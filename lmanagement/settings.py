@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'djangoformsetjs',
+    'django_extensions',
     'extra_views',
     'django_select2',
     'core.apps.CoreConfig',

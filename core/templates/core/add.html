@@ -1,97 +1,50 @@
 {% extends 'base.html' %}
 {% load formset_tags %}
+{% load core_tag %}
 {% load static %}
 {% block content %}
     <form method="post" novalidate enctype="multipart/form-data">
-
+        {% csrf_token %}
         <div class="row">
             <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
                 <div class="card">
                     <div class="card-header">
-                        <h3>License Details</h3>
+                        <h3>Add </h3>
                     </div>
-
                     <div class="card-body">
-                        {% csrf_token %}
+                        {% if form.errors %}
+                            <div class="alert alert-danger">
+                                <ul class="errorlist">
+                                    {% if form.non_field_errors %}
+                                        <li>{{ form.non_field_errors }}</li>
+                                    {% endif %}
+                                    {% for field in form %}
+                                        {% if field.errors %}
+                                            <li>
+                                                {{ field.label|title }}
+                                                <ul class="errorlist">
+                                                    {% for error in field.errors %}
+                                                        <li>{{ error }}</li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                        {% for fld in form.hidden_fields %}{{ fld }}{% endfor %}
                         <div class="row">
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.scheme_code.label }}</label>
-                                    {{ form.scheme_code }}
+                            {% for field in form %}
+                                <div class="col-lg-3 col-xs-6">
+                                    <div class="form-group">
+                                        <label for="{{ field.name }}">{{ field.label }}</label>
+                                        <div class="form-line">
+                                            {{ field|addcss:"form-control" }}
+                                        </div>
+                                    </div>
                                 </div>
-
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.notification_number.label }}</label>
-                                    {{ form.notification_number }}
-                                </div>
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.license_number.label }}</label>
-                                    {{ form.license_number }}
-                                </div>
-
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.license_date.label }}</label>
-                                    {{ form.license_date }}
-                                </div>
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.license_expiry_date.label }}</label>
-                                    {{ form.license_expiry_date }}
-                                </div>
-
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.file_number.label }}</label>
-                                    {{ form.file_number }}
-                                </div>
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.exporter.label }}</label>
-                                    {{ form.exporter }}
-                                </div>
-
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.port.label }}</label>
-                                    {{ form.port }}
-                                </div>
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.registration_number.label }}</label>
-                                    {{ form.registration_number }}
-                                </div>
-
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.registration_date.label }}</label>
-                                    {{ form.registration_date }}
-                                </div>
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.restrictions.label }}</label>
-                                    {{ form.restrictions }}
-                                </div>
-
-                            </div>
-                            <div class="col-lg-2 col-xs-6">
-                                <div class="form-group">
-                                    <label for="">{{ form.user_comments.label }}</label>
-                                    {{ form.user_comments }}
-                                </div>
-                            </div>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>
@@ -147,12 +100,12 @@
                                                 {% for fld in form.hidden_fields %}{{ fld }}{% endfor %}
                                                 <div class="row">
                                                     {% for field in form %}
-                                                        {% if field.name == 'license' or field.name == 'DELETE' or field.name == 'id' %}
+                                                        {% if field.name == 'license' or field.name == 'DELETE' or field.name == 'id' or field.name == 'norm_class' %}
                                                             <div class="hidden" style="display: none">
                                                                 {{ field }}
                                                             </div>
                                                         {% else %}
-                                                            <div class="col-lg-2 col-xs-6">
+                                                            <div class="col-lg-3 col-xs-6">
 
                                                                 <div class="form-group">
                                                                     <label for="">{{ field.label }}</label>
@@ -162,7 +115,7 @@
                                                         {% endif %}
 
                                                     {% endfor %}
-                                                    <div class="col-lg-2 col-xs-6">
+                                                    <div class="col-lg-3 col-xs-6">
                                                         <button type="button" class="deleteButton"
                                                                 data-formset-delete-button>Delete form
                                                         </button>
@@ -188,7 +141,7 @@
                                                             </div>
 
                                                         {% else %}
-                                                            <div class="col-lg-2 col-xs-6">
+                                                            <div class="col-lg-3 col-xs-6">
 
                                                                 <div class="form-group">
                                                                     <label for="">{{ field.label }}</label>
@@ -198,7 +151,7 @@
                                                         {% endif %}
 
                                                     {% endfor %}
-                                                    <div class="col-lg-2 col-xs-6">
+                                                    <div class="col-lg-3 col-xs-6">
                                                         <button type="button" class="deleteButton"
                                                                 data-formset-delete-button>Delete form
                                                         </button>
@@ -232,8 +185,8 @@
                 </div>
             </div>
         </div>
-    </form>
 
+    </form>
 {% endblock %}
 {% block extra_js_script %}
     <script src="{% static 'js/select2.min.js' %}"></script>

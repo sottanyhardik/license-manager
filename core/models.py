@@ -16,6 +16,7 @@ alpha = RegexValidator(r'^[a-zA-Z ]*$', 'Only alpha characters are allowed.')
 
 class CompanyModel(models.Model):
     iec = models.CharField(max_length=10, unique=True)
+    pan = models.CharField(max_length=20, null=True, blank=True)
     name = models.CharField(max_length=255, null=True, blank=True)
     contact_person = models.CharField(max_length=255, null=True, blank=True)
     phone_number = models.CharField(max_length=255, null=True, blank=True)
@@ -26,6 +27,9 @@ class CompanyModel(models.Model):
             return self.name
         else:
             return self.iec
+
+    def get_absolute_url(self):
+        return reverse('company_list')
 
 
 class PortModel(models.Model):

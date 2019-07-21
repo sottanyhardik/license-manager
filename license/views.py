@@ -5,9 +5,13 @@ from django.shortcuts import render
 
 # Create your views here.
 from django.urls import reverse
+from django.views.generic import TemplateView
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
+
+from bill_of_entry.scripts import parse_file
+from core.utils import PagedFilteredTableView
 from . import models as license
-from . import forms
+from . import forms, tables, filters, models
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -17,6 +21,7 @@ class LicenseExportItemInline(InlineFormSetFactory):
         'extra': 0,
     }
 
+
 class LicenseImportItemInline(InlineFormSetFactory):
     model = license.LicenseImportItemsModel
     form_class = forms.ImportItemsForm
@@ -25,11 +30,19 @@ class LicenseImportItemInline(InlineFormSetFactory):
     }
 
 
+class LicenseDocumentInline(InlineFormSetFactory):
+    model = license.LicenseDocumentModel
+    form_class = forms.LicenseDocumentForm
+    factory_kwargs = {
+        'extra': 1,
+    }
+
+
 class LicenseDetailCreateView(CreateWithInlinesView):
     template_name = 'license/add.html'
     model = license.LicenseDetailsModel
     form_class = forms.LicenseDetailsForm
-    inlines = [LicenseExportItemInline, ]
+    inlines = [LicenseExportItemInline, LicenseDocumentInline]
 
     def form_valid(self, form):
         if not form.instance.created_by:
@@ -44,7 +57,7 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
     template_name = 'license/add.html'
     model = license.LicenseDetailsModel
     form_class = forms.LicenseDetailsForm
-    inlines = [LicenseExportItemInline, ]
+    inlines = [LicenseExportItemInline, LicenseDocumentInline]
 
     def dispatch(self, request, *args, **kwargs):
         # check if there is some video onsite
@@ -72,20 +85,37 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
                 for export_item in self.object.export_license.all():
                     if export_item.norm_class:
                         for import_item in export_item.norm_class.import_norm.all():
-                            import_item_obj, bool = license.LicenseImportItemsModel.objects.get_or_create(license=self.object,
+                            if not self.object.ledger_date:
+                                import_item_obj, bool = license.LicenseImportItemsModel.objects.get_or_create(
+                                    license=self.object,
+                                    serial_number=import_item.sr_no)
+                            else:
+                                try:
+                                    import_item_obj = license.LicenseImportItemsModel.objects.get(license=self.object,
                                                                                                   serial_number=import_item.sr_no)
-                            if not import_item_obj.item or import_item_obj.item.pk == 141:
-                                import_item_obj.item = import_item.item
-                            if not import_item_obj.quantity:
-                                import_item_obj.quantity = round(
-                                    export_item.net_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
-                                    3)
-                            if not import_item_obj.hs_code:
-                                import_item_obj.hs_code = import_item.hs_code.first()
-                            import_item_obj.save()
+                                except:
+                                    import_item_obj = None
+                            if import_item_obj:
+                                if not import_item_obj.item or import_item_obj.item.pk == 141:
+                                    import_item_obj.item = import_item.item
+                                if not import_item_obj.quantity:
+                                    import_item_obj.quantity = round(
+                                        export_item.net_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
+                                        3)
+                                if not import_item_obj.hs_code:
+                                    import_item_obj.hs_code = import_item.hs_code.first()
+                                import_item_obj.save()
                     else:
                         if self.object.import_license.all().first():
                             value = round(
                                 self.object.import_license.all().first().quantity / export_item.net_quantity * 100)
-            self.inlines = [LicenseExportItemInline, LicenseImportItemInline]
+            self.inlines = [LicenseExportItemInline, LicenseImportItemInline, LicenseDocumentInline]
         return super(LicenseDetailUpdateView, self).get_inlines()
+
+
+class LicenseDetailListView(PagedFilteredTableView):
+    template_name = 'core/list.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseDetailTable
+    filter_class = filters.LicenseDetailFilter
+    page_head = 'License List'

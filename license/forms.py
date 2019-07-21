@@ -83,11 +83,30 @@ class LicenseDetailsForm(forms.ModelForm):
     class Meta:
         model = license_model.LicenseDetailsModel
         fields = ['scheme_code', 'notification_number', 'license_number', 'license_date', 'license_expiry_date',
-                  'file_number', 'exporter', 'port', 'registration_number',
-                  'registration_date', 'user_restrictions', 'user_comment', 'license', 'transfer_letter','annexure']
+                  'file_number', 'exporter', 'port', 'registration_number', 'registration_date', 'user_restrictions',
+                  'user_comment']
 
     def __init__(self, *args, **kwargs):
         super(LicenseDetailsForm, self).__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if 'date' in field_name:
+                field.widget.input_type = 'date'
+            if field.widget.attrs.get('class'):
+                field.widget.attrs['class'] += ' form-control'
+            else:
+                field.widget.attrs['class'] = 'form-control'
+            if 'Textarea' in str(field.widget):
+                field.widget.attrs['rows'] = '2'
+
+
+class LicenseDocumentForm(forms.ModelForm):
+
+    class Meta:
+        model = license_model.LicenseDocumentModel
+        fields = ['license', 'type', 'file']
+
+    def __init__(self, *args, **kwargs):
+        super(LicenseDocumentForm, self).__init__(*args, **kwargs)
         for field_name, field in self.fields.items():
             if 'date' in field_name:
                 field.widget.input_type = 'date'

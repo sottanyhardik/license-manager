@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django_extensions',
     'extra_views',
     'django_select2',
+    'django_tables2',
     'core.apps.CoreConfig',
     'license.apps.LicenseConfig',
     'bill_of_entry.apps.BillOfEntryConfig',

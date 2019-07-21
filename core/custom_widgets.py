@@ -18,6 +18,12 @@ class NormWidget(ModelSelect2Widget):
     model = models.SionNormClassModel
 
 
+class HeadNormWidget(ModelSelect2Widget):
+    search_fields = ['name__icontains',]
+    model = models.HeadSIONNormsModel
+
+
+
 class ItemWidget(ModelSelect2Widget):
     search_fields = ['name__icontains', ]
     model = models.ItemNameModel

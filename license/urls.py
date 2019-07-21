@@ -5,8 +5,9 @@ from . import views
 urlpatterns = [
     # ex: /polls/
     path('add/', views.LicenseDetailCreateView.as_view(), name='add-license'),
-    path('list/', views.LicenseDetailCreateView.as_view(), name='list-license'),
+    path('list/', views.LicenseDetailListView.as_view(), name='list-license'),
     path('<int:license_id>/', views.LicenseDetailUpdateView.as_view(), name='license-detail'),
+    path('<int:license_id>/update', views.LicenseDetailUpdateView.as_view(), name='license-update'),
     # # ex: /polls/5/
     # path('<int:question_id>/', views.detail, name='detail'),
     # # ex: /polls/5/results/

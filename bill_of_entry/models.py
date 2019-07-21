@@ -35,7 +35,7 @@ ROW_TYPE = (
 
 class RowDetails(models.Model):
     bill_of_entry = models.ForeignKey('bill_of_entry.BillOfEntryModel', on_delete=models.CASCADE,
-                                      related_name='item_details')
+                                      related_name='item_details', null=True, blank=True)
     row_type = models.CharField(max_length=2, choices=ROW_TYPE, default=ALLOTMENT)
     sr_number = models.ForeignKey('license.LicenseImportItemsModel', on_delete=models.CASCADE,
                                   related_name='item_details')

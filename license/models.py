@@ -4,14 +4,14 @@ from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 
-DFIA = "DFIA"
+DFIA = "26"
 
 SCHEME_CODE_CHOICES = (
     (DFIA, '26 - Duty Free Import Authorization')
 )
 
-N2009 = 'N2009'
-N2015 = 'N2015'
+N2009 = '098/2009'
+N2015 = '019/2015'
 
 NOTIFICATION_NORM_CHOICES = (
     (N2015, '019/2015'),
@@ -20,21 +20,14 @@ NOTIFICATION_NORM_CHOICES = (
 
 
 def license_path(instance, filename):
-    return '{0}/{1}'.format(instance.license_number, "{0}".format('_lic.pdf'))
-
-
-def transfer_letter_path(instance, filename):
-    return '{0}/{1}'.format(instance.license_number, "{0}".format('_tl.pdf'))
-
-def annexure_path(instance, filename):
-    return '{0}/{1}'.format(instance.license_number, "{0}".format('_annexure.pdf'))
+    return '{0}/{1}'.format(instance.license.license_number, "{0}.pdf".format(instance.type))
 
 
 class LicenseDetailsModel(models.Model):
-    scheme_code = models.CharField(max_length=5, default=DFIA)
-    notification_number = models.CharField(max_length=5, default=N2015)
-    license_number = models.CharField(max_length=10, unique=True)
-    license_date = models.DateField()
+    scheme_code = models.CharField(max_length=10, default=DFIA)
+    notification_number = models.CharField(max_length=10, default=N2015)
+    license_number = models.CharField(max_length=50, unique=True)
+    license_date = models.DateField(null=True, blank=True)
     license_expiry_date = models.DateField(null=True, blank=True)
     file_number = models.CharField(max_length=30, null=True, blank=True)
     exporter = models.ForeignKey('core.CompanyModel', on_delete=models.CASCADE, null=True, blank=True)
@@ -43,10 +36,9 @@ class LicenseDetailsModel(models.Model):
     registration_date = models.DateField(null=True, blank=True)
     user_comment = models.TextField(null=True, blank=True)
     user_restrictions = models.TextField(null=True, blank=True)
-    license = models.FileField(upload_to=license_path, null=True, blank=True)
-    transfer_letter = models.FileField(upload_to=transfer_letter_path, null=True, blank=True)
-    annexure = models.FileField(upload_to=annexure_path, null=True, blank=True)
+    ledger_date = models.DateField(null=True, blank=True)
     is_audit = models.BooleanField(default=False)
+    is_null =  models.BooleanField(default=False)
 
     def __str__(self):
         return self.license_number
@@ -174,8 +166,14 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def license_expiry(self):
-        return self.license.expiry_date
+        return self.license.license_expiry_date
 
     @property
     def license_date(self):
         return self.license.license_date
+
+
+class LicenseDocumentModel(models.Model):
+    license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE, related_name='license_documents')
+    type = models.CharField(max_length=255)
+    file = models.FileField(upload_to=license_path)

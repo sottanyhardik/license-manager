@@ -23743,3 +23743,21 @@ dl li {
     padding: 5px;
     border: solid 2px #f1f6f8;
 }
+
+.grid div[class*='col-']{
+    border-bottom: solid 1px #0ddbb9;
+    margin-bottom: 10px;
+}
+
+.grid h3{
+    color: #0ddbb9;
+}
+
+.grid p{
+    color: #000000;
+}
+
+.tbordered th, .tbordered td,.tbordered tr{
+    border: solid 1px #0ddbb9;
+    color: #000000;
+}

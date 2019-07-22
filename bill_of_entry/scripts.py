@@ -115,7 +115,10 @@ def parse_file(data):
         row_obj, bool = LicenseImportItemsModel.objects.get_or_create(serial_number=row['sr_no'], license=license)
         if row['type'] == Credit:
             row_obj.quantity = float(row['qty'])
-            row_obj.cif_fc = float(row['cif_fc'])
+            if float(data_dict['cif_fc']) != float(row['cif_fc']):
+                row_obj.cif_fc = float(row['cif_fc'])
+            else:
+                row_obj.cif_fc = 0.0
             row_obj.cif_inr = float(row['cif_inr'])
             row_obj.save()
         if row['type'] == 'C':

@@ -1,13 +1,17 @@
 from django.db import models
 
 # Create your models here.
+from django.db.models import Sum
 from django.urls import reverse
 from django.utils import timezone
+
+from allotment.models import AllotmentItems
+from bill_of_entry.models import RowDetails
 
 DFIA = "26"
 
 SCHEME_CODE_CHOICES = (
-    (DFIA, '26 - Duty Free Import Authorization')
+    (DFIA, '26 - Duty Free Import Authorization'),
 )
 
 N2009 = '098/2009'
@@ -24,8 +28,8 @@ def license_path(instance, filename):
 
 
 class LicenseDetailsModel(models.Model):
-    scheme_code = models.CharField(max_length=10, default=DFIA)
-    notification_number = models.CharField(max_length=10, default=N2015)
+    scheme_code = models.CharField(choices=SCHEME_CODE_CHOICES, max_length=10, default=DFIA)
+    notification_number = models.CharField(choices=NOTIFICATION_NORM_CHOICES, max_length=10, default=N2015)
     license_number = models.CharField(max_length=50, unique=True)
     license_date = models.DateField(null=True, blank=True)
     license_expiry_date = models.DateField(null=True, blank=True)
@@ -38,7 +42,7 @@ class LicenseDetailsModel(models.Model):
     user_restrictions = models.TextField(null=True, blank=True)
     ledger_date = models.DateField(null=True, blank=True)
     is_audit = models.BooleanField(default=False)
-    is_null =  models.BooleanField(default=False)
+    is_null = models.BooleanField(default=False)
 
     def __str__(self):
         return self.license_number
@@ -48,7 +52,7 @@ class LicenseDetailsModel(models.Model):
         return self.license_expiry_date < timezone.now()
 
     def get_absolute_url(self):
-        return reverse('license-detail', kwargs={'license_id': self.pk})
+        return reverse('license-detail', kwargs={'pk': self.pk})
 
 
 KG = 'kg'
@@ -90,19 +94,19 @@ class LicenseExportItemModel(models.Model):
         except:
             return ''
 
-    # def balance_cif_fc(self):
-    #     credit = ExportItemsModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
-    #     debit = \
-    #     RowDetails.objects.filter(sr_number__license=self.license).filter(type='D').aggregate(Sum('cif_fc'))[
-    #         'cif_fc__sum']
-    #     allotment = AllotmentItems.objects.filter(item__license=self.license).aggregate(Sum('cif_fc'))[
-    #         'cif_fc__sum']
-    #     t_debit = 0
-    #     if debit:
-    #         t_debit = t_debit + debit
-    #     if allotment:
-    #         t_debit = t_debit + allotment
-    #     return int(credit - t_debit)
+    def balance_cif_fc(self):
+        credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        debit = \
+        RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type='D').aggregate(Sum('cif_fc'))[
+            'cif_fc__sum']
+        allotment = AllotmentItems.objects.filter(item__license=self.license).aggregate(Sum('cif_fc'))[
+            'cif_fc__sum']
+        t_debit = 0
+        if debit:
+            t_debit = t_debit + debit
+        if allotment:
+            t_debit = t_debit + allotment
+        return int(credit - t_debit)
 
 
 class LicenseImportItemsModel(models.Model):
@@ -134,35 +138,56 @@ class LicenseImportItemsModel(models.Model):
     def __str__(self):
         return "{0}-{1}".format(str(self.license), str(self.serial_number))
 
-    # @property
-    # def balance_quantity(self):
-    #     credit = self.quantity
-    #     debit = self.row_details.filter(type='D').aggregate(Sum('qty'))['qty__sum']
-    #     allotment = self.allotment_details.aggregate(Sum('qty'))['qty__sum']
-    #     t_debit = 0
-    #     if debit:
-    #         t_debit = t_debit + debit
-    #     if allotment:
-    #         t_debit = t_debit + allotment
-    #     if credit and t_debit:
-    #         return int(credit - t_debit)
-    #     elif credit:
-    #         return int(credit)
-    #     else:
-    #         return 0
+    @property
+    def balance_quantity(self):
+        credit = self.quantity
+        from django.db.models import Sum
+        debit = self.item_details.filter(transaction_type='D').aggregate(Sum('qty'))['qty__sum']
+        allotment = self.allotment_details.aggregate(Sum('qty'))['qty__sum']
+        t_debit = 0
+        if debit:
+            t_debit = t_debit + debit
+        if allotment:
+            t_debit = t_debit + allotment
+        if credit and t_debit:
+            return int(credit - t_debit)
+        elif credit:
+            return int(credit)
+        else:
+            return 0
 
-    # @property
-    # def balance_cif_fc(self):
-    #     credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
-    #     debit = RowDetails.objects.filter(sr_number__license=self.license).filter(type='D').aggregate(Sum('cif_fc'))[
-    #         'cif_fc__sum']
-    #     allotment = AllotmentItems.objects.filter(item__license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
-    #     t_debit = 0
-    #     if debit:
-    #         t_debit = t_debit + debit
-    #     if allotment:
-    #         t_debit = t_debit + allotment
-    #     return int(credit - t_debit)
+    @property
+    def balance_cif_fc(self):
+        if self.cif_fc == 0:
+            credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        else:
+            credit = self.cif_fc
+        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type='D').aggregate(Sum('cif_fc'))[
+            'cif_fc__sum']
+        allotment = AllotmentItems.objects.filter(item__license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        t_debit = 0
+        if debit:
+            t_debit = t_debit + debit
+        if allotment:
+            t_debit = t_debit + allotment
+        return int(credit - t_debit)
+
+    @property
+    def dbalance_cif_fc(self):
+        if self.cif_fc == 0:
+            return "''"
+        else:
+            credit = self.cif_fc
+        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type='D').aggregate(
+            Sum('cif_fc'))[
+            'cif_fc__sum']
+        allotment = AllotmentItems.objects.filter(item__license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        t_debit = 0
+        if debit:
+            t_debit = t_debit + debit
+        if allotment:
+            t_debit = t_debit + allotment
+        return int(credit - t_debit)
 
     @property
     def license_expiry(self):
@@ -174,6 +199,9 @@ class LicenseImportItemsModel(models.Model):
 
 
 class LicenseDocumentModel(models.Model):
-    license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE, related_name='license_documents')
+    license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE,
+                                related_name='license_documents')
     type = models.CharField(max_length=255)
     file = models.FileField(upload_to=license_path)
+
+

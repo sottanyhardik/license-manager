@@ -1,17 +1,15 @@
 import datetime
 
 from django.http import HttpResponseRedirect
-from django.shortcuts import render
-
 # Create your views here.
 from django.urls import reverse
-from django.views.generic import TemplateView
+from django.views.generic import DetailView
+from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
-from bill_of_entry.scripts import parse_file
 from core.utils import PagedFilteredTableView
+from . import forms, tables, filters
 from . import models as license
-from . import forms, tables, filters, models
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -63,12 +61,12 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
         # check if there is some video onsite
         license = self.get_object()
         if self.get_object().is_audit:
-            return HttpResponseRedirect(reverse('license-detail', kwargs={'license_id': license.id}))
+            return HttpResponseRedirect(reverse('license-detail', kwargs={'pk': license.id}))
         else:
             return super(LicenseDetailUpdateView, self).dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
-        object = self.model.objects.get(id=self.kwargs.get('license_id'))
+        object = self.model.objects.get(id=self.kwargs.get('pk'))
         return object
 
     def form_valid(self, form):
@@ -119,3 +117,13 @@ class LicenseDetailListView(PagedFilteredTableView):
     table_class = tables.LicenseDetailTable
     filter_class = filters.LicenseDetailFilter
     page_head = 'License List'
+
+
+class LicenseDetailView(DetailView):
+    template_name = 'license/detail.html'
+    model = license.LicenseDetailsModel
+
+
+class PDFLicenseDetailView(PDFTemplateResponseMixin, DetailView):
+    template_name = 'license/pdf.html'
+    model = license.LicenseDetailsModel

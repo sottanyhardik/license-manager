@@ -138,6 +138,6 @@ class UploadLedger(TemplateView):
         from django.http import HttpResponseRedirect
         from django.urls import reverse
         if license:
-            return HttpResponseRedirect(reverse('license-update', kwargs={'license_id': license}))
+            return HttpResponseRedirect(reverse('license-update', kwargs={'pk': license}))
         else:
             return HttpResponseRedirect(reverse('ledger-upload'))

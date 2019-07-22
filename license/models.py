@@ -193,7 +193,7 @@ class LicenseImportItemsModel(models.Model):
         if self.cif_fc:
             return int(credit - t_debit)
         else:
-            "Error"
+            return ''
 
     @property
     def license_expiry(self):

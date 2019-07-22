@@ -102,13 +102,17 @@
                 <td>{{ import_item.quantity }}</td>
                 <td>{{ import_item.balance_quantity }}
                 <td>
-                    {% if not import_item.cif_fc == 0 %}
+                    {% if import_item.cif_fc and not import_item.cif_fc == 0 %}
                         {{ import_item.cif_fc }}
                     {% else %}
-                        ''
+
                     {% endif %}
                 </td>
-                <td>{{ import_item.dbalance_cif_fc }}</td>
+                <td>
+                    {% if import_item.dbalance_cif_fc %}
+                        {{ import_item.dbalance_cif_fc }}
+                    {% endif %}
+                </td>
             </tr>
         {% endfor %}
 

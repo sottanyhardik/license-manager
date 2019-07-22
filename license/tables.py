@@ -16,7 +16,7 @@ class LicenseDetailTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'notification_number', 'port_of_registration','license_number', 'license_date',
+        fields = ['counter', 'notification_number', 'port','license_number', 'license_date',
                   'license_expiry_date', 'file_no', 'exporter', 'balance_cif', 'is_audit', 'ledger_date']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable"}
 

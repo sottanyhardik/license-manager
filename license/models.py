@@ -170,7 +170,10 @@ class LicenseImportItemsModel(models.Model):
             t_debit = t_debit + debit
         if allotment:
             t_debit = t_debit + allotment
-        return int(credit - t_debit)
+        if self.cif_fc:
+            return int(credit - t_debit)
+        else:
+            "Error"
 
     @property
     def dbalance_cif_fc(self):
@@ -187,7 +190,10 @@ class LicenseImportItemsModel(models.Model):
             t_debit = t_debit + debit
         if allotment:
             t_debit = t_debit + allotment
-        return int(credit - t_debit)
+        if self.cif_fc:
+            return int(credit - t_debit)
+        else:
+            "Error"
 
     @property
     def license_expiry(self):

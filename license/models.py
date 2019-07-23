@@ -162,7 +162,7 @@ class LicenseImportItemsModel(models.Model):
             credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
         else:
             credit = self.cif_fc
-        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type='D').aggregate(Sum('cif_fc'))[
+        debit = RowDetails.objects.filter(sr_number=self).filter(transaction_type='D').aggregate(Sum('cif_fc'))[
             'cif_fc__sum']
         allotment = AllotmentItems.objects.filter(item__license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
         t_debit = 0
@@ -181,7 +181,7 @@ class LicenseImportItemsModel(models.Model):
             return "''"
         else:
             credit = self.cif_fc
-        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type='D').aggregate(
+        debit = RowDetails.objects.filter(sr_number__license=self.license, sr_number=self.serial_number).filter(transaction_type='D').aggregate(
             Sum('cif_fc'))[
             'cif_fc__sum']
         allotment = AllotmentItems.objects.filter(item__license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']

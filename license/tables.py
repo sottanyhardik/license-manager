@@ -7,7 +7,7 @@ from . import models
 
 class LicenseDetailTable(dt2.Table):
     counter = dt2.Column(empty_values=(), orderable=False)
-    edit = dt2.TemplateColumn('<a href="/license/edit/{{ record.id }}"><i class="mdi mdi-grease-pencil"></i></a>', orderable=False)
+    edit = dt2.TemplateColumn('<a href="/license/{{ record.id }}/update"><i class="mdi mdi-grease-pencil"></i></a>', orderable=False)
     view = dt2.TemplateColumn('<a href="/license/{{ record.id }}"><i class="mdi mdi-share"></i></a>', orderable=False)
     pdf = dt2.TemplateColumn('<a href="/license/{{ record.id }}/pdf"><i class="mdi mdi-file-pdf"></i></a>', orderable=False)
     license_date = dt2.DateTimeColumn(format='d-m-Y')

@@ -7,5 +7,6 @@ urlpatterns = [
     path('add', views.BillOfEntryCreateView.as_view(), name='bill-of-entry-create'),
     path('<int:pk>', views.BillOfEntryDetailView.as_view(), name='bill-of-entry-detail'),
     path('<int:pk>/update', views.BillOfEntryUpdateView.as_view(), name='bill-of-entry-update'),
+    path('fetch', views.BillOfEntryFetchView.as_view(), name='bill_of_entry_fetch'),
 
 ]

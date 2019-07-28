@@ -14,6 +14,9 @@ class BillOfEntryModel(models.Model):
                                   null=True, blank=True)
     invoice_no = models.CharField(max_length=255, null=True, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
+    is_fetch = models.BooleanField(default=False)
+    failed = models.IntegerField(default=0)
+    cha = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
         return self.bill_of_entry_number

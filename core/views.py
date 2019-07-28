@@ -1,10 +1,7 @@
-from django.shortcuts import render
-
 # Create your views here.
-from django.views.generic import TemplateView, CreateView, ListView, UpdateView, DetailView
+from django.views.generic import TemplateView, CreateView, UpdateView, DetailView
 from extra_views import UpdateWithInlinesView, InlineFormSetFactory
 
-from core.forms import SIONExportForm, SIONImportForm
 from core.scripts.sion import fetch_sion_data
 from core.utils import PagedFilteredTableView
 from . import models, tables, filters, forms
@@ -139,7 +136,7 @@ class UploadLedger(TemplateView):
             file = raw_file.read()
             data = file.decode('utf-8')
             try:
-                from bill_of_entry.scripts import parse_file
+                from bill_of_entry.scripts.ledger import parse_file
                 license = parse_file(data)
             except Exception as e:
                 print(e)

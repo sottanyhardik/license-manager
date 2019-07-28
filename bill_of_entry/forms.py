@@ -69,3 +69,15 @@ class ImportItemsForm(forms.ModelForm):
                 field.widget.attrs['class'] += ' span2'
             if 'Textarea' in str(field.widget):
                 field.widget.attrs['rows'] = '2'
+
+
+class BillOfEntryCaptcha(forms.Form):
+    captcha = forms.CharField(max_length=30)
+    cookies = forms.CharField(max_length=30)
+
+    def clean(self):
+        cleaned_data = super(BillOfEntryCaptcha, self).clean()
+        captcha = cleaned_data.get('captcha')
+        cookies = cleaned_data.get('cookies')
+        if not captcha and not cookies:
+            raise forms.ValidationError('ALL Fields Are Compulsory!')

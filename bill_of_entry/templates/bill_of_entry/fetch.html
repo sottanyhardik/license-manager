@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% load formset_tags %}
+{% load static %}
+{% block content %}
+    <div class="row">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card">
+                <div class="card-header">
+                    <div class="row">
+                        <div class="col-xs-12 col-lg-9">
+                            Fetch Bill Of Entry
+                        </div>
+                        <div class="col-xs-12 col-lg-3">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <img src="{{ captcha_url }}"/>
+                    <h3><b>Shipping Bill</b> {{ remain_count }} <br> <b>Captcha Remains</b> {{ remain_captcha }}</h3>
+                    <div class="input-field col s12 required" id="id_captcha_container">
+                        <input id="id_captcha" maxlength="30" name="captcha" type="text">
+                        <label for="id_captcha" class="">Captcha</label>
+                    </div>
+                    <input id="id_cookies" maxlength="30" name="cookies" type="hidden" value="{{ fetch_cookies }}">
+                    <input id="id_csrftoken" maxlength="30" name="csrftoken" type="hidden" value="{{ csrftoken }}">
+                    <button type="submit" name="_submit" class="btn">Submit</button>
+                </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

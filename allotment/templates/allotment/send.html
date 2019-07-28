@@ -1,0 +1,164 @@
+{% extends "allotment/pdf_base.html" %}
+
+{% block extra_style %}
+    <style>
+        body {
+            font-size: 12px;
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+        }
+
+        #license {
+            font-size: 12px;
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        #license td {
+            border: 1px solid #000000;
+            padding: 5px;
+        }
+
+        #license tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        #license tr:hover {
+            background-color: #ddd;
+        }
+
+        #license th {
+            padding-top: 5px;
+            padding-bottom: 5px;
+            text-align: center;
+            background-color: #f2f2f2;
+            color: #000000;
+            font-size: 14px;
+            border: 1px solid #000000;
+        }
+
+
+        #items {
+            margin-top: 20px;
+            font-size: 12px;
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        #items td {
+            border: 1px solid #000000;
+            padding: 5px;
+        }
+
+        #items tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        #items tr:hover {
+            background-color: #ddd;
+        }
+
+        #items th {
+            padding-top: 5px;
+            padding-bottom: 5px;
+            text-align: center;
+            background-color: #f2f2f2;
+            color: #000000;
+            font-size: 14px;
+            border: 1px solid #000000;
+        }
+
+        #highlight {
+            background-color: yellow;
+        }
+
+        #foot-top{
+            float: right;
+            margin-top: 30px;
+        }
+    </style>
+
+{% endblock %}
+{% block content %}
+
+    <b>Allotment Time</b> {% now "jS F Y H:i" %}
+
+    <p>To,</p>
+    <h3>{{ object.company }}</h3>
+    {% if object.company.address %}
+        <h5>{{ object.company.address }}</h5>
+    {% endif %}
+
+    <p>Subject: <span
+            id="highlight">License Allotment for <b>{{ object.item_name|title }}</b> for <b>{{ object.required_quantity }} Kg</b></span>
+    </p>
+
+    <p>Dear Sir,</p>
+    <p>We thank you for your DFIA License request </p>
+    <p>Please find the attached details of the Licenses alloted for your requests.</p>
+
+    <table id="license">
+        <thead>
+        <th>Date</th>
+        <th>Customer</th>
+        <th>CHA</th>
+        <th>Item</th>
+        <th>Port Of Discharge</th>
+        </thead>
+        <tbody>
+        <tr>
+            <td>{{ object.modified_on }}</td>
+            <td>{{ object.company|title }}</td>
+
+                {% if object.cha %}
+                    <td>
+                    {{ object.cha|title }}
+                        </td>
+                {% else %}
+                <td style="text-align: center">-</td>
+                {% endif %}
+
+            <td>{{ object.item_name|title }}</td>
+            <td>{{ object.port|title }}</td>
+        </tr>
+        </tbody>
+    </table>
+    <h1></h1>
+    <table id="items">
+        <thead>
+        <th>DFIA No</th>
+        <th>Reg No</th>
+        <th>Port Code</th>
+        <th>Duty Type</th>
+        <th>Item Sr.No</th>
+        <th>Qty</th>
+        <th>CIF $</th>
+        <th>NTF No</th>
+        </thead>
+        <tbody>
+        {% for data in object.allotment_details.all %}
+            <tr>
+                <td>{{ data.license_number }} {{ data.license_date }}</td>
+                <td>{{ data.registration_number }} {{ data.registration_date }}</td>
+                <td>{{ data.port_code|upper }}</td>
+                <td>Basic</td>
+                <td>{{ data.serial_number }}</td>
+                <td style="text-align: right">{{ data.qty|floatformat:2 }}</td>
+                <td style="text-align: right">{{ data.cif_fc|floatformat:2 }}</td>
+                <td>{{ data.notification_number }}</td>
+            </tr>
+        {% endfor %}
+           <tr>
+               <td> </td>
+                <td> </td>
+               <td> </td>
+               <td> </td>
+               <td> </td>
+               <td style="text-align: right"><b>{{ object.alloted_quantity|floatformat:2 }}</b></td>
+               <td style="text-align: right"><b>{{ object.alloted_value|floatformat:2 }}</b> </td>
+               <td> </td>
+           </tr>
+        </tbody>
+    </table>
+{% endblock %}

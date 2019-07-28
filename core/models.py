@@ -41,7 +41,7 @@ class PortModel(models.Model):
         unique_together = ('name', 'code')
 
     def __str__(self):
-        return "{0} | {1}".format(self.code, str(self.name))
+        return "{0}".format(self.code)
 
 
 class ItemNameModel(models.Model):
@@ -118,7 +118,7 @@ class SIONExportModel(models.Model):
 
 
 class SIONImportModel(models.Model):
-    sr_no = models.CharField(max_length=10, default=0)
+    sr_no = models.IntegerField(default=0)
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='import_norm')
     item = models.ForeignKey('core.ItemNameModel', related_name='sion_import', on_delete=models.CASCADE, null=True,
                              blank=True)
@@ -126,6 +126,9 @@ class SIONImportModel(models.Model):
     unit = models.CharField(max_length=255, null=True, blank=True)
     condition = models.CharField(max_length=255, null=True, blank=True)
     hs_code = models.ManyToManyField('core.HSCodeModel', blank=True, related_name='import_norms')
+
+    class Meta:
+        ordering = ['sr_no']
 
     def __str__(self):
         if self.item:

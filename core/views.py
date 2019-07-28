@@ -1,7 +1,7 @@
 from django.shortcuts import render
 
 # Create your views here.
-from django.views.generic import TemplateView, CreateView, ListView, UpdateView
+from django.views.generic import TemplateView, CreateView, ListView, UpdateView, DetailView
 from extra_views import UpdateWithInlinesView, InlineFormSetFactory
 
 from core.forms import SIONExportForm, SIONImportForm
@@ -55,6 +55,15 @@ class ListSionView(PagedFilteredTableView):
     model = models.SionNormClassModel
     table_class = tables.SionNormClassTable
     filter_class = filters.SionNormClassFilter
+
+
+class SionDetailView(DetailView):
+    model = models.SionNormClassModel
+    template_name = 'sion/detail.html'
+    context_object_name = 'sion_norm'
+
+    def get_object(self, queryset=None):
+        return self.model.objects.get(id=self.kwargs.get('pk'))
 
 
 class UpdateSionView(UpdateWithInlinesView):

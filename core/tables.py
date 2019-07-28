@@ -28,7 +28,7 @@ class SionNormClassTable(dt2.Table):
     class Meta:
         model = models.SionNormClassModel
         per_page = 50
-        fields = ('counter', 'head_norm', 'norm_class', 'norm_name', 'edit', 'view')
+        fields = ('counter', 'head_norm', 'norm_class', 'norm_name', 'edit', 'view', 'company_name')
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

@@ -194,6 +194,10 @@
                                     <i class="mdi mdi-arrow-all text-primary"></i>
                                     Company
                                 </a>
+                                <a href="{% url 'ledger-upload' %}" class="dropdown-item">
+                                    <i class="mdi mdi-arrow-all text-primary"></i>
+                                    Upload Ledger
+                                </a>
                             </div>
                         </li>
                         <li class="nav-item nav-profile dropdown">
@@ -228,14 +232,14 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="pages/forms/basic_elements.html" class="nav-link">
+                        <a href="{% url 'allotment-list' %}" class="nav-link">
                             <i class="mdi mdi-chart-areaspline menu-icon"></i>
                             <span class="menu-title">Allotment List</span>
                             <i class="menu-arrow"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="pages/forms/basic_elements.html" class="nav-link">
+                        <a href="{% url 'bill-of-entry-list' %}" class="nav-link">
                             <i class="mdi mdi-chart-areaspline menu-icon"></i>
                             <span class="menu-title">Bill Of Entry</span>
                             <i class="menu-arrow"></i>

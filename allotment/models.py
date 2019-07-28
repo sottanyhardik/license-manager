@@ -83,6 +83,7 @@ class AllotmentItems(models.Model):
     cif_inr = models.FloatField(default=0.0)
     cif_fc = models.FloatField(default=0.0)
     qty = models.FloatField(default=0.0)
+    is_boe = models.BooleanField(default=False)
     admin_search_fields = ('item__license__license_number', )
 
     class Meta:
@@ -121,4 +122,4 @@ class AllotmentItems(models.Model):
 
     @property
     def get_delete_url(self):
-        return reverse('allotment-item-remove', kwargs={'pk': self.pk}) + '?allotment_id=' + str(self.allotment_id)
+        return reverse('allotment-item-delete', kwargs={'pk': self.pk}) + '?allotment_id=' + str(self.allotment_id)

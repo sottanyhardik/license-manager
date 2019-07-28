@@ -1,0 +1,72 @@
+import datetime
+
+import django_filters
+from django.db import models
+from django.forms import Select
+
+from license import models as license_model
+from allotment import models as allotment_model
+
+BOOLEAN_CHOICES = (
+    (True, 'Yes'),
+    (False, 'No')
+)
+
+
+class AllotmentItemFilter(django_filters.FilterSet):
+    remove_null = django_filters.BooleanFilter(method='remove_null_values', label='Remove Null')
+
+    class Meta:
+        model = license_model.LicenseImportItemsModel
+        fields = ['license__license_number', 'item__name', 'license__notification_number',
+                  'license__export_license__norm_class']
+        widgets = {
+            'license__notification_number': Select(attrs={'class': 'form-control'}),
+        }
+        filter_overrides = {
+            models.CharField: {
+                'filter_class': django_filters.CharFilter,
+                'extra': lambda f: {
+                    'lookup_expr': 'icontains',
+                },
+            },
+            models.TextField: {
+                'filter_class': django_filters.CharFilter,
+                'extra': lambda f: {
+                    'lookup_expr': 'icontains',
+                },
+            }
+        }
+
+    def remove_null_values(self, queryset, name, value):
+        if value:
+            id = []
+            for row in queryset:
+                if row.balance_quantity > 5000 and row.balance_cif_fc > 100:
+                    id.append(row.id)
+            return queryset.filter(id__in=id)
+        return queryset
+
+
+class AllotmentFilter(django_filters.FilterSet):
+    class Meta:
+        model = allotment_model.AllotmentModel
+        fields = ['type', 'company', 'item_name']
+        widgets = {
+            'company': Select(attrs={'class': 'form-control'}),
+            'type': Select(attrs={'class': 'form-control'}),
+        }
+        filter_overrides = {
+            models.CharField: {
+                'filter_class': django_filters.CharFilter,
+                'extra': lambda f: {
+                    'lookup_expr': 'icontains',
+                },
+            },
+            models.TextField: {
+                'filter_class': django_filters.CharFilter,
+                'extra': lambda f: {
+                    'lookup_expr': 'icontains',
+                },
+            }
+        }

@@ -1,0 +1,3 @@
+{% load app_tags %}
+{% load i18n %}
+<input type="text" name="allotment_quantity_{{ record.id }}" id="id_allotment_quantity_{{ record.id }}" class="form-control" value="{% quantity_allotment record.id allotment_object %}">

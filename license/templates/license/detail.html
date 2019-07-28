@@ -6,7 +6,14 @@
         <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
             <div class="card">
                 <div class="card-header">
-                    License Details
+                    <div class="row">
+                        <div class="col-xs-12 col-lg-9">
+                            License Details
+                        </div>
+                        <div class="col-xs-12 col-lg-3">
+                            <a class="successButton" href="{% url 'license-update' object.id %}">Edit</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="row grid">

@@ -10,6 +10,7 @@ urlpatterns = [
     path('company/<int:pk>/update/', views.UpdateCompanyView.as_view(), name='company-update'),
     path('sion/', views.ListSionView.as_view(), name='sion-list'),
     path('sion/<int:pk>/update/', views.UpdateSionView.as_view(), name='sion-update'),
+    path('sion/<int:pk>/', views.SionDetailView.as_view(), name='sion-detail'),
     path('hs_code/add/', views.CreateHSNCodeView.as_view(), name='hs-code-add'),
     path('hs_code/', views.ListHSNView.as_view(), name='hs-code-list'),
     path('hs_code/<int:pk>/update/', views.UpdateHSNCodeView.as_view(), name='hs-code-update'),

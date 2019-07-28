@@ -44,13 +44,15 @@ class LicenseDetailFilter(django_filters.FilterSet):
         }
 
     def check_expired(self, queryset, name, value):
+        from datetime import datetime, timedelta
+        expirty_limit = datetime.today() - timedelta(days=30)
         if value:
-            return queryset.filter(license_expiry_date__lt=datetime.datetime.now())
+            return queryset.filter(license_expiry_date__lt=expirty_limit)
         else:
-            return queryset
+            return queryset.filter(license_expiry_date__gte=expirty_limit)
 
     def check_individual(self, queryset, name, value):
         if value:
-            return queryset.filter(import_license__row_details__cif_fc=.01).distinct()
+            return queryset.filter(import_license__item_details__cif_fc=.01).distinct()
         else:
             return queryset

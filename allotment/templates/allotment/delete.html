@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}{{ object_name }} Confirm delete?{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Confirm </h3>
+                </div>
+                <div class="card-body">
+                    {% if form.errors %}
+                            <div class="alert alert-danger">
+                                <ul class="errorlist">
+                                    {% if form.non_field_errors %}
+                                        <li>{{ form.non_field_errors }}</li>
+                                    {% endif %}
+                                    {% for field in form %}
+                                        {% if field.errors %}
+                                            <li>
+                                                {{ field.label|title }}
+                                                <ul class="errorlist">
+                                                    {% for error in field.errors %}
+                                                        <li>{{ error }}</li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                    <h3>Are you sure?</h3>
+                    <p>You're about to delete <b>{{ object }}</b> allotment for license</p>
+                    <p>Please confirm.</p>
+                    <form action="" method="post">
+                        {% csrf_token %}
+                        <input class="btn btn-link"
+                               type="button" value="Cancel"
+                               onclick="window.history.go(-1);"/>
+                        <input class="btn btn-danger" type="submit" value="Confirm"/>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

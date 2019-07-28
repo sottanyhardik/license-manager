@@ -1,4 +1,5 @@
 from django.db import models
+from django.urls import reverse
 
 
 class BillOfEntryModel(models.Model):
@@ -8,12 +9,17 @@ class BillOfEntryModel(models.Model):
     bill_of_entry_date = models.DateField(null=True, blank=True)
     port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, related_name='boe_port', null=True, blank=True)
     exchange_rate = models.FloatField(default=0)
+    product_name = models.CharField(max_length=255, default='')
     allotment = models.ForeignKey('allotment.AllotmentModel', related_name="bill_of_entry", on_delete=models.CASCADE,
                                   null=True, blank=True)
     invoice_no = models.CharField(max_length=255, null=True, blank=True)
+    invoice_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return self.bill_of_entry_number
+
+    def get_absolute_url(self):
+        return reverse('bill-of-entry-detail', kwargs={'pk':self.id})
 
 
 Credit = 'C'
@@ -47,3 +53,5 @@ class RowDetails(models.Model):
 
     class Meta:
         ordering = ['sr_number__sr_number', 'sr_number__type']
+
+

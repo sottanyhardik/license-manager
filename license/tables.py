@@ -12,13 +12,15 @@ class LicenseDetailTable(dt2.Table):
     pdf = dt2.TemplateColumn('<a href="/license/{{ record.id }}/pdf"><i class="mdi mdi-file-pdf"></i></a>', orderable=False)
     license_date = dt2.DateTimeColumn(format='d-m-Y')
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y')
+    balance_cif = dt2.Column(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    norm_class = dt2.Column(verbose_name='Norm Class', accessor='get_norm_class', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'notification_number', 'port','license_number', 'license_date',
-                  'license_expiry_date', 'file_no', 'exporter', 'balance_cif', 'is_audit', 'ledger_date']
-        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable"}
+        fields = ['counter', 'notification_number', 'norm_class','port','license_number', 'license_date',
+                  'license_expiry_date', 'file_number', 'exporter', 'balance_cif', 'is_audit', 'ledger_date']
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):
         self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))

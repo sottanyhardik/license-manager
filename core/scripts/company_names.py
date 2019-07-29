@@ -52,11 +52,11 @@ def fetch_captcha(cookies):
 def request_company(cookies, iec, captcha):
     import requests
     cookies = {
-        'JSESSIONID': '7BBE257FB6BE8439AAEB92AE4C9FAC20',
-        'TS01b48377': '016b3f3df4fa55d9e0df544f99c19be0aea4153f05bdc873795304d292eee4fcac145f40d81e98974fa94fc18f8ae23907fa7e8b6bff86d6a77f546dcbed9e61370480e31d',
-        'style': 'blue',
+        'JSESSIONID': 'E5ADE641EE61B7236A1C0B83C1884BF1',
+        'TS01b48377': '016b3f3df4efd1558d7fa2911b3488799081c8222f4b5919ffa8df03b53dde15e45d77347c1157ee424803618794a5657f09ef16c1bfa57d8d8da3c1ded9088985c330a68ee2977900cd653ec4e9f4b1873afd0f92',
         'BIGipServerICEGATE_LOGIN_APP_6565': '2013856010.42265.0000',
-        'TS013f8d96': '016b3f3df43080012f32c326316c6e807d78a14ab2f98cfa329858718bcc7f108fa7121afcc9a883de3361753eab5ac863e8bd8cc8e91754d8cdc74a906e6c60be8aa93266',
+        'style': 'blue',
+        'TS013f8d96': '016b3f3df48fbdcecc0b08d77ff7aa3156b71da28645e7ae26fe86d3813c8b69d482e9d5225affcd3a68bc45862a69c54a23420224c0dd0c73e5b580a4f12042812691693c',
     }
     headers = {
         'Connection': 'keep-alive',
@@ -72,7 +72,7 @@ def request_company(cookies, iec, captcha):
     }
     data = {
         'searchIECode': iec,
-        'captchaResp': '8Jo9QI'
+        'captchaResp': 'tWQhhk'
     }
     response = requests.post('https://www.icegate.gov.in/EnqMod/searchIecCodeAction', headers=headers, cookies=cookies,
                              data=data, verify=False)
@@ -82,7 +82,8 @@ def request_company(cookies, iec, captcha):
             from bs4 import BeautifulSoup
             soup = BeautifulSoup(reponse_content, 'html.parser')
             dict_data = {'address': ''}
-            trs = soup.findAll('tr')
+            pagetable = soup.find('table', id="pagetable")
+            trs = pagetable.findAll('tr')
             for tr in trs:
                 tds = tr.findAll('td')
                 if tds:
@@ -109,7 +110,7 @@ def fetch_data_to_model(cookies, captcha):
     from core.models import CompanyModel
     data = CompanyModel.objects.filter(is_fetch=False).exclude(failed=5).order_by('id').first()
     if data:
-        data_dict = request_company(cookies, data.ie_code, captcha)
+        data_dict = request_company(cookies, data.iec, captcha)
         if data_dict:
             data.address = data_dict['address']
             if 'pan' in list(data_dict.keys()):

@@ -11,7 +11,7 @@ class CompanyClassTable(dt2.Table):
     class Meta:
         model = models.CompanyModel
         per_page = 100
-        fields = ('counter', 'iec', 'name', 'contact_person', 'phone_number', 'email', 'edit')
+        fields = ('counter', 'iec', 'name', 'address', 'phone_number', 'email', 'edit')
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

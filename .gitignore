@@ -125,3 +125,4 @@ dmypy.json
 .idea/*
 static_cdn/*
 dtemplates/*
+*.json

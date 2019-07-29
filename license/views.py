@@ -1,13 +1,16 @@
 import datetime
 
+import xlsxwriter as xlsxwriter
 from django.http import HttpResponseRedirect
 # Create your views here.
 from django.urls import reverse
+from django.views import View
 from django.views.generic import DetailView
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
 from core.utils import PagedFilteredTableView
+from license.excel import get_license_table
 from . import forms, tables, filters
 from . import models as license
 
@@ -127,3 +130,46 @@ class LicenseDetailView(DetailView):
 class PDFLicenseDetailView(PDFTemplateResponseMixin, DetailView):
     template_name = 'license/pdf.html'
     model = license.LicenseDetailsModel
+
+    def get_object(self, queryset=None):
+        return self.model.objects.get(license_number=self.kwargs.get('license'))
+
+
+class ExcelLicenseDetailView(View):
+
+    def get(self, request, license):
+        # Create an in-memory output file for the new workbook.
+        import io
+        from django.http import HttpResponse
+        output = io.BytesIO()
+        # Even though the final file will be in memory the module uses temp
+        # files during assembly for efficiency. To avoid this on servers that
+        # don't allow temp files, for example the Google APP Engine, set the
+        # 'in_memory' Workbook() constructor option as shown in the docs.
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet()
+        # Get some data to write to the spreadsheet.
+        data = get_license_table(license)
+        # Write some test data.
+        for row_num, columns in enumerate(data):
+            for col_num, cell_data in enumerate(columns):
+                if cell_data in ['License Number', 'License Date', 'License Expiry', 'File Number', 'Exporter',
+                                 'Notification', 'Scheme Code', 'Port', 'Export Items', 'Import Items', 'Item',
+                                 'Total CIF', 'Balance CIF',
+                                 "Sr No", 'HS Code', 'Quantity', 'Balance Quantity', 'CIF FC', 'Balance CIF FC']:
+                    cell_format = workbook.add_format({'bold': True})
+                    worksheet.write(row_num, col_num, cell_data, cell_format)
+                else:
+                    worksheet.write(row_num, col_num, cell_data)
+        # Close the workbook before sending the data.
+        workbook.close()
+        # Rewind the buffer.
+        output.seek(0)
+        # Set up the Http response.
+        filename = license + '.xlsx'
+        response = HttpResponse(
+            output,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename=%s' % filename
+        return response

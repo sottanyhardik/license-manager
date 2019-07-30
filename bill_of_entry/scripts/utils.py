@@ -1,10 +1,3 @@
-from core.scripts.company_names import fetch_data_to_model
-companies = CompanyModel.objects.all().update(is_fetch=False)
-status = True
-while status:
-    fetch_data_to_model('cookies', 'captcha')
-    status = CompanyModel.objects.filter(is_fetch=False).exclude(failed=5).exists()
-
 port_dict = {
     'INBLJ6': 'AGRA ICD (INBLJ6)',
     'INAMD4': 'AHEMDABAD AIR ACC (INAMD4)',

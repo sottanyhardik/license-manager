@@ -14,6 +14,8 @@ BOOLEAN_CHOICES = (
 
 
 class AllotmentItemFilter(django_filters.FilterSet):
+    remove_expired = django_filters.BooleanFilter(field_name='license_expiry_date', method='check_expired',
+                                                  label='Is Expired')
     remove_null = django_filters.BooleanFilter(method='remove_null_values', label='Remove Null')
 
     class Meta:
@@ -46,6 +48,14 @@ class AllotmentItemFilter(django_filters.FilterSet):
                     id.append(row.id)
             return queryset.filter(id__in=id)
         return queryset
+
+    def check_expired(self, queryset, name, value):
+        from datetime import datetime, timedelta
+        expirty_limit = datetime.today() - timedelta(days=30)
+        if value:
+            return queryset.filter(license__license_expiry_date__lt=expirty_limit)
+        else:
+            return queryset.filter(license__license_expiry_date__gte=expirty_limit)
 
 
 class AllotmentFilter(django_filters.FilterSet):

@@ -50,7 +50,7 @@ class AllotmentModel(models.Model):
         return self.required_quantity * self.unit_value_per_unit
 
     def get_absolute_url(self):
-        return reverse('allotment-details', kwargs={'pk': self.pk}) + '?item__name=' + self.item_name
+        return reverse('allotment-details', kwargs={'pk': self.pk}) + '?item__name=' + self.item_name + "&remove_expired=false&remove_null=true"
 
     @property
     def balanced_quantity(self):

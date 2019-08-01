@@ -55,20 +55,21 @@ class LicenseDetailsModel(models.Model):
     def get_norm_class(self):
         return ','.join([export.norm_class.norm_class for export in self.export_license.all()])
 
-
     def get_absolute_url(self):
         return reverse('license-detail', kwargs={'pk': self.pk})
 
     def get_balance_cif(self):
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        debit = RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        debit = \
+        RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
+            'cif_fc__sum']
         allotment = AllotmentItems.objects.filter(item__license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
         t_debit = 0
         if debit:
             t_debit = t_debit + debit
         if allotment:
             t_debit = t_debit + allotment
-        return round(credit - t_debit,2)
+        return round(credit - t_debit, 2)
 
 
 KG = 'kg'
@@ -115,7 +116,8 @@ class LicenseExportItemModel(models.Model):
             credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
         else:
             credit = self.cif_fc
-        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
+        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
+            Sum('cif_fc'))[
             'cif_fc__sum']
         allotment = AllotmentItems.objects.filter(item__license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
         t_debit = 0
@@ -228,5 +230,3 @@ class LicenseDocumentModel(models.Model):
                                 related_name='license_documents')
     type = models.CharField(max_length=255)
     file = models.FileField(upload_to=license_path)
-
-

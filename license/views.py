@@ -151,16 +151,22 @@ class ExcelLicenseDetailView(View):
         # Get some data to write to the spreadsheet.
         data = get_license_table(license)
         # Write some test data.
+        col_width = 256 * 30
+        width_dict = {}
         for row_num, columns in enumerate(data):
             for col_num, cell_data in enumerate(columns):
                 if cell_data in ['License Number', 'License Date', 'License Expiry', 'File Number', 'Exporter',
                                  'Notification', 'Scheme Code', 'Port', 'Export Items', 'Import Items', 'Item',
                                  'Total CIF', 'Balance CIF',
                                  "Sr No", 'HS Code', 'Quantity', 'Balance Quantity', 'CIF FC', 'Balance CIF FC']:
-                    cell_format = workbook.add_format({'bold': True})
+                    cell_format = workbook.add_format({'bold': True,'text_wrap': True})
                     worksheet.write(row_num, col_num, cell_data, cell_format)
+                    worksheet.set_column(row_num, col_num, 15)
                 else:
-                    worksheet.write(row_num, col_num, cell_data)
+                    cell_format = workbook.add_format({'text_wrap': True})
+                    worksheet.write(row_num, col_num, cell_data,cell_format)
+                    width_dict[col_num] = len(str(cell_data))
+                    worksheet.set_column(row_num, col_num, 15)
         # Close the workbook before sending the data.
         workbook.close()
         # Rewind the buffer.
@@ -173,3 +179,12 @@ class ExcelLicenseDetailView(View):
         )
         response['Content-Disposition'] = 'attachment; filename=%s' % filename
         return response
+
+
+class LicenseVerifyView(View):
+
+    def get(self, requests, pk):
+        license_obj = license.LicenseDetailsModel.objects.get(id=pk)
+        license_obj.is_audit = True
+        license_obj.save()
+        return HttpResponseRedirect(reverse('license-detail', kwargs={'pk': license_obj.id}))

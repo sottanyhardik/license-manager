@@ -14,13 +14,12 @@ def get_license_table(license):
         ["License Number", "License Date", "License Expiry", "File Number"],
         [license.license_number, str(license.license_date), str(license.license_expiry_date), license.file_number],
         [],
-        ["Exporter", "Notification", "Scheme Code", "Port"],
-        [exporter, license.get_notification_number_display(), license.scheme_code, license.port.code],
+        ["Notification", "Scheme Code", "Exporter", "Port", ],
+        [license.get_notification_number_display(), license.scheme_code, exporter, license.port.code],
         [],
         ["Export Items"],
         [],
         ['Item', 'Total CIF', 'Balance CIF'],
-        [],
     ]
     for item in license.export_license.all():
         item_list = []
@@ -32,9 +31,9 @@ def get_license_table(license):
         item_list.append(item.balance_cif_fc())
         data_list.append(item_list)
     data_list.append([])
-    data_list.append(["Import"])
+    data_list.append(["Import  Items"])
     data_list.append([])
-    data_list.append(["Sr No","HS Code","Item","Quantity","Balance Quantity","CIF FC","Balance CIF FC"])
+    data_list.append(["Sr No", "HS Code", "Item", "Quantity", "Balance Quantity", "CIF FC", "Balance CIF FC"])
     for item in license.import_license.all():
         item_list = [item.serial_number]
         if item.hs_code and item.hs_code.hs_code:

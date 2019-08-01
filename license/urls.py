@@ -8,8 +8,10 @@ urlpatterns = [
     path('', views.LicenseDetailListView.as_view(), name='list-license'),
     path('<int:pk>/', views.LicenseDetailView.as_view(), name='license-detail'),
     path('<int:pk>/update', views.LicenseDetailUpdateView.as_view(), name='license-update'),
+    path('<int:pk>/verify', views.LicenseVerifyView.as_view(), name='license-verify'),
     path('<slug:license>.pdf', views.PDFLicenseDetailView.as_view(), name='license-pdf'),
     path('<slug:license>.xlsx', views.ExcelLicenseDetailView.as_view(), name='license-excel'),
+
 
     # # ex: /polls/5/
     # path('<int:question_id>/', views.detail, name='detail'),

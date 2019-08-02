@@ -25,6 +25,7 @@ urlpatterns = [
     path('bill_of_entry/', include('bill_of_entry.urls')),
     path('admin/', admin.site.urls),
     path('select2/', include('django_select2.urls')),
+    path('accounts/', include('django.contrib.auth.urls')),
 ]
 
 if settings.DEBUG:

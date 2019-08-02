@@ -47,7 +47,7 @@
                     </div>
                     <div class="row">
                         <div class="col-lg-2 col-sm-4">
-                            <a href="{% url 'allotment-verify' allotment_object.id %}" class="successButton">View Allotments</a>
+                            <a href="{{ allotment_object.get_absolute_url }}" class="successButton">Edit Allotments</a>
                         </div>
                         <div class="col-lg-2 col-sm-4">
                             <a href="{% url 'allotment-send' allotment_object.id %}" class="successButton">View PDF</a>

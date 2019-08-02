@@ -3,6 +3,7 @@
 {% load querystring from django_tables2 %}
 {% load django_tables2 %}
 {% load core_tag %}
+{% load static %}
 {% load i18n %}
 {% block content %}
 
@@ -24,7 +25,12 @@
                             <a href="{% url 'item-add' %}" class="successButton">Add New</a>
                                     {% elif 'license' in request.path %}
                             <a href="{% url 'add-license' %}" class="successButton">Add New</a>
+                            {% elif 'allotment' in request.path %}
+                            <a href="{% url 'allotment-add' %}" class="successButton">Add New</a>
+                                {% elif 'bill_of_entry'  in request.path %}
+                                <a href="{% url 'bill-of-entry-create' %}" class="successButton">Add New</a>
                             {% endif %}
+
                         </div>
                     </div>
 
@@ -122,4 +128,17 @@
             </div>
         </div>
     </div>
+{% endblock %}
+{% block extra_js_script %}
+    <script src="{% static 'js/select2.min.js' %}"></script>
+    <script src="{% static 'js/django_select2.js' %}"></script>
+    <script src="{% static 'js/django_select2.js' %}"></script>
+     <script type="text/javascript">
+        $(document).on('focus', '.select2', function (e) {
+            if (e.originalEvent) {
+                $(this).siblings('select').select2('open');
+            }
+        });
+
+    </script>
 {% endblock %}

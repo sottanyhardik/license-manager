@@ -105,6 +105,14 @@ class AllotmentItems(models.Model):
         return self.item.license.license_date
 
     @property
+    def exporter(self):
+        return self.item.license.exporter
+
+    @property
+    def license_expiry(self):
+        return self.item.license.license_expiry_date
+
+    @property
     def registration_number(self):
         return self.item.license.registration_number
 

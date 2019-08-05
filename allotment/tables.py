@@ -10,6 +10,7 @@ class AllotmentItemsTable(dt2.Table):
     counter = dt2.Column(empty_values=(), orderable=False)
     license_date = dt2.Column(verbose_name='License Date', accessor='license.license_date')
     license_expiry = dt2.Column(verbose_name='License Expiry Date', accessor='license.license_expiry_date')
+    license_exporter = dt2.Column(verbose_name='Exporter', accessor='license.exporter')
     balance_quantity = dt2.TemplateColumn(
         '<spam id = "id_allotment_balance_{{ record.id }}" > {{ record.balance_quantity }} </spam>', orderable=False)
     balance_value = dt2.TemplateColumn(
@@ -20,7 +21,7 @@ class AllotmentItemsTable(dt2.Table):
     class Meta:
         model = license_model.LicenseImportItemsModel
         per_page = 50
-        fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry', 'hs_code', 'item',
+        fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry','license_exporter', 'hs_code', 'item',
                   'balance_quantity', 'balance_value', 'allotment_quantity', 'allotment_value', 'unit']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 

@@ -45,7 +45,7 @@ def get_license_table(license):
     for item in license.import_license.all():
         item_list = [item.serial_number]
         if item.hs_code and item.hs_code.hs_code:
-            item_list.append(item.hs_code.hs_code)
+            item_list.append(str(item.hs_code.hs_code))
         else:
             item_list.append("")
         if item.item and item.item.name:

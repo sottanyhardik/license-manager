@@ -110,10 +110,7 @@
                         {% for import_item in object.import_license.all %}
                             <tr>
                                 <td>{{ import_item.serial_number }}</td>
-                                <td>{% for hs_code in import_item.hs_code.all %}
-                                        {{ hs_code }}/
-                                    {% endfor %}
-                            </td>
+                                <td>{{ import_item.hs_code }}</td>
                                 <td>{{ import_item.item|title }}</td>
                                 <td>{{ import_item.quantity }}</td>
                                 <td>{{ import_item.balance_quantity }}

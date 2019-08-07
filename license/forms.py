@@ -35,9 +35,9 @@ class ExportItemsForm(forms.ModelForm):
 
 
 class ImportItemsForm(forms.ModelForm):
-    hs_code = forms.ModelMultipleChoiceField(
+    hs_code = forms.ModelChoiceField(
         queryset=core_model.HSCodeModel.objects.all(),
-        widget=custom_widgets.HSCodeWidget,
+        widget=custom_widgets.HSCodeSingleWidget,
         required=False
     )
 

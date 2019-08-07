@@ -17,6 +17,7 @@ class BillOfEntryModel(models.Model):
     is_fetch = models.BooleanField(default=False)
     failed = models.IntegerField(default=0)
     cha = models.CharField(max_length=255, null=True, blank=True)
+    admin_search_fields = ['bill_of_entry_number',]
 
     def __str__(self):
         return self.bill_of_entry_number
@@ -52,7 +53,7 @@ class RowDetails(models.Model):
     cif_inr = models.FloatField(default=0.0)
     cif_fc = models.FloatField(default=0.0)
     qty = models.FloatField(default=0.0)
-    admin_search_fields = ('sr_number__license__license_number', 'be_number')
+    admin_search_fields = ('sr_number__license__license_number', 'bill_of_entry__bill_of_entry_number')
 
     class Meta:
         ordering = ['sr_number__sr_number', 'sr_number__type']

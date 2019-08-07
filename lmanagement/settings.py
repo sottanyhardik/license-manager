@@ -130,6 +130,7 @@ USE_L10N = False
 USE_TZ = True
 
 DATE_FORMAT = "d-m-Y"
+DATETIME_FORMAT = "d-m-Y"
 
 
 # Static files (CSS, JavaScript, Images)
@@ -173,3 +174,4 @@ CACHES = {
 
 # Set the cache backend to select2
 SELECT2_CACHE_BACKEND = 'select2'
+

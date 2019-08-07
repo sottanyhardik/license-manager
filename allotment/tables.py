@@ -8,8 +8,9 @@ from allotment import models as allotment_model
 
 class AllotmentItemsTable(dt2.Table):
     counter = dt2.Column(empty_values=(), orderable=False)
-    license_date = dt2.Column(verbose_name='License Date', accessor='license.license_date')
-    license_expiry = dt2.Column(verbose_name='License Expiry Date', accessor='license.license_expiry_date')
+    license_date = dt2.DateTimeColumn(format='d-m-Y', accessor='license.license_date')
+    license_expiry = dt2.DateTimeColumn(format='d-m-Y', verbose_name='License Expiry Date',
+                                        accessor='license.license_expiry_date')
     license_exporter = dt2.Column(verbose_name='Exporter', accessor='license.exporter')
     balance_quantity = dt2.TemplateColumn(
         '<spam id = "id_allotment_balance_{{ record.id }}" > {{ record.balance_quantity }} </spam>', orderable=False)
@@ -21,7 +22,8 @@ class AllotmentItemsTable(dt2.Table):
     class Meta:
         model = license_model.LicenseImportItemsModel
         per_page = 50
-        fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry','license_exporter', 'hs_code', 'item',
+        fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
+                  'hs_code', 'item',
                   'balance_quantity', 'balance_value', 'allotment_quantity', 'allotment_value', 'unit']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
@@ -76,7 +78,8 @@ class AllotedItemsTable(dt2.Table):
     class Meta:
         model = allotment_model.AllotmentItems
         per_page = 50
-        fields = ['counter', 'serial_number', 'license_number', 'license_date','exporter','license_expiry','registration_number',
+        fields = ['counter', 'serial_number', 'license_number', 'license_date', 'exporter', 'license_expiry',
+                  'registration_number',
                   'registration_date', 'qty', 'cif_fc', 'notification_number']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 

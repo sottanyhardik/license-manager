@@ -19,6 +19,7 @@ class BillOfEntryTable(dt2.Table):
     amount_inr = dt2.Column(verbose_name='BE Amount INR', accessor='get_total_inr')
     amount_fc = dt2.Column(verbose_name='BE Amount FC', accessor='get_total_fc')
     quantity = dt2.Column(verbose_name='BE Quantity', accessor='get_total_quantity')
+    bill_of_entry_date = dt2.DateTimeColumn(format='d-m-Y')
 
     class Meta:
         model = bill_of_entry_model.BillOfEntryModel

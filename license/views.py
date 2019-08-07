@@ -103,8 +103,9 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
                                     import_item_obj.quantity = round(
                                         export_item.net_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
                                         3)
-                                if not import_item_obj.hs_code:
-                                    import_item_obj.hs_code = import_item.hs_code.first()
+                                if not import_item_obj.hs_code.all().exists():
+                                    for hs_code in import_item.hs_code.all():
+                                        import_item_obj.hs_code.add(hs_code.id)
                                 import_item_obj.save()
                     else:
                         if self.object.import_license.all().first():

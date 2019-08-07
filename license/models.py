@@ -134,7 +134,7 @@ class LicenseExportItemModel(models.Model):
 class LicenseImportItemsModel(models.Model):
     serial_number = models.IntegerField(default=0)
     license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE, related_name='import_license')
-    hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.CASCADE, null=True, blank=True,
+    hs_code = models.ManyToManyField('core.HSCodeModel', null=True, blank=True,
                                 related_name='import_item')
     item = models.ForeignKey('core.ItemNameModel', related_name='license_items', on_delete=models.CASCADE, null=True,
                              blank=True)

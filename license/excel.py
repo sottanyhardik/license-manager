@@ -10,9 +10,17 @@ def get_license_table(license):
         exporter = license.exporter.name
     else:
         exporter = ""
+    if license.license_expiry_date:
+        date = license.license_expiry_date.strftime('%d-%m-%Y')
+    else:
+        date = ""
+    if license.license_expiry_date:
+        license_expiry_date = license.license_expiry_date.strftime('%d-%m-%Y')
+    else:
+        license_expiry_date = ""
     data_list = [
         ["License Number", "License Date", "License Expiry", "File Number"],
-        [license.license_number, str(license.license_date.strftime('%d-%m-%Y')), str(license.license_expiry_date.strftime('%d-%m-%Y')), license.file_number],
+        [license.license_number, date, license_expiry_date, license.file_number],
         [],
         ["Notification", "Scheme Code", "Exporter", "Port", ],
         [license.get_notification_number_display(), license.scheme_code, exporter, license.port.code],

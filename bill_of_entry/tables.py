@@ -13,7 +13,7 @@ class BillOfEntryTable(dt2.Table):
         orderable=False)
     view = dt2.TemplateColumn('<a href="{{ record.get_absolute_url }}"><i class="mdi mdi-share"></i></a>',
                               orderable=False)
-    delete = dt2.TemplateColumn('<a href="{% url "allotment-delete" record.id %}"><i class="mdi mdi-share"></i></a>',
+    delete = dt2.TemplateColumn('<a href="{% url "bill-of-entry-delete" record.id %}"><i class="mdi mdi-share"></i></a>',
                                 orderable=False)
 
     class Meta:

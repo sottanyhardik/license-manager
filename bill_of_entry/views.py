@@ -1,7 +1,7 @@
 # Create your views here.
 from django.http import HttpResponseRedirect
-from django.urls import reverse
-from django.views.generic import DetailView, FormView
+from django.urls import reverse, reverse_lazy
+from django.views.generic import DetailView, FormView, DeleteView
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
 from bill_of_entry.models import RowDetails
@@ -115,3 +115,7 @@ class BillOfEntryFetchView(FormView):
             return HttpResponseRedirect(reverse('bill_of_entry'))
 
 
+class BillOfEntryDeleteView(DeleteView):
+    template_name = 'allotment/delete.html'
+    model = bill_of_entry.BillOfEntryModel
+    success_url = reverse_lazy('bill-of-entry-list')

@@ -1,3 +1,5 @@
+from tempfile import template
+
 from django.db.models import Sum
 from django.http import JsonResponse, HttpResponse
 # Create your views here.
@@ -145,14 +147,15 @@ class SendAllotmentView(PDFTemplateResponseMixin, DetailView):
         context = {
             "object": self.get_object()
         }
+        html = template.render(context)
         pdf = render_to_pdf('allotment/send.html', context)
         if pdf:
             response = HttpResponse(pdf, content_type='application/pdf')
-            filename = "Allotment_%s.pdf" % object.item_name
-            content = "inline; filename='%s'" % filename
+            filename = "Allotment_%s.pdf" % (str(object.id))
+            content = "inline; filename='%s'" % (filename)
             download = request.GET.get("download")
             if download:
-                content = "attachment; filename='%s'" % filename
+                content = "attachment; filename='%s'" % (filename)
             response['Content-Disposition'] = content
             return response
         return HttpResponse("Not found")

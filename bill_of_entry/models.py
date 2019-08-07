@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Sum
 from django.urls import reverse
 
 
@@ -24,6 +25,15 @@ class BillOfEntryModel(models.Model):
 
     def get_absolute_url(self):
         return reverse('bill-of-entry-detail', kwargs={'pk':self.id})
+
+    def get_total_inr(self):
+        return self.item_details.all().aggregate(Sum('cif_inr'))['cif_inr__sum']
+
+    def get_total_fc(self):
+        return self.item_details.all().aggregate(Sum('cif_fc'))['cif_fc__sum']
+
+    def get_total_quantity(self):
+        return self.item_details.all().aggregate(Sum('qty'))['qty__sum']
 
 
 Credit = 'C'

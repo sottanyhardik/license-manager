@@ -3,6 +3,7 @@ from django import forms
 from core import models
 from . import custom_widgets
 
+
 class SIONExportForm(forms.ModelForm):
     hs_code = forms.ModelMultipleChoiceField(
         queryset=models.HSCodeModel.objects.all(),
@@ -71,7 +72,6 @@ class SIONImportForm(forms.ModelForm):
 
 
 class SionNormClassForm(forms.ModelForm):
-
     item = forms.ModelChoiceField(
         queryset=models.ItemNameModel.objects.all(),
         widget=custom_widgets.ItemWidget,

@@ -47,7 +47,16 @@ class PortModel(models.Model):
         return "{0}".format(self.code)
 
 
+class ItemHeadModel(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
 class ItemNameModel(models.Model):
+    head = models.ForeignKey('core.ItemHeadModel', on_delete=models.CASCADE, related_name='items', null=True,
+                             blank=True)
     name = models.CharField(max_length=255, unique=True)
 
     def __str__(self):

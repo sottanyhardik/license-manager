@@ -51,7 +51,7 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
     template_name = 'core/add.html'
     model = bill_of_entry.BillOfEntryModel
     form_class = forms.BillOfEntryForm
-    inlines = [BillOfEntryLicenseImportItemInline,]
+    inlines = [BillOfEntryLicenseImportItemInline, ]
 
     def dispatch(self, request, *args, **kwargs):
         # check if there is some video onsite
@@ -67,7 +67,8 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
         if allotment:
             if allotment.allotment_details.all().exists():
                 for allotment_item in allotment.allotment_details.all():
-                    row, bool = RowDetails.objects.get_or_create(bill_of_entry=self.object,sr_number=allotment_item.item)
+                    row, bool = RowDetails.objects.get_or_create(bill_of_entry=self.object,
+                                                                 sr_number=allotment_item.item)
                     row.cif_inr = allotment_item.cif_inr
                     row.cif_fc = allotment_item.cif_fc
                     row.qty = allotment_item.qty
@@ -76,8 +77,6 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
                     allotment_item.save()
         self.inlines = [BillOfEntryLicenseImportItemInline, ]
         return super(BillOfEntryUpdateView, self).get_inlines()
-
-
 
 
 # Create your views here.
@@ -96,7 +95,8 @@ class BillOfEntryFetchView(FormView):
         context['fetch_cookies'] = json.dumps(cookies)
         context['csrftoken'] = csrftoken
         data = self.kwargs.get('data')
-        context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(is_fetch=False).order_by('bill_of_entry_date', 'id').count()
+        context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(is_fetch=False).order_by(
+            'bill_of_entry_date', 'id').count()
         context['remain_captcha'] = context['remain_count'] / 3
         return context
 
@@ -110,9 +110,9 @@ class BillOfEntryFetchView(FormView):
             from bill_of_entry.scripts.utils import port_dict
             status = fetch_data_to_model(cookies, csrftoken, port_dict, kwargs, captcha)
         if bill_of_entry.BillOfEntryModel.objects.filter(is_fetch=False).exclude(failed=5).exists():
-            return HttpResponseRedirect(reverse('bill_of_entry'))
+            return HttpResponseRedirect(reverse('bill-of-entry-list'))
         else:
-            return HttpResponseRedirect(reverse('bill_of_entry'))
+            return HttpResponseRedirect(reverse('bill-of-entry-list'))
 
 
 class BillOfEntryDeleteView(DeleteView):

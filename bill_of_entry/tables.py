@@ -13,13 +13,19 @@ class BillOfEntryTable(dt2.Table):
         orderable=False)
     view = dt2.TemplateColumn('<a href="{{ record.get_absolute_url }}"><i class="mdi mdi-share"></i></a>',
                               orderable=False)
-    delete = dt2.TemplateColumn('<a href="{% url "bill-of-entry-delete" record.id %}"><i class="mdi mdi-share"></i></a>',
-                                orderable=False)
+    delete = dt2.TemplateColumn(
+        '<a href="{% url "bill-of-entry-delete" record.id %}"><i class="mdi mdi-share"></i></a>',
+        orderable=False)
+    amount_inr = dt2.Column(verbose_name='BE Amount INR', accessor='get_total_inr')
+    amount_fc = dt2.Column(verbose_name='BE Amount FC', accessor='get_total_fc')
+    quantity = dt2.Column(verbose_name='BE Quantity', accessor='get_total_quantity')
 
     class Meta:
         model = bill_of_entry_model.BillOfEntryModel
         per_page = 50
-        fields = ['counter', 'company', 'bill_of_entry_number', 'bill_of_entry_date', 'port', 'exchange_rate', 'product_name','allotment', 'invoice_no' ]
+
+        fields = ['counter', 'company', 'bill_of_entry_number', 'bill_of_entry_date','amount_inr', 'amount_fc','quantity','port', 'exchange_rate',
+                  'product_name', 'allotment', 'invoice_no']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

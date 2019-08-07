@@ -12,7 +12,7 @@ def get_license_table(license):
         exporter = ""
     data_list = [
         ["License Number", "License Date", "License Expiry", "File Number"],
-        [license.license_number, str(license.license_date), str(license.license_expiry_date), license.file_number],
+        [license.license_number, str(license.license_date.strftime('%d-%m-%Y')), str(license.license_expiry_date.strftime('%d-%m-%Y')), license.file_number],
         [],
         ["Notification", "Scheme Code", "Exporter", "Port", ],
         [license.get_notification_number_display(), license.scheme_code, exporter, license.port.code],

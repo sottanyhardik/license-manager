@@ -6,6 +6,17 @@ from core import custom_widgets
 
 
 class AllotmentForm(forms.ModelForm):
+    company = forms.ModelChoiceField(
+        queryset=core_models.CompanyModel.objects.all(),
+        widget=custom_widgets.CompanyWidget,
+        required=False
+    )
+
+    port = forms.ModelChoiceField(
+        queryset=core_models.PortModel.objects.all(),
+        widget=custom_widgets.PortWidget,
+        required=False
+    )
 
     class Meta:
         model = models.AllotmentModel

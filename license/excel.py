@@ -59,4 +59,14 @@ def get_license_table(license):
         if item.dbalance_cif_fc:
             item_list.append(item.balance_quantity)
         data_list.append(item_list)
+    data_list.append([])
+    data_list.append(["Amendment Needed"])
+    data_list.append(["Sr No","HS Code", "Item"])
+    for item in license.import_license.all():
+        main_item = item.item
+        item_list = [item.serial_number]
+        if main_item.head and main_item.head.hs_code != item.hs_code.hs_code:
+            item_list.append(main_item.head.hs_code)
+            item_list.append(main_item.head.name)
+        data_list.append(item_list)
     return data_list

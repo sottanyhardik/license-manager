@@ -49,6 +49,7 @@ class PortModel(models.Model):
 
 class ItemHeadModel(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    hs_code = models.CharField(max_length=255)
 
     def __str__(self):
         return self.name
@@ -61,6 +62,9 @@ class ItemNameModel(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_absolute_url(self):
+        return reverse('item-list')
 
 
 class HSCodeModel(models.Model):

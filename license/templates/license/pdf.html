@@ -155,4 +155,30 @@
         </tbody>
 
     </table>
+    <h3>
+        Amendment Needed
+    </h3>
+    <table class="table table-bordered table-striped tbordered">
+        <thead>
+        <th>Sr No</th>
+        <th>HS Code</th>
+        <th>Item</th>
+        </thead>
+        <tbody>
+        {% for import_item in object.import_license.all %}
+            <tr>
+                <td>{{ import_item.serial_number }}</td>
+                {% if import_item.item.head and import_item.item.head.hs_code != item.hs_code.hs_code %}
+                <td>{{ import_item.item.head.hs_code }}</td>
+                <td>{{ import_item.item.head.name|title }}</td>
+                {% else %}
+                    <td> </td>
+                    <td> </td>
+                {% endif %}
+            </tr>
+        {% endfor %}
+
+        </tbody>
+
+    </table>
 {% endblock %}

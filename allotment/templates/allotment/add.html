@@ -63,3 +63,15 @@
     </form>
 
 {% endblock %}
+{% block extra_js_script %}
+    <script src="{% static 'js/select2.min.js' %}"></script>
+    <script src="{% static 'js/django_select2.js' %}"></script>
+    <script type="text/javascript">
+        $(document).on('focus', '.select2', function (e) {
+            if (e.originalEvent) {
+                $(this).siblings('select').select2('open');
+            }
+        });
+
+    </script>
+{% endblock %}

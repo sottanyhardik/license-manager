@@ -147,7 +147,6 @@ class SendAllotmentView(PDFTemplateResponseMixin, DetailView):
         context = {
             "object": self.get_object()
         }
-        html = template.render(context)
         pdf = render_to_pdf('allotment/send.html', context)
         if pdf:
             response = HttpResponse(pdf, content_type='application/pdf')

@@ -24,6 +24,7 @@ class CompanyModel(models.Model):
     address = models.TextField(null=True, blank=True)
     is_fetch = models.BooleanField(default=False)
     failed = models.IntegerField(default=0)
+    is_self = models.BooleanField(default=True)
 
     def __str__(self):
         if self.name:
@@ -32,7 +33,7 @@ class CompanyModel(models.Model):
             return self.iec
 
     def get_absolute_url(self):
-        return reverse('company_list')
+        return reverse('company-list')
 
 
 class PortModel(models.Model):

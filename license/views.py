@@ -156,7 +156,8 @@ class ExcelLicenseDetailView(View):
         for row_num, columns in enumerate(data):
             for col_num, cell_data in enumerate(columns):
                 if cell_data in ['License Number', 'License Date', 'License Expiry', 'File Number', 'Exporter',
-                                 'Notification', 'Scheme Code', 'Port', 'Export Items', 'Import Items', 'Item',
+                                 'Notification', 'Scheme Code',
+                                 'Port', 'Export Items', 'Import Items', 'Item',
                                  'Total CIF', 'Balance CIF',
                                  "Sr No", 'HS Code', 'Quantity', 'Balance Quantity', 'CIF FC', 'Balance CIF FC']:
                     cell_format = workbook.add_format({'bold': True,'text_wrap': True})
@@ -188,3 +189,4 @@ class LicenseVerifyView(View):
         license_obj.is_audit = True
         license_obj.save()
         return HttpResponseRedirect(reverse('license-detail', kwargs={'pk': license_obj.id}))
+

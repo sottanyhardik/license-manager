@@ -39,7 +39,4 @@ class BillOfEntryFilter(django_filters.FilterSet):
         }
 
     def check_self(self, queryset, name,value):
-        if value:
-            return queryset.filter(company__is_self=value)
-        else:
-            return queryset.filter()
+        return queryset.filter(item_details__sr_number__license__is_self=True)

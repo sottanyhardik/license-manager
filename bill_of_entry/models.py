@@ -20,6 +20,9 @@ class BillOfEntryModel(models.Model):
     cha = models.CharField(max_length=255, null=True, blank=True)
     admin_search_fields = ['bill_of_entry_number',]
 
+    class Meta:
+        ordering = ('-bill_of_entry_date',)
+
     def __str__(self):
         return self.bill_of_entry_number
 

@@ -39,4 +39,4 @@ class BillOfEntryFilter(django_filters.FilterSet):
         }
 
     def check_self(self, queryset, name,value):
-        return queryset.filter(item_details__sr_number__license__is_self=True).order_by('bill_of_entry_number').distinct('bill_of_entry_number')
+        return queryset.filter(item_details__sr_number__license__is_self=True).distinct()

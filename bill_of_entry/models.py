@@ -38,6 +38,9 @@ class BillOfEntryModel(models.Model):
     def get_total_quantity(self):
         return self.item_details.all().aggregate(Sum('qty'))['qty__sum']
 
+    def get_licenses(self):
+        return ", ".join([item.sr_number.license.license_number for item in self.item_details.all()])
+
 
 Credit = 'C'
 Debit = 'D'

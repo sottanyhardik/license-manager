@@ -58,7 +58,7 @@ class ItemNameTable(dt2.Table):
     class Meta:
         model = models.ItemNameModel
         per_page = 50
-        fields = ('counter', 'name', 'edit')
+        fields = ('counter', 'name','head', 'edit')
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

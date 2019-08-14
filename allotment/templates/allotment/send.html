@@ -145,7 +145,13 @@
                 <td>Basic</td>
                 <td>{{ data.serial_number }}</td>
                 <td style="text-align: right">{{ data.qty|floatformat:2 }}</td>
-                <td style="text-align: right">{{ data.cif_fc|floatformat:2 }}</td>
+                <td style="text-align: right">
+                    {% if not data.cif_fc == 0 %}
+                        {{ data.cif_fc|floatformat:2 }}
+                    {% else %}
+                         As Per Invoice
+                    {% endif %}
+                </td>
                 <td>{{ data.notification_number }}</td>
             </tr>
         {% endfor %}

@@ -43,6 +43,7 @@ class LicenseDetailsModel(models.Model):
     ledger_date = models.DateField(null=True, blank=True)
     is_audit = models.BooleanField(default=False)
     is_null = models.BooleanField(default=False)
+    is_self = models.BooleanField(default=True)
 
     def __str__(self):
         return self.license_number

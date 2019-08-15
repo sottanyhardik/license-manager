@@ -20,6 +20,9 @@ class BillOfEntryModel(models.Model):
     cha = models.CharField(max_length=255, null=True, blank=True)
     admin_search_fields = ['bill_of_entry_number',]
 
+    class Meta:
+        ordering = ('-bill_of_entry_date',)
+
     def __str__(self):
         return self.bill_of_entry_number
 
@@ -34,6 +37,9 @@ class BillOfEntryModel(models.Model):
 
     def get_total_quantity(self):
         return self.item_details.all().aggregate(Sum('qty'))['qty__sum']
+
+    def get_licenses(self):
+        return ", ".join([item.sr_number.license.license_number for item in self.item_details.all()])
 
 
 Credit = 'C'

@@ -171,7 +171,7 @@
         </thead>
         <tbody>
         {% for import_item in object.import_license.all %}
-            {% if import_item.item.head and not import_item.hs_code.hs_code in import_item.item.head.hs_code  %}
+            {% if import_item.item.head and import_item.hs_code.hs_code not in import_item.item.head.hs_code %}
                 <tr>
                     <td>{{ import_item.serial_number }}</td>
                     <td>{{ import_item.item.head.hs_code }}</td>

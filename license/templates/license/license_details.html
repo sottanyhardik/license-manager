@@ -133,20 +133,27 @@
 
                                     {% endfor %}
                                     {% for item in import_item.allotment_details.all %}
-                                                                                <tr>
+                                        <tr>
                                             <td>ALLOTMENT</td>
                                             <td>{{ item.qty }}</td>
                                             <td>
-                                                    {{ item.cif_fc }}
+                                                {{ item.cif_fc }}
                                             </td>
-
                                             <td>
-                                                    {{ item.cif_fc }}
+                                                {{ item.cif_fc }}
                                             </td>
                                         </tr>
 
                                     {% endfor %}
                                     </tbody>
+                                    <tfoot>
+                                    <tr>
+                                        <td></td>
+                                        <td><b>{{ import_item.balance_quantity }}</b></td>
+                                        <td></td>
+                                        <td></td>
+                                    </tr>
+                                    </tfoot>
                                 </table>
                             </td>
                             </tr>

@@ -5,7 +5,7 @@ from django.http import HttpResponseRedirect
 # Create your views here.
 from django.urls import reverse
 from django.views import View
-from django.views.generic import DetailView
+from django.views.generic import DetailView, ListView
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
@@ -195,3 +195,32 @@ class LicenseDetailLedgerView(DetailView):
     template_name = 'license/license_details.html'
     model = license.LicenseDetailsModel
     context_object_name = 'license'
+
+
+class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):
+    template_name = 'license/pdf_ledger.html'
+    model = license.LicenseDetailsModel
+
+    def get_object(self, queryset=None):
+        return self.model.objects.get(license_number=self.kwargs.get('license'))
+
+
+class PDFConsolidatedView(PDFTemplateResponseMixin, ListView):
+    template_name = 'license/consolidated.html'
+    model = license.LicenseDetailsModel
+    context_object_name = 'license_list'
+
+    def get_queryset(self):
+        expirty_limit = datetime.datetime.today() - datetime.timedelta(days=30)
+        from license.models import LicenseDetailsModel
+        notification = self.kwargs.get('notification')
+        if notification == '19':
+            from license.models import N2015
+            notification_number = N2015
+        else:
+            from license.models import N2009
+            notification_number = N2009
+        query = LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class=self.kwargs.get('norm'),
+                                                   notification_number=notification_number, is_null=False).filter(
+            license_expiry_date__gt=expirty_limit).order_by('license_expiry_date')
+        return query

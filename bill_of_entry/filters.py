@@ -16,10 +16,11 @@ BOOLEAN_CHOICES = (
 
 class BillOfEntryFilter(django_filters.FilterSet):
     is_self = django_filters.BooleanFilter(method='check_self', label='All')
+    item_details__sr_number__license__license_number = django_filters.CharFilter(label='License Number')
 
     class Meta:
         model = bill_of_entry.BillOfEntryModel
-        fields = ['company', 'bill_of_entry_number','port','product_name','is_self']
+        fields = ['company', 'bill_of_entry_number','port','product_name','is_self', 'item_details__sr_number__license__license_number']
         widgets = {
             'company': Select(attrs={'class': 'form-control'}),
         }

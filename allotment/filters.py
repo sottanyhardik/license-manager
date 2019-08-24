@@ -59,9 +59,11 @@ class AllotmentItemFilter(django_filters.FilterSet):
 
 
 class AllotmentFilter(django_filters.FilterSet):
+    allotment_details__item__license__license_number  = django_filters.CharFilter(label='License Number')
+
     class Meta:
         model = allotment_model.AllotmentModel
-        fields = ['type', 'company', 'item_name']
+        fields = ['type', 'company', 'item_name', 'allotment_details__item__license__license_number']
         widgets = {
             'company': Select(attrs={'class': 'form-control'}),
             'type': Select(attrs={'class': 'form-control'}),

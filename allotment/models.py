@@ -43,7 +43,7 @@ class AllotmentModel(models.Model):
         ordering = ['created_on', ]
 
     def __str__(self):
-        return "{0} {1}".format(self.item_name, self.company.name)
+        return "{0} {1} {2}".format(self.item_name, self.company.name, str(self.required_quantity))
 
     @property
     def required_value(self):

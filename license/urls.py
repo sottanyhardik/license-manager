@@ -11,7 +11,7 @@ urlpatterns = [
     path('<int:pk>/verify', views.LicenseVerifyView.as_view(), name='license-verify'),
     path('<slug:license>.pdf', views.PDFLicenseDetailView.as_view(), name='license-pdf'),
     path('<slug:license>.xlsx', views.ExcelLicenseDetailView.as_view(), name='license-excel'),
-
+    path('<int:pk>/ledger', views.LicenseDetailLedgerView.as_view(), name='license_ledger'),
 
     # # ex: /polls/5/
     # path('<int:question_id>/', views.detail, name='detail'),

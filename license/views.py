@@ -160,12 +160,12 @@ class ExcelLicenseDetailView(View):
                                  'Port', 'Export Items', 'Import Items', 'Item',
                                  'Total CIF', 'Balance CIF',
                                  "Sr No", 'HS Code', 'Quantity', 'Balance Quantity', 'CIF FC', 'Balance CIF FC']:
-                    cell_format = workbook.add_format({'bold': True,'text_wrap': True})
+                    cell_format = workbook.add_format({'bold': True, 'text_wrap': True})
                     worksheet.write(row_num, col_num, cell_data, cell_format)
                     worksheet.set_column(row_num, col_num, 15)
                 else:
                     cell_format = workbook.add_format({'text_wrap': True})
-                    worksheet.write(row_num, col_num, cell_data,cell_format)
+                    worksheet.write(row_num, col_num, cell_data, cell_format)
                     width_dict[col_num] = len(str(cell_data))
                     worksheet.set_column(row_num, col_num, 15)
         # Close the workbook before sending the data.
@@ -190,3 +190,8 @@ class LicenseVerifyView(View):
         license_obj.save()
         return HttpResponseRedirect(reverse('license-detail', kwargs={'pk': license_obj.id}))
 
+
+class LicenseDetailLedgerView(DetailView):
+    template_name = 'license/license_details.html'
+    model = license.LicenseDetailsModel
+    context_object_name = 'license'

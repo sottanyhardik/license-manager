@@ -20,7 +20,7 @@ def convert(query, name):
             import_datas = license.import_license.all()
             dict_data = {
                 'sr_no': counter,
-                'license_number': number,
+                'license_number': str(number),
                 'license_date': str(date),
                 'license_expiry': str(expiry),
                 'exporter': str(exporter),
@@ -33,8 +33,11 @@ def convert(query, name):
             file = False
             counter = counter + 1
             for import_data in import_datas:
-                dict_data['import_item'] = str(import_data.item.name)
-                dict_data['hs_code'] = str(import_data.hs_code.hs_code)
+                if import_data.item.head:
+                    dict_data['import_item'] = str(import_data.item.head.name)
+                else:
+                    dict_data['import_item'] = str(import_data.item.name)
+                dict_data['hs_code'] = "'" + import_data.hs_code.hs_code
                 dict_data['quantity_balance'] = int(import_data.balance_quantity)
                 if not license.is_null and not int(import_data.balance_quantity) < 1000:
                     if import_data.item.name in list(total_dict.keys()):

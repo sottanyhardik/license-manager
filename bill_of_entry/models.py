@@ -65,7 +65,7 @@ class RowDetails(models.Model):
     row_type = models.CharField(max_length=2, choices=ROW_TYPE, default=ALLOTMENT)
     sr_number = models.ForeignKey('license.LicenseImportItemsModel', on_delete=models.CASCADE,
                                   related_name='item_details')
-    transaction_type = models.CharField(max_length=2, choices=TYPE_CHOICES, default='C')
+    transaction_type = models.CharField(max_length=2, choices=TYPE_CHOICES, default='D')
     cif_inr = models.FloatField(default=0.0)
     cif_fc = models.FloatField(default=0.0)
     qty = models.FloatField(default=0.0)

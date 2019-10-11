@@ -147,7 +147,7 @@
                 <td>{{ import_item.hs_code }}</td>
                 <td>{{ import_item.item|title }}</td>
                 <td>{{ import_item.quantity }}</td>
-                <td>{% if import_item.cif_fc or import_item.cif_fc != 0 %}
+                <td>{% if import_item.cif_fc and import_item.cif_fc != 0 %}
                     {{ import_item.cif_fc }}{% else %} {% endif %}</td>
                 <td>{% if import_item.debited_quantity %}{{ import_item.debited_quantity }}{% else %} {% endif %}</td>
                 <td>

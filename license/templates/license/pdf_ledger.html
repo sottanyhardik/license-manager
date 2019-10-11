@@ -121,7 +121,20 @@
         Import Items
     </h3>
     {% for import_item in object.import_license.all %}
-
+        <table style="margin-top:20px; margin-bottom:5px;" class="table table-bordered table-striped tbordered">
+            <thead>
+            <th>Sr No</th>
+            <th>Product Description</th>
+            <th>HS Code</th>
+            </thead>
+            <tbody>
+            <tr>
+                <td>{{ import_item.serial_number }}</td>
+                <td>{{ import_item.item }}</td>
+                <td>{{ import_item.hs_code }}</td>
+            </tr>
+            </tbody>
+        </table>
         <table  class="table table-bordered table-striped tbordered">
             <thead>
             <th style="width: 10%">Date</th>
@@ -179,19 +192,19 @@
 
             </tbody>
             <tfoot>
-            <tr style="border-bottom: 1px solid #000">
-                <td style="border: none; width: 10%; border-right: 1px solid #000"></td>
-                <td style="border: none; width: 10%; border-right: 1px solid #000"></td>
-                <td style="border: none; width: 10%; border-right: 1px solid #000"></td>
-                <td style="border: none; width: 10%; border-right: 1px solid #000">
+            <tr>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid">
                     <b>{{ import_item.balance_quantity }}</b></td>
-                <td style="border: none; width: 10%; border-right: 1px solid #000">
+                <td style="width: 10%; border: 1px solid">
 
                 </td>
-                <td style="border: none; width: 10%; border-right: 1px solid #000">
+                <td style="width: 10%; border: 1px solid">
 
                 </td>
-                <td style="border: none; width: 40%; border-right: 1px solid #000"></td>
+                <td style="width: 40%; border: 1px solid"></td>
             </tr>
 
             </tfoot>

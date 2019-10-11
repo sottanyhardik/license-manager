@@ -135,6 +135,15 @@ class PDFLicenseDetailView(PDFTemplateResponseMixin, DetailView):
         return self.model.objects.get(license_number=self.kwargs.get('license'))
 
 
+class PDFAmendmentLicenseDetailView(PDFTemplateResponseMixin, DetailView):
+    template_name = 'license/pdf_amend.html'
+    model = license.LicenseDetailsModel
+
+    def get_object(self, queryset=None):
+        return self.model.objects.get(license_number=self.kwargs.get('license'))
+
+
+
 class ExcelLicenseDetailView(View):
 
     def get(self, request, license):

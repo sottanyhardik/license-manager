@@ -20,6 +20,8 @@ def parse_file(data):
     lines = data.split('\n')
     data_dict = {
         'row': []
+
+
     }
     for line in lines:
         if 'Printed By' in line:

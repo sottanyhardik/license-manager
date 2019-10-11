@@ -104,80 +104,31 @@
         </tbody>
     </table>
     <h3>
-        Export Items
-    </h3>
-    <table class="table table-bordered table-striped tbordered">
-        <thead>
-        <th>Item</th>
-        <th>Total CIF</th>
-        <th>Balance CIF</th>
-        </thead>
-        <tbody>
-        {% for export_item in object.export_license.all %}
-            <tr>
-                <td>{{ export_item.item|title }}</td>
-                <td>{{ export_item.cif_fc|title }}</td>
-                <td>{{ export_item.balance_cif_fc|title }}</td>
-            </tr>
-        {% endfor %}
-
-        </tbody>
-    </table>
-    <h3>
-        Import Items
+        Amendment Needed
     </h3>
     <table class="table table-bordered table-striped tbordered">
         <thead>
         <th>Sr No</th>
-        <th>HS Code</th>
-        <th>Item</th>
-        <th>Quantity</th>
-        <th>Value</th>
-        <th>Debited Qty</th>
-        <th>Debited USD</th>
-        <th>Alloted Qty</th>
-        <th>Alloted USD</th>
-        <th>Balance Qty</th>
-        <th>Balance USD</th>
+        <th>Current HS Code</th>
+        <th>Amend HS Code</th>
+        <th>Current Product Description</th>
+        <th>Amend Product Description</th>
         </thead>
         <tbody>
         {% for import_item in object.import_license.all %}
-            <tr>
-                <td>{{ import_item.serial_number }}</td>
-                <td>{{ import_item.hs_code }}</td>
-                <td>{{ import_item.item|title }}</td>
-                <td>{{ import_item.quantity }}</td>
-                <td>{% if import_item.cif_fc or import_item.cif_fc != 0 %}
-                    {{ import_item.cif_fc }}{% else %} {% endif %}</td>
-                <td>{% if import_item.debited_quantity %}{{ import_item.debited_quantity }}{% else %} {% endif %}</td>
-                <td>
-                    {% if import_item.debited_value %}
-                        {{ import_item.debited_value }}
-                    {% else %}
-
-                    {% endif %}
-                </td>
-                <td>{% if import_item.alloted_quantity %}{{ import_item.alloted_quantity }}{% else %} {% endif %}</td>
-                <td>{% if import_item.alloted_value %}{{ import_item.alloted_value }}{% else %} {% endif %}</td>
-                <td>{% if import_item.balance_quantity %}{{ import_item.balance_quantity }}{% else %} {% endif %}</td>
-                <td>{% if import_item.balance_cif_fc %}{{ import_item.balance_cif_fc }}{% else %} {% endif %}</td>
-            </tr>
+            {% if import_item.item.head and import_item.item.head.is_amend and import_item.hs_code.hs_code not in import_item.item.head.hs_code %}
+                <tr>
+                    <td>{{ import_item.serial_number }}</td>
+                    <td>{{ import_item.hs_code }}</td>
+                    <td>{{ import_item.item.head.hs_code }}</td>
+                    <td>{{ import_item.item }}</td>
+                    <td>{{ import_item.item.head.name|title }}</td>
+                </tr>
+            {% endif %}
         {% endfor %}
+
         </tbody>
-        <tfoot>
-        <tr>
-            <td> </td>
-            <td> </td>
-            <td> </td>
-            <td> </td>
-            <td> </td>
-            <td>Total Debit USD</td>
-            <td><b>{{ object.get_total_debit }}</b></td>
-            <td>Total Alloted USD</td>
-            <td><b>{{ object.get_total_allotment }}</b></td>
-            <td>Total Balance USD</td>
-            <td><b>{{ object.get_balance_cif }}</b></td>
-        </tr>
-        </tfoot>
+
     </table>
 {% endblock %}
+

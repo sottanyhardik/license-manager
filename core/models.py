@@ -51,6 +51,7 @@ class PortModel(models.Model):
 class ItemHeadModel(models.Model):
     name = models.CharField(max_length=255, unique=True)
     hs_code = models.CharField(max_length=255)
+    is_amend = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name

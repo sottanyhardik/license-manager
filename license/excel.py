@@ -56,7 +56,7 @@ def get_license_table(license):
         item_list.append(item.balance_quantity)
         if item.cif_fc and not item.cif_fc == 0:
             item_list.append(item.cif_fc)
-        if item.dbalance_cif_fc:
+        if item.balance_cif_fc:
             item_list.append(item.balance_quantity)
         data_list.append(item_list)
     data_list.append([])

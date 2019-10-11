@@ -128,3 +128,4 @@ dtemplates/*
 *.json
 
 db.json
+aro_details.csv

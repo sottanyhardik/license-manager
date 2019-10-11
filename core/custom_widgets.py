@@ -19,9 +19,8 @@ class NormWidget(ModelSelect2Widget):
 
 
 class HeadNormWidget(ModelSelect2Widget):
-    search_fields = ['name__icontains',]
+    search_fields = ['name__icontains', ]
     model = models.HeadSIONNormsModel
-
 
 
 class ItemWidget(ModelSelect2Widget):

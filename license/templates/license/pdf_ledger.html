@@ -161,18 +161,18 @@
                 </tr>
             {% endfor %}
             {% for item in import_item.allotment_details.all %}
-                <tr style="border-bottom: 1px solid #000">
-                    <td style="border: none; width: 10%; border-right: 1px solid #000">{{ item.allotment.modified_on }}</td>
-                    <td style="border: none; width: 10%; border-right: 1px solid #000">ALLOTMENT</td>
-                    <td style="border: none; width: 10%; border-right: 1px solid #000"></td>
-                    <td style="border: none; width: 10%; border-right: 1px solid #000">{{ item.qty }}</td>
-                    <td style="border: none; width: 10%; border-right: 1px solid #000">
+                <tr >
+                    <td>{{ item.allotment.modified_on }}</td>
+                    <td></td>
+                    <td>ALLOTMENT</td>
+                    <td>{{ item.qty }}</td>
+                    <td>
                         {{ item.cif_fc }}
                     </td>
-                    <td style="border: none; width: 10%; border-right: 1px solid #000">
+                    <td>
                         {{ item.cif_inr }}
                     </td>
-                    <td style="border: none; width: 40%; border-right: 1px solid #000">{{ item.allotment.company }}</td>
+                    <td>{{ item.allotment.company }}</td>
                 </tr>
 
             {% endfor %}

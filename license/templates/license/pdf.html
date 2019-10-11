@@ -160,7 +160,7 @@
                 <td>{% if import_item.alloted_quantity %}{{ import_item.alloted_quantity }}{% else %} {% endif %}</td>
                 <td>{% if import_item.alloted_value %}{{ import_item.alloted_value }}{% else %} {% endif %}</td>
                 <td>{% if import_item.balance_quantity %}{{ import_item.balance_quantity }}{% else %} {% endif %}</td>
-                <td>{% if import_item.balance_cif_fc %}{{ import_item.balance_cif_fc }}{% else %} {% endif %}</td>
+                <td>{% if import_item.balance_cif_fc != object.get_balance_cif %}{{ import_item.balance_cif_fc }}{% else %} {% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>

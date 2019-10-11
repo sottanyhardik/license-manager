@@ -61,12 +61,14 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_total_debit(self):
-        return RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        return \
+        RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
+            'cif_fc__sum']
 
     @property
     def get_total_allotment(self):
         return AllotmentItems.objects.filter(item__license=self,
-                                                  allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+                                             allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
             Sum('cif_fc'))['cif_fc__sum']
 
     def get_balance_cif(self):
@@ -172,15 +174,22 @@ class LicenseImportItemsModel(models.Model):
     def __str__(self):
         return "{0}-{1}".format(str(self.license), str(self.serial_number))
 
-
     @property
     def debited_quantity(self):
-        return self.item_details.filter(transaction_type='D').aggregate(Sum('qty'))['qty__sum']
+        debited = self.item_details.filter(transaction_type='D').aggregate(Sum('qty'))['qty__sum']
+        if debited:
+            return debited
+        else:
+            return 0
 
     @property
     def alloted_quantity(self):
-        return self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(Sum('qty'))['qty__sum']
-
+        alloted = self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+            Sum('qty'))['qty__sum']
+        if alloted:
+            return alloted
+        else:
+            return 0
 
     @property
     def balance_quantity(self):
@@ -188,12 +197,13 @@ class LicenseImportItemsModel(models.Model):
         debit = self.debited_quantity
         alloted = self.alloted_quantity
         if debit and alloted:
-            return  round(credit - debit - alloted, 2)
+            return round(credit - debit - alloted, 2)
         elif debit:
-            return round(credit - debit,2)
+            return round(credit - debit, 2)
         elif alloted:
-            return round((credit - alloted),2)
-
+            return round((credit - alloted), 2)
+        else:
+            return round(credit, 2)
 
     @property
     def debited_value(self):
@@ -201,26 +211,31 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def alloted_value(self):
-        return self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(Sum('cif_fc'))['cif_fc__sum']
-
+        return self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+            Sum('cif_fc'))['cif_fc__sum']
 
     @property
     def balance_cif_fc(self):
         if not self.cif_fc or self.cif_fc == 0:
-            return None
+            credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
+            debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
+                Sum('cif_fc'))[
+                'cif_fc__sum']
         else:
             credit = self.cif_fc
             debit = RowDetails.objects.filter(sr_number=self).filter(transaction_type=Debit).aggregate(
                 Sum('cif_fc'))['cif_fc__sum']
         alloted = AllotmentItems.objects.filter(item=self,
-                                                allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(Sum('cif_fc'))['cif_fc__sum']
+                                                allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+            Sum('cif_fc'))['cif_fc__sum']
         if debit and alloted:
-            return  round(credit - debit - alloted, 2)
+            return round(credit - debit - alloted, 2)
         elif debit:
-            return round(credit - debit,2)
+            return round(credit - debit, 2)
         elif alloted:
-            return round((credit - alloted),2)
-
+            return round((credit - alloted), 2)
+        else:
+            return round(credit, 2)
 
     @property
     def license_expiry(self):

@@ -40,7 +40,7 @@ class AllotmentModel(models.Model):
                                     related_name='allotment_updated')
 
     class Meta:
-        ordering = ['created_on', ]
+        ordering = ['modified_on', ]
 
     def __str__(self):
         return "{0} {1} {2}".format(self.item_name, self.company.name, str(self.required_quantity))

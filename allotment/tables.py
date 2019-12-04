@@ -42,11 +42,13 @@ class AllotmentTable(dt2.Table):
     delete = dt2.TemplateColumn('<a href="{% url "allotment-delete" record.id %}"><i class="mdi mdi-share"></i></a>',
                                 orderable=False)
 
+    modified_on = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Allotment Date')
+
     class Meta:
         model = allotment_model.AllotmentModel
         per_page = 50
-        fields = ['counter', 'type', 'company', 'required_quantity', 'unit_value_per_unit', 'item_name',
-                  'contact_person', 'contact_number', ]
+        fields = ['counter', 'type', 'modified_on','company', 'required_quantity', 'unit_value_per_unit', 'item_name',
+                  'contact_person', 'contact_number']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

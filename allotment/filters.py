@@ -60,6 +60,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
 
 class AllotmentFilter(django_filters.FilterSet):
     allotment_details__item__license__license_number  = django_filters.CharFilter(label='License Number')
+    is_be = django_filters.BooleanFilter(method='check_be', label='Is BOE')
 
     class Meta:
         model = allotment_model.AllotmentModel
@@ -82,3 +83,6 @@ class AllotmentFilter(django_filters.FilterSet):
                 },
             }
         }
+
+    def check_be(self, queryset, name, value):
+        return queryset.exclude(bill_of_entry__isnull=value).distinct()

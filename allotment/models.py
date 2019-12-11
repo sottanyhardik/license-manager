@@ -125,6 +125,10 @@ class AllotmentItems(models.Model):
         return self.item.license.notification_number
 
     @property
+    def file_number(self):
+        return self.item.license.file_number
+
+    @property
     def port_code(self):
         return self.item.license.port
 

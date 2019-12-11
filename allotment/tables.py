@@ -80,7 +80,7 @@ class AllotedItemsTable(dt2.Table):
     class Meta:
         model = allotment_model.AllotmentItems
         per_page = 50
-        fields = ['counter', 'serial_number', 'license_number', 'license_date', 'exporter', 'license_expiry',
+        fields = ['counter', 'serial_number', 'license_number','file_number', 'license_date', 'exporter', 'license_expiry',
                   'registration_number',
                   'registration_date', 'qty', 'cif_fc', 'notification_number']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}

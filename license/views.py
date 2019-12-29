@@ -105,7 +105,9 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
                                         export_item.net_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
                                         3)
                                 if import_item_obj.old_quantity == 0:
-                                    import_item_obj.old_quantity = round_down(export_item.old_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,0)
+                                    import_item_obj.old_quantity = round_down(
+                                        export_item.old_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
+                                        0)
                                 if not import_item_obj.hs_code:
                                     import_item_obj.hs_code = import_item.hs_code.first()
                                 import_item_obj.save()
@@ -131,7 +133,6 @@ class LicenseDetailView(DetailView):
 
     def get_object(self, queryset=None):
         return self.model.objects.get(license_number=self.kwargs.get('license'))
-
 
 
 class PDFLicenseDetailView(PDFTemplateResponseMixin, DetailView):
@@ -251,7 +252,8 @@ class BiscuitsReportView(PagedFilteredTableView):
     def get_queryset(self, **kwargs):
         norms = self.kwargs.get('norms')
         expirty_limit = datetime.datetime.today() - datetime.timedelta(days=30)
-        self.queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5', is_self=True).order_by('license_expiry_date')
+        self.queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                   is_self=True).order_by('license_expiry_date')
         return super(BiscuitsReportView, self).get_queryset()
 
 
@@ -263,5 +265,71 @@ class ConfectineryReportView(PagedFilteredTableView):
     page_head = 'License Report List'
 
     def get_queryset(self, **kwargs):
-        self.queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E1', is_self=True).order_by('license_expiry_date')
+        self.queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E1',
+                                                                   is_self=True).order_by('license_expiry_date')
         return super(ConfectineryReportView, self).get_queryset()
+
+
+class PDFReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_queryset(self, **kwargs):
+        norms = self.kwargs.get('norms')
+        expirty_limit = datetime.datetime.today()
+        self.queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                   license_expiry_date__gt=expirty_limit,
+                                                                   is_self=True).order_by('license_expiry_date')
+        return super(PDFReportView, self).get_queryset()
+
+    def get_context_data(self, **kwargs):
+        context = super(PDFReportView, self).get_context_data()
+        tables =[]
+        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
+        from license.models import N2015
+        from license.models import N2009
+        from django.db.models import Q
+        try:
+            expirty_limit = datetime.datetime.today()
+            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                       license_expiry_date__gt=expirty_limit,
+                                                                       is_self=True).order_by('license_expiry_date')
+            confectionery_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E1',
+                                                                           license_expiry_date__gt=expirty_limit,
+                                                                           is_self=True).order_by('license_expiry_date')
+
+            table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2015).filter(Q(exporter__name__icontains='rama')|Q(exporter__name__icontains='rani')|Q(exporter__name__icontains='vanila')).exclude(export_license__old_quantity=0).distinct())
+            tables.append({'label':'RAMA RANI VANNILA Conversion Biscuits','table':table})
+            table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2015).filter(Q(exporter__name__icontains='rama')|Q(exporter__name__icontains='rani')|Q(exporter__name__icontains='vanila')).exclude(export_license__old_quantity=0).distinct())
+            tables.append({'label':'RAMA RANI VANNILA Conversion Confectinery','table':table})
+            table = LicenseBiscuitReportTable(biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(Q(exporter__name__icontains='rama')|Q(exporter__name__icontains='rani')|Q(exporter__name__icontains='vanila')).distinct())
+            tables.append({'label':'RAMA RANI VANNILA Other Biscuits','table':table})
+            table = LicenseConfectineryReportTable(confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(Q(exporter__name__icontains='rama')|Q(exporter__name__icontains='rani')|Q(exporter__name__icontains='vanila')).distinct())
+            tables.append({'label':'RAMA RANI VANNILA Other Confectinery','table':table})
+
+            table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2015).filter(exporter__name__icontains='parle').exclude(export_license__old_quantity=0).distinct())
+            tables.append({'label':'Parle Conversion Biscuits','table':table})
+            table = LicenseBiscuitReportTable(biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(Q(exporter__name__icontains='parle')).distinct())
+            tables.append({'label':'Parle Other Biscuits','table':table})
+            table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2015).filter(exporter__name__icontains='parle').exclude(export_license__old_quantity=0).distinct())
+            tables.append({'label':'Parle Conversion Confectinery','table':table})
+            table = LicenseConfectineryReportTable(confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(Q(exporter__name__icontains='parle')).distinct())
+            tables.append({'label':'Parle Other Confectinery','table':table})
+
+            table = LicenseBiscuitReportTable(biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).exclude(Q(exporter__name__icontains='rama')|Q(exporter__name__icontains='rani')|Q(exporter__name__icontains='vanila')|Q(exporter__name__icontains='parle')).distinct())
+            tables.append({'label':'Biscuits Remaning 2015 Notification','table':table})
+            table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label':'Biscuits 2009 Notification','table':table})
+
+            table = LicenseConfectineryReportTable(confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).exclude(Q(exporter__name__icontains='rama')|Q(exporter__name__icontains='rani')|Q(exporter__name__icontains='vanila')|Q(exporter__name__icontains='parle')).distinct())
+            tables.append({'label':'Confectinery Remaning 2015 Notification','table':table})
+            table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label':'Confectinery 2009 Notification','table':table})
+
+            context['tables'] = tables
+        except:
+            pass
+        return context

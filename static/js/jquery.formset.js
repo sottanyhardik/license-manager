@@ -125,7 +125,7 @@
                 });
                 $form.trigger('formAdded');
             }
-        }
+        };
 
         // Trigger `formAdded` / `formDeleted` events when delete checkbox value changes
         $delete.change(onChangeDelete);
@@ -208,7 +208,7 @@
             var $order = $(form).find('[name=' + prefix + '-ORDER]');
             $order.val(i);
         });
-    }
+    };
 
     /**
      * Enumerate the forms and fill numbers into their ORDER input
@@ -224,7 +224,7 @@
             var a = parseInt($(form_a).find('[name*=-ORDER]').val());
             var b = parseInt($(form_b).find('[name*=-ORDER]').val());
             return (a < b ? -1 : (a > b ? 1 : 0));
-        }
+        };
         var $forms = this.$activeForms().sort(compareForms);
 
         if (this.opts.reorderMode == 'dom') {
@@ -267,7 +267,7 @@
                 _this.$body.css("height", "auto");
             }, 1000);
         }
-    }
+    };
 
     Formset.prototype.$forms = function() {
         return this.$body.find(this.opts.form);

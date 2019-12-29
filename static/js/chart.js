@@ -145,7 +145,7 @@ $(function() {
         propagate: true
       }
     }
-  }
+  };
 
   var multiAreaData = {
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
@@ -199,7 +199,7 @@ $(function() {
         }
       }]
     }
-  }
+  };
 
   var scatterChartData = {
     datasets: [{
@@ -257,7 +257,7 @@ $(function() {
         borderWidth: 1
       }
     ]
-  }
+  };
 
   var scatterChartOptions = {
     scales: {
@@ -266,7 +266,7 @@ $(function() {
         position: 'bottom'
       }]
     }
-  }
+  };
   // Get context with jQuery - using jQuery's .get() method.
   if ($("#barChart").length) {
     var barChartCanvas = $("#barChart").get(0).getContext("2d");

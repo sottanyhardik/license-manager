@@ -1,0 +1,112 @@
+{% extends "pdf_base.html" %}
+{% load render_table from django_tables2 %}
+
+{% block extra_style %}
+
+    <style type="text/css">
+        @page {
+            size: A4 landscape;
+            margin: 1cm;
+        }
+
+
+        .table th,
+        .table td {
+            padding: 1px;
+            vertical-align: top;
+            border: 1px solid #000;
+            text-align: center;
+        }
+
+        .table thead th {
+            vertical-align: bottom;
+            border-bottom: 2px solid #000;
+        }
+
+        .table tbody + tbody {
+            border-top: 2px solid #000;
+        }
+
+        .table .table {
+            background-color: #fff;
+        }
+
+        .list-group {
+            display: block;
+            width: 100%;
+            list-style: none;
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+
+        .list-group p {
+            width: 100%;
+            height: 18px;
+            line-height: 20px;
+            list-style: none;
+            font-size: 1.1em;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <h3>
+        Reports
+    </h3>
+    {% load django_tables2 %}
+    {% load i18n %}
+        {% for table_dict in tables %}
+            <h1>{{ table_dict.label }}</h1>
+            <div class="table-container">
+                <table {% render_attrs table_dict.table.attrs %}>
+                    {% block table_dict.table.thead %}
+                        {% if table_dict.table.show_header %}
+                            <thead {{ table_dict.table.attrs.thead.as_html }}>
+                            <tr>
+                                {% for column in table_dict.table.columns %}
+                                    <th {{ column.attrs.th.as_html }} colspan="18">
+                                        {{ column.header }}
+                                    </th>
+                                {% endfor %}
+                            </tr>
+                            </thead>
+                        {% endif %}
+                    {% endblock table_dict.table.thead %}
+                    {% block table_dict.table.tbody %}
+                        <tbody {{ table_dict.table.attrs.tbody.as_html }}>
+                        {% for row in table_dict.table.paginated_rows %}
+                            {% block table_dict.table.tbody.row %}
+                                <tr {{ row.attrs.as_html }}>
+                                    {% for column, cell in row.items %}
+                                        <td {{ column.attrs.td.as_html }} colspan="18">{% if column.localize == None %}{{ cell }}{% else %}{% if column.localize %}{{ cell|localize }}{% else %}{{ cell|unlocalize }}{% endif %}{% endif %}</td>
+                                    {% endfor %}
+                                </tr>
+                            {% endblock table_dict.table.tbody.row %}
+                        {% empty %}
+                            {% if table_dict.table.empty_text %}
+                                {% block table_dict.table.tbody.empty_text %}
+                                    <tr><td colspan="{{ table_dict.table.columns|length }}">{{ table_dict.table.empty_text }}</td></tr>
+                                {% endblock table_dict.table.tbody.empty_text %}
+                            {% endif %}
+                        {% endfor %}
+                        </tbody>
+                    {% endblock table_dict.table.tbody %}
+                    {% block table_dict.table.tfoot %}
+                        {% if table_dict.table.has_footer %}
+                            <tfoot {{ table_dict.table.attrs.tfoot.as_html }}>
+                            <tr>
+                                {% for column in table_dict.table.columns %}
+                                    <td {{ column.attrs.tf.as_html }} colspan="18">{{ column.footer }}</td>
+                                {% endfor %}
+                            </tr>
+                            </tfoot>
+                        {% endif %}
+                    {% endblock table_dict.table.tfoot %}
+                </table>
+            </div>
+            <br>
+        {% endfor %}
+
+
+
+{% endblock %}

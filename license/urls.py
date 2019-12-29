@@ -20,4 +20,6 @@ urlpatterns = [
          name='consolidate_pdf'),
     path('report/biscuits', login_required(views.BiscuitsReportView.as_view()), name='biscuits_report'),
     path('report/confectinery', login_required(views.ConfectineryReportView.as_view()), name='confectinery_report'),
+    path('report/biscuits/pdf', login_required(views.PDFReportView.as_view()), name='report'),
+
 ]

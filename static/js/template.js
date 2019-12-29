@@ -39,12 +39,12 @@
     $('.nav li a', sidebar).each(function() {
       var $this = $(this);
       addActiveClass($this);
-    })
+    });
 
     $('.horizontal-menu .nav li a').each(function() {
       var $this = $(this);
       addActiveClass($this);
-    })
+    });
 
     //Close other submenu in sidebar on opening any
 
@@ -97,7 +97,7 @@
         }
         $(this).toggleClass('show-submenu');
       }        
-    })
+    });
 
     $(window).scroll(function() {
       if(window.matchMedia('(min-width: 992px)').matches) {

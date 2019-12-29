@@ -147,6 +147,9 @@ class LicenseDetailsModel(models.Model):
         from django.db.models import Q
         return self.import_license.filter(Q(item__head__name__icontains='starch')|Q(item__head__name__icontains='emulsifier')).first().balance_quantity
 
+    def get_party_name(self):
+        return str(self.exporter)[:8]
+
 KG = 'kg'
 
 UNIT_CHOICES = (
@@ -256,9 +259,9 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def balance_quantity(self):
-        if self.item.head.is_restricted and self.old_quantity:
+        if self.item.head and self.item.head.is_restricted and self.old_quantity:
             credit = self.old_quantity
-        elif self.item.head.is_restricted and self.license.notification_number == N2015:
+        elif self.item.head and self.item.head.is_restricted and self.license.notification_number == N2015:
             credit = self.quantity
         else:
             credit = self.quantity

@@ -214,12 +214,12 @@ class LicenseBiscuitReportTable(dt2.Table):
     license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
                                  orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
     balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
     wheat_flour = WheatQuantityColumn(verbose_name='Wheat Flour', accessor='get_wheat', orderable=False)
     sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
     rbd = RBDQuantityColumn(verbose_name='RBD Palmolein', orderable=False, accessor='get_rbd')
     leavening_agent = LAQuantityColumn(verbose_name='Leavening Agent', orderable=False, accessor='get_leavening_agent')
-    emulsifier = EmulsifierQuantityColumn(verbose_name='Emulsifier', orderable=False, accessor='get_emulsifier')
     food_flavour = FFQuantityColumn(verbose_name='Food Flavour', orderable=False, accessor='get_food_flavour')
     starch = StarchQuantityColumn(verbose_name='Starch', orderable=False, accessor='get_starch')
     food_colour = ColourQuantityColumn(verbose_name='Food Colour', orderable=False, accessor='get_food_colour')
@@ -228,14 +228,12 @@ class LicenseBiscuitReportTable(dt2.Table):
     dietary_fibre = DFQuantityColumn(verbose_name='Dietary Fibre', orderable=False, accessor='get_dietary_fibre')
     m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
     pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
-    bopp = BOPPQuantityColumn(verbose_name='BOPP', orderable=False, accessor='get_bopp')
-    paper = PaperQuantityColumn(verbose_name='Paper', orderable=False, accessor='get_paper')
 
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
         fields = ['counter', 'license', 'license_expiry_date',
-                  'exporter', 'balance_cif']
+                  'party', 'balance_cif']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):
@@ -248,6 +246,7 @@ class LicenseConfectineryReportTable(dt2.Table):
     license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
                                  orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
     balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
     sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
     liquid_glucose = LiquidGlucoseQuantityColumn(verbose_name='Liquid Glucose', orderable=False,
@@ -264,14 +263,12 @@ class LicenseConfectineryReportTable(dt2.Table):
     other_confectionery = OCIQuantityColumn(verbose_name='Other Confectionery Ingredients', orderable=False,
                                             accessor='get_other_confectionery')
     pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
-    bopp = BOPPQuantityColumn(verbose_name='BOPP', orderable=False, accessor='get_bopp')
-    paper = PaperQuantityColumn(verbose_name='Paper', orderable=False, accessor='get_paper')
 
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
         fields = ['counter', 'license', 'license_expiry_date',
-                  'exporter', 'balance_cif']
+                  'balance_cif']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

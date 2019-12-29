@@ -57,7 +57,7 @@ class LicenseDetailsModel(models.Model):
         return ','.join([export.norm_class.norm_class for export in self.export_license.all()])
 
     def get_absolute_url(self):
-        return reverse('license-detail', kwargs={'pk': self.pk})
+        return reverse('license-detail', kwargs={'license': self.license_number})
 
     @property
     def get_total_debit(self):
@@ -86,6 +86,66 @@ class LicenseDetailsModel(models.Model):
             t_debit = t_debit + allotment
         return round(credit - t_debit, 2)
 
+    def get_wheat(self):
+        return self.import_license.filter(item__head__name__icontains='wheat').first().balance_quantity
+
+    def get_sugar(self):
+        return self.import_license.filter(item__head__name__icontains='sugar').first().balance_quantity
+
+    def get_rbd(self):
+        return self.import_license.filter(item__head__name__icontains='rbd').first().balance_quantity
+
+    def get_leavening_agent(self):
+        return self.import_license.filter(item__head__name__icontains='Leavening Agent').first().balance_quantity
+
+    def get_emulsifier(self):
+        return self.import_license.filter(item__head__name__icontains='emulsifier').first().balance_quantity
+
+    def get_food_flavour(self):
+        return self.import_license.filter(item__head__name__icontains='food flavour').first().balance_quantity
+
+    def get_starch(self):
+        return self.import_license.filter(item__head__name__icontains='starch').first().balance_quantity
+
+    def get_food_colour(self):
+        return self.import_license.filter(item__head__name__icontains='food colour').first().balance_quantity
+
+    def get_anti_oxidant(self):
+        return self.import_license.filter(item__head__name__icontains='anti oxidant').first().balance_quantity
+
+    def get_fruit(self):
+        return self.import_license.filter(item__head__name__icontains='fruit').first().balance_quantity
+
+    def get_dietary_fibre(self):
+        return self.import_license.filter(item__head__name__icontains='dietary fibre').first().balance_quantity
+
+    def get_m_n_m(self):
+        return self.import_license.filter(item__head__name__icontains='milk').first().balance_quantity
+
+    def get_pp(self):
+        return self.import_license.filter(item__head__name__icontains='pp').first().balance_quantity
+
+    def get_bopp(self):
+        return self.import_license.filter(item__head__name__icontains='bopp').first().balance_quantity
+
+    def get_paper(self):
+        return self.import_license.filter(item__head__name__icontains='paper').first().balance_quantity
+
+    def get_liquid_glucose(self):
+        return self.import_license.filter(item__head__name__icontains='liquid glucose').first().balance_quantity
+
+    def get_tartaric_acid(self):
+        return self.import_license.filter(item__head__name__icontains='acid').first().balance_quantity
+
+    def get_essential_oil(self):
+        return self.import_license.filter(item__head__name__icontains='essential oil').first().balance_quantity
+
+    def get_other_confectionery(self):
+        return self.import_license.filter(item__head__name__icontains='other confectionery').first().balance_quantity
+
+    def get_starch_confectionery(self):
+        from django.db.models import Q
+        return self.import_license.filter(Q(item__head__name__icontains='starch')|Q(item__head__name__icontains='emulsifier')).first().balance_quantity
 
 KG = 'kg'
 
@@ -111,6 +171,7 @@ class LicenseExportItemModel(models.Model):
                                    related_name='export_item')
     duty_type = models.CharField(max_length=255, default='Basic')
     net_quantity = models.FloatField(default=0)
+    old_quantity = models.FloatField(default=0)
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default=KG)
     fob_fc = models.FloatField(default=0)
     fob_inr = models.FloatField(default=0)
@@ -119,6 +180,7 @@ class LicenseExportItemModel(models.Model):
     value_addition = models.FloatField(default=15)
     cif_fc = models.FloatField(default=0)
     cif_inr = models.FloatField(default=0)
+
 
     def __str__(self):
         try:
@@ -157,6 +219,7 @@ class LicenseImportItemsModel(models.Model):
                              blank=True)
     duty_type = models.CharField(max_length=255, default='Basic')
     quantity = models.FloatField(default=0)
+    old_quantity = models.FloatField(default=0)
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default=KG)
     cif_fc = models.FloatField(null=True, blank=True)
     cif_inr = models.FloatField(default=0)
@@ -193,7 +256,12 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def balance_quantity(self):
-        credit = self.quantity
+        if self.item.head.is_restricted and self.old_quantity:
+            credit = self.old_quantity
+        elif self.item.head.is_restricted and self.license.notification_number == N2015:
+            credit = self.quantity
+        else:
+            credit = self.quantity
         debit = self.debited_quantity
         alloted = self.alloted_quantity
         if debit and alloted:

@@ -88,10 +88,18 @@
                             </div>
                             <div class="col-lg-2 col-xs-6">
                                 <div class="form-group">
+                                    <label for="">{{ form.is_self.label }}</label>
+                                    {{ form.is_self }}
+                                </div>
+
+                            </div>
+                            <div class="col-lg-2 col-xs-6">
+                                <div class="form-group">
                                     <label for="">{{ form.user_comments.label }}</label>
                                     {{ form.user_comments }}
                                 </div>
                             </div>
+
                         </div>
                     </div>
                 </div>

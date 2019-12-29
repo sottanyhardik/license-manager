@@ -5,12 +5,13 @@ from django.http import HttpResponseRedirect
 # Create your views here.
 from django.urls import reverse
 from django.views import View
-from django.views.generic import DetailView, ListView
+from django.views.generic import DetailView, ListView, TemplateView
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
 from core.utils import PagedFilteredTableView
 from license.excel import get_license_table
+from license.helper import round_down
 from . import forms, tables, filters
 from . import models as license
 
@@ -51,7 +52,7 @@ class LicenseDetailCreateView(CreateWithInlinesView):
             form.instance.created_on = datetime.datetime.now()
         form.instance.modified_by = self.request.user
         form.instance.modified_on = datetime.datetime.now()
-        return super().form_valid(form)
+        return super(LicenseDetailCreateView, self).form_valid(form)
 
 
 class LicenseDetailUpdateView(UpdateWithInlinesView):
@@ -64,7 +65,7 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
         # check if there is some video onsite
         license = self.get_object()
         if self.get_object().is_audit:
-            return HttpResponseRedirect(reverse('license-detail', kwargs={'pk': license.id}))
+            return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license.license_number}))
         else:
             return super(LicenseDetailUpdateView, self).dispatch(request, *args, **kwargs)
 
@@ -78,7 +79,7 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
             form.instance.created_on = datetime.datetime.now()
         form.instance.modified_by = self.request.user
         form.instance.modified_on = datetime.datetime.now()
-        return super().form_valid(form)
+        return super(LicenseDetailUpdateView, self).form_valid(form)
 
     def get_inlines(self):
         if not self.object.is_audit:
@@ -100,9 +101,11 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
                                 if not import_item_obj.item or import_item_obj.item.pk == 141:
                                     import_item_obj.item = import_item.item
                                 if not import_item_obj.quantity:
-                                    import_item_obj.quantity = round(
+                                    import_item_obj.quantity = round_down(
                                         export_item.net_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
                                         3)
+                                if import_item_obj.old_quantity == 0:
+                                    import_item_obj.old_quantity = round_down(export_item.old_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,0)
                                 if not import_item_obj.hs_code:
                                     import_item_obj.hs_code = import_item.hs_code.first()
                                 import_item_obj.save()
@@ -126,6 +129,10 @@ class LicenseDetailView(DetailView):
     template_name = 'license/detail.html'
     model = license.LicenseDetailsModel
 
+    def get_object(self, queryset=None):
+        return self.model.objects.get(license_number=self.kwargs.get('license'))
+
+
 
 class PDFLicenseDetailView(PDFTemplateResponseMixin, DetailView):
     template_name = 'license/pdf.html'
@@ -141,7 +148,6 @@ class PDFAmendmentLicenseDetailView(PDFTemplateResponseMixin, DetailView):
 
     def get_object(self, queryset=None):
         return self.model.objects.get(license_number=self.kwargs.get('license'))
-
 
 
 class ExcelLicenseDetailView(View):
@@ -197,7 +203,7 @@ class LicenseVerifyView(View):
         license_obj = license.LicenseDetailsModel.objects.get(id=pk)
         license_obj.is_audit = True
         license_obj.save()
-        return HttpResponseRedirect(reverse('license-detail', kwargs={'pk': license_obj.id}))
+        return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license_obj.license_number}))
 
 
 class LicenseDetailLedgerView(DetailView):
@@ -233,3 +239,29 @@ class PDFConsolidatedView(PDFTemplateResponseMixin, ListView):
                                                    notification_number=notification_number, is_null=False).filter(
             license_expiry_date__gt=expirty_limit).order_by('license_expiry_date')
         return query
+
+
+class BiscuitsReportView(PagedFilteredTableView):
+    template_name = 'core/list.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    page_head = 'License Report List'
+
+    def get_queryset(self, **kwargs):
+        norms = self.kwargs.get('norms')
+        expirty_limit = datetime.datetime.today() - datetime.timedelta(days=30)
+        self.queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5', is_self=True).order_by('license_expiry_date')
+        return super(BiscuitsReportView, self).get_queryset()
+
+
+class ConfectineryReportView(PagedFilteredTableView):
+    template_name = 'core/list.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseConfectineryReportTable
+    filter_class = filters.LicenseReportFilter
+    page_head = 'License Report List'
+
+    def get_queryset(self, **kwargs):
+        self.queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E1', is_self=True).order_by('license_expiry_date')
+        return super(ConfectineryReportView, self).get_queryset()

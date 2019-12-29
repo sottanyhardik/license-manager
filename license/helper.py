@@ -22,3 +22,9 @@ def calculate(self):
     if allotment:
         t_debit = t_debit + allotment
     return credit, t_debit
+
+
+def round_down(n, decimals=0):
+    multiplier = 10 ** decimals
+    import math
+    return math.floor(n * multiplier) / multiplier

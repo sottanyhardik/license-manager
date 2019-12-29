@@ -44,7 +44,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
         if value:
             id = []
             for row in queryset:
-                if row.balance_quantity > 5000 and row.balance_cif_fc > 100:
+                if row.balance_quantity > 100 and row.balance_cif_fc > 100:
                     id.append(row.id)
             return queryset.filter(id__in=id)
         return queryset

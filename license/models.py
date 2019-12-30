@@ -259,9 +259,9 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def balance_quantity(self):
-        if self.item.head and self.item.head.is_restricted and self.old_quantity:
+        if self.item and self.item.head and self.item.head.is_restricted and self.old_quantity:
             credit = self.old_quantity
-        elif self.item.head and self.item.head.is_restricted and self.license.notification_number == N2015:
+        elif self.item and self.item.head and self.item.head.is_restricted and self.license.notification_number == N2015:
             credit = self.quantity
         else:
             credit = self.quantity

@@ -20,6 +20,12 @@ urlpatterns = [
          name='consolidate_pdf'),
     path('report/biscuits', login_required(views.BiscuitsReportView.as_view()), name='biscuits_report'),
     path('report/confectinery', login_required(views.ConfectineryReportView.as_view()), name='confectinery_report'),
-    path('report/biscuits/pdf', login_required(views.PDFReportView.as_view()), name='report'),
-
+    path('report/con/', login_required(views.PDFCReportView.as_view()), name='report_conversion'),
+    path('report/biscuits/new', login_required(views.PDFNewBiscuitsReportView.as_view()), name='report_new_biscuits'),
+    path('report/confectinery/new', login_required(views.PDFNewConfectioneryReportView.as_view()),
+         name='report_new_confectionery'),
+    path('report/biscuits/new/other/', login_required(views.PDFNewBiscuitsOtherReportView.as_view()), name='report_new_biscuits_other'),
+    path('report/confectinery/new/other/', login_required(views.PDFNewConfectioneryOtherReportView.as_view()),
+         name='report_new_confectionery_other'),
+    path('report/all/old', login_required(views.PDFOldAllReportView.as_view()), name='report_all_old'),
 ]

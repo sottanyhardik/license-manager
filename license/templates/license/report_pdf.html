@@ -50,13 +50,10 @@
 {% endblock %}
 
 {% block content %}
-    <h3>
-        Reports
-    </h3>
     {% load django_tables2 %}
     {% load i18n %}
         {% for table_dict in tables %}
-            <h1>{{ table_dict.label }}</h1>
+            <p><b>{{ table_dict.label }}</b></p>
             <div class="table-container">
                 <table {% render_attrs table_dict.table.attrs %}>
                     {% block table_dict.table.thead %}

@@ -267,8 +267,7 @@ class LicenseConfectineryReportTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'license', 'license_expiry_date',
-                  'balance_cif']
+        fields = ['counter', 'license', 'license_expiry_date']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

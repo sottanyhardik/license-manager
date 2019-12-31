@@ -47,7 +47,13 @@ class AllotmentModel(models.Model):
 
     @property
     def required_value(self):
-        return self.required_quantity * self.unit_value_per_unit
+        return round(self.required_quantity * self.unit_value_per_unit,0)
+
+    @property
+    def dfia_list(self):
+        dfia = [i.item.license.license_number for i in  self.allotment_details.all()]
+        return ', '.join(dfia)
+
 
     def get_absolute_url(self):
         return reverse('allotment-details', kwargs={'pk': self.pk}) + '?item__name=' + self.item_name + "&remove_expired=false&remove_null=true&sort=license_expiry"

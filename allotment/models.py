@@ -31,7 +31,7 @@ class AllotmentModel(models.Model):
     contact_number = models.CharField(max_length=255, null=True, blank=True)
     port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, null=True, blank=True)
     related_company = models.ForeignKey('core.CompanyModel', related_name='related_company', on_delete=models.CASCADE,
-                                        null=True,blank=True)
+                                        null=True, blank=True)
     created_on = models.DateField(auto_created=True, null=True, blank=True)
     created_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True,
                                    related_name='allotment_created')
@@ -47,16 +47,16 @@ class AllotmentModel(models.Model):
 
     @property
     def required_value(self):
-        return round(self.required_quantity * self.unit_value_per_unit,0)
+        return round(self.required_quantity * self.unit_value_per_unit, 0)
 
     @property
     def dfia_list(self):
-        dfia = [i.item.license.license_number for i in  self.allotment_details.all()]
+        dfia = [i.item.license.license_number for i in self.allotment_details.all()]
         return ', '.join(dfia)
 
-
     def get_absolute_url(self):
-        return reverse('allotment-details', kwargs={'pk': self.pk}) + '?item__name=' + self.item_name + "&remove_expired=false&remove_null=true&sort=license_expiry"
+        return reverse('allotment-details', kwargs={
+            'pk': self.pk}) + '?item__name=' + self.item_name + "&remove_expired=false&remove_null=true&sort=license_expiry"
 
     @property
     def balanced_quantity(self):
@@ -84,13 +84,15 @@ class AllotmentModel(models.Model):
 
 
 class AllotmentItems(models.Model):
-    item = models.ForeignKey('license.LicenseImportItemsModel', on_delete=models.CASCADE, related_name='allotment_details')
-    allotment = models.ForeignKey('allotment.AllotmentModel', on_delete=models.CASCADE, related_name='allotment_details')
+    item = models.ForeignKey('license.LicenseImportItemsModel', on_delete=models.CASCADE,
+                             related_name='allotment_details')
+    allotment = models.ForeignKey('allotment.AllotmentModel', on_delete=models.CASCADE,
+                                  related_name='allotment_details')
     cif_inr = models.FloatField(default=0.0)
     cif_fc = models.FloatField(default=0.0)
     qty = models.FloatField(default=0.0)
     is_boe = models.BooleanField(default=False)
-    admin_search_fields = ('item__license__license_number', )
+    admin_search_fields = ('item__license__license_number',)
 
     class Meta:
         ordering = ['qty', ]

@@ -65,7 +65,7 @@ def get_license_table(license):
     for item in license.import_license.all():
         main_item = item.item
         item_list = [item.serial_number]
-        if main_item.head and item.hs_code.hs_code not in main_item.head.hs_code:
+        if main_item and main_item.head and item.hs_code.hs_code not in main_item.head.hs_code:
             item_list.append(main_item.head.hs_code)
             item_list.append(main_item.head.name)
         data_list.append(item_list)

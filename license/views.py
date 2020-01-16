@@ -478,3 +478,147 @@ class PDFOldAllReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
         except:
             pass
         return context
+
+
+class BiscuitsAmmendmentView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/pdf_amend.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(BiscuitsAmmendmentView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
+        from license.models import N2009
+        try:
+            expirty_limit = datetime.datetime.today()
+            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                           license_expiry_date__gt=expirty_limit,
+                                                                           is_self=True).order_by('license_expiry_date')
+
+            table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Biscuits 098/2019 Notification', 'table': table})
+            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
+                export_license__norm_class__norm_class='E1',
+                license_expiry_date__gt=expirty_limit,
+                is_self=True).order_by('license_expiry_date')
+            table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Confectinery 098/2019 Notification', 'table': table})
+
+            context['tables'] = tables
+        except:
+            pass
+        return context
+
+
+class PDFBiscuitsNewExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(PDFBiscuitsNewExpiryReportView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseBiscuitReportTable
+        from license.models import N2015
+        try:
+            expirty_limit = datetime.datetime.today()
+            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                           license_expiry_date__lt=expirty_limit,
+                                                                           is_self=True).order_by('license_expiry_date')
+
+            table = LicenseBiscuitReportTable(
+                biscuits_queryset.filter(notification_number=N2015).distinct())
+            tables.append({'label': 'Biscuits Expired 019/2015 Notification', 'table': table})
+            context['tables'] = tables
+        except:
+            pass
+        return context
+
+
+class PDFConfectioneryNewExpiredReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(PDFConfectioneryNewExpiredReportView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseConfectineryReportTable
+        from license.models import N2015
+        try:
+            expirty_limit = datetime.datetime.today()
+            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
+                export_license__norm_class__norm_class='E1',
+                license_expiry_date__lt=expirty_limit,
+                is_self=True).order_by('license_expiry_date')
+
+            table = LicenseConfectineryReportTable(
+                confectionery_queryset.filter(notification_number=N2015).distinct())
+            tables.append({'label': 'Confectinery Expired 019/2015 Notification', 'table': table})
+            context['tables'] = tables
+        except:
+            pass
+        return context
+
+
+class PDFBiscuitsOldExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(PDFBiscuitsOldExpiryReportView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseBiscuitReportTable
+        from license.models import N2009
+        try:
+            expirty_limit = datetime.datetime.today()
+            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                           license_expiry_date__lt=expirty_limit,
+                                                                           is_self=True).order_by('license_expiry_date')
+
+            table = LicenseBiscuitReportTable(
+                biscuits_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Biscuits Expired 098/2009 Notification', 'table': table})
+            context['tables'] = tables
+        except:
+            pass
+        return context
+
+
+class PDFConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(PDFConfectioneryOldExpiredReportView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseConfectineryReportTable
+        from license.models import N2009
+        try:
+            expirty_limit = datetime.datetime.today()
+            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
+                export_license__norm_class__norm_class='E1',
+                license_expiry_date__lt=expirty_limit,
+                is_self=True).order_by('license_expiry_date')
+
+            table = LicenseConfectineryReportTable(
+                confectionery_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Confectinery Expired 098/2009 Notification', 'table': table})
+            context['tables'] = tables
+        except:
+            pass
+        return context
+

@@ -667,6 +667,10 @@ class PDFOCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
                     exporter__name__icontains='vanila')|Q(
                     exporter__name__icontains='parle')).exclude(export_license__old_quantity=0).distinct())
             tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table})
+            table = LicenseConfectineryReportTable(
+                confectionery_queryset.filter(notification_number=N2015).filter(exporter__name__icontains='parle').exclude(
+                    export_license__old_quantity=0).distinct())
+            tables.append({'label': 'Parle Confectinery', 'table': table})
             context['tables'] = tables
         except:
             pass

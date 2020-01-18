@@ -15,9 +15,7 @@ BOOLEAN_CHOICES = (
 class LicenseDetailFilter(django_filters.FilterSet):
     is_expired = django_filters.BooleanFilter(field_name='license_expiry_date', method='check_expired',
                                               label='Is Expired')
-
     is_individual = django_filters.BooleanFilter(method='check_individual', label='Is Individual')
-    is_null = django_filters.BooleanFilter(method='check_individual', label='Is Null')
 
     class Meta:
         model = lic_model.LicenseDetailsModel

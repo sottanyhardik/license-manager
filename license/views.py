@@ -497,7 +497,6 @@ class BiscuitsAmmendmentView(PDFTemplateResponseMixin, PagedFilteredTableView):
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__gt=expirty_limit,
                                                                            is_self=True).order_by('license_expiry_date')
-
             table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2009).distinct())
             tables.append({'label': 'Biscuits 098/2019 Notification', 'table': table})
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
@@ -522,6 +521,8 @@ class PDFBiscuitsNewExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
 
     def get_context_data(self, **kwargs):
         context = super(PDFBiscuitsNewExpiryReportView, self).get_context_data()
+        from allotment.scripts.aro import fetch_cif
+        fetch_cif()
         tables = []
         from license.tables import LicenseBiscuitReportTable
         from license.models import N2015
@@ -529,7 +530,7 @@ class PDFBiscuitsNewExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
             expirty_limit = datetime.datetime.today()
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expirty_limit,
-                                                                           is_self=True).order_by('license_expiry_date')
+                                                                           is_self=True, balance_cif__gte=4000).order_by('license_expiry_date')
 
             table = LicenseBiscuitReportTable(
                 biscuits_queryset.filter(notification_number=N2015).distinct())
@@ -548,6 +549,8 @@ class PDFConfectioneryNewExpiredReportView(PDFTemplateResponseMixin, PagedFilter
     context_object_name = 'license_list'
 
     def get_context_data(self, **kwargs):
+        from allotment.scripts.aro import fetch_cif
+        fetch_cif()
         context = super(PDFConfectioneryNewExpiredReportView, self).get_context_data()
         tables = []
         from license.tables import LicenseConfectineryReportTable
@@ -557,7 +560,7 @@ class PDFConfectioneryNewExpiredReportView(PDFTemplateResponseMixin, PagedFilter
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expirty_limit,
-                is_self=True).order_by('license_expiry_date')
+                is_self=True, balance_cif__gte=4000).order_by('license_expiry_date')
 
             table = LicenseConfectineryReportTable(
                 confectionery_queryset.filter(notification_number=N2015).distinct())
@@ -578,13 +581,15 @@ class PDFBiscuitsOldExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
     def get_context_data(self, **kwargs):
         context = super(PDFBiscuitsOldExpiryReportView, self).get_context_data()
         tables = []
+        from allotment.scripts.aro import fetch_cif
+        fetch_cif()
         from license.tables import LicenseBiscuitReportTable
         from license.models import N2009
         try:
             expirty_limit = datetime.datetime.today()
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expirty_limit,
-                                                                           is_self=True).order_by('license_expiry_date')
+                                                                           is_self=True, balance_cif__gte=4000).order_by('license_expiry_date')
 
             table = LicenseBiscuitReportTable(
                 biscuits_queryset.filter(notification_number=N2009).distinct())
@@ -603,6 +608,8 @@ class PDFConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedFilter
     context_object_name = 'license_list'
 
     def get_context_data(self, **kwargs):
+        from allotment.scripts.aro import fetch_cif
+        fetch_cif()
         context = super(PDFConfectioneryOldExpiredReportView, self).get_context_data()
         tables = []
         from license.tables import LicenseConfectineryReportTable
@@ -612,7 +619,7 @@ class PDFConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedFilter
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expirty_limit,
-                is_self=True).order_by('license_expiry_date')
+                is_self=True, balance_cif__gte=4000).order_by('license_expiry_date')
 
             table = LicenseConfectineryReportTable(
                 confectionery_queryset.filter(notification_number=N2009).distinct())

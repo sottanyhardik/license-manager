@@ -44,6 +44,7 @@ class LicenseDetailsModel(models.Model):
     is_audit = models.BooleanField(default=False)
     is_null = models.BooleanField(default=False)
     is_self = models.BooleanField(default=True)
+    balance_cif = models.FloatField(default=0.0)
 
     def __str__(self):
         return self.license_number

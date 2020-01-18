@@ -530,7 +530,9 @@ class PDFBiscuitsNewExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
             expirty_limit = datetime.datetime.today()
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expirty_limit,
-                                                                           is_self=True, balance_cif__gte=4000).order_by('license_expiry_date')
+                                                                           is_self=True,
+                                                                           balance_cif__gte=4000).order_by(
+                'license_expiry_date')
 
             table = LicenseBiscuitReportTable(
                 biscuits_queryset.filter(notification_number=N2015).distinct())
@@ -589,7 +591,9 @@ class PDFBiscuitsOldExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
             expirty_limit = datetime.datetime.today()
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expirty_limit,
-                                                                           is_self=True, balance_cif__gte=4000).order_by('license_expiry_date')
+                                                                           is_self=True,
+                                                                           balance_cif__gte=4000).order_by(
+                'license_expiry_date')
 
             table = LicenseBiscuitReportTable(
                 biscuits_queryset.filter(notification_number=N2009).distinct())
@@ -629,3 +633,39 @@ class PDFConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedFilter
             pass
         return context
 
+
+class PDFOCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(PDFOCReportView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
+        from license.models import N2015
+        from django.db.models import Q
+        try:
+            expirty_limit = datetime.datetime.today()
+            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                           license_expiry_date__gt=expirty_limit,
+                                                                           is_self=True).order_by('license_expiry_date')
+            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
+                export_license__norm_class__norm_class='E1',
+                license_expiry_date__gt=expirty_limit,
+                is_self=True).order_by('license_expiry_date')
+
+            table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2015).exclude(
+                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
+                    exporter__name__icontains='vanila')).exclude(export_license__old_quantity=0).distinct())
+            tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table})
+            table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2015).exclude(
+                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
+                    exporter__name__icontains='vanila')).exclude(export_license__old_quantity=0).distinct())
+            tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table})
+            context['tables'] = tables
+        except:
+            pass
+        return context

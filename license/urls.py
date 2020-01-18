@@ -21,7 +21,7 @@ urlpatterns = [
     path('report/biscuits', login_required(views.BiscuitsReportView.as_view()), name='biscuits_report'),
     path('report/confectinery', login_required(views.ConfectineryReportView.as_view()), name='confectinery_report'),
     path('report/con/', login_required(views.PDFCReportView.as_view()), name='report_conversion'),
-    path('report/oth/con/ss', login_required(views.PDFCReportView.as_view()), name='report_other_conversion'),
+    path('report/oth/con/ss', login_required(views.PDFOCReportView.as_view()), name='report_other_conversion'),
 
     path('report/biscuits/new', login_required(views.PDFNewBiscuitsReportView.as_view()), name='report_new_biscuits'),
     path('report/confectinery/new', login_required(views.PDFNewConfectioneryReportView.as_view()),

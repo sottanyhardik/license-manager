@@ -659,11 +659,13 @@ class PDFOCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
             table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2015).exclude(
                 Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila')).exclude(export_license__old_quantity=0).distinct())
+                    exporter__name__icontains='vanila')|Q(
+                    exporter__name__icontains='parle')).exclude(export_license__old_quantity=0).distinct())
             tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table})
             table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2015).exclude(
                 Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila')).exclude(export_license__old_quantity=0).distinct())
+                    exporter__name__icontains='vanila')|Q(
+                    exporter__name__icontains='parle')).exclude(export_license__old_quantity=0).distinct())
             tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table})
             context['tables'] = tables
         except:

@@ -63,8 +63,8 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_total_debit(self):
         return \
-        RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
-            'cif_fc__sum']
+            RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
+                'cif_fc__sum']
 
     @property
     def get_total_allotment(self):
@@ -146,10 +146,12 @@ class LicenseDetailsModel(models.Model):
 
     def get_starch_confectionery(self):
         from django.db.models import Q
-        return self.import_license.filter(Q(item__head__name__icontains='starch')|Q(item__head__name__icontains='emulsifier')).first().balance_quantity
+        return self.import_license.filter(Q(item__head__name__icontains='starch') | Q(
+            item__head__name__icontains='emulsifier')).first().balance_quantity
 
     def get_party_name(self):
         return str(self.exporter)[:8]
+
 
 KG = 'kg'
 
@@ -184,7 +186,6 @@ class LicenseExportItemModel(models.Model):
     value_addition = models.FloatField(default=15)
     cif_fc = models.FloatField(default=0)
     cif_inr = models.FloatField(default=0)
-
 
     def __str__(self):
         try:
@@ -316,6 +317,50 @@ class LicenseImportItemsModel(models.Model):
     @property
     def license_date(self):
         return self.license.license_date
+
+    @property
+    def sorted_item_list(self):
+        dict_list = []
+        dict_return = {}
+        data = self.item_details.order_by('transaction_type', 'bill_of_entry__company',
+                                          'bill_of_entry__bill_of_entry_date')
+        company_data = list(set([c['bill_of_entry__company__name'] for c in
+                                 self.item_details.order_by('transaction_type', 'bill_of_entry__company',
+                                                            'bill_of_entry__bill_of_entry_date').values(
+                                     'bill_of_entry__company__name')]))
+        for company in company_data:
+            if company:
+                if not company in list(dict_return.keys()):
+                    dict_return[company] = {}
+                dict_return[company]['company'] = company
+                dict_return[company]['data_list'] = data.filter(bill_of_entry__company__name=company)
+                dict_return[company]['sum_total_qty'] = data.filter(bill_of_entry__company__name=company).aggregate(
+                    Sum('qty')).get('qty__sum', 0.00)
+                dict_return[company]['sum_total_cif_fc'] = data.filter(bill_of_entry__company__name=company).aggregate(
+                    Sum('cif_fc')).get('cif_fc__sum', 0.00)
+                dict_return[company]['sum_total_cif_inr'] = data.filter(bill_of_entry__company__name=company).aggregate(
+                    Sum('cif_inr')).get('cif_inr__sum', 0.00)
+        for company in company_data:
+            if company:
+                dict_list.append(dict_return[company])
+        dict_return['item_details'] = dict_list
+        return dict_return
+
+    @property
+    def total_debited_qty(self):
+        return self.item_details.filter(transaction_type='D').aggregate(Sum('qty')).get('qty__sum', 0.00)
+
+    @property
+    def total_debited_cif_fc(self):
+        return self.item_details.filter(transaction_type='D').aggregate(Sum('cif_fc')).get('cif_fc__sum', 0.00)
+
+    @property
+    def total_debited_cif_inr(self):
+        return self.item_details.filter(transaction_type='D').aggregate(Sum('cif_inr')).get('cif_inr__sum', 0.00)
+
+    @property
+    def opening_balance(self):
+        return self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00)
 
 
 class LicenseDocumentModel(models.Model):

@@ -158,3 +158,6 @@ class SendAllotmentView(PDFTemplateResponseMixin, DetailView):
             response['Content-Disposition'] = content
             return response
         return HttpResponse("Not found")
+
+
+

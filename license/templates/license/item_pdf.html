@@ -5,7 +5,7 @@
 
     <style type="text/css">
         @page {
-            size: A4 landscape;
+            size: A4;
             margin: 1cm;
         }
 
@@ -146,49 +146,51 @@
             <th style="width: 40%">Company</th>
             </thead>
             <tbody>
-            {% for item in import_item.item_details.all %}
+            {% for item in import_item.sorted_item_list.item_details %}
+                {% for foo in item.data_list %}
+                    <tr style="border-bottom: 1px solid #000">
+                        <td >{{ foo.bill_of_entry.bill_of_entry_date }}</td>
+                        <td >{{ foo.get_transaction_type_display|title }}</td>
+                        <td >
+                            {% if foo.bill_of_entry %}
+                                {{ foo.bill_of_entry }}
+                            {% endif %}
+                        </td>
+                        <td >{{ foo.qty }}</td>
+                        <td >
+                            {% if foo.cif_fc == object.export_license.all.0.cif_fc %}
+                                0.0
+                            {% else %}
+                                {{ foo.cif_fc }}
+                            {% endif %}
+                        </td>
+                        <td >
+                            {% if foo.cif_inr == object.export_license.all.0.cif_inr %}
+                                0.0
+                            {% else %}
+                                {{ foo.cif_inr }}
+                            {% endif %}
+                        </td>
+                        <td>{{ item.company|title }}</td>
+                    </tr>
+
+                {% endfor %}
                 <tr style="border-bottom: 1px solid #000">
-                    <td >{{ item.bill_of_entry.bill_of_entry_date }}</td>
-                    <td >{{ item.get_transaction_type_display|title }}</td>
+                    <td ></td>
+                    <td ></td>
                     <td >
-                        {% if item.bill_of_entry %}
-                            {{ item.bill_of_entry }}
-                        {% endif %}
+                        <b>Total</b>
                     </td>
-                    <td >{{ item.qty }}</td>
+                    <td><b>{{ item.sum_total_qty|floatformat:2 }}</b></td>
                     <td >
-                        {% if item.cif_fc == object.export_license.all.0.cif_fc %}
-                            0.0
-                        {% else %}
-                            {{ item.cif_fc }}
-                        {% endif %}
+                        <b>{{ item.sum_total_cif_fc|floatformat:2 }}</b>
                     </td>
                     <td >
-                        {% if item.cif_inr == object.export_license.all.0.cif_inr %}
-                            0.0
-                        {% else %}
-                            {{ item.cif_fc }}
-                        {% endif %}
+                        <b>{{ item.sum_total_cif_inr|floatformat:2 }}</b>
                     </td>
-                    <td>{{ item.bill_of_entry.company|title }}</td>
-                </tr>
-            {% endfor %}
-            {% for item in import_item.allotment_details.all %}
-                {% if not item.allotment.bill_of_entry.all.exists %}
-                <tr >
-                    <td>{{ item.allotment.modified_on }}</td>
                     <td></td>
-                    <td>ALLOTMENT</td>
-                    <td>{{ item.qty }}</td>
-                    <td>
-                        {{ item.cif_fc }}
-                    </td>
-                    <td>
-                        {{ item.cif_inr }}
-                    </td>
-                    <td>{{ item.allotment.company }}</td>
                 </tr>
-                {% endif %}
+                <tr style="border: 1px solid"></tr>
             {% endfor %}
 
             </tbody>
@@ -196,7 +198,47 @@
             <tr>
                 <td style="width: 10%; border: 1px solid"></td>
                 <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid">Opening</td>
+                <td style="width: 10%; border: 1px solid">
+                    <b>{{ import_item.opening_balance|floatformat:2 }}</b></td>
+                <td style="width: 10%; border: 1px solid">
+                </td>
+                <td style="width: 10%; border: 1px solid">
+                </td>
+                <td style="width: 40%; border: 1px solid"></td>
+            </tr>
+            <tr>
                 <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid">Total Debits</td>
+                <td style="width: 10%; border: 1px solid">
+                    {% if import_item.total_debited_qty %}
+                        <b>{{ import_item.total_debited_qty|floatformat:2 }}</b>
+                    {% else %}
+                        <b>0.00</b>
+                    {% endif %}
+                </td>
+                <td style="width: 10%; border: 1px solid">
+                    {% if import_item.total_debited_cif_fc %}
+                        <b>{{ import_item.total_debited_cif_fc|floatformat:2 }}</b>
+                    {% else %}
+                        <b>0.00</b>
+                    {% endif %}
+                </td>
+                <td style="width: 10%; border: 1px solid">
+                    {% if import_item.total_debited_cif_inr %}
+                        <b>{{ import_item.total_debited_cif_inr|floatformat:2 }}</b>
+                    {% else %}
+                        <b>0.00</b>
+                    {% endif %}
+                </td>
+                <td style="width: 40%; border: 1px solid"></td>
+            </tr>
+
+            <tr>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid">Final Balance</td>
                 <td style="width: 10%; border: 1px solid">
                     <b>{{ import_item.balance_quantity }}</b></td>
                 <td style="width: 10%; border: 1px solid">

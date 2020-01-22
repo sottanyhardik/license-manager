@@ -18,7 +18,7 @@ class BillOfEntryModel(models.Model):
     is_fetch = models.BooleanField(default=False)
     failed = models.IntegerField(default=0)
     cha = models.CharField(max_length=255, null=True, blank=True)
-    admin_search_fields = ['bill_of_entry_number',]
+    admin_search_fields = ['bill_of_entry_number', ]
 
     class Meta:
         ordering = ('-bill_of_entry_date',)
@@ -27,7 +27,7 @@ class BillOfEntryModel(models.Model):
         return self.bill_of_entry_number
 
     def get_absolute_url(self):
-        return reverse('bill-of-entry-detail', kwargs={'pk':self.id})
+        return reverse('bill-of-entry-detail', kwargs={'pk': self.id})
 
     def get_total_inr(self):
         return self.item_details.all().aggregate(Sum('cif_inr'))['cif_inr__sum']
@@ -72,6 +72,4 @@ class RowDetails(models.Model):
     admin_search_fields = ('sr_number__license__license_number', 'bill_of_entry__bill_of_entry_number')
 
     class Meta:
-        ordering = ['sr_number__sr_number', 'sr_number__type']
-
-
+        ordering = ['transaction_type','bill_of_entry__bill_of_entry_date']

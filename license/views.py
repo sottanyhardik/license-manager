@@ -659,19 +659,28 @@ class PDFOCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
             table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2015).exclude(
                 Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila')|Q(
+                    exporter__name__icontains='vanila') | Q(
                     exporter__name__icontains='parle')).exclude(export_license__old_quantity=0).distinct())
             tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table})
             table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2015).exclude(
                 Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila')|Q(
+                    exporter__name__icontains='vanila') | Q(
                     exporter__name__icontains='parle')).exclude(export_license__old_quantity=0).distinct())
             tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table})
             table = LicenseConfectineryReportTable(
-                confectionery_queryset.filter(notification_number=N2015).filter(exporter__name__icontains='parle').exclude(
+                confectionery_queryset.filter(notification_number=N2015).filter(
+                    exporter__name__icontains='parle').exclude(
                     export_license__old_quantity=0).distinct())
             tables.append({'label': 'Parle Confectinery', 'table': table})
             context['tables'] = tables
         except:
             pass
         return context
+
+
+class PDFLedgerItemLicenseDetailView(PDFTemplateResponseMixin, DetailView):
+    template_name = 'license/item_pdf.html'
+    model = license.LicenseDetailsModel
+
+    def get_object(self, queryset=None):
+        return self.model.objects.get(license_number=self.kwargs.get('license'))

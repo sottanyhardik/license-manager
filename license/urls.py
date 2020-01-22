@@ -16,6 +16,8 @@ urlpatterns = [
     path('<int:pk>/ledger', login_required(views.LicenseDetailLedgerView.as_view()), name='license_ledger'),
     path('ledger/<slug:license>.pdf', login_required(views.PDFLedgerLicenseDetailView.as_view()),
          name='license_ledger_pdf'),
+    path('ledger/item/<slug:license>.pdf', login_required(views.PDFLedgerItemLicenseDetailView.as_view()),
+         name='license_item_ledger_pdf'),
     path('consolidated/<str:norm>_<str:notification>.pdf', login_required(views.PDFConsolidatedView.as_view()),
          name='consolidate_pdf'),
     path('report/biscuits', login_required(views.BiscuitsReportView.as_view()), name='biscuits_report'),

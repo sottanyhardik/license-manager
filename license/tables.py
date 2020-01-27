@@ -273,3 +273,35 @@ class LicenseConfectineryReportTable(dt2.Table):
     def render_counter(self):
         self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
         return next(self.row_counter)
+
+
+class TruncatedTextColumn(dt2.Column):
+    '''A Column to limit to 100 characters and add an ellipsis'''
+    def render(self, value):
+        if len(value) > 10:
+            return value[0:10] + '...'
+        return str(value)
+
+
+class LicenseItemReportTable(dt2.Table):
+    counter = dt2.Column(empty_values=(), orderable=False)
+    license_date = dt2.DateTimeColumn(format='d-m-Y', accessor='license.license_date')
+    license_expiry = dt2.DateTimeColumn(format='d-m-Y', verbose_name='License Expiry Date',
+                                        accessor='license.license_expiry_date')
+    license_exporter = TruncatedTextColumn(verbose_name='Exporter', accessor='license.exporter.name')
+    balance_quantity = dt2.TemplateColumn(
+        '<spam id = "id_allotment_balance_{{ record.id }}" > {{ record.balance_quantity }} </spam>', orderable=False)
+    balance_value = dt2.TemplateColumn(
+        '<spam id = "id_allotment_balance_value_{{ record.id }}"> {{ record.balance_cif_fc }} </spam>', orderable=False)
+
+    class Meta:
+        model = models.LicenseImportItemsModel
+        per_page = 50
+        fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
+                  'hs_code', 'item',
+                  'balance_quantity', 'balance_value']
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+    def render_counter(self):
+        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
+        return next(self.row_counter)

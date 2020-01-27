@@ -5,7 +5,7 @@ from django.http import HttpResponseRedirect
 # Create your views here.
 from django.urls import reverse
 from django.views import View
-from django.views.generic import DetailView, ListView
+from django.views.generic import DetailView, ListView, TemplateView
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
@@ -14,6 +14,8 @@ from license.excel import get_license_table
 from license.helper import round_down
 from . import forms, tables, filters
 from . import models as license
+from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_milk_query, dietary_query, food_query, \
+    packing_query, juice_query, oci_query
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -330,16 +332,14 @@ class PDFNewBiscuitsReportView(PDFTemplateResponseMixin, PagedFilteredTableView)
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__gt=expirty_limit,
                                                                            is_self=True).order_by('license_expiry_date')
-
-            table = LicenseBiscuitReportTable(
-                biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
+            filter_query =biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
                     Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                        exporter__name__icontains='vanila')).distinct())
+                        exporter__name__icontains='vanila')).distinct()
+            table = LicenseBiscuitReportTable(filter_query)
             tables.append({'label': 'RAMA RANI Other Biscuits', 'table': table})
-
-            table = LicenseBiscuitReportTable(
-                biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
-                    Q(exporter__name__icontains='parle')).distinct())
+            filter_query = biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
+                    Q(exporter__name__icontains='parle')).distinct()
+            table = LicenseBiscuitReportTable(filter_query)
             tables.append({'label': 'Parle Other Biscuits', 'table': table})
 
             context['tables'] = tables
@@ -366,11 +366,10 @@ class PDFNewBiscuitsOtherReportView(PDFTemplateResponseMixin, PagedFilteredTable
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__gt=expirty_limit,
                                                                            is_self=True).order_by('license_expiry_date')
-
-            table = LicenseBiscuitReportTable(
-                biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).exclude(
+            filter_query = biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).exclude(
                     Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                        exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle')).distinct())
+                        exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle')).distinct()
+            table = LicenseBiscuitReportTable(filter_query)
             tables.append({'label': 'Biscuits Remaning 019/2015 Notification', 'table': table})
 
             context['tables'] = tables
@@ -398,16 +397,14 @@ class PDFNewConfectioneryReportView(PDFTemplateResponseMixin, PagedFilteredTable
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__gt=expirty_limit,
                 is_self=True).order_by('license_expiry_date')
-
-            table = LicenseConfectineryReportTable(
-                confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
+            filter_query = confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
                     Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                        exporter__name__icontains='vanila')).distinct())
+                        exporter__name__icontains='vanila')).distinct()
+            table = LicenseConfectineryReportTable(filter_query)
             tables.append({'label': 'RAMA RANI VANNILA Other Confectinery', 'table': table})
-
-            table = LicenseConfectineryReportTable(
-                confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
-                    Q(exporter__name__icontains='parle')).distinct())
+            filter_query = confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
+                    Q(exporter__name__icontains='parle')).distinct()
+            table = LicenseConfectineryReportTable(filter_query)
             tables.append({'label': 'Parle Other Confectinery', 'table': table})
 
             context['tables'] = tables
@@ -435,11 +432,10 @@ class PDFNewConfectioneryOtherReportView(PDFTemplateResponseMixin, PagedFiltered
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__gt=expirty_limit,
                 is_self=True).order_by('license_expiry_date')
-
-            table = LicenseConfectineryReportTable(
-                confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).exclude(
+            filter_query = confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).exclude(
                     Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                        exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle')).distinct())
+                        exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle'))
+            table = LicenseConfectineryReportTable(filter_query).distinct()
             tables.append({'label': 'Confectinery Remaning 019/2015 Notification', 'table': table})
             context['tables'] = tables
         except:
@@ -684,3 +680,59 @@ class PDFLedgerItemLicenseDetailView(PDFTemplateResponseMixin, DetailView):
 
     def get_object(self, queryset=None):
         return self.model.objects.get(license_number=self.kwargs.get('license'))
+
+
+class ItemReportView(TemplateView):
+    template_name = 'license/report.html'
+
+    def get_context_data(self, **kwargs):
+        context = super(ItemReportView, self).get_context_data()
+        return context
+
+
+class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+
+    def get_context_data(self, **kwargs):
+        context = super(ItemListReportView, self).get_context_data()
+        total_quantity = 0
+        item = self.request.GET.get('item',None)
+        if item == 'sugar':
+            title = 'Sugar'
+            tables = sugar_query()
+        elif item == 'rbd':
+            title = 'RBD Palmolein Oil'
+            tables = rbd_query()
+        elif item == 'whey':
+            title = 'Milk & Milk [Whey]'
+            tables = milk_query()
+        elif item == 'wpc':
+            title = 'Milk & Milk [WPC]'
+            tables = wpc_query()
+        elif item == 'skimmed':
+            title = 'Milk & Milk [Skimmed Milk]'
+            tables = skimmed_milk_query()
+        elif item == 'dietary':
+            title = 'Dietary Fibre'
+            tables = dietary_query()
+        elif item == 'flavour':
+            title = 'Food Flavour'
+            tables = food_query()
+        elif item == 'pp':
+            title = 'PP'
+            tables = packing_query()
+        elif item == 'oci':
+            title = 'Other Confectionery Ingredients'
+            tables = oci_query()
+        elif item == 'juice':
+            title = 'Fruit Juice'
+            tables = juice_query()
+        context['page_title'] = title
+        context['tables'] = tables
+        for table in tables:
+            if table['total']:
+                total_quantity = total_quantity + table['total']
+        context['total_quantity'] = total_quantity
+        return context
+

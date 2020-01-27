@@ -1,11 +1,11 @@
 {% extends "pdf_base.html" %}
-{% load render_table from django_tables2 %}
+
 
 {% block extra_style %}
 
     <style type="text/css">
         @page {
-            size: A4 landscape;
+            size: A4;
             margin: 1cm;
         }
 
@@ -52,9 +52,8 @@
 {% block content %}
     {% load django_tables2 %}
     {% load i18n %}
-        <b style="font-size: 20px">{{ page_title|title }}</b>
+    {{ tables }}
         {% for table_dict in tables %}
-            {% if table_dict.total %}
             <p><b>{{ table_dict.label }}</b></p>
             <div class="table-container">
                 <table {% render_attrs table_dict.table.attrs %}>
@@ -95,32 +94,14 @@
                             <tfoot {{ table_dict.table.attrs.tfoot.as_html }}>
                             <tr>
                                 {% for column in table_dict.table.columns %}
-                                    <td {{ column.attrs.tf.as_html }} colspan="18">
-                                        {{ column.footer }}
-                                    </td>
+                                    <td {{ column.attrs.tf.as_html }} colspan="18">{{ column.footer }}</td>
                                 {% endfor %}
                             </tr>
                             </tfoot>
-                        {% else %}
-                            {% if table_dict.total %}
-                            <tfoot {{ table_dict.table.attrs.tfoot.as_html }}>
-                            <tr>
-                                {% for column in table_dict.table.columns %}
-                                    <td {{ column.attrs.tf.as_html }} colspan="18">
-                                        {% if column.header == 'Balance quantity' %}
-                                            <b>{{ table_dict.total|floatformat:0 }}</b>
-                                        {% endif %}
-                                    </td>
-                                {% endfor %}
-                            </tr>
-                            </tfoot>
-                            {% endif %}
                         {% endif %}
                     {% endblock table_dict.table.tfoot %}
                 </table>
             </div>
             <br>
-            {% endif %}
         {% endfor %}
-        <p>Total Quantity: <b>{{ total_quantity|floatformat:0 }}</b></p>
 {% endblock %}

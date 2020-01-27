@@ -1,31 +1,21 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block content %}
-    <div class="row">
-        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
-            <table class="table table-responsive, table-bordered">
-                <th>DFIA</th>
-                <th>Expiry</th>
-                <th>Value</th>
-                <th>Wheat Flour</th>
-                <th>Sugar</th>
-                <th>RBD Palmolein Oil</th>
-                <th>Leavening Agent</th>
-                <th>Emulsifier</th>
-                <th>Food Flavour</th>
-                <th>Starch</th>
-                <th>Food Colour</th>
-                <th>Anti Oxidant</th>
-                <th>Fruit</th>
-                <th>Dietary Fibre</th>
-                <th>M & M</th>
-                <th>PP</th>
-            </table>
-            <tbody>
-                <tr>
-
-                </tr>
-            </tbody>
+    <div class="card">
+        <div class="card-header">
+            Download Report For
+        </div>
+        <div class="card-body">
+            <p>1. <a href="{% url 'item_report_list' %}?item=sugar">Sugar</a></p>
+            <p>2. <a href="{% url 'item_report_list' %}?item=rbd"> RBD Palomein</a></p>
+            <p>3. <a href="{% url 'item_report_list' %}?item=dietary"> Dietry Fibre</a></p>
+            <p>4. <a href="{% url 'item_report_list' %}?item=flavour"> Food Flavour</a></p>
+            <p>5. <a href="{% url 'item_report_list' %}?item=whey"> Milk & Milk [Whey]</a> </p>
+            <p>6. <a href="{% url 'item_report_list' %}?item=skimmed"> Milk & Milk [Skimmed]</a></p>
+            <p>7. <a href="{% url 'item_report_list' %}?item=wpc"> Milk & Milk [WPC]</a></p>
+            <p>8. <a href="{% url 'item_report_list' %}?item=juice"> Fruit Juice</a></p>
+            <p>9. <a href="{% url 'item_report_list' %}?item=oci"> Other Confectionery Ingredients</a></p>
+            <p>10. <a href="{% url 'item_report_list' %}?item=pp"> Packing Material</a></p>
         </div>
     </div>
 {% endblock %}

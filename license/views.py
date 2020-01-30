@@ -691,7 +691,7 @@ class ItemReportView(TemplateView):
 
 
 class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
-    template_name = 'license/report_pdf.html'
+    template_name = 'license/report_pdf_ITEM.html'
     model = license.LicenseDetailsModel
 
     def get_context_data(self, **kwargs):

@@ -289,7 +289,7 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def balance_cif_fc(self):
-        if not self.cif_fc or self.cif_fc == 0:
+        if not self.cif_fc or self.cif_fc == 0 or self.cif_fc == 0.01:
             credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
         else:
             credit = self.cif_fc

@@ -291,24 +291,20 @@ class LicenseImportItemsModel(models.Model):
     def balance_cif_fc(self):
         if not self.cif_fc or self.cif_fc == 0:
             credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
-            debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
-                Sum('cif_fc'))[
-                'cif_fc__sum']
         else:
             credit = self.cif_fc
-            debit = RowDetails.objects.filter(sr_number=self).filter(transaction_type=Debit).aggregate(
-                Sum('cif_fc'))['cif_fc__sum']
-        alloted = AllotmentItems.objects.filter(item=self,
-                                                allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
+            Sum('cif_fc'))[
+            'cif_fc__sum']
+        allotment = AllotmentItems.objects.filter(item__license=self.license,
+                                                  allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
             Sum('cif_fc'))['cif_fc__sum']
-        if debit and alloted:
-            return round(credit - debit - alloted, 2)
-        elif debit:
-            return round(credit - debit, 2)
-        elif alloted:
-            return round((credit - alloted), 2)
-        else:
-            return round(credit, 2)
+        t_debit = 0
+        if debit:
+            t_debit = t_debit + debit
+        if allotment:
+            t_debit = t_debit + allotment
+        return int(credit - t_debit)
 
     @property
     def license_expiry(self):

@@ -13,118 +13,17 @@ def sugar_query():
     try:
         expirty_limit = datetime.datetime.today()
         biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E5',
-            license__license_expiry_date__gte=expirty_limit,
-            license__is_self=True, item__head__name__icontains='sugar').order_by('license__license_expiry_date')
-        confectionery_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E1',
             license__license_expiry_date__gte=expirty_limit,
             license__is_self=True, item__head__name__icontains='sugar').order_by('license__license_expiry_date')
         for object in biscuits_queryset:
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        for object in confectionery_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
         biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=1000))
-        confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = biscuits_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table,
+        tables.append({'label': 'License List', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Confectinery 098/2019 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Biscuits Remaning 019/2015 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-
-        filter_query = confectionery_queryset.filter(license__export_license__old_quantity=0,
-                                                     license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Other Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = confectionery_queryset.filter(license__export_license__old_quantity=0,
-                                                     license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Other Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-
-        filter_query = confectionery_queryset.filter(license__export_license__old_quantity=0,
-                                                     license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Confectinery Remaning 019/2015 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False
@@ -144,53 +43,14 @@ def rbd_query():
             object.available_value = object.balance_cif_fc
             object.save()
         biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = biscuits_queryset.filter(hs_code__hs_code__icontains='15119020').distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table,
+        tables.append({'label': 'License List', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
+        filter_query = biscuits_queryset.exclude(hs_code__hs_code__icontains='15119020').distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Biscuits', 'table': table,
+        tables.append({'label': 'Need Amendment', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Old Notifications', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Biscuits Remaning 019/2015 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False
@@ -209,53 +69,10 @@ def milk_query():
             object.available_value = object.balance_cif_fc
             object.save()
         biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = biscuits_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table,
+        tables.append({'label': 'License Lists', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Old Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Biscuits Remaning 019/2015 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False
@@ -274,53 +91,10 @@ def skimmed_milk_query():
             object.available_value = object.balance_cif_fc
             object.save()
         biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = biscuits_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table,
+        tables.append({'label': 'License List', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Old Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Biscuits Remaning 019/2015 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False
@@ -339,51 +113,10 @@ def wpc_query():
             object.available_value = object.balance_cif_fc
             object.save()
         biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = biscuits_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table,
+        tables.append({'label': 'License Lists', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Other Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = biscuits_queryset.filter(license__export_license__old_quantity=0,
-                                                license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Biscuits Remaning 019/2015 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False
@@ -402,30 +135,14 @@ def dietary_query():
             object.available_value = object.balance_cif_fc
             object.save()
         biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = biscuits_queryset.filter(hs_code__hs_code__startswith='08').distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table,
+        tables.append({'label': 'License Lists', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
+        filter_query = biscuits_queryset.exclude(hs_code__hs_code__startswith='08').distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Biscuits', 'table': table,
+        tables.append({'label': 'Need Amendment', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'OLD NOTIFICATION', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False
@@ -444,30 +161,10 @@ def food_query():
             object.available_value = object.balance_cif_fc
             object.save()
         biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = biscuits_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table,
+        tables.append({'label': 'License List', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'OLD NOTIFICATION', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False
@@ -486,31 +183,14 @@ def juice_query():
             object.available_value = object.balance_cif_fc
             object.save()
         confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = confectionery_queryset.filter((Q(license__export_license__old_quantity__gt=1)&Q(license__notification_number=N2015))|Q(license__notification_number=N2009)).filter(hs_code__hs_code__startswith='2009').distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Confectinery', 'table': table,
+        tables.append({'label': 'License Lists', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
+        filter_query = confectionery_queryset.filter((Q(license__export_license__old_quantity__gt=1)&Q(license__notification_number=N2015))|Q(license__notification_number=N2009)).exclude(hs_code__hs_code__startswith='2009').distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Confectinery 098/2019 Notification', 'table': table,
+        tables.append({'label': 'Amendment Needed', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False
@@ -529,55 +209,10 @@ def packing_query():
             object.available_value = object.balance_cif_fc
             object.save()
         confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = confectionery_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Confectinery', 'table': table,
+        tables.append({'label': 'License List', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Confectinery 098/2019 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = confectionery_queryset.filter(license__export_license__old_quantity=0,
-                                                     license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Other Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = confectionery_queryset.filter(license__export_license__old_quantity=0,
-                                                     license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Other Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-
-        filter_query = confectionery_queryset.filter(license__export_license__old_quantity=0,
-                                                     license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(license__exporter__name__icontains='parle')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Confectinery Remaning 019/2015 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False
@@ -596,31 +231,10 @@ def oci_query():
             object.available_value = object.balance_cif_fc
             object.save()
         confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=1000))
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).filter(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila')).exclude(license__export_license__old_quantity=0).distinct()
+        filter_query = confectionery_queryset.filter((Q(license__export_license__old_quantity__gt=1)&Q(license__notification_number=N2015))|Q(license__notification_number=N2009)).distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RAMA RANI VANNILA Confectinery', 'table': table,
+        tables.append({'label': 'License List', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).filter(
-            license__exporter__name__icontains='parle').exclude(
-            license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Parle Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2009).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Confectinery 098/2019 Notification', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = confectionery_queryset.filter(license__notification_number=N2015).exclude(
-            Q(license__exporter__name__icontains='rama') | Q(license__exporter__name__icontains='rani') | Q(
-                license__exporter__name__icontains='vanila') | Q(
-                license__exporter__name__icontains='parle')).exclude(license__export_license__old_quantity=0).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum',
-                                                                                      0.0)})
         return tables
     except Exception as e:
         return False

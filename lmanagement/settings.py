@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'bill_of_entry.apps.BillOfEntryConfig',
     'allotment.apps.AllotmentConfig',
     'license_movement.apps.LicenseMovementConfig',
+    'django.contrib.humanize',
 ]
 
 MIDDLEWARE = [

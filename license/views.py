@@ -1,6 +1,7 @@
 import datetime
 
 import xlsxwriter as xlsxwriter
+from django.db.models import Q
 from django.http import HttpResponseRedirect
 # Create your views here.
 from django.urls import reverse
@@ -174,10 +175,9 @@ class ExcelLicenseDetailView(View):
         for row_num, columns in enumerate(data):
             for col_num, cell_data in enumerate(columns):
                 if cell_data in ['License Number', 'License Date', 'License Expiry', 'File Number', 'Exporter',
-                                 'Notification', 'Scheme Code',
-                                 'Port', 'Export Items', 'Import Items', 'Item',
-                                 'Total CIF', 'Balance CIF',
-                                 "Sr No", 'HS Code', 'Quantity', 'Balance Quantity', 'CIF FC', 'Balance CIF FC']:
+                                 'Notification', 'Scheme Code', 'Port', 'Export Items', 'Import Items', 'Item',
+                                 'Total CIF', 'Balance CIF', "Sr No", 'HS Code', 'Quantity', 'Balance Quantity',
+                                 'CIF FC', 'Balance CIF FC']:
                     cell_format = workbook.add_format({'bold': True, 'text_wrap': True})
                     worksheet.write(row_num, col_num, cell_data, cell_format)
                     worksheet.set_column(row_num, col_num, 15)
@@ -427,18 +427,18 @@ class PDFNewConfectioneryOtherReportView(PDFTemplateResponseMixin, PagedFiltered
         from license.models import N2015
         from django.db.models import Q
         try:
-            expirty_limit = datetime.datetime.today()
+            expiry_limit = datetime.datetime.today()
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
-                license_expiry_date__gt=expirty_limit,
+                license_expiry_date__gt=expiry_limit,
                 is_self=True).order_by('license_expiry_date')
             filter_query = confectionery_queryset.filter(export_license__old_quantity=0, notification_number=N2015).exclude(
                     Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                        exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle'))
-            table = LicenseConfectineryReportTable(filter_query).distinct()
+                        exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle')).distinct()
+            table = LicenseConfectineryReportTable(filter_query)
             tables.append({'label': 'Confectinery Remaning 019/2015 Notification', 'table': table})
             context['tables'] = tables
-        except:
+        except Exception as e:
             pass
         return context
 
@@ -619,7 +619,7 @@ class PDFConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedFilter
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expirty_limit,
-                is_self=True, balance_cif__gte=4000).order_by('license_expiry_date')
+                is_self=True, balance_cif__gte=5000).order_by('license_expiry_date')
 
             table = LicenseConfectineryReportTable(
                 confectionery_queryset.filter(notification_number=N2009).distinct())
@@ -729,10 +729,86 @@ class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
             title = 'Fruit Juice'
             tables = juice_query()
         context['page_title'] = title
-        context['tables'] = tables
+        context['tables'] = title
         for table in tables:
             if table['total']:
                 total_quantity = total_quantity + table['total']
         context['total_quantity'] = total_quantity
         return context
+
+
+class PDFParleConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        from allotment.scripts.aro import fetch_cif
+        fetch_cif()
+        context = super(PDFParleConfectioneryOldExpiredReportView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseConfectineryReportTable
+        from license.models import N2009
+        try:
+            expirty_limit = datetime.datetime.today()
+            queryset = license.LicenseDetailsModel.objects.filter(
+                export_license__norm_class__norm_class='E1',
+                license_expiry_date__gte=expirty_limit,
+                is_self=True, balance_cif__gte=4000).order_by('license_expiry_date')
+            queryset = queryset.exclude(Q(exporter__name__icontains='MOTWANI INTERNATIONAL') |
+                            Q(exporter__name__icontains='KHYATI ADVISORY') |
+                            Q(exporter__name__icontains='SHAKTI  FOOD  PRODUCTS')
+                            | Q(exporter__name__icontains='STRAINA INTERNATIONAL')
+                            | Q(exporter__name__icontains='TOPAZ INTERNATIONAL')
+                            | Q(exporter__name__icontains='VANILA')
+                            | Q(exporter__name__icontains='VIVA')
+                            | Q(exporter__name__icontains='DELMORE')
+                            | Q(exporter__name__icontains='Kulubi')
+                            | Q(exporter__name__icontains='Jai Gurudev')
+                            | Q(exporter__name__icontains='CONTINENTAL EXPORTS')
+                            | Q(exporter__name__icontains='KITES BAKERS')
+                            | Q(exporter__name__icontains='J K INTERNATIONAL TRADERS')
+                            | Q(exporter__name__icontains='DALSON FOOD INDUSTRIES')
+                                       | Q(exporter__name__icontains='RAMA')
+                                       | Q(exporter__name__icontains='RANI')
+                                       | Q(exporter__name__icontains='Parle')
+
+                                       ).distinct()
+            table = LicenseConfectineryReportTable(queryset)
+            tables.append({'label': 'Confectinery', 'table': table})
+            queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                           license_expiry_date__gte=expirty_limit,
+                                                                           is_self=True,
+                                                                           balance_cif__gte=4000).order_by(
+                'license_expiry_date')
+
+            from license.tables import LicenseBiscuitReportTable
+            queryset = queryset.exclude(Q(exporter__name__icontains='MOTWANI INTERNATIONAL')|
+                                Q(exporter__name__icontains='KHYATI ADVISORY')|
+                                Q(exporter__name__icontains='SHAKTI  FOOD  PRODUCTS')
+                                |Q(exporter__name__icontains='STRAINA INTERNATIONAL')
+                                |Q(exporter__name__icontains='TOPAZ INTERNATIONAL')
+                                | Q(exporter__name__icontains='VANILA')
+                                | Q(exporter__name__icontains='VIVA')
+                                | Q(exporter__name__icontains='DELMORE')
+                                | Q(exporter__name__icontains='Kulubi')
+                                | Q(exporter__name__icontains='Jai Gurudev')
+                                | Q(exporter__name__icontains='CONTINENTAL EXPORTS')
+                                | Q(exporter__name__icontains='KITES BAKERS')
+                                | Q(exporter__name__icontains='J K INTERNATIONAL TRADERS')
+                                | Q(exporter__name__icontains='DALSON FOOD INDUSTRIES')
+                                        | Q(exporter__name__icontains='RAMA')
+                                        | Q(exporter__name__icontains='RANI')
+                                        | Q(exporter__name__icontains='Parle')
+
+                                        ).distinct()
+            table = LicenseBiscuitReportTable(queryset)
+            tables.append({'label': 'Biscuits', 'table': table})
+            context['tables'] = tables
+        except:
+            pass
+        return context
+
 

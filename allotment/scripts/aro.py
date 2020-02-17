@@ -33,10 +33,11 @@ def generate_tl():
 
 
 def generate_agreement():
-    input_file = csv.DictReader(open("test.csv",'r',encoding ='utf-8'))
+    input_file = csv.DictReader(open("aro_details.csv"))
     for context in input_file:
         print(context)
         dict_data = context
-        doc = DocxTemplate("Tri-party agreement copy.docx")
+        dict_data['today'] = dict_data['\ufefftoday']
+        doc = DocxTemplate("Tri-party agreement.docx")
         doc.render(dict_data)
         doc.save(context['license'] + "_Tri-party agreement.docx")

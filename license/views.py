@@ -729,7 +729,7 @@ class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
             title = 'Fruit Juice'
             tables = juice_query()
         context['page_title'] = title
-        context['tables'] = tables
+        context['tables'] = title
         for table in tables:
             if table['total']:
                 total_quantity = total_quantity + table['total']

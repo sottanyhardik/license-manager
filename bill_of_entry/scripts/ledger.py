@@ -20,13 +20,14 @@ def parse_file(data):
     lines = data.split('\n')
     data_dict = {
         'row': []
-
-
     }
     for line in lines:
         if 'Printed By' in line:
             ledger_date = line.split('Dated:')[-1].strip().split(' ')[0]
-            data_dict['ledger_date'] = datetime.datetime.strptime(ledger_date, '%d/%m/%Y')
+            try:
+                data_dict['ledger_date'] = datetime.datetime.strptime(ledger_date, '%d/%m/%Y')
+            except:
+                data_dict['ledger_date'] = datetime.datetime.strptime(ledger_date, '%d/%m/%y')
         if 'Regn.No.' in line:
             data_dict['regn_no'] = extract_data(line, 'Regn.No.')
         if 'Regn.Date' in line:
@@ -113,7 +114,10 @@ def parse_file(data):
         if row['be_date'] == "":
             datetime_object = None
         else:
-            datetime_object = datetime.datetime.strptime(row['be_date'], '%d/%m/%Y')
+            try:
+                datetime_object = datetime.datetime.strptime(row['be_date'], '%d/%m/%Y')
+            except:
+                datetime_object = datetime.datetime.strptime(row['be_date'], '%d/%m/%y')
         row_obj, bool = LicenseImportItemsModel.objects.get_or_create(serial_number=row['sr_no'], license=license)
         if row['type'] == Credit:
             row_obj.quantity = float(row['qty'])
@@ -131,9 +135,10 @@ def parse_file(data):
             drow_obj.save()
         else:
             boe_port, bool = PortModel.objects.get_or_create(code=row['port'])
-            bill_of_entry, bool = BillOfEntryModel.objects.get_or_create(bill_of_entry_number=row['be_number'],
-                                                                         bill_of_entry_date=datetime_object,
-                                                                         port=boe_port)
+            bill_of_entry, bool = BillOfEntryModel.objects.get_or_create(bill_of_entry_number=row['be_number'])
+            bill_of_entry.bill_of_entry_date=datetime_object
+            bill_of_entry.port=boe_port
+            bill_of_entry.save()
             drow_obj, bool = RowDetails.objects.get_or_create(sr_number=row_obj, transaction_type=row['type'],
                                                               bill_of_entry=bill_of_entry)
             drow_obj.cif_inr = row['cif_inr']

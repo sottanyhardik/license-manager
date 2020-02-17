@@ -1,6 +1,7 @@
 from django import forms
 from django_select2.forms import ModelSelect2Widget
 
+from allotment.models import AllotmentModel, ALLOTMENT
 from core import models as core_models
 from bill_of_entry import models
 from core import custom_widgets
@@ -16,6 +17,12 @@ class BillOfEntryForm(forms.ModelForm):
     company = forms.ModelChoiceField(
         queryset=core_models.CompanyModel.objects.all(),
         widget=custom_widgets.CompanyWidget,
+        required=False
+    )
+
+    allotment = forms.ModelChoiceField(
+        queryset=AllotmentModel.objects.filter(bill_of_entry__isnull=True,type=ALLOTMENT),
+        widget=custom_widgets.AllotmentWidget,
         required=False
     )
 

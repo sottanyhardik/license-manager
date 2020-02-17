@@ -1,5 +1,6 @@
 from django_select2.forms import ModelSelect2MultipleWidget, ModelSelect2Widget
 
+from allotment.models import AllotmentModel
 from core import models
 
 
@@ -31,6 +32,11 @@ class ItemWidget(ModelSelect2Widget):
 class CompanyWidget(ModelSelect2Widget):
     search_fields = ['name__icontains', ]
     model = models.CompanyModel
+
+
+class AllotmentWidget(ModelSelect2Widget):
+    search_fields = ['item_name__icontains', 'company__name__icontains']
+    model = AllotmentModel
 
 
 class PortWidget(ModelSelect2Widget):

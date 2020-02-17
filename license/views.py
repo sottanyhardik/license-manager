@@ -307,7 +307,7 @@ class PDFCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
                 biscuits_queryset.filter(notification_number=N2015).filter(exporter__name__icontains='parle').exclude(
                     export_license__old_quantity=0).distinct())
             tables.append({'label': 'Parle Biscuits', 'table': table})
-
+            context['today_date'] = datetime.datetime.now().date()
             context['tables'] = tables
         except:
             pass
@@ -341,7 +341,7 @@ class PDFNewBiscuitsReportView(PDFTemplateResponseMixin, PagedFilteredTableView)
                     Q(exporter__name__icontains='parle')).distinct()
             table = LicenseBiscuitReportTable(filter_query)
             tables.append({'label': 'Parle Other Biscuits', 'table': table})
-
+            context['today_date'] = datetime.datetime.now().date()
             context['tables'] = tables
         except:
             pass
@@ -371,7 +371,7 @@ class PDFNewBiscuitsOtherReportView(PDFTemplateResponseMixin, PagedFilteredTable
                         exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle')).distinct()
             table = LicenseBiscuitReportTable(filter_query)
             tables.append({'label': 'Biscuits Remaning 019/2015 Notification', 'table': table})
-
+            context['today_date'] = datetime.datetime.now().date()
             context['tables'] = tables
         except:
             pass
@@ -406,7 +406,7 @@ class PDFNewConfectioneryReportView(PDFTemplateResponseMixin, PagedFilteredTable
                     Q(exporter__name__icontains='parle')).distinct()
             table = LicenseConfectineryReportTable(filter_query)
             tables.append({'label': 'Parle Other Confectinery', 'table': table})
-
+            context['today_date'] = datetime.datetime.now().date()
             context['tables'] = tables
         except:
             pass
@@ -437,6 +437,7 @@ class PDFNewConfectioneryOtherReportView(PDFTemplateResponseMixin, PagedFiltered
                         exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle')).distinct()
             table = LicenseConfectineryReportTable(filter_query)
             tables.append({'label': 'Confectinery Remaning 019/2015 Notification', 'table': table})
+            context['today_date'] = datetime.datetime.now().date()
             context['tables'] = tables
         except Exception as e:
             pass
@@ -469,7 +470,7 @@ class PDFOldAllReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
                 is_self=True).order_by('license_expiry_date')
             table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2009).distinct())
             tables.append({'label': 'Confectinery 098/2019 Notification', 'table': table})
-
+            context['today_date'] = datetime.datetime.now().date()
             context['tables'] = tables
         except:
             pass

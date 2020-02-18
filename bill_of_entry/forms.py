@@ -21,7 +21,7 @@ class BillOfEntryForm(forms.ModelForm):
     )
 
     allotment = forms.ModelChoiceField(
-        queryset=AllotmentModel.objects.filter(bill_of_entry__isnull=True,type=ALLOTMENT),
+        queryset=AllotmentModel.objects.filter(type=ALLOTMENT),
         widget=custom_widgets.AllotmentWidget,
         required=False
     )

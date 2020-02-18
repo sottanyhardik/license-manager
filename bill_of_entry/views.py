@@ -69,9 +69,12 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
                 for allotment_item in allotment.allotment_details.all():
                     row, bool = RowDetails.objects.get_or_create(bill_of_entry=self.object,
                                                                  sr_number=allotment_item.item)
-                    row.cif_inr = allotment_item.cif_inr
-                    row.cif_fc = allotment_item.cif_fc
-                    row.qty = allotment_item.qty
+                    if not row.cif_inr or row.cif_inr == 0:
+                        row.cif_inr = allotment_item.cif_inr
+                    if not row.cif_fc or row.cif_fc == 0:
+                        row.cif_fc = allotment_item.cif_fc
+                    if not row.cif_inr or row.qty == 0:
+                        row.qty = allotment_item.qty
                     row.save()
                     allotment_item.is_boe = True
                     allotment_item.save()

@@ -35,7 +35,7 @@ def parse_file(data):
         if 'Lic.Date' in line:
             data_dict['lic_date'] = datetime.datetime.strptime(extract_data(line, 'Lic.Date'), '%d/%m/%Y')
         if 'Lic.No.' in line:
-            data_dict['lic_no'] = extract_data(line, 'Lic.No.')
+            data_dict['lic_no'] = extract_data(line, 'Lic.No. ')
         if 'Frgn.Curr' in line:
             data_dict['foregin_currency'] = extract_data(line, 'Frgn.Curr')
         if 'CIF-INR.' in line:
@@ -43,19 +43,19 @@ def parse_file(data):
         if '\tCIF-FC \t:' in line:
             data_dict['cif_fc'] = extract_data(line, 'CIF-FC')
         if 'Tot.Qty.' in line:
-            data_dict['total_quantity'] = extract_data(line, 'Tot.Qty.')
+            data_dict['total_quantity'] = extract_data(line, 'Tot.Qty. ')
         if 'IEC \t:' in line:
             data_dict['iec'] = extract_data(line, 'IEC')
         if 'Regn.No. \t:' in line:
             data_dict['registration_no'] = extract_data(line, 'Regn.No.')
         if 'Regn.Date \t:' in line:
             data_dict['registration_date'] = datetime.datetime.strptime(extract_data(line, 'Regn.Date'), '%d/%m/%Y')
-        if 'Iss.CH. \t:' in line:
-            data_dict['port'] = extract_data(line, 'Iss.CH.')
+        if 'Iss.CH.' in line:
+            data_dict['port'] = extract_data(line, 'Iss.CH. ')
         if 'Schm.Cd. \t:' in line:
             data_dict['scheme_code'] = extract_data(line, 'Schm.Cd.')
-        if 'Notifcn. \t:' in line:
-            data_dict['notification'] = extract_data(line, 'Notifcn.')
+        if 'Notifcn. ' in line:
+            data_dict['notification'] = extract_data(line, 'Notifcn. ')
         if 'Credit-' in line:
             split_line = line.split('\t')
             row_dict = {
@@ -115,7 +115,7 @@ def parse_file(data):
             datetime_object = None
         else:
             try:
-                datetime_object = datetime.datetime.strptime(row['be_date'], '%d/%m/%Y')
+                datetime_object = datetime.datetime.strptime(row['be_date'], '%d-%m-%Y')
             except:
                 datetime_object = datetime.datetime.strptime(row['be_date'], '%d/%m/%y')
         row_obj, bool = LicenseImportItemsModel.objects.get_or_create(serial_number=row['sr_no'], license=license)
@@ -142,7 +142,7 @@ def parse_file(data):
             drow_obj, bool = RowDetails.objects.get_or_create(sr_number=row_obj, transaction_type=row['type'],
                                                               bill_of_entry=bill_of_entry)
             drow_obj.cif_inr = row['cif_inr']
-            drow_obj.cif_fc = row['cif_fc']
+            drow_obj.cif_fc = row['cif_fc'].replace(',','')
             drow_obj.qty = float(row['qty'])
             drow_obj.save()
-    return license.id
+    return license.license_number

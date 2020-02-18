@@ -32,7 +32,7 @@ urlpatterns = [
     path('report/confectinery/new/other/', login_required(views.PDFNewConfectioneryOtherReportView.as_view()),
          name='report_new_confectionery_other'),
     path('report/all/old', login_required(views.PDFOldAllReportView.as_view()), name='report_all_old'),
-    path('biscuits/amend', login_required(views.BiscuitsAmmendmentView.as_view()), name='biscuit_amend'),
+    path('biscuits/amend', login_required(views.BiscuitsAmendmentView.as_view()), name='biscuit_amend'),
     path('biscuits/new/expiried', login_required(views.PDFBiscuitsNewExpiryReportView.as_view()), name='biscuits_expiried_new'),
     path('confectinery/new/expiried', login_required(views.PDFConfectioneryNewExpiredReportView.as_view()), name='confectinery_expiried_new'),
     path('biscuits/old/expiried', login_required(views.PDFBiscuitsOldExpiryReportView.as_view()), name='biscuits_expiried_old'),

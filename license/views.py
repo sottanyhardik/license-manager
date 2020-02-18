@@ -461,15 +461,25 @@ class PDFOldAllReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__gt=expirty_limit,
                                                                            is_self=True).order_by('license_expiry_date')
-
-            table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Biscuits 098/2019 Notification', 'table': table})
+            q_biscuits_queryset = biscuits_queryset.exclude(Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani'))
+            table = LicenseBiscuitReportTable(q_biscuits_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Biscuits 098/2019 Notification [ No Rama & Rani]', 'table': table})
+            q_biscuits_queryset = biscuits_queryset.filter(
+                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani'))
+            table = LicenseBiscuitReportTable(q_biscuits_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Rama Rani Biscuits 098/2019 Notification', 'table': table})
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__gt=expirty_limit,
                 is_self=True).order_by('license_expiry_date')
-            table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Confectinery 098/2019 Notification', 'table': table})
+            q_confectionery_queryset = confectionery_queryset.exclude(
+                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani'))
+            table = LicenseConfectineryReportTable(q_confectionery_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Confectinery 098/2019 Notification [ No Rama & Rani]', 'table': table})
+            q_confectionery_queryset = confectionery_queryset.filter(
+                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani'))
+            table = LicenseConfectineryReportTable(q_confectionery_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Rama & Rani Confectinery 098/2019 Notification', 'table': table})
             context['today_date'] = datetime.datetime.now().date()
             context['tables'] = tables
         except:
@@ -477,7 +487,7 @@ class PDFOldAllReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
         return context
 
 
-class BiscuitsAmmendmentView(PDFTemplateResponseMixin, PagedFilteredTableView):
+class BiscuitsAmendmentView(PDFTemplateResponseMixin, PagedFilteredTableView):
     template_name = 'license/pdf_amend.html'
     model = license.LicenseDetailsModel
     table_class = tables.LicenseBiscuitReportTable
@@ -485,7 +495,7 @@ class BiscuitsAmmendmentView(PDFTemplateResponseMixin, PagedFilteredTableView):
     context_object_name = 'license_list'
 
     def get_context_data(self, **kwargs):
-        context = super(BiscuitsAmmendmentView, self).get_context_data()
+        context = super(BiscuitsAmendmentView, self).get_context_data()
         tables = []
         from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
         from license.models import N2009

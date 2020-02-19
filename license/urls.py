@@ -37,6 +37,8 @@ urlpatterns = [
     path('confectinery/new/expiried', login_required(views.PDFConfectioneryNewExpiredReportView.as_view()), name='confectinery_expiried_new'),
     path('biscuits/old/expiried', login_required(views.PDFBiscuitsOldExpiryReportView.as_view()), name='biscuits_expiried_old'),
     path('confectinery/old/expiried', login_required(views.PDFConfectioneryOldExpiredReportView.as_view()), name='confectinery_expiried_old'),
+    path('confectinery/other/old/expiried', login_required(views.PDFOtherConfectioneryOldExpiredReportView.as_view()), name='confectinery_other_expiried_old'),
+
     path('item/report', login_required(views.ItemReportView.as_view()),
          name='item_report'),
     path('item/list/report', login_required(views.ItemListReportView.as_view()),

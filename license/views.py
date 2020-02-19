@@ -902,3 +902,84 @@ class PDFParleConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedF
         except:
             pass
         return context
+
+
+class PDFAUConfectioneryReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        from allotment.scripts.aro import fetch_cif
+        fetch_cif()
+        context = super(PDFAUConfectioneryReportView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseConfectineryReportTable
+        from license.models import N2009
+        try:
+            expirty_limit = datetime.datetime.today()
+            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
+                export_license__norm_class__norm_class='E1',
+                license_expiry_date__gte=expirty_limit,
+                is_self=True, is_au=False, balance_cif__gte=5000).order_by('license_expiry_date')
+            q_confectionery_queryset = confectionery_queryset
+            table = LicenseConfectineryReportTable(
+                q_confectionery_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'AU Confectinery Active', 'table': table})
+            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
+                export_license__norm_class__norm_class='E1',
+                license_expiry_date__lt=expirty_limit,
+                is_self=True, is_au=False, balance_cif__gte=5000).order_by('license_expiry_date')
+            q_confectionery_queryset = confectionery_queryset
+            table = LicenseConfectineryReportTable(
+                q_confectionery_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'AU Confectinery Expired', 'table': table})
+            context['tables'] = tables
+        except:
+            pass
+        return context
+
+
+class PDFAUBiscuitsReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(PDFAUBiscuitsReportView, self).get_context_data()
+        tables = []
+        from allotment.scripts.aro import fetch_cif
+        fetch_cif()
+        from license.tables import LicenseBiscuitReportTable
+        from license.models import N2009
+        try:
+            expirty_limit = datetime.datetime.today()
+            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                           license_expiry_date__gte=expirty_limit,
+                                                                           is_self=True, is_au=False,
+                                                                           balance_cif__gte=4000).order_by(
+                'license_expiry_date')
+
+            q_biscuits_queryset = biscuits_queryset
+            table = LicenseBiscuitReportTable(
+                q_biscuits_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'AU Biscuits Active', 'table': table})
+            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                           license_expiry_date__lt=expirty_limit,
+                                                                           is_self=True, is_au=False,
+                                                                           balance_cif__gte=4000).order_by(
+                'license_expiry_date')
+
+            q_biscuits_queryset = biscuits_queryset
+            table = LicenseBiscuitReportTable(
+                q_biscuits_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'AU Biscuits Expired', 'table': table})
+
+            context['tables'] = tables
+        except:
+            pass
+        return context

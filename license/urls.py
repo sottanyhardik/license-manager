@@ -42,9 +42,8 @@ urlpatterns = [
          name='confectinery_au'),
     path('biscuits/au', login_required(views.PDFAUBiscuitsReportView.as_view()),
          name='biscuits_au'),
-    path('rajwani/', login_required(views.PDFOldRajawaniReportView.as_view()),
+    path('item/rajwani', login_required(views.PDFOldRajawaniReportView.as_view()),
          name='rajwani'),
-
     path('item/report', login_required(views.ItemReportView.as_view()),
          name='item_report'),
     path('item/list/report', login_required(views.ItemListReportView.as_view()),

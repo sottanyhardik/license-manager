@@ -51,8 +51,8 @@ class AllotmentTable(dt2.Table):
     class Meta:
         model = allotment_model.AllotmentModel
         per_page = 50
-        fields = ['counter', 'type', 'modified_on','company', 'required_quantity', 'unit_value_per_unit','value', 'item_name',
-                  'license','port']
+        fields = ['counter', 'type', 'modified_on', 'company', 'required_quantity', 'unit_value_per_unit','value',
+                  'item_name', 'license', 'port', 'invoice', 'eta']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

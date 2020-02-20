@@ -106,28 +106,28 @@ def convert(query, name):
 def fetch():
     from license.models import LicenseDetailsModel
     from _datetime import datetime, timedelta
-    expirty_limit = datetime.today() - timedelta(days=30)
+    expiry_limit = datetime.today() - timedelta(days=30)
     query = LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E1', notification_number=N2015,
-                                               is_null=False).filter(license_expiry_date__gt=expirty_limit).order_by('license_expiry_date')
+                                               is_null=False).filter(license_expiry_date__gt=expiry_limit).order_by('license_expiry_date')
     convert(query, 'Confectionery_19_2015.csv')
     query = LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E1', notification_number=N2009,
-                                               is_null=False).filter(license_expiry_date__gt=expirty_limit).order_by('license_expiry_date')
+                                               is_null=False).filter(license_expiry_date__gt=expiry_limit).order_by('license_expiry_date')
     convert(query, 'Confectionery_98_2009.csv')
     query = LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5', notification_number=N2015,
-                                               is_null=False).filter(license_expiry_date__gt=expirty_limit).order_by('license_expiry_date')
+                                               is_null=False).filter(license_expiry_date__gt=expiry_limit).order_by('license_expiry_date')
     convert(query, 'Biscuits_19_2015.csv')
     query = LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5', notification_number=N2009,
-                                               is_null=False).filter(license_expiry_date__gt=expirty_limit).order_by('license_expiry_date')
+                                               is_null=False).filter(license_expiry_date__gt=expiry_limit).order_by('license_expiry_date')
     convert(query, 'Biscuits_98_2009.csv')
     # query = LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E1', notification_number=N2015,
-    #                                           is_null=True).filter(license_expiry_date__gt=expirty_limit)
+    #                                           is_null=True).filter(license_expiry_date__gt=expiry_limit)
     # convert(query, 'Confectionery_19_2015_null.csv')
     # query = LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E1', notification_number=2,
-    #                                           is_null=True).filter(license_expiry_date__gt=expirty_limit)
+    #                                           is_null=True).filter(license_expiry_date__gt=expiry_limit)
     # convert(query, 'Confectionery_98_2009_null.csv')
     # query = LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5', notification_number=N2015,
-    #                                           is_null=True).filter(license_expiry_date__gt=expirty_limit)
+    #                                           is_null=True).filter(license_expiry_date__gt=expiry_limit)
     # convert(query, 'Biscuits_19_2015_null.csv')
     # query = LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5', notification_number=N2015,
-    #                                           is_null=True).filter(license_expiry_date__gt=expirty_limit)
+    #                                           is_null=True).filter(license_expiry_date__gt=expiry_limit)
     # convert(query, 'Biscuits_98_2009_null.csv')

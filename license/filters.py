@@ -43,11 +43,11 @@ class LicenseDetailFilter(django_filters.FilterSet):
 
     def check_expired(self, queryset, name, value):
         from datetime import datetime, timedelta
-        expirty_limit = datetime.today()
+        expiry_limit = datetime.today()
         if value:
-            return queryset.filter(license_expiry_date__lt=expirty_limit)
+            return queryset.filter(license_expiry_date__lt=expiry_limit)
         else:
-            return queryset.filter(license_expiry_date__gte=expirty_limit)
+            return queryset.filter(license_expiry_date__gte=expiry_limit)
 
     def check_individual(self, queryset, name, value):
         if value:
@@ -88,11 +88,11 @@ class LicenseReportFilter(django_filters.FilterSet):
 
     def check_expired(self, queryset, name, value):
         from datetime import datetime, timedelta
-        expirty_limit = datetime.today()
+        expiry_limit = datetime.today()
         if value:
-            return queryset.filter(license_expiry_date__lt=expirty_limit)
+            return queryset.filter(license_expiry_date__lt=expiry_limit)
         else:
-            return queryset.filter(license_expiry_date__gte=expirty_limit)
+            return queryset.filter(license_expiry_date__gte=expiry_limit)
 
     def check_individual(self, queryset, name, value):
         if value:

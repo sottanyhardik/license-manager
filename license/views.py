@@ -493,6 +493,43 @@ class PDFOldAllReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
         return context
 
 
+class PDFOldRajawaniReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(PDFOldRajawaniReportView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
+        from license.models import N2009
+        try:
+            expiry_limit = datetime.datetime.today()
+            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
+                                                                           license_expiry_date__gt=expiry_limit,
+                                                                           is_self=True, is_au=False).order_by('license_expiry_date')
+            q_biscuits_queryset = biscuits_queryset.filter(
+                Q(exporter__name__icontains='rajwani'))
+            table = LicenseBiscuitReportTable(q_biscuits_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Biscuits 098/2019 Notification [Rajwani]', 'table': table})
+            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
+                export_license__norm_class__norm_class='E1',
+                license_expiry_date__gt=expiry_limit,
+                is_self=True, is_au=False).order_by('license_expiry_date')
+            q_confectionery_queryset = confectionery_queryset.filter(
+                Q(exporter__name__icontains='rajwani'))
+            table = LicenseConfectineryReportTable(
+                q_confectionery_queryset.filter(notification_number=N2009).distinct())
+            tables.append({'label': 'Confectinery 098/2019 Notification [Rajwani]', 'table': table})
+            context['today_date'] = datetime.datetime.now().date()
+            context['tables'] = tables
+        except:
+            pass
+        return context
+
+
 class BiscuitsAmendmentView(PDFTemplateResponseMixin, PagedFilteredTableView):
     template_name = 'license/pdf_amend.html'
     model = license.LicenseDetailsModel

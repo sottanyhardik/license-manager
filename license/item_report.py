@@ -45,9 +45,13 @@ def rbd_query():
         biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=1000))
         filter_query = biscuits_queryset.filter(hs_code__hs_code__icontains='15119020').distinct()
         table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License List', 'table': table,
+        tables.append({'label': 'RBD Palmolein Oil', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.exclude(hs_code__hs_code__icontains='15119020').distinct()
+        filter_query = biscuits_queryset.filter(hs_code__hs_code__icontains='15119010').distinct()
+        table = LicenseItemReportTable(filter_query)
+        tables.append({'label': 'RBD Palm Oil', 'table': table,
+                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
+        filter_query = biscuits_queryset.exclude(Q(hs_code__hs_code__icontains='15119010')|Q(hs_code__hs_code__icontains='15119020')).distinct()
         table = LicenseItemReportTable(filter_query)
         tables.append({'label': 'Need Amendment', 'table': table,
                        'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})

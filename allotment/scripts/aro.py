@@ -27,13 +27,16 @@ def generate_tl():
     input_file = csv.DictReader(open("aro_details.csv"))
     for context in input_file:
         print(context)
-        doc = DocxTemplate("TL.docx")
+        doc = DocxTemplate("__GE_TL.docx")
         doc.render(context)
-        doc.save(context['license'] + "_TL.docx")
+        doc.save(context['license'] + "_GE_TL.docx")
+        doc = DocxTemplate("__GMPL_TL.docx")
+        doc.render(context)
+        doc.save(context['license'] + "_GMPL_TL.docx")
 
 
 def generate_agreement():
-    input_file = csv.DictReader(open("aro_invalidation.csv",'r',encoding ='utf-8'))
+    input_file = csv.DictReader(open("aro_invalidation.csv", 'r', encoding='utf-8'))
     for context in input_file:
         print(context)
         dict_data = context

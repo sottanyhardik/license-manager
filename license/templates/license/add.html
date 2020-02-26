@@ -12,6 +12,28 @@
                     </div>
 
                     <div class="card-body">
+                                                            {% if form.errors %}
+                                        <div class="alert alert-danger">
+                                            <ul class="errorlist">
+                                                {% if form.non_field_errors %}
+                                                    <li>{{ form.non_field_errors }}</li>
+                                                {% endif %}
+                                                {% for field in form %}
+                                                    {% if field.errors %}
+                                                        <li>
+                                                            {{ field.label|title }}
+                                                            <ul class="errorlist">
+                                                                {% for error in field.errors %}
+                                                                    <li>{{ error }}</li>
+                                                                {% endfor %}
+                                                            </ul>
+                                                        </li>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    {% endif %}
+
                         {% csrf_token %}
                         <div class="row">
                             <div class="col-lg-2 col-xs-6">

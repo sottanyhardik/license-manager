@@ -447,7 +447,7 @@ class PDFNewConfectioneryOtherReportView(PDFTemplateResponseMixin, PagedFiltered
         return context
 
 
-class PDFOldAllReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+class PDFOldBisReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
     template_name = 'license/report_pdf.html'
     model = license.LicenseDetailsModel
     table_class = tables.LicenseBiscuitReportTable
@@ -455,7 +455,7 @@ class PDFOldAllReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
     context_object_name = 'license_list'
 
     def get_context_data(self, **kwargs):
-        context = super(PDFOldAllReportView, self).get_context_data()
+        context = super(PDFOldBisReportView, self).get_context_data()
         tables = []
         from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
         from license.models import N2009
@@ -472,6 +472,27 @@ class PDFOldAllReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
                 Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani'))
             table = LicenseBiscuitReportTable(q_biscuits_queryset.filter(notification_number=N2009).distinct())
             tables.append({'label': 'Rama Rani Biscuits 098/2019 Notification', 'table': table})
+            context['today_date'] = datetime.datetime.now().date()
+            context['tables'] = tables
+        except:
+            pass
+        return context
+
+
+class PDFOldConReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/report_pdf.html'
+    model = license.LicenseDetailsModel
+    table_class = tables.LicenseBiscuitReportTable
+    filter_class = filters.LicenseReportFilter
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(PDFOldConReportView, self).get_context_data()
+        tables = []
+        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
+        from license.models import N2009
+        try:
+            expiry_limit = datetime.datetime.today()
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__gt=expiry_limit,
@@ -491,7 +512,6 @@ class PDFOldAllReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
         except:
             pass
         return context
-
 
 class PDFOldRajawaniReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
     template_name = 'license/report_pdf.html'

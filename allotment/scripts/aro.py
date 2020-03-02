@@ -43,3 +43,12 @@ def generate_agreement():
         doc = DocxTemplate("Tri-party agreement.docx")
         doc.render(dict_data)
         doc.save(context['license'] + "_Tri-party agreement.docx")
+
+
+def generate_tl_ge():
+    input_file = csv.DictReader(open("vkc.csv"))
+    for context in input_file:
+        print(context)
+        doc = DocxTemplate("BLANK TL.docx")
+        doc.render(context)
+        doc.save( context['id'] + '-' + context['license'] + "_GE_TL.docx")

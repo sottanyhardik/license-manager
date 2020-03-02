@@ -52,6 +52,7 @@
 {% block content %}
     {% load django_tables2 %}
     {% load i18n %}
+        <div style="text-align: right"><b>{{ today }}</b></div>
         <b style="font-size: 20px">{{ page_title|title }}</b>
         {% for table_dict in tables %}
             {% if table_dict.total %}

@@ -883,6 +883,7 @@ class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
             if table['total']:
                 total_quantity = total_quantity + table['total']
         context['total_quantity'] = total_quantity
+        context['today'] = datetime.datetime.now().date()
         return context
 
 

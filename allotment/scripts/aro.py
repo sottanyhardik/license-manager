@@ -29,10 +29,10 @@ def generate_tl():
         print(context)
         doc = DocxTemplate("__GE_TL.docx")
         doc.render(context)
-        doc.save(context['license'] + "_GE_TL.docx")
+        doc.save(context['sr_no'] + ' ' + context['license'] + "_GE_TL.docx")
         doc = DocxTemplate("__GMPL_TL.docx")
         doc.render(context)
-        doc.save(context['license'] + "_GMPL_TL.docx")
+        doc.save(context['sr_no'] + ' ' + context['license'] + "_GMPL_TL.docx")
 
 
 def generate_agreement():

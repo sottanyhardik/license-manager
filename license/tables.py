@@ -77,6 +77,15 @@ class PPQuantityColumn(ColumnTotal):
         return intcomma(round(bills, 0))
 
 
+class PaperBoardQuantityColumn(ColumnTotal):
+
+    def render(self, record):
+        bills = record.get_pp()
+        self.column_total += bills
+        return intcomma(round(bills, 0))
+
+
+
 class DFQuantityColumn(ColumnTotal):
 
     def render(self, record):
@@ -277,20 +286,24 @@ class LicenseConfectineryReportTable(dt2.Table):
 
 class TruncatedTextColumn(dt2.Column):
     '''A Column to limit to 100 characters and add an ellipsis'''
+
     def render(self, value):
         if len(value) > 10:
             return value[0:10] + '...'
         return str(value)
 
+
 class TruncatedBigTextColumn(dt2.Column):
     '''A Column to limit to 100 characters and add an ellipsis'''
+
     def render(self, value):
         if len(value) > 32:
             return value[0:30] + '...'
         return str(value)
 
+
 class ColumnWithThousandsSeparator(dt2.Column):
-    def render(self,value):
+    def render(self, value):
         return intcomma(value)
 
 
@@ -300,7 +313,7 @@ class LicenseItemReportTable(dt2.Table):
     license_expiry = dt2.DateTimeColumn(format='d-m-Y', verbose_name='License Expiry Date',
                                         accessor='license.license_expiry_date')
     license_exporter = TruncatedTextColumn(verbose_name='Exporter', accessor='license.exporter.name')
-    item = TruncatedBigTextColumn(verbose_name='Item Description',accessor='item.name')
+    item = TruncatedBigTextColumn(verbose_name='Item Description', accessor='item.name')
     balance_quantity = ColumnWithThousandsSeparator()
     balance_cif_fc = ColumnWithThousandsSeparator()
 
@@ -310,6 +323,62 @@ class LicenseItemReportTable(dt2.Table):
         fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
                   'hs_code', 'item',
                   'balance_quantity', 'balance_cif_fc']
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+    def render_counter(self):
+        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
+        return next(self.row_counter)
+
+
+class LicenseBiscuitPreimiumTable(dt2.Table):
+    counter = dt2.Column(empty_values=(), orderable=False)
+    license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
+                                 orderable=False)
+    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    license_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
+    balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
+    sugar_value = ColumnTotal(verbose_name='Required Sugar Value', orderable=False, accessor='get_required_sugar_value')
+    rbd = RBDQuantityColumn(verbose_name='RBD Palmolein', orderable=False, accessor='get_rbd')
+    rbd_value = ColumnTotal(verbose_name='Required RBD Value', orderable=False, accessor='get_required_rbd_value')
+    m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
+    m_n_m_value = ColumnTotal(verbose_name='Required M & M Value', orderable=False, accessor='get_required_mnm_value')
+    pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
+    paper = PaperQuantityColumn(verbose_name='Paper & Paper Board', orderable=False, accessor='get_paper')
+    balance_value = ColumnTotal(verbose_name='Balance CIF For PP', orderable=False, accessor='get_balance_value')
+
+    class Meta:
+        model = models.LicenseDetailsModel
+        per_page = 50
+        fields = ['counter', 'license', 'license_date', 'license_expiry_date',
+                  'party', 'balance_cif']
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+    def render_counter(self):
+        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
+        return next(self.row_counter)
+
+
+class LicenseConfectioneryPreimiumTable(dt2.Table):
+    counter = dt2.Column(empty_values=(), orderable=False)
+    license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
+                                 orderable=False)
+    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    license_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
+    balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
+    sugar_value = ColumnTotal(verbose_name='Required Sugar Value', orderable=False, accessor='get_required_sugar_value')
+    pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
+    paper = PaperQuantityColumn(verbose_name='Paper & Paper Board', orderable=False, accessor='get_paper')
+    balance_value = ColumnTotal(verbose_name='Balance CIF For PP', orderable=False, accessor='get_balance_value')
+
+    class Meta:
+        model = models.LicenseDetailsModel
+        per_page = 50
+        fields = ['counter', 'license', 'license_date', 'license_expiry_date',
+                  'party', 'balance_cif']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

@@ -86,7 +86,12 @@ class LicenseDetailsModel(models.Model):
             t_debit = t_debit + debit
         if allotment:
             t_debit = t_debit + allotment
-        return round(credit - t_debit, 2)
+        if credit and t_debit:
+            return round(credit - t_debit, 2)
+        elif credit:
+            return round(credit, 2)
+        else:
+            return 0
 
     def get_wheat(self):
         return self.import_license.filter(item__head__name__icontains='wheat').first().balance_quantity
@@ -152,6 +157,21 @@ class LicenseDetailsModel(models.Model):
 
     def get_party_name(self):
         return str(self.exporter)[:8]
+
+    def get_required_sugar_value(self):
+        return round(self.get_sugar() * 0.330, 2)
+
+    def get_required_rbd_value(self):
+        return round(self.get_rbd() * 0.800, 2)
+
+    def get_required_mnm_value(self):
+        return round(self.get_m_n_m() * 5, 2)
+
+    def get_balance_value(self):
+        if self.get_norm_class == 'E5':
+            return round(self.get_balance_cif() - self.get_required_sugar_value() - self.get_required_rbd_value() - self.get_required_mnm_value(),2)
+        else:
+            return round(self.get_balance_cif() - self.get_required_sugar_value(),2)
 
 
 KG = 'kg'

@@ -1060,7 +1060,8 @@ class PremiumCalculationView(PDFTemplateResponseMixin, PagedFilteredTableView):
                                                                            balance_cif__gte=4000).order_by(
                 'license_expiry_date')
 
-            q_biscuits_queryset = biscuits_queryset.exclude(export_license__old_quantity__isnull=True)
+            q_biscuits_queryset = biscuits_queryset.filter(
+                Q(export_license__old_quantity=0) | Q(export_license__old_quantity=None))
             from license.tables import LicenseBiscuitPreimiumTable
             table = LicenseBiscuitPreimiumTable(
                 q_biscuits_queryset.filter(notification_number=N2015).distinct())
@@ -1070,7 +1071,8 @@ class PremiumCalculationView(PDFTemplateResponseMixin, PagedFilteredTableView):
                 license_expiry_date__gte=expiry_limit,
                 is_self=True,
                 balance_cif__gte=4000).order_by('license_expiry_date')
-            q_confectionery_queryset = confectionery_queryset.exclude(export_license__old_quantity__isnull=True)
+            q_confectionery_queryset = confectionery_queryset.filter(
+                Q(export_license__old_quantity=0) | Q(export_license__old_quantity=None))
             from license.tables import LicenseConfectioneryPreimiumTable
             table = LicenseConfectioneryPreimiumTable(
                 q_confectionery_queryset.filter(notification_number=N2015).distinct())

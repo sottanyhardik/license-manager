@@ -20,7 +20,7 @@ def sugar_query():
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) | Q(available_value__gte=100))
+        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
         filter_query = biscuits_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
         tables.append({'label': 'License List', 'table': table,
@@ -44,7 +44,7 @@ def rbd_query():
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) | Q(available_value__gte=100))
+        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
         filter_query = biscuits_queryset.filter(hs_code__hs_code__icontains='15119020').distinct()
         table = LicenseItemReportTable(filter_query)
         tables.append({'label': 'RBD Palmolein Oil', 'table': table,
@@ -77,7 +77,7 @@ def milk_query():
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) | Q(available_value__gte=100))
+        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
         filter_query = biscuits_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
         tables.append({'label': 'License Lists', 'table': table,
@@ -101,7 +101,7 @@ def skimmed_milk_query():
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) | Q(available_value__gte=100))
+        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
         filter_query = biscuits_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
         tables.append({'label': 'License List', 'table': table,
@@ -124,7 +124,7 @@ def wpc_query():
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) | Q(available_value__gte=100))
+        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
         filter_query = biscuits_queryset.distinct()
         table = LicenseItemReportTable(filter_query)
         tables.append({'label': 'License Lists', 'table': table,
@@ -147,7 +147,7 @@ def dietary_query():
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) | Q(available_value__gte=100))
+        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
         filter_query = biscuits_queryset.filter(
             (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
                 license__notification_number=N2009)).filter(hs_code__hs_code__startswith='08').distinct()
@@ -178,7 +178,7 @@ def food_query():
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) | Q(available_value__gte=100))
+        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
         filter_query = biscuits_queryset.filter(
             (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
                 license__notification_number=N2009)).distinct()
@@ -203,7 +203,7 @@ def juice_query():
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=100) | Q(available_value__gte=100))
+        confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
         filter_query = confectionery_queryset.filter(
             (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
                 license__notification_number=N2009)).filter(hs_code__hs_code__startswith='2009').distinct()
@@ -257,7 +257,7 @@ def oci_query():
             object.available_quantity = object.balance_quantity
             object.available_value = object.balance_cif_fc
             object.save()
-        confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=100) | Q(available_value__gte=100))
+        confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
         filter_query = confectionery_queryset.filter(
             (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
                 license__notification_number=N2009)).distinct()

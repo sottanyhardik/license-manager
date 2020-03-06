@@ -4,7 +4,6 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # ex: /polls/
     path('add/', login_required(views.LicenseDetailCreateView.as_view()), name='add-license'),
     path('', login_required(views.LicenseDetailListView.as_view()), name='list-license'),
     path('<slug:license>/', login_required(views.LicenseDetailView.as_view()), name='license-detail'),

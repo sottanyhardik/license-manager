@@ -35,7 +35,7 @@ def parse_file(data):
         if 'Lic.Date' in line:
             data_dict['lic_date'] = datetime.datetime.strptime(extract_data(line, 'Lic.Date'), '%d/%m/%Y')
         if 'Lic.No.' in line:
-            data_dict['lic_no'] = extract_data(line, 'Lic.No. ')
+            data_dict['lic_no'] = extract_data(line, 'Lic.No.')
         if 'Frgn.Curr' in line:
             data_dict['foregin_currency'] = extract_data(line, 'Frgn.Curr')
         if 'CIF-INR.' in line:
@@ -43,7 +43,7 @@ def parse_file(data):
         if '\tCIF-FC \t:' in line:
             data_dict['cif_fc'] = extract_data(line, 'CIF-FC')
         if 'Tot.Qty.' in line:
-            data_dict['total_quantity'] = extract_data(line, 'Tot.Qty. ')
+            data_dict['total_quantity'] = extract_data(line, 'Tot.Qty.')
         if 'IEC \t:' in line:
             data_dict['iec'] = extract_data(line, 'IEC')
         if 'Regn.No. \t:' in line:
@@ -51,13 +51,14 @@ def parse_file(data):
         if 'Regn.Date \t:' in line:
             data_dict['registration_date'] = datetime.datetime.strptime(extract_data(line, 'Regn.Date'), '%d/%m/%Y')
         if 'Iss.CH.' in line:
-            data_dict['port'] = extract_data(line, 'Iss.CH. ')
+            data_dict['port'] = extract_data(line, 'Iss.CH.')
         if 'Schm.Cd. \t:' in line:
             data_dict['scheme_code'] = extract_data(line, 'Schm.Cd.')
         if 'Notifcn. ' in line:
-            data_dict['notification'] = extract_data(line, 'Notifcn. ')
+            data_dict['notification'] = extract_data(line, 'Notifcn.')
         if 'Credit-' in line:
             split_line = line.split('\t')
+            split_line[1] = split_line[1].strip().replace('/01/00','')
             row_dict = {
                 'type': 'C',
                 'sr_no': split_line[1].strip(),
@@ -76,6 +77,7 @@ def parse_file(data):
             data_dict['row'].append(row_dict)
         if 'Debit-' in line:
             split_line = line.split('\t')
+            split_line[1] = split_line[1].strip().replace('/01/00', '')
             row_dict = {
                 'type': 'D',
                 'sr_no': split_line[1].strip(),

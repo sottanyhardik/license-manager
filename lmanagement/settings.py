@@ -176,3 +176,6 @@ CACHES = {
 # Set the cache backend to select2
 SELECT2_CACHE_BACKEND = 'select2'
 
+FILE_UPLOAD_HANDLERS = (
+    'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+)

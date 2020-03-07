@@ -130,17 +130,26 @@ class UploadLedger(TemplateView):
         return context
 
     def post(self, request, **kwargs):
+        # workbook = xlrd.open_workbook(files.temporary_file_path())
+        # worksheet = workbook.sheet_by_index(0)
+        # rows = []
+        # for column in range(worksheet.nrows):
+        #     for row in range(worksheet.nrows):
+        #         print(worksheet.cell(row, column).value)
+
         files = request.FILES.getlist('ledger')
         license = None
         for raw_file in files:
             file = raw_file.read()
-            data = file.decode('utf-8')
-            try:
-                from bill_of_entry.scripts.ledger import parse_file
-                license = parse_file(data)
-            except Exception as e:
-                print(e)
-                license = None
+            full = file.decode('utf-8')
+            for data in full.split('Page No:-1\t'):
+                try:
+                    from bill_of_entry.scripts.ledger import parse_file
+                    license = parse_file(data)
+                except Exception as e:
+                    print(data)
+                    print(e)
+                    license = None
         from django.http import HttpResponseRedirect
         from django.urls import reverse
         if license:

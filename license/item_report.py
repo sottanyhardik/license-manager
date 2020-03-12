@@ -267,3 +267,28 @@ def oci_query():
         return tables
     except Exception as e:
         return False
+
+
+def fruit_query():
+    tables = []
+    try:
+        expiry_limit = datetime.datetime.today()
+        biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
+            license__export_license__norm_class__norm_class='E5',
+            license__license_expiry_date__gte=expiry_limit,
+            license__is_self=True, license__is_au=False, item__head__name__icontains='fruit').order_by(
+            'license__license_expiry_date')
+        for object in biscuits_queryset:
+            object.available_quantity = object.balance_quantity
+            object.available_value = object.balance_cif_fc
+            object.save()
+        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
+        filter_query = biscuits_queryset.filter(
+            (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
+                license__notification_number=N2009)).distinct()
+        table = LicenseItemReportTable(filter_query)
+        tables.append({'label': 'License List', 'table': table,
+                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
+        return tables
+    except Exception as e:
+        return False

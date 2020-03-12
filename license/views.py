@@ -16,7 +16,7 @@ from license.helper import round_down
 from . import forms, tables, filters
 from . import models as license
 from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_milk_query, dietary_query, food_query, \
-    packing_query, juice_query, oci_query
+    packing_query, juice_query, oci_query, fruit_query
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -881,6 +881,9 @@ class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
         elif item == 'flavour':
             title = 'Food Flavour'
             tables = food_query()
+        elif item == 'fruit':
+            title = 'Fruit (Biscuit)'
+            tables = fruit_query()
         elif item == 'pp':
             title = 'PP'
             tables = packing_query()

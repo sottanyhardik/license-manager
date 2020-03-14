@@ -11,7 +11,7 @@ def sugar_query():
     total_quantity = 0
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
             license__license_expiry_date__gte=expiry_limit,
             license__is_self=True, license__is_au=False, item__head__name__icontains='sugar').order_by(
@@ -34,7 +34,7 @@ def rbd_query():
     total_quantity = 0
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
             license__export_license__norm_class__norm_class='E5',
             license__license_expiry_date__gte=expiry_limit,
@@ -66,7 +66,7 @@ def rbd_query():
 def milk_query():
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
             license__export_license__norm_class__norm_class='E5',
             license__license_expiry_date__gte=expiry_limit,
@@ -90,7 +90,7 @@ def milk_query():
 def skimmed_milk_query():
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
             license__export_license__norm_class__norm_class='E5',
             license__license_expiry_date__gte=expiry_limit,
@@ -114,7 +114,7 @@ def skimmed_milk_query():
 def wpc_query():
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
             license__export_license__norm_class__norm_class='E5',
             license__license_expiry_date__gte=expiry_limit,
@@ -137,7 +137,7 @@ def wpc_query():
 def dietary_query():
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
             license__export_license__norm_class__norm_class='E5',
             license__license_expiry_date__gte=expiry_limit,
@@ -168,7 +168,7 @@ def dietary_query():
 def food_query():
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
             license__export_license__norm_class__norm_class='E5',
             license__license_expiry_date__gte=expiry_limit,
@@ -193,7 +193,7 @@ def food_query():
 def juice_query():
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         confectionery_queryset = license.LicenseImportItemsModel.objects.filter(
             license__export_license__norm_class__norm_class='E1',
             license__license_expiry_date__gte=expiry_limit,
@@ -224,7 +224,7 @@ def juice_query():
 def packing_query():
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         all = license.LicenseImportItemsModel.objects.filter(license__license_expiry_date__gte=expiry_limit,
                                                              license__is_self=True, license__is_au=False,
                                                              item__head__name__icontains='Packing Material')
@@ -247,7 +247,7 @@ def packing_query():
 def oci_query():
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         confectionery_queryset = license.LicenseImportItemsModel.objects.filter(
             license__export_license__norm_class__norm_class='E1',
             license__license_expiry_date__gte=expiry_limit,
@@ -272,7 +272,7 @@ def oci_query():
 def fruit_query():
     tables = []
     try:
-        expiry_limit = datetime.datetime.today()
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
             license__export_license__norm_class__norm_class='E5',
             license__license_expiry_date__gte=expiry_limit,

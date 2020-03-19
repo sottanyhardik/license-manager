@@ -27,12 +27,21 @@ def generate_tl():
     input_file = csv.DictReader(open("aro_details.csv"))
     for context in input_file:
         print(context)
-        doc = DocxTemplate("__GE_TL.docx")
-        doc.render(context)
-        doc.save(context['sr_no'] + ' ' + context['license'] + "_GE_TL.docx")
-        doc = DocxTemplate("__GMPL_TL.docx")
-        doc.render(context)
-        doc.save(context['sr_no'] + ' ' + context['license'] + "_GMPL_TL.docx")
+        if context['tl_company'] == 'ge':
+            doc = DocxTemplate("__GE_TL.docx")
+            doc.render(context)
+            doc.save(context['sr_no'] + ' ' + context['license'] + "_GE_TL.docx")
+        if context['tl_company'] == 'gmpl':
+            doc = DocxTemplate("__GMPL_TL.docx")
+            doc.render(context)
+            doc.save(context['sr_no'] + ' ' + context['license'] + "_GMPL_TL.docx")
+        else:
+            doc = DocxTemplate("__GE_TL.docx")
+            doc.render(context)
+            doc.save(context['sr_no'] + ' ' + context['license'] + "_GE_TL.docx")
+            doc = DocxTemplate("__GMPL_TL.docx")
+            doc.render(context)
+            doc.save(context['sr_no'] + ' ' + context['license'] + "_GMPL_TL.docx")
 
 
 def generate_agreement():
@@ -51,4 +60,15 @@ def generate_tl_ge():
         print(context)
         doc = DocxTemplate("BLANK TL.docx")
         doc.render(context)
-        doc.save( context['id'] + '-' + context['license'] + "_GE_TL.docx")
+        doc.save(context['id'] + '-' + context['license'] + "_GE_TL.docx")
+
+
+def generate_sugar():
+    input_file = csv.DictReader(open("aro_details.csv"))
+    for context in input_file:
+        doc = DocxTemplate("SUGAR.docx")
+        doc.render(context)
+        doc.save(context['sr_no'] + ' ' + context['license'] + "_SUGAR.docx")
+        doc = DocxTemplate("KS.docx")
+        doc.render(context)
+        doc.save(context['sr_no'] + ' ' + context['license'] + "_KS.docx")

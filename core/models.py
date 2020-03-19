@@ -154,3 +154,24 @@ class SIONImportModel(models.Model):
             return "{0} | {1}".format(self.norm_class, self.item.name)
         else:
             return "{0}".format(self.norm_class)
+
+
+class HSCodeDutyModel(models.Model):
+    hs_code = models.CharField(max_length=8, unique=True)
+    basic_custom_duty = models.FloatField(default=0)
+    additional_duty_of_customs = models.FloatField(default=0)
+    custom_health_CESS = models.FloatField(default=0)
+    social_welfare_surcharge = models.FloatField(default=0)
+    additional_CVD = models.FloatField(default=0)
+    IGST_levy = models.FloatField(default=0)
+    compensation_cess = models.FloatField(default=0)
+    total_duty = models.FloatField(default=0)
+    sample_on_lakh = models.FloatField(default=0)
+    is_fetch = models.BooleanField(default=False)
+    list_filter = ('is_fetch',)
+    admin_search_fields = ('hs_code',)
+
+    def __str__(self):
+        return self.hs_code
+
+

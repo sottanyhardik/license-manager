@@ -1,29 +1,29 @@
-from core.models import HSCodeDutyModel
+import re
+
+import requests
+from bs4 import BeautifulSoup
+from django_rq import job
+
+from core.models import HSCodeDutyModel, ProductDescriptionModel
 
 cookies = {
-    'JSESSIONID': '5BBAA00543167D4C7960BAFEA82434B1',
+    'JSESSIONID': '132B3A095CDA9ED2089404CD6FC43BDA',
+    'TS015cbc79': '016b3f3df4cb7de623877d653a684e3fdc325a09a591aa2bdb1c88462faa2b7ad719fa346bfffb3740104e8dbec18a6ad28e87164e096134e6486bc684f532f0f3d720aeed',
+    'TS013f8d96': '016b3f3df46a82cc5266ef92e7ec24a4dfd045a15b6eef0f58cd35a9685a40cd667bef40eb1c1bb74c9473ac3637eca8bdcd903702',
     'style': 'blue',
 }
 
 headers = {
     'Host': 'www.icegate.gov.in',
-    'Cache-Control': 'max-age=0',
     'Origin': 'https://www.icegate.gov.in',
-    'Upgrade-Insecure-Requests': '1',
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36',
-    'Sec-Fetch-Dest': 'document',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-    'Sec-Fetch-Site': 'same-origin',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-User': '?1',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1 Safari/605.1.15',
     'Referer': 'https://www.icegate.gov.in/Webappl/Trade-Guide-on-Imports',
-    'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
+    'Accept-Language': 'en-gb',
 }
 
 
 def fetch_hs_code():
-    from bs4 import BeautifulSoup
-    import requests
     hs_list = ["%.2d" % i for i in range(1, 100)]
     for hs_2 in hs_list:
         data = {
@@ -37,9 +37,6 @@ def fetch_hs_code():
         soup = BeautifulSoup(response.content, 'html.parser')
         hs_codes = soup.findAll('input', {'name': 'cth'})
         [HSCodeDutyModel.objects.get_or_create(hs_code=hs.get('value')) for hs in hs_codes]
-
-
-import re
 
 
 def repair(text, backwards=False):
@@ -65,13 +62,8 @@ def repair_tags(html):
     return repair(repair(html[::-1], True)[::-1])
 
 
-from django_rq import job
-
-
 @job
 def fetch_duty_details(hs_code):
-    from bs4 import BeautifulSoup
-    import requests
     headers = {
         'Host': 'www.icegate.gov.in',
         'Cache-Control': 'max-age=0',
@@ -140,3 +132,49 @@ def fetch_duty():
     for hs_code in hs_codes:
         print(hs_code.hs_code)
         fetch_duty_details.delay(hs_code.hs_code)
+
+
+@job
+def fetch_product_description(hs_code):
+    product_descriptions = []
+    for i in range(0, 6):
+        import requests
+        cookies = {
+            '__zlcmid': 'xPj0qmjdP3owEH',
+            '__auc': 'bc8c979c17115e3758d742816cb',
+            '_ga': 'GA1.2.1289090600.1585210160',
+            '_gid': 'GA1.2.849945841.1585210160',
+            'PHPSESSID': '7a50c84276d1d2d9d3b7d9e22ecdd19b',
+        }
+        headers = {
+            'Host': 'www.eximpulse.com',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1 Safari/605.1.15',
+            'Accept-Language': 'en-gb',
+        }
+        params = (
+            ('tpages', str(i)),
+        )
+        url = "https://www.eximpulse.com/import-hscode-{0}.htm".format(hs_code)
+        response = requests.get(url, headers=headers, params=params,
+                                cookies=cookies)
+        htmp_parser = response.content.decode('utf-8').lower()
+        soup = BeautifulSoup(htmp_parser, 'html.parser')
+        table = soup.find('table')
+        trs = table.find_all('tr')
+        for tr in trs:
+            tds = tr.findAll('td')
+            if not len(tds) == 0:
+                product_descriptions.append(tds[4].text)
+    uproduct_descriptions = list(set(product_descriptions))
+    hs_code_obj = HSCodeDutyModel.objects.get(hs_code=hs_code)
+    [ProductDescriptionModel.objects.get_or_create(hs_code=hs_code_obj, product_description=product_description) for
+     product_description in uproduct_descriptions]
+
+
+def fetch_pd():
+    from fetch_hs_codes import fetch_product_description
+    hs_codes = HSCodeDutyModel.objects.filter(is_fetch=False).order_by('hs_code')
+    for hs_code in hs_codes:
+        print(hs_code.hs_code)
+        fetch_product_description.delay(hs_code.hs_code)

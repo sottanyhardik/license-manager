@@ -167,7 +167,6 @@ class HSCodeDutyModel(models.Model):
     compensation_cess = models.FloatField(default=0)
     total_duty = models.FloatField(default=0)
     sample_on_lakh = models.FloatField(default=0)
-    product_description = models.TextField(null=True,blank=True)
     is_fetch = models.BooleanField(default=False)
     list_filter = ('is_fetch',)
     admin_search_fields = ('hs_code',)
@@ -175,4 +174,14 @@ class HSCodeDutyModel(models.Model):
     def __str__(self):
         return self.hs_code
 
+    @property
+    def product_description(self):
+        return self.product_descriptions.all().values('product_description')
 
+
+class ProductDescriptionModel(models.Model):
+    hs_code = models.ForeignKey('core.HSCodeDutyModel', on_delete=models.PROTECT, related_name='product_descriptions')
+    product_description = models.TextField()
+
+    def __str__(self):
+        return self.product_description

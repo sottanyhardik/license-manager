@@ -23,12 +23,14 @@ for model_name, model in app.models.items():
         pass
 
 
-
 class HSCodeDutyAdmin(admin.ModelAdmin):
     actions = ['download_csv']
-    list_display = ('id', 'hs_code', 'product_description','basic_custom_duty', 'additional_duty_of_customs', 'custom_health_CESS', 'social_welfare_surcharge', 'additional_CVD', 'IGST_levy', 'compensation_cess', 'total_duty', 'sample_on_lakh')
+    list_display = (
+        'id', 'hs_code', 'product_description', 'basic_custom_duty', 'additional_duty_of_customs', 'custom_health_CESS',
+        'social_welfare_surcharge', 'additional_CVD', 'IGST_levy', 'compensation_cess', 'total_duty', 'sample_on_lakh')
     list_filter = ('is_fetch',)
     search_fields = ('hs_code',)
+
     def download_csv(self, request, queryset):
         import csv
         from django.http import HttpResponse
@@ -36,15 +38,25 @@ class HSCodeDutyAdmin(admin.ModelAdmin):
 
         f = StringIO()
         writer = csv.writer(f)
-        writer.writerow(['id', 'hs_code', 'product_description', 'basic_custom_duty', 'additional_duty_of_customs', 'custom_health_CESS', 'social_welfare_surcharge', 'additional_CVD', 'IGST_levy', 'compensation_cess', 'total_duty', 'sample_on_lakh'])
+        writer.writerow(['id', 'hs_code', 'product_description', 'basic_custom_duty', 'additional_duty_of_customs',
+                         'custom_health_CESS', 'social_welfare_surcharge', 'additional_CVD', 'IGST_levy',
+                         'compensation_cess', 'total_duty', 'sample_on_lakh'])
 
         for s in queryset:
-            writer.writerow([s.id, "'" + s.hs_code, s.product_description, s.basic_custom_duty, s.additional_duty_of_customs, s.custom_health_CESS, s.social_welfare_surcharge, s.additional_CVD, s.IGST_levy, s.compensation_cess, s.total_duty, s.sample_on_lakh])
-
+            for product_description in s.product_description:
+                if s.product_description.first() == product_description:
+                    writer.writerow(
+                        [s.id, "'" + s.hs_code, product_description['product_description'], s.basic_custom_duty, s.additional_duty_of_customs,
+                         s.custom_health_CESS, s.social_welfare_surcharge, s.additional_CVD, s.IGST_levy,
+                         s.compensation_cess, s.total_duty, s.sample_on_lakh])
+                else:
+                    writer.writerow(
+                        ['', "", product_description['product_description'], '', '', '', '', '', '', '', '', ''])
         f.seek(0)
         response = HttpResponse(f, content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename=stat-info.csv'
         return response
+
     download_csv.short_description = "Download CSV file for selected stats."
 
 

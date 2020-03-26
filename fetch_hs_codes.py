@@ -1,7 +1,7 @@
 from core.models import HSCodeDutyModel
 
 cookies = {
-    'JSESSIONID': '5D9A8E9CC76FBBFB9CFF7AD75C77B022',
+    'JSESSIONID': '5BBAA00543167D4C7960BAFEA82434B1',
     'style': 'blue',
 }
 
@@ -65,13 +65,13 @@ def repair_tags(html):
     return repair(repair(html[::-1], True)[::-1])
 
 
+from django_rq import job
+
+
+@job
 def fetch_duty_details(hs_code):
     from bs4 import BeautifulSoup
     import requests
-    cookies = {
-        'JSESSIONID': 'AB2ECC4A16D2868A6E1F3F36E3994EA3',
-        'style': 'blue',
-    }
     headers = {
         'Host': 'www.icegate.gov.in',
         'Cache-Control': 'max-age=0',
@@ -107,6 +107,7 @@ def fetch_duty_details(hs_code):
             table = table[1]
             trs = table.find_all('tr')
             hs_code_obj, bool = HSCodeDutyModel.objects.get_or_create(hs_code=hs_code)
+            hs_code_obj.product_description = table.findAll('tr')[1].text.replace('\n', '').strip().split(':')[1]
             for tr in trs:
                 if 'basic customs duty' in tr.text:
                     hs_code_obj.basic_custom_duty = tr.findAll('td')[5].text.strip()
@@ -135,7 +136,7 @@ def fetch_duty_details(hs_code):
 
 def fetch_duty():
     from fetch_hs_codes import fetch_duty_details
-    hs_codes = HSCodeDutyModel.objects.filter(is_fetch=False).order_by('-hs_code')
+    hs_codes = HSCodeDutyModel.objects.filter(is_fetch=False).order_by('hs_code')
     for hs_code in hs_codes:
         print(hs_code.hs_code)
-        fetch_duty_details(hs_code.hs_code)
+        fetch_duty_details.delay(hs_code.hs_code)

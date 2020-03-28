@@ -322,7 +322,7 @@ class LicenseItemReportTable(dt2.Table):
         per_page = 50
         fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
                   'hs_code', 'item',
-                  'balance_quantity', 'balance_cif_fc']
+                  'balance_quantity', 'balance_cif_fc','comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

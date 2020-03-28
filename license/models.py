@@ -255,6 +255,7 @@ class LicenseImportItemsModel(models.Model):
     blocked_quantity = models.FloatField(default=0.00)
     available_quantity = models.FloatField(default=0.00)
     available_value = models.FloatField(default=0.00)
+    comment = models.TextField(null=True, blank=True)
     admin_search_fields = ('license__license_number',)
 
     class Meta:

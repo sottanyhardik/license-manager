@@ -91,9 +91,12 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
                     if export_item.norm_class:
                         for import_item in export_item.norm_class.import_norm.all():
                             if not self.object.ledger_date:
-                                import_item_obj, bool = license.LicenseImportItemsModel.objects.get_or_create(
-                                    license=self.object,
-                                    serial_number=import_item.sr_no)
+                                try:
+                                    import_item_obj, bool = license.LicenseImportItemsModel.objects.get_or_create(
+                                        license=self.object,
+                                        serial_number=import_item.sr_no)
+                                except:
+                                    pass
                             else:
                                 try:
                                     import_item_obj = license.LicenseImportItemsModel.objects.get(license=self.object,

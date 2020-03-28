@@ -85,7 +85,6 @@ class PaperBoardQuantityColumn(ColumnTotal):
         return intcomma(round(bills, 0))
 
 
-
 class DFQuantityColumn(ColumnTotal):
 
     def render(self, record):
@@ -238,11 +237,12 @@ class LicenseBiscuitReportTable(dt2.Table):
     m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
     pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
 
+
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
         fields = ['counter', 'license', 'license_expiry_date',
-                  'party', 'balance_cif']
+                  'party', 'balance_cif','wheat_flour','sugar','rbd','leavening_agent','food_flavour','starch','food_colour','anti_oxidant','fruit','dietary_fibre','m_n_m','pp','user_comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):
@@ -276,7 +276,8 @@ class LicenseConfectineryReportTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'license', 'license_expiry_date']
+        fields = ['counter', 'license', 'license_expiry_date','party','balance_cif','sugar','liquid_glucose','fruit_juice','tartaric_acid',
+                  'essential_oil','food_colour','food_flavour','starch','other_confectionery','pp','user_comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):
@@ -322,7 +323,7 @@ class LicenseItemReportTable(dt2.Table):
         per_page = 50
         fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
                   'hs_code', 'item',
-                  'balance_quantity', 'balance_cif_fc','comment']
+                  'balance_quantity', 'balance_cif_fc', 'comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

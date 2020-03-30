@@ -169,7 +169,7 @@ class HSCodeDutyModel(models.Model):
     sample_on_lakh = models.FloatField(default=0)
     is_fetch = models.BooleanField(default=False)
     is_fetch_xls = models.BooleanField(default=False)
-    list_filter = ('is_fetch',)
+    list_filter = ('is_fetch','is_fetch_xls')
     admin_search_fields = ('hs_code',)
 
     def __str__(self):
@@ -177,7 +177,7 @@ class HSCodeDutyModel(models.Model):
 
     @property
     def product_description(self):
-        return self.product_descriptions.all().values('product_description')
+        return '\n'.join([product_description['product_description'] for product_description in self.product_descriptions.all().values('product_description')])
 
 
 class ProductDescriptionModel(models.Model):

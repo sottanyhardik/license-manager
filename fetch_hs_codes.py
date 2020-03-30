@@ -136,45 +136,70 @@ def fetch_duty():
 
 @job
 def fetch_product_description(hs_code):
-    product_descriptions = []
-    for i in range(0, 6):
-        import requests
-        cookies = {
-            '__zlcmid': 'xPj0qmjdP3owEH',
-            '__auc': 'bc8c979c17115e3758d742816cb',
-            '_ga': 'GA1.2.1289090600.1585210160',
-            '_gid': 'GA1.2.849945841.1585210160',
-            'PHPSESSID': '7a50c84276d1d2d9d3b7d9e22ecdd19b',
-        }
-        headers = {
-            'Host': 'www.eximpulse.com',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1 Safari/605.1.15',
-            'Accept-Language': 'en-gb',
-        }
-        params = (
-            ('tpages', str(i)),
-        )
-        url = "https://www.eximpulse.com/import-hscode-{0}.htm".format(hs_code)
-        response = requests.get(url, headers=headers, params=params,
-                                cookies=cookies)
-        htmp_parser = response.content.decode('utf-8').lower()
-        soup = BeautifulSoup(htmp_parser, 'html.parser')
-        table = soup.find('table')
-        trs = table.find_all('tr')
-        for tr in trs:
-            tds = tr.findAll('td')
-            if not len(tds) == 0:
-                product_descriptions.append(tds[4].text)
-    uproduct_descriptions = list(set(product_descriptions))
     hs_code_obj = HSCodeDutyModel.objects.get(hs_code=hs_code)
-    [ProductDescriptionModel.objects.get_or_create(hs_code=hs_code_obj, product_description=product_description) for
-     product_description in uproduct_descriptions]
+    if not hs_code_obj.is_fetch:
+        last_page = 1
+        i = 1
+        first = None
+        while (last_page >= i):
+            product_descriptions = []
+            import requests
+            cookies = {
+                '__zlcmid': 'xPj0qmjdP3owEH',
+                '__auc': 'bc8c979c17115e3758d742816cb',
+                '_ga': 'GA1.2.1289090600.1585210160',
+                '_gid': 'GA1.2.849945841.1585210160',
+                'PHPSESSID': '7a50c84276d1d2d9d3b7d9e22ecdd19b',
+            }
+            headers = {
+                'Host': 'www.eximpulse.com',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1 Safari/605.1.15',
+                'Accept-Language': 'en-gb',
+            }
+            params = (
+                ('tpages', str(i)),
+            )
+            i = i + 1
+            url = "https://www.eximpulse.com/import-hscode-{0}.htm".format(hs_code)
+            response = requests.get(url, headers=headers, params=params,cookies=cookies)
+            htmp_parser = response.content.decode('windows-1252').encode('utf-8').decode('utf-8').lower()
+            soup = BeautifulSoup(htmp_parser, 'html.parser')
+            print(i)
+            if not first:
+                last = soup.findAll("li", class_="prevbtn")
+                if not len(last) == 0:
+                    last_page = int(last[2].find('a')['href'].split('page=')[-1])
+                    if last_page > 100:
+                        last_page = 100
+                else:
+                    last_page = 1
+                first = True
+            table = soup.find('table')
+            trs = table.find_all('tr')
+            for tr in trs:
+                tds = tr.findAll('td')
+                if not len(tds) == 0:
+                    try:
+                        product_descriptions.append(tds[4].text)
+                    except:
+                        if tr.text == 'Sorry no record found.':
+                            print(url)
+                            break
+        uproduct_descriptions = list(set(product_descriptions))
+        hs_code_obj = HSCodeDutyModel.objects.get(hs_code=hs_code)
+        for product_description in uproduct_descriptions:
+            try:
+                ProductDescriptionModel.objects.get_or_create(hs_code=hs_code_obj, product_description=product_description)
+            except:
+                pass
+        hs_code_obj.is_fetch = True
+        hs_code_obj.save()
 
 
 def fetch_pd():
     from fetch_hs_codes import fetch_product_description
-    hs_codes = HSCodeDutyModel.objects.filter(is_fetch=False).order_by('hs_code')
+    hs_codes = HSCodeDutyModel.objects.filter(is_fetch=False).order_by('-hs_code')
     for hs_code in hs_codes:
         print(hs_code.hs_code)
         fetch_product_description.delay(hs_code.hs_code)
@@ -206,26 +231,30 @@ def fetch_xlx(hs_code):
     }
     url = 'https://www.eximpulse.com/import-hscode-{0}.htm'.format(hs_code)
     response = requests.get(url, headers=headers, cookies=cookies)
-    htmp_parser = response.content.decode('utf-8')
-    soup = BeautifulSoup(htmp_parser, 'html.parser')
-    excel = soup.select("a[href*=iexcel]")[0]["href"]
-    string = excel.split('hscode=')[-1].split('&')[0]
-    params = (
-        ('pd', ''),
-        ('hscode', string),
-        ('origin', ''),
-        ('port', ''),
-        ('month', ''),
-        ('unit', ''),
-    )
-    response = requests.get('https://www.eximpulse.com/iexcel.php', headers=headers, params=params, cookies=cookies)
-    url = response.content.decode('utf-8').split('href=')[-1].split('</script>')[0].replace("'", '')
-    resp = requests.get(url)
-    file_name = hs_code + '.xls'
-    output = open(file_name, 'wb')
-    output.write(resp.content)
-    output.close()
-    HSCodeDutyModel.objects.filter(hs_code=hs_code).update(is_fetch_xls=True)
+    htmp_parser = response.content.decode('ISO-8859-1').encode('utf-8').decode('utf-8')
+    if not 'Sorry no record found' in htmp_parser:
+        soup = BeautifulSoup(htmp_parser, 'html.parser')
+        excel = soup.select("a[href*=iexcel]")[0]["href"]
+        string = excel.split('hscode=')[-1].split('&')[0]
+        params = (
+            ('pd', ''),
+            ('hscode', string),
+            ('origin', ''),
+            ('port', ''),
+            ('month', ''),
+            ('unit', ''),
+        )
+        response = requests.get('https://www.eximpulse.com/iexcel.php', headers=headers, params=params, cookies=cookies)
+        url = response.content.decode('utf-8').split('href=')[-1].split('</script>')[0].replace("'", '')
+        resp = requests.get(url)
+        file_name = 'xlsx/' + hs_code + '.xls'
+        output = open(file_name, 'wb')
+        output.write(resp.content)
+        output.close()
+        HSCodeDutyModel.objects.filter(hs_code=hs_code).update(is_fetch_xls=True)
+        print(file_name)
+    else:
+        HSCodeDutyModel.objects.filter(hs_code=hs_code).update(is_fetch_xls=True)
 
 
 def fetch_xls():
@@ -233,4 +262,26 @@ def fetch_xls():
     hs_codes = HSCodeDutyModel.objects.filter(is_fetch_xls=False).order_by('hs_code')
     for hs_code in hs_codes:
         print(hs_code.hs_code)
-        fetch_xlx.delay(hs_code.hs_code)
+        fetch_xlx(hs_code.hs_code)
+
+
+
+def convert_xlsx():
+    import glob
+    files = glob.glob("xlsx/*.xls")
+    for path in files:
+        try:
+            rf = open(path, "rb")
+            npath = path.replace('xlsx', 'newxlsx')
+            wf = open(npath, "wb")
+            data_list = rf.readlines()
+            if data_list[-1].decode('utf-8') == '\n':
+                del data_list[-1]
+            if data_list[1].decode('utf-8') == '\n':
+                del data_list[1]
+            if 'This data is provided free of cost ' in data_list[0].decode('utf-8'):
+                del data_list[0]
+            wf.writelines(data_list)
+            wf.close()
+        except:
+            print(path)

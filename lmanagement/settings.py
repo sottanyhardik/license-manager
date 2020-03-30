@@ -185,7 +185,7 @@ RQ_QUEUES = {
         'HOST': 'localhost',
         'PORT': 6379,
         'DB': 0,
-        'DEFAULT_TIMEOUT': 360,
+        'DEFAULT_TIMEOUT': 1200,
     },
     'with-sentinel': {
         'SENTINELS': [('localhost', 26736), ('localhost', 26737)],

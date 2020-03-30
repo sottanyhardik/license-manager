@@ -131,3 +131,5 @@ db.json
 aro_details.csv
 *_Tri-party agreement.docx
 *_TL.docx
+*.xls
+*.DS_Store

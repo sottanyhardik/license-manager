@@ -1,11 +1,9 @@
-from tempfile import template
-
 from django.db.models import Sum
 from django.http import JsonResponse, HttpResponse
 # Create your views here.
-from django.template.loader import get_template
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, CreateView, UpdateView, DeleteView
+from django_filters.views import FilterView
 from easy_pdf.rendering import render_to_pdf
 from easy_pdf.views import PDFTemplateResponseMixin
 
@@ -15,12 +13,25 @@ from . import forms, tables, filters
 from . import models as allotments
 
 
-class AllotmentView(PagedFilteredTableView):
-    template_name = 'core/list.html'
+class AllotmentView(FilterView):
+    template_name = 'allotment/list.html'
     model = allotments.AllotmentModel
-    table_class = tables.AllotmentTable
     filter_class = filters.AllotmentFilter
     page_head = 'Item List'
+
+    def get_queryset(self):
+        qs = self.model.objects.all()
+        pk = self.request.GET.get('pk',None)
+        if not pk:
+            product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
+            return product_filtered_list.qs
+        else:
+            return self.model.objects.filter(id=self.request.GET.get('pk'))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['filter'] = self.filter_class(self.request.GET)
+        return context
 
 
 class AllotmentCreateView(CreateView):
@@ -34,12 +45,19 @@ class AllotmentUpdateView(UpdateView):
     model = allotments.AllotmentModel
     form_class = forms.AllotmentForm
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['allotment_object'] = allotments.AllotmentModel.objects.get(id=self.kwargs.get('pk'))
+        return context
+
 
 class AllotmentDeleteView(DeleteView):
     template_name = 'allotment/delete.html'
     model = allotments.AllotmentModel
     form_class = forms.AllotmentForm
-    success_url = reverse_lazy('allotment-list')
+
+    def get_success_url(self):
+        return reverse('allotment-list') + '?type=AT&company=&is_be=false'
 
 
 class StartAllotmentView(PagedFilteredTableView):
@@ -135,7 +153,7 @@ class AllotmentDeleteItemsView(DeleteView):
     template_name = 'allotment/delete.html'
 
     def get_success_url(self):
-        return reverse('allotment-verify', kwargs={'pk': self.request.GET.get('allotment_id')})
+        return reverse('allotment-list') + '?pk=' + str(self.request.GET.get('allotment'))
 
 
 class SendAllotmentView(PDFTemplateResponseMixin, DetailView):
@@ -158,6 +176,3 @@ class SendAllotmentView(PDFTemplateResponseMixin, DetailView):
             response['Content-Disposition'] = content
             return response
         return HttpResponse("Not found")
-
-
-

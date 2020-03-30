@@ -62,8 +62,8 @@ class AllotmentItemFilter(django_filters.FilterSet):
 
 
 class AllotmentFilter(django_filters.FilterSet):
-    allotment_details__item__license__license_number  = django_filters.CharFilter(label='License Number')
-    is_be = django_filters.BooleanFilter(method='check_be', label='Is BOE')
+    allotment_details__item__license__license_number = django_filters.CharFilter(label='License Number')
+    is_be = django_filters.BooleanFilter(method='check_be', label='Is BOE', initial=False)
 
     class Meta:
         model = allotment_model.AllotmentModel
@@ -86,6 +86,21 @@ class AllotmentFilter(django_filters.FilterSet):
                 },
             }
         }
+
+    def __init__(self, data=None, *args, **kwargs):
+        # if filterset is bound, use initial values as defaults
+        if data is not None:
+            # get a mutable copy of the QueryDict
+            data = data.copy()
+
+            for name, f in self.base_filters.items():
+                initial = f.extra.get('initial')
+
+                # filter param is either missing or empty, use initial as default
+                if not data.get(name) and initial:
+                    data[name] = initial
+
+        super().__init__(data, *args, **kwargs)
 
     def check_be(self, queryset, name, value):
         return queryset.exclude(bill_of_entry__isnull=value).distinct()

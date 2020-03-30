@@ -25,7 +25,7 @@ class AllotmentItemsTable(dt2.Table):
         fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
                   'hs_code', 'item',
                   'balance_quantity', 'balance_value', 'allotment_quantity', 'allotment_value', 'unit']
-        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+        attrs = {"class": "table table-bordered dataTable js-exportable"}
 
     def render_counter(self):
         self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
@@ -87,7 +87,8 @@ class AllotedItemsTable(dt2.Table):
         fields = ['counter', 'serial_number', 'license_number','file_number', 'license_date', 'exporter', 'license_expiry',
                   'registration_number',
                   'registration_date', 'qty', 'cif_fc', 'notification_number']
-        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+        attrs = {"class": "table dataTable js-exportable"}
+        template_name = "django_tables2/bootstrap.html"
 
     def render_counter(self):
         self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))

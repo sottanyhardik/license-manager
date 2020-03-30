@@ -178,3 +178,59 @@ def fetch_pd():
     for hs_code in hs_codes:
         print(hs_code.hs_code)
         fetch_product_description.delay(hs_code.hs_code)
+
+
+@job
+def fetch_xlx(hs_code):
+    import requests
+    cookies = {
+        'PHPSESSID': '12e217e5af7f15b7622a2c30ac448c40',
+        '_ga': 'GA1.2.1760074702.1585554696',
+        '_gid': 'GA1.2.541674515.1585554696',
+        '__auc': 'b84664481712a6ca87b5bbef865',
+        '__zlcmid': 'xTj1SOQhO2vYb4',
+        '__asc': '4dafe1cb1712a9231223fbf1bb8',
+        '_gat': '1',
+    }
+    headers = {
+        'Host': 'www.eximpulse.com',
+        'Cache-Control': 'max-age=0',
+        'Upgrade-Insecure-Requests': '1',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36',
+        'Sec-Fetch-Dest': 'document',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-User': '?1',
+        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
+    }
+    url = 'https://www.eximpulse.com/import-hscode-{0}.htm'.format(hs_code)
+    response = requests.get(url, headers=headers, cookies=cookies)
+    htmp_parser = response.content.decode('utf-8')
+    soup = BeautifulSoup(htmp_parser, 'html.parser')
+    excel = soup.select("a[href*=iexcel]")[0]["href"]
+    string = excel.split('hscode=')[-1].split('&')[0]
+    params = (
+        ('pd', ''),
+        ('hscode', string),
+        ('origin', ''),
+        ('port', ''),
+        ('month', ''),
+        ('unit', ''),
+    )
+    response = requests.get('https://www.eximpulse.com/iexcel.php', headers=headers, params=params, cookies=cookies)
+    url = response.content.decode('utf-8').split('href=')[-1].split('</script>')[0].replace("'", '')
+    resp = requests.get(url)
+    file_name = hs_code + '.xls'
+    output = open(file_name, 'wb')
+    output.write(resp.content)
+    output.close()
+    HSCodeDutyModel.objects.filter(hs_code=hs_code).update(is_fetch_xls=True)
+
+
+def fetch_xls():
+    from fetch_hs_codes import fetch_xlx
+    hs_codes = HSCodeDutyModel.objects.filter(is_fetch_xls=False).order_by('hs_code')
+    for hs_code in hs_codes:
+        print(hs_code.hs_code)
+        fetch_xlx.delay(hs_code.hs_code)

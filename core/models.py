@@ -168,6 +168,7 @@ class HSCodeDutyModel(models.Model):
     total_duty = models.FloatField(default=0)
     sample_on_lakh = models.FloatField(default=0)
     is_fetch = models.BooleanField(default=False)
+    is_fetch_xls = models.BooleanField(default=False)
     list_filter = ('is_fetch',)
     admin_search_fields = ('hs_code',)
 

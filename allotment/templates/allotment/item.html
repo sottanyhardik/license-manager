@@ -1,4 +1,3 @@
-{% extends 'base.html' %}
 {% load render_table from django_tables2 %}
 {% load querystring from django_tables2 %}
 {% load django_tables2 %}
@@ -7,176 +6,138 @@
 {% load core_tag %}
 
 {% block content %}
-        {% csrf_token %}
-        <div class="row">
-            <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Allotment Details</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                                <div class="col-lg-2 col-sm-4">
-                                    <h5>Item Name</h5>
-                                    <label>{{ allotment_object.item_name|title }}</label>
-                                </div>
-                                <div class="col-lg-2 col-sm-4">
-                                    <h5>Required Quantity</h5>
-                                    <label>{{ allotment_object.required_quantity|title }}</label>
-                                </div>
-                                <div class="col-lg-2 col-sm-4">
-                                    <h5>*</h5>
-                                </div>
-                                <div class="col-lg-2 col-sm-4">
-                                    <h5>Value Per Unit</h5>
-                                    <label>{{ allotment_object.unit_value_per_unit|title }}</label>
-                                </div>
-                                <div class="col-lg-2 col-sm-4">
-                                    <h5>=</h5>
-                                </div>
-                                <div class="col-lg-2 col-sm-4">
-                                    <h5>Required Value</h5>
-                                    <label>{{ allotment_object.required_value }}</label>
-                                </div>
-                                <div class="col-lg-2 col-sm-4">
-                                    <h5>Alloted Quantity</h5>
-                                    <label id="alloted_quantity">{{ allotment_object.alloted_quantity }}</label>
-                                </div>
-                                <div class="col-lg-2 col-sm-4">
-                                    <h5>Balance Quantity</h5>
-                                    <label id="balance_quantity">{{ allotment_object.balanced_quantity }}</label>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-lg-2 col-sm-4">
-                                    <a href="{% url 'allotment-verify' allotment_object.id %}" class="btn btn-info">View Allotments</a>
-                                    </div>
-                            </div>
-
-                    </div>
+    {% csrf_token %}
+    <div class="card">
+        <div class="card-header">
+            <div class="row">
+                <div class="col-xs-9 col-lg-9">
+                    Filter
                 </div>
-            </div>
-        </div>
-        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
-            <div class="card">
-
-                <div class="card-header">
-                    <div class="row">
-                        <div class="col-xs-9 col-lg-9">
-                            Filter
-                        </div>
-                        <div class="col-xs-3 col-lg-3">
-                            {% if 'company' in request.path %}
-                            <a href="{% url 'company-add' %}" class="successButton">Add New</a>
-                            {% elif 'hs_code' in request.path %}
-                            <a href="{% url 'hs-code-add' %}" class="successButton">Add New</a>
-                                {% elif 'item' in request.path %}
-                            <a href="{% url 'item-add' %}" class="successButton">Add New</a>
-                                    {% elif 'license' in request.path %}
-                            <a href="{% url 'add-license' %}" class="successButton">Add New</a>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                </div>
-
-                <div class="card-body">
-                    <form action="">
-                        {% if filter.form %}
-                            <div class="row">
-                                {% for field in filter.form %}
-                                    <div class="col-lg-2 col-sm-4">
-                                        <div class="form-group">
-
-                                            <label for="{{ field.name }}">{{ field.label }}</label>
-                                            <div class="form-line">
-                                                {{ field|addcss:"form-control" }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                            <div class="stat">
-                                <button class="deleteButton" type="submit">Filter</button>
-                            </div>
-                        {% endif %}
-                    </form>
-                </div>
-            </div>
-        </div>
-            <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
-
-            <div class="card">
-                <div class="card-header">
-                    <div class="row">
-                        <div class="col-xs-9 col-lg-9">
-                            List
-                        </div>
-                        <div class="col-lg-2 col-sm-4">
-                                <a class="successButton"
-                                   href="{% querystring '_export'='csv' %}"
-                                   aria-controls="DataTables_Table_1"><span>CSV</span></a>
-                                <a class="successButton" tabindex="0"
-                                   aria-controls="DataTables_Table_1"
-                                   href="{% querystring '_export'='xls' %}"><span>Excel</span></a>
-
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body">
-                    {% if table.page and table.paginator.num_pages > 1 %}
-                        <nav aria-label="Table navigation">
-                            <div class="pull-left">
-                                <ul class="pagination">
-                                    {% if table.page.has_previous %}
-                                            <li class="previous">
-                                                <a href="{% querystring table.prefixed_page_field=table.page.previous_page_number %}">
-                                                    <span aria-hidden="true">&laquo;</span>
-                                                    {% trans 'previous' %}
-                                                </a>
-                                            </li>
-                                    {% endif %}
-                                    {% if table.page.has_previous or table.page.has_next %}
-                                            {% for p in table.page|table_page_range:table.paginator %}
-                                                <li {% if p == table.page.number %}class="active"{% endif %}>
-                                                    {% if p == '...' %}
-                                                        <a href="#">{{ p }}</a>
-                                                    {% else %}
-                                                        <a href="{% querystring table.prefixed_page_field=p %}">
-                                                            {{ p }}
-                                                        </a>
-                                                    {% endif %}
-                                                </li>
-                                            {% endfor %}
-                                    {% endif %}
-                                    {% if table.page.has_next %}
-                                            <li class="next">
-                                                <a href="{% querystring table.prefixed_page_field=table.page.next_page_number %}">
-                                                    {% trans 'next' %}
-                                                    <span aria-hidden="true">&raquo;</span>
-                                                </a>
-                                            </li>
-                                    {% endif %}
-                                </ul>
-                            </div>
-                            <div class="pull-right">
-                            </div>
-                        </nav>
+                <div class="col-xs-3 col-lg-3">
+                    {% if 'company' in request.path %}
+                        <a href="{% url 'company-add' %}" class="successButton">Add New</a>
+                    {% elif 'hs_code' in request.path %}
+                        <a href="{% url 'hs-code-add' %}" class="successButton">Add New</a>
+                    {% elif 'item' in request.path %}
+                        <a href="{% url 'item-add' %}" class="successButton">Add New</a>
+                    {% elif 'license' in request.path %}
+                        <a href="{% url 'add-license' %}" class="successButton">Add New</a>
                     {% endif %}
-                    <div class="table-responsive">
-                        <div id="" class="">
-                            {% render_table table %}
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
-
+        <div class="card-body">
+            <form action="{{ request.path }}">
+                {% if filter.form %}
+                    <div class="row">
+                        {% for field in filter.form %}
+                            <div class="col-lg-2 col-sm-4">
+                                <div class="form-group">
+                                    <label for="{{ field.name }}">{{ field.label }}</label>
+                                    <div class="form-line">
+                                        {{ field|addcss:"form-control" }}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div class="stat">
+                        <button class="deleteButton" type="button" onclick="ajax_post(this)"
+                                data-target="div-{{ allotment_object.id }}">Filter
+                        </button>
+                    </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    <br>
+    <div class="card">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-lg-2 col-sm-4">
+                    <h5>Required Quantity</h5>
+                    <b>{{ allotment_object.required_quantity }}</b>
+                </div>
+                <div class="col-lg-2 col-sm-4">
+                    <h5></h5>
+                    <b>---</b>
+                </div>
+                <div class="col-lg-2 col-sm-4">
+                    <h5>Alloted Quantity</h5>
+                    <b id="alloted_quantity">{{ allotment_object.alloted_quantity }}</b>
+                </div>
+                <div class="col-lg-2 col-sm-4">
+                    <h5></h5>
+                    <b>===</b>
+                </div>
+                <div class="col-lg-2 col-sm-4">
+                    <h5>Balance Quantity</h5>
+                    <b id="balance_quantity">{{ allotment_object.balanced_quantity }}</b>
+                </div>
+            </div>
+        </div>
+    </div>
+    <br>
+    <div class="card">
+        <div class="card-header">
+            <div class="row">
+                <div class="col-xs-9 col-lg-9">
+                    List
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if table.page and table.paginator.num_pages > 1 %}
+                <nav aria-label="Table navigation">
+                    <div class="pull-left">
+                        <ul class="pagination">
+                            {% if table.page.has_previous %}
+                                <li class="previous">
+                                    <a href="{% querystring table.prefixed_page_field=table.page.previous_page_number %}">
+                                        <span aria-hidden="true">&laquo;</span>
+                                        {% trans 'previous' %}
+                                    </a>
+                                </li>
+                            {% endif %}
+                            {% if table.page.has_previous or table.page.has_next %}
+                                {% for p in table.page|table_page_range:table.paginator %}
+                                    <li {% if p == table.page.number %}class="active"{% endif %}>
+                                        {% if p == '...' %}
+                                            <a href="#">{{ p }}</a>
+                                        {% else %}
+                                            <a href="{% querystring table.prefixed_page_field=p %}">
+                                                {{ p }}
+                                            </a>
+                                        {% endif %}
+                                    </li>
+                                {% endfor %}
+                            {% endif %}
+                            {% if table.page.has_next %}
+                                <li class="next">
+                                    <a href="{% querystring table.prefixed_page_field=table.page.next_page_number %}">
+                                        {% trans 'next' %}
+                                        <span aria-hidden="true">&raquo;</span>
+                                    </a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <div class="pull-right">
+                    </div>
+                </nav>
+            {% endif %}
+            <div class="table-responsive">
+                <div id="" class="">
+                    {% render_table table "django_tables2/bootstrap-responsive.html" %}
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 {% block extra_js_script %}
     <script>
         jQuery(function ($) {
-            $("input[id*='allotment_quantity']").on('focusin', function(){
+            $("input[id*='allotment_quantity']").on('focusin', function () {
                 $(this).data('val', $(this).val());
             });
             $("input[id*='allotment_quantity']").change(function () {
@@ -184,7 +145,7 @@
                 quantity_id = '#' + this.id;
                 balance_id = quantity_id.replace('quantity', 'balance');
                 value_id = quantity_id.replace('quantity', 'value');
-                balance_value = quantity_id.replace('quantity','balance_value');
+                balance_value = quantity_id.replace('quantity', 'balance_value');
                 pieces = value_id.split('_');
                 id = pieces[pieces.length - 1];
                 var csrf_token = $('meta[name="csrf-token"]').attr('content');
@@ -211,7 +172,7 @@
 
                 });
             });
-            $("input[id*='allotment_value']").on('focusin', function(){
+            $("input[id*='allotment_value']").on('focusin', function () {
                 $(this).data('val', $(this).val());
             });
             $("input[id*='allotment_value']").change(function () {
@@ -219,7 +180,7 @@
                 value_id = '#' + this.id;
                 balance_id = value_id.replace('value', 'balance');
                 quantity_id = value_id.replace('value', 'quantity');
-                balance_value = value_id.replace('value','balance_value');
+                balance_value = value_id.replace('value', 'balance_value');
                 pieces = value_id.split('_');
                 id = pieces[pieces.length - 1];
                 var csrf_token = $('meta[name="csrf-token"]').attr('content');

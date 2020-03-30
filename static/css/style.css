@@ -13818,9 +13818,9 @@ a.badge-dark:focus, a.badge-dark.focus {
 }
 
 .alert-secondary {
-    color: #707070;
-    background-color: #f7f7f7;
-    border-color: #f4f4f4;
+    color: whitesmoke;
+    background-color: lightgrey;
+    border-color: darkgrey;
 }
 
 .alert-secondary hr {
@@ -23738,26 +23738,42 @@ dl li {
 }
 
 
-.pagination li{
+.pagination li {
     margin-right: 5px;
     padding: 5px;
     border: solid 2px #f1f6f8;
 }
 
-.grid div[class*='col-']{
+.grid div[class*='col-'] {
     border-bottom: solid 1px #0ddbb9;
     margin-bottom: 10px;
 }
 
-.grid h3{
+.grid h3 {
     color: #0ddbb9;
 }
 
-.grid p{
+.grid p {
     color: #000000;
 }
 
-.tbordered th, .tbordered td,.tbordered tr{
+.tbordered th, .tbordered td, .tbordered tr {
     border: solid 1px #0ddbb9;
     color: #000000;
+}
+
+.btn {
+    color: #ffffff !important;
+}
+
+.fetch-page {
+    color: #ffffff; min-width: 100% !important;
+}
+
+.data-target-div{
+    display: none;
+}
+
+.full-width{
+    min-width: 100% !important;
 }

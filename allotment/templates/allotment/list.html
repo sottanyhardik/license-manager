@@ -128,7 +128,6 @@
         });
 
         function fetch_page(button) {
-            event.preventDefault();
             url = button.dataset.url;
             target = "#" + button.dataset.target;
             $.get(url, function (data, status) {

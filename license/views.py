@@ -126,7 +126,7 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
 
 
 class LicenseDetailListView(PagedFilteredTableView):
-    template_name = 'core/list.html'
+    template_name = 'license/list.html'
     model = license.LicenseDetailsModel
     table_class = tables.LicenseDetailTable
     filter_class = filters.LicenseDetailFilter

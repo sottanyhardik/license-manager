@@ -25,7 +25,7 @@ def value_allotment(arg1, arg2):
 
 @register.simple_tag
 def get_table_html(table):
-    from allotment.tables import AllotedItemsTable
-    table = AllotedItemsTable(table)
+    from allotment.tables import AllottedItemsTable
+    table = AllottedItemsTable(table)
     table.paginate(page=1, per_page=50)
     return table

@@ -6,9 +6,6 @@
         <div class="row">
             <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
                 <div class="card">
-                    <div class="card-header">
-                        <h3>Add </h3>
-                    </div>
                     <div class="card-body">
                         {% if form.errors %}
                             <div class="alert alert-danger">
@@ -49,7 +46,7 @@
                         <div class="row">
                             <div class="col-lg-12">
                                 <input type="submit" class="btn btn-success full-width ajax-post" onclick="ajax_post(this)"
-                                       data-target="div-{{ object.id }}" value="Submit">
+                                       data-target="div-{% if object %}{{ object.id }}{% else %}add{% endif %}" value="Submit">
                             </div>
                         </div>
 

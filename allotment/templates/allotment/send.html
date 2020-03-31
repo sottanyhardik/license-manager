@@ -91,7 +91,7 @@
     {% endif %}
 
     <p>Subject: <span
-            id="highlight">License Allotment for <b>{{ object.item_name|title }}</b> for <b>{{ object.required_quantity }} Kg</b></span>
+            id="highlight">License Allotment for <b>{{ object.item_name|title }}</b> {% if object.invoice %}Invoice No. {{ object.invoice|title }}{% endif %} for <b>{{ object.required_quantity }} Kg</b></span>
     </p>
 
     <p>Dear Sir,</p>
@@ -118,7 +118,6 @@
                 {% else %}
                 <td style="text-align: center">-</td>
                 {% endif %}
-
             <td>{{ object.item_name|title }}</td>
             <td>{{ object.port|title }}</td>
         </tr>

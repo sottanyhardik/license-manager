@@ -7,12 +7,13 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, ListView, TemplateView
+from django_filters.views import FilterView
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
 from core.utils import PagedFilteredTableView
 from license.excel import get_license_table
-from license.helper import round_down
+from license.helper import round_down, check_license
 from . import forms, tables, filters
 from . import models as license
 from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_milk_query, dietary_query, food_query, \
@@ -125,12 +126,18 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
         return super(LicenseDetailUpdateView, self).get_inlines()
 
 
-class LicenseDetailListView(PagedFilteredTableView):
+class LicenseListView(FilterView):
     template_name = 'license/list.html'
     model = license.LicenseDetailsModel
-    table_class = tables.LicenseDetailTable
     filter_class = filters.LicenseDetailFilter
     page_head = 'License List'
+    paginate_by = 50
+    context_object_name = 'object_list'
+
+    def get_queryset(self):
+        qs = self.model.objects.filter(is_active=True)
+        filtered_list = self.filter_class(self.request.GET, queryset=qs)
+        return filtered_list.qs
 
 
 class LicenseDetailView(DetailView):
@@ -1087,3 +1094,8 @@ class PremiumCalculationView(PDFTemplateResponseMixin, PagedFilteredTableView):
         except Exception as e:
             pass
         return context
+
+
+def analysis(requests):
+    check_license()
+    return HttpResponseRedirect(reverse('license-list'))

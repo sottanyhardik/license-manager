@@ -13,24 +13,14 @@
 
                 <div class="card-header">
                     <div class="row">
-                        <div class="col-xs-9 col-lg-9">
+                        <div class="col-xs-12 col-lg-8">
                             Filter
                         </div>
-                        <div class="col-lg-2 col-sm-4">
-                            {% if 'company' in request.path %}
-                                <a href="{% url 'company-add' %}" class="successButton">Add New</a>
-                            {% elif 'hs_code' in request.path %}
-                                <a href="{% url 'hs-code-add' %}" class="successButton">Add New</a>
-                            {% elif 'item' in request.path %}
-                                <a href="{% url 'item-add' %}" class="successButton">Add New</a>
-                            {% elif 'license' in request.path %}
-                                <a href="{% url 'add-license' %}" class="successButton">Add New</a>
-                            {% elif 'allotment' in request.path %}
-                                <a href="{% url 'allotment-add' %}" class="successButton">Add New</a>
-                            {% elif 'bill_of_entry'  in request.path %}
-                                <a href="{% url 'bill-of-entry-create' %}" class="successButton">Add New</a>
-                            {% endif %}
-
+                        <div class="col-lg-2 col-sm-6">
+                            <a href="{% url 'add-license' %}" class="btn btn-success full-width">Add New</a>
+                        </div>
+                        <div class="col-lg-2 col-sm-6">
+                            <a href="{% url 'license-list' %}" class="btn btn-warning full-width">Analysis</a>
                         </div>
                     </div>
 
@@ -62,91 +52,231 @@
         </div>
         <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
             <div class="card">
+                <ul class="card-header nav nav-pills nav-pills-success" id="pills-tab" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="pills-home-tab" data-toggle="pill" href="#"
+                           role="tab" aria-controls="pills-home" aria-selected="true">Active Licenses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-profile-tab" data-toggle="pill" href="#pills-profile"
+                           role="tab" aria-controls="pills-profile" aria-selected="false">AU Licenses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-contact-tab" data-toggle="pill" href="#pills-contact"
+                           role="tab" aria-controls="pills-contact" aria-selected="false">Expired Licenses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-contact-tab" data-toggle="pill" href="#pills-contact"
+                           role="tab" aria-controls="pills-contact" aria-selected="false">Individual Licenses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-contact-tab" data-toggle="pill" href="#pills-contact"
+                           role="tab" aria-controls="pills-contact" aria-selected="false">Null Licenses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-contact-tab" data-toggle="pill" href="#pills-contact"
+                           role="tab" aria-controls="pills-contact" aria-selected="false">All Licenses</a>
+                    </li>
+                </ul>
                 <div class="card-body">
-                    <ul class="nav nav-pills nav-pills-success" id="pills-tab" role="tablist">
-                    <li class="nav-item">
-                      <a class="nav-link active" id="pills-home-tab" data-toggle="pill" href="#pills-home" role="tab" aria-controls="pills-home" aria-selected="true">Home</a>
-                    </li>
-                    <li class="nav-item">
-                      <a class="nav-link" id="pills-profile-tab" data-toggle="pill" href="#pills-profile" role="tab" aria-controls="pills-profile" aria-selected="false">Profile</a>
-                    </li>
-                    <li class="nav-item">
-                      <a class="nav-link" id="pills-contact-tab" data-toggle="pill" href="#pills-contact" role="tab" aria-controls="pills-contact" aria-selected="false">Contact</a>
-                    </li>
-                  </ul>
-                        <div class="tab-content tab-no-active-fill-tab-content">
-                            <div class="tab-pane fade show active" id="license-list" role="tabpanel"
-                                 aria-labelledby="license-list">
-                            </div>
+                    <div class="tab-content tab-no-active-fill-tab-content">
+                        <div class="tab-pane fade show active" id="license-list" role="tabpanel"
+                             aria-labelledby="license-list">
+                            {% if is_paginated %}
+                                <ul class="pagination">
+                                    {% if page_obj.has_previous %}
+                                        <li><a href="?page={{ page_obj.previous_page_number }}">&laquo;</a></li>
+                                    {% else %}
+                                        <li class="disabled"><span>&laquo;</span></li>
+                                    {% endif %}
+                                    {% for i in paginator.page_range %}
+                                        {% if page_obj.number == i %}
+                                            <li class="active"><span>{{ i }} <span
+                                                    class="sr-only">(current)</span></span></li>
+                                        {% else %}
+                                            <li><a href="?page={{ i }}">{{ i }}</a></li>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% if page_obj.has_next %}
+                                        <li><a href="?page={{ page_obj.next_page_number }}">&raquo;</a></li>
+                                    {% else %}
+                                        <li class="disabled"><span>&raquo;</span></li>
+                                    {% endif %}
+                                </ul>
+                            {% endif %}
+
+                            {% for license in object_list %}
+                                <div class="card">
+                                    <div class="card-header">
+                                        <div class="row">
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>License Number</label>
+                                                    <p><b>{{ license.license_number }}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>License Date</label>
+                                                    <p><b>{{ license.license_date }}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>License Expiry</label>
+                                                    <p><b>{{ license.license_expiry_date }}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>File Number</label>
+                                                    <p><b>{{ license.file_number }}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-4">
+                                                <div class="form-group">
+                                                    <label>Exporter</label>
+                                                    <p><b>{{ license.exporter }}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>Norms</label>
+                                                    <p><b>{% if license.get_norm_class %}
+                                                        {{ license.get_norm_class }}{% else %}-{% endif %}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>Notification Number</label>
+                                                    <p><b>{{ license.get_notification_number_display }}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>Port Of Registration</label>
+                                                    <p><b>{{ license.port.name }}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>Balance Cif $</label>
+                                                    <p><b>{{ license.get_balance_cif }}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>User Remarks</label>
+                                                    <p><b>{% if license.user_comment %}
+                                                        {{ license.user_comment }}{% else %}-{% endif %}</b></p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-2">
+                                                <div class="form-group">
+                                                    <label>Ledger Date</label>
+                                                    <p><b>{% if license.ledger_date %}
+                                                        {{ license.ledger_date }}{% else %}-{% endif %}</b></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <ul class="nav nav-pills nav-pills-success no-padding-bottom" id="pills-tab"
+                                                    role="tablist">
+                                                    <li class="nav-item">
+                                                        <a class="nav-link active" id="pills-home-tab"
+                                                           data-toggle="pill"
+                                                           href="#" role="tab" aria-controls="pills-home"
+                                                           aria-selected="true">
+                                                            View License</a>
+                                                    </li>
+                                                    <li class="nav-item">
+                                                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                                                           href="#" role="tab" aria-controls="pills-home"
+                                                           aria-selected="true">
+                                                            Update License Detail</a>
+                                                    </li>
+                                                    <li class="nav-item">
+                                                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                                                           href="#" role="tab" aria-controls="pills-home"
+                                                           aria-selected="true">
+                                                            Update Item List</a>
+                                                    </li>
+                                                    <li class="nav-item">
+                                                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                                                           href="#" role="tab" aria-controls="pills-home"
+                                                           aria-selected="true">
+                                                            View Ledger</a>
+                                                    </li>
+                                                    <li class="nav-item">
+                                                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                                                           href="#" role="tab" aria-controls="pills-home"
+                                                           aria-selected="true">
+                                                            View Amendment Need</a>
+                                                    </li>
+                                                    <li class="nav-item">
+                                                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                                                           href="#" role="tab" aria-controls="pills-home"
+                                                           aria-selected="true">
+                                                            Download</a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <br>
+                            {% endfor %}
+                            {% if is_paginated %}
+                                <ul class="pagination">
+                                    {% if page_obj.has_previous %}
+                                        <li><a href="?page={{ page_obj.previous_page_number }}">&laquo;</a></li>
+                                    {% else %}
+                                        <li class="disabled"><span>&laquo;</span></li>
+                                    {% endif %}
+                                    {% for i in paginator.page_range %}
+                                        {% if page_obj.number == i %}
+                                            <li class="active"><span>{{ i }} <span
+                                                    class="sr-only">(current)</span></span></li>
+                                        {% else %}
+                                            <li><a href="?page={{ i }}">{{ i }}</a></li>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% if page_obj.has_next %}
+                                        <li><a href="?page={{ page_obj.next_page_number }}">&raquo;</a></li>
+                                    {% else %}
+                                        <li class="disabled"><span>&raquo;</span></li>
+                                    {% endif %}
+                                </ul>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+    </div>
+    <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
 
-            <div class="card">
-                <div class="card-header">
-                    <div class="row">
-                        <div class="col-xs-9 col-lg-9">
-                            List
-                        </div>
-                        <div class="col-lg-2 col-sm-4">
-                            <a class="successButton"
-                               href="{% querystring '_export'='csv' %}"
-                               aria-controls="DataTables_Table_1"><span>CSV</span></a>
-                            <a class="successButton" tabindex="0"
-                               aria-controls="DataTables_Table_1"
-                               href="{% querystring '_export'='xls' %}"><span>Excel</span></a>
-                        </div>
+        <div class="card">
+            <div class="card-header">
+                <div class="row">
+                    <div class="col-xs-9 col-lg-9">
+                        List
+                    </div>
+                    <div class="col-lg-2 col-sm-4">
+                        <a class="successButton"
+                           href="{% querystring '_export'='csv' %}"
+                           aria-controls="DataTables_Table_1"><span>CSV</span></a>
+                        <a class="successButton" tabindex="0"
+                           aria-controls="DataTables_Table_1"
+                           href="{% querystring '_export'='xls' %}"><span>Excel</span></a>
                     </div>
                 </div>
-                <div class="card-body">
-                    {% if table.page and table.paginator.num_pages > 1 %}
-                        <nav aria-label="Table navigation">
-                            <div class="pull-left">
-                                <ul class="pagination">
-                                    {% if table.page.has_previous %}
-                                        <li class="previous">
-                                            <a href="{% querystring table.prefixed_page_field=table.page.previous_page_number %}">
-                                                <span aria-hidden="true">&laquo;</span>
-                                                {% trans 'previous' %}
-                                            </a>
-                                        </li>
-                                    {% endif %}
-                                    {% if table.page.has_previous or table.page.has_next %}
-                                        {% for p in table.page|table_page_range:table.paginator %}
-                                            <li {% if p == table.page.number %}class="active"{% endif %}>
-                                                {% if p == '...' %}
-                                                    <a href="#">{{ p }}</a>
-                                                {% else %}
-                                                    <a href="{% querystring table.prefixed_page_field=p %}">
-                                                        {{ p }}
-                                                    </a>
-                                                {% endif %}
-                                            </li>
-                                        {% endfor %}
-                                    {% endif %}
-                                    {% if table.page.has_next %}
-                                        <li class="next">
-                                            <a href="{% querystring table.prefixed_page_field=table.page.next_page_number %}">
-                                                {% trans 'next' %}
-                                                <span aria-hidden="true">&raquo;</span>
-                                            </a>
-                                        </li>
-                                    {% endif %}
-                                </ul>
-                            </div>
-                            <div class="pull-right">
-                            </div>
-                        </nav>
-                    {% endif %}
-                    <div class="table-responsive">
-                        <div id="" class="">
-                            {% render_table table %}
-                        </div>
-                    </div>
-                </div>
+            </div>
+            <div class="card-body">
+
             </div>
         </div>
     </div>

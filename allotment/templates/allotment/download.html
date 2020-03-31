@@ -77,26 +77,38 @@
                 <td>{{ allotment.item_name }}</td>
                 <td>{% if allotment.invoice %}{{ allotment.invoice }}{% else %}-{% endif %}</td>
                 <td>{% if allotment.eta %}{{ allotment.eta }}{% else %}-{% endif %}</td>
-                {% for allotment_detail in allotment.allotment_details.all %}
-                    <td>{{ allotment_detail.item.license }}</td>
-                    <td>{{ allotment_detail.qty }}</td>
-                    <td>{{ allotment_detail.cif_fc }}</td>
-                    {% if not allotment_details.last == allotment_detail %}
-                        </tr>
+                <td colspan="3">
+                    <table>
+                        {% for allotment_detail in allotment.allotment_details.all %}
+                            <tr>
+                                <td>{{ allotment_detail.item.license }}</td>
+                                <td>{{ allotment_detail.qty }}</td>
+                                <td>{{ allotment_detail.cif_fc }}</td>
+                            </tr>
+                        {% endfor %}
                         <tr>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                    {% endif %}
-                {% endfor %}
-                </tr>
+                            <td><b>Total</b></td>
+                            <td>{{ allotment.alloted_quantity }}</td>
+                            <td>{{ allotment.alloted_value }}</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
         {% endfor %}
+        <tr>
+            <td> </td>
+            <td> </td>
+            <td> </td>
+            <td> </td>
+            <td><b>Total USD $</b></td>
+            <td><b>{{ total_cif }}</b></td>
+            <td> </td>
+            <td> </td>
+            <td> </td>
+            <td> </td>
+            <td> </td>
+            <td> </td>
+        </tr>
         </tbody>
     </table>
 {% endblock %}

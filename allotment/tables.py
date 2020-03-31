@@ -74,7 +74,7 @@ def cif_fc_footer(table):
     return round(total, 2)
 
 
-class AllotedItemsTable(dt2.Table):
+class AllottedItemsTable(dt2.Table):
     counter = dt2.Column(empty_values=(), orderable=False)
     delete = dt2.TemplateColumn('<a href="{{ record.get_delete_url }}"><i class="mdi mdi-delete-forever"></i></a>',
                                 orderable=False)

@@ -56,10 +56,6 @@ class AllotmentModel(models.Model):
         dfia = [i.item.license.license_number for i in self.allotment_details.all()]
         return ', '.join(dfia)
 
-    def get_absolute_url(self):
-        return reverse('allotment-details', kwargs={
-            'pk': self.pk}) + '?item__name=' + self.item_name + "&remove_expired=false&remove_null=true&sort=license_expiry"
-
     @property
     def balanced_quantity(self):
         qty = self.allotment_details.aggregate(Sum('qty'))['qty__sum']

@@ -1,8 +1,9 @@
 from django.db.models import Sum
 from django.http import JsonResponse, HttpResponse
 # Create your views here.
-from django.urls import reverse, reverse_lazy
-from django.views.generic import DetailView, CreateView, UpdateView, DeleteView
+from django.urls import reverse
+from django.views.generic import DetailView, CreateView, UpdateView
+from django.views.generic.base import TemplateResponseMixin, ContextMixin, View
 from django_filters.views import FilterView
 from easy_pdf.rendering import render_to_pdf
 from easy_pdf.views import PDFTemplateResponseMixin
@@ -21,7 +22,7 @@ class AllotmentView(FilterView):
 
     def get_queryset(self):
         qs = self.model.objects.all()
-        pk = self.request.GET.get('pk',None)
+        pk = self.request.GET.get('pk', None)
         if not pk:
             product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
             return product_filtered_list.qs
@@ -39,6 +40,9 @@ class AllotmentCreateView(CreateView):
     model = allotments.AllotmentModel
     form_class = forms.AllotmentForm
 
+    def get_success_url(self):
+        return reverse('allotment-card', kwargs={'pk': self.object.pk})
+
 
 class AllotmentUpdateView(UpdateView):
     template_name = 'allotment/add.html'
@@ -50,14 +54,33 @@ class AllotmentUpdateView(UpdateView):
         context['allotment_object'] = allotments.AllotmentModel.objects.get(id=self.kwargs.get('pk'))
         return context
 
+    def get_success_url(self):
+        return reverse('allotment-details', kwargs={
+            'pk': self.object.pk}) + '?item__name=' + self.object.item_name + "&remove_expired=false&remove_null=true&sort=license_expiry"
 
-class AllotmentDeleteView(DeleteView):
+
+class AllotmentDeleteView(TemplateResponseMixin, ContextMixin, View):
     template_name = 'allotment/delete.html'
     model = allotments.AllotmentModel
-    form_class = forms.AllotmentForm
 
-    def get_success_url(self):
-        return reverse('allotment-list') + '?type=AT&company=&is_be=false'
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['type'] = True
+        context['object'] = self.get_object()
+        return context
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        return self.render_to_response(context)
+
+    def get_object(self):
+        return self.model.objects.get(id=self.kwargs.get('pk'))
+
+    def post(self, request, *args, **kwargs):
+        success_url = reverse('allotment-list')
+        self.get_object().delete()
+        from django.http import HttpResponseRedirect
+        return HttpResponseRedirect(success_url)
 
 
 class StartAllotmentView(PagedFilteredTableView):
@@ -133,27 +156,36 @@ def allotment_data(request, pk):
                              'status': False}, safe=False)
 
 
-class AllotmentVerifyView(PagedFilteredTableView):
+class AllotmentVerifyView(DetailView):
     template_name = 'allotment/verify.html'
-    model = allotments.AllotmentItems
-    table_class = tables.AllotedItemsTable
+    model = allotments.AllotmentModel
     page_head = 'Item List'
 
-    def get_queryset(self, **kwargs):
-        return self.model.objects.filter(allotment=self.kwargs.get('pk'))
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['allotment_object'] = allotments.AllotmentModel.objects.get(id=self.kwargs.get('pk'))
-        return context
+    def get_object(self, queryset=None):
+        return self.model.objects.get(pk=self.kwargs.get('pk'))
 
 
-class AllotmentDeleteItemsView(DeleteView):
+class AllotmentDeleteItemsView(TemplateResponseMixin, ContextMixin, View):
     model = allotments.AllotmentItems
     template_name = 'allotment/delete.html'
 
-    def get_success_url(self):
-        return reverse('allotment-list') + '?pk=' + str(self.request.GET.get('allotment'))
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        return self.render_to_response(context)
+
+    def get_object(self):
+        return self.model.objects.get(id=self.kwargs.get('pk'))
+
+    def post(self, request, *args, **kwargs):
+        success_url = reverse('allotment-verify', kwargs={'pk': str(self.get_object().allotment_id)})
+        self.get_object().delete()
+        from django.http import HttpResponseRedirect
+        return HttpResponseRedirect(success_url)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object'] = self.get_object()
+        return context
 
 
 class SendAllotmentView(PDFTemplateResponseMixin, DetailView):
@@ -169,10 +201,24 @@ class SendAllotmentView(PDFTemplateResponseMixin, DetailView):
         if pdf:
             response = HttpResponse(pdf, content_type='application/pdf')
             filename = "Allotment_%s.pdf" % (str(object.id))
-            content = "inline; filename='%s'" % (filename)
+            content = "inline; filename=%s" % (filename)
             download = request.GET.get("download")
             if download:
-                content = "attachment; filename='%s'" % (filename)
+                content = "attachment; filename=%s" % (filename)
             response['Content-Disposition'] = content
             return response
         return HttpResponse("Not found")
+
+
+class CardView(DetailView):
+    template_name = 'allotment/card.html'
+    model = allotments.AllotmentModel
+
+    def get_object(self, queryset=None):
+        return self.model.objects.get(pk=self.kwargs.get('pk'))
+
+
+class DownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
+    template_name = 'allotment/download.html'
+    model = allotments.AllotmentModel
+    filter_class = filters.AllotmentFilter

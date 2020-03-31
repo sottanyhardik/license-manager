@@ -10,30 +10,13 @@
     <div class="row">
         <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
             <div class="card">
-
                 <div class="card-header">
                     <div class="row">
                         <div class="col-xs-9 col-lg-9">
                             Filter
                         </div>
-                        <div class="col-lg-2 col-sm-4">
-                            {% if 'company' in request.path %}
-                                <a href="{% url 'company-add' %}" class="successButton">Add New</a>
-                            {% elif 'hs_code' in request.path %}
-                                <a href="{% url 'hs-code-add' %}" class="successButton">Add New</a>
-                            {% elif 'item' in request.path %}
-                                <a href="{% url 'item-add' %}" class="successButton">Add New</a>
-                            {% elif 'license' in request.path %}
-                                <a href="{% url 'add-license' %}" class="successButton">Add New</a>
-                            {% elif 'allotment' in request.path %}
-                                <a href="{% url 'allotment-add' %}" class="successButton">Add New</a>
-                            {% elif 'bill_of_entry'  in request.path %}
-                                <a href="{% url 'bill-of-entry-create' %}" class="successButton">Add New</a>
-                            {% endif %}
-                        </div>
                     </div>
                 </div>
-
                 <div class="card-body">
                     <form action="{{ request.path }}" method="get">
                         {% if filter.form %}
@@ -61,19 +44,25 @@
             <div class="card">
                 <div class="card-header">
                     <div class="row">
-                        <div class="col-xs-9 col-lg-9">
+                        <div class="col-xs-4 col-lg-8">
                             List
                         </div>
                         <div class="col-lg-2 col-sm-4">
-                            <a class="successButton"
-                               href="{% querystring '_export'='csv' %}"
-                               aria-controls="DataTables_Table_1"><span>CSV</span></a>
-                            <a class="successButton" tabindex="0"
-                               aria-controls="DataTables_Table_1"
-                               href="{% querystring '_export'='xls' %}"><span>Excel</span></a>
+                            <a href="{% url 'allotment-add' %}" class="btn btn-primary full-width" onclick="fetch_page(this)"
+                               data-url="{% url 'allotment-add' %}" data-target="div-add">Add New</a>
+                        </div>
+                        <div class="col-lg-2 col-sm-4">
+                            <a href="download/{% querystring '_export'='pdf' %}" class="btn btn-success full-width">Download Pending</a>
                         </div>
                     </div>
                 </div>
+                <div class="card-body data-target-div" id="div-add">
+
+                </div>
+            </div>
+        </div>
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card">
                 <div class="card-body">
                     <h1>{{ object_list.has_other_pages }}</h1>
                     {% if is_paginated %}
@@ -98,118 +87,7 @@
                         </ul>
                     {% endif %}
                     {% for object in object_list %}
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="row">
-                                    <div class="col-lg-1">
-                                        <label for="">Date:</label>
-                                        <p><b>{{ object.modified_on|title }}</b></p>
-                                    </div>
-                                    <div class="col-lg-1">
-                                        <label for="">Type:</label>
-                                        <p><b>{{ object.get_type_display|title }}</b></p>
-                                    </div>
-                                    <div class="col-lg-3">
-                                        <label for="">Importer:</label>
-                                        <p><b>{{ object.company|title }}</b></p>
-                                    </div>
-                                    <div class="col-lg-2">
-                                        <label for="">Item:</label>
-                                        <p><b>{{ object.item_name|title }}</b></p>
-                                    </div>
-                                    <div class="col-lg-1">
-                                        <label for="">Quantity:</label>
-                                        <p><b>{{ object.required_quantity|title }}</b></p>
-                                    </div>
-                                    <div class="col-lg-1">
-                                        <label for="">Unit Price:</label>
-                                        <p><b>{{ object.unit_value_per_unit|title }}</b></p>
-                                    </div>
-                                    <div class="col-lg-1">
-                                        <label for="">Value:</label>
-                                        <p><b>{{ object.required_value|title }}</b></p>
-                                    </div>
-                                    <div class="col-lg-1">
-                                        <label for="">Invoice:</label>
-                                        <p><b>{% if object.invoice %}{{ object.invoice|title }}{% endif %}</b>
-                                        </p>
-                                    </div>
-                                    <div class="col-lg-1">
-                                        <label for="">ETA:</label>
-                                        <p><b>{% if object.eta %}{{ object.eta|title }}{% endif %}</b></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-header" style="background: #ffffff">
-                                <div class="row">
-                                    <div class="col-lg-2">
-                                        <a class="btn btn-success fetch-page"
-                                           data-url="{% url 'allotment-update' object.id %}"
-                                           data-target="div-{{ object.id }}">Update</a>
-                                    </div>
-                                    <div class="col-lg-2">
-                                        <a class="btn btn-info fetch-page"
-                                           data-url="{% url 'allotment-details' object.id %}?item__name={{ object.item_name }}&remove_expired=false&remove_null=true&sort=license_expiry"
-                                           data-target="div-{{ object.id }}">Allotment</a>
-                                    </div>
-                                    <div class="col-lg-2">
-                                        <a class="btn btn-warning fetch-page">Download</a>
-                                    </div>
-                                    <div class="col-lg-2">
-                                        <a class="btn btn-secondary fetch-page">Send</a>
-                                    </div>
-                                    <div class="col-lg-2">
-                                        <a href="{% url 'allotment-delete' object.id %}"
-                                           class="btn btn-danger fetch-page">Delete</a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="card-body data-target-div" id="div-{{ object.id }}">
-                                <div class="row">
-                                    <div class="col-lg-12">
-                                        <h3>View Allotment</h3>
-                                        {% get_table_html object.allotment_details.all as table %}
-                                        <table class="table table-bordered" style="border: grey 2px solid">
-                                            <thead>
-                                            <th>Counter</th>
-                                            <th>Serial number</th>
-                                            <th>License number</th>
-                                            <th>License date</th>
-                                            <th>File number</th>
-                                            <th>License expiry</th>
-                                            <th>Exporter</th>
-                                            <th>Qty</th>
-                                            <th>Cif fc</th>
-                                            <th>Notification number</th>
-                                            <th></th>
-                                            </thead>
-                                            <tbody>
-                                            {% for allotment in object.allotment_details.all %}
-                                                <tr>
-                                                    <td>{{ forloop.counter }}</td>
-                                                    <td>{{ allotment.serial_number }}</td>
-                                                    <td>{{ allotment.license_number }}</td>
-                                                    <td>{{ allotment.license_date }}</td>
-                                                    <td>{{ allotment.file_number }}</td>
-                                                    <td>{{ allotment.license_expiry }}</td>
-                                                    <td>{{ allotment.exporter }}</td>
-                                                    <td>{{ allotment.qty }}</td>
-                                                    <td>{{ allotment.cif_fc }}</td>
-                                                    <td>{{ allotment.notification_number }}</td>
-                                                    <td>
-                                                        <a href="{% url 'allotment-item-delete' allotment.id %}?allotment={{ object.id }}"
-                                                           class="btn btn-danger fetch-page">Delete</a>
-                                                    </td>
-                                                </tr>
-                                            {% endfor %}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        {% include 'allotment/card.html' %}
                         <br>
                     {% endfor %}
                     {% if is_paginated %}
@@ -248,31 +126,66 @@
                 $(this).siblings('select').select2('open');
             }
         });
-        $(".fetch-page").click(function () {
+
+        function fetch_page(button) {
             event.preventDefault();
-            url = this.dataset.url;
-            target = "#" + this.dataset.target;
+            url = button.dataset.url;
+            target = "#" + button.dataset.target;
             $.get(url, function (data, status) {
                 $(target).html(data);
                 $(target).show();
             });
-        });
+        }
+
+        function getCookie(name) {
+            var cookieValue = null;
+            if (document.cookie && document.cookie !== '')
+            {
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++) {
+                    var cookie = jQuery.trim(cookies[i]);
+                    // Check if this cookie string begin with the name we want
+                    if (cookie.substring(0, name.length + 1) === (name + '='))
+                    {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
 
         function ajax_post(button) {
             event.preventDefault();
             var form = $(button).closest("form");
-            target = "#" + button.dataset.target;
+            target_div = button.dataset.target;
             $.ajax({
                 url: form.attr("action"),
                 method: form.attr("method"),
                 data: form.serialize(),
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
+                },
                 success: function (data) {
-                    $(target).html(data);
-                    $(target).show();
+                    if (target_div.indexOf("card") >= 0) {
+                        target = '.' + target_div;
+                        $(target).remove();
+                    } else {
+                        target = '#' + target_div;
+                        $(target).html(data);
+                        $(target).show();
+                    }
+
                 },
                 error: function (data, status) {
-                    $(target).html(data);
-                    $(target).show();
+                    if (target_div.indexOf("card") >= 0) {
+                        target = '.' + target_div;
+                        $(target).remove();
+                    } else {
+                        target = '#' + target_div;
+                        $(target).html(data);
+                        $(target).show();
+                    }
                 }
             });
         }

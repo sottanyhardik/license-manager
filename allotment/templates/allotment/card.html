@@ -1,0 +1,79 @@
+<div class="card card-{{ object.id }}">
+    <div class="card-header">
+        <div class="row">
+            <div class="col-lg-1">
+                <label for="">Date:</label>
+                <p><b>{{ object.modified_on|title }}</b></p>
+            </div>
+            <div class="col-lg-1">
+                <label for="">Type:</label>
+                <p><b>{{ object.get_type_display|title }}</b></p>
+            </div>
+            <div class="col-lg-3">
+                <label for="">Importer:</label>
+                <p><b>{{ object.company|title }}</b></p>
+            </div>
+            <div class="col-lg-2">
+                <label for="">Item:</label>
+                <p><b>{{ object.item_name|title }}</b></p>
+            </div>
+            <div class="col-lg-1">
+                <label for="">Quantity:</label>
+                <p><b>{{ object.required_quantity|title }}</b></p>
+            </div>
+            <div class="col-lg-1">
+                <label for="">Unit Price:</label>
+                <p><b>{{ object.unit_value_per_unit|title }}</b></p>
+            </div>
+            <div class="col-lg-1">
+                <label for="">Value:</label>
+                <p><b>{{ object.required_value|title }}</b></p>
+            </div>
+            <div class="col-lg-1">
+                <label for="">Invoice:</label>
+                <p><b>{% if object.invoice %}{{ object.invoice|title }}{% endif %}</b>
+                </p>
+            </div>
+            <div class="col-lg-1">
+                <label for="">ETA:</label>
+                <p><b>{% if object.eta %}{{ object.eta|title }}{% endif %}</b></p>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card card-{{ object.id }}">
+    <div class="card-header" style="background: #ffffff">
+        <div class="row">
+            <div class="col-lg-2">
+                <a class="btn btn-success full-width" onclick="fetch_page(this)"
+                   data-url="{% url 'allotment-update' object.id %}"
+                   data-target="div-{{ object.id }}">Update</a>
+            </div>
+            <div class="col-lg-2">
+                <a class="btn btn-info full-width" onclick="fetch_page(this)"
+                   data-url="{% url 'allotment-details' object.id %}?item__name={{ object.item_name }}&remove_expired=false&remove_null=true&sort=license_expiry"
+                   data-target="div-{{ object.id }}">Allotment</a>
+            </div>
+            <div class="col-lg-2">
+                <a class="btn btn-dark full-width" onclick="fetch_page(this)"
+                   data-url="{% url 'allotment-verify' object.id %}"
+                   data-target="div-{{ object.id }}">View</a>
+            </div>
+            <div class="col-lg-2">
+                <a href="{% url 'allotment-download' object.id %}" target="_blank"
+                   class="btn btn-warning full-width">Download</a>
+            </div>
+            <div class="col-lg-2">
+                <a class="btn btn-secondary full-width" onclick="fetch_page(this)">Send</a>
+            </div>
+            <div class="col-lg-2">
+                <a href="{% url 'allotment-delete' object.id %}"
+                   class="btn btn-danger full-width" onclick="fetch_page(this)"
+                   data-url="{% url 'allotment-delete' object.id %}"
+                   data-target="div-{{ object.id }}">Delete</a>
+            </div>
+        </div>
+    </div>
+    <div class="card-body data-target-div" id="div-{{ object.id }}">
+    </div>
+</div>

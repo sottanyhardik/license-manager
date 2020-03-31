@@ -34,7 +34,7 @@
                         {% csrf_token %}
                         <div class="row">
                             <div class="col-lg-2">
-                                <a class="btn btn-warning" data-url="{% if type %} {% url 'allotment-verify' object.id %} {% else %} {% url 'allotment-verify' object.allotment_id %} {% endif %}"
+                                <a class="btn btn-warning full-width" data-url="{% if type %} {% url 'allotment-verify' object.id %} {% else %} {% url 'allotment-verify' object.allotment_id %} {% endif %}"
                                    data-target="{% if type %}div-{{ object.id }}{% else %}div-{{ object.allotment_id }}{% endif %}"
                                    onclick="fetch_page(this)">Cancel</a>
 

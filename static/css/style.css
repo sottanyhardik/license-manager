@@ -23832,3 +23832,7 @@ dl li {
     color: #fff!important;
     background-color: #555!important;
 }
+
+.no-padding-bottom{
+    padding-bottom: 0px;
+}

@@ -4,8 +4,9 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('analysis/', login_required(views.analysis), name='analysis'),
     path('add/', login_required(views.LicenseDetailCreateView.as_view()), name='add-license'),
-    path('', login_required(views.LicenseDetailListView.as_view()), name='list-license'),
+    path('', login_required(views.LicenseListView.as_view()), name='license-list'),
     path('<slug:license>/', login_required(views.LicenseDetailView.as_view()), name='license-detail'),
     path('<int:pk>/update', login_required(views.LicenseDetailUpdateView.as_view()), name='license-update'),
     path('<int:pk>/verify', login_required(views.LicenseVerifyView.as_view()), name='license-verify'),

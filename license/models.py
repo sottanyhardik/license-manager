@@ -45,6 +45,7 @@ class LicenseDetailsModel(models.Model):
     is_null = models.BooleanField(default=False)
     is_self = models.BooleanField(default=True)
     is_au = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=False)
     balance_cif = models.FloatField(default=0.0)
 
     def __str__(self):
@@ -52,11 +53,14 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def is_expired(self):
-        return self.license_expiry_date < timezone.now()
+        if self.license_expiry_date:
+            from datetime import timedelta
+            return self.license_expiry_date < (timezone.now() - timedelta(days=90)).date()
+        return False
 
     @property
     def get_norm_class(self):
-        return ','.join([export.norm_class.norm_class for export in self.export_license.all()])
+        return ','.join([export.norm_class.norm_class for export in self.export_license.all() if export.norm_class])
 
     def get_absolute_url(self):
         return reverse('license-detail', kwargs={'license': self.license_number})
@@ -169,9 +173,11 @@ class LicenseDetailsModel(models.Model):
 
     def get_balance_value(self):
         if self.get_norm_class == 'E5':
-            return round(self.get_balance_cif() - self.get_required_sugar_value() - self.get_required_rbd_value() - self.get_required_mnm_value(),2)
+            return round(
+                self.get_balance_cif() - self.get_required_sugar_value() - self.get_required_rbd_value() - self.get_required_mnm_value(),
+                2)
         else:
-            return round(self.get_balance_cif() - self.get_required_sugar_value(),2)
+            return round(self.get_balance_cif() - self.get_required_sugar_value(), 2)
 
 
 KG = 'kg'

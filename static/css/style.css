@@ -23777,3 +23777,7 @@ dl li {
 .full-width{
     min-width: 100% !important;
 }
+
+.nav-tabs li{
+    margin-right: 5px!important;
+}

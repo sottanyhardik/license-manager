@@ -222,3 +222,15 @@ class DownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
     template_name = 'allotment/download.html'
     model = allotments.AllotmentModel
     filter_class = filters.AllotmentFilter
+
+    def get_queryset(self):
+        qs = self.model.objects.all()
+        product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
+        return product_filtered_list.qs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        total = 0
+        total_list = [total + int(data.required_value) for data in self.get_queryset()]
+        context['total_cif'] = sum(total_list)
+        return context

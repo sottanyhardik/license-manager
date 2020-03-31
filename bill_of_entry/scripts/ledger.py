@@ -102,8 +102,11 @@ def parse_file(data):
     license.registration_date = data_dict['registration_date']
     license.port, bool = PortModel.objects.get_or_create(code=data_dict['port'])
     license.scheme_code = data_dict['scheme_code']
-    if not license.ledger_date or data_dict['ledger_date'].date() > license.ledger_date:
-        license.ledger_date = data_dict['ledger_date']
+    try:
+        if not license.ledger_date or data_dict['ledger_date'].date() > license.ledger_date:
+            license.ledger_date = data_dict['ledger_date']
+    except:
+        pass
     license.save()
     exp, bool = LicenseExportItemModel.objects.get_or_create(license=license)
     exp.net_quantity = data_dict['total_quantity']

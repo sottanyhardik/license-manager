@@ -48,11 +48,13 @@
                             List
                         </div>
                         <div class="col-lg-2 col-sm-4">
-                            <a href="{% url 'allotment-add' %}" class="btn btn-primary full-width" onclick="fetch_page(this)"
+                            <a href="{% url 'allotment-add' %}" class="btn btn-primary full-width"
+                               onclick="fetch_page(this)"
                                data-url="{% url 'allotment-add' %}" data-target="div-add">Add New</a>
                         </div>
                         <div class="col-lg-2 col-sm-4">
-                            <a href="download/{% querystring '_export'='pdf' %}" class="btn btn-success full-width">Download Pending</a>
+                            <a href="download/{% querystring '_export'='pdf' %}" class="btn btn-success full-width">Download
+                                Pending</a>
                         </div>
                     </div>
                 </div>
@@ -65,50 +67,73 @@
             <div class="card">
                 <div class="card-body">
                     {% if is_paginated %}
-                        <ul class="pagination">
-                            {% if page_obj.has_previous %}
-                                <li><a href="?page={{ page_obj.previous_page_number }}">&laquo;</a></li>
-                            {% else %}
-                                <li class="disabled"><span>&laquo;</span></li>
-                            {% endif %}
-                            {% for i in paginator.page_range %}
-                                {% if page_obj.number == i %}
-                                    <li class="active"><span>{{ i }} <span class="sr-only">(current)</span></span></li>
+                        <nav>
+                            <ul class="pagination d-flex flex-wrap justify-content-center pagination-success">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item"><a class="page-link"
+                                                             href="?page={{ page_obj.previous_page_number }}"><i
+                                            class="mdi mdi-chevron-left"></i></a></li>
                                 {% else %}
-                                    <li><a href="?page={{ i }}">{{ i }}</a></li>
+                                    <li class="page-item disabled"><a class="page-link" href="#"><i
+                                            class="mdi mdi-chevron-left"></i></a></li>
                                 {% endif %}
-                            {% endfor %}
-                            {% if page_obj.has_next %}
-                                <li><a href="?page={{ page_obj.next_page_number }}">&raquo;</a></li>
-                            {% else %}
-                                <li class="disabled"><span>&raquo;</span></li>
-                            {% endif %}
-                        </ul>
+                                {% for i in paginator.page_range %}
+                                    {% if page_obj.number == i %}
+                                        <li class="page-item active"><a class="page-link"
+                                                                        href="?page={{ i }}">{{ i }} </a></li>
+                                    {% else %}
+                                        <li class="page-item"><a class="page-link"
+                                                                 href="?page={{ i }}">{{ i }} </a></li>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if page_obj.has_next %}
+                                    <li class="page-item"><a class="page-link"
+                                                             href="?page={{ page_obj.next_page_number }}"><i
+                                            class="mdi mdi-chevron-right"></i></a></li>
+                                {% else %}
+                                    <li class="page-item disabled"><a class="page-link" href="#"><i
+                                            class="mdi mdi-chevron-right"></i></a></li>
+                                {% endif %}
+
+                            </ul>
+                        </nav>
                     {% endif %}
+
                     {% for object in object_list %}
                         {% include 'allotment/card.html' %}
                         <br>
                     {% endfor %}
                     {% if is_paginated %}
-                        <ul class="pagination">
-                            {% if page_obj.has_previous %}
-                                <li><a href="?page={{ page_obj.previous_page_number }}">&laquo;</a></li>
-                            {% else %}
-                                <li class="disabled"><span>&laquo;</span></li>
-                            {% endif %}
-                            {% for i in paginator.page_range %}
-                                {% if page_obj.number == i %}
-                                    <li class="active"><span>{{ i }} <span class="sr-only">(current)</span></span></li>
+                        <nav>
+                            <ul class="pagination d-flex flex-wrap justify-content-center pagination-success">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item"><a class="page-link"
+                                                             href="?page={{ page_obj.previous_page_number }}"><i
+                                            class="mdi mdi-chevron-left"></i></a></li>
                                 {% else %}
-                                    <li><a href="?page={{ i }}">{{ i }}</a></li>
+                                    <li class="page-item disabled"><a class="page-link" href="#"><i
+                                            class="mdi mdi-chevron-left"></i></a></li>
                                 {% endif %}
-                            {% endfor %}
-                            {% if page_obj.has_next %}
-                                <li><a href="?page={{ page_obj.next_page_number }}">&raquo;</a></li>
-                            {% else %}
-                                <li class="disabled"><span>&raquo;</span></li>
-                            {% endif %}
-                        </ul>
+                                {% for i in paginator.page_range %}
+                                    {% if page_obj.number == i %}
+                                        <li class="page-item active"><a class="page-link"
+                                                                        href="?page={{ i }}">{{ i }} </a></li>
+                                    {% else %}
+                                        <li class="page-item"><a class="page-link"
+                                                                 href="?page={{ i }}">{{ i }} </a></li>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if page_obj.has_next %}
+                                    <li class="page-item"><a class="page-link"
+                                                             href="?page={{ page_obj.next_page_number }}"><i
+                                            class="mdi mdi-chevron-right"></i></a></li>
+                                {% else %}
+                                    <li class="page-item disabled"><a class="page-link" href="#"><i
+                                            class="mdi mdi-chevron-right"></i></a></li>
+                                {% endif %}
+
+                            </ul>
+                        </nav>
                     {% endif %}
                 </div>
             </div>
@@ -125,67 +150,5 @@
                 $(this).siblings('select').select2('open');
             }
         });
-
-        function fetch_page(button) {
-            url = button.dataset.url;
-            target = "#" + button.dataset.target;
-            $.get(url, function (data, status) {
-                $(target).html(data);
-                $(target).show();
-            });
-        }
-
-        function getCookie(name) {
-            var cookieValue = null;
-            if (document.cookie && document.cookie !== '')
-            {
-                var cookies = document.cookie.split(';');
-                for (var i = 0; i < cookies.length; i++) {
-                    var cookie = jQuery.trim(cookies[i]);
-                    // Check if this cookie string begin with the name we want
-                    if (cookie.substring(0, name.length + 1) === (name + '='))
-                    {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
-
-        function ajax_post(button) {
-            event.preventDefault();
-            var form = $(button).closest("form");
-            target_div = button.dataset.target;
-            $.ajax({
-                url: form.attr("action"),
-                method: form.attr("method"),
-                data: form.serialize(),
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
-                },
-                success: function (data) {
-                    if (target_div.indexOf("card") >= 0) {
-                        target = '.' + target_div;
-                        $(target).remove();
-                    } else {
-                        target = '#' + target_div;
-                        $(target).html(data);
-                        $(target).show();
-                    }
-
-                },
-                error: function (data, status) {
-                    if (target_div.indexOf("card") >= 0) {
-                        target = '.' + target_div;
-                        $(target).remove();
-                    } else {
-                        target = '#' + target_div;
-                        $(target).html(data);
-                        $(target).show();
-                    }
-                }
-            });
-        }
     </script>
 {% endblock %}

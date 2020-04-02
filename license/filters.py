@@ -13,13 +13,12 @@ BOOLEAN_CHOICES = (
 
 
 class LicenseDetailFilter(django_filters.FilterSet):
-    is_expired = django_filters.BooleanFilter(field_name='license_expiry_date', method='check_expired',
-                                              label='Is Expired')
     is_individual = django_filters.BooleanFilter(method='check_individual', label='Is Individual')
 
     class Meta:
         model = lic_model.LicenseDetailsModel
-        fields = ['license_number', 'import_license__item__name', 'exporter', 'is_audit', 'is_null', 'is_au']
+        fields = ['license_number', 'import_license__item__name', 'exporter', 'is_null', 'is_au',
+                  'is_incomplete','is_expired','is_active']
         widgets = {
             'exporter': Select(attrs={'class': 'form-control'}),
             'is_audit': Select(attrs={'class': 'form-control'}),

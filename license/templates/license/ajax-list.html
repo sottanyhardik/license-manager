@@ -1,0 +1,221 @@
+{% load core_tag %}
+{% if is_paginated %}
+    <nav>
+        <ul class="pagination d-flex flex-wrap justify-content-center pagination-success">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="#"
+                       data-url="
+
+
+
+
+
+
+
+                               {% url 'license-ajax-list' %}{% relative_url page_obj.previous_page_number 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                       data-target="license-list" onclick="fetch_page(this)">
+                        <i class="mdi mdi-chevron-left"></i>
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><a class="page-link" href="#"><i
+                        class="mdi mdi-chevron-left"></i></a></li>
+            {% endif %}
+            {% for i in paginator.page_range %}
+                {% if page_obj.number == i %}
+                    <li class="page-item active">
+                        <a class="page-link" href="?page={{ i }}"
+                           data-url="
+
+
+
+
+
+
+
+                                   {% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                           data-target="license-list" onclick="fetch_page(this)">
+                            {{ i }} </a></li>
+                {% else %}
+                    <li class="page-item"><a class="page-link"
+                                             href="?page={{ i }}"
+                                             data-url="
+
+
+
+
+
+
+
+                                                     {% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                                             data-target="license-list" onclick="fetch_page(this)">{{ i }} </a></li>
+                {% endif %}
+            {% endfor %}
+            {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link"
+                                         href="?page={{ page_obj.next_page_number }}"
+                                         data-url="
+
+
+
+
+
+
+
+                                                 {% url 'license-ajax-list' %}{% relative_url page_obj.next_page_number 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                                         data-target="license-list" onclick="fetch_page(this)"><i
+                        class="mdi mdi-chevron-right"></i></a></li>
+            {% else %}
+                <li class="page-item disabled"><a class="page-link" href="#"><i
+                        class="mdi mdi-chevron-right"></i></a></li>
+            {% endif %}
+
+        </ul>
+    </nav>
+{% endif %}
+<div class="card-header"  style="border-bottom: #333333 1px solid">
+    <div class="row">
+        <div class="col-lg-1">
+            <div>
+                <label><b>License Number</b></label>
+            </div>
+        </div>
+        <div class="col-lg-1">
+            <div>
+                <label><b>License Date</b></label>
+            </div>
+        </div>
+        <div class="col-lg-1">
+            <div>
+                <label><b>License Expiry</b></label>
+            </div>
+        </div>
+        <div class="col-lg-1">
+            <div>
+                <label><b>File Number</b></label>
+            </div>
+        </div>
+        <div class="col-lg-2">
+            <div>
+                <label><b>Exporter</b></label>
+            </div>
+        </div>
+        <div class="col-lg-1">
+            <div>
+                <label><b>Norms</b></label>
+            </div>
+        </div>
+        <div class="col-lg-1">
+            <div>
+                <label><b>Notification Number</b></label>
+            </div>
+        </div>
+        <div class="col-lg-1">
+            <div>
+                <label><b>Port Of Registration</b></label>
+            </div>
+        </div>
+        <div class="col-lg-1">
+            <div>
+                <label><b>Balance Cif $</b></label>
+            </div>
+        </div>
+        <div class="col-lg-1">
+            <div>
+                <label><b>User Remarks</b></label>
+            </div>
+        </div>
+        <div class="col-lg-1">
+            <div>
+                <label><b>Ledger Date</b></label>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="accordion table-responsive" id="accordion-2" role="tablist">
+    <table class="table dataTable no-footer table-striped">
+
+    {% for license in object_list %}
+        {% include 'license/card.html' %}
+    {% endfor %}
+        </table>
+
+</div>
+<br>
+{% if is_paginated %}
+    <nav>
+        <ul class="pagination d-flex flex-wrap justify-content-center pagination-success">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="#"
+                       data-url="
+
+
+
+
+
+
+
+                               {% url 'license-ajax-list' %}{% relative_url page_obj.previous_page_number 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                       data-target="license-list" onclick="fetch_page(this)">
+                        <i class="mdi mdi-chevron-left"></i>
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><a class="page-link" href="#"><i
+                        class="mdi mdi-chevron-left"></i></a></li>
+            {% endif %}
+            {% for i in paginator.page_range %}
+                {% if page_obj.number == i %}
+                    <li class="page-item active">
+                        <a class="page-link" href="?page={{ i }}"
+                           data-url="
+
+
+
+
+
+
+
+                                   {% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                           data-target="license-list" onclick="fetch_page(this)">
+                            {{ i }} </a></li>
+                {% else %}
+                    <li class="page-item"><a class="page-link"
+                                             href="?page={{ i }}"
+                                             data-url="
+
+
+
+
+
+
+
+                                                     {% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                                             data-target="license-list" onclick="fetch_page(this)">{{ i }} </a></li>
+                {% endif %}
+            {% endfor %}
+            {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link"
+                                         href="?page={{ page_obj.next_page_number }}"
+                                         data-url="
+
+
+
+
+
+
+
+                                                 {% url 'license-ajax-list' %}{% relative_url page_obj.next_page_number 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                                         data-target="license-list" onclick="fetch_page(this)"><i
+                        class="mdi mdi-chevron-right"></i></a></li>
+            {% else %}
+                <li class="page-item disabled"><a class="page-link" href="#"><i
+                        class="mdi mdi-chevron-right"></i></a></li>
+            {% endif %}
+
+        </ul>
+    </nav>
+{% endif %}

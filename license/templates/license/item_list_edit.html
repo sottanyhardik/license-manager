@@ -1,0 +1,72 @@
+{% load formset_tags %}
+{% load static %}
+<form action="{% url 'license-item-update' object.license_number %}" method="post" novalidate
+      enctype="multipart/form-data">
+    {% include 'license/formset.html' %}
+    <div class="row">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <input type="submit" class="btn btn-success full-width  ajax-post" onclick="ajax_post(this)"
+                   data-target="div-{% if object %}{{ object.id }}{% else %}add{% endif %}" value="Submit">
+        </div>
+    </div>
+    <br>
+</form>
+<script src="{% static 'js/select2.min.js' %}"></script>
+<script src="{% static 'js/django_select2.js' %}"></script>
+<script>
+    function calculateCurrency() {
+        var export_license_fob_fc = $('#id_export_license-0-fob_fc').val();
+        var export_license_fob_inr = $('#id_export_license-0-fob_inr').val();
+        var value_addition = parseInt($('#id_export_license-0-value_addition').val());
+        if (export_license_fob_fc == "") {
+            return false
+        } else if (export_license_fob_inr == "") {
+            return false
+        } else {
+            var tvalue_addition = 100 + value_addition;
+
+            if ($('#id_export_license-0-cif_fc').val() == 0) {
+                var export_license_cif_fc = export_license_fob_fc * 100 / tvalue_addition;
+                $('#id_export_license-0-cif_fc').val(export_license_cif_fc.toFixed(2));
+                $('#id_export_license-0-cif_fc').css("background-color", "#7FFF00");
+            }
+            if ($('#id_export_license-0-cif_inr').val() == 0) {
+                var export_license_cif_inr = export_license_fob_inr * 100 / tvalue_addition;
+                $('#id_export_license-0-cif_inr').val(export_license_cif_inr.toFixed(2));
+                $('#id_export_license-0-cif_inr').css("background-color", "#7FFF00");
+            }
+
+            var fob_exchange_rate = export_license_fob_inr / export_license_fob_fc;
+            $('#id_export_license-0-fob_exchange_rate').val(fob_exchange_rate.toFixed(2));
+            $('#id_export_license-0-fob_exchange_rate').css("background-color", "#7FFF00");
+        }
+    }
+
+    jQuery(function ($) {
+        $("#id_export_license-0-fob_fc").change(function () {
+            calculateCurrency()
+        });
+        $("#id_export_license-0-fob_inr").change(function () {
+            calculateCurrency()
+        });
+        $("#id_export_license-0-value_addition").change(function () {
+            calculateCurrency()
+        });
+    });</script>
+
+<script type="text/javascript">
+    $(document).on('focus', '.select2', function (e) {
+        if (e.originalEvent) {
+            $(this).siblings('select').select2('open');
+        }
+    });
+
+</script>
+<script>jQuery(function ($) {
+    {% for formset in inlines %}
+        $("#{{ formset.prefix }}-id").formset({
+            animateForms: true,
+            reorderMode: 'dom',
+        });
+    {% endfor %}
+});</script>

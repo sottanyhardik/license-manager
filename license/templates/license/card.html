@@ -1,0 +1,124 @@
+<tr class="card-header" role="tab" id="heading-{{ license.id }}">
+    <td style="padding: 3px;border-bottom: #333333 1px solid">
+        <div data-toggle="collapse" href="#collapse-{{ license.id }}" aria-expanded="false"
+             aria-controls="collapse-{{ license.id }}">
+            <div class="row">
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{{ license.license_number }}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{{ license.license_date }}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{{ license.license_expiry_date }}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{{ license.file_number }}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-2">
+                    <div>
+                        <p><b>{{ license.exporter }}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{% if license.get_norm_class %}
+                            {{ license.get_norm_class }}{% else %}-{% endif %}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{{ license.get_notification_number_display }}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{{ license.port.name }}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{{ license.get_balance_cif }}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{% if license.user_comment %}
+                            {{ license.user_comment }}{% else %}-{% endif %}</b></p>
+                    </div>
+                </div>
+                <div class="col-lg-1">
+                    <div>
+                        <p><b>{% if license.ledger_date %}
+                            {{ license.ledger_date }}{% else %}-{% endif %}</b></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </td>
+</tr>
+<tr id="collapse-{{ license.id }}" class="collapse" role="tabpanel" aria-labelledby="heading-{{ license.id }}"
+    data-parent="#accordion-2">
+    <td style="padding: 0px">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-pills nav-pills-success no-padding-bottom"
+                    id="pills-tab"
+                    role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="pill"
+                           href="#" role="tab" aria-controls="pills-home"
+                           aria-selected="true"
+                           data-url="{% url 'license-detail' license.license_number %}"
+                           data-target="div-{{ license.id }}" onclick="fetch_page(this)">
+                           View License</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                           href="#" role="tab" aria-controls="pills-home"
+                           aria-selected="true" data-url="{% url 'license-update' license.license_number %}"
+                           data-target="div-{{ license.id }}"
+                           onclick="fetch_page(this)">
+                            Update License Detail</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                           href="#" role="tab" aria-controls="pills-home"
+                           aria-selected="true" data-url="{% url 'license-item-update' license.license_number %}"
+                           data-target="div-{{ license.id }}"
+                           onclick="fetch_page(this)">
+                            Update Item List</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-home-tab"
+                           href="{% url 'license_ledger' license.license_number %}" target="_blank">
+                            View Ledger</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-home-tab"
+                           href="{% url 'amend-license-pdf' license.license_number %}" target="_blank">
+                            View Amendment Need</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                           href="#" role="tab" aria-controls="pills-home"
+                           aria-selected="true">
+                            Download</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="tab-pane fade show active" id="pills-home" role="tabpanel" aria-labelledby="pills-home-tab">
+                <div class="card-body" id="div-{{ license.id }}" style="padding: 0px 0px 0px 0px">
+                </div>
+            </div>
+        </div>
+    </td>
+</tr>

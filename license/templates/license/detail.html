@@ -1,4 +1,3 @@
-{% extends 'base.html' %}
 {% load formset_tags %}
 {% load static %}
 {% block content %}
@@ -6,68 +5,10 @@
         <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
             <div class="card">
                 <div class="card-header">
-                    <div class="row">
-                        <div class="col-xs-12 col-lg-9">
-                            License Details
-                        </div>
-                        <div class="col-xs-12 col-lg-3">
-                            {% if not object.is_audit %}
-                            <a class="deleteButton" href="{% url 'license-verify' object.id %}">Verify</a>
-                            <a class="successButton" href="{% url 'license-update' object.id %}">Edit</a>
-                            {% endif %}
-                            <a class="deleteButton" href="{% url 'license-pdf' object.license_number %}">Download PDF</a>
-                            <a class="addButton" href="{% url 'license-excel' object.license_number %}">Excel PDF</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="row grid">
-                        <div class="col-lg-3 col-xs-6">
-                            <h3>License Number</h3>
-                            <p>{{ object.license_number }}</p>
-                        </div>
-                        <div class="col-lg-3 col-xs-6">
-                            <h3>License Date</h3>
-                            <p>{{ object.license_date }}</p>
-                        </div>
-                        <div class="col-lg-3 col-xs-6">
-                            <h3>License Expiry</h3>
-                            <p>{{ object.license_expiry_date }}</p>
-                        </div>
-                        <div class="col-lg-3 col-xs-6">
-                            <h3>File Number</h3>
-                            <p>{{ object.file_number }}</p>
-                        </div>
-                        <div class="col-lg-3 col-xs-6">
-                            <h3>Exporter</h3>
-                            <p>{{ object.exporter }}</p>
-                        </div>
-                        <div class="col-lg-3 col-xs-6">
-                            <h3>Notification Number</h3>
-                            <p>{{ object.get_notification_number_display }}</p>
-                        </div>
-                        <div class="col-lg-3 col-xs-6">
-                            <h3>Scheme Code</h3>
-                            <p>{{ object.get_scheme_code_display }}</p>
-                        </div>
-                        <div class="col-lg-3 col-xs-6">
-                            <h3>Port Of Registration</h3>
-                            <p>{{ object.port }}</p>
-                        </div>
-
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
-            <div class="card">
-                <div class="card-header">
                     Export Items
                 </div>
-                <div class="card-body">
-                    <table class="table table-bordered table-striped tbordered">
+                <div class="card-body table-responsive">
+                    <table class="table dataTable no-footer table-striped">
                         <thead>
                         <th>Item</th>
                         <th>Total CIF</th>
@@ -92,16 +33,18 @@
     <div class="row">
         <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header ">
                     Import Items
                 </div>
-                <div class="card-body">
-                    <table class="table table-bordered table-striped tbordered">
+                <div class="card-body table-responsive">
+                    <table class="table dataTable no-footer table-striped">
                         <thead>
                         <th>Sr No</th>
                         <th>HS Code</th>
                         <th>Item</th>
-                        <th>Quantity</th>
+                        <th>Total Quantity</th>
+                        <th>Old Quantity</th>
+                        <th>New Quantity</th>
                         <th>Balance Quantity</th>
                         <th>CIF FC</th>
                         <th>Balance CIF FC</th>
@@ -113,6 +56,8 @@
                                 <td>{{ import_item.hs_code }}</td>
                                 <td>{{ import_item.item|title }}</td>
                                 <td>{{ import_item.quantity }}</td>
+                                <td>{{ import_item.old_quantity }}
+                                <td>{{ import_item.new_quantity }}
                                 <td>{{ import_item.balance_quantity }}
                                 <td>
                                     {% if import_item.cif_fc and not import_item.cif_fc == 0 %}
@@ -121,7 +66,12 @@
 
                                     {% endif %}
                                 </td>
-                                <td>{{ import_item.balance_cif_fc }}</td>
+                                <td>
+                                    {% if import_item.cif_fc and not import_item.cif_fc == 0 %}
+                                        {{ import_item.balance_cif_fc }}
+                                    {% else %}
+                                    {% endif %}
+                                </td>
                             </tr>
                         {% endfor %}
 

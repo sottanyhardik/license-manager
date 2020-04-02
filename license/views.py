@@ -59,11 +59,11 @@ class LicenseDetailCreateView(CreateWithInlinesView):
         return super(LicenseDetailCreateView, self).form_valid(form)
 
 
-class LicenseDetailUpdateView(UpdateWithInlinesView):
-    template_name = 'license/add.html'
+class LicenseItemListUpdateView(UpdateWithInlinesView):
+    template_name = 'license/item_list_edit.html'
     model = license.LicenseDetailsModel
-    form_class = forms.LicenseDetailsForm
-    inlines = [LicenseExportItemInline, LicenseDocumentInline]
+    inlines = [LicenseImportItemInline, ]
+    fields = ()
 
     def dispatch(self, request, *args, **kwargs):
         # check if there is some video onsite
@@ -71,10 +71,10 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
         if self.get_object().is_audit:
             return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license.license_number}))
         else:
-            return super(LicenseDetailUpdateView, self).dispatch(request, *args, **kwargs)
+            return super(LicenseItemListUpdateView, self).dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
-        object = self.model.objects.get(id=self.kwargs.get('pk'))
+        object = self.model.objects.get(license_number=self.kwargs.get('license'))
         return object
 
     def form_valid(self, form):
@@ -83,7 +83,7 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
             form.instance.created_on = datetime.datetime.now()
         form.instance.modified_by = self.request.user
         form.instance.modified_on = datetime.datetime.now()
-        return super(LicenseDetailUpdateView, self).form_valid(form)
+        return super(LicenseItemListUpdateView, self).form_valid(form)
 
     def get_inlines(self):
         if not self.object.is_audit:
@@ -122,22 +122,61 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
                         if self.object.import_license.all().first():
                             value = round(
                                 self.object.import_license.all().first().quantity / export_item.net_quantity * 100)
-            self.inlines = [LicenseExportItemInline, LicenseImportItemInline, LicenseDocumentInline]
-        return super(LicenseDetailUpdateView, self).get_inlines()
+            self.inlines = [LicenseImportItemInline]
+        return super(LicenseItemListUpdateView, self).get_inlines()
+
+
+class LicenseDetailUpdateView(UpdateWithInlinesView):
+    template_name = 'license/add.html'
+    model = license.LicenseDetailsModel
+    form_class = forms.LicenseDetailsForm
+    inlines = [LicenseExportItemInline, LicenseDocumentInline]
+
+    def dispatch(self, request, *args, **kwargs):
+        # check if there is some video onsite
+        license = self.get_object()
+        if self.get_object().is_audit:
+            return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license.license_number}))
+        else:
+            return super(LicenseDetailUpdateView, self).dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        object = self.model.objects.get(license_number=self.kwargs.get('license'))
+        return object
+
+    def form_valid(self, form):
+        if not form.instance.created_by:
+            form.instance.created_by = self.request.user
+            form.instance.created_on = datetime.datetime.now()
+        form.instance.modified_by = self.request.user
+        form.instance.modified_on = datetime.datetime.now()
+        return super(LicenseDetailUpdateView, self).form_valid(form)
 
 
 class LicenseListView(FilterView):
     template_name = 'license/list.html'
     model = license.LicenseDetailsModel
-    filter_class = filters.LicenseDetailFilter
-    page_head = 'License List'
+    filterset_class = filters.LicenseDetailFilter
     paginate_by = 50
-    context_object_name = 'object_list'
+    queryset = license.LicenseDetailsModel.objects.filter(is_active=True)
+    ordering = "license_expiry_date"
 
-    def get_queryset(self):
-        qs = self.model.objects.filter(is_active=True)
-        filtered_list = self.filter_class(self.request.GET, queryset=qs)
-        return filtered_list.qs
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data()
+        context['is_active'] = True
+        filterset_class = self.get_filterset_class()
+        self.filterset = self.get_filterset(filterset_class)
+        context['filter'] = self.filterset
+        return context
+
+
+class LicenseAjaxListView(FilterView):
+    template_name = 'license/ajax-list.html'
+    model = license.LicenseDetailsModel
+    filterset_class = filters.LicenseDetailFilter
+    paginate_by = 50
+    queryset = license.LicenseDetailsModel.objects.filter()
+    ordering = "license_expiry_date"
 
 
 class LicenseDetailView(DetailView):
@@ -218,11 +257,6 @@ class LicenseVerifyView(View):
         license_obj.save()
         return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license_obj.license_number}))
 
-
-class LicenseDetailLedgerView(DetailView):
-    template_name = 'license/license_details.html'
-    model = license.LicenseDetailsModel
-    context_object_name = 'license'
 
 
 class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):
@@ -586,7 +620,6 @@ class BiscuitsAmendmentView(PDFTemplateResponseMixin, PagedFilteredTableView):
                                                                            license_expiry_date__gt=expiry_limit,
                                                                            is_self=True, is_au=False).order_by(
                 'license_expiry_date')
-
             table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2009).distinct())
             tables.append({'label': 'Biscuits 098/2019 Notification', 'table': table})
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
@@ -595,7 +628,6 @@ class BiscuitsAmendmentView(PDFTemplateResponseMixin, PagedFilteredTableView):
                 is_self=True, is_au=False).order_by('license_expiry_date')
             table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2009).distinct())
             tables.append({'label': 'Confectinery 098/2019 Notification', 'table': table})
-
             context['tables'] = tables
         except:
             pass

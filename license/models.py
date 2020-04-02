@@ -47,16 +47,12 @@ class LicenseDetailsModel(models.Model):
     is_au = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     balance_cif = models.FloatField(default=0.0)
+    is_incomplete = models.BooleanField(default=False)
+    is_expired = models.BooleanField(default=False)
+    is_individual = models.BooleanField(default=False)
 
     def __str__(self):
         return self.license_number
-
-    @property
-    def is_expired(self):
-        if self.license_expiry_date:
-            from datetime import timedelta
-            return self.license_expiry_date < (timezone.now() - timedelta(days=90)).date()
-        return False
 
     @property
     def get_norm_class(self):

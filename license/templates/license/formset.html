@@ -1,0 +1,129 @@
+{% load formset_tags %}
+{% load static %}
+{% if inlines %}
+    {% for formset in inlines %}
+        <div class="row">
+            <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+                <div class="card" id="{{ formset.prefix }}-id" data-formset-prefix="{{ formset.prefix }}">
+                    <div>
+                        <h3>
+                            {% if formset.prefix == 'license_documents' %}
+                                License Documents
+                            {% elif formset.prefix == 'export_license' %}
+                                Export Item List
+                            {% else %}
+                            {% endif %}
+                        </h3>
+                    </div>
+                    <div>
+                        {% for form in formset.forms %}
+                            {% if form.errors %}
+                                <div class="alert alert-danger">
+                                    <ul class="errorlist">
+                                        {% if form.non_field_errors %}
+                                            <li>{{ form.non_field_errors }}</li>
+                                        {% endif %}
+                                        {% for field in form %}
+                                            {% if field.errors %}
+                                                <li>
+                                                    {{ field.label|title }}
+                                                    <ul class="errorlist">
+                                                        {% for error in field.errors %}
+                                                            <li>{{ error }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </li>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                        <div>
+                            {{ formset.management_form }}
+
+                            <div data-formset-body>
+                                <!-- New forms will be inserted in here -->
+                                <table>
+                                    <tr>
+                                        {% for field in formset.form %}
+                                            {% if not field.name == 'license' or not field.name == 'DELETE' or not field.name == 'id' %}
+
+                                                <td><b>{{ field.label }}</b></td>
+                                            {% endif %}
+                                        {% endfor %}
+                                        <td><b> </b></td>
+                                    </tr>
+                                    {% for form in formset %}
+                                        <tr data-formset-form>
+                                            {% for fld in form.hidden_fields %}{{ fld }}{% endfor %}
+                                            {% for field in form %}
+                                                {% if field.name == 'license' or field.name == 'DELETE' or field.name == 'id' %}
+                                                    <td class="hidden" style="display: none">
+                                                        {{ field }}
+                                                    </td>
+                                                {% else %}
+                                                    <td style="{% if field.name == 'hs_code' %}min-width:150px;
+                                                    {% elif field.name == 'item' %}min-width:250px; max-width:250px;
+                                                    {% else %}min-width:150px;{% endif %} padding: 3px;">
+                                                        <div>
+                                                            <p>{{ field }}</p>
+                                                        </div>
+                                                    </td>
+                                                {% endif %}
+                                            {% endfor %}
+                                            <td>
+                                                <button type="button" class="btn btn-danger"
+                                                        data-formset-delete-button>Delete
+                                                </button>
+
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </table>
+                            </div>
+                            <!-- The empty form template. By wrapping this in a <script> tag, the
+                            __prefix__ placeholder can easily be replaced in both attributes and
+                            any scripts -->
+                            <script type="form-template" data-formset-empty-form>
+                                {% escapescript %}
+                                    <tr data-formset-form>
+                                        {% for fld in form.hidden_fields %}{{ fld }}{% endfor %}
+                                        {% for field in formset.empty_form %}
+                                            {% if field.name == 'license' or field.name == 'DELETE' or field.name == 'id' %}
+                                                <td class="hidden" style="display: none">
+                                                    {{ field }}
+                                                </td>
+                                            {% else %}
+                                                <td {% if field.name == 'hs_code' %}style="min-width:150px"
+                                                    {% elif field.name == 'item' %}style="min-width:250px; max-width:250px"
+                                                    {% else %}style="min-width:150px"{% endif %}>
+                                                    <div>
+                                                        <p>{{ field }}</p>
+                                                    </div>
+                                                </td>
+                                            {% endif %}
+                                        {% endfor %}
+                                        <td>
+                                            <button type="button" class="btn btn-danger"
+                                                    data-formset-delete-button>Delete form
+                                            </button>
+
+                                        </td>
+                                    </tr>
+                                {% endescapescript %}
+                            </script>
+
+                        </div>
+                    </div>
+                    <br>
+                    <div class="card-footer">
+                        <!-- This button will add a new form when clicked -->
+                        <input type="button" class="btn btn-info full-width" value="Add another" data-formset-add>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+
+{% endif %}

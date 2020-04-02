@@ -23738,12 +23738,6 @@ dl li {
 }
 
 
-.pagination li {
-    margin-right: 5px;
-    padding: 5px;
-    border: solid 2px #f1f6f8;
-}
-
 .grid div[class*='col-'] {
     border-bottom: solid 1px #0ddbb9;
     margin-bottom: 10px;
@@ -23778,61 +23772,15 @@ dl li {
     min-width: 100% !important;
 }
 
-.nav-tabs li{
-    margin-right: 5px!important;
-}
-
-.card.with-nav-tabs .card-heading{
-    padding: 5px 5px 0 5px!important;
-}
-.card.with-nav-tabs .nav-tabs{
-	border-bottom: none!important;
-}
-.card.with-nav-tabs .nav-justified{
-	margin-bottom: -1px!important;
-}
-/********************************************************************/
-/*** card DEFAULT ***/
-.with-nav-tabs.card-default .nav-tabs > li > a,
-.with-nav-tabs.card-default .nav-tabs > li > a:hover,
-.with-nav-tabs.card-default .nav-tabs > li > a:focus {
-    color: #777!important;
-}
-.with-nav-tabs.card-default .nav-tabs > .open > a,
-.with-nav-tabs.card-default .nav-tabs > .open > a:hover,
-.with-nav-tabs.card-default .nav-tabs > .open > a:focus,
-.with-nav-tabs.card-default .nav-tabs > li > a:hover,
-.with-nav-tabs.card-default .nav-tabs > li > a:focus {
-    color: #777!important;
-	background-color: #ddd!important;
-	border-color: transparent!important;
-}
-.with-nav-tabs.card-default .nav-tabs > li.active > a,
-.with-nav-tabs.card-default .nav-tabs > li.active > a:hover,
-.with-nav-tabs.card-default .nav-tabs > li.active > a:focus {
-	color: #555!important;
-	background-color: #fff!important;
-	border-color: #ddd!important;
-	border-bottom-color: transparent!important;
-}
-.with-nav-tabs.card-default .nav-tabs > li.dropdown .dropdown-menu {
-    background-color: #f5f5f5!important;
-    border-color: #ddd!important;
-}
-.with-nav-tabs.card-default .nav-tabs > li.dropdown .dropdown-menu > li > a {
-    color: #777!important;
-}
-.with-nav-tabs.card-default .nav-tabs > li.dropdown .dropdown-menu > li > a:hover,
-.with-nav-tabs.card-default .nav-tabs > li.dropdown .dropdown-menu > li > a:focus {
-    background-color: #ddd!important;
-}
-.with-nav-tabs.card-default .nav-tabs > li.dropdown .dropdown-menu > .active > a,
-.with-nav-tabs.card-default .nav-tabs > li.dropdown .dropdown-menu > .active > a:hover,
-.with-nav-tabs.card-default .nav-tabs > li.dropdown .dropdown-menu > .active > a:focus {
-    color: #fff!important;
-    background-color: #555!important;
-}
-
 .no-padding-bottom{
     padding-bottom: 0px;
+}
+
+.page-item.active .page-link {
+    background-color: #0ddbb9;
+    border-color: #0ddbb9;
+}
+
+.page-link{
+    color: #0ddbb9;
 }

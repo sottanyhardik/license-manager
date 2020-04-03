@@ -38,6 +38,17 @@ class AllotmentWidget(ModelSelect2Widget):
     search_fields = ['item_name__icontains', 'company__name__icontains']
     model = AllotmentModel
 
+    def filter_queryset(self, request, term, queryset=None, **dependent_fields):
+        """
+        Limit results to Car's owned by the current user.
+
+        If the current user is not authenticated, return empty queryset.
+        """
+        if request.user.is_authenticated:
+            from django.db.models import Q
+            return queryset.filter(Q(item_name__icontains=term)|Q(company__name__icontains=term)).filter(allotment_details__is_boe=False)
+        return self.queryset.none()
+
 
 class PortWidget(ModelSelect2Widget):
     search_fields = ['code__icontains', 'name__icontains']

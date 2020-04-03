@@ -33,6 +33,7 @@ class BillOfEntryForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(BillOfEntryForm, self).__init__(*args, **kwargs)
+        instance = kwargs.get('instance', None)
         for field_name, field in self.fields.items():
             if 'date' in field_name:
                 field.widget.input_type = 'date'
@@ -76,6 +77,8 @@ class ImportItemsForm(forms.ModelForm):
                 field.widget.attrs['class'] += ' span2'
             if 'Textarea' in str(field.widget):
                 field.widget.attrs['rows'] = '2'
+            if 'cif_inr' in field_name:
+                field.widget.attrs['onchange'] = 'convert_currency(this)'
 
 
 class BillOfEntryCaptcha(forms.Form):

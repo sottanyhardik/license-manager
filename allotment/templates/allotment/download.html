@@ -1,4 +1,5 @@
 {% extends "pdf_base.html" %}
+{% load app_tags %}
 {% load humanize %}
 {% block extra_style %}
 
@@ -49,66 +50,77 @@
 {% endblock %}
 
 {% block content %}
-    <h3>Pending Allotment</h3>
-    <table class="table table-bordered">
-        <thead>
-        <th>Sr No</th>
-        <th>Allotment Date</th>
-        <th>Importer</th>
-        <th>Quantity (KGS)</th>
-        <th>Unit Price ($)</th>
-        <th>Value ($)</th>
-        <th>Item Name</th>
-        <th>Invoice</th>
-        <th>ETA</th>
-        <th>DFIA No.</th>
-        <th>DFIA Qty.</th>
-        <th>DFIA $.</th>
-        </thead>
-        <tbody>
-        {% for allotment in object_list %}
-            <tr>
-                <td>{{ forloop.counter }}</td>
-                <td>{{ allotment.modified_on }}</td>
-                <td>{{ allotment.company }}</td>
-                <td>{{ allotment.required_quantity }}</td>
-                <td>{{ allotment.unit_value_per_unit }}</td>
-                <td>{{ allotment.required_value }}</td>
-                <td>{{ allotment.item_name }}</td>
-                <td>{% if allotment.invoice %}{{ allotment.invoice }}{% else %}-{% endif %}</td>
-                <td>{% if allotment.eta %}{{ allotment.eta }}{% else %}-{% endif %}</td>
-                <td colspan="3">
-                    <table>
-                        {% for allotment_detail in allotment.allotment_details.all %}
-                            <tr>
-                                <td>{{ allotment_detail.item.license }}</td>
-                                <td>{{ allotment_detail.qty }}</td>
-                                <td>{{ allotment_detail.cif_fc }}</td>
-                            </tr>
-                        {% endfor %}
-                        <tr>
-                            <td><b>Total</b></td>
-                            <td>{{ allotment.alloted_quantity }}</td>
-                            <td>{{ allotment.alloted_value }}</td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        {% endfor %}
+    <table>
         <tr>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td><b>Total USD $</b></td>
-            <td><b>{{ total_cif }}</b></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
+            <td colspan="4"><h3>Pending Allotment</h3></td>
+            <td><b>{{ today }}</b></td>
         </tr>
-        </tbody>
     </table>
+    {% regroup object_list by company as company %}
+    {% for data in company %}
+        <h4>{{ data.grouper }}</h4>
+        <table class="table table-bordered">
+            <tr>
+                <th>Sr No</th>
+                <th>Allotment Date</th>
+                <th>Port</th>
+                <th>Quantity (KGS)</th>
+                <th>Unit Price ($)</th>
+                <th>Value ($)</th>
+                <th>Item Name</th>
+                <th>Invoice</th>
+                <th>ETA</th>
+                <th>DFIA No.</th>
+                <th>DFIA Qty.</th>
+                <th>DFIA $.</th>
+            </tr>
+            <tbody>
+            {% for allotment in data.list %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ allotment.modified_on }}</td>
+                    <td>{{ allotment.port }}</td>
+                    <td>{{ allotment.required_quantity }}</td>
+                    <td>{{ allotment.unit_value_per_unit }}</td>
+                    <td>{{ allotment.required_value }}</td>
+                    <td>{{ allotment.item_name }}</td>
+                    <td>{% if allotment.invoice %}{{ allotment.invoice }}{% else %}-{% endif %}</td>
+                    <td>{% if allotment.eta %}{{ allotment.eta }}{% else %}-{% endif %}</td>
+                    <td colspan="3">
+                        <table>
+                            {% for allotment_detail in allotment.allotment_details.all %}
+                                <tr>
+                                    <td>{{ allotment_detail.item.license }}</td>
+                                    <td>{{ allotment_detail.qty }}</td>
+                                    <td>{{ allotment_detail.cif_fc }}</td>
+                                </tr>
+                            {% endfor %}
+                            <tr>
+                                <td><b>Total</b></td>
+                                <td>{{ allotment.alloted_quantity }}</td>
+                                <td>{{ allotment.alloted_value }}</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            {% endfor %}
+            <tr>
+                <td>-</td>
+                <td>-</td>
+                <td><b>Total Quantity</b></td>
+                <td><b>{% get_total_quantity data.list %}</b></td>
+                <td><b>Total USD $</b></td>
+                <td><b>{% get_total data.list %}</b></td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+            </tbody>
+        </table>
+    {% endfor %}
+
+
 {% endblock %}

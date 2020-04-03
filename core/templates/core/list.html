@@ -160,6 +160,7 @@
     <script src="{% static 'js/django_select2.js' %}"></script>
     <script src="{% static 'js/django_select2.js' %}"></script>
     <script type="text/javascript">
+        $('select').select2();
         $(document).on('focus', '.select2', function (e) {
             if (e.originalEvent) {
                 $(this).siblings('select').select2('open');

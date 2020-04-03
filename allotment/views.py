@@ -19,6 +19,7 @@ class AllotmentView(FilterView):
     model = allotments.AllotmentModel
     filter_class = filters.AllotmentFilter
     page_head = 'Item List'
+    ordering = ['modified_on']
 
     def get_queryset(self):
         qs = self.model.objects.all()
@@ -226,11 +227,13 @@ class DownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
     def get_queryset(self):
         qs = self.model.objects.all()
         product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
-        return product_filtered_list.qs
+        return product_filtered_list.qs.order_by('company','modified_on')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         total = 0
         total_list = [total + int(data.required_value) for data in self.get_queryset()]
         context['total_cif'] = sum(total_list)
+        import datetime
+        context['today'] = datetime.datetime.now().date
         return context

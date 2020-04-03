@@ -29,3 +29,19 @@ def get_table_html(table):
     table = AllottedItemsTable(table)
     table.paginate(page=1, per_page=50)
     return table
+
+
+@register.simple_tag
+def get_total(queryset):
+    total = 0
+    for query in queryset:
+        total = total + query.required_value
+    return total
+
+
+@register.simple_tag
+def get_total_quantity(queryset):
+    total = 0
+    for query in queryset:
+        total = total + query.required_quantity
+    return total

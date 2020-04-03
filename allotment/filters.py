@@ -67,7 +67,7 @@ class AllotmentFilter(django_filters.FilterSet):
 
     class Meta:
         model = allotment_model.AllotmentModel
-        fields = ['type', 'company', 'item_name', 'allotment_details__item__license__license_number']
+        fields = ['type', 'company', 'item_name', 'allotment_details__item__license__license_number','port']
         widgets = {
             'company': Select(attrs={'class': 'form-control'}),
             'type': Select(attrs={'class': 'form-control'}),

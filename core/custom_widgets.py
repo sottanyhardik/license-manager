@@ -46,7 +46,7 @@ class AllotmentWidget(ModelSelect2Widget):
         """
         if request.user.is_authenticated:
             from django.db.models import Q
-            return queryset.filter(Q(item_name__icontains=term)|Q(company__name__icontains=term)).filter(allotment_details__is_boe=False)
+            return queryset.filter(Q(item_name__icontains=term)|Q(company__name__icontains=term)).filter(allotment_details__is_boe=False).distinct()
         return self.queryset.none()
 
 

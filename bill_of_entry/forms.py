@@ -26,6 +26,12 @@ class BillOfEntryForm(forms.ModelForm):
         required=False
     )
 
+    port = forms.ModelChoiceField(
+        queryset=core_models.PortModel.objects.all(),
+        widget=custom_widgets.PortWidget,
+        required=False
+    )
+
     class Meta:
         model = models.BillOfEntryModel
         fields = ['company', 'bill_of_entry_number', 'bill_of_entry_date', 'port', 'exchange_rate', 'allotment',

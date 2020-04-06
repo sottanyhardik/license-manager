@@ -1,6 +1,6 @@
 {% load formset_tags %}
 {% load static %}
-<form action="{% url 'license-update' license %}" method="post" novalidate enctype="multipart/form-data">
+<form action="{% if license %}{% url 'license-update' license %}{% else %}{% url 'license-add' %}{% endif %}" method="post" novalidate enctype="multipart/form-data">
     <div class="row">
         <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
             <div class="card">
@@ -173,7 +173,7 @@
     <div class="row">
         <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
             <input type="submit" class="btn btn-success full-width  ajax-post" onclick="ajax_post(this)"
-                   data-target="div-{% if object %}{{ object.id }}{% else %}add{% endif %}" value="Submit">
+                   data-target="{% if license %}div-{{ license.id }}{% else %}license-list{% endif %}" value="Submit">
         </div>
     </div>
 </form>

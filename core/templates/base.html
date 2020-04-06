@@ -390,7 +390,12 @@
                 if (target_div.indexOf("card") >= 0) {
                     target = '.' + target_div;
                     $(target).remove();
-                } else {
+                }
+                else if (target_div.indexOf("license-list") >= 0){
+                    target = '#' + target_div;
+                    $(target).html(data);
+                }
+                else {
                     target = '#' + target_div;
                     $(target).html(data);
                     $(target).show();

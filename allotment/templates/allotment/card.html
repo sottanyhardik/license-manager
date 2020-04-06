@@ -71,11 +71,7 @@
                    aria-controls="pills-home" aria-selected="true" href="{% url 'allotment-download' object.id %}"
                    target="_blank">Download</a>
             </li>
-{#            <li class="nav-item">#}
-{#                <a class="nav-link" role="tab"#}
-{#                   aria-controls="pills-home" aria-selected="true"#}
-{#                   target="_blank">Send</a>#}
-{#            </li>#}
+
             <li class="nav-item">
                 <a class="nav-link" onclick="fetch_page(this)" data-toggle="pill" role="tab"
                    aria-controls="pills-home" aria-selected="true" href="#div-{{ object.id }}"

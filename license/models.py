@@ -45,7 +45,7 @@ class LicenseDetailsModel(models.Model):
     is_null = models.BooleanField(default=False)
     is_self = models.BooleanField(default=True)
     is_au = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
     balance_cif = models.FloatField(default=0.0)
     is_incomplete = models.BooleanField(default=False)
     is_expired = models.BooleanField(default=False)

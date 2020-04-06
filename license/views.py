@@ -48,7 +48,7 @@ class LicenseDetailCreateView(CreateWithInlinesView):
     template_name = 'license/add.html'
     model = license.LicenseDetailsModel
     form_class = forms.LicenseDetailsForm
-    inlines = [LicenseExportItemInline, LicenseDocumentInline]
+    inlines = [LicenseExportItemInline, ]
 
     def form_valid(self, form):
         if not form.instance.created_by:
@@ -57,6 +57,9 @@ class LicenseDetailCreateView(CreateWithInlinesView):
         form.instance.modified_by = self.request.user
         form.instance.modified_on = datetime.datetime.now()
         return super(LicenseDetailCreateView, self).form_valid(form)
+
+    def get_success_url(self):
+        return reverse('license-ajax-list') + '?license_number=' + self.object.license_number
 
 
 class LicenseItemListUpdateView(UpdateWithInlinesView):
@@ -179,6 +182,15 @@ class LicenseAjaxListView(FilterView):
     ordering = "license_expiry_date"
 
 
+class LicenseCardView(DetailView):
+    template_name = 'license/card.html'
+    model = license.LicenseDetailsModel
+    context_object_name = 'license'
+
+    def get_object(self, queryset=None):
+        return self.model.objects.get(license_number=self.kwargs.get('license'))
+
+
 class LicenseDetailView(DetailView):
     template_name = 'license/detail.html'
     model = license.LicenseDetailsModel
@@ -256,7 +268,6 @@ class LicenseVerifyView(View):
         license_obj.is_audit = True
         license_obj.save()
         return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license_obj.license_number}))
-
 
 
 class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):

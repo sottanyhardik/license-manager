@@ -55,6 +55,12 @@
             <td colspan="4"><h3>Pending Allotment</h3></td>
             <td><b>{{ today }}</b></td>
         </tr>
+            <tr>
+                <td><b>Total USD $</b></td>
+                <td><b>{% get_total object_list %}</b></td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
     </table>
     {% regroup object_list by company as company %}
     {% for data in company %}

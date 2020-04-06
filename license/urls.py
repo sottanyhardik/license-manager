@@ -5,7 +5,8 @@ from . import views
 
 urlpatterns = [
     path('analysis/', login_required(views.analysis), name='analysis'),
-    path('add/', login_required(views.LicenseDetailCreateView.as_view()), name='add-license'),
+    path('add/', login_required(views.LicenseDetailCreateView.as_view()), name='license-add'),
+    path('<slug:license>/card/', login_required(views.LicenseCardView.as_view()), name='license-card'),
     path('', login_required(views.LicenseListView.as_view()), name='license-list'),
     path('ajax/', login_required(views.LicenseAjaxListView.as_view()), name='license-ajax-list'),
     path('<slug:license>/', login_required(views.LicenseDetailView.as_view()), name='license-detail'),

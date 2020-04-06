@@ -1,11 +1,7 @@
-import datetime
-
 import django_filters
 from django.db import models
 from django.forms import Select
 
-from license import models as license_model
-from allotment import models as allotment_model
 from . import models as bill_of_entry
 
 BOOLEAN_CHOICES = (

@@ -56,16 +56,16 @@
                     <h3>View Allotment</h3>
                     <table class="table table-bordered" style="border: grey 2px solid">
                         <thead>
-                        <th>Counter</th>
-                        <th>Serial number</th>
-                        <th>License number</th>
-                        <th>License date</th>
-                        <th>File number</th>
-                        <th>License expiry</th>
+                        <th>Sr No.</th>
+                        <th>Item No.</th>
+                        <th>DFIA No.</th>
+                        <th>DFIA Dt.</th>
+                        <th>File No.</th>
+                        <th>DFIA Expiry</th>
                         <th>Exporter</th>
-                        <th>Qty</th>
-                        <th>Cif fc</th>
-                        <th>Notification number</th>
+                        <th>Alloted Qty</th>
+                        <th>Alloted Cif FC</th>
+                        <th>Notf No.</th>
                         <th></th>
                         </thead>
                         <tbody>
@@ -88,6 +88,20 @@
                                 </td>
                             </tr>
                         {% endfor %}
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td>Total</td>
+                            <td>{{ object.alloted_quantity }}</td>
+                            <td>{{ objectpytho.alloted_value }}</td>
+                            <td></td>
+                            <td>
+                            </td>
+                        </tr>
                         </tbody>
                     </table>
                 </div>

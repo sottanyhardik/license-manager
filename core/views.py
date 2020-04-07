@@ -142,6 +142,7 @@ class UploadLedger(TemplateView):
         for raw_file in files:
             file = raw_file.read()
             full = file.decode('utf-8')
+            full = full.replace(',','\t')
             for data in full.split('Page No:-1\t'):
                 try:
                     from bill_of_entry.scripts.ledger import parse_file

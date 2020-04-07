@@ -7,12 +7,20 @@ from license.models import LicenseDetailsModel, LicenseImportItemsModel, License
 
 
 def extract_data(line, text):
-    split_text = text + ' \t:'
-    try:
-        return line.split(split_text)[1].split('\t')[0].strip()
-    except:
-        print(text)
-        return None
+    if '\t' in line:
+        split_text = text + ' \t:'
+        try:
+            return line.split(split_text)[1].split('\t')[0].strip()
+        except:
+            print(text)
+            return None
+    else:
+        split_text = text + ' ,:'
+        try:
+            return line.split(split_text)[1].split(',')[0].strip()
+        except:
+            print(text)
+            return None
 
 
 def parse_file(data):

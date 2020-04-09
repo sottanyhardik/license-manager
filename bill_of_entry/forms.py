@@ -20,7 +20,7 @@ class BillOfEntryForm(forms.ModelForm):
         required=False
     )
 
-    allotment = forms.ModelChoiceField(
+    allotment = forms.ModelMultipleChoiceField(
         queryset=AllotmentModel.objects.filter(type=ALLOTMENT),
         widget=custom_widgets.AllotmentWidget,
         required=False

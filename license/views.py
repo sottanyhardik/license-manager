@@ -6,7 +6,7 @@ from django.http import HttpResponseRedirect
 # Create your views here.
 from django.urls import reverse
 from django.views import View
-from django.views.generic import DetailView, ListView, TemplateView
+from django.views.generic import DetailView, TemplateView
 from django_filters.views import FilterView
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
@@ -290,7 +290,6 @@ class PDFCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
         tables = []
         from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
         from license.models import N2015
-        from django.db.models import Q
         try:
             query_dict = {
                 'export_license__norm_class__norm_class': 'E5',
@@ -483,7 +482,7 @@ class PDFOldBisReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
     def get_context_data(self, **kwargs):
         context = super(PDFOldBisReportView, self).get_context_data()
         tables = []
-        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
+        from license.tables import LicenseBiscuitReportTable
         from license.models import N2009
         try:
             expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
@@ -516,7 +515,7 @@ class PDFOldConReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
     def get_context_data(self, **kwargs):
         context = super(PDFOldConReportView, self).get_context_data()
         tables = []
-        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
+        from license.tables import LicenseConfectineryReportTable
         from license.models import N2009
         try:
             expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
@@ -955,7 +954,6 @@ class PDFParleConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedF
         context = super(PDFParleConfectioneryOldExpiredReportView, self).get_context_data()
         tables = []
         from license.tables import LicenseConfectineryReportTable
-        from license.models import N2009
         try:
             expiry_limit = datetime.datetime.today()
             queryset = license.LicenseDetailsModel.objects.filter(

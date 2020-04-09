@@ -1,4 +1,5 @@
-from django_select2.forms import ModelSelect2MultipleWidget, ModelSelect2Widget
+from django_select2.forms import ModelSelect2MultipleWidget, ModelSelect2Widget, Select2MultipleWidget, \
+    HeavySelect2MultipleWidget
 
 from allotment.models import AllotmentModel
 from core import models
@@ -34,7 +35,7 @@ class CompanyWidget(ModelSelect2Widget):
     model = models.CompanyModel
 
 
-class AllotmentWidget(ModelSelect2Widget):
+class AllotmentWidget(ModelSelect2MultipleWidget):
     search_fields = ['item_name__icontains', 'company__name__icontains']
     model = AllotmentModel
 

@@ -63,8 +63,8 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
         return object
 
     def get_inlines(self):
-        allotment = self.object.allotment
-        if allotment:
+        allotments = self.object.allotment.all()
+        for allotment in allotments:
             if allotment.allotment_details.all().exists():
                 for allotment_item in allotment.allotment_details.all():
                     row, bool = RowDetails.objects.get_or_create(bill_of_entry=self.object,

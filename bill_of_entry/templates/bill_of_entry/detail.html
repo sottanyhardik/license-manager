@@ -44,7 +44,11 @@
                         </div>
                         <div class="col-lg-3 col-xs-6">
                             <h3>Allotment</h3>
-                            <p>{{ object.allotment }}</p>
+                            <p>
+                                {% for allotment in object.allotment.all %}
+                                    {{ allotment }}<br>
+                                {% endfor %}
+                            </p>
                         </div>
                         <div class="col-lg-3 col-xs-6">
                             <h3>Invoice No & Date</h3>

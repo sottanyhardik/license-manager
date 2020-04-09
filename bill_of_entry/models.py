@@ -11,8 +11,7 @@ class BillOfEntryModel(models.Model):
     port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, related_name='boe_port', null=True, blank=True)
     exchange_rate = models.FloatField(default=0)
     product_name = models.CharField(max_length=255, default='')
-    allotment = models.ForeignKey('allotment.AllotmentModel', related_name="bill_of_entry", on_delete=models.CASCADE,
-                                  null=True, blank=True)
+    allotment = models.ManyToManyField('allotment.AllotmentModel', related_name="bill_of_entry", blank=True)
     invoice_no = models.CharField(max_length=255, null=True, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
     is_fetch = models.BooleanField(default=False)
@@ -72,4 +71,4 @@ class RowDetails(models.Model):
     admin_search_fields = ('sr_number__license__license_number', 'bill_of_entry__bill_of_entry_number')
 
     class Meta:
-        ordering = ['transaction_type','bill_of_entry__bill_of_entry_date']
+        ordering = ['transaction_type', 'bill_of_entry__bill_of_entry_date']

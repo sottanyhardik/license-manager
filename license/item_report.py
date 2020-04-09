@@ -3,292 +3,304 @@ import datetime
 from django.db.models import Q, Sum
 
 from . import models as license
-from .models import N2009, N2015
+from .models import N2009, N2015, LicenseDetailsModel
 from .tables import LicenseItemReportTable
 
 
+def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
+                 minimun_qty=500, minimun_value=500):
+    expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
+    query_dict['license__license_expiry_date__gte'] = expiry_limit
+    query_dict['license__is_self'] = True
+    query_dict['license__is_au'] = False
+    query_dict['available_quantity__gte'] = minimun_qty
+    query_dict['available_value__gte'] = minimun_value
+    my_filter = Q()
+    for item in query_dict:
+        my_filter &= Q(**{item: query_dict[item]})
+    if and_filter:
+        for item in and_filter:
+            my_filter &= Q(**{item: and_filter[item]})
+    if or_filters:
+        for item in or_filters:
+            if 'list' in str(type(or_filters[item])) and '__icontains' in item:
+                or_filter_text = Q()
+                for value in or_filters[item]:
+                    or_filter_text |= Q(**{item: value})
+                my_filter &= or_filter_text
+            else:
+                my_filter = Q(**{item: or_filters[item]})
+    if and_or_filter:
+        and_filter = Q()
+        for data in and_or_filter:
+            or_filter_text = Q()
+            for item in data:
+                or_filter_text &= Q(**{item: data[item]})
+            and_filter |= or_filter_text
+        my_filter &= and_filter
+    if exclude_or_filters:
+        for item in exclude_or_filters:
+            my_filter &= ~Q(**{item: exclude_or_filters[item]})
+    query_set = license.LicenseImportItemsModel.objects.filter(my_filter).order_by(
+        'license__license_expiry_date')
+    for object in query_set:
+        object.available_quantity = object.balance_quantity
+        object.available_value = object.balance_cif_fc
+        object.save()
+    query_set = query_set.filter(Q(available_quantity__gte=minimun_qty) & Q(available_value__gte=minimun_value))
+    return query_set.distinct()
+
+
+def query_set_table(tables, query_set, label='License List'):
+    table = LicenseItemReportTable(query_set)
+    tables.append({'label': label, 'table': table,
+                   'total': query_set.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
+    return tables
+
+
 def sugar_query():
-    total_quantity = 0
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False, item__head__name__icontains='sugar').order_by(
-            'license__license_expiry_date')
-        for object in biscuits_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = biscuits_queryset.distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License List', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'item__head__name__icontains': 'sugar'
+    }
+    queryset = all_queryset(query_dict, minimun_qty=1000)
+    tables = query_set_table(tables, queryset)
+    return tables
 
 
 def rbd_query():
-    total_quantity = 0
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E5',
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False, item__head__name__icontains='RBD Palmolein Oil').order_by(
-            'license__license_expiry_date')
-        for object in biscuits_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = biscuits_queryset.filter(hs_code__hs_code__icontains='15119020').distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RBD Palmolein Oil', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(hs_code__hs_code__icontains='15119010').distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'RBD Palm Oil', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.exclude(
-            Q(hs_code__hs_code__icontains='15119010') | Q(hs_code__hs_code__icontains='15119020')).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Need Amendment', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'item__head__name__icontains': 'RBD Palmolein Oil',
+        'hs_code__hs_code__icontains': '15119020'
+    }
+    queryset = all_queryset(query_dict)
+    tables = query_set_table(tables, queryset, 'RBD Palmolein Oil')
+    query_dict = {
+        'item__head__name__icontains': 'RBD Palmolein Oil',
+        'hs_code__hs_code__icontains': '15119010'
+    }
+    queryset = all_queryset(query_dict)
+    tables = query_set_table(tables, queryset, 'RBD Palm Oil')
+    query_dict = {
+        'item__head__name__icontains': 'RBD Palmolein Oil',
+    }
+    exclude_or_filters = {
+        'hs_code__hs_code__in': ['15119010', '15119020']
+    }
+    queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters)
+    tables = query_set_table(tables, queryset, 'Need Amendment')
+    return tables
 
 
 def milk_query():
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E5',
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False, item__head__name__icontains='milk & milk products').filter(
-            hs_code__hs_code__icontains='04041020').exclude(hs_code__hs_code__startswith='35').order_by(
-            'license__license_expiry_date')
-        for object in biscuits_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = biscuits_queryset.distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License Lists', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__head__name__icontains': 'milk & milk products',
+        'hs_code__hs_code__icontains': '04041020'
+    }
+    queryset = all_queryset(query_dict)
+    tables = query_set_table(tables, queryset)
+    return tables
 
 
 def skimmed_milk_query():
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E5',
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False).filter(
-            Q(item__name__icontains='skim') | Q(item__name__icontains='skimmed')).exclude(hs_code__hs_code='04041020').order_by(
-            'license__license_expiry_date')
-        for object in biscuits_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = biscuits_queryset.distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License List', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__head__name__icontains': 'milk & milk products',
+    }
+    or_filters = {
+        'item__name__icontains': ['skim', 'skimmed'],
+
+    }
+    exclude_or_filters = {
+        'hs_code__hs_code__icontains': '04041020'
+    }
+    queryset = all_queryset(query_dict, or_filters=or_filters, exclude_or_filters=exclude_or_filters)
+    tables = query_set_table(tables, queryset)
+    return tables
 
 
 def wpc_query():
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E5',
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False, hs_code__hs_code__startswith='35',
-            item__head__name__icontains='milk').order_by('license__license_expiry_date')
-        for object in biscuits_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = biscuits_queryset.distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License Lists', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'hs_code__hs_code__startswith': '35',
+        'item__head__name__icontains': 'milk',
+    }
+    queryset = all_queryset(query_dict)
+    tables = query_set_table(tables, queryset)
+    return tables
 
 
 def dietary_query():
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E5',
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False, item__head__name__icontains='dietary fibre').order_by(
-            'license__license_expiry_date')
-        for object in biscuits_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = biscuits_queryset.filter(
-            (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
-                license__notification_number=N2009)).filter(hs_code__hs_code__startswith='08').distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License Lists', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = biscuits_queryset.filter(
-            (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
-                license__notification_number=N2009)).exclude(hs_code__hs_code__startswith='08').distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Need Amendment', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__head__name__icontains': 'dietary fibre',
+        'hs_code__hs_code__startswith': '08'
+    }
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }, {
+        'license__notification_number': N2009
+    }]
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset)
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__head__name__icontains': 'dietary fibre',
+    }
+    exclude_or_filters = {
+        'hs_code__hs_code__startswith': '08'
+    }
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, exclude_or_filters=exclude_or_filters)
+    tables = query_set_table(tables, queryset, 'Need Amendment')
+    return tables
 
 
 def food_query():
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E5',
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False, item__head__name__icontains='food flavour').order_by(
-            'license__license_expiry_date')
-        for object in biscuits_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = biscuits_queryset.filter(
-            (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
-                license__notification_number=N2009)).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License List', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__head__name__icontains': 'food flavour',
+    }
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }, {
+        'license__notification_number': N2009
+    }]
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset)
+    return tables
 
 
 def juice_query():
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        confectionery_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E1',
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False, item__head__name__icontains='juice').order_by(
-            'license__license_expiry_date')
-        for object in confectionery_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = confectionery_queryset.filter(
-            (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
-                license__notification_number=N2009)).filter(hs_code__hs_code__startswith='2009').distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License Lists', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        filter_query = confectionery_queryset.filter(
-            (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
-                license__notification_number=N2009)).exclude(hs_code__hs_code__startswith='2009').distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'Amendment Needed', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E1',
+        'item__head__name__icontains': 'juice',
+        'hs_code__hs_code__startswith': '2009',
+    }
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }, {
+        'license__notification_number': N2009
+    }]
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset)
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E1',
+        'item__head__name__icontains': 'juice',
+    }
+    exclude_or_filters = {
+        'hs_code__hs_code__startswith': '2009'
+    }
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter,exclude_or_filters=exclude_or_filters)
+    tables = query_set_table(tables, queryset, 'Need Amendment')
+    return tables
 
 
 def packing_query():
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        all = license.LicenseImportItemsModel.objects.filter(license__license_expiry_date__gte=expiry_limit,
-                                                             license__is_self=True, license__is_au=False,
-                                                             item__head__name__icontains='Packing Material')
-        confectionery_queryset = all.filter(Q(license__export_license__norm_class__norm_class='E5') | Q(
-            license__export_license__norm_class__norm_class='E5')).exclude(Q(license__export_license__norm_class__norm_class='E5',license__export_license__old_quantity__isnull=True)).order_by('license__license_expiry_date')
-        for object in confectionery_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=1000) & Q(available_value__gte=500))
-        filter_query = confectionery_queryset.distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License List', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'item__head__name__icontains': 'Packing Material',
+    }
+    and_or_filter = [{
+        'license__export_license__norm_class__norm_class': 'E1',
+    }, {
+        'license__export_license__old_quantity__lte': 1,
+        'license__export_license__norm_class__norm_class': 'E5',
+        'license__notification_number': N2015
+    }]
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset)
+    return tables
 
 
 def oci_query():
     tables = []
-    try:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        confectionery_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E1',
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False, item__head__name__icontains='other confectionery').order_by(
-            'license__license_expiry_date')
-        for object in confectionery_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        confectionery_queryset = confectionery_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = confectionery_queryset.filter(
-            (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
-                license__notification_number=N2009)).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License List', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E1',
+        'item__head__name__icontains': 'other confectionery',
+        'hs_code__hs_code__startswith': '08',
+    }
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }, {
+        'license__notification_number': N2009
+    }]
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset)
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E1',
+        'item__head__name__icontains': 'other confectionery',
+    }
+    exclude_or_filters = {
+        'hs_code__hs_code__startswith': '08'
+    }
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, exclude_or_filters=exclude_or_filters)
+    tables = query_set_table(tables, queryset, 'Need Amendment')
+    return tables
 
 
 def fruit_query():
     tables = []
-    try:
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__head__name__icontains': 'fruit',
+        'hs_code__hs_code__startswith': '08',
+    }
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }, {
+        'license__notification_number': N2009
+    }]
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset)
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__head__name__icontains': 'fruit',
+    }
+    exclude_or_filters = {
+        'hs_code__hs_code__startswith': '08'
+    }
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, exclude_or_filters=exclude_or_filters)
+    tables = query_set_table(tables, queryset, 'Need Amendment')
+    return tables
+
+
+
+def get_table_query(query_dict, or_filters=None,exclude_or_filters=None, is_self=True, is_au=False, is_expired=False):
+    my_filter = Q()
+    if is_expired:
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
+        query_dict['license_expiry_date__lte'] = expiry_limit
+    else:
         expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-        biscuits_queryset = license.LicenseImportItemsModel.objects.filter(
-            license__export_license__norm_class__norm_class='E5',
-            license__license_expiry_date__gte=expiry_limit,
-            license__is_self=True, license__is_au=False, item__head__name__icontains='fruit').order_by(
-            'license__license_expiry_date')
-        for object in biscuits_queryset:
-            object.available_quantity = object.balance_quantity
-            object.available_value = object.balance_cif_fc
-            object.save()
-        biscuits_queryset = biscuits_queryset.filter(Q(available_quantity__gte=100) & Q(available_value__gte=100))
-        filter_query = biscuits_queryset.filter(
-            (Q(license__export_license__old_quantity__gt=1) & Q(license__notification_number=N2015)) | Q(
-                license__notification_number=N2009)).distinct()
-        table = LicenseItemReportTable(filter_query)
-        tables.append({'label': 'License List', 'table': table,
-                       'total': filter_query.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
-        return tables
-    except Exception as e:
-        return False
+        query_dict['license_expiry_date__gte'] = expiry_limit
+    query_dict['is_self'] = is_self
+    query_dict['is_au'] = is_au
+    for item in query_dict:
+        my_filter &= Q(**{item: query_dict[item]})
+    # if or_filters:
+    #     for item in or_filters:
+    #         if 'list' in str(type(or_filters[item])) and '__icontains' in item:
+    #             or_filter_text = Q()
+    #             for value in or_filters[item]:
+    #                 or_filter_text |= Q(**{item: value})
+    #             my_filter &= or_filter_text
+    #         else:
+    #             my_filter = Q(**{item: or_filters[item]})
+    if exclude_or_filters:
+        for item in exclude_or_filters:
+            my_filter &= ~Q(**{item: exclude_or_filters[item]})
+    query_set = LicenseDetailsModel.objects.filter(my_filter)
+    return query_set.distinct()

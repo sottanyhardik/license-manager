@@ -201,7 +201,7 @@ def juice_query():
     exclude_or_filters = {
         'hs_code__hs_code__startswith': '2009'
     }
-    queryset = all_queryset(query_dict, and_or_filter=and_or_filter,exclude_or_filters=exclude_or_filters)
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, exclude_or_filters=exclude_or_filters)
     tables = query_set_table(tables, queryset, 'Need Amendment')
     return tables
 
@@ -277,8 +277,7 @@ def fruit_query():
     return tables
 
 
-
-def get_table_query(query_dict, or_filters=None,exclude_or_filters=None, is_self=True, is_au=False, is_expired=False):
+def get_table_query(query_dict, or_filters=None, exclude_or_filters=None, is_self=True, is_au=False, is_expired=False):
     my_filter = Q()
     if is_expired:
         expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
@@ -290,15 +289,15 @@ def get_table_query(query_dict, or_filters=None,exclude_or_filters=None, is_self
     query_dict['is_au'] = is_au
     for item in query_dict:
         my_filter &= Q(**{item: query_dict[item]})
-    # if or_filters:
-    #     for item in or_filters:
-    #         if 'list' in str(type(or_filters[item])) and '__icontains' in item:
-    #             or_filter_text = Q()
-    #             for value in or_filters[item]:
-    #                 or_filter_text |= Q(**{item: value})
-    #             my_filter &= or_filter_text
-    #         else:
-    #             my_filter = Q(**{item: or_filters[item]})
+    if or_filters:
+        for item in or_filters:
+            if 'list' in str(type(or_filters[item])) and '__icontains' in item:
+                or_filter_text = Q()
+                for value in or_filters[item]:
+                    or_filter_text |= Q(**{item: value})
+                my_filter &= or_filter_text
+            else:
+                my_filter = Q(**{item: or_filters[item]})
     if exclude_or_filters:
         for item in exclude_or_filters:
             my_filter &= ~Q(**{item: exclude_or_filters[item]})

@@ -294,29 +294,43 @@ class PDFCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
         try:
             query_dict = {
                 'export_license__norm_class__norm_class': 'E5',
-                'notification_number': 'N2015'
+                'notification_number': N2015
             }
             or_filters = {
-                'exporter__name__icontains': ['rama', 'rani', 'vanila']
+                'exporter__name__icontains': ['rama', 'rani', 'VANILA']
             }
-            exclude_or_filters={}
+            exclude_or_filters={
+                'export_license__old_quantity':0
+            }
             queryset = get_table_query(query_dict, or_filters=or_filters,exclude_or_filters=exclude_or_filters)
-
-            # confectionery_queryset = license.LicenseDetailsModel.objects.filter(
-            #     export_license__norm_class__norm_class='E1',
-            #     license_expiry_date__gt=expiry_limit,
-            #     is_self=True, is_au=False).order_by('license_expiry_date')
-            #
             table = LicenseBiscuitReportTable(queryset)
             tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table})
-            # table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2015).filter(
-            #     Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-            #         exporter__name__icontains='vanila')).exclude(export_license__old_quantity=0).distinct())
-            # tables.append({'label': 'RAMA RANI VANNILA Confectinery', 'table': table})
-            # table = LicenseBiscuitReportTable(
-            #     biscuits_queryset.filter(notification_number=N2015).filter(exporter__name__icontains='parle').exclude(
-            #         export_license__old_quantity=0).distinct())
-            # tables.append({'label': 'Parle Biscuits', 'table': table})
+            query_dict = {
+                'export_license__norm_class__norm_class': 'E1',
+                'notification_number': N2015
+            }
+            or_filters = {
+                'exporter__name__icontains': ['rama', 'rani', 'VANILA']
+            }
+            exclude_or_filters = {
+                'export_license__old_quantity': 0
+            }
+            queryset = get_table_query(query_dict, or_filters=or_filters, exclude_or_filters=exclude_or_filters)
+            table = LicenseConfectineryReportTable(queryset)
+            tables.append({'label': 'RAMA RANI VANNILA Confectinery', 'table': table})
+            query_dict = {
+                'export_license__norm_class__norm_class': 'E5',
+                'notification_number': N2015
+            }
+            or_filters = {
+                'exporter__name__icontains': ['Parle']
+            }
+            exclude_or_filters = {
+                'export_license__old_quantity': 0
+            }
+            queryset = get_table_query(query_dict, or_filters=or_filters, exclude_or_filters=exclude_or_filters)
+            table = LicenseBiscuitReportTable(queryset)
+            tables.append({'label': 'Parle Biscuits', 'table': table})
             context['today_date'] = datetime.datetime.now().date()
             context['tables'] = tables
         except Exception as e:

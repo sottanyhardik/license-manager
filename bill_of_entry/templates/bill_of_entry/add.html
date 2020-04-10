@@ -212,7 +212,7 @@
     <script>
         function convert_currency(inputE) {
             inr = parseInt(inputE.value);
-            exchange = parseInt($('#id_exchange_rate').val());
+            exchange = {{ object.exchange_rate }};
             fc_id = '#' + inputE.id.replace('inr', 'fc');
             $(fc_id).val((inr / exchange).toFixed(2));
         }

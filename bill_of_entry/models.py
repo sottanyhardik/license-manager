@@ -26,16 +26,28 @@ class BillOfEntryModel(models.Model):
         return self.bill_of_entry_number
 
     def get_absolute_url(self):
-        return reverse('bill-of-entry-detail', kwargs={'pk': self.id})
+        return reverse('bill-of-entry-detail', kwargs={'boe': self.bill_of_entry_number})
 
     def get_total_inr(self):
-        return self.item_details.all().aggregate(Sum('cif_inr'))['cif_inr__sum']
+        total = self.item_details.all().aggregate(Sum('cif_inr'))['cif_inr__sum']
+        if total:
+            return round(total, 2)
+        else:
+            return 0
 
     def get_total_fc(self):
-        return self.item_details.all().aggregate(Sum('cif_fc'))['cif_fc__sum']
+        total = self.item_details.all().aggregate(Sum('cif_fc'))['cif_fc__sum']
+        if total:
+            return round(total, 2)
+        else:
+            return 0
 
     def get_total_quantity(self):
-        return self.item_details.all().aggregate(Sum('qty'))['qty__sum']
+        total = self.item_details.all().aggregate(Sum('qty'))['qty__sum']
+        if total:
+            return round(total, 2)
+        else:
+            return 0
 
     def get_licenses(self):
         return ", ".join([item.sr_number.license.license_number for item in self.item_details.all()])

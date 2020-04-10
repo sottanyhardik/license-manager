@@ -1,0 +1,101 @@
+<div class="row card card-header collapsed" role="tab" id="heading-{{ object.id }}" data-toggle="collapse"
+     href="#collapse-{{ object.id }}" aria-expanded="false"
+     aria-controls="collapse-{{ object.id }}">
+    <div class="col-md-12">
+        <div class="row">
+            <div class="col-md-1">
+                <b>BE Number</b>
+                <p>{{ object.bill_of_entry_number }}</p>
+            </div>
+            <div class="col-md-1">
+                <b>BE Date</b>
+                <p>{{ object.bill_of_entry_date }}</p>
+            </div>
+            <div class="col-md-3">
+                <b>Company</b>
+                <p>{{ object.company }}</p>
+            </div>
+            <div class="col-md-1">
+                <b>CIF INR</b>
+                <p>{{ object.get_total_inr }}</p>
+            </div>
+            <div class="col-md-1">
+                <b>CIF FC</b>
+                <p>{{ object.get_total_fc }}</p>
+            </div>
+            <div class="col-md-1">
+                <b>Quantity</b>
+                <p>{{ object.get_total_quantity }}</p>
+            </div>
+            <div class="col-md-1">
+                <b>Port</b>
+                <p>{{ object.port }}</p>
+            </div>
+            <div class="col-md-2">
+                <b>Exchange Rate</b>
+                <p>{{ object.exchange_rate }}</p>
+            </div>
+            <div class="col-md-1">
+                <b>Invoice</b>
+                <p>{% if object.invoice_no %}{{ object.invoice_no }}{% else %}-{% endif %}</p>
+            </div>
+            <div class="col-md-4">
+                <b>Allotment</b>
+                {% for allotment in object.allotment.all %}
+                    <p>{{ allotment }}</p>
+                {% endfor %}
+            </div>
+            <div class="col-md-4">
+                <b>Product</b>
+                <p>{{ object.product_name }}</p>
+            </div>
+            <div class="col-md-4">
+                <b>DFIA No</b>
+                <p>{{ object.get_licenses }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="collapse-{{ object.id }}" class="row card card-body collapse {{ important }}" role="tabpanel"
+     aria-labelledby="heading-4"
+     data-parent="#bill_of_entry">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-pills nav-pills-success no-padding-bottom"
+                    id="pills-tab"
+                    role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="pill"
+                           href="#" role="tab" aria-controls="pills-home"
+                           aria-selected="true"
+                           data-url="{% url 'bill-of-entry-detail' object.bill_of_entry_number %}"
+                           data-target="boe-{{ object.id }}" onclick="fetch_page(this)">
+                            View Item Details</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                           href="#" role="tab" aria-controls="pills-home"
+                           aria-selected="true" data-url="{% url 'bill-of-entry-update' object.bill_of_entry_number %}"
+                           data-target="div-{{ object.id }}"
+                           onclick="fetch_page(this)">
+                            Update BOE Detail</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-home-tab" data-toggle="pill"
+                           href="#" role="tab" aria-controls="pills-home"
+                           aria-selected="true" data-url="{% url 'bill-of-entry-items' object.bill_of_entry_number %}"
+                           data-target="div-{{ object.id }}"
+                           onclick="fetch_page(this)">
+                            Update BOE Item List</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="tab-pane fade show active" id="pills-home" role="tabpanel" aria-labelledby="pills-home-tab">
+                <div class="card-body" id="div-{{ object.id }}" style="padding: 0px 0px 0px 0px">
+                    {% include 'bill_of_entry/detail.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

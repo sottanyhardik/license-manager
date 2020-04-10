@@ -1,7 +1,8 @@
 # Create your views here.
 from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import DetailView, FormView, DeleteView
+from django.views.generic import DetailView, FormView, DeleteView, UpdateView, CreateView
+from django_filters.views import FilterView
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
 from bill_of_entry.models import RowDetails
@@ -11,32 +12,49 @@ from . import forms, tables, filters
 from . import models as bill_of_entry
 
 
-class BillOfEntryView(PagedFilteredTableView):
-    template_name = 'core/list.html'
+class BillOfEntryView(FilterView):
+    template_name = 'bill_of_entry/list.html'
     model = bill_of_entry.BillOfEntryModel
     table_class = tables.BillOfEntryTable
-    filter_class = filters.BillOfEntryFilter
-    page_head = 'Item List'
+    filterset_class = filters.BillOfEntryFilter
+    paginate_by = 50
+    ordering = '-bill_of_entry_date'
 
 
-class BillOfEntryCreateView(CreateWithInlinesView):
-    template_name = 'core/add.html'
+class BillOfEntryAjaxListView(FilterView):
+    template_name = 'bill_of_entry/ajax_list.html'
+    model = bill_of_entry.BillOfEntryModel
+    table_class = tables.BillOfEntryTable
+    filterset_class = filters.BillOfEntryFilter
+    paginate_by = 50
+    ordering = '-bill_of_entry_date'
+
+
+class BillOfEntryCreateView(CreateView):
+    template_name = 'bill_of_entry/add.html'
     model = bill_of_entry.BillOfEntryModel
     form_class = forms.BillOfEntryForm
-    inlines = []
 
-    # def form_valid(self, form):
-    #     if not form.instance.created_by:
-    #         form.instance.created_by = self.request.user
-    #         form.instance.created_on = datetime.datetime.now()
-    #     form.instance.modified_by = self.request.user
-    #     form.instance.modified_on = datetime.datetime.now()
-    #     return super().form_valid(form)
+    def get_context_data(self, **kwargs):
+        context = super(BillOfEntryCreateView, self).get_context_data(**kwargs)
+        context['inline'] = True
+        return context
 
 
 class BillOfEntryDetailView(DetailView):
-    template_name = 'bill_of_entry/detail.html'
+    template_name = 'bill_of_entry/card.html'
     model = bill_of_entry.BillOfEntryModel
+
+    def get_object(self, queryset=None):
+        object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
+        return object
+
+    def get_context_data(self, **kwargs):
+        context = super(BillOfEntryDetailView, self).get_context_data(**kwargs)
+        context['important'] = 'show active'
+        return context
+
+
 
 
 class BillOfEntryLicenseImportItemInline(InlineFormSetFactory):
@@ -46,11 +64,20 @@ class BillOfEntryLicenseImportItemInline(InlineFormSetFactory):
         'extra': 0,
     }
 
-
-class BillOfEntryUpdateView(UpdateWithInlinesView):
-    template_name = 'core/add.html'
+class BillOfEntryUpdateDetailView(UpdateView):
+    template_name = 'bill_of_entry/add.html'
     model = bill_of_entry.BillOfEntryModel
     form_class = forms.BillOfEntryForm
+
+    def get_object(self, queryset=None):
+        object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
+        return object
+
+
+class BillOfEntryUpdateView(UpdateWithInlinesView):
+    template_name = 'bill_of_entry/add.html'
+    model = bill_of_entry.BillOfEntryModel
+    fields = ()
     inlines = [BillOfEntryLicenseImportItemInline, ]
 
     def dispatch(self, request, *args, **kwargs):
@@ -59,7 +86,7 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
         return super(BillOfEntryUpdateView, self).dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
-        object = self.model.objects.get(id=self.kwargs.get('pk'))
+        object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
         return object
 
     def get_inlines(self):
@@ -67,19 +94,23 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
         for allotment in allotments:
             if allotment.allotment_details.all().exists():
                 for allotment_item in allotment.allotment_details.all():
-                    row, bool = RowDetails.objects.get_or_create(bill_of_entry=self.object,
-                                                                 sr_number=allotment_item.item)
-                    if not row.cif_inr or row.cif_inr == 0:
-                        row.cif_inr = allotment_item.cif_inr
-                    if not row.cif_fc or row.cif_fc == 0:
-                        row.cif_fc = allotment_item.cif_fc
-                    if not row.cif_inr or row.qty == 0:
-                        row.qty = allotment_item.qty
-                    row.save()
+                    if not RowDetails.objects.filter(bill_of_entry=self.object,
+                                                                 sr_number=allotment_item.item).exists():
+                        row, bool = RowDetails.objects.get_or_create(bill_of_entry=self.object,
+                                                                     sr_number=allotment_item.item)
+                        if not row.cif_inr or row.cif_inr == 0:
+                            row.cif_inr = allotment_item.cif_inr
+                        if not row.cif_fc or row.cif_fc == 0:
+                            row.cif_fc = allotment_item.cif_fc
+                        if not row.cif_inr or row.qty == 0:
+                            row.qty = allotment_item.qty
+                        row.save()
                     allotment_item.is_boe = True
                     allotment_item.save()
         self.inlines = [BillOfEntryLicenseImportItemInline, ]
         return super(BillOfEntryUpdateView, self).get_inlines()
+
+
 
 
 # Create your views here.
@@ -122,3 +153,7 @@ class BillOfEntryDeleteView(DeleteView):
     template_name = 'allotment/delete.html'
     model = bill_of_entry.BillOfEntryModel
     success_url = reverse_lazy('bill-of-entry-list')
+
+    def get_object(self, queryset=None):
+        object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
+        return object

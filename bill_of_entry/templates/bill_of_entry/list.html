@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% load render_table from django_tables2 %}
+{% load querystring from django_tables2 %}
+{% load django_tables2 %}
+{% load core_tag %}
+{% load static %}
+{% load i18n %}
+{% block content %}
+
+    <div class="row">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card">
+
+                <div class="card-header">
+                    <div class="row">
+                        <div class="col-xs-9 col-lg-9">
+                            Filter
+                        </div>
+                        <div class="col-lg-2 col-sm-4">
+                            {% if 'company' in request.path %}
+                                <a href="{% url 'company-add' %}" class="successButton">Add New</a>
+                            {% elif 'hs_code' in request.path %}
+                                <a href="{% url 'hs-code-add' %}" class="successButton">Add New</a>
+                            {% elif 'item' in request.path %}
+                                <a href="{% url 'item-add' %}" class="successButton">Add New</a>
+                            {% elif 'license' in request.path %}
+                                <a href="{% url 'add-license' %}" class="successButton">Add New</a>
+                            {% elif 'allotment' in request.path %}
+                                <a href="{% url 'allotment-add' %}" class="successButton">Add New</a>
+                            {% elif 'bill_of_entry'  in request.path %}
+                                <a href="{% url 'bill-of-entry-create' %}" class="successButton">Add New</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <form action="">
+                        {% if filter.form %}
+                            <div class="row">
+                                {% for field in filter.form %}
+                                    <div class="col-lg-3 col-xs-6">
+                                        <div class="form-group">
+
+                                            <label for="{{ field.name }}">{{ field.label }}</label>
+                                            <div class="form-line">
+                                                {{ field|addcss:"form-control" }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <div class="stat">
+                                <button class="deleteButton" type="submit">Filter</button>
+                            </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card with-nav-tabs card-default">
+                <div class="card-header">
+                    <div class="row">
+                        <div class="col-xs-4 col-lg-8">
+                            List
+                        </div>
+                        <div class="col-lg-2 col-sm-4">
+                            <a href="{% url 'bill-of-entry-create' %}" class="btn btn-primary full-width"
+                               onclick="fetch_page(this)"
+                               data-url="{% url 'bill-of-entry-create' %}" data-target="bill_of_entry">Add New</a>
+                        </div>
+                        <div class="col-lg-2 col-sm-4">
+                            <a href="download/{% querystring '_export'='pdf' %}" target="_blank"
+                               class="btn btn-success full-width">Download
+                                Pending</a>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="card-body">
+                    <div class="accordion accordion-bordered" id="bill_of_entry" role="tablist">
+                        {% include 'bill_of_entry/ajax_list.html' %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block extra_js_script %}
+    <script src="{% static 'js/select2.min.js' %}"></script>
+    <script src="{% static 'js/django_select2.js' %}"></script>
+    <script src="{% static 'js/django_select2.js' %}"></script>
+    <script type="text/javascript">
+        $('select').select2();
+        $(document).on('focus', '.select2', function (e) {
+            if (e.originalEvent) {
+                $(this).siblings('select').select2('open');
+            }
+        });
+
+        function fetch_boe(boe) {
+            event.preventDefault();
+            url = "{% url 'bill-of-entry-list' %}?company=&bill_of_entry_number=" + boe;
+            $.get(url, function (data, status) {
+                $('#bill_of_entry').html(data);
+                $('#bill_of_entry').show();
+            });
+        }
+
+    </script>
+{% endblock %}

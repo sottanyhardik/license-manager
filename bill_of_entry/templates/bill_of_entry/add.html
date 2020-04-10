@@ -1,0 +1,220 @@
+{% load formset_tags %}
+{% load core_tag %}
+{% load static %}
+{% block content %}
+    <form action="
+
+            {% if inlines %}{% url 'bill-of-entry-items'  object.bill_of_entry_number %}{% elif object %}{% url 'bill-of-entry-update' object.bill_of_entry_number %}{% else %}{% url 'bill-of-entry-create' %}{% endif %}"
+          method="post" novalidate
+          enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {% if inlines %}
+            {% for formset in inlines %}
+                <div class="row">
+                    <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+                        <div class="card" id="{{ formset.prefix }}-id" data-formset-prefix="{{ formset.prefix }}">
+                            <div class="card-header">
+                                <h3>
+                                    {% if formset.prefix == 'license_documents' %}
+                                        License Documents
+                                    {% elif formset.prefix == 'export_license' %}
+                                        Export Item List
+                                    {% else %}
+                                        {{ formset.prefix|title }}
+                                    {% endif %}
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                {% for form in formset.forms %}
+                                    {% if form.errors %}
+                                        <div class="alert alert-danger">
+                                            <ul class="errorlist">
+                                                {% if form.non_field_errors %}
+                                                    <li>{{ form.non_field_errors }}</li>
+                                                {% endif %}
+                                                {% for field in form %}
+                                                    {% if field.errors %}
+                                                        <li>
+                                                            {{ field.label|title }}
+                                                            <ul class="errorlist">
+                                                                {% for error in field.errors %}
+                                                                    <li>{{ error }}</li>
+                                                                {% endfor %}
+                                                            </ul>
+                                                        </li>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                                <div>
+                                    {{ formset.management_form }}
+
+                                    <div data-formset-body>
+                                        <!-- New forms will be inserted in here -->
+                                        {% for form in formset %}
+                                            <div data-formset-form>
+                                                {% for fld in form.hidden_fields %}{{ fld }}{% endfor %}
+                                                <div class="row">
+                                                    {% for field in form %}
+                                                        {% if field.name == 'license' or field.name == 'DELETE' or field.name == 'id' or field.name == 'norm_class' %}
+                                                            <div class="hidden" style="display: none">
+                                                                {{ field }}
+                                                            </div>
+                                                        {% else %}
+                                                            <div class="col-lg-3 col-xs-6">
+
+                                                                <div class="form-group">
+                                                                    <label for="">{{ field.label }}</label>
+                                                                    {{ field }}
+                                                                </div>
+                                                            </div>
+                                                        {% endif %}
+
+                                                    {% endfor %}
+                                                    <div class="col-lg-3 col-xs-6">
+                                                        <button type="button" class="deleteButton"
+                                                                data-formset-delete-button>Delete form
+                                                        </button>
+
+                                                    </div>
+
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                    <!-- The empty form template. By wrapping this in a <script> tag, the
+                                    __prefix__ placeholder can easily be replaced in both attributes and
+                                    any scripts -->
+                                    <script type="form-template" data-formset-empty-form>
+                                        {% escapescript %}
+                                            <div data-formset-form>
+                                                {% for fld in form.hidden_fields %}{{ fld }}{% endfor %}
+                                                <div class="row">
+                                                    {% for field in formset.empty_form %}
+                                                        {% if field.name == 'license' or field.name == 'DELETE' or field.name == 'id' %}
+                                                            <div class="hidden" style="display: none">
+                                                                {{ field }}
+                                                            </div>
+
+                                                        {% else %}
+                                                            <div class="col-lg-3 col-xs-6">
+
+                                                                <div class="form-group">
+                                                                    <label for="">{{ field.label }}</label>
+                                                                    {{ field }}
+                                                                </div>
+                                                            </div>
+                                                        {% endif %}
+
+                                                    {% endfor %}
+                                                    <div class="col-lg-3 col-xs-6">
+                                                        <button type="button" class="deleteButton"
+                                                                data-formset-delete-button>Delete form
+                                                        </button>
+
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endescapescript %}
+                                    </script>
+
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <!-- This button will add a new form when clicked -->
+                                <input type="button" class="addButton" value="Add another" data-formset-add>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="row">
+                <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>{% if add %}Update{% else %}Add New{% endif %}</h3>
+                        </div>
+                        <div class="card-body">
+                            {% if form.errors %}
+                                <div class="alert alert-danger">
+                                    <ul class="errorlist">
+                                        {% if form.non_field_errors %}
+                                            <li>{{ form.non_field_errors }}</li>
+                                        {% endif %}
+                                        {% for field in form %}
+                                            {% if field.errors %}
+                                                <li>
+                                                    {{ field.label|title }}
+                                                    <ul class="errorlist">
+                                                        {% for error in field.errors %}
+                                                            <li>{{ error }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </li>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
+                            {% for fld in form.hidden_fields %}{{ fld }}{% endfor %}
+                            <div class="row">
+                                {% for field in form %}
+                                    <div class="col-lg-3 col-xs-6">
+                                        <div class="form-group">
+                                            <label for="{{ field.name }}">{{ field.label }}</label>
+                                            <div class="form-line">
+                                                {{ field|addcss:"form-control" }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        <div class="row">
+            <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+                <input type="submit" class="btn btn-success full-width ajax-post" onclick="ajax_post(this)"
+                       data-target="{% if object %}boe-{{ object.id }}{% else %}bill_of_entry{% endif %}"
+                       value="Submit">
+            </div>
+        </div>
+    </form>
+{% endblock %}
+{% block extra_js_script %}
+    <script src="{% static 'js/select2.min.js' %}"></script>
+    <script src="{% static 'js/django_select2.js' %}"></script>
+    <script type="text/javascript">
+        $(document).on('focus', '.select2', function (e) {
+            if (e.originalEvent) {
+                $(this).siblings('select').select2('open');
+            }
+        });
+
+    </script>
+    <script>
+        jQuery(function ($) {
+            {% for formset in inlines %}
+                $("#{{ formset.prefix }}-id").formset({
+                    animateForms: true,
+                    reorderMode: 'dom',
+                });
+            {% endfor %}
+        });
+    </script>
+    <script>
+        function convert_currency(inputE) {
+            inr = parseInt(inputE.value);
+            exchange = parseInt($('#id_exchange_rate').val());
+            fc_id = '#' + inputE.id.replace('inr', 'fc');
+            $(fc_id).val((inr / exchange).toFixed(2));
+        }
+    </script>
+{% endblock %}

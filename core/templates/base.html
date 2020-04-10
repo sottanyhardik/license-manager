@@ -334,8 +334,8 @@
 <!-- Custom js for this page-->
 <script src="{% static "js/dashboard.js" %}"></script>
 <script>
-    $(function() {
-        $( "#accordion" ).accordion();
+    $(function () {
+        $("#accordion").accordion();
     });
 
     function fetch_page(button) {
@@ -367,6 +367,7 @@
     function ajax_post(button) {
         event.preventDefault();
         var form = $(button).closest("form");
+        boe = form.serializeArray()[2]['value']
         target_div = button.dataset.target;
         $.ajax({
             url: form.attr("action"),
@@ -379,12 +380,17 @@
                 if (target_div.indexOf("card") >= 0) {
                     target = '.' + target_div;
                     $(target).remove();
-                }
-                else if (target_div.indexOf("license-list") >= 0){
+                } else if (target_div.indexOf("license-list") >= 0) {
                     target = '#' + target_div;
                     $(target).html(data);
-                }
-                else {
+                } else if (target_div.indexOf('bill_of_entry') >= 0) {
+                    if (data.indexOf('errorlist') >= 0) {
+                        target = '#' + target_div;
+                        $(target).html(data);
+                    } else {
+                        fetch_boe(boe)
+                    }
+                } else {
                     target = '#' + target_div;
                     $(target).html(data);
                     $(target).show();
@@ -409,6 +415,8 @@
             }
         });
     }
+
+
 </script>
 {% block extra_js_script %}
 {% endblock %}

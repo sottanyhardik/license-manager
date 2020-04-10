@@ -24,7 +24,7 @@ class UpdateCompanyView(UpdateView):
 
 
 class ListCompanyView(PagedFilteredTableView):
-    template_name = 'core/list.html'
+    template_name = 'core/../bill_of_entry/templates/bill_of_entry/list.html'
     model = models.CompanyModel
     table_class = tables.CompanyClassTable
     filter_class = filters.CompanyFilter
@@ -48,7 +48,7 @@ class SIONImportInline(InlineFormSetFactory):
 
 
 class ListSionView(PagedFilteredTableView):
-    template_name = 'core/list.html'
+    template_name = 'core/../bill_of_entry/templates/bill_of_entry/list.html'
     model = models.SionNormClassModel
     table_class = tables.SionNormClassTable
     filter_class = filters.SionNormClassFilter
@@ -91,7 +91,7 @@ class CreateHSNCodeView(CreateView):
 
 
 class ListHSNView(PagedFilteredTableView):
-    template_name = 'core/list.html'
+    template_name = 'core/../bill_of_entry/templates/bill_of_entry/list.html'
     model = models.HSCodeModel
     table_class = tables.HSCodeTable
     filter_class = filters.HSNCodeFilter
@@ -104,7 +104,7 @@ class CreateItemView(CreateView):
 
 
 class ListItemView(PagedFilteredTableView):
-    template_name = 'core/list.html'
+    template_name = 'core/../bill_of_entry/templates/bill_of_entry/list.html'
     model = models.ItemNameModel
     table_class = tables.ItemNameTable
     filter_class = filters.ItemFilter

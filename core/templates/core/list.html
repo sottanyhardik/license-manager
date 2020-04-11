@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% load render_table from django_tables2 %}
+{% load querystring from django_tables2 %}
+{% load django_tables2 %}
+{% load core_tag %}
+{% load static %}
+{% load i18n %}
+{% block content %}
+
+    <div class="row">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card">
+
+                <div class="card-header">
+                    <div class="row">
+                        <div class="col-xs-9 col-lg-9">
+                            Filter
+                        </div>
+                        <div class="col-lg-2 col-sm-4">
+                            {% if 'company' in request.path %}
+                                <a href="{% url 'company-add' %}" class="successButton">Add New</a>
+                            {% elif 'hs_code' in request.path %}
+                                <a href="{% url 'hs-code-add' %}" class="successButton">Add New</a>
+                            {% elif 'item' in request.path %}
+                                <a href="{% url 'item-add' %}" class="successButton">Add New</a>
+                            {% elif 'license' in request.path %}
+                                <a href="{% url 'add-license' %}" class="successButton">Add New</a>
+                            {% elif 'allotment' in request.path %}
+                                <a href="{% url 'allotment-add' %}" class="successButton">Add New</a>
+                            {% elif 'bill_of_entry'  in request.path %}
+                                <a href="{% url 'bill-of-entry-create' %}" class="successButton">Add New</a>
+                            {% endif %}
+
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="card-body">
+                    <form action="">
+                        {% if filter.form %}
+                            <div class="row">
+                                {% for field in filter.form %}
+                                    <div class="col-lg-3 col-xs-6">
+                                        <div class="form-group">
+
+                                            <label for="{{ field.name }}">{{ field.label }}</label>
+                                            <div class="form-line">
+                                                {{ field|addcss:"form-control" }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <div class="stat">
+                                <button class="deleteButton" type="submit">Filter</button>
+                            </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card with-nav-tabs card-default">
+                <div class="card-heading">
+                    <ul class="nav nav-tabs">
+                        <li class="active"><a href="#tab1default" data-toggle="tab">Default 1</a></li>
+                        <li><a href="#tab2default" data-toggle="tab">Default 2</a></li>
+                        <li><a href="#tab3default" data-toggle="tab">Default 3</a></li>
+                        <li class="dropdown">
+                            <a href="#" data-toggle="dropdown">Dropdown <span class="caret"></span></a>
+                            <ul class="dropdown-menu" role="menu">
+                                <li><a href="#tab4default" data-toggle="tab">Default 4</a></li>
+                                <li><a href="#tab5default" data-toggle="tab">Default 5</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content">
+                        <div class="tab-pane fade in active" id="tab1default">Default 1</div>
+                        <div class="tab-pane fade" id="tab2default">Default 2</div>
+                        <div class="tab-pane fade" id="tab3default">Default 3</div>
+                        <div class="tab-pane fade" id="tab4default">Default 4</div>
+                        <div class="tab-pane fade" id="tab5default">Default 5</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="row">
+                        <div class="col-xs-9 col-lg-9">
+                            List
+                        </div>
+                        <div class="col-lg-2 col-sm-4">
+                            <a class="successButton"
+                               href="{% querystring '_export'='csv' %}"
+                               aria-controls="DataTables_Table_1"><span>CSV</span></a>
+                            <a class="successButton" tabindex="0"
+                               aria-controls="DataTables_Table_1"
+                               href="{% querystring '_export'='xls' %}"><span>Excel</span></a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if table.page and table.paginator.num_pages > 1 %}
+                        <nav aria-label="Table navigation">
+                            <div class="pull-left">
+                                <ul class="pagination">
+                                    {% if table.page.has_previous %}
+                                        <li class="previous">
+                                            <a href="{% querystring table.prefixed_page_field=table.page.previous_page_number %}">
+                                                <span aria-hidden="true">&laquo;</span>
+                                                {% trans 'previous' %}
+                                            </a>
+                                        </li>
+                                    {% endif %}
+                                    {% if table.page.has_previous or table.page.has_next %}
+                                        {% for p in table.page|table_page_range:table.paginator %}
+                                            <li {% if p == table.page.number %}class="active"{% endif %}>
+                                                {% if p == '...' %}
+                                                    <a href="#">{{ p }}</a>
+                                                {% else %}
+                                                    <a href="{% querystring table.prefixed_page_field=p %}">
+                                                        {{ p }}
+                                                    </a>
+                                                {% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    {% endif %}
+                                    {% if table.page.has_next %}
+                                        <li class="next">
+                                            <a href="{% querystring table.prefixed_page_field=table.page.next_page_number %}">
+                                                {% trans 'next' %}
+                                                <span aria-hidden="true">&raquo;</span>
+                                            </a>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            <div class="pull-right">
+                            </div>
+                        </nav>
+                    {% endif %}
+                    <div class="table-responsive">
+                        <div id="" class="">
+                            {% render_table table %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block extra_js_script %}
+    <script src="{% static 'js/select2.min.js' %}"></script>
+    <script src="{% static 'js/django_select2.js' %}"></script>
+    <script src="{% static 'js/django_select2.js' %}"></script>
+    <script type="text/javascript">
+        $('select').select2();
+        $(document).on('focus', '.select2', function (e) {
+            if (e.originalEvent) {
+                $(this).siblings('select').select2('open');
+            }
+        });
+
+    </script>
+{% endblock %}

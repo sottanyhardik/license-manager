@@ -230,7 +230,7 @@ class DownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
     def get_queryset(self):
         qs = self.model.objects.all()
         product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
-        return product_filtered_list.qs.order_by('company','modified_on')
+        return product_filtered_list.qs.order_by('company', 'modified_on')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -267,30 +267,22 @@ class ARODocumentGenerateView(FormView):
             return self.form_invalid(form)
         else:
             try:
-                allotment_id=self.kwargs.get('pk')
+                allotment_id = self.kwargs.get('pk')
                 allotment = allotments.AllotmentModel.objects.get(id=allotment_id)
                 from datetime import datetime
-                context_dict = {
-                    'dgft_address':self.request.POST.get('dgft_address'),
-                    'mill_name':self.request.POST.get('mill_name'),
-                    'company': self.request.POST.get('company'),
-                    'company_address': self.request.POST.get('company_address'),
-                    'mill_address': self.request.POST.get('mill_address'),
-                    'from_company': self.request.POST.get('from_company'),
-                    'today': str(datetime.now().date()),
-                    'item':'Cane Sugar',
-                    'hs_code':'17019990',
-                }
-                data= []
-                for item in allotment.allotment_details.all():
-                    context_dict['license'] = item.license_number
-                    context_dict['license_date'] = item.license_date
-                    context_dict['file_number'] = item.file_number
-                    context_dict['quantity'] = item.qty
-                    context_dict['v_allotment_inr'] = round(item.cif_fc * 72,2)
-                    context_dict['v_allotment_usd'] = item.cif_fc
-                    context_dict['sr_no'] = item.serial_number
-                    data.append(context_dict)
+                data = [{'dgft_address': self.request.POST.get('dgft_address'),
+                         'mill_name': self.request.POST.get('mill_name'),
+                         'company': self.request.POST.get('company'),
+                         'company_address': self.request.POST.get('company_address'),
+                         'mill_address': self.request.POST.get('mill_address'),
+                         'from_company': self.request.POST.get('from_company'),
+                         'today': str(datetime.now().date()),
+                         'item': 'Cane Sugar',
+                         'hs_code': '17019990',
+                         'license': item.license_number, 'license_date': item.license_date,
+                         'file_number': item.file_number, 'quantity': item.qty,
+                         'v_allotment_inr': round(item.cif_fc * 72, 2), 'v_allotment_usd': item.cif_fc, 'sr_no': item.serial_number} for item in
+                        allotment.allotment_details.all()]
                 file_path = 'media/ARO_ALLOTMENT_' + str(allotment_id) + '/'
                 from allotment.scripts.aro import generate_documents
                 generate_documents(data=data, path=file_path)
@@ -300,7 +292,7 @@ class ARODocumentGenerateView(FormView):
                 response = HttpResponse(zip_file, content_type='application/force-download')
                 response['Content-Disposition'] = 'attachment; filename="%s"' % file_name
                 url = request.META.get('HTTP_ORIGIN') + path_to_zip.split('lmanagement')[-1]
-                return JsonResponse({'url':url,'message':'Success'})
+                return JsonResponse({'url': url, 'message': 'Success'})
             except Exception as e:
                 print(e)
                 return self.form_invalid(form)

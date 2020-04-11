@@ -1,12 +1,15 @@
+from wsgiref.util import FileWrapper
+
 from django.db.models import Sum
 from django.http import JsonResponse, HttpResponse
 # Create your views here.
 from django.urls import reverse
-from django.views.generic import DetailView, CreateView, UpdateView
+from django.views.generic import DetailView, CreateView, UpdateView, FormView
 from django.views.generic.base import TemplateResponseMixin, ContextMixin, View
 from django_filters.views import FilterView
 from easy_pdf.rendering import render_to_pdf
 from easy_pdf.views import PDFTemplateResponseMixin
+from openpyxl.compat import file
 
 from core.utils import PagedFilteredTableView
 from license import models as license_models
@@ -237,3 +240,67 @@ class DownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
         import datetime
         context['today'] = datetime.datetime.now().date
         return context
+
+
+class ARODocumentGenerateView(FormView):
+    template_name = 'allotment/generate.html'
+    model = allotments.AllotmentModel
+    form_class = forms.AROForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['type'] = True
+        context['object'] = self.get_object()
+        return context
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        return self.render_to_response(context)
+
+    def get_object(self):
+        return self.model.objects.get(id=self.kwargs.get('pk'))
+
+    def post(self, request, *args, **kwargs):
+        from shutil import make_archive
+        form = self.get_form()
+        if not form.is_valid():
+            return self.form_invalid(form)
+        else:
+            try:
+                allotment_id=self.kwargs.get('pk')
+                allotment = allotments.AllotmentModel.objects.get(id=allotment_id)
+                from datetime import datetime
+                context_dict = {
+                    'dgft_address':self.request.POST.get('dgft_address'),
+                    'mill_name':self.request.POST.get('mill_name'),
+                    'company': self.request.POST.get('company'),
+                    'company_address': self.request.POST.get('company_address'),
+                    'mill_address': self.request.POST.get('mill_address'),
+                    'from_company': self.request.POST.get('from_company'),
+                    'today': str(datetime.now().date()),
+                    'item':'Cane Sugar',
+                    'hs_code':'17019990',
+                }
+                data= []
+                for item in allotment.allotment_details.all():
+                    context_dict['license'] = item.license_number
+                    context_dict['license_date'] = item.license_date
+                    context_dict['file_number'] = item.file_number
+                    context_dict['quantity'] = item.qty
+                    context_dict['v_allotment_inr'] = round(item.cif_fc * 72,2)
+                    context_dict['v_allotment_usd'] = item.cif_fc
+                    context_dict['sr_no'] = item.serial_number
+                    data.append(context_dict)
+                file_path = 'media/ARO_ALLOTMENT_' + str(allotment_id) + '/'
+                from allotment.scripts.aro import generate_documents
+                generate_documents(data=data, path=file_path)
+                file_name = 'ARO_ALLOTMENT_' + str(allotment_id) + '.zip'
+                path_to_zip = make_archive(file_path, "zip", file_path)
+                zip_file = open(path_to_zip, 'rb')
+                response = HttpResponse(zip_file, content_type='application/force-download')
+                response['Content-Disposition'] = 'attachment; filename="%s"' % file_name
+                url = request.META.get('HTTP_ORIGIN') + path_to_zip.split('lmanagement')[-1]
+                return JsonResponse({'url':url,'message':'Success'})
+            except Exception as e:
+                print(e)
+                return self.form_invalid(form)

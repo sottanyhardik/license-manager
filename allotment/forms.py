@@ -40,3 +40,12 @@ class AllotmentForm(forms.ModelForm):
                 field.widget.attrs['class'] += ' span2'
             if 'Textarea' in str(field.widget):
                 field.widget.attrs['rows'] = '2'
+
+
+class AROForm(forms.Form):
+    from_company = forms.CharField(required=True)
+    company = forms.CharField(required=True)
+    mill_name = forms.CharField(required=True)
+    company_address = forms.CharField( widget=forms.Textarea )
+    mill_address = forms.CharField( widget=forms.Textarea )
+    dgft_address = forms.CharField( widget=forms.Textarea )

@@ -15,5 +15,6 @@ urlpatterns = [
     path('<int:pk>/data/', login_required(views.allotment_data), name='allotment-data'),
     path('<int:pk>/download/', login_required(views.SendAllotmentView.as_view()), name='allotment-download'),
     path('download/', login_required(views.DownloadPendingAllotmentView.as_view()), name='allotment-pending'),
+    path('<int:pk>/generate/', login_required(views.ARODocumentGenerateView.as_view()), name='allotment-generate-aro'),
     # path('<int:pk>/pdf', views.PDFLicenseDetailView.as_view(), name='license-pdf')
 ]

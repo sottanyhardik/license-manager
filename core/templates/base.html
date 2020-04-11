@@ -377,6 +377,9 @@
                 xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
             },
             success: function (data) {
+                if (data.url != undefined){
+                    window.location.href = data.url;
+                }
                 if (target_div.indexOf("card") >= 0) {
                     target = '.' + target_div;
                     $(target).remove();

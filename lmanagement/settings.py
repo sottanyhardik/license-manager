@@ -16,7 +16,6 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
@@ -81,7 +80,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'lmanagement.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
 
@@ -95,7 +93,6 @@ DATABASES = {
         'PORT': '',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators
@@ -115,7 +112,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/2.2/topics/i18n/
 
@@ -132,7 +128,6 @@ USE_TZ = True
 DATE_FORMAT = "d-m-Y"
 DATETIME_FORMAT = "d-m-Y"
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
 
@@ -142,18 +137,17 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
 ]
 
-STATIC_ROOT= os.path.join(BASE_DIR, "static_cdn", "static_root")
+STATIC_ROOT = os.path.join(BASE_DIR, "static_cdn", "static_root")
 
-MEDIA_URL= '/media/'
+MEDIA_URL = '/media/'
 
-MEDIA_ROOT= os.path.join(BASE_DIR, "static_cdn", "media_root")
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 from django.urls import reverse_lazy
 
 LOGIN_URL = reverse_lazy('login')
 LOGIN_REDIRECT_URL = reverse_lazy('dashboard')
 LOGOUT_REDIRECT_URL = reverse_lazy('login')
-
 
 CACHES = {
     "default": {
@@ -197,7 +191,7 @@ RQ_QUEUES = {
         },
     },
     'high': {
-        'URL': os.getenv('REDISTOGO_URL', 'redis://localhost:6379/0'), # If you're on Heroku
+        'URL': os.getenv('REDISTOGO_URL', 'redis://localhost:6379/0'),  # If you're on Heroku
         'DEFAULT_TIMEOUT': 500,
     },
     'low': {
@@ -206,6 +200,5 @@ RQ_QUEUES = {
         'DB': 0,
     }
 }
-
 
 DJANGO_TABLES2_TEMPLATE = "django_tables2/bootstrap.html"

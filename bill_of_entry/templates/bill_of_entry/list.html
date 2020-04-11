@@ -41,7 +41,6 @@
                                 {% for field in filter.form %}
                                     <div class="col-lg-3 col-xs-6">
                                         <div class="form-group">
-
                                             <label for="{{ field.name }}">{{ field.label }}</label>
                                             <div class="form-line">
                                                 {{ field|addcss:"form-control" }}
@@ -103,8 +102,7 @@
             event.preventDefault();
             url = "{% url 'bill-of-entry-list' %}?company=&bill_of_entry_number=" + boe;
             $.get(url, function (data, status) {
-                $('#bill_of_entry').html(data);
-                $('#bill_of_entry').show();
+                $('#bill_of_entry').prepend(data);
             });
         }
 

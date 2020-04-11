@@ -1,7 +1,9 @@
 import django_filters
 from django.db import models
 from django.forms import Select
+from django_filters import DateFromToRangeFilter
 
+from core.filter_helper import RangeWidget
 from . import models as bill_of_entry
 
 BOOLEAN_CHOICES = (
@@ -13,6 +15,8 @@ BOOLEAN_CHOICES = (
 class BillOfEntryFilter(django_filters.FilterSet):
     is_self = django_filters.BooleanFilter(method='check_self', label='All')
     item_details__sr_number__license__license_number = django_filters.CharFilter(label='License Number')
+    bill_of_entry_date = DateFromToRangeFilter(widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY','format':'dd/mm/yyyy', 'type':'date'}))
+    is_invoice = django_filters.BooleanFilter(method='check_is_invoice', label='Is Invoice')
 
     class Meta:
         model = bill_of_entry.BillOfEntryModel
@@ -37,3 +41,11 @@ class BillOfEntryFilter(django_filters.FilterSet):
 
     def check_self(self, queryset, name,value):
         return queryset.filter(item_details__sr_number__license__is_self=True).distinct()
+
+    def check_is_invoice(self, queryset, name, value):
+        from datetime import datetime, timedelta
+        expiry_limit = datetime.today()
+        if value:
+            return queryset.exclude(invoice_no=None)
+        else:
+            return queryset.filter(invoice_no=None)

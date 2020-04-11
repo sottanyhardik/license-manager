@@ -3,6 +3,7 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, FormView, DeleteView, UpdateView, CreateView
 from django_filters.views import FilterView
+from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
 from bill_of_entry.models import RowDetails
@@ -157,3 +158,23 @@ class BillOfEntryDeleteView(DeleteView):
     def get_object(self, queryset=None):
         object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
         return object
+
+
+class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
+    template_name = 'bill_of_entry/download.html'
+    model = bill_of_entry.BillOfEntryModel
+    filter_class = filters.BillOfEntryFilter
+
+    def get_queryset(self):
+        qs = self.model.objects.all()
+        product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
+        return product_filtered_list.qs.order_by('company','bill_of_entry_date')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        total = 0
+        total_list = [total + int(data.get_total_inr()) for data in self.get_queryset()]
+        context['total_cif'] = sum(total_list)
+        import datetime
+        context['today'] = datetime.datetime.now().date
+        return context

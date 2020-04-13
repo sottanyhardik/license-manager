@@ -367,7 +367,12 @@
     function ajax_post(button) {
         event.preventDefault();
         var form = $(button).closest("form");
-        boe = form.serializeArray()[2]['value']
+        try {
+            boe = form.serializeArray()[2]['value']
+        }
+        catch(err) {
+            console.log(err.message);
+        }
         target_div = button.dataset.target;
         $.ajax({
             url: form.attr("action"),

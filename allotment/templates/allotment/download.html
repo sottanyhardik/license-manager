@@ -77,6 +77,7 @@
                 <th>Invoice</th>
                 <th>ETA</th>
                 <th>DFIA No.</th>
+                <th>Item Sr. NO.</th>
                 <th>DFIA Qty.</th>
                 <th>DFIA $.</th>
             </tr>
@@ -86,25 +87,27 @@
                     <td>{{ forloop.counter }}</td>
                     <td>{{ allotment.modified_on }}</td>
                     <td>{{ allotment.port }}</td>
-                    <td>{{ allotment.required_quantity }}</td>
-                    <td>{{ allotment.unit_value_per_unit }}</td>
-                    <td>{{ allotment.required_value }}</td>
+                    <td>{{ allotment.required_quantity|intcomma }}</td>
+                    <td>{{ allotment.unit_value_per_unit|intcomma }}</td>
+                    <td>{{ allotment.required_value|intcomma }}</td>
                     <td>{{ allotment.item_name }}</td>
                     <td>{% if allotment.invoice %}{{ allotment.invoice }}{% else %}-{% endif %}</td>
                     <td>{% if allotment.eta %}{{ allotment.eta }}{% else %}-{% endif %}</td>
-                    <td colspan="3">
+                    <td colspan="4">
                         <table>
                             {% for allotment_detail in allotment.allotment_details.all %}
                                 <tr>
                                     <td>{{ allotment_detail.item.license }}</td>
-                                    <td>{{ allotment_detail.qty }}</td>
-                                    <td>{{ allotment_detail.cif_fc }}</td>
+                                    <td>{{ allotment_detail.serial_number }}</td>
+                                    <td>{{ allotment_detail.qty|intcomma }}</td>
+                                    <td>{{ allotment_detail.cif_fc|intcomma }}</td>
                                 </tr>
                             {% endfor %}
                             <tr>
                                 <td><b>Total</b></td>
-                                <td>{{ allotment.alloted_quantity }}</td>
-                                <td>{{ allotment.alloted_value }}</td>
+                                <td>-</td>
+                                <td>{{ allotment.alloted_quantity|intcomma }}</td>
+                                <td>{{ allotment.alloted_value|intcomma }}</td>
                             </tr>
                         </table>
                     </td>
@@ -117,6 +120,7 @@
                 <td><b>{% get_total_quantity data.list %}</b></td>
                 <td><b>Total USD $</b></td>
                 <td><b>{% get_total data.list %}</b></td>
+                <td>-</td>
                 <td>-</td>
                 <td>-</td>
                 <td>-</td>

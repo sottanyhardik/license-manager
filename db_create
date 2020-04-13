@@ -4,26 +4,4 @@ ALTER ROLE lmanagement SET client_encoding TO 'utf8';
 ALTER ROLE lmanagement SET default_transaction_isolation TO 'read committed';
 ALTER ROLE lmanagement SET timezone TO 'UTC';
 GRANT ALL PRIVILEGES ON DATABASE lmanagement TO lmanagement;
-
-
-
-
-
-
-
-
-
-psql -U lmanagement lmanagement < lmanagement.sql
-
-psql -U lmanagement -d lmanagement -f lmanagement.sql
-
-
-pg_restore -h localhost -p 5432 -U lmanagement -d lmanagement -C lmanagement.sql
-
-
-pg_restore -U lmanagement -d lmanagement 
-
-
-lds = LicenseDetailsModel.objects.all()
-for ls in lds:
-    ls.dbalance_cif
+\q

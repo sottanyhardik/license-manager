@@ -47,7 +47,8 @@ class AllotmentWidget(ModelSelect2MultipleWidget):
         """
         if request.user.is_authenticated:
             from django.db.models import Q
-            return queryset.filter(Q(item_name__icontains=term) | Q(company__name__icontains=term)).filter(
+            return queryset.filter(
+                Q(item_name__icontains=term) | Q(company__name__icontains=term) | Q(invoice__icontains=term)).filter(
                 bill_of_entry__isnull=True).distinct()
         return self.queryset.none()
 

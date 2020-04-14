@@ -45,7 +45,11 @@ class AllotmentModel(models.Model):
         ordering = ['modified_on', ]
 
     def __str__(self):
-        return "{0} {1} {2}".format(self.item_name, self.company.name, str(self.required_quantity))
+        if self.invoice:
+            return "{0} {1} {2} {3}".format(self.item_name, self.company.name, str(self.invoice),str(self.required_quantity))
+        else:
+            return "{0} {1} {2}".format(self.item_name, self.company.name,
+                                            str(self.required_quantity))
 
     @property
     def required_value(self):

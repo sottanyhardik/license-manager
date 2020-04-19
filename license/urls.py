@@ -30,7 +30,6 @@ urlpatterns = [
          name='report_new_confectionery_other'),
     path('report/2009/biscuits/', login_required(views.PDFOldBisReportView.as_view()), name='report_bis_old'),
     path('report/2009/confectinery/', login_required(views.PDFOldConReportView.as_view()), name='report_con_old'),
-    path('biscuits/amend', login_required(views.BiscuitsAmendmentView.as_view()), name='biscuit_amend'),
     path('biscuits/2015/expiried', login_required(views.PDFBiscuitsNewExpiryReportView.as_view()), name='biscuits_expiried_new'),
     path('confectinery/2015/expiried', login_required(views.PDFConfectioneryNewExpiredReportView.as_view()), name='confectinery_expiried_new'),
     path('biscuits/2009/expiried', login_required(views.PDFBiscuitsOldExpiryReportView.as_view()), name='biscuits_expiried_old'),
@@ -42,8 +41,8 @@ urlpatterns = [
          name='biscuits_au'),
     path('item/report', login_required(views.ItemReportView.as_view()),
          name='item_report'),
-    path('item/list/report', login_required(views.ItemListReportView.as_view()),
+    path('item/report/list/', login_required(views.ItemListReportView.as_view()),
          name='item_report_list'),
-    path('item/parle', login_required(views.PDFParleConfectioneryOldExpiredReportView.as_view()), name='parle'),
     path('calc/premium', login_required(views.PremiumCalculationView.as_view()), name='premium'),
+    path('generate/report', login_required(views.LicenseReportListView.as_view()), name='report_list'),
 ]

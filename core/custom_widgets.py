@@ -1,5 +1,4 @@
-from django_select2.forms import ModelSelect2MultipleWidget, ModelSelect2Widget, Select2MultipleWidget, \
-    HeavySelect2MultipleWidget
+from django_select2.forms import ModelSelect2MultipleWidget, ModelSelect2Widget
 
 from allotment.models import AllotmentModel
 from core import models

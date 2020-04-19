@@ -157,3 +157,7 @@ class UploadLedger(TemplateView):
             return HttpResponseRedirect(reverse('license_ledger_pdf', kwargs={'license': license}))
         else:
             return HttpResponseRedirect(reverse('ledger-upload'))
+
+
+class TemplateListView(TemplateView):
+    template_name = 'base.html'

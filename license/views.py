@@ -1,12 +1,17 @@
 import datetime
+import os
+from io import BytesIO
 
+import xhtml2pdf.pisa as pisa
 import xlsxwriter as xlsxwriter
 from django.db.models import Q
 from django.http import HttpResponseRedirect
+from django.template.loader import get_template
 # Create your views here.
 from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, TemplateView
+from django.views.generic.base import TemplateResponseMixin, ContextMixin
 from django_filters.views import FilterView
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
@@ -17,7 +22,9 @@ from license.helper import round_down, check_license
 from . import forms, tables, filters
 from . import models as license
 from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_milk_query, dietary_query, food_query, \
-    packing_query, juice_query, oci_query, fruit_query, get_table_query
+    packing_query, juice_query, oci_query, fruit_query, get_table_query, report_dict_generate, conversion_other, \
+    conversion_main, biscuit_2009, biscuit_2019, biscuit_2019_other, confectinery_2009, confectinery_2019, \
+    confectinery_2019_other
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -287,53 +294,9 @@ class PDFCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
     def get_context_data(self, **kwargs):
         context = super(PDFCReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
-        from license.models import N2015
-        try:
-            query_dict = {
-                'export_license__norm_class__norm_class': 'E5',
-                'notification_number': N2015
-            }
-            or_filters = {
-                'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-            }
-            exclude_or_filters={
-                'export_license__old_quantity':0
-            }
-            queryset = get_table_query(query_dict, or_filters=or_filters,exclude_or_filters=exclude_or_filters)
-            table = LicenseBiscuitReportTable(queryset)
-            tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table})
-            query_dict = {
-                'export_license__norm_class__norm_class': 'E1',
-                'notification_number': N2015
-            }
-            or_filters = {
-                'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-            }
-            exclude_or_filters = {
-                'export_license__old_quantity': 0
-            }
-            queryset = get_table_query(query_dict, or_filters=or_filters, exclude_or_filters=exclude_or_filters)
-            table = LicenseConfectineryReportTable(queryset)
-            tables.append({'label': 'RAMA RANI VANNILA Confectinery', 'table': table})
-            query_dict = {
-                'export_license__norm_class__norm_class': 'E5',
-                'notification_number': N2015
-            }
-            or_filters = {
-                'exporter__name__icontains': ['Parle']
-            }
-            exclude_or_filters = {
-                'export_license__old_quantity': 0
-            }
-            queryset = get_table_query(query_dict, or_filters=or_filters, exclude_or_filters=exclude_or_filters)
-            table = LicenseBiscuitReportTable(queryset)
-            tables.append({'label': 'Parle Biscuits', 'table': table})
-            context['today_date'] = datetime.datetime.now().date()
-            context['tables'] = tables
-        except Exception as e:
-            pass
+        tables = conversion_main()
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
         return context
 
 
@@ -346,29 +309,9 @@ class PDFNewBiscuitsReportView(PDFTemplateResponseMixin, PagedFilteredTableView)
 
     def get_context_data(self, **kwargs):
         context = super(PDFNewBiscuitsReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseBiscuitReportTable
-        from license.models import N2015
-        from django.db.models import Q
-        try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
-                                                                           license_expiry_date__gt=expiry_limit,
-                                                                           is_self=True, is_au=False).order_by(
-                'license_expiry_date')
-            filter_query = biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila')).distinct()
-            table = LicenseBiscuitReportTable(filter_query)
-            tables.append({'label': 'RAMA RANI Other Biscuits', 'table': table})
-            filter_query = biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).filter(
-                Q(exporter__name__icontains='parle')).distinct()
-            table = LicenseBiscuitReportTable(filter_query)
-            tables.append({'label': 'Parle Other Biscuits', 'table': table})
-            context['today_date'] = datetime.datetime.now().date()
-            context['tables'] = tables
-        except:
-            pass
+        tables = biscuit_2019()
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
         return context
 
 
@@ -381,25 +324,9 @@ class PDFNewBiscuitsOtherReportView(PDFTemplateResponseMixin, PagedFilteredTable
 
     def get_context_data(self, **kwargs):
         context = super(PDFNewBiscuitsOtherReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseBiscuitReportTable
-        from license.models import N2015
-        from django.db.models import Q
-        try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
-                                                                           license_expiry_date__gt=expiry_limit,
-                                                                           is_self=True, is_au=False).order_by(
-                'license_expiry_date')
-            filter_query = biscuits_queryset.filter(export_license__old_quantity=0, notification_number=N2015).exclude(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle')).distinct()
-            table = LicenseBiscuitReportTable(filter_query)
-            tables.append({'label': 'Biscuits Remaning 019/2015 Notification', 'table': table})
-            context['today_date'] = datetime.datetime.now().date()
-            context['tables'] = tables
-        except:
-            pass
+        tables = biscuit_2019_other()
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
         return context
 
 
@@ -412,31 +339,9 @@ class PDFNewConfectioneryReportView(PDFTemplateResponseMixin, PagedFilteredTable
 
     def get_context_data(self, **kwargs):
         context = super(PDFNewConfectioneryReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseConfectineryReportTable
-        from license.models import N2015
-        from django.db.models import Q
-        try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
-                export_license__norm_class__norm_class='E1',
-                license_expiry_date__gt=expiry_limit,
-                is_self=True, is_au=False).order_by('license_expiry_date')
-            filter_query = confectionery_queryset.filter(export_license__old_quantity=0,
-                                                         notification_number=N2015).filter(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila')).distinct()
-            table = LicenseConfectineryReportTable(filter_query)
-            tables.append({'label': 'RAMA RANI VANNILA Other Confectinery', 'table': table})
-            filter_query = confectionery_queryset.filter(export_license__old_quantity=0,
-                                                         notification_number=N2015).filter(
-                Q(exporter__name__icontains='parle')).distinct()
-            table = LicenseConfectineryReportTable(filter_query)
-            tables.append({'label': 'Parle Other Confectinery', 'table': table})
-            context['today_date'] = datetime.datetime.now().date()
-            context['tables'] = tables
-        except:
-            pass
+        tables = confectinery_2019()
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
         return context
 
 
@@ -449,26 +354,9 @@ class PDFNewConfectioneryOtherReportView(PDFTemplateResponseMixin, PagedFiltered
 
     def get_context_data(self, **kwargs):
         context = super(PDFNewConfectioneryOtherReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseConfectineryReportTable
-        from license.models import N2015
-        from django.db.models import Q
-        try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
-                export_license__norm_class__norm_class='E1',
-                license_expiry_date__gt=expiry_limit,
-                is_self=True, is_au=False).order_by('license_expiry_date')
-            filter_query = confectionery_queryset.filter(export_license__old_quantity=0,
-                                                         notification_number=N2015).exclude(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila') | Q(exporter__name__icontains='parle')).distinct()
-            table = LicenseConfectineryReportTable(filter_query)
-            tables.append({'label': 'Confectinery Remaning 019/2015 Notification', 'table': table})
-            context['today_date'] = datetime.datetime.now().date()
-            context['tables'] = tables
-        except Exception as e:
-            pass
+        tables = confectinery_2019_other()
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
         return context
 
 
@@ -481,27 +369,9 @@ class PDFOldBisReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
     def get_context_data(self, **kwargs):
         context = super(PDFOldBisReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseBiscuitReportTable
-        from license.models import N2009
-        try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
-                                                                           license_expiry_date__gt=expiry_limit,
-                                                                           is_self=True, is_au=False).order_by(
-                'license_expiry_date')
-            q_biscuits_queryset = biscuits_queryset.exclude(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani'))
-            table = LicenseBiscuitReportTable(q_biscuits_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Biscuits 098/2019 Notification [ No Rama & Rani]', 'table': table})
-            q_biscuits_queryset = biscuits_queryset.filter(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani'))
-            table = LicenseBiscuitReportTable(q_biscuits_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Rama Rani Biscuits 098/2019 Notification', 'table': table})
-            context['today_date'] = datetime.datetime.now().date()
-            context['tables'] = tables
-        except:
-            pass
+        tables = biscuit_2009()
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
         return context
 
 
@@ -514,99 +384,9 @@ class PDFOldConReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
     def get_context_data(self, **kwargs):
         context = super(PDFOldConReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseConfectineryReportTable
-        from license.models import N2009
-        try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
-                export_license__norm_class__norm_class='E1',
-                license_expiry_date__gt=expiry_limit,
-                is_self=True, is_au=False).order_by('license_expiry_date')
-            q_confectionery_queryset = confectionery_queryset.exclude(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani'))
-            table = LicenseConfectineryReportTable(
-                q_confectionery_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Confectinery 098/2019 Notification [ No Rama & Rani]', 'table': table})
-            q_confectionery_queryset = confectionery_queryset.filter(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani'))
-            table = LicenseConfectineryReportTable(
-                q_confectionery_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Rama & Rani Confectinery 098/2019 Notification', 'table': table})
-            context['today_date'] = datetime.datetime.now().date()
-            context['tables'] = tables
-        except:
-            pass
-        return context
-
-
-class PDFOldRajawaniReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
-    template_name = 'license/report_pdf.html'
-    model = license.LicenseDetailsModel
-    table_class = tables.LicenseBiscuitReportTable
-    filter_class = filters.LicenseReportFilter
-    context_object_name = 'license_list'
-
-    def get_context_data(self, **kwargs):
-        context = super(PDFOldRajawaniReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
-        from license.models import N2009
-        try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
-                                                                           license_expiry_date__gt=expiry_limit,
-                                                                           is_self=True, is_au=False).order_by(
-                'license_expiry_date')
-            q_biscuits_queryset = biscuits_queryset.filter(
-                Q(exporter__name__icontains='rajwani'))
-            table = LicenseBiscuitReportTable(q_biscuits_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Biscuits 098/2019 Notification [Rajwani]', 'table': table})
-            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
-                export_license__norm_class__norm_class='E1',
-                license_expiry_date__gt=expiry_limit,
-                is_self=True, is_au=False).order_by('license_expiry_date')
-            q_confectionery_queryset = confectionery_queryset.filter(
-                Q(exporter__name__icontains='rajwani'))
-            table = LicenseConfectineryReportTable(
-                q_confectionery_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Confectinery 098/2019 Notification [Rajwani]', 'table': table})
-            context['today_date'] = datetime.datetime.now().date()
-            context['tables'] = tables
-        except:
-            pass
-        return context
-
-
-class BiscuitsAmendmentView(PDFTemplateResponseMixin, PagedFilteredTableView):
-    template_name = 'license/pdf_amend.html'
-    model = license.LicenseDetailsModel
-    table_class = tables.LicenseBiscuitReportTable
-    filter_class = filters.LicenseReportFilter
-    context_object_name = 'license_list'
-
-    def get_context_data(self, **kwargs):
-        context = super(BiscuitsAmendmentView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
-        from license.models import N2009
-        try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
-                                                                           license_expiry_date__gt=expiry_limit,
-                                                                           is_self=True, is_au=False).order_by(
-                'license_expiry_date')
-            table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Biscuits 098/2019 Notification', 'table': table})
-            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
-                export_license__norm_class__norm_class='E1',
-                license_expiry_date__gt=expiry_limit,
-                is_self=True, is_au=False).order_by('license_expiry_date')
-            table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Confectinery 098/2019 Notification', 'table': table})
-            context['tables'] = tables
-        except:
-            pass
+        tables = confectinery_2009()
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
         return context
 
 
@@ -818,39 +598,8 @@ class PDFOCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
     def get_context_data(self, **kwargs):
         context = super(PDFOCReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
-        from license.models import N2015
-        from django.db.models import Q
-        try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
-            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
-                                                                           license_expiry_date__gt=expiry_limit,
-                                                                           is_self=True, is_au=False).order_by(
-                'license_expiry_date')
-            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
-                export_license__norm_class__norm_class='E1',
-                license_expiry_date__gt=expiry_limit,
-                is_self=True, is_au=False).order_by('license_expiry_date')
-
-            table = LicenseBiscuitReportTable(biscuits_queryset.filter(notification_number=N2015).exclude(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila') | Q(
-                    exporter__name__icontains='parle')).exclude(export_license__old_quantity=0).distinct())
-            tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table})
-            table = LicenseConfectineryReportTable(confectionery_queryset.filter(notification_number=N2015).exclude(
-                Q(exporter__name__icontains='rama') | Q(exporter__name__icontains='rani') | Q(
-                    exporter__name__icontains='vanila') | Q(
-                    exporter__name__icontains='parle')).exclude(export_license__old_quantity=0).distinct())
-            tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table})
-            table = LicenseConfectineryReportTable(
-                confectionery_queryset.filter(notification_number=N2015).filter(
-                    exporter__name__icontains='parle').exclude(
-                    export_license__old_quantity=0).distinct())
-            tables.append({'label': 'Parle Confectinery', 'table': table})
-            context['tables'] = tables
-        except:
-            pass
+        tables = conversion_other()
+        context['tables'] = tables
         return context
 
 
@@ -1106,3 +855,109 @@ class PremiumCalculationView(PDFTemplateResponseMixin, PagedFilteredTableView):
 def analysis(requests):
     check_license()
     return HttpResponseRedirect(reverse('license-list'))
+
+
+class LicenseReportListView(TemplateResponseMixin, ContextMixin, View):
+    template_name = 'license/report_form.html'
+
+    def render_to_file(self, data_dict, folder_name=None):
+        template = get_template(data_dict['template_name'])
+        html = template.render(data_dict)
+        file_name = "{0}.pdf".format(data_dict['page_title'])
+        file_path = os.path.join(os.path.abspath(os.path.dirname("__file__")), folder_name)
+        if not os.path.exists(file_path):
+            os.mkdir(file_path)
+        file_path = os.path.join(os.path.abspath(os.path.dirname("__file__")), folder_name, file_name)
+        with open(file_path, 'wb') as pdf:
+            pisa.pisaDocument(BytesIO(html.encode("UTF-8")), pdf)
+        return [file_name, file_path]
+
+    def get(self, request, *args, **kwargs):
+        item_report = self.request.GET.get('item_report', None)
+        item_generate = self.request.GET.get('item_generate', None)
+        start_date = self.request.GET.get('start_date', None)
+        end_date = self.request.GET.get('end_date', None)
+        date_range = {
+            'start': start_date,
+            'end': end_date
+        }
+        if item_report:
+            file_name = "Item Report " + str(datetime.datetime.now().date())
+            self.render_to_file(report_dict_generate(sugar_query(date_range=date_range), 'Sugar', total_quantity=0),
+                                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(rbd_query(date_range=date_range), 'RBD Palmolein Oil', total_quantity=0),
+                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(milk_query(date_range=date_range), 'Milk & Milk [Whey]', total_quantity=0),
+                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(wpc_query(date_range=date_range), 'Milk & Milk [WPC]', total_quantity=0),
+                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(skimmed_milk_query(date_range=date_range), 'Milk & Milk [Skimmed Milk]',
+                                     total_quantity=0), folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(dietary_query(date_range=date_range), 'Dietary Fibre', total_quantity=0),
+                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(food_query(date_range=date_range), 'Food Flavour', total_quantity=0),
+                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(fruit_query(date_range=date_range), 'Fruit (Biscuit)', total_quantity=0),
+                folder_name=file_name)
+            self.render_to_file(report_dict_generate(packing_query(date_range=date_range), 'PP', total_quantity=0),
+                                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(oci_query(date_range=date_range), 'Other Confectionery Ingredients',
+                                     total_quantity=0), folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(juice_query(date_range=date_range), 'Fruit Juice', total_quantity=0),
+                folder_name=file_name)
+            files_path = os.path.join(os.path.abspath(os.path.dirname("__file__")), file_name)
+            from shutil import make_archive
+            path_to_zip = make_archive(files_path, "zip", files_path)
+            zip_file = open(path_to_zip, 'rb')
+            from django.http import HttpResponse
+            response = HttpResponse(zip_file, content_type='application/force-download')
+            response['Content-Disposition'] = 'attachment; filename="{filename}.zip"'.format(
+                filename=file_name.replace(" ", "_")
+            )
+            return response
+        elif item_generate:
+            file_name = "License Report " + str(datetime.datetime.now().date())
+            self.render_to_file(report_dict_generate(conversion_other(date_range=date_range), 'Conversion V Group'),
+                                folder_name=file_name)
+            self.render_to_file(report_dict_generate(conversion_main(date_range=date_range), 'Conversion Main'),
+                                folder_name=file_name)
+            self.render_to_file(report_dict_generate(biscuit_2009(date_range=date_range), 'Biscuit 98_2009'),
+                                folder_name=file_name)
+            self.render_to_file(report_dict_generate(biscuit_2019(date_range=date_range), 'Biscuit 19_2015'),
+                                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(biscuit_2019_other(date_range=date_range), 'Biscuit 19_2015 Other'),
+                folder_name=file_name)
+            self.render_to_file(report_dict_generate(confectinery_2009(date_range=date_range), 'Confectionery 98_2009'),
+                                folder_name=file_name)
+            self.render_to_file(report_dict_generate(confectinery_2019(date_range=date_range), 'Confectionery 19_2015'),
+                                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(confectinery_2019_other(date_range=date_range), 'Confectionery 19_2015 Other'),
+                folder_name=file_name)
+            files_path = os.path.join(os.path.abspath(os.path.dirname("__file__")), file_name)
+            from shutil import make_archive
+            path_to_zip = make_archive(files_path, "zip", files_path)
+            zip_file = open(path_to_zip, 'rb')
+            from django.http import HttpResponse
+            response = HttpResponse(zip_file, content_type='application/force-download')
+            response['Content-Disposition'] = 'attachment; filename="{filename}.zip"'.format(
+                filename=file_name.replace(" ", "_")
+            )
+            return response
+        else:
+            context = self.get_context_data(**kwargs)
+            return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        context = super(LicenseReportListView, self).get_context_data()
+        return context

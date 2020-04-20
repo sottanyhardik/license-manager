@@ -350,7 +350,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
 
 
 def report_dict_generate(tables, title, total_quantity=None):
-    if total_quantity:
+    if total_quantity == 0:
         for table in tables:
             if table['total']:
                 total_quantity = total_quantity + table['total']

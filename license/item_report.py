@@ -108,8 +108,14 @@ def milk_query(date_range=None):
         'item__head__name__icontains': 'milk & milk products',
         'hs_code__hs_code__icontains': '04041020'
     }
+    exclude_or_filters = {
+        'license__license_number': '0310832494'
+    }
+    queryset = all_queryset(query_dict, date_range=date_range,exclude_or_filters=exclude_or_filters)
+    tables = query_set_table(tables, queryset, 'Whey Powder')
+    query_dict['license__license_number'] = '0310832494'
     queryset = all_queryset(query_dict, date_range=date_range)
-    tables = query_set_table(tables, queryset)
+    tables = query_set_table(tables, queryset, 'CHEESE')
     return tables
 
 

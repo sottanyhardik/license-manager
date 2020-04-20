@@ -23,8 +23,6 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
         query_dict['license__license_expiry_date__gte'] = expiry_limit
     query_dict['license__is_self'] = True
     query_dict['license__is_au'] = False
-    query_dict['available_quantity__gte'] = minimun_qty
-    query_dict['available_value__gte'] = minimun_value
     my_filter = Q()
     for item in query_dict:
         my_filter &= Q(**{item: query_dict[item]})

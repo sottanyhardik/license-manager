@@ -4,6 +4,7 @@ from docxtpl import DocxTemplate
 
 import csv
 
+
 def remove(path):
     """ param <path> could either be relative or absolute. """
     import os
@@ -14,6 +15,7 @@ def remove(path):
             shutil.rmtree(path)  # remove dir and all contains
     else:
         return True
+
 
 def generate_documents(data=None, path=''):
     if data:
@@ -72,13 +74,17 @@ def generate_agreement():
         doc.save(context['license'] + "_Tri-party agreement.docx")
 
 
-def generate_tl_ge():
-    input_file = csv.DictReader(open("vkc.csv"))
-    for context in input_file:
-        print(context)
-        doc = DocxTemplate("BLANK TL.docx")
-        doc.render(context)
-        doc.save(context['id'] + '-' + context['license'] + "_GE_TL.docx")
+def generate_tl_software(data, tl_path, path=''):
+    if data:
+        input_file = data
+        import os
+        remove(path)
+        os.mkdir(path)
+        for context in data:
+            print(context)
+            doc = DocxTemplate(tl_path)
+            doc.render(context)
+            doc.save(path + context['license'] + "_TL.docx")
 
 
 def generate_sugar():

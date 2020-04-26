@@ -186,3 +186,13 @@ class ProductDescriptionModel(models.Model):
 
     def __str__(self):
         return self.product_description
+
+
+
+
+class TransferLetterModel(models.Model):
+    name = models.CharField(max_length=255)
+    tl = models.FileField(upload_to='tl')
+
+    def __str__(self):
+        return self.name

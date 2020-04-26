@@ -78,6 +78,12 @@
                    data-target="div-{{ object.id }}">Generate Letters</a>
             </li>
             <li class="nav-item">
+                 <a class="nav-link" onclick="fetch_page(this)" data-toggle="pill" role="tab"
+                   aria-controls="pills-home" aria-selected="true" href="#div-{{ object.id }}"
+                   data-url="{% url 'allotment-tl' object.id %}"
+                   data-target="div-{{ object.id }}">Transfer Letter</a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link" onclick="fetch_page(this)" data-toggle="pill" role="tab"
                    aria-controls="pills-home" aria-selected="true" href="#div-{{ object.id }}"
                    data-url="{% url 'allotment-delete' object.id %}"

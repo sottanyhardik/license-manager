@@ -2,9 +2,9 @@ import datetime
 
 from django.db.models import Q, Sum
 
-from . import models as license
-from .models import N2009, N2015, LicenseDetailsModel
-from .tables import LicenseItemReportTable
+from license import models as license
+from license.models import N2009, N2015, LicenseDetailsModel
+from license.tables import LicenseItemReportTable
 
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,

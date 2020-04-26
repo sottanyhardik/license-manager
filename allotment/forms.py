@@ -49,3 +49,13 @@ class AROForm(forms.Form):
     company_address = forms.CharField( widget=forms.Textarea )
     mill_address = forms.CharField( widget=forms.Textarea )
     dgft_address = forms.CharField( widget=forms.Textarea )
+
+
+class TlForm(forms.Form):
+    tl_choice = forms.ModelChoiceField(
+        queryset=core_models.TransferLetterModel.objects.all(),
+        required=False
+    )
+    company = forms.CharField(required=True)
+    company_address_line1 = forms.CharField( widget=forms.Textarea)
+    company_address_line2 = forms.CharField(widget=forms.Textarea)

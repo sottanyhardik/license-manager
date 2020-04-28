@@ -5,8 +5,8 @@ from django.db.models import Sum
 from django.urls import reverse
 from django.utils import timezone
 
-from allotment.models import AllotmentItems, Debit
-from bill_of_entry.models import RowDetails
+from allotment.models import AllotmentItems, Debit, ALLOTMENT
+from bill_of_entry.models import RowDetails, ARO
 
 DFIA = "26"
 
@@ -63,13 +63,25 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_total_debit(self):
-        return \
-            RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
-                'cif_fc__sum']
+        alloted = AllotmentItems.objects.filter(item__license=self, allotment__type=ARO,
+                                                allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+            Sum('cif_fc'))['cif_fc__sum']
+        debited = \
+        RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
+            'cif_fc__sum']
+        if debited and alloted:
+            total = debited + alloted
+        elif alloted:
+            total = alloted
+        elif debited:
+            total = debited
+        else:
+            total = 0
+        return round(total, 2)
 
     @property
     def get_total_allotment(self):
-        return AllotmentItems.objects.filter(item__license=self,
+        return AllotmentItems.objects.filter(item__license=self, allotment__type=ALLOTMENT,
                                              allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
             Sum('cif_fc'))['cif_fc__sum']
 
@@ -269,14 +281,21 @@ class LicenseImportItemsModel(models.Model):
     @property
     def debited_quantity(self):
         debited = self.item_details.filter(transaction_type='D').aggregate(Sum('qty'))['qty__sum']
-        if debited:
-            return debited
+        alloted = self.allotment_details.filter(allotment__type=ARO).aggregate(Sum('qty'))['qty__sum']
+        if debited and alloted:
+            total = debited + alloted
+        elif alloted:
+            total = alloted
+        elif debited:
+            total = debited
         else:
-            return 0
+            total = 0
+        return round(total, 2)
 
     @property
     def alloted_quantity(self):
-        alloted = self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+        alloted = self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+                                                allotment__type=ALLOTMENT).aggregate(
             Sum('qty'))['qty__sum']
         if alloted:
             return alloted
@@ -304,25 +323,44 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def debited_value(self):
-        return self.item_details.filter(transaction_type='D').aggregate(Sum('cif_fc'))['cif_fc__sum']
+        debited = self.item_details.filter(transaction_type='D').aggregate(Sum('cif_fc'))['cif_fc__sum']
+        alloted = self.allotment_details.filter(allotment__type=ARO).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        if debited and alloted:
+            total = debited + alloted
+        elif alloted:
+            total = alloted
+        elif debited:
+            total = debited
+        else:
+            total = 0
+        return round(total, 2)
 
     @property
     def alloted_value(self):
-        return self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+        return self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+                                             allotment__type=ALLOTMENT).aggregate(
             Sum('cif_fc'))['cif_fc__sum']
 
     @property
     def balance_cif_fc(self):
-        if not self.cif_fc or self.cif_fc == 0 or self.cif_fc == 0.01:
+        if not self.cif_fc or int(self.cif_fc) == 0 or self.cif_fc== 0.1:
             credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
         else:
             credit = self.cif_fc
-        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
-            Sum('cif_fc'))[
-            'cif_fc__sum']
-        allotment = AllotmentItems.objects.filter(item__license=self.license,
-                                                  allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-            Sum('cif_fc'))['cif_fc__sum']
+        if not self.cif_fc or self.cif_fc == 0.01:
+            debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
+                Sum('cif_fc'))[
+                'cif_fc__sum']
+            allotment = AllotmentItems.objects.filter(item__license=self.license,
+                                                      allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+                Sum('cif_fc'))['cif_fc__sum']
+        else:
+            debit = RowDetails.objects.filter(sr_number=self).filter(transaction_type=Debit).aggregate(
+                Sum('cif_fc'))[
+                'cif_fc__sum']
+            allotment = AllotmentItems.objects.filter(item=self,
+                                                      allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+                Sum('cif_fc'))['cif_fc__sum']
         t_debit = 0
         if debit:
             t_debit = t_debit + debit
@@ -372,7 +410,18 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def total_debited_cif_fc(self):
-        return self.item_details.filter(transaction_type='D').aggregate(Sum('cif_fc')).get('cif_fc__sum', 0.00)
+        debited = self.item_details.filter(transaction_type='D').aggregate(Sum('cif_fc')).get('cif_fc__sum', 0.00)
+        alloted = self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+                                                allotment__type=ARO).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        if debited and alloted:
+            total = debited + alloted
+        elif alloted:
+            total = alloted
+        elif debited:
+            total = debited
+        else:
+            total = 0
+        return round(total, 0)
 
     @property
     def total_debited_cif_inr(self):

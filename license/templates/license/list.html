@@ -98,7 +98,7 @@
                     <li class="nav-item">
                         <a class="nav-link" id="pills-contact-tab" data-toggle="pill" href="#license-list"
                            role="tab" aria-controls="pills-contact" aria-selected="false"
-                           data-url="{% url 'license-ajax-list' %}"
+                           data-url="{% url 'license-ajax-list' %}{% relative_url True 'all' request.GET.urlencode %}"
                            data-target="license-list" onclick="fetch_page(this)"
                         >All Licenses</a>
                     </li>

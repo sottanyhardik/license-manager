@@ -167,7 +167,7 @@
                         {% if item.cif_inr == object.export_license.all.0.cif_inr %}
                             0.0
                         {% else %}
-                            {{ item.cif_fc }}
+                            {{ item.cif_inr }}
                         {% endif %}
                     </td>
                     <td>{{ item.bill_of_entry.company|title }}</td>
@@ -178,7 +178,7 @@
                 <tr >
                     <td>{{ item.allotment.modified_on }}</td>
                     <td></td>
-                    <td>ALLOTMENT</td>
+                    <td>{{ item.allotment.get_type_display }}</td>
                     <td>{{ item.qty }}</td>
                     <td>
                         {{ item.cif_fc }}

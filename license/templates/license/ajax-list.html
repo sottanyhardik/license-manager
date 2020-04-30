@@ -1,4 +1,8 @@
 {% load core_tag %}
+<div class="row">
+    <div class="col-md-10"></div>
+        <div class="col-md-2"><a href="{% url 'license-list' %}{% relative_url True 'csv' request.GET.urlencode %}" class="btn btn-primary">Download</a></div>
+</div>
 {% if is_paginated %}
     <nav>
         <ul class="pagination d-flex flex-wrap justify-content-center pagination-success">

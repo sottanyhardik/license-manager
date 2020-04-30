@@ -179,6 +179,17 @@ class LicenseListView(FilterView):
         context['filter'] = self.filterset
         return context
 
+    def get(self, request, **kwargs):
+        csv = request.GET.get('csv', False)
+        # check for format query key in url (my/url/?format=csv)
+        if csv:
+            f = self.filterset_class(request.GET, queryset=self.model.objects.all())
+            query = f.qs.values('license_number', 'license_date', 'license_expiry_date', 'file_number',
+                                'exporter__name', 'balance_cif', 'user_comment','ledger_date')
+            from djqscsv import render_to_csv_response
+            return render_to_csv_response(query.order_by('license_expiry_date'))
+        return super(LicenseListView, self).get(request, **kwargs)
+
 
 class LicenseAjaxListView(FilterView):
     template_name = 'license/ajax-list.html'
@@ -187,6 +198,14 @@ class LicenseAjaxListView(FilterView):
     paginate_by = 50
     queryset = license.LicenseDetailsModel.objects.filter()
     ordering = "license_expiry_date"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data()
+        context['is_active'] = True
+        filterset_class = self.get_filterset_class()
+        self.filterset = self.get_filterset(filterset_class)
+        context['filter'] = self.filterset
+        return context
 
 
 class LicenseCardView(DetailView):

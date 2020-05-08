@@ -45,4 +45,5 @@ urlpatterns = [
          name='item_report_list'),
     path('calc/premium', login_required(views.PremiumCalculationView.as_view()), name='premium'),
     path('generate/report', login_required(views.LicenseReportListView.as_view()), name='report_list'),
+    path('consolidate/pdf', login_required(views.LicensePDFConsolidateView.as_view()), name='consolidate'),
 ]

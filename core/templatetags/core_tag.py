@@ -17,3 +17,13 @@ def relative_url(value, field_name, urlencode=None):
         encoded_querystring = '&'.join(filtered_querystring)
         url = '{}&{}'.format(url, encoded_querystring)
     return url
+
+
+@register.simple_tag
+def calculate_required_value(quantity, unit_price):
+    if quantity > 100:
+        value = round(quantity * unit_price,2)
+        return value
+    else:
+        return 0
+

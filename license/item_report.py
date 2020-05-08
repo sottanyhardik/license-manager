@@ -4,7 +4,7 @@ from django.db.models import Q, Sum
 
 from license import models as license
 from license.models import N2009, N2015, LicenseDetailsModel
-from license.tables import LicenseItemReportTable
+from license.tables import LicenseItemReportTable, LicenseBiscuitReportTable, LicenseConfectineryReportTable
 
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
@@ -111,7 +111,7 @@ def milk_query(date_range=None):
     exclude_or_filters = {
         'license__license_number': '0310832494'
     }
-    queryset = all_queryset(query_dict, date_range=date_range,exclude_or_filters=exclude_or_filters)
+    queryset = all_queryset(query_dict, date_range=date_range, exclude_or_filters=exclude_or_filters)
     tables = query_set_table(tables, queryset, 'Whey Powder')
     query_dict['license__license_number'] = '0310832494'
     queryset = all_queryset(query_dict, date_range=date_range)
@@ -366,177 +366,155 @@ def report_dict_generate(tables, title, total_quantity=None):
     return data_dict
 
 
-def conversion_other(date_range=None):
-    tables = []
-    from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
-    from license.models import N2015
+def generate_table(queryset, table):
+    table = table(queryset)
+    return table
+
+
+def biscuit_conversion(date_range=None, party=None, exclude_party=None):
     query_dict = {
         'export_license__norm_class__norm_class': 'E5',
         'notification_number': N2015
     }
-    exclude_and_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA', 'parle']
-    }
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
     exclude_or_filters = {
         'export_license__old_quantity': 0
     }
-    queryset = get_table_query(query_dict, date_range=date_range, exclude_and_filters=exclude_and_filters,
-                               exclude_or_filters=exclude_or_filters)
-    table = LicenseBiscuitReportTable(queryset)
-    tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits', 'table': table})
+    return get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
+                           exclude_or_filters=exclude_or_filters, exclude_and_filters=exclude_and_filters)
+
+
+def confectionery_conversion(date_range=None, party=None, exclude_party=None):
     query_dict = {
         'export_license__norm_class__norm_class': 'E1',
         'notification_number': N2015
     }
-    queryset = get_table_query(query_dict, date_range=date_range, exclude_and_filters=exclude_and_filters,
-                               exclude_or_filters=exclude_or_filters)
-    table = LicenseConfectineryReportTable(queryset)
-    tables.append({'label': 'Viva, V A global, Vipul Kumar Confectinery', 'table': table})
-    or_filters = {
-        'exporter__name__icontains': ['parle']
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
+    exclude_or_filters = {
+        'export_license__old_quantity': 0
     }
+    return get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
+                           exclude_or_filters=exclude_or_filters, exclude_and_filters=exclude_and_filters)
+
+
+def biscuit_2019(date_range=None, party=None, exclude_party=None):
+    query_dict = {
+        'export_license__norm_class__norm_class': 'E5',
+        'notification_number': N2015,
+        'export_license__old_quantity': 0
+    }
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
     queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
-                               exclude_or_filters=exclude_or_filters)
-    table = LicenseConfectineryReportTable(queryset)
-    tables.append({'label': 'Parle Confectinery', 'table': table})
+                               exclude_and_filters=exclude_and_filters)
+    return queryset
+
+
+def biscuit_2019_rama_rani(date_range=None):
+    tables = [{'label': 'RAMA RANI New Biscuits',
+               'table': generate_table(biscuit_2019(party=['rama', 'rani']),
+                                       LicenseBiscuitReportTable)}, {'label': 'Parle New Biscuits',
+                                                                     'table': generate_table(
+                                                                         biscuit_2019(party=['Parle']),
+                                                                         LicenseBiscuitReportTable)}]
+
+    return tables
+
+
+def conversion_other(date_range=None):
+    tables = []
+    from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
+    tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits',
+                   'table': generate_table(
+                       biscuit_conversion(date_range, exclude_party=['rama', 'rani', 'vanila', 'parle']),
+                       LicenseBiscuitReportTable)})
+    tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits',
+                   'table': generate_table(
+                       confectionery_conversion(date_range, exclude_party=['rama', 'rani', 'vanila', 'parle']),
+                       LicenseConfectineryReportTable)})
+    tables.append({'label': 'Parle Confectinery',
+                   'table': generate_table(
+                       confectionery_conversion(date_range, party=['parle']),
+                       LicenseConfectineryReportTable)})
     return tables
 
 
 def conversion_main(date_range=None):
-    tables = []
-    from license.tables import LicenseBiscuitReportTable, LicenseConfectineryReportTable
-    from license.models import N2015
-    query_dict = {
-        'export_license__norm_class__norm_class': 'E5',
-        'notification_number': N2015
-    }
-    or_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-    }
-    exclude_or_filters = {
-        'export_license__old_quantity': 0
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters, exclude_or_filters=exclude_or_filters)
-    table = LicenseBiscuitReportTable(queryset)
-    tables.append({'label': 'RAMA RANI VANNILA Biscuits', 'table': table})
-    query_dict = {
-        'export_license__norm_class__norm_class': 'E1',
-        'notification_number': N2015
-    }
-    or_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-    }
-    exclude_or_filters = {
-        'export_license__old_quantity': 0
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters, exclude_or_filters=exclude_or_filters)
-    table = LicenseConfectineryReportTable(queryset)
-    tables.append({'label': 'RAMA RANI VANNILA Confectinery', 'table': table})
-    query_dict = {
-        'export_license__norm_class__norm_class': 'E5',
-        'notification_number': N2015
-    }
-    or_filters = {
-        'exporter__name__icontains': ['Parle']
-    }
-    exclude_or_filters = {
-        'export_license__old_quantity': 0
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters, exclude_or_filters=exclude_or_filters)
-    table = LicenseBiscuitReportTable(queryset)
-    tables.append({'label': 'Parle Biscuits', 'table': table})
+    tables = [{'label': 'RAMA RANI Biscuits',
+               'table': generate_table(biscuit_conversion(date_range, party=['rama', 'rani']),
+                                       LicenseBiscuitReportTable)},
+              {'label': 'RAMA RANI & VANILLA Confectionery',
+               'table': generate_table(confectionery_conversion(date_range, party=['rama', 'rani', 'VANILLA']),
+                                       LicenseConfectineryReportTable)},
+              {'label': 'Parle Biscuits',
+               'table': generate_table(biscuit_conversion(date_range, party=['Parle']),
+                                       LicenseBiscuitReportTable)}]
     return tables
 
 
-def biscuit_2019(date_range=None):
-    tables = []
-    from license.tables import LicenseBiscuitReportTable
-    from license.models import N2015
-    query_dict = {
-        'export_license__norm_class__norm_class': 'E5',
-        'notification_number': N2015,
-        'export_license__old_quantity': 0
-    }
-    or_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters)
-    table = LicenseBiscuitReportTable(queryset)
-    tables.append({'label': 'RAMA RANI Other Biscuits', 'table': table})
-    or_filters = {
-        'exporter__name__icontains': ['parle']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters)
-    table = LicenseBiscuitReportTable(queryset)
-    tables.append({'label': 'Parle Other Biscuits', 'table': table})
-    return tables
-
-
-def biscuit_2009(date_range=None):
-    tables = []
+def biscuit_2009(date_range=None, party=None, exclude_party=None):
     from license.models import N2009
-    from license.tables import LicenseBiscuitReportTable
     query_dict = {
         'export_license__norm_class__norm_class': 'E5',
         'notification_number': N2009
     }
-    exclude_and_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, exclude_and_filters=exclude_and_filters)
-    table = LicenseBiscuitReportTable(queryset)
-    tables.append({'label': 'Biscuits 098/2019 Notification [ No Rama & Rani]', 'table': table})
-    or_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters)
-    table = LicenseBiscuitReportTable(queryset)
-    tables.append({'label': 'Rama Rani Biscuits 098/2019 Notification', 'table': table})
-    return tables
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
+    queryset = get_table_query(query_dict, date_range=date_range, exclude_and_filters=exclude_and_filters,
+                               or_filters=or_filters)
+    return queryset
 
 
 def biscuit_2019_other(date_range=None):
-    tables = []
-    from license.tables import LicenseBiscuitReportTable
-    from license.models import N2015
-    query_dict = {
-        'export_license__norm_class__norm_class': 'E5',
-        'notification_number': N2015,
-        'export_license__old_quantity': 0
-    }
-    exclude_and_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA', 'parle']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, exclude_and_filters=exclude_and_filters)
-    table = LicenseBiscuitReportTable(queryset)
-    tables.append({'label': 'Biscuits Remaning 019/2015 Notification', 'table': table})
+    tables = [{'label': 'Biscuits New Remaning [019/2015]',
+               'table': generate_table(biscuit_2019(date_range, exclude_party=['rama', 'rani', 'VANILA', 'parle']),
+                                       LicenseBiscuitReportTable)}]
     return tables
 
 
-def confectinery_2009(date_range=None):
-    tables = []
-    from license.tables import LicenseConfectineryReportTable
-    from license.models import N2009
-    query_dict = {
-        'export_license__norm_class__norm_class': 'E1',
-        'notification_number': N2009
-    }
-    exclude_and_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, exclude_and_filters=exclude_and_filters)
-    table = LicenseConfectineryReportTable(queryset)
-    tables.append({'label': 'Confectinery 098/2019 Notification [ No Rama & Rani]', 'table': table})
-    or_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters)
-    table = LicenseConfectineryReportTable(queryset)
-    tables.append({'label': 'Rama & Rani Confectinery 098/2019 Notification', 'table': table})
-    return tables
-
-
-def confectinery_2019(date_range=None):
+def confectinery_2019(date_range=None, party=None, exclude_party=None):
     tables = []
     from license.tables import LicenseConfectineryReportTable
     from license.models import N2015
@@ -545,34 +523,221 @@ def confectinery_2019(date_range=None):
         'notification_number': N2015,
         'export_license__old_quantity': 0
     }
-    or_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters)
-    table = LicenseConfectineryReportTable(queryset)
-    tables.append({'label': 'RAMA RANI VANNILA Other Confectinery', 'table': table})
-    or_filters = {
-        'exporter__name__icontains': ['Parle']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters)
-    table = LicenseConfectineryReportTable(queryset)
-    tables.append({'label': 'Parle Other Confectinery', 'table': table})
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
+    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
+                               exclude_and_filters=exclude_and_filters)
+    return queryset
+
+
+def confectinery_2019_rama_rani(date_range=None):
+    tables = [{'label': 'RAMA RANI New Confectinery',
+               'table': generate_table(confectinery_2019(date_range, party=['rama', 'rani']),
+                                       LicenseConfectineryReportTable)}, {'label': 'Parle New Confectinery',
+                                                                          'table': generate_table(
+                                                                              confectinery_2019(date_range,
+                                                                                                party=['Parle']),
+                                                                              LicenseConfectineryReportTable)}]
+
     return tables
 
 
 def confectinery_2019_other(date_range=None):
-    tables = []
-    from license.tables import LicenseConfectineryReportTable
-    from license.models import N2015
+    tables = [{'label': 'Confectinery New Remaning [019/2015]',
+               'table': generate_table(confectinery_2019(date_range, exclude_party=['rama', 'rani', 'VANILA', 'parle']),
+                                       LicenseConfectineryReportTable)}]
+    return tables
+
+
+def confectinery_2009(date_range=None, party=None, exclude_party=None):
     query_dict = {
         'export_license__norm_class__norm_class': 'E1',
-        'notification_number': N2015,
-        'export_license__old_quantity': 0
+        'notification_number': N2009
     }
-    exclude_and_filters = {
-        'exporter__name__icontains': ['rama', 'rani', 'VANILA', 'parle']
-    }
-    queryset = get_table_query(query_dict, date_range=date_range, exclude_and_filters=exclude_and_filters)
-    table = LicenseConfectineryReportTable(queryset)
-    tables.append({'label': 'Confectinery Remaning 019/2015 Notification', 'table': table})
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
+    return get_table_query(query_dict, date_range=date_range, exclude_and_filters=exclude_and_filters,
+                           or_filters=or_filters)
+
+
+def confectinery_2009_all(date_range=None):
+    from license.tables import LicenseConfectineryReportTable
+    tables = [{'label': 'Confectinery 098/2019 Notification [ No Rama & Rani]',
+               'table': generate_table(confectinery_2009(date_range, exclude_party=['rama', 'rani', 'VANILA']),
+                                       LicenseConfectineryReportTable)},
+              {'label': 'Confectinery 098/2019 Notification [Rama & Rani]',
+               'table': generate_table(
+                   confectinery_2009(date_range,
+                                     party=['rama', 'rani', 'VANILA']),
+                   LicenseConfectineryReportTable)}]
     return tables
+
+
+def biscuits_2009_all(date_range=None):
+    from license.tables import LicenseBiscuitReportTable
+    tables = [{'label': 'Biscuits 098/2019 Notification [ No Rama & Rani]',
+               'table': generate_table(biscuit_2009(date_range, exclude_party=['rama', 'rani', 'VANILA']),
+                                       LicenseBiscuitReportTable)},
+              {'label': 'Biscuits 098/2019 Notification [Rama & Rani]',
+               'table': generate_table(biscuit_2009(date_range, party=['rama', 'rani', 'VANILA']),
+                                       LicenseBiscuitReportTable)}]
+    return tables
+
+
+def generate_dict(object, total_dict):
+    dicts = {'license_number': object.license_number, 'license_date': object.license_date,
+             'license_expiry': object.license_expiry_date, 'exporter': object.exporter}
+    balance_dict = {
+        'opening_balance': object.opening_balance,
+        'usable_balance': '--',
+        'balance': object.get_balance_cif,
+        'usable_cif': '--'
+    }
+    dicts['balance'] = balance_dict
+    total_dict['balance']['cif'] = round(total_dict['balance']['cif'] + object.get_balance_cif(),2)
+    balance = round(object.get_balance_cif(),0)
+    cif_required = object.sugar().required_cif
+    if balance < cif_required:
+        cif_required = balance
+    balance = round(balance - cif_required, 0)
+    balance_dict = {
+        'opening_balance': object.sugar().quantity,
+        'usable_balance': object.sugar().usable,
+        'balance': object.get_sugar(),
+        'usable_cif': cif_required
+    }
+    dicts['sugar'] = balance_dict
+    total_dict['sugar']['cif'] = total_dict['sugar']['cif'] + cif_required
+    total_dict['sugar']['quantity'] = total_dict['sugar']['quantity'] + round(cif_required / object.sugar().item.head.unit_rate, 0)
+
+    cif_required = object.rbd().required_cif
+    if balance < cif_required:
+        cif_required = balance
+    balance = round(balance - cif_required, 0)
+    balance_dict = {
+        'opening_balance': object.rbd().quantity,
+        'usable_balance': object.rbd().usable,
+        'balance': object.get_rbd(),
+        'usable_cif': cif_required
+    }
+    dicts['rbd'] = balance_dict
+    total_dict['rbd']['cif'] = total_dict['rbd']['cif'] + cif_required
+    total_dict['rbd']['quantity'] = total_dict['rbd']['quantity'] + round(cif_required / object.rbd().item.head.unit_rate, 0)
+    cif_required = object.dietary_fibre().required_cif
+    if balance < cif_required:
+        cif_required = balance
+    balance = round(balance - cif_required, 0)
+    balance_dict = {
+        'opening_balance': object.dietary_fibre().quantity,
+        'usable_balance': object.dietary_fibre().usable,
+        'balance': object.get_dietary_fibre(),
+        'usable_cif': cif_required
+    }
+    dicts['dietary_fibre'] = balance_dict
+    total_dict['dietary_fibre']['cif'] = total_dict['dietary_fibre']['cif'] + cif_required
+    total_dict['dietary_fibre']['quantity'] = total_dict['dietary_fibre']['quantity'] + round(cif_required / object.dietary_fibre().item.head.unit_rate, 0)
+
+    cif_required = object.food_flavour().required_cif
+    if balance < cif_required:
+        cif_required = balance
+    balance = round(balance - cif_required, 0)
+    balance_dict = {
+        'opening_balance': object.food_flavour().quantity,
+        'usable_balance': object.food_flavour().usable,
+        'balance': object.get_food_flavour(),
+        'usable_cif': cif_required
+    }
+    dicts['food_flavour'] = balance_dict
+    total_dict['food_flavour']['cif'] = total_dict['food_flavour']['cif'] + cif_required
+    total_dict['food_flavour']['quantity'] = total_dict['food_flavour']['quantity'] + round(cif_required / object.food_flavour().item.head.unit_rate, 0)
+
+    cif_required = object.fruit().required_cif
+    if balance < cif_required:
+        cif_required = balance
+    balance = round(balance - cif_required, 0)
+    balance_dict = {
+        'opening_balance': object.fruit().quantity,
+        'usable_balance': object.fruit().usable,
+        'balance': object.get_fruit(),
+        'usable_cif': cif_required
+    }
+    dicts['fruit'] = balance_dict
+    total_dict['fruit']['cif'] = total_dict['fruit']['cif'] + cif_required
+    total_dict['fruit']['quantity'] = total_dict['fruit']['quantity'] + round(cif_required / object.fruit().item.head.unit_rate, 0)
+
+    cif_required = object.m_n_m().required_cif
+    if balance < cif_required:
+        cif_required = balance
+    balance = round(balance - cif_required, 0)
+    balance_dict = {
+        'opening_balance': object.m_n_m().quantity,
+        'usable_balance': object.m_n_m().usable,
+        'balance': object.get_m_n_m(),
+        'usable_cif': cif_required
+    }
+    dicts['m_n_m'] = balance_dict
+    total_dict['m_n_m']['cif'] = total_dict['m_n_m']['cif'] + cif_required
+    total_dict['m_n_m']['quantity'] = total_dict['m_n_m']['quantity'] + round(cif_required / object.fruit().item.head.unit_rate, 0)
+
+    cif_required = object.wheat().required_cif
+    if balance < cif_required:
+        cif_required = balance
+    balance = round(balance - cif_required, 0)
+    balance_dict = {
+        'opening_balance': object.wheat().quantity,
+        'usable_balance': object.wheat().usable,
+        'balance': object.get_wheat(),
+        'usable_cif': cif_required
+    }
+    dicts['wheat'] = balance_dict
+    total_dict['wheat']['cif'] = total_dict['wheat']['cif'] + cif_required
+    total_dict['wheat']['quantity'] = total_dict['wheat']['quantity'] + round(cif_required / object.wheat().item.head.unit_rate, 0)
+
+    cif_required = object.leavening_agent().required_cif
+    if balance < cif_required:
+        cif_required = balance
+    balance = round(balance - cif_required, 0)
+    balance_dict = {
+        'opening_balance': object.leavening_agent().quantity,
+        'usable_balance': object.leavening_agent().usable,
+        'balance': object.get_leavening_agent(),
+        'usable_cif': cif_required
+    }
+    dicts['leavening_agent'] = balance_dict
+    total_dict['leavening_agent']['cif'] = total_dict['leavening_agent']['cif'] + cif_required
+    total_dict['leavening_agent']['quantity'] = total_dict['leavening_agent']['quantity'] + round(cif_required / object.leavening_agent().item.head.unit_rate, 0)
+
+    cif_required = object.pp().required_cif
+    if balance < cif_required:
+        cif_required = balance
+    balance = round(balance - cif_required, 0)
+    balance_dict = {
+        'opening_balance': object.pp().quantity,
+        'usable_balance': object.pp().usable,
+        'balance': object.get_pp(),
+        'usable_cif': cif_required
+    }
+    dicts['pp'] = balance_dict
+    total_dict['pp']['cif'] = total_dict['pp']['cif'] + cif_required
+    total_dict['pp']['quantity'] = total_dict['pp']['quantity'] + round(cif_required / object.pp().item.head.unit_rate, 0)
+    return dicts, total_dict

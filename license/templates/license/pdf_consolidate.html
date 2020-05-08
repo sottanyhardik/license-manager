@@ -1,0 +1,366 @@
+{% extends "pdf_base.html" %}
+{% load core_tag %}
+
+{% block extra_style %}
+
+    <style type="text/css">
+        @page {
+            size: A4 landscape;
+            margin: 1cm;
+        }
+
+        .table {
+            width: 100%;
+            max-width: 100%;
+            margin-bottom: 5px;
+            background-color: #fff;
+        }
+
+        .table th,
+        .table td {
+            padding: 2px;
+            vertical-align: top;
+            border: 1px solid #000;
+            text-align: center;
+        }
+
+        .table thead th {
+            vertical-align: bottom;
+            border-bottom: 2px solid #000;
+        }
+
+        .table tbody + tbody {
+            border-top: 2px solid #000;
+        }
+
+        .table .table {
+            background-color: #fff;
+        }
+
+        .list-group {
+            display: block;
+            width: 100%;
+            list-style: none;
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+
+        .list-group p {
+            width: 100%;
+            height: 18px;
+            line-height: 20px;
+            list-style: none;
+            font-size: 1.1em;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <table class="table table-bordered table-striped tbordered">
+        <thead>
+        <th>Sr No</th>
+        <th>License No</th>
+        <th><h3>License Date</h3></th>
+        <th><h3>License Expiry</h3></th>
+        <th>Exporter</th>
+        <th>--</th>
+        <th>CIF</th>
+        <th>Sugar</th>
+        <th>RBD Palmolein</th>
+        <th>Dietry Fibre</th>
+        <th>Food Flavour</th>
+        <th>Fruit</th>
+        <th>Milk & Milk</th>
+        <th>Wheat/Gluten</th>
+        <th>Yeast</th>
+        <th>PP</th>
+        </thead>
+        <tbody>
+        {% for object in biscuit_list %}
+            <tr>
+                <th>{{ forloop.counter }}</th>
+                <td>{{ object.license_number }}</td>
+                <td>{{ object.license_date }}</td>
+                <td>{{ object.license_expiry }}</td>
+                <td>{{ object.exporter }}</td>
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>Opening</td>
+                        </tr>
+                        <tr>
+                            <td>Usable</td>
+                        </tr>
+                        <tr>
+                            <td>Balance</td>
+                        </tr>
+                        <tr>
+                            <td>Usable CIF</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.balance.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>----</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.balance.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>----</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.sugar.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.sugar.usable_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.sugar.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.sugar.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.rbd.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.rbd.usable_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.rbd.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.rbd.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.dietary_fibre.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.dietary_fibre.usable_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.dietary_fibre.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.dietary_fibre.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.food_flavour.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.food_flavour.usable_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.food_flavour.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.food_flavour.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.fruit.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.fruit.usable_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.fruit.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.fruit.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.m_n_m.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.m_n_m.usable_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.m_n_m.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.m_n_m.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.wheat.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.wheat.usable_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.wheat.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.wheat.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.leavening_agent.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.leavening_agent.usable_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.leavening_agent.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.leavening_agent.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>{{ object.pp.opening_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.pp.usable_balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.pp.balance }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.pp.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+
+            </tr>
+        {% endfor %}
+            <tr>
+                <td>--</td>
+                <td>--</td>
+                <td>--</td>
+                <td>--</td>
+                <td>--</td>
+                <td>
+                    <table>
+                        <tr><td>Quantity</td></tr>
+                        <tr><td>CIF</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>--</td></tr>
+                        <tr><td>{{ total_dict.balance.cif }}</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>{{ total_dict.sugar.quantity }}</td></tr>
+                        <tr><td>{{ total_dict.sugar.cif }}</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>{{ total_dict.rbd.quantity }}</td></tr>
+                        <tr><td>{{ total_dict.rbd.cif }}</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>{{ total_dict.dietary_fibre.quantity }}</td></tr>
+                        <tr><td>{{ total_dict.dietary_fibre.cif }}</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>{{ total_dict.food_flavour.quantity }}</td></tr>
+                        <tr><td>{{ total_dict.food_flavour.cif }}</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>{{ total_dict.fruit.quantity }}</td></tr>
+                        <tr><td>{{ total_dict.fruit.cif }}</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>{{ total_dict.m_n_m.quantity }}</td></tr>
+                        <tr><td>{{ total_dict.m_n_m.cif }}</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>{{ total_dict.wheat.quantity }}</td></tr>
+                        <tr><td>{{ total_dict.wheat.cif }}</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>{{ total_dict.leavening_agent.quantity }}</td></tr>
+                        <tr><td>{{ total_dict.leavening_agent.cif }}</td></tr>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tr><td>{{ total_dict.pp.quantity }}</td></tr>
+                        <tr><td>{{ total_dict.pp.cif }}</td></tr>
+                    </table>
+                </td>
+
+            </tr>
+        </tbody>
+    </table>
+{% endblock %}

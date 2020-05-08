@@ -22,9 +22,12 @@ from license.helper import round_down, check_license
 from . import forms, tables, filters
 from . import models as license
 from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_milk_query, dietary_query, food_query, \
-    packing_query, juice_query, oci_query, fruit_query, get_table_query, report_dict_generate, conversion_other, \
-    conversion_main, biscuit_2009, biscuit_2019, biscuit_2019_other, confectinery_2009, confectinery_2019, \
-    confectinery_2019_other
+    packing_query, juice_query, oci_query, fruit_query, report_dict_generate, biscuit_2009, biscuit_2019, \
+    biscuit_2019_other, confectinery_2009, confectinery_2019, \
+    confectinery_2019_other, generate_table, biscuit_conversion, confectionery_conversion, biscuit_2019_rama_rani, \
+    conversion_main, conversion_other, confectinery_2019_rama_rani, confectinery_2009_all, biscuits_2009_all, \
+    generate_dict
+from .tables import LicenseBiscuitReportTable
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -185,7 +188,7 @@ class LicenseListView(FilterView):
         if csv:
             f = self.filterset_class(request.GET, queryset=self.model.objects.all())
             query = f.qs.values('license_number', 'license_date', 'license_expiry_date', 'file_number',
-                                'exporter__name', 'balance_cif', 'user_comment','ledger_date')
+                                'exporter__name', 'balance_cif', 'user_comment', 'ledger_date')
             from djqscsv import render_to_csv_response
             return render_to_csv_response(query.order_by('license_expiry_date'))
         return super(LicenseListView, self).get(request, **kwargs)
@@ -328,8 +331,8 @@ class PDFNewBiscuitsReportView(PDFTemplateResponseMixin, PagedFilteredTableView)
 
     def get_context_data(self, **kwargs):
         context = super(PDFNewBiscuitsReportView, self).get_context_data()
-        tables = biscuit_2019()
         context['today_date'] = datetime.datetime.now().date()
+        tables = biscuit_2019_rama_rani()
         context['tables'] = tables
         return context
 
@@ -343,8 +346,8 @@ class PDFNewBiscuitsOtherReportView(PDFTemplateResponseMixin, PagedFilteredTable
 
     def get_context_data(self, **kwargs):
         context = super(PDFNewBiscuitsOtherReportView, self).get_context_data()
-        tables = biscuit_2019_other()
         context['today_date'] = datetime.datetime.now().date()
+        tables = biscuit_2019_other()
         context['tables'] = tables
         return context
 
@@ -358,7 +361,7 @@ class PDFNewConfectioneryReportView(PDFTemplateResponseMixin, PagedFilteredTable
 
     def get_context_data(self, **kwargs):
         context = super(PDFNewConfectioneryReportView, self).get_context_data()
-        tables = confectinery_2019()
+        tables = confectinery_2019_rama_rani()
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context
@@ -388,7 +391,7 @@ class PDFOldBisReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
     def get_context_data(self, **kwargs):
         context = super(PDFOldBisReportView, self).get_context_data()
-        tables = biscuit_2009()
+        tables = biscuits_2009_all()
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context
@@ -403,7 +406,7 @@ class PDFOldConReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
     def get_context_data(self, **kwargs):
         context = super(PDFOldConReportView, self).get_context_data()
-        tables = confectinery_2009()
+        tables = confectinery_2009_all()
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context
@@ -617,6 +620,7 @@ class PDFOCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
     def get_context_data(self, **kwargs):
         context = super(PDFOCReportView, self).get_context_data()
+        context['today_date'] = datetime.datetime.now().date()
         tables = conversion_other()
         context['tables'] = tables
         return context
@@ -695,7 +699,7 @@ def check_query(queryset):
                             Q(exporter__name__icontains='SHAKTI  FOOD  PRODUCTS')
                             | Q(exporter__name__icontains='STRAINA INTERNATIONAL')
                             | Q(exporter__name__icontains='TOPAZ INTERNATIONAL')
-                            | Q(exporter__name__icontains='VANILA')
+                            | Q(exporter__name__icontains='VANILLA')
                             | Q(exporter__name__icontains='VIVA')
                             | Q(exporter__name__icontains='DELMORE')
                             | Q(exporter__name__icontains='Kulubi')
@@ -951,7 +955,7 @@ class LicenseReportListView(TemplateResponseMixin, ContextMixin, View):
                                 folder_name=file_name)
             self.render_to_file(report_dict_generate(biscuit_2009(date_range=date_range), 'Biscuit 98_2009'),
                                 folder_name=file_name)
-            self.render_to_file(report_dict_generate(biscuit_2019(date_range=date_range), 'Biscuit 19_2015'),
+            self.render_to_file(report_dict_generate(biscuit_2019_rama_rani(date_range=date_range), 'Biscuit 19_2015'),
                                 folder_name=file_name)
             self.render_to_file(
                 report_dict_generate(biscuit_2019_other(date_range=date_range), 'Biscuit 19_2015 Other'),
@@ -979,4 +983,39 @@ class LicenseReportListView(TemplateResponseMixin, ContextMixin, View):
 
     def get_context_data(self, **kwargs):
         context = super(LicenseReportListView, self).get_context_data()
+        return context
+
+
+class LicensePDFConsolidateView(PDFTemplateResponseMixin, PagedFilteredTableView):
+    template_name = 'license/pdf_consolidate.html'
+    model = license.LicenseDetailsModel
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(LicensePDFConsolidateView, self).get_context_data()
+        context['today_date'] = datetime.datetime.now().date()
+        total_dict = {
+            'balance': {'cif': 0},
+            'sugar': {'cif': 0, 'quantity': 0},
+            'rbd': {'cif': 0, 'quantity': 0},
+            'dietary_fibre': {'cif': 0, 'quantity': 0},
+            'food_flavour': {'cif': 0, 'quantity': 0},
+            'fruit': {'cif': 0, 'quantity': 0},
+            'm_n_m': {'cif': 0, 'quantity': 0},
+            'wheat': {'cif': 0, 'quantity': 0},
+            'leavening_agent': {'cif': 0, 'quantity': 0},
+            'pp': {'cif': 0, 'quantity': 0},
+
+        }
+        biscuit_list = []
+        objects = biscuit_2009()
+        for object in objects:
+            dicts, total_dict = generate_dict(object, total_dict)
+            biscuit_list.append(dicts)
+        objects = biscuit_conversion()
+        for object in objects:
+            dicts, total_dict = generate_dict(object, total_dict)
+            biscuit_list.append(dicts)
+        context['biscuit_list'] = biscuit_list
+        context['total_dict'] = total_dict
         return context

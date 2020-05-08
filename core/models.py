@@ -51,6 +51,9 @@ class PortModel(models.Model):
 class ItemHeadModel(models.Model):
     name = models.CharField(max_length=255, unique=True)
     hs_code = models.CharField(max_length=255)
+    unit_rate = models.FloatField(default=0)
+    biscuit_priority = models.FloatField(default=0)
+    confectionery_priority = models.FloatField(default=0)
     is_restricted = models.BooleanField(default=True)
     is_amend = models.BooleanField(default=False)
 

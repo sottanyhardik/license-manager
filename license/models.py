@@ -67,8 +67,8 @@ class LicenseDetailsModel(models.Model):
                                                 allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
             Sum('cif_fc'))['cif_fc__sum']
         debited = \
-        RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
-            'cif_fc__sum']
+            RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
+                'cif_fc__sum']
         if debited and alloted:
             total = debited + alloted
         elif alloted:
@@ -105,17 +105,39 @@ class LicenseDetailsModel(models.Model):
         else:
             return 0
 
+    @property
+    def opening_balance(self):
+        return self.export_license.all().aggregate(sum=Sum('cif_fc'))['sum']
+
     def get_wheat(self):
         return self.import_license.filter(item__head__name__icontains='wheat').first().balance_quantity
+
+    def wheat(self):
+        return self.import_license.filter(item__head__name__icontains='wheat').first()
 
     def get_sugar(self):
         return self.import_license.filter(item__head__name__icontains='sugar').first().balance_quantity
 
+    def sugar(self):
+        return self.import_license.filter(item__head__name__icontains='sugar').first()
+
     def get_rbd(self):
         return self.import_license.filter(item__head__name__icontains='rbd').first().balance_quantity
 
+    def rbd(self):
+        return self.import_license.filter(item__head__name__icontains='rbd').first()
+
+    def food_flavour(self):
+        return self.import_license.filter(item__head__name__icontains='food flavour').first()
+
+    def dietary_fibre(self):
+        return self.import_license.filter(item__head__name__icontains='dietary fibre').first()
+
     def get_leavening_agent(self):
         return self.import_license.filter(item__head__name__icontains='Leavening Agent').first().balance_quantity
+
+    def leavening_agent(self):
+        return self.import_license.filter(item__head__name__icontains='Leavening Agent').first()
 
     def get_emulsifier(self):
         return self.import_license.filter(item__head__name__icontains='emulsifier').first().balance_quantity
@@ -135,14 +157,23 @@ class LicenseDetailsModel(models.Model):
     def get_fruit(self):
         return self.import_license.filter(item__head__name__icontains='fruit').first().balance_quantity
 
+    def fruit(self):
+        return self.import_license.filter(item__head__name__icontains='fruit').first()
+
     def get_dietary_fibre(self):
         return self.import_license.filter(item__head__name__icontains='dietary fibre').first().balance_quantity
 
     def get_m_n_m(self):
         return self.import_license.filter(item__head__name__icontains='milk').first().balance_quantity
 
+    def m_n_m(self):
+        return self.import_license.filter(item__head__name__icontains='milk').first()
+
     def get_pp(self):
         return self.import_license.filter(item__head__name__icontains='pp').first().balance_quantity
+
+    def pp(self):
+        return self.import_license.filter(item__head__name__icontains='pp').first()
 
     def get_bopp(self):
         return self.import_license.filter(item__head__name__icontains='bopp').first().balance_quantity
@@ -303,6 +334,14 @@ class LicenseImportItemsModel(models.Model):
             return 0
 
     @property
+    def required_cif(self):
+        if self.balance_quantity > 100:
+            required = round(self.balance_quantity * self.item.head.unit_rate, 0)+10
+            return required
+        else:
+            return 0
+
+    @property
     def balance_quantity(self):
         if self.item and self.item.head and self.item.head.is_restricted and self.old_quantity:
             credit = self.old_quantity
@@ -343,7 +382,7 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def balance_cif_fc(self):
-        if not self.cif_fc or int(self.cif_fc) == 0 or self.cif_fc== 0.1:
+        if not self.cif_fc or int(self.cif_fc) == 0 or self.cif_fc == 0.1:
             credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
         else:
             credit = self.cif_fc
@@ -429,6 +468,12 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def opening_balance(self):
+        return self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00)
+
+    @property
+    def usable(self):
+        if self.license.notification_number == N2015 and self.item.head.is_restricted:
+            return self.old_quantity
         return self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00)
 
 

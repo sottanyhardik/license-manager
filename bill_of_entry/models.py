@@ -25,9 +25,11 @@ class BillOfEntryModel(models.Model):
     def __str__(self):
         return self.bill_of_entry_number
 
+    @property
     def get_absolute_url(self):
         return reverse('bill-of-entry-detail', kwargs={'boe': self.bill_of_entry_number})
 
+    @property
     def get_total_inr(self):
         total = self.item_details.all().aggregate(Sum('cif_inr'))['cif_inr__sum']
         if total:
@@ -35,6 +37,7 @@ class BillOfEntryModel(models.Model):
         else:
             return 0
 
+    @property
     def get_total_fc(self):
         total = self.item_details.all().aggregate(Sum('cif_fc'))['cif_fc__sum']
         if total:
@@ -42,6 +45,7 @@ class BillOfEntryModel(models.Model):
         else:
             return 0
 
+    @property
     def get_total_quantity(self):
         total = self.item_details.all().aggregate(Sum('qty'))['qty__sum']
         if total:
@@ -49,8 +53,21 @@ class BillOfEntryModel(models.Model):
         else:
             return 0
 
+    @property
     def get_licenses(self):
         return ", ".join([item.sr_number.license.license_number for item in self.item_details.all()])
+
+    @property
+    def get_unit_price(self):
+        if self.get_total_quantity and self.get_total_quantity != 0:
+            return round(self.get_total_fc/self.get_total_quantity,3)
+        return 0
+
+    @property
+    def get_exchange_rate(self):
+        if self.get_total_quantity and self.get_total_quantity != 0:
+            return round(self.get_total_inr / self.get_total_fc, 3)
+        return 0
 
 
 Credit = 'C'

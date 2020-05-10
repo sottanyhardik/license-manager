@@ -476,7 +476,7 @@ def conversion_main(date_range=None):
                'table': generate_table(biscuit_conversion(date_range, party=['rama', 'rani']),
                                        LicenseBiscuitReportTable)},
               {'label': 'RAMA RANI & VANILLA Confectionery',
-               'table': generate_table(confectionery_conversion(date_range, party=['rama', 'rani', 'VANILLA']),
+               'table': generate_table(confectionery_conversion(date_range, party=['rama', 'rani', 'ls']),
                                        LicenseConfectineryReportTable)},
               {'label': 'Parle Biscuits',
                'table': generate_table(biscuit_conversion(date_range, party=['Parle']),

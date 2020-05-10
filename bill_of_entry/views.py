@@ -173,7 +173,7 @@ class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         total = 0
-        total_list = [total + int(data.get_total_inr()) for data in self.get_queryset()]
+        total_list = [total + int(data.get_total_inr) for data in self.get_queryset()]
         context['total_cif'] = sum(total_list)
         import datetime
         context['today'] = datetime.datetime.now().date

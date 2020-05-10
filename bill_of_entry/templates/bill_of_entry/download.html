@@ -66,6 +66,7 @@
                 <th>BE Dt.</th>
                 <th>Port</th>
                 <th>Quantity (KGS)</th>
+                <th>Unit Price</th>
                 <th>Value (INR)</th>
                 <th>Exc Rt.</th>
                 <th>Value ($)</th>
@@ -84,9 +85,10 @@
                     <td>{{ boe.bill_of_entry_date }}</td>
                     <td>{{ boe.port }}</td>
                     <td>{{ boe.get_total_quantity }}</td>
-                    <td>{{ boe.get_total_inr }}</td>
-                    <td>{{ boe.exchange_rate }}</td>
+                    <td>{{ boe.get_unit_price }}</td>
                     <td>{{ boe.get_total_fc }}</td>
+                    <td>{{ boe.get_exchange_rate }}</td>
+                    <td>{{ boe.get_total_inr }}</td>
                     <td colspan="2">{{ boe.product_name }}</td>
                     <td>{% if boe.invoice_no %}{{ boe.invoice_no }}{% else %}-{% endif %}</td>
                     <td colspan="4">
@@ -115,6 +117,7 @@
                 <td>-</td>
                 <td><b>Total</b></td>
                 <td><b>{% get_boe_total_quantity data.list %}</b></td>
+                <td>-</td>
                 <td><b>{% get_boe_total_inr data.list %}</b></td>
                 <td>-</td>
                 <td><b>{% get_boe_total_fc data.list %}</b></td>

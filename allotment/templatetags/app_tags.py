@@ -43,7 +43,7 @@ def get_total(queryset):
 def get_boe_total_inr(queryset):
     total = 0
     for query in queryset:
-        total = total + query.get_total_inr()
+        total = total + query.get_total_inr
     return "{:,}".format(round(total,2))
 
 
@@ -51,7 +51,7 @@ def get_boe_total_inr(queryset):
 def get_boe_total_fc(queryset):
     total = 0
     for query in queryset:
-        total = total + query.get_total_fc()
+        total = total + query.get_total_fc
     return "{:,}".format(round(total,2))
 
 
@@ -59,8 +59,9 @@ def get_boe_total_fc(queryset):
 def get_boe_total_quantity(queryset):
     total = 0
     for query in queryset:
-        total = total + query.get_total_quantity()
+        total = total + query.get_total_quantity
     return "{:,}".format(round(total,2))
+
 
 @register.simple_tag
 def get_total_quantity(queryset):

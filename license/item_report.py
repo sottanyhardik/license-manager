@@ -542,7 +542,7 @@ def confectinery_2019(date_range=None, party=None, exclude_party=None):
 
 def confectinery_2019_rama_rani(date_range=None):
     tables = [{'label': 'RAMA RANI New Confectinery',
-               'table': generate_table(confectinery_2019(date_range, party=['rama', 'rani']),
+               'table': generate_table(confectinery_2019(date_range, party=['rama', 'rani','vanila']),
                                        LicenseConfectineryReportTable)}, {'label': 'Parle New Confectinery',
                                                                           'table': generate_table(
                                                                               confectinery_2019(date_range,

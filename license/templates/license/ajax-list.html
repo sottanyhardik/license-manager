@@ -1,7 +1,8 @@
 {% load core_tag %}
 <div class="row">
     <div class="col-md-10"></div>
-        <div class="col-md-2"><a href="{% url 'license-list' %}{% relative_url True 'csv' request.GET.urlencode %}" class="btn btn-primary">Download</a></div>
+    <div class="col-md-2"><a href="{% url 'license-list' %}{% relative_url True 'csv' request.GET.urlencode %}"
+                             class="btn btn-primary">Download</a></div>
 </div>
 {% if is_paginated %}
     <nav>
@@ -9,7 +10,8 @@
             {% if page_obj.has_previous %}
                 <li class="page-item">
                     <a class="page-link" href="#"
-                       data-url="{% url 'license-ajax-list' %}{% relative_url page_obj.previous_page_number 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                       data-url="
+                               {% url 'license-ajax-list' %}{% relative_url page_obj.previous_page_number 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
                        data-target="license-list" onclick="fetch_page(this)">
                         <i class="mdi mdi-chevron-left"></i>
                     </a>
@@ -22,13 +24,15 @@
                 {% if page_obj.number == i %}
                     <li class="page-item active">
                         <a class="page-link" href="?page={{ i }}"
-                           data-url="{% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                           data-url="
+                                   {% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
                            data-target="license-list" onclick="fetch_page(this)">
                             {{ i }} </a></li>
                 {% else %}
                     <li class="page-item"><a class="page-link"
                                              href="?page={{ i }}"
                                              data-url="
+
 
 
 
@@ -46,6 +50,7 @@
                 <li class="page-item"><a class="page-link"
                                          href="?page={{ page_obj.next_page_number }}"
                                          data-url="
+
 
 
 
@@ -143,6 +148,7 @@
                     <a class="page-link" href="#"
                        data-url="
 
+
                                {% url 'license-ajax-list' %}{% relative_url page_obj.previous_page_number 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
                        data-target="license-list" onclick="fetch_page(this)">
                         <i class="mdi mdi-chevron-left"></i>
@@ -156,20 +162,23 @@
                 {% if page_obj.number == i %}
                     <li class="page-item active">
                         <a class="page-link" href="?page={{ i }}"
-                           data-url="{% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                           data-url="
+                                   {% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
                            data-target="license-list" onclick="fetch_page(this)">
                             {{ i }} </a></li>
                 {% else %}
                     <li class="page-item"><a class="page-link"
                                              href="?page={{ i }}"
-                                             data-url="{% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                                             data-url="
+                                                     {% url 'license-ajax-list' %}{% relative_url i 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
                                              data-target="license-list" onclick="fetch_page(this)">{{ i }} </a></li>
                 {% endif %}
             {% endfor %}
             {% if page_obj.has_next %}
                 <li class="page-item"><a class="page-link"
                                          href="?page={{ page_obj.next_page_number }}"
-                                         data-url="{% url 'license-ajax-list' %}{% relative_url page_obj.next_page_number 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
+                                         data-url="
+                                                 {% url 'license-ajax-list' %}{% relative_url page_obj.next_page_number 'page' request.GET.urlencode %}{% if is_active %}&is_active=True{% endif %}"
                                          data-target="license-list" onclick="fetch_page(this)"><i
                         class="mdi mdi-chevron-right"></i></a></li>
             {% else %}

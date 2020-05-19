@@ -1016,6 +1016,10 @@ class LicensePDFConsolidateView(PDFTemplateResponseMixin, PagedFilteredTableView
         for object in objects:
             dicts, total_dict = generate_dict(object, total_dict)
             biscuit_list.append(dicts)
+        objects = biscuit_2019()
+        for object in objects:
+            dicts, total_dict = generate_dict(object, total_dict, new=True)
+            biscuit_list.append(dicts)
         context['biscuit_list'] = biscuit_list
         context['total_dict'] = total_dict
         return context

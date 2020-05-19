@@ -152,16 +152,11 @@
                 <td>
                     {% if import_item.debited_quantity %}
                         {{ import_item.debited_quantity }}
-                    {% else %}
-                        {% if import_item.alloted_quantity %}{{ import_item.alloted_quantity }}{% else %} {% endif %}
                     {% endif %}
                 </td>
-                <td>{% if import_item.debited_value %}
+                <td>
+                    {% if import_item.debited_value %}
                         {{ import_item.debited_value }}
-                    {% else %}
-                        {% if import_item.alloted_value %}
-                            {{ import_item.alloted_value }}
-                        {% endif %}
                     {% endif %}
                 </td>
                 <td>{% if import_item.alloted_quantity %}{{ import_item.alloted_quantity }}{% else %} {% endif %}</td>

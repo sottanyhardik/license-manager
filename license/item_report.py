@@ -604,7 +604,7 @@ def biscuits_2009_all(date_range=None):
     return tables
 
 
-def generate_dict(object, total_dict):
+def generate_dict(object, total_dict, new=False):
     dicts = {'license_number': object.license_number, 'license_date': object.license_date,
              'license_expiry': object.license_expiry_date, 'exporter': object.exporter}
     balance_dict = {
@@ -643,47 +643,50 @@ def generate_dict(object, total_dict):
     dicts['rbd'] = balance_dict
     total_dict['rbd']['cif'] = total_dict['rbd']['cif'] + cif_required
     total_dict['rbd']['quantity'] = total_dict['rbd']['quantity'] + round(cif_required / object.rbd().item.head.unit_rate, 0)
-    cif_required = object.dietary_fibre().required_cif
-    if balance < cif_required:
-        cif_required = balance
-    balance = round(balance - cif_required, 0)
-    balance_dict = {
-        'opening_balance': object.dietary_fibre().quantity,
-        'usable_balance': object.dietary_fibre().usable,
-        'balance': object.get_dietary_fibre(),
-        'usable_cif': cif_required
-    }
-    dicts['dietary_fibre'] = balance_dict
-    total_dict['dietary_fibre']['cif'] = total_dict['dietary_fibre']['cif'] + cif_required
-    total_dict['dietary_fibre']['quantity'] = total_dict['dietary_fibre']['quantity'] + round(cif_required / object.dietary_fibre().item.head.unit_rate, 0)
 
-    cif_required = object.food_flavour().required_cif
-    if balance < cif_required:
-        cif_required = balance
-    balance = round(balance - cif_required, 0)
-    balance_dict = {
-        'opening_balance': object.food_flavour().quantity,
-        'usable_balance': object.food_flavour().usable,
-        'balance': object.get_food_flavour(),
-        'usable_cif': cif_required
-    }
-    dicts['food_flavour'] = balance_dict
-    total_dict['food_flavour']['cif'] = total_dict['food_flavour']['cif'] + cif_required
-    total_dict['food_flavour']['quantity'] = total_dict['food_flavour']['quantity'] + round(cif_required / object.food_flavour().item.head.unit_rate, 0)
+    if not new:
+        cif_required = object.dietary_fibre().required_cif
+        if balance < cif_required:
+            cif_required = balance
+        balance = round(balance - cif_required, 0)
+        balance_dict = {
+            'opening_balance': object.dietary_fibre().quantity,
+            'usable_balance': object.dietary_fibre().usable,
+            'balance': object.get_dietary_fibre(),
+            'usable_cif': cif_required
+        }
+        dicts['dietary_fibre'] = balance_dict
+        total_dict['dietary_fibre']['cif'] = total_dict['dietary_fibre']['cif'] + cif_required
+        total_dict['dietary_fibre']['quantity'] = total_dict['dietary_fibre']['quantity'] + round(cif_required / object.dietary_fibre().item.head.unit_rate, 0)
+    if not new:
+        cif_required = object.food_flavour().required_cif
+        if balance < cif_required:
+            cif_required = balance
+        balance = round(balance - cif_required, 0)
+        balance_dict = {
+            'opening_balance': object.food_flavour().quantity,
+            'usable_balance': object.food_flavour().usable,
+            'balance': object.get_food_flavour(),
+            'usable_cif': cif_required
+        }
+        dicts['food_flavour'] = balance_dict
+        total_dict['food_flavour']['cif'] = total_dict['food_flavour']['cif'] + cif_required
+        total_dict['food_flavour']['quantity'] = total_dict['food_flavour']['quantity'] + round(cif_required / object.food_flavour().item.head.unit_rate, 0)
 
-    cif_required = object.fruit().required_cif
-    if balance < cif_required:
-        cif_required = balance
-    balance = round(balance - cif_required, 0)
-    balance_dict = {
-        'opening_balance': object.fruit().quantity,
-        'usable_balance': object.fruit().usable,
-        'balance': object.get_fruit(),
-        'usable_cif': cif_required
-    }
-    dicts['fruit'] = balance_dict
-    total_dict['fruit']['cif'] = total_dict['fruit']['cif'] + cif_required
-    total_dict['fruit']['quantity'] = total_dict['fruit']['quantity'] + round(cif_required / object.fruit().item.head.unit_rate, 0)
+    if not new:
+        cif_required = object.fruit().required_cif
+        if balance < cif_required:
+            cif_required = balance
+        balance = round(balance - cif_required, 0)
+        balance_dict = {
+            'opening_balance': object.fruit().quantity,
+            'usable_balance': object.fruit().usable,
+            'balance': object.get_fruit(),
+            'usable_cif': cif_required
+        }
+        dicts['fruit'] = balance_dict
+        total_dict['fruit']['cif'] = total_dict['fruit']['cif'] + cif_required
+        total_dict['fruit']['quantity'] = total_dict['fruit']['quantity'] + round(cif_required / object.fruit().item.head.unit_rate, 0)
 
     cif_required = object.m_n_m().required_cif
     if balance < cif_required:
@@ -697,47 +700,50 @@ def generate_dict(object, total_dict):
     }
     dicts['m_n_m'] = balance_dict
     total_dict['m_n_m']['cif'] = total_dict['m_n_m']['cif'] + cif_required
-    total_dict['m_n_m']['quantity'] = total_dict['m_n_m']['quantity'] + round(cif_required / object.fruit().item.head.unit_rate, 0)
+    total_dict['m_n_m']['quantity'] = total_dict['m_n_m']['quantity'] + round(cif_required / object.m_n_m().item.head.unit_rate, 0)
 
-    cif_required = object.wheat().required_cif
-    if balance < cif_required:
-        cif_required = balance
-    balance = round(balance - cif_required, 0)
-    balance_dict = {
-        'opening_balance': object.wheat().quantity,
-        'usable_balance': object.wheat().usable,
-        'balance': object.get_wheat(),
-        'usable_cif': cif_required
-    }
-    dicts['wheat'] = balance_dict
-    total_dict['wheat']['cif'] = total_dict['wheat']['cif'] + cif_required
-    total_dict['wheat']['quantity'] = total_dict['wheat']['quantity'] + round(cif_required / object.wheat().item.head.unit_rate, 0)
+    if not new:
+        cif_required = object.wheat().required_cif
+        if balance < cif_required:
+            cif_required = balance
+        balance = round(balance - cif_required, 0)
+        balance_dict = {
+            'opening_balance': object.wheat().quantity,
+            'usable_balance': object.wheat().usable,
+            'balance': object.get_wheat(),
+            'usable_cif': cif_required
+        }
+        dicts['wheat'] = balance_dict
+        total_dict['wheat']['cif'] = total_dict['wheat']['cif'] + cif_required
+        total_dict['wheat']['quantity'] = total_dict['wheat']['quantity'] + round(cif_required / object.wheat().item.head.unit_rate, 0)
 
-    cif_required = object.leavening_agent().required_cif
-    if balance < cif_required:
-        cif_required = balance
-    balance = round(balance - cif_required, 0)
-    balance_dict = {
-        'opening_balance': object.leavening_agent().quantity,
-        'usable_balance': object.leavening_agent().usable,
-        'balance': object.get_leavening_agent(),
-        'usable_cif': cif_required
-    }
-    dicts['leavening_agent'] = balance_dict
-    total_dict['leavening_agent']['cif'] = total_dict['leavening_agent']['cif'] + cif_required
-    total_dict['leavening_agent']['quantity'] = total_dict['leavening_agent']['quantity'] + round(cif_required / object.leavening_agent().item.head.unit_rate, 0)
+    if not new:
+        cif_required = object.leavening_agent().required_cif
+        if balance < cif_required:
+            cif_required = balance
+        balance = round(balance - cif_required, 0)
+        balance_dict = {
+            'opening_balance': object.leavening_agent().quantity,
+            'usable_balance': object.leavening_agent().usable,
+            'balance': object.get_leavening_agent(),
+            'usable_cif': cif_required
+        }
+        dicts['leavening_agent'] = balance_dict
+        total_dict['leavening_agent']['cif'] = total_dict['leavening_agent']['cif'] + cif_required
+        total_dict['leavening_agent']['quantity'] = total_dict['leavening_agent']['quantity'] + round(cif_required / object.leavening_agent().item.head.unit_rate, 0)
 
-    cif_required = object.pp().required_cif
-    if balance < cif_required:
-        cif_required = balance
-    balance = round(balance - cif_required, 0)
-    balance_dict = {
-        'opening_balance': object.pp().quantity,
-        'usable_balance': object.pp().usable,
-        'balance': object.get_pp(),
-        'usable_cif': cif_required
-    }
-    dicts['pp'] = balance_dict
-    total_dict['pp']['cif'] = total_dict['pp']['cif'] + cif_required
-    total_dict['pp']['quantity'] = total_dict['pp']['quantity'] + round(cif_required / object.pp().item.head.unit_rate, 0)
+    if object.pp():
+        cif_required = object.pp().required_cif
+        if balance < cif_required:
+            cif_required = balance
+        balance = round(balance - cif_required, 0)
+        balance_dict = {
+            'opening_balance': object.pp().quantity,
+            'usable_balance': object.pp().usable,
+            'balance': object.get_pp(),
+            'usable_cif': cif_required
+        }
+        dicts['pp'] = balance_dict
+        total_dict['pp']['cif'] = total_dict['pp']['cif'] + cif_required
+        total_dict['pp']['quantity'] = total_dict['pp']['quantity'] + round(cif_required / object.pp().item.head.unit_rate, 0)
     return dicts, total_dict

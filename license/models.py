@@ -77,7 +77,7 @@ class LicenseDetailsModel(models.Model):
             total = debited
         else:
             total = 0
-        return round(total, 2)
+        return round(total, 0)
 
     @property
     def get_total_allotment(self):
@@ -99,9 +99,9 @@ class LicenseDetailsModel(models.Model):
         if allotment:
             t_debit = t_debit + allotment
         if credit and t_debit:
-            return round(credit - t_debit, 2)
+            return round(credit - t_debit, 0)
         elif credit:
-            return round(credit, 2)
+            return round(credit, 0)
         else:
             return 0
 
@@ -202,21 +202,21 @@ class LicenseDetailsModel(models.Model):
         return str(self.exporter)[:8]
 
     def get_required_sugar_value(self):
-        return round(self.get_sugar() * 0.330, 2)
+        return round(self.get_sugar() * 0.330, 0)
 
     def get_required_rbd_value(self):
-        return round(self.get_rbd() * 0.800, 2)
+        return round(self.get_rbd() * 0.800, 0)
 
     def get_required_mnm_value(self):
-        return round(self.get_m_n_m() * 5, 2)
+        return round(self.get_m_n_m() * 5, 0)
 
     def get_balance_value(self):
         if self.get_norm_class == 'E5':
             return round(
                 self.get_balance_cif() - self.get_required_sugar_value() - self.get_required_rbd_value() - self.get_required_mnm_value(),
-                2)
+                0)
         else:
-            return round(self.get_balance_cif() - self.get_required_sugar_value(), 2)
+            return round(self.get_balance_cif() - self.get_required_sugar_value(), 0)
 
 
 KG = 'kg'
@@ -321,7 +321,7 @@ class LicenseImportItemsModel(models.Model):
             total = debited
         else:
             total = 0
-        return round(total, 2)
+        return round(total, 0)
 
     @property
     def alloted_quantity(self):
@@ -352,13 +352,13 @@ class LicenseImportItemsModel(models.Model):
         debit = self.debited_quantity
         alloted = self.alloted_quantity
         if debit and alloted:
-            return round(credit - debit - alloted, 2)
+            return round(credit - debit - alloted, 0)
         elif debit:
-            return round(credit - debit, 2)
+            return round(credit - debit, 0)
         elif alloted:
-            return round((credit - alloted), 2)
+            return round((credit - alloted), 0)
         else:
-            return round(credit, 2)
+            return round(credit, 0)
 
     @property
     def debited_value(self):
@@ -372,7 +372,7 @@ class LicenseImportItemsModel(models.Model):
             total = debited
         else:
             total = 0
-        return round(total, 2)
+        return round(total, 0)
 
     @property
     def alloted_value(self):
@@ -474,7 +474,7 @@ class LicenseImportItemsModel(models.Model):
     def usable(self):
         if self.license.notification_number == N2015 and self.item.head.is_restricted:
             return self.old_quantity
-        return self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00)
+        return round(self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00),0)
 
 
 class LicenseDocumentModel(models.Model):

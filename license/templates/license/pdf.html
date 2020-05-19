@@ -132,6 +132,7 @@
         <th>HS Code</th>
         <th>Item</th>
         <th>Quantity</th>
+        <th>Old Quantity</th>
         <th>Value</th>
         <th>Debited Qty</th>
         <th>Debited USD</th>
@@ -147,6 +148,7 @@
                 <td>{{ import_item.hs_code }}</td>
                 <td>{{ import_item.item|title }}</td>
                 <td>{{ import_item.quantity }}</td>
+                <td>{{ import_item.old_quantity }}</td>
                 <td>{% if import_item.cif_fc and import_item.cif_fc != 0 %}
                     {{ import_item.cif_fc }}{% else %} {% endif %}</td>
                 <td>
@@ -168,6 +170,7 @@
         </tbody>
         <tfoot>
         <tr>
+            <td> </td>
             <td> </td>
             <td> </td>
             <td> </td>

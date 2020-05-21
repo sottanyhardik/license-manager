@@ -474,8 +474,11 @@ class LicenseImportItemsModel(models.Model):
     def usable(self):
         if self.license.notification_number == N2015 and self.item.head.is_restricted:
             return self.old_quantity
-        return round(self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00),0)
-
+        value = self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00)
+        if value:
+            return round(value,0)
+        else:
+            return 0
 
 class LicenseDocumentModel(models.Model):
     license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE,

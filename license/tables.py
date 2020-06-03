@@ -267,7 +267,7 @@ class LicenseConfectineryReportTable(dt2.Table):
                                                accessor='get_essential_oil')
     food_colour = ColourQuantityColumn(verbose_name='Food Colour', orderable=False, accessor='get_food_colour')
     food_flavour = FFQuantityColumn(verbose_name='Food Flavour', orderable=False, accessor='get_food_flavour')
-    starch = StarchConfectioneryQuantityColumn(verbose_name='Starch', orderable=False,
+    starch = StarchConfectioneryQuantityColumn(verbose_name='Emulsifier', orderable=False,
                                                accessor='get_starch_confectionery')
     other_confectionery = OCIQuantityColumn(verbose_name='Other Confectionery Ingredients', orderable=False,
                                             accessor='get_other_confectionery')

@@ -1,6 +1,6 @@
 import datetime
 import os
-from io import BytesIO
+from io import BytesIO, StringIO
 
 import xhtml2pdf.pisa as pisa
 import xlsxwriter as xlsxwriter
@@ -986,10 +986,58 @@ class LicenseReportListView(TemplateResponseMixin, ContextMixin, View):
         return context
 
 
+
+import xlsxwriter
+
+
+def WriteToExcel(weather_data, town=None):
+    output = StringIO()
+    workbook = xlsxwriter.Workbook(output)
+    worksheet_s = workbook.add_worksheet("Summary")
+    from django.utils.translation import ugettext
+    title_text = "{0} {1}".format(ugettext("Weather History for"), 'town_text')
+    title = workbook.add_format({
+        'bold': True,
+        'font_size': 14,
+        'align': 'center',
+        'valign': 'vcenter'
+    })
+    header = workbook.add_format({
+        'bg_color': '#F7F7F7',
+        'color': 'black',
+        'align': 'center',
+        'valign': 'top',
+        'border': 1
+    })
+    worksheet_s.merge_range('B2:H2', title_text, title)
+    worksheet_s.write(4, 0, ugettext("No"), header)
+    worksheet_s.write(4, 1, ugettext("Town"), header)
+    worksheet_s.write(4, 3, ugettext("Max T."), header)
+    # Here we will adding the code to add data
+
+    workbook.close()
+    xlsx_data = output.getvalue()
+    # xlsx_data contains the Excel file
+    return xlsx_data
+
+
 class LicensePDFConsolidateView(PDFTemplateResponseMixin, PagedFilteredTableView):
     template_name = 'license/pdf_consolidate.html'
     model = license.LicenseDetailsModel
     context_object_name = 'license_list'
+
+    def get(self, request, *args, **kwargs):
+        if 'excel' in self.request.GET:
+            from django.http import HttpResponse
+            response = HttpResponse(content_type='application/vnd.ms-excel')
+            response['Content-Disposition'] = 'attachment; filename=Report.xlsx'
+            xlsx_data = WriteToExcel('', '')
+            response.write(xlsx_data)
+            return response
+        else:
+            context = self.get_context_data(**kwargs)
+        return self.render_to_response(context)
+
 
     def get_context_data(self, **kwargs):
         context = super(LicensePDFConsolidateView, self).get_context_data()

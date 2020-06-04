@@ -19,7 +19,7 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
             start_object = datetime.datetime.strptime(end, '%Y-%m-%d')
             query_dict['license__license_expiry_date__lte'] = start_object
     else:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=150)
         query_dict['license__license_expiry_date__gte'] = expiry_limit
     query_dict['license__is_self'] = True
     query_dict['license__is_au'] = False
@@ -310,7 +310,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
         start_object = datetime.datetime.strptime(start, '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = start_object
     else:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=150)
         query_dict['license_expiry_date__gte'] = expiry_limit
     if end:
         end_object = datetime.datetime.strptime(end, '%Y-%m-%d')

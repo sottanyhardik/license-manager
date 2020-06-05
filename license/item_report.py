@@ -8,7 +8,7 @@ from license.tables import LicenseItemReportTable, LicenseBiscuitReportTable, Li
 
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
-                 minimun_qty=500, minimun_value=500, date_range=None):
+                 minimun_qty=500, minimun_value=500, date_range=None, notification_number=False):
     if date_range:
         start = date_range.get('start')
         end = date_range.get('end')
@@ -21,6 +21,8 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
     else:
         expiry_limit = datetime.datetime.today() - datetime.timedelta(days=150)
         query_dict['license__license_expiry_date__gte'] = expiry_limit
+    if notification_number:
+        query_dict['license__notification_number'] = notification_number
     query_dict['license__is_self'] = True
     query_dict['license__is_au'] = False
     my_filter = Q()
@@ -157,14 +159,18 @@ def dietary_query(date_range=None):
         'item__head__name__icontains': 'dietary fibre',
         'hs_code__hs_code__startswith': '08'
     }
+
     and_or_filter = [{
-        'license__export_license__old_quantity__gt': 1,
-        'license__notification_number': N2015
-    }, {
         'license__notification_number': N2009
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset)
+    tables = query_set_table(tables, queryset, 'OLD Notification')
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }]
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset, 'New Notification')
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'dietary fibre',
@@ -185,13 +191,16 @@ def food_query(date_range=None):
         'item__head__name__icontains': 'food flavour',
     }
     and_or_filter = [{
-        'license__export_license__old_quantity__gt': 1,
-        'license__notification_number': N2015
-    }, {
         'license__notification_number': N2009
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset)
+    tables = query_set_table(tables, queryset, 'OLD Notification')
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }]
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset, 'New Notification')
     return tables
 
 
@@ -248,13 +257,17 @@ def oci_query(date_range=None):
         'hs_code__hs_code__startswith': '08',
     }
     and_or_filter = [{
-        'license__export_license__old_quantity__gt': 1,
-        'license__notification_number': N2015
-    }, {
         'license__notification_number': N2009
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset)
+    tables = query_set_table(tables, queryset, 'Old Notification')
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }]
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset, 'New Notification')
+
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E1',
         'item__head__name__icontains': 'other confectionery',
@@ -276,13 +289,16 @@ def fruit_query(date_range=None):
         'hs_code__hs_code__startswith': '08',
     }
     and_or_filter = [{
-        'license__export_license__old_quantity__gt': 1,
-        'license__notification_number': N2015
-    }, {
         'license__notification_number': N2009
     }]
     queryset = all_queryset(query_dict, and_or_filter=and_or_filter, date_range=date_range)
-    tables = query_set_table(tables, queryset)
+    tables = query_set_table(tables, queryset, 'Old Notification')
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }]
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'New Notification')
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'fruit',
@@ -476,8 +492,9 @@ def conversion_main(date_range=None):
                'table': generate_table(biscuit_conversion(date_range, party=['rama', 'rani']),
                                        LicenseBiscuitReportTable)},
               {'label': 'RAMA RANI & VANILLA Confectionery',
-               'table': generate_table(confectionery_conversion(date_range, party=['rama', 'rani', 'VANILA','VANILLA']),
-                                       LicenseConfectineryReportTable)},
+               'table': generate_table(
+                   confectionery_conversion(date_range, party=['rama', 'rani', 'VANILA', 'VANILLA']),
+                   LicenseConfectineryReportTable)},
               {'label': 'Parle Biscuits',
                'table': generate_table(biscuit_conversion(date_range, party=['Parle']),
                                        LicenseBiscuitReportTable)}]
@@ -542,7 +559,7 @@ def confectinery_2019(date_range=None, party=None, exclude_party=None):
 
 def confectinery_2019_rama_rani(date_range=None):
     tables = [{'label': 'RAMA RANI New Confectinery',
-               'table': generate_table(confectinery_2019(date_range, party=['rama', 'rani','vanila']),
+               'table': generate_table(confectinery_2019(date_range, party=['rama', 'rani', 'vanila']),
                                        LicenseConfectineryReportTable)}, {'label': 'Parle New Confectinery',
                                                                           'table': generate_table(
                                                                               confectinery_2019(date_range,
@@ -614,8 +631,8 @@ def generate_dict(object, total_dict, new=False):
         'usable_cif': '--'
     }
     dicts['balance'] = balance_dict
-    total_dict['balance']['cif'] = round(total_dict['balance']['cif'] + object.get_balance_cif(),2)
-    balance = round(object.get_balance_cif(),0)
+    total_dict['balance']['cif'] = round(total_dict['balance']['cif'] + object.get_balance_cif(), 2)
+    balance = round(object.get_balance_cif(), 0)
     cif_required = object.sugar().required_cif
     if balance < cif_required:
         cif_required = balance
@@ -628,7 +645,8 @@ def generate_dict(object, total_dict, new=False):
     }
     dicts['sugar'] = balance_dict
     total_dict['sugar']['cif'] = total_dict['sugar']['cif'] + cif_required
-    total_dict['sugar']['quantity'] = total_dict['sugar']['quantity'] + round(cif_required / object.sugar().item.head.unit_rate, 0)
+    total_dict['sugar']['quantity'] = total_dict['sugar']['quantity'] + round(
+        cif_required / object.sugar().item.head.unit_rate, 0)
 
     cif_required = object.rbd().required_cif
     if balance < cif_required:
@@ -642,7 +660,8 @@ def generate_dict(object, total_dict, new=False):
     }
     dicts['rbd'] = balance_dict
     total_dict['rbd']['cif'] = total_dict['rbd']['cif'] + cif_required
-    total_dict['rbd']['quantity'] = total_dict['rbd']['quantity'] + round(cif_required / object.rbd().item.head.unit_rate, 0)
+    total_dict['rbd']['quantity'] = total_dict['rbd']['quantity'] + round(
+        cif_required / object.rbd().item.head.unit_rate, 0)
 
     if not new:
         cif_required = object.dietary_fibre().required_cif
@@ -657,7 +676,8 @@ def generate_dict(object, total_dict, new=False):
         }
         dicts['dietary_fibre'] = balance_dict
         total_dict['dietary_fibre']['cif'] = total_dict['dietary_fibre']['cif'] + cif_required
-        total_dict['dietary_fibre']['quantity'] = total_dict['dietary_fibre']['quantity'] + round(cif_required / object.dietary_fibre().item.head.unit_rate, 0)
+        total_dict['dietary_fibre']['quantity'] = total_dict['dietary_fibre']['quantity'] + round(
+            cif_required / object.dietary_fibre().item.head.unit_rate, 0)
     if not new:
         cif_required = object.food_flavour().required_cif
         if balance < cif_required:
@@ -671,7 +691,8 @@ def generate_dict(object, total_dict, new=False):
         }
         dicts['food_flavour'] = balance_dict
         total_dict['food_flavour']['cif'] = total_dict['food_flavour']['cif'] + cif_required
-        total_dict['food_flavour']['quantity'] = total_dict['food_flavour']['quantity'] + round(cif_required / object.food_flavour().item.head.unit_rate, 0)
+        total_dict['food_flavour']['quantity'] = total_dict['food_flavour']['quantity'] + round(
+            cif_required / object.food_flavour().item.head.unit_rate, 0)
 
     if not new:
         cif_required = object.fruit().required_cif
@@ -686,7 +707,8 @@ def generate_dict(object, total_dict, new=False):
         }
         dicts['fruit'] = balance_dict
         total_dict['fruit']['cif'] = total_dict['fruit']['cif'] + cif_required
-        total_dict['fruit']['quantity'] = total_dict['fruit']['quantity'] + round(cif_required / object.fruit().item.head.unit_rate, 0)
+        total_dict['fruit']['quantity'] = total_dict['fruit']['quantity'] + round(
+            cif_required / object.fruit().item.head.unit_rate, 0)
 
     cif_required = object.m_n_m().required_cif
     if balance < cif_required:
@@ -700,7 +722,8 @@ def generate_dict(object, total_dict, new=False):
     }
     dicts['m_n_m'] = balance_dict
     total_dict['m_n_m']['cif'] = total_dict['m_n_m']['cif'] + cif_required
-    total_dict['m_n_m']['quantity'] = total_dict['m_n_m']['quantity'] + round(cif_required / object.m_n_m().item.head.unit_rate, 0)
+    total_dict['m_n_m']['quantity'] = total_dict['m_n_m']['quantity'] + round(
+        cif_required / object.m_n_m().item.head.unit_rate, 0)
 
     if not new:
         cif_required = object.wheat().required_cif
@@ -715,7 +738,8 @@ def generate_dict(object, total_dict, new=False):
         }
         dicts['wheat'] = balance_dict
         total_dict['wheat']['cif'] = total_dict['wheat']['cif'] + cif_required
-        total_dict['wheat']['quantity'] = total_dict['wheat']['quantity'] + round(cif_required / object.wheat().item.head.unit_rate, 0)
+        total_dict['wheat']['quantity'] = total_dict['wheat']['quantity'] + round(
+            cif_required / object.wheat().item.head.unit_rate, 0)
 
     if not new:
         cif_required = object.leavening_agent().required_cif
@@ -730,7 +754,8 @@ def generate_dict(object, total_dict, new=False):
         }
         dicts['leavening_agent'] = balance_dict
         total_dict['leavening_agent']['cif'] = total_dict['leavening_agent']['cif'] + cif_required
-        total_dict['leavening_agent']['quantity'] = total_dict['leavening_agent']['quantity'] + round(cif_required / object.leavening_agent().item.head.unit_rate, 0)
+        total_dict['leavening_agent']['quantity'] = total_dict['leavening_agent']['quantity'] + round(
+            cif_required / object.leavening_agent().item.head.unit_rate, 0)
 
     if object.pp():
         cif_required = object.pp().required_cif
@@ -745,5 +770,6 @@ def generate_dict(object, total_dict, new=False):
         }
         dicts['pp'] = balance_dict
         total_dict['pp']['cif'] = total_dict['pp']['cif'] + cif_required
-        total_dict['pp']['quantity'] = total_dict['pp']['quantity'] + round(cif_required / object.pp().item.head.unit_rate, 0)
+        total_dict['pp']['quantity'] = total_dict['pp']['quantity'] + round(
+            cif_required / object.pp().item.head.unit_rate, 0)
     return dicts, total_dict

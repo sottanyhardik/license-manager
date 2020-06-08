@@ -1026,19 +1026,6 @@ class LicensePDFConsolidateView(PDFTemplateResponseMixin, PagedFilteredTableView
     model = license.LicenseDetailsModel
     context_object_name = 'license_list'
 
-    def get(self, request, *args, **kwargs):
-        if 'excel' in self.request.GET:
-            from django.http import HttpResponse
-            response = HttpResponse(content_type='application/vnd.ms-excel')
-            response['Content-Disposition'] = 'attachment; filename=Report.xlsx'
-            xlsx_data = WriteToExcel('', '')
-            response.write(xlsx_data)
-            return response
-        else:
-            context = self.get_context_data(**kwargs)
-        return self.render_to_response(context)
-
-
     def get_context_data(self, **kwargs):
         context = super(LicensePDFConsolidateView, self).get_context_data()
         context['today_date'] = datetime.datetime.now().date()

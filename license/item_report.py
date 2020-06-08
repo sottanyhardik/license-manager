@@ -237,15 +237,32 @@ def packing_query(date_range=None):
     query_dict = {
         'item__head__name__icontains': 'Packing Material',
     }
-    and_or_filter = [{
-        'license__export_license__norm_class__norm_class': 'E1',
-    }, {
-        'license__export_license__old_quantity__lte': 1,
-        'license__export_license__norm_class__norm_class': 'E5',
-        'license__notification_number': N2015
-    }]
-    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset)
+    query_dict['is_restrict'] = False
+    query_dict['available_quantity__lte'] = 10000
+    queryset = all_queryset(query_dict, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'Less than 10000 Kg')
+
+    query_dict['available_quantity__gte'] = 10001
+    query_dict['available_quantity__lte'] = 25000
+    queryset = all_queryset(query_dict, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'Between 10001 to 25000 Kg')
+
+    query_dict['available_quantity__gte'] = 25001
+    query_dict['available_quantity__lte'] = 50000
+    queryset = all_queryset(query_dict, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'Between 25001 to 50000 Kg')
+
+    query_dict['available_quantity__gte'] = 50001
+    query_dict['available_quantity__lte'] = 100000
+    queryset = all_queryset(query_dict, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'Between 50001 to 100000 Kg')
+
+    query_dict['available_quantity__gte'] = 100000
+    del query_dict['available_quantity__lte']
+    queryset = all_queryset(query_dict, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'Above 100001 Kg')
+
+
     return tables
 
 

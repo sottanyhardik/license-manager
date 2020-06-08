@@ -18,7 +18,7 @@ class ExportItemsForm(forms.ModelForm):
 
     class Meta:
         model = license_model.LicenseExportItemModel
-        fields = ['item', 'norm_class', 'duty_type', 'net_quantity', 'old_quantity','unit',
+        fields = ['item', 'norm_class', 'duty_type', 'net_quantity', 'old_quantity', 'unit',
                   'fob_fc', 'fob_inr', 'currency', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr']
 
     def __init__(self, *args, **kwargs):
@@ -49,7 +49,7 @@ class ImportItemsForm(forms.ModelForm):
 
     class Meta:
         model = license_model.LicenseImportItemsModel
-        fields = ['serial_number', 'hs_code', 'item', 'quantity','old_quantity', 'cif_fc','comment']
+        fields = ['serial_number', 'hs_code', 'item', 'quantity', 'old_quantity', 'cif_fc', 'comment', 'is_restrict']
 
     def __init__(self, *args, **kwargs):
         super(ImportItemsForm, self).__init__(*args, **kwargs)
@@ -84,7 +84,7 @@ class LicenseDetailsForm(forms.ModelForm):
         model = license_model.LicenseDetailsModel
         fields = ['scheme_code', 'notification_number', 'license_number', 'license_date', 'license_expiry_date',
                   'file_number', 'exporter', 'port', 'registration_number', 'registration_date', 'user_restrictions',
-                  'user_comment','is_self','is_au','user_comment']
+                  'user_comment', 'is_self', 'is_au', 'user_comment']
 
     def __init__(self, *args, **kwargs):
         super(LicenseDetailsForm, self).__init__(*args, **kwargs)
@@ -100,7 +100,6 @@ class LicenseDetailsForm(forms.ModelForm):
 
 
 class LicenseDocumentForm(forms.ModelForm):
-
     class Meta:
         model = license_model.LicenseDocumentModel
         fields = ['license', 'type', 'file']

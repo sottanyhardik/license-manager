@@ -11,7 +11,7 @@ urlpatterns = [
     path('<slug:boe>/update', login_required(views.BillOfEntryUpdateDetailView.as_view()), name='bill-of-entry-update'),
     path('<slug:boe>/item', login_required(views.BillOfEntryUpdateView.as_view()), name='bill-of-entry-items'),
     path('<slug:boe>/delete', login_required(views.BillOfEntryDeleteView.as_view()), name='bill-of-entry-delete'),
-    path('fetch', login_required(views.BillOfEntryFetchView.as_view()), name='bill_of_entry_fetch'),
+    path('fetch/', login_required(views.BillOfEntryFetchView.as_view()), name='bill_of_entry_fetch'),
     path('download/', login_required(views.DownloadPendingBillView.as_view()), name='bill_of_entry_pending'),
 
 ]

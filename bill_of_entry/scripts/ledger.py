@@ -8,9 +8,9 @@ from license.models import LicenseDetailsModel, LicenseImportItemsModel, License
 
 def extract_data(line, text):
     if '\t' in line:
-        split_text = text + ' \t:'
+        split_text = text + ' \t'
         try:
-            return line.split(split_text)[1].split('\t')[0].strip()
+            return line.split(split_text)[1].split('\t')[0].replace(':','').strip()
         except:
             print(text)
             return None
@@ -52,7 +52,7 @@ def parse_file(data):
             data_dict['cif_fc'] = extract_data(line, 'CIF-FC')
         if 'Tot.Qty.' in line:
             data_dict['total_quantity'] = extract_data(line, 'Tot.Qty.')
-        if 'IEC \t:' in line:
+        if 'IEC' in line:
             data_dict['iec'] = extract_data(line, 'IEC')
         if 'Regn.No. \t:' in line:
             data_dict['registration_no'] = extract_data(line, 'Regn.No.')

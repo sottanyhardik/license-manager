@@ -22,10 +22,7 @@ class PagedFilteredTableView(ExportMixin, SingleTableView):
 
     def get_context_data(self, **kwargs):
         context = super(PagedFilteredTableView, self).get_context_data()
-        try:
-            context[self.context_filter_name] = self.filter
-        except:
-            pass
+        context[self.context_filter_name] = self.filter_class(request.GET, queryset=self.model.objects.all())
         context['page_head'] = self.page_head
         return context
 

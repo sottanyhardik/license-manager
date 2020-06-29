@@ -8,7 +8,7 @@ from license.tables import LicenseItemReportTable, LicenseBiscuitReportTable, Li
 
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
-                 minimun_qty=500, minimun_value=500, date_range=None, notification_number=False):
+                 minimun_qty=500, minimun_value=500, date_range=None, notification_number=False, maximum_qty=None):
     if date_range:
         start = date_range.get('start')
         end = date_range.get('end')
@@ -57,7 +57,13 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
         object.available_quantity = object.balance_quantity
         object.available_value = object.balance_cif_fc
         object.save()
-    query_set = query_set.filter(Q(available_quantity__gte=minimun_qty) & Q(available_value__gte=minimun_value))
+    if maximum_qty:
+        query_set = query_set.filter(
+            Q(available_quantity__gte=minimun_qty) & Q(available_value__gte=minimun_value) & Q(is_restrict=False) & Q(
+                available_quantity__lte=maximum_qty))
+    else:
+        query_set = query_set.filter(
+            Q(available_quantity__gte=minimun_qty) & Q(available_value__gte=minimun_value) & Q(is_restrict=False))
     return query_set.distinct()
 
 
@@ -73,8 +79,10 @@ def sugar_query(date_range=None):
     query_dict = {
         'item__head__name__icontains': 'sugar'
     }
-    queryset = all_queryset(query_dict, minimun_qty=1000, date_range=date_range)
-    tables = query_set_table(tables, queryset)
+    queryset = all_queryset(query_dict, minimun_qty=1000, date_range=date_range, maximum_qty=25000)
+    tables = query_set_table(tables, queryset,label="Below 25 MTS")
+    queryset = all_queryset(query_dict, minimun_qty=25001, date_range=date_range)
+    tables = query_set_table(tables, queryset,label="Above 25 MTS")
     return tables
 
 
@@ -261,7 +269,6 @@ def packing_query(date_range=None):
     del query_dict['available_quantity__lte']
     queryset = all_queryset(query_dict, date_range=date_range)
     tables = query_set_table(tables, queryset, 'Above 100001 Kg')
-
 
     return tables
 

@@ -50,6 +50,7 @@ class LicenseDetailsModel(models.Model):
     is_incomplete = models.BooleanField(default=False)
     is_expired = models.BooleanField(default=False)
     is_individual = models.BooleanField(default=False)
+    admin_search_fields = ('license_number',)
 
     def __str__(self):
         return self.license_number

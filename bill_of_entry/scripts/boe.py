@@ -1,4 +1,5 @@
 import requests
+from django.db.models import Q
 
 
 def fetch_cookies():
@@ -92,11 +93,46 @@ def be_details(cookies, data):
         soup = BeautifulSoup(response.content.decode('utf-8'), 'html.parser')
         tds = [td.text for td in soup.findAll('td') if td.text.strip() != '']
         dict_data = {}
-        for index, data in enumerate(soup.findAll('th')):
-            if data.text == 'IEC':
+        for index, ddata in enumerate(soup.findAll('th')):
+            if ddata.text == 'IEC':
                 dict_data['iec'] = soup.findAll('td')[index].text.replace('\xa0', '')
-            elif data.text == 'CHA No.':
+            elif ddata.text == 'CHA No.':
                 dict_data['cha'] = soup.findAll('td')[index].text.replace('\xa0', '')
+        response = requests.post('https://www.enquiry.icegate.gov.in/enquiryatices/BE_IcesCURRST_action', headers=headers,
+                                 cookies=cookies, data=data, verify=False)
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(response.content.decode('utf-8'), 'html.parser')
+        for index, data in enumerate(soup.findAll('th')):
+            if data.text == 'APPRAISEMENT':
+                dict_data['appraisement'] = soup.findAll('td')[index].text.replace('\xa0', '')
+        return dict_data
+    except Exception as e:
+        print(e)
+        return None
+
+
+def rms_details(cookies, data):
+    import requests
+    headers = {
+        'Origin': 'https://enquiry.icegate.gov.in',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'en',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': '*/*',
+        'Referer': 'https://enquiry.icegate.gov.in/enquiryatices/BETrack_Ices_action',
+        'Connection': 'keep-alive',
+    }
+    response = requests.post('https://www.enquiry.icegate.gov.in/enquiryatices/BE_IcesCURRST_action', headers=headers,
+                             cookies=cookies, data=data, verify=True)
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(response.content.decode('utf-8'), 'html.parser')
+        tds = [td.text for td in soup.findAll('td') if td.text.strip() != '']
+        dict_data = {}
+        for index, data in enumerate(soup.findAll('th')):
+            if data.text == 'APPRAISEMENT':
+                dict_data['appraisement'] = soup.findAll('td')[index].text.replace('\xa0', '')
         return dict_data
     except Exception as e:
         print(e)
@@ -128,6 +164,45 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
                 company, bool = CompanyModel.objects.get_or_create(iec=dict_sb_data['iec'])
                 from bill_of_entry.models import BillOfEntryModel
                 BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(cha=dict_sb_data['cha'],company=company, is_fetch=True)
+            else:
+                data.failed = data.failed + 1
+                data.save()
+                print(False)
+
+        else:
+            data.failed = data.failed + 1
+            data.save()
+            print(False)
+        return True
+    else:
+        return False
+
+
+def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
+    from bill_of_entry.models import BillOfEntryModel
+    data = BillOfEntryModel.objects.filter(bill_of_entry_date__year=2020).filter(Q(is_fetch=False)|Q(appraisement=None)).exclude(failed=5).order_by('id').first()
+    if data:
+        print("'''''''''''''''''\n{0}''''''''''''''''''''".format(data.bill_of_entry_number))
+        if not data:
+            return True
+        if not data.bill_of_entry_date:
+            data.failed = 5
+            data.save()
+            return True
+        date = data.bill_of_entry_date.strftime('%Y/%m/%d')
+        if request_bill_of_entry(cookies, csrftoken, data_dict[data.port.code], data.bill_of_entry_number, date, captcha):
+            dict_data = {
+                'BE_NO': data.bill_of_entry_number,
+                'BE_DT': date,
+                'beTrack_location': data.port,
+                '': ''
+            }
+            dict_sb_data = be_details(cookies, dict_data)
+            if dict_sb_data:
+                from core.models import CompanyModel
+                company, bool = CompanyModel.objects.get_or_create(iec=dict_sb_data['iec'])
+                from bill_of_entry.models import BillOfEntryModel
+                BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(cha=dict_sb_data['cha'],company=company, is_fetch=True,appraisement=dict_sb_data['appraisement'])
             else:
                 data.failed = data.failed + 1
                 data.save()

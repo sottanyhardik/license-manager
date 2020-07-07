@@ -26,7 +26,7 @@ from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_
     biscuit_2019_other, confectinery_2009, confectinery_2019, \
     confectinery_2019_other, generate_table, biscuit_conversion, confectionery_conversion, biscuit_2019_rama_rani, \
     conversion_main, conversion_other, confectinery_2019_rama_rani, confectinery_2009_all, biscuits_2009_all, \
-    generate_dict
+    generate_dict, tartaric_query, essential_oil_query
 from .tables import LicenseBiscuitReportTable
 
 
@@ -683,6 +683,12 @@ class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
         elif item == 'juice':
             title = 'Fruit Juice'
             tables = juice_query()
+        elif item == 'tartaric':
+            title = 'Tartaric'
+            tables = tartaric_query()
+        elif item == 'essential':
+            title = 'Essential Oil'
+            tables = essential_oil_query()
         context['page_title'] = title
         context['tables'] = tables
         for table in tables:

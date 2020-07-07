@@ -80,9 +80,9 @@ def sugar_query(date_range=None):
         'item__head__name__icontains': 'sugar'
     }
     queryset = all_queryset(query_dict, minimun_qty=1000, date_range=date_range, maximum_qty=25000)
-    tables = query_set_table(tables, queryset,label="Below 25 MTS")
+    tables = query_set_table(tables, queryset, label="Below 25 MTS")
     queryset = all_queryset(query_dict, minimun_qty=25001, date_range=date_range)
-    tables = query_set_table(tables, queryset,label="Above 25 MTS")
+    tables = query_set_table(tables, queryset, label="Above 25 MTS")
     return tables
 
 
@@ -310,12 +310,15 @@ def fruit_query(date_range=None):
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'fruit',
-        'hs_code__hs_code__startswith': '08',
     }
+    or_filters = {
+        'hs_code__hs_code__startswith': ['15', '08'],
+    }
+
     and_or_filter = [{
         'license__notification_number': N2009
     }]
-    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, date_range=date_range)
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, date_range=date_range, or_filters=or_filters)
     tables = query_set_table(tables, queryset, 'Old Notification')
     and_or_filter = [{
         'license__export_license__old_quantity__gt': 1,
@@ -797,3 +800,54 @@ def generate_dict(object, total_dict, new=False):
         total_dict['pp']['quantity'] = total_dict['pp']['quantity'] + round(
             cif_required / object.pp().item.head.unit_rate, 0)
     return dicts, total_dict
+
+
+def tartaric_query(date_range=None):
+    tables = []
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E1',
+        'item__head__name__icontains': 'citric',
+    }
+    and_or_filter = [{
+        'license__notification_number': N2009
+    }]
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset, 'Old Notification')
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }]
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset, 'New Notification')
+    return tables
+
+
+def essential_oil_query(date_range=None):
+    tables = []
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E1',
+        'item__head__name__icontains': 'essential oil',
+    }
+    and_or_filter = [{
+        'license__notification_number': N2009
+    }]
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset, 'Old Notification')
+    and_or_filter = [{
+        'license__export_license__old_quantity__gt': 1,
+        'license__notification_number': N2015
+    }]
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
+    tables = query_set_table(tables, queryset, 'New Notification')
+
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E1',
+        'item__head__name__icontains': 'other confectionery',
+    }
+    exclude_or_filters = {
+        'hs_code__hs_code__startswith': '08'
+    }
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter,
+                            exclude_or_filters=exclude_or_filters)
+    tables = query_set_table(tables, queryset, 'Need Amendment')
+    return tables

@@ -16,6 +16,7 @@ class BillOfEntryModel(models.Model):
     invoice_date = models.DateField(null=True, blank=True)
     is_fetch = models.BooleanField(default=False)
     failed = models.IntegerField(default=0)
+    appraisement = models.CharField(max_length=255, null=True, blank=True)
     cha = models.CharField(max_length=255, null=True, blank=True)
     admin_search_fields = ['bill_of_entry_number', ]
 
@@ -60,7 +61,7 @@ class BillOfEntryModel(models.Model):
     @property
     def get_unit_price(self):
         if self.get_total_quantity and self.get_total_quantity != 0:
-            return round(self.get_total_fc/self.get_total_quantity,3)
+            return round(self.get_total_fc / self.get_total_quantity, 3)
         return 0
 
     @property

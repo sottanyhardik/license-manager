@@ -20,7 +20,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
 
     class Meta:
         model = bill_of_entry.BillOfEntryModel
-        fields = ['company', 'bill_of_entry_number','port','product_name','is_self', 'item_details__sr_number__license__license_number']
+        fields = ['company', 'bill_of_entry_number','port','product_name','is_self', 'item_details__sr_number__license__license_number','appraisement']
         widgets = {
             'company': Select(attrs={'class': 'form-control'}),
         }

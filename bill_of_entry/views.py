@@ -1,19 +1,21 @@
 # Create your views here.
+from django.db.models import Q
 from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, FormView, DeleteView, UpdateView, CreateView
 from django_filters.views import FilterView
+from django_tables2 import SingleTableView
+from django_tables2.export import ExportMixin
 from easy_pdf.views import PDFTemplateResponseMixin
-from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
+from extra_views import UpdateWithInlinesView, InlineFormSetFactory
 
 from bill_of_entry.models import RowDetails
 from bill_of_entry.scripts.boe import fetch_data_to_model
-from core.utils import PagedFilteredTableView
 from . import forms, tables, filters
 from . import models as bill_of_entry
 
 
-class BillOfEntryView(FilterView):
+class BillOfEntryView(FilterView, ExportMixin, SingleTableView):
     template_name = 'bill_of_entry/list.html'
     model = bill_of_entry.BillOfEntryModel
     table_class = tables.BillOfEntryTable
@@ -56,14 +58,13 @@ class BillOfEntryDetailView(DetailView):
         return context
 
 
-
-
 class BillOfEntryLicenseImportItemInline(InlineFormSetFactory):
     model = bill_of_entry.RowDetails
     form_class = forms.ImportItemsForm
     factory_kwargs = {
         'extra': 0,
     }
+
 
 class BillOfEntryUpdateDetailView(UpdateView):
     template_name = 'bill_of_entry/add.html'
@@ -96,7 +97,7 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
             if allotment.allotment_details.all().exists():
                 for allotment_item in allotment.allotment_details.all():
                     if not RowDetails.objects.filter(bill_of_entry=self.object,
-                                                                 sr_number=allotment_item.item).exists():
+                                                     sr_number=allotment_item.item).exists():
                         row, bool = RowDetails.objects.get_or_create(bill_of_entry=self.object,
                                                                      sr_number=allotment_item.item)
                         if not row.cif_inr or row.cif_inr == 0:
@@ -110,8 +111,6 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
                     allotment_item.save()
         self.inlines = [BillOfEntryLicenseImportItemInline, ]
         return super(BillOfEntryUpdateView, self).get_inlines()
-
-
 
 
 # Create your views here.
@@ -130,7 +129,8 @@ class BillOfEntryFetchView(FormView):
         context['fetch_cookies'] = json.dumps(cookies)
         context['csrftoken'] = csrftoken
         data = self.kwargs.get('data')
-        context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(is_fetch=False).order_by(
+        context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(bill_of_entry_date__year=2020).filter(
+            Q(is_fetch=False) | Q(appraisement=None)).order_by(
             'bill_of_entry_date', 'id').count()
         context['remain_captcha'] = context['remain_count'] / 3
         return context
@@ -168,7 +168,7 @@ class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
     def get_queryset(self):
         qs = self.model.objects.all()
         product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
-        return product_filtered_list.qs.order_by('company','bill_of_entry_date')
+        return product_filtered_list.qs.order_by('company', 'bill_of_entry_date')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

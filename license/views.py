@@ -684,7 +684,7 @@ class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
             title = 'Fruit Juice'
             tables = juice_query()
         elif item == 'tartaric':
-            title = 'Tartaric'
+            title = 'Tartaric Acid'
             tables = tartaric_query()
         elif item == 'essential':
             title = 'Essential Oil'

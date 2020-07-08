@@ -311,14 +311,10 @@ def fruit_query(date_range=None):
         'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'fruit',
     }
-    exclude_or_filters = {
-        'hs_code__hs_code__startswith': '08'
-    }
     and_or_filter = [{
         'license__notification_number': N2009
     }]
-    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, date_range=date_range,
-                            exclude_or_filters=exclude_or_filters)
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, date_range=date_range)
     tables = query_set_table(tables, queryset, 'Old Notification')
     and_or_filter = [{
         'license__export_license__old_quantity__gt': 1,

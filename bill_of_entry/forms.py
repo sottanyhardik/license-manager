@@ -35,7 +35,7 @@ class BillOfEntryForm(forms.ModelForm):
     class Meta:
         model = models.BillOfEntryModel
         fields = ['company', 'bill_of_entry_number', 'bill_of_entry_date', 'port', 'exchange_rate', 'allotment',
-                  'product_name','invoice_no']
+                  'product_name','invoice_no','comments']
 
     def __init__(self, *args, **kwargs):
         super(BillOfEntryForm, self).__init__(*args, **kwargs)

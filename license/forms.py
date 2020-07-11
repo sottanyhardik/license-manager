@@ -84,7 +84,7 @@ class LicenseDetailsForm(forms.ModelForm):
         model = license_model.LicenseDetailsModel
         fields = ['scheme_code', 'notification_number', 'license_number', 'license_date', 'license_expiry_date',
                   'file_number', 'exporter', 'port', 'registration_number', 'registration_date', 'user_restrictions',
-                  'user_comment', 'is_self', 'is_au', 'user_comment']
+                  'user_comment', 'is_self', 'is_au', 'user_comment','ge_file_number']
 
     def __init__(self, *args, **kwargs):
         super(LicenseDetailsForm, self).__init__(*args, **kwargs)

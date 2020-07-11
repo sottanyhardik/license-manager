@@ -36,9 +36,8 @@ class CompanyWidget(ModelSelect2Widget):
 
 
 class LicenseWidget(ModelSelect2Widget):
-    search_fields = ['license_number__icontains', ]
+    search_fields = ['license_number__icontains', 'ge_file_number__icontains']
     model = LicenseDetailsModel
-
 
 
 class AllotmentWidget(ModelSelect2MultipleWidget):

@@ -1,5 +1,6 @@
 from django_select2.forms import ModelSelect2MultipleWidget, ModelSelect2Widget
 
+from license.models import LicenseDetailsModel
 from allotment.models import AllotmentModel
 from core import models
 
@@ -32,6 +33,12 @@ class ItemWidget(ModelSelect2Widget):
 class CompanyWidget(ModelSelect2Widget):
     search_fields = ['name__icontains', ]
     model = models.CompanyModel
+
+
+class LicenseWidget(ModelSelect2Widget):
+    search_fields = ['license_number__icontains', ]
+    model = LicenseDetailsModel
+
 
 
 class AllotmentWidget(ModelSelect2MultipleWidget):

@@ -104,3 +104,25 @@ class LicenseReportFilter(django_filters.FilterSet):
             return queryset.exclude(export_license__old_quantity=0).distinct()
         else:
             return queryset.filter(export_license__old_quantity=0).distinct()
+
+
+class LicenseInwardOutwardFilter(django_filters.FilterSet):
+    class Meta:
+        model = lic_model.LicenseInwardOutwardModel
+        fields = ('date', 'license', 'status', 'office', 'description', 'amd_sheets_number', 'copy', 'annexure', 'along_with')
+        filter_overrides = {
+            models.CharField: {
+                'filter_class': django_filters.CharFilter,
+                'extra': lambda f: {
+                    'lookup_expr': 'icontains',
+                },
+            },
+            models.TextField: {
+                'filter_class': django_filters.CharFilter,
+                'extra': lambda f: {
+                    'lookup_expr': 'icontains',
+                },
+            }
+        }
+
+

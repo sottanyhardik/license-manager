@@ -237,12 +237,12 @@ class LicenseBiscuitReportTable(dt2.Table):
     m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
     pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
 
-
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
         fields = ['counter', 'license', 'license_expiry_date',
-                  'party', 'balance_cif','wheat_flour','sugar','rbd','leavening_agent','food_flavour','starch','food_colour','anti_oxidant','fruit','dietary_fibre','m_n_m','pp','user_comment']
+                  'party', 'balance_cif', 'wheat_flour', 'sugar', 'rbd', 'leavening_agent', 'food_flavour', 'starch',
+                  'food_colour', 'anti_oxidant', 'fruit', 'dietary_fibre', 'm_n_m', 'pp', 'user_comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):
@@ -276,8 +276,9 @@ class LicenseConfectineryReportTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'license', 'license_expiry_date','party','balance_cif','sugar','liquid_glucose','fruit_juice','tartaric_acid',
-                  'essential_oil','food_colour','food_flavour','starch','other_confectionery','pp','user_comment']
+        fields = ['counter', 'license', 'license_expiry_date', 'party', 'balance_cif', 'sugar', 'liquid_glucose',
+                  'fruit_juice', 'tartaric_acid',
+                  'essential_oil', 'food_colour', 'food_flavour', 'starch', 'other_confectionery', 'pp', 'user_comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):
@@ -380,6 +381,22 @@ class LicenseConfectioneryPreimiumTable(dt2.Table):
         per_page = 50
         fields = ['counter', 'license', 'license_date', 'license_expiry_date',
                   'party', 'balance_cif']
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+    def render_counter(self):
+        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
+        return next(self.row_counter)
+
+
+class LicenseInwardOutwardTable(dt2.Table):
+    counter = dt2.Column(empty_values=(), orderable=False)
+
+    class Meta:
+        model = models.LicenseInwardOutwardModel
+        per_page = 50
+        fields = (
+        'counter', 'date', 'license', 'status', 'office', 'description', 'amd_sheets_number', 'copy', 'annexure',
+        'along_with')
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_counter(self):

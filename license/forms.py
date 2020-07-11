@@ -115,3 +115,28 @@ class LicenseDocumentForm(forms.ModelForm):
                 field.widget.attrs['class'] = 'form-control'
             if 'Textarea' in str(field.widget):
                 field.widget.attrs['rows'] = '2'
+
+
+class LicenseInwardOutwardForm(forms.ModelForm):
+    license = forms.ModelChoiceField(
+        queryset=license_model.LicenseDetailsModel.objects.all(),
+        widget=custom_widgets.LicenseWidget,
+        required=False
+    )
+
+    class Meta:
+        model = license_model.LicenseInwardOutwardModel
+        fields = ['date', 'license', 'status', 'office', 'description', 'amd_sheets_number', 'copy', 'annexure',
+                  'along_with']
+
+    def __init__(self, *args, **kwargs):
+        super(LicenseInwardOutwardForm, self).__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if 'date' in field_name:
+                field.widget.input_type = 'date'
+            if field.widget.attrs.get('class'):
+                field.widget.attrs['class'] += ' form-control'
+            else:
+                field.widget.attrs['class'] = 'form-control'
+            if 'Textarea' in str(field.widget):
+                field.widget.attrs['rows'] = '2'

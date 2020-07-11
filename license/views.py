@@ -992,7 +992,6 @@ class LicenseReportListView(TemplateResponseMixin, ContextMixin, View):
         return context
 
 
-
 import xlsxwriter
 
 
@@ -1064,3 +1063,29 @@ class LicensePDFConsolidateView(PDFTemplateResponseMixin, PagedFilteredTableView
         context['biscuit_list'] = biscuit_list
         context['total_dict'] = total_dict
         return context
+
+
+class MovementItemInline(InlineFormSetFactory):
+    model = license.LicenseInwardOutwardModel
+    form_class = forms.LicenseInwardOutwardForm
+
+
+class MovementListView(PagedFilteredTableView):
+    template_name = 'core/list.html'
+    model = license.LicenseInwardOutwardModel
+    table_class = tables.LicenseInwardOutwardTable
+    filter_class = filters.LicenseInwardOutwardFilter
+
+
+class MovementUpdateView(UpdateWithInlinesView):
+    model = license.DateModel
+    template_name = 'core/add.html'
+    fields = "__all__"
+    inlines = [MovementItemInline, ]
+
+    def get_object(self, queryset=None):
+        model, bool = self.model.objects.get_or_create(date=datetime.datetime.now().date())
+        return model
+
+    def get_success_url(self):
+        return reverse('movement-list')

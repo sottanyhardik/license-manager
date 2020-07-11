@@ -178,3 +178,6 @@ class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
         import datetime
         context['today'] = datetime.datetime.now().date
         return context
+
+
+

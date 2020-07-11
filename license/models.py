@@ -338,7 +338,7 @@ class LicenseImportItemsModel(models.Model):
     @property
     def required_cif(self):
         if self.balance_quantity > 100:
-            required = round(self.balance_quantity * self.item.head.unit_rate, 0)+10
+            required = round(self.balance_quantity * self.item.head.unit_rate, 0) + 10
             return required
         else:
             return 0
@@ -478,12 +478,78 @@ class LicenseImportItemsModel(models.Model):
             return self.old_quantity
         value = self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00)
         if value:
-            return round(value,0)
+            return round(value, 0)
         else:
             return 0
+
 
 class LicenseDocumentModel(models.Model):
     license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE,
                                 related_name='license_documents')
     type = models.CharField(max_length=255)
     file = models.FileField(upload_to=license_path)
+
+
+class StatusModel(models.Model):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+
+class OfficeModel(models.Model):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+
+class AlongWithModel(models.Model):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+
+class DateModel(models.Model):
+    date = models.DateField()
+
+    def __str__(self):
+        return str(self.date)
+
+
+class LicenseInwardOutwardModel(models.Model):
+    date = models.ForeignKey('license.DateModel', on_delete=models.CASCADE,
+                             related_name='license_status')
+    license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE,
+                                related_name='license_status', null=True, blank=True)
+    status = models.ForeignKey('license.StatusModel', on_delete=models.CASCADE,
+                               related_name='license_status')
+    office = models.ForeignKey('license.OfficeModel', on_delete=models.CASCADE,
+                               related_name='license_status')
+    description = models.TextField(null=True, blank=True)
+    amd_sheets_number = models.CharField(max_length=100, null=True, blank=True)
+    copy = models.BooleanField(default=False)
+    annexure = models.BooleanField(default=False)
+    along_with = models.ForeignKey('license.AlongWithModel', on_delete=models.CASCADE,
+                                   related_name='license_status', null=True, blank=True)
+
+    def __str__(self):
+        text = ''
+        if self.license:
+            text = text + str(self.license) + ' '
+        if self.copy:
+            text = text + 'copy '
+        if self.amd_sheets_number:
+            text = text + 'amendment sheet:- ' + str(self.amd_sheets_number) + ' '
+        if self.annexure:
+            text = text + '& annexure '
+        if self.status:
+            text = text + 'has been {0} '.format(self.status.name)
+        if self.office:
+            text = text + 'send to '.format(self.office.name)
+        if self.description:
+            text = text + 'for ' + str(self.description) + ' '
+        if self.along_with:
+            text = text + 'along with ' + str(self.along_with.name)
+        return text

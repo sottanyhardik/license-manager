@@ -61,6 +61,8 @@
                                         License Documents
                                     {% elif formset.prefix == 'export_license' %}
                                         Export Item List
+                                    {% elif formset.prefix == 'license_status' %}
+                                        License Status
                                     {% else %}
                                         {{ formset.prefix|title }}
                                     {% endif %}
@@ -100,7 +102,18 @@
                                                 {% for fld in form.hidden_fields %}{{ fld }}{% endfor %}
                                                 <div class="row">
                                                     {% for field in form %}
-                                                        {% if field.name == 'license' or field.name == 'DELETE' or field.name == 'id' or field.name == 'norm_class' %}
+                                                        {% if formset.prefix == 'license_status' and field.name == 'date' %}
+                                                            <div class="hidden" style="display: none">
+                                                                {{ field }}
+                                                            </div>
+                                                        {% elif formset.prefix == 'license_status' and field.name == 'license' %}
+                                                            <div class="col-lg-3 col-xs-6">
+                                                                <div class="form-group">
+                                                                    <label for="">{{ field.label }}</label>
+                                                                    {{ field }}
+                                                                </div>
+                                                            </div>
+                                                        {% elif field.name == 'license' or field.name == 'DELETE' or field.name == 'id' or field.name == 'norm_class' %}
                                                             <div class="hidden" style="display: none">
                                                                 {{ field }}
                                                             </div>
@@ -135,7 +148,18 @@
                                                 {% for fld in form.hidden_fields %}{{ fld }}{% endfor %}
                                                 <div class="row">
                                                     {% for field in formset.empty_form %}
-                                                        {% if field.name == 'license' or field.name == 'DELETE' or field.name == 'id' %}
+                                                        {% if formset.prefix == 'license_status' and field.name == 'date' %}
+                                                        <div class="hidden" style="display: none">
+                                                            {{ field }}
+                                                        </div>
+                                                        {% elif formset.prefix == 'license_status' and field.name == 'license' %}
+                                                        <div class="col-lg-3 col-xs-6">
+                                                            <div class="form-group">
+                                                                <label for="">{{ field.label }}</label>
+                                                                {{ field }}
+                                                            </div>
+                                                        </div>
+                                                        {% elif field.name == 'license' or field.name == 'DELETE' or field.name == 'id' %}
                                                             <div class="hidden" style="display: none">
                                                                 {{ field }}
                                                             </div>
@@ -253,8 +277,8 @@
         function convert_currency(inputE) {
             inr = parseInt(inputE.value);
             exchange = parseInt($('#id_exchange_rate').val());
-            fc_id = '#' + inputE.id.replace('inr','fc');
-            $(fc_id).val((inr/exchange).toFixed(2));
+            fc_id = '#' + inputE.id.replace('inr', 'fc');
+            $(fc_id).val((inr / exchange).toFixed(2));
         }
     </script>
 {% endblock %}

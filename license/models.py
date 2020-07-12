@@ -556,3 +556,8 @@ class LicenseInwardOutwardModel(models.Model):
         if self.along_with:
             text = text + 'along with ' + str(self.along_with.name)
         return text
+
+    @property
+    def ge_file_number(self):
+        return self.license.ge_file_number
+

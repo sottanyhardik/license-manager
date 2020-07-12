@@ -390,13 +390,13 @@ class LicenseConfectioneryPreimiumTable(dt2.Table):
 
 class LicenseInwardOutwardTable(dt2.Table):
     counter = dt2.Column(empty_values=(), orderable=False)
-    license__ge_file_number = dt2.Column(verbose_name='GE File Number')
+    ge_file_number = dt2.Column(orderable=False)
 
     class Meta:
         model = models.LicenseInwardOutwardModel
         per_page = 50
         fields = (
-            'counter', 'date', 'license__ge_file_number', 'license', 'status', 'office', 'description',
+            'counter', 'date', 'ge_file_number', 'license', 'status', 'office', 'description',
             'amd_sheets_number', 'copy', 'annexure', 'tl', 'aro', 'along_with')
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 

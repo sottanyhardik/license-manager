@@ -123,6 +123,16 @@ class LicenseInwardOutwardForm(forms.ModelForm):
         widget=custom_widgets.LicenseWidget,
         required=False
     )
+    copy = forms.BooleanField(initial=True)
+    tl = forms.BooleanField(initial=True)
+    status = forms.ModelChoiceField(
+        queryset=license_model.StatusModel.objects.all(),
+        initial=3
+    )
+    office = forms.ModelChoiceField(
+        queryset=license_model.OfficeModel.objects.all(),
+        initial=1
+    )
 
     class Meta:
         model = license_model.LicenseInwardOutwardModel
@@ -140,3 +150,4 @@ class LicenseInwardOutwardForm(forms.ModelForm):
                 field.widget.attrs['class'] = 'form-control'
             if 'Textarea' in str(field.widget):
                 field.widget.attrs['rows'] = '2'
+

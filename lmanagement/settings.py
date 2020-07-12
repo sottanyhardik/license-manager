@@ -202,3 +202,4 @@ RQ_QUEUES = {
 }
 
 DJANGO_TABLES2_TEMPLATE = "django_tables2/bootstrap.html"
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000 #

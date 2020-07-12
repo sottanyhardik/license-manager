@@ -123,8 +123,8 @@ class LicenseInwardOutwardForm(forms.ModelForm):
         widget=custom_widgets.LicenseWidget,
         required=False
     )
-    copy = forms.BooleanField(initial=True)
-    tl = forms.BooleanField(initial=True)
+    copy = forms.BooleanField(initial=True, required=False)
+    tl = forms.BooleanField(initial=True, required=False)
     status = forms.ModelChoiceField(
         queryset=license_model.StatusModel.objects.all(),
         initial=3

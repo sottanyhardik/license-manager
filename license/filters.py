@@ -109,7 +109,8 @@ class LicenseReportFilter(django_filters.FilterSet):
 class LicenseInwardOutwardFilter(django_filters.FilterSet):
     class Meta:
         model = lic_model.LicenseInwardOutwardModel
-        fields = ('date', 'license', 'status', 'office', 'description', 'amd_sheets_number', 'copy', 'annexure', 'along_with')
+        fields = ('date', 'license__ge_file_number', 'license', 'status', 'office', 'description',
+            'amd_sheets_number', 'copy', 'annexure', 'tl', 'aro', 'along_with')
         filter_overrides = {
             models.CharField: {
                 'filter_class': django_filters.CharFilter,

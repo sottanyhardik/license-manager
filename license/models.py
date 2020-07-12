@@ -532,6 +532,8 @@ class LicenseInwardOutwardModel(models.Model):
     amd_sheets_number = models.CharField(max_length=100, null=True, blank=True)
     copy = models.BooleanField(default=False)
     annexure = models.BooleanField(default=False)
+    tl = models.BooleanField(default=False)
+    aro = models.BooleanField(default=False)
     along_with = models.ForeignKey('license.AlongWithModel', on_delete=models.CASCADE,
                                    related_name='license_status', null=True, blank=True)
 

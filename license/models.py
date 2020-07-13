@@ -475,8 +475,9 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def usable(self):
-        if self.license.notification_number == N2015 and self.item.head.is_restricted:
-            return self.old_quantity
+        if self.item.head:
+            if self.license.notification_number == N2015 and self.item.head.is_restricted:
+                return self.old_quantity
         value = self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00)
         if value:
             return round(value, 0)

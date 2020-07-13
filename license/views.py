@@ -1075,6 +1075,7 @@ class MovementListView(PagedFilteredTableView):
     model = license.LicenseInwardOutwardModel
     table_class = tables.LicenseInwardOutwardTable
     filter_class = filters.LicenseInwardOutwardFilter
+    ordering = ('date__date','license__ge_file_number')
 
 
 class MovementUpdateView(UpdateWithInlinesView):

@@ -16,9 +16,9 @@ class PagedFilteredTableView(ExportMixin, SingleTableView):
         qs = super(PagedFilteredTableView, self).get_queryset()
         if self.filter_class:
             self.filter = self.filter_class(self.request.GET, queryset=qs)
-            return self.filter.qs.order_by(self.ordering)
+            return self.filter.qs
         else:
-            return qs.order_by(self.ordering)
+            return qs
 
     def get_context_data(self, **kwargs):
         context = super(PagedFilteredTableView, self).get_context_data()

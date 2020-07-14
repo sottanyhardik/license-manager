@@ -5,7 +5,8 @@ from django.db.models import Q, Sum
 from license import models as license
 from license.models import N2009, N2015, LicenseDetailsModel
 from license.tables import LicenseItemReportTable, LicenseBiscuitReportTable, LicenseConfectineryReportTable
-
+from datetime import date
+from dateutil.relativedelta import relativedelta
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
                  minimun_qty=500, minimun_value=500, date_range=None, notification_number=False, maximum_qty=None):
@@ -55,6 +56,21 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
         'license__license_expiry_date')
     for object in query_set:
         object.available_quantity = object.balance_quantity
+        object.available_value = object.balance_cif_fc
+        if object.cif_fc == 0.01:
+            if object.comment and not 'individual' in object.comment.lower():
+                object.comment = object.comment + ' individual value error'
+            else:
+                object.comment = 'individual value error'
+        expiry = date.today() + relativedelta(months=-2)
+        if object.license_expiry < expiry:
+            if object.comment and not 'expired' in object.comment.lower():
+                object.comment = object.comment + ' expired'
+            else:
+                object.comment = 'expired'
+        else:
+            if object.comment:
+                object.comment = object.comment.replace('expired','')
         object.available_value = object.balance_cif_fc
         object.save()
     if maximum_qty:

@@ -355,13 +355,13 @@ class LicenseImportItemsModel(models.Model):
         debit = self.debited_quantity
         alloted = self.alloted_quantity
         if debit and alloted:
-            return round(credit - debit - alloted, 0)
+            return round(credit - debit - alloted, 0)-2
         elif debit:
-            return round(credit - debit, 0)
+            return round(credit - debit, 0)-2
         elif alloted:
-            return round((credit - alloted), 0)
+            return round((credit - alloted), 0)-2
         else:
-            return round(credit, 0)
+            return round(credit, 0) -2
 
     @property
     def debited_value(self):

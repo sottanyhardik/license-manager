@@ -515,7 +515,7 @@ def conversion_other(date_range=None):
                    'table': generate_table(
                        biscuit_conversion(date_range, exclude_party=['rama', 'rani', 'vanila', 'parle']),
                        LicenseBiscuitReportTable)})
-    tables.append({'label': 'Viva, V A global, Vipul Kumar Biscuits',
+    tables.append({'label': 'Viva, V A global, Vipul Kumar Confectioney',
                    'table': generate_table(
                        confectionery_conversion(date_range, exclude_party=['rama', 'rani', 'vanila', 'parle']),
                        LicenseConfectineryReportTable)})

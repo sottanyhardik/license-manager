@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from allotment.models import AllotmentItems, Debit, ALLOTMENT
 from bill_of_entry.models import RowDetails, ARO
+from license.helper import round_down
 
 DFIA = "26"
 
@@ -355,13 +356,13 @@ class LicenseImportItemsModel(models.Model):
         debit = self.debited_quantity
         alloted = self.alloted_quantity
         if debit and alloted:
-            return round(credit - debit - alloted, 0)-2
+            return round_down(credit - debit - alloted, 0)
         elif debit:
-            return round(credit - debit, 0)-2
+            return round_down(credit - debit, 0)
         elif alloted:
-            return round((credit - alloted), 0)-2
+            return round_down((credit - alloted), 0)
         else:
-            return round(credit, 0) -2
+            return round_down(credit, 0)
 
     @property
     def debited_value(self):

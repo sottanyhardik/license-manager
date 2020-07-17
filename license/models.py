@@ -213,6 +213,10 @@ class LicenseDetailsModel(models.Model):
     def get_required_mnm_value(self):
         return round(self.get_m_n_m() * 5, 0)
 
+    def get_per_cif(self):
+        credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        return round_down(credit * .1, 0)
+
     def get_balance_value(self):
         if self.get_norm_class == 'E5':
             return round(

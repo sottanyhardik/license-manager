@@ -21,6 +21,14 @@ class BalanceCIFColumn(ColumnTotal):
         return intcomma(round(bills, 0))
 
 
+class PERCIFColumn(ColumnTotal):
+
+    def render(self, record):
+        bills = record.get_per_cif()
+        self.column_total += bills
+        return intcomma(round(bills, 0))
+
+
 class WheatQuantityColumn(ColumnTotal):
 
     def render(self, record):
@@ -236,6 +244,7 @@ class LicenseBiscuitReportTable(dt2.Table):
     dietary_fibre = DFQuantityColumn(verbose_name='Dietary Fibre', orderable=False, accessor='get_dietary_fibre')
     m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
     pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
+    per_cif = PERCIFColumn(verbose_name='10% of CIF', accessor='get_per_cif', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel

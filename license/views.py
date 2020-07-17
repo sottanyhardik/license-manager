@@ -427,7 +427,7 @@ class PDFBiscuitsNewExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
         from license.tables import LicenseBiscuitReportTable
         from license.models import N2015
         try:
-            expiry_limit = datetime.datetime.today()
+            expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expiry_limit,
                                                                            is_self=True, is_au=False,
@@ -469,7 +469,7 @@ class PDFConfectioneryNewExpiredReportView(PDFTemplateResponseMixin, PagedFilter
         from license.tables import LicenseConfectineryReportTable
         from license.models import N2015
         try:
-            expiry_limit = datetime.datetime.today()
+            expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expiry_limit,
@@ -513,7 +513,7 @@ class PDFBiscuitsOldExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
         from license.tables import LicenseBiscuitReportTable
         from license.models import N2009
         try:
-            expiry_limit = datetime.datetime.today()
+            expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expiry_limit,
                                                                            is_self=True, is_au=False,
@@ -556,7 +556,7 @@ class PDFConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedFilter
         from license.tables import LicenseConfectineryReportTable
         from license.models import N2009
         try:
-            expiry_limit = datetime.datetime.today()
+            expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expiry_limit,
@@ -593,7 +593,7 @@ class PDFOtherConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedF
         from license.tables import LicenseConfectineryReportTable
         from license.models import N2009
         try:
-            expiry_limit = datetime.datetime.today()
+            expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expiry_limit,
@@ -733,7 +733,7 @@ class PDFParleConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedF
         tables = []
         from license.tables import LicenseConfectineryReportTable
         try:
-            expiry_limit = datetime.datetime.today()
+            expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__gte=expiry_limit,
@@ -772,7 +772,7 @@ class PDFAUConfectioneryReportView(PDFTemplateResponseMixin, PagedFilteredTableV
         from license.tables import LicenseConfectineryReportTable
         from license.models import N2009
         try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
+            expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__gte=expiry_limit,
@@ -810,7 +810,7 @@ class PDFAUBiscuitsReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
         from license.tables import LicenseBiscuitReportTable
         from license.models import N2009
         try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
+            expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__gte=expiry_limit,
                                                                            is_self=True, is_au=True,
@@ -851,7 +851,7 @@ class PremiumCalculationView(PDFTemplateResponseMixin, PagedFilteredTableView):
         fetch_cif()
         from license.models import N2015
         try:
-            expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
+            expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__gte=expiry_limit,
                                                                            is_self=True,

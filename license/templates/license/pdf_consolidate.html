@@ -74,6 +74,7 @@
         <th>Wheat/Gluten</th>
         <th>Yeast</th>
         <th>PP</th>
+        <th>Wastage</th>
         </thead>
         <tbody>
         {% for object in biscuit_list %}
@@ -280,6 +281,24 @@
                         </tr>
                         <tr>
                             <td>{{ object.pp.usable_cif }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td>
+                    <table>
+                        <tbody>
+                        <tr>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td>{{ object.wastage.usable_cif }}</td>
                         </tr>
                         </tbody>
                     </table>

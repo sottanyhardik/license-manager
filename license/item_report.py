@@ -365,7 +365,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
         start_object = datetime.datetime.strptime(start, '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = start_object
     else:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=150)
+        expiry_limit = datetime.datetime.strptime('2020-03-01', '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = expiry_limit
     if end:
         end_object = datetime.datetime.strptime(end, '%Y-%m-%d')
@@ -811,6 +811,12 @@ def generate_dict(object, total_dict, new=False):
         total_dict['pp']['cif'] = total_dict['pp']['cif'] + cif_required
         total_dict['pp']['quantity'] = total_dict['pp']['quantity'] + round(
             cif_required / object.pp().item.head.unit_rate, 0)
+    balance_dict = {
+        'opening_balance': '',
+        'usable_balance': '',
+        'balance': '',
+        'usable_cif': balance
+    }
     return dicts, total_dict
 
 

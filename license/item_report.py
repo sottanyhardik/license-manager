@@ -4,9 +4,11 @@ from django.db.models import Q, Sum
 
 from license import models as license
 from license.models import N2009, N2015, LicenseDetailsModel
-from license.tables import LicenseItemReportTable, LicenseBiscuitReportTable, LicenseConfectineryReportTable
+from license.tables import LicenseItemReportTable, LicenseBiscuitReportTable, LicenseConfectineryReportTable, \
+    LicenseBiscuitNewReportTable
 from datetime import date
 from dateutil.relativedelta import relativedelta
+
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
                  minimun_qty=500, minimun_value=500, date_range=None, notification_number=False, maximum_qty=None):
@@ -70,7 +72,7 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
                 object.comment = 'expired'
         else:
             if object.comment:
-                object.comment = object.comment.replace('expired','')
+                object.comment = object.comment.replace('expired', '')
         object.available_value = object.balance_cif_fc
         object.save()
     if maximum_qty:
@@ -500,10 +502,10 @@ def biscuit_2019(date_range=None, party=None, exclude_party=None):
 def biscuit_2019_rama_rani(date_range=None):
     tables = [{'label': 'RAMA RANI New Biscuits',
                'table': generate_table(biscuit_2019(party=['rama', 'rani']),
-                                       LicenseBiscuitReportTable)}, {'label': 'Parle New Biscuits',
+                                       LicenseBiscuitNewReportTable)}, {'label': 'Parle New Biscuits',
                                                                      'table': generate_table(
                                                                          biscuit_2019(party=['Parle']),
-                                                                         LicenseBiscuitReportTable)}]
+                                                                         LicenseBiscuitNewReportTable)}]
 
     return tables
 
@@ -566,7 +568,7 @@ def biscuit_2009(date_range=None, party=None, exclude_party=None):
 def biscuit_2019_other(date_range=None):
     tables = [{'label': 'Biscuits New Remaning [019/2015]',
                'table': generate_table(biscuit_2019(date_range, exclude_party=['rama', 'rani', 'VANILA', 'parle']),
-                                       LicenseBiscuitReportTable)}]
+                                       LicenseBiscuitNewReportTable)}]
     return tables
 
 

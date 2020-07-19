@@ -56,7 +56,7 @@
         <b style="font-size: 20px">{{ page_title|title }}</b>
         {% for table_dict in tables %}
             {% if table_dict.total %}
-            <p><b>{{ table_dict.label }}</b></p>
+            <p  style="text-align: center"><b>{{ table_dict.label }}</b></p>
             <div class="table-container">
                 <table {% render_attrs table_dict.table.attrs %}>
                     {% block table_dict.table.thead %}

@@ -9,7 +9,6 @@
             margin: .4cm;
         }
 
-
         .table th,
         .table td {
             padding: 1px;
@@ -54,7 +53,7 @@
     {% load django_tables2 %}
     {% load i18n %}
         {% for table_dict in tables %}
-            <p><b>{{ table_dict.label }}</b></p>
+            <p style="text-align: center"><b>{{ table_dict.label }}</b></p>
             <div class="table-container">
                 <table {% render_attrs table_dict.table.attrs %}>
                     {% block table_dict.table.thead %}

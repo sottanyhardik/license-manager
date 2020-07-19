@@ -244,6 +244,39 @@ class LicenseBiscuitReportTable(dt2.Table):
     dietary_fibre = DFQuantityColumn(verbose_name='Dietary Fibre', orderable=False, accessor='get_dietary_fibre')
     m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
     pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
+
+    class Meta:
+        model = models.LicenseDetailsModel
+        per_page = 50
+        fields = ['counter', 'license', 'license_expiry_date',
+                  'party', 'balance_cif', 'wheat_flour', 'sugar', 'rbd', 'leavening_agent', 'food_flavour', 'starch',
+                  'food_colour', 'anti_oxidant', 'fruit', 'dietary_fibre', 'm_n_m', 'pp', 'user_comment']
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+    def render_counter(self):
+        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
+        return next(self.row_counter)
+
+
+class LicenseBiscuitNewReportTable(dt2.Table):
+    counter = dt2.Column(empty_values=(), orderable=False)
+    license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
+                                 orderable=False)
+    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
+    balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    wheat_flour = WheatQuantityColumn(verbose_name='Wheat Flour', accessor='get_wheat', orderable=False)
+    sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
+    rbd = RBDQuantityColumn(verbose_name='RBD Palmolein', orderable=False, accessor='get_rbd')
+    leavening_agent = LAQuantityColumn(verbose_name='Leavening Agent', orderable=False, accessor='get_leavening_agent')
+    food_flavour = FFQuantityColumn(verbose_name='Food Flavour', orderable=False, accessor='get_food_flavour')
+    starch = StarchQuantityColumn(verbose_name='Starch', orderable=False, accessor='get_starch')
+    food_colour = ColourQuantityColumn(verbose_name='Food Colour', orderable=False, accessor='get_food_colour')
+    anti_oxidant = AntiOxidantQuantityColumn(verbose_name='Anti Oxidant', orderable=False, accessor='get_anti_oxidant')
+    fruit = FruitsQuantityColumn(verbose_name='Fruit', orderable=False, accessor='get_fruit')
+    dietary_fibre = DFQuantityColumn(verbose_name='Dietary Fibre', orderable=False, accessor='get_dietary_fibre')
+    m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
+    pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
     per_cif = PERCIFColumn(verbose_name='10% of CIF', accessor='get_per_cif', orderable=False)
 
     class Meta:

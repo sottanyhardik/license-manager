@@ -1,7 +1,7 @@
 from django.db import models
 
 # Create your models here.
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -215,7 +215,13 @@ class LicenseDetailsModel(models.Model):
 
     def get_per_cif(self):
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        return round_down(credit * .1, 0)
+        credit = credit *.1
+        imports = LicenseImportItemsModel.objects.filter(license=self).filter(
+            Q(item__head__name__icontains='flavour') | Q(item__head__name__icontains='fruit') | Q(
+                item__head__name__icontains='dietary'))
+        for dimport in imports:
+            credit = credit - dimport.debited_value
+        return round_down(credit)
 
     def get_balance_value(self):
         if self.get_norm_class == 'E5':
@@ -566,4 +572,3 @@ class LicenseInwardOutwardModel(models.Model):
     @property
     def ge_file_number(self):
         return self.license.ge_file_number
-

@@ -198,7 +198,7 @@ class EssentialOilQuantityColumn(ColumnTotal):
 
 
 class LicenseDetailTable(dt2.Table):
-    counter = dt2.Column(empty_values=(), orderable=False)
+    sr_no = dt2.Column(empty_values=(), orderable=False)
     edit = dt2.TemplateColumn('<a href="/license/{{ record.id }}/update"><i class="mdi mdi-grease-pencil"></i></a>',
                               orderable=False)
     view = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/"><i class="mdi mdi-share"></i></a>',
@@ -216,17 +216,17 @@ class LicenseDetailTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'notification_number', 'norm_class', 'port', 'is_au', 'license_number', 'license_date',
+        fields = ['sr_no', 'notification_number', 'norm_class', 'port', 'is_au', 'license_number', 'license_date',
                   'license_expiry_date', 'file_number', 'exporter', 'balance_cif', 'is_audit', 'ledger_date']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
-    def render_counter(self):
-        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
-        return next(self.row_counter)
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
 
 
 class LicenseBiscuitReportTable(dt2.Table):
-    counter = dt2.Column(empty_values=(), orderable=False)
+    sr_no = dt2.Column(empty_values=(), orderable=False)
     license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
                                  orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
@@ -248,18 +248,18 @@ class LicenseBiscuitReportTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'license', 'license_expiry_date',
+        fields = ['sr_no', 'license', 'license_expiry_date',
                   'party', 'balance_cif', 'wheat_flour', 'sugar', 'rbd', 'leavening_agent', 'food_flavour', 'starch',
                   'food_colour', 'anti_oxidant', 'fruit', 'dietary_fibre', 'm_n_m', 'pp', 'user_comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
-    def render_counter(self):
-        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
-        return next(self.row_counter)
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
 
 
 class LicenseBiscuitNewReportTable(dt2.Table):
-    counter = dt2.Column(empty_values=(), orderable=False)
+    sr_no = dt2.Column(empty_values=(), orderable=False)
     license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
                                  orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
@@ -282,18 +282,18 @@ class LicenseBiscuitNewReportTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'license', 'license_expiry_date',
+        fields = ['sr_no', 'license', 'license_expiry_date',
                   'party', 'balance_cif', 'wheat_flour', 'sugar', 'rbd', 'leavening_agent', 'food_flavour', 'starch',
                   'food_colour', 'anti_oxidant', 'fruit', 'dietary_fibre', 'm_n_m', 'pp', 'user_comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
-    def render_counter(self):
-        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
-        return next(self.row_counter)
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
 
 
 class LicenseConfectineryReportTable(dt2.Table):
-    counter = dt2.Column(empty_values=(), orderable=False)
+    sr_no = dt2.Column(empty_values=(), orderable=False)
     license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
                                  orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
@@ -318,14 +318,14 @@ class LicenseConfectineryReportTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'license', 'license_expiry_date', 'party', 'balance_cif', 'sugar', 'liquid_glucose',
+        fields = ['sr_no', 'license', 'license_expiry_date', 'party', 'balance_cif', 'sugar', 'liquid_glucose',
                   'fruit_juice', 'tartaric_acid',
                   'essential_oil', 'food_colour', 'food_flavour', 'starch', 'other_confectionery', 'pp', 'user_comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
-    def render_counter(self):
-        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
-        return next(self.row_counter)
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
 
 
 class TruncatedTextColumn(dt2.Column):
@@ -352,7 +352,7 @@ class ColumnWithThousandsSeparator(dt2.Column):
 
 
 class LicenseItemReportTable(dt2.Table):
-    counter = dt2.Column(empty_values=(), orderable=False)
+    sr_no = dt2.Column(empty_values=(), orderable=False)
     license_date = dt2.DateTimeColumn(format='d-m-Y', accessor='license.license_date')
     license_expiry = dt2.DateTimeColumn(format='d-m-Y', verbose_name='License Expiry Date',
                                         accessor='license.license_expiry_date')
@@ -364,18 +364,18 @@ class LicenseItemReportTable(dt2.Table):
     class Meta:
         model = models.LicenseImportItemsModel
         per_page = 50
-        fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
+        fields = ['sr_no', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
                   'hs_code', 'item',
                   'balance_quantity', 'balance_cif_fc', 'comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
-    def render_counter(self):
-        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
-        return next(self.row_counter)
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
 
 
 class LicenseBiscuitPreimiumTable(dt2.Table):
-    counter = dt2.Column(empty_values=(), orderable=False)
+    sr_no = dt2.Column(empty_values=(), orderable=False)
     license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
                                  orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
@@ -395,17 +395,17 @@ class LicenseBiscuitPreimiumTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'license', 'license_date', 'license_expiry_date',
+        fields = ['sr_no', 'license', 'license_date', 'license_expiry_date',
                   'party', 'balance_cif']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
-    def render_counter(self):
-        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
-        return next(self.row_counter)
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
 
 
 class LicenseConfectioneryPreimiumTable(dt2.Table):
-    counter = dt2.Column(empty_values=(), orderable=False)
+    sr_no = dt2.Column(empty_values=(), orderable=False)
     license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
                                  orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
@@ -421,27 +421,27 @@ class LicenseConfectioneryPreimiumTable(dt2.Table):
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['counter', 'license', 'license_date', 'license_expiry_date',
+        fields = ['sr_no', 'license', 'license_date', 'license_expiry_date',
                   'party', 'balance_cif']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
-    def render_counter(self):
-        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
-        return next(self.row_counter)
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
 
 
 class LicenseInwardOutwardTable(dt2.Table):
-    counter = dt2.Column(empty_values=(), orderable=False)
+    sr_no = dt2.Column(empty_values=(), orderable=False)
     ge_file_number = dt2.Column(orderable=False)
 
     class Meta:
         model = models.LicenseInwardOutwardModel
         per_page = 50
         fields = (
-            'counter', 'date', 'ge_file_number', 'license', 'status', 'office', 'description',
+            'sr_no', 'date', 'ge_file_number', 'license', 'status', 'office', 'description',
             'amd_sheets_number', 'copy', 'annexure', 'tl', 'aro', 'along_with')
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
-    def render_counter(self):
-        self.row_counter = getattr(self, 'row_counter', itertools.count(start=1))
-        return next(self.row_counter)
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)

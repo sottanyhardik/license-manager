@@ -196,7 +196,7 @@ def dietary_query(date_range=None):
         'license__notification_number': N2015
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset, 'New Notification')
+    tables = query_set_table(tables, queryset, 'New Notification 019/2015')
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'dietary fibre',
@@ -226,7 +226,7 @@ def food_query(date_range=None):
         'license__notification_number': N2015
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset, 'New Notification')
+    tables = query_set_table(tables, queryset, 'New Notification 019/2015')
     return tables
 
 
@@ -302,13 +302,13 @@ def oci_query(date_range=None):
         'license__notification_number': N2009
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset, 'Old Notification')
+    tables = query_set_table(tables, queryset, 'Old Notification 098/2009')
     and_or_filter = [{
         'license__export_license__old_quantity__gt': 1,
         'license__notification_number': N2015
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset, 'New Notification')
+    tables = query_set_table(tables, queryset, 'New Notification 019/2015')
 
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E1',
@@ -330,16 +330,20 @@ def fruit_query(date_range=None):
         'item__head__name__icontains': 'fruit',
     }
     and_or_filter = [{
-        'license__notification_number': N2009
+        'license__notification_number': N2009,
+        'hs_code__hs_code__startswith': '08'
     }]
     queryset = all_queryset(query_dict, and_or_filter=and_or_filter, date_range=date_range)
-    tables = query_set_table(tables, queryset, 'Old Notification')
+    tables = query_set_table(tables, queryset, 'Old Notification 098/2009')
     and_or_filter = [{
         'license__export_license__old_quantity__gt': 1,
-        'license__notification_number': N2015
+        'license__notification_number': N2015,
+        'hs_code__hs_code__startswith': '08'
     }]
-    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, date_range=date_range)
-    tables = query_set_table(tables, queryset, 'New Notification')
+
+    queryset = all_queryset(query_dict, and_or_filter=and_or_filter, date_range=date_range,
+                            )
+    tables = query_set_table(tables, queryset, 'New Notification 019/2015')
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'fruit',
@@ -503,9 +507,9 @@ def biscuit_2019_rama_rani(date_range=None):
     tables = [{'label': 'RAMA RANI New Biscuits',
                'table': generate_table(biscuit_2019(party=['rama', 'rani']),
                                        LicenseBiscuitNewReportTable)}, {'label': 'Parle New Biscuits',
-                                                                     'table': generate_table(
-                                                                         biscuit_2019(party=['Parle']),
-                                                                         LicenseBiscuitNewReportTable)}]
+                                                                        'table': generate_table(
+                                                                            biscuit_2019(party=['Parle']),
+                                                                            LicenseBiscuitNewReportTable)}]
 
     return tables
 
@@ -832,13 +836,13 @@ def tartaric_query(date_range=None):
         'license__notification_number': N2009
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset, 'Old Notification')
+    tables = query_set_table(tables, queryset, 'Old Notification 098/2009')
     and_or_filter = [{
         'license__export_license__old_quantity__gt': 1,
         'license__notification_number': N2015
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset, 'New Notification')
+    tables = query_set_table(tables, queryset, 'New Notification 019/2015')
     return tables
 
 
@@ -852,13 +856,13 @@ def essential_oil_query(date_range=None):
         'license__notification_number': N2009
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset, 'Old Notification')
+    tables = query_set_table(tables, queryset, 'Old Notification 098/2009')
     and_or_filter = [{
         'license__export_license__old_quantity__gt': 1,
         'license__notification_number': N2015
     }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset, 'New Notification')
+    tables = query_set_table(tables, queryset, 'New Notification 019/2015')
 
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E1',

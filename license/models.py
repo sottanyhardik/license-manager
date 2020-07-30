@@ -102,9 +102,13 @@ class LicenseDetailsModel(models.Model):
         if allotment:
             t_debit = t_debit + allotment
         if credit and t_debit:
-            return round(credit - t_debit, 0)
+            value = round(credit - t_debit, 0)
         elif credit:
-            return round(credit, 0)
+            value = round(credit, 0)
+        else:
+            value = 0
+        if value > 0:
+            return value
         else:
             return 0
 
@@ -215,7 +219,7 @@ class LicenseDetailsModel(models.Model):
 
     def get_per_cif(self):
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        credit = credit *.1
+        credit = credit * .1
         imports = LicenseImportItemsModel.objects.filter(license=self).filter(
             Q(item__head__name__icontains='flavour') | Q(item__head__name__icontains='fruit') | Q(
                 item__head__name__icontains='dietary'))
@@ -366,13 +370,17 @@ class LicenseImportItemsModel(models.Model):
         debit = self.debited_quantity
         alloted = self.alloted_quantity
         if debit and alloted:
-            return round_down(credit - debit - alloted, 0)
+            value = round_down(credit - debit - alloted, 0)
         elif debit:
-            return round_down(credit - debit, 0)
+            value = round_down(credit - debit, 0)
         elif alloted:
-            return round_down((credit - alloted), 0)
+            value = round_down((credit - alloted), 0)
         else:
-            return round_down(credit, 0)
+            value = round_down(credit, 0)
+        if value > 0:
+            return value
+        else:
+            return 0
 
     @property
     def debited_value(self):

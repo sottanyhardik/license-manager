@@ -371,7 +371,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
         start_object = datetime.datetime.strptime(start, '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = start_object
     else:
-        expiry_limit = datetime.datetime.strptime('2020-02-01', '%Y-%m-%d')
+        expiry_limit = datetime.datetime.strptime('2020-04-01', '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = expiry_limit
     if end:
         end_object = datetime.datetime.strptime(end, '%Y-%m-%d')

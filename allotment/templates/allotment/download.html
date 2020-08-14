@@ -137,9 +137,18 @@
                 <td>-</td>
                 <td>-</td>
             </tr>
+
             </tbody>
         </table>
     {% endfor %}
 
 
 {% endblock %}
+<table>
+        <tr style="text-align: center">
+            <td>-</td>
+            <td><b>Total USD $</b></td>
+            <td><b>{% get_total object_list %}</b></td>
+            <td>-</td>
+        </tr>
+    </table>

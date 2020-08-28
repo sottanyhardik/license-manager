@@ -17,7 +17,7 @@
                 <label for="">Importer:</label>
                 <p><b>{{ object.company|title }}</b></p>
             </div>
-            <div class="col-lg-2">
+            <div class="col-lg-1">
                 <label for="">Item:</label>
                 <p><b>{{ object.item_name|title }}</b></p>
             </div>
@@ -41,6 +41,10 @@
             <div class="col-lg-1">
                 <label for="">ETA:</label>
                 <p><b>{% if object.eta %}{{ object.eta|title }}{% endif %}</b></p>
+            </div>
+            <div class="col-lg-1">
+                <label for="">BL Details</label>
+                <p><b>{% if object.bl_detail %}{{ object.bl_detail|title }}{% endif %}</b></p>
             </div>
         </div>
     </div>

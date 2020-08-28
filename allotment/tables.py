@@ -41,7 +41,7 @@ class AllotmentTable(dt2.Table):
                               orderable=False)
     delete = dt2.TemplateColumn('<a href="{% url "allotment-delete" record.id %}"><i class="mdi mdi-share"></i></a>',
                                 orderable=False)
-
+    bl_detail = dt2.Column(verbose_name='BL Details')
     modified_on = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Allotment Date')
     required_quantity = dt2.Column(verbose_name='Quantity')
     unit_value_per_unit = dt2.Column(verbose_name='Unit Price')

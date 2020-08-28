@@ -65,13 +65,14 @@
         <tr style="text-align: center">
             <td>-</td>
             <td><b>Total USD $</b></td>
-            <td><b>{% get_total object_list %}</b></td>
+            <td><b>{% get_total object_list as total %}
+            {{ total }}</b></td>
             <td>-</td>
         </tr>
     </table>
     {% regroup object_list by company as company %}
     {% for data in company %}
-        <h4  style="text-align: center">{{ data.grouper }}</h4>
+        <h4 style="text-align: center">{{ data.grouper }}</h4>
         <table class="table table-bordered">
             <tr>
                 <th>Sr No</th>
@@ -83,6 +84,7 @@
                 <th>Item Name</th>
                 <th>Invoice</th>
                 <th>ETA</th>
+                <th>BL Date / No.</th>
                 <th>DFIA No.</th>
                 <th>Item Sr. NO.</th>
                 <th>DFIA Qty.</th>
@@ -102,6 +104,9 @@
                         {% if allotment.invoice %}{{ allotment.invoice }}{% else %}-{% endif %}</td>
                     <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
                         {% if allotment.eta %}{{ allotment.eta }}{% else %}-{% endif %}</td>
+                    <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
+                        {% if allotment.bl_detail %}{{ allotment.bl_detail }}{% else %}-{% endif %}</td>
+
                     <td colspan="4" {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
                         <table>
                             {% for allotment_detail in allotment.allotment_details.all %}
@@ -141,14 +146,14 @@
             </tbody>
         </table>
     {% endfor %}
-
-
-{% endblock %}
-<table>
+    <br>
+    <table>
         <tr style="text-align: center">
             <td>-</td>
             <td><b>Total USD $</b></td>
-            <td><b>{% get_total object_list %}</b></td>
+            <td><b>{{ total }}</b></td>
             <td>-</td>
         </tr>
     </table>
+
+{% endblock %}

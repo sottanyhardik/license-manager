@@ -25,7 +25,7 @@ from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_
     biscuit_2019_other, confectinery_2009, confectinery_2019, \
     confectinery_2019_other, biscuit_conversion, biscuit_2019_rama_rani, \
     conversion_main, conversion_other, confectinery_2019_rama_rani, confectinery_2009_all, biscuits_2009_all, \
-    generate_dict, tartaric_query, essential_oil_query
+    generate_dict, tartaric_query, essential_oil_query, confectinery_2009_expired_all, biscuits_2009_expired_all
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -510,40 +510,9 @@ class PDFBiscuitsOldExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
 
     def get_context_data(self, **kwargs):
         context = super(PDFBiscuitsOldExpiryReportView, self).get_context_data()
-        tables = []
-        from allotment.scripts.aro import fetch_cif
-        fetch_cif()
-        from license.tables import LicenseBiscuitReportTable
-        from license.models import N2009
-        try:
-            expiry_limit = datetime.datetime.strptime('2020-07-31', '%Y-%m-%d')
-            start_limit = datetime.datetime.strptime('2020-02-01', '%Y-%m-%d')
-
-            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
-                                                                           license_expiry_date__lt=expiry_limit,
-                                                                           license_expiry_date__gt=start_limit,
-                                                                           is_self=True, is_au=False,
-                                                                           balance_cif__gte=4000).order_by(
-                'license_expiry_date')
-
-            q_biscuits_queryset = biscuits_queryset.filter(
-                Q(exporter__name__icontains='Rama') | Q(exporter__name__icontains='rani'))
-            table = LicenseBiscuitReportTable(
-                q_biscuits_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Rama & Rani Biscuits Expired 098/2009 Notification', 'table': table})
-            q_biscuits_queryset = biscuits_queryset.filter(exporter__name__icontains='Parle')
-            table = LicenseBiscuitReportTable(
-                q_biscuits_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Parle Biscuits Expired 098/2009 Notification', 'table': table})
-            q_biscuits_queryset = biscuits_queryset.exclude(
-                Q(exporter__name__icontains='Parle') | Q(exporter__name__icontains='Rama') | Q(
-                    exporter__name__icontains='rani'))
-            table = LicenseBiscuitReportTable(
-                q_biscuits_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Other Biscuits Expired 098/2009 Notification', 'table': table})
-            context['tables'] = tables
-        except:
-            pass
+        tables = biscuits_2009_expired_all()
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
         return context
 
 
@@ -555,32 +524,10 @@ class PDFConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedFilter
     context_object_name = 'license_list'
 
     def get_context_data(self, **kwargs):
-        from allotment.scripts.aro import fetch_cif
-        fetch_cif()
         context = super(PDFConfectioneryOldExpiredReportView, self).get_context_data()
-        tables = []
-        from license.tables import LicenseConfectineryReportTable
-        from license.models import N2009
-        try:
-            expiry_limit = datetime.datetime.strptime('2020-07-31', '%Y-%m-%d')
-            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
-                export_license__norm_class__norm_class='E1',
-                license_expiry_date__lt=expiry_limit,
-                is_self=True, is_au=False, balance_cif__gte=5000).order_by('license_expiry_date')
-            q_confectionery_queryset = confectionery_queryset.filter(exporter__name__icontains='Parle')
-            table = LicenseConfectineryReportTable(
-                q_confectionery_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Parle Confectinery Expired 098/2009 Notification', 'table': table})
-
-            q_confectionery_queryset = confectionery_queryset.filter(
-                Q(exporter__name__icontains='Rama') | Q(exporter__name__icontains='rani'))
-            table = LicenseConfectineryReportTable(
-                q_confectionery_queryset.filter(notification_number=N2009).distinct())
-            tables.append({'label': 'Rama & Rani Confectinery Expired 098/2009 Notification', 'table': table})
-
-            context['tables'] = tables
-        except:
-            pass
+        tables = confectinery_2009_expired_all()
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
         return context
 
 
@@ -1083,7 +1030,7 @@ class MovementListView(PagedFilteredTableView):
     model = license.LicenseInwardOutwardModel
     table_class = tables.LicenseInwardOutwardTable
     filter_class = filters.LicenseInwardOutwardFilter
-    ordering = ('date__date','license__ge_file_number')
+    ordering = ('date__date', 'license__ge_file_number')
 
 
 class MovementUpdateView(UpdateWithInlinesView):
@@ -1098,3 +1045,6 @@ class MovementUpdateView(UpdateWithInlinesView):
 
     def get_success_url(self):
         return reverse('movement-list')
+
+
+

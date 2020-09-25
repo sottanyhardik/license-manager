@@ -22,7 +22,7 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
             start_object = datetime.datetime.strptime(end, '%Y-%m-%d')
             query_dict['license__license_expiry_date__lte'] = start_object
     else:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=150)
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=300)
         query_dict['license__license_expiry_date__gte'] = expiry_limit
     if notification_number:
         query_dict['license__notification_number'] = notification_number
@@ -874,4 +874,21 @@ def essential_oil_query(date_range=None):
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter,
                             exclude_or_filters=exclude_or_filters)
     tables = query_set_table(tables, queryset, 'Need Amendment')
+    return tables
+
+
+def biscuits_2009_expired_all(date_range={'start':'2001-04-01','end':'2020-09-01'}):
+    from license.tables import LicenseBiscuitReportTable
+    tables = [
+              {'label': 'Biscuits 098/2019 Notification Ravi Foods',
+               'table': generate_table(biscuit_2009(date_range, exclude_party=['ravi',]),
+                                       LicenseBiscuitReportTable)}]
+    return tables
+
+
+def confectinery_2009_expired_all(date_range={'start':'2001-04-01','end':'2020-09-01'}):
+    from license.tables import LicenseConfectineryReportTable
+    tables = [{'label': 'Confectinery 098/2019 Notification',
+               'table': generate_table(confectinery_2009(date_range, exclude_party=['ravi',]),
+                                       LicenseConfectineryReportTable)}]
     return tables

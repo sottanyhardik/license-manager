@@ -135,11 +135,12 @@
             </tr>
             </tbody>
         </table>
-        <table  class="table table-bordered table-striped tbordered">
+        <table class="table table-bordered table-striped tbordered">
             <thead>
             <th style="width: 10%">Date</th>
             <th style="width: 10%">Type</th>
             <th style="width: 10%">BILL OF ENTRY</th>
+            <th style="width: 10%">BILL Details</th>
             <th style="width: 10%">Quantity</th>
             <th style="width: 10%">CIF FC</th>
             <th style="width: 10%">CIF INR</th>
@@ -148,22 +149,27 @@
             <tbody>
             {% for item in import_item.item_details.all %}
                 <tr style="border-bottom: 1px solid #000">
-                    <td >{{ item.bill_of_entry.bill_of_entry_date }}</td>
-                    <td >{{ item.get_transaction_type_display|title }}</td>
-                    <td >
+                    <td>{{ item.bill_of_entry.bill_of_entry_date }}</td>
+                    <td>{{ item.get_transaction_type_display|title }}</td>
+                    <td>
                         {% if item.bill_of_entry %}
                             {{ item.bill_of_entry }}
                         {% endif %}
                     </td>
-                    <td >{{ item.qty }}</td>
-                    <td >
+                    <td>
+                        {% if item.bill_of_entry.invoice_no %}
+                            {{ item.bill_of_entry.invoice_no }}
+                        {% endif %}
+                    </td>
+                    <td>{{ item.qty }}</td>
+                    <td>
                         {% if item.cif_fc == object.export_license.all.0.cif_fc %}
                             0.0
                         {% else %}
                             {{ item.cif_fc }}
                         {% endif %}
                     </td>
-                    <td >
+                    <td>
                         {% if item.cif_inr == object.export_license.all.0.cif_inr %}
                             0.0
                         {% else %}
@@ -175,25 +181,27 @@
             {% endfor %}
             {% for item in import_item.allotment_details.all %}
                 {% if not item.allotment.bill_of_entry.all.exists %}
-                <tr >
-                    <td>{{ item.allotment.modified_on }}</td>
-                    <td></td>
-                    <td>{{ item.allotment.get_type_display }}</td>
-                    <td>{{ item.qty }}</td>
-                    <td>
-                        {{ item.cif_fc }}
-                    </td>
-                    <td>
-                        {{ item.cif_inr }}
-                    </td>
-                    <td>{{ item.allotment.company }}</td>
-                </tr>
+                    <tr>
+                        <td>{{ item.allotment.modified_on }}</td>
+                        <td></td>
+                        <td>{{ item.allotment.get_type_display }}</td>
+                        <td></td>
+                        <td>{{ item.qty }}</td>
+                        <td>
+                            {{ item.cif_fc }}
+                        </td>
+                        <td>
+                            {{ item.cif_inr }}
+                        </td>
+                        <td>{{ item.allotment.company }}</td>
+                    </tr>
                 {% endif %}
             {% endfor %}
 
             </tbody>
             <tfoot>
             <tr>
+                <td style="width: 10%; border: 1px solid"></td>
                 <td style="width: 10%; border: 1px solid"></td>
                 <td style="width: 10%; border: 1px solid"></td>
                 <td style="width: 10%; border: 1px solid"></td>

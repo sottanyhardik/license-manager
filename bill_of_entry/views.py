@@ -129,7 +129,7 @@ class BillOfEntryFetchView(FormView):
         context['fetch_cookies'] = json.dumps(cookies)
         context['csrftoken'] = csrftoken
         data = self.kwargs.get('data')
-        context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(bill_of_entry_date__year=2020).filter(
+        context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(
             Q(is_fetch=False) | Q(appraisement=None)).order_by(
             'bill_of_entry_date', 'id').count()
         context['remain_captcha'] = context['remain_count'] / 3

@@ -66,7 +66,7 @@
             <td>-</td>
             <td><b>Total USD $</b></td>
             <td><b>{% get_total object_list as total %}
-            {{ total }}</b></td>
+                {{ total }}</b></td>
             <td>-</td>
         </tr>
     </table>
@@ -83,8 +83,8 @@
                 <th>Value ($)</th>
                 <th>Item Name</th>
                 <th>Invoice</th>
-                <th>ETA</th>
                 <th>BL Date / No.</th>
+                <th>ETA</th>
                 <th>DFIA No.</th>
                 <th>Item Sr. NO.</th>
                 <th>DFIA Qty.</th>
@@ -103,10 +103,9 @@
                     <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
                         {% if allotment.invoice %}{{ allotment.invoice }}{% else %}-{% endif %}</td>
                     <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
-                        {% if allotment.eta %}{{ allotment.eta }}{% else %}-{% endif %}</td>
-                    <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
                         {% if allotment.bl_detail %}{{ allotment.bl_detail }}{% else %}-{% endif %}</td>
-
+                    <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
+                        {% if allotment.eta %}{{ allotment.eta }}{% else %}-{% endif %}</td>
                     <td colspan="4" {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
                         <table>
                             {% for allotment_detail in allotment.allotment_details.all %}

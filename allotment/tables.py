@@ -1,4 +1,4 @@
- import itertools
+import itertools
 
 import django_tables2 as dt2
 

@@ -130,7 +130,10 @@ def parse_file(data):
             try:
                 datetime_object = datetime.datetime.strptime(row['be_date'], '%d-%m-%Y')
             except:
-                datetime_object = datetime.datetime.strptime(row['be_date'], '%d/%m/%y')
+                try:
+                    datetime_object = datetime.datetime.strptime(row['be_date'], '%d/%m/%y')
+                except:
+                    datetime_object = datetime.datetime.strptime(row['be_date'].split(' ')[0], '%Y-%m-%d')
         row_obj, bool = LicenseImportItemsModel.objects.get_or_create(serial_number=row['sr_no'], license=license)
         if row['type'] == Credit:
             row_obj.quantity = float(row['qty'])
@@ -152,10 +155,15 @@ def parse_file(data):
             bill_of_entry.bill_of_entry_date=datetime_object
             bill_of_entry.port=boe_port
             bill_of_entry.save()
-            drow_obj, bool = RowDetails.objects.get_or_create(sr_number=row_obj, transaction_type=row['type'],
-                                                              bill_of_entry=bill_of_entry)
-            drow_obj.cif_inr = row['cif_inr']
-            drow_obj.cif_fc = row['cif_fc'].replace(',','')
-            drow_obj.qty = float(row['qty'])
-            drow_obj.save()
+            try:
+                drow_obj, bool = RowDetails.objects.get_or_create(sr_number=row_obj, transaction_type=row['type'],
+                                                                  bill_of_entry=bill_of_entry)
+                drow_obj.cif_inr = row['cif_inr']
+                drow_obj.cif_fc = row['cif_fc'].replace(',','')
+                drow_obj.qty = float(row['qty'])
+                drow_obj.save()
+            except Exception as e:
+                print("ERROR")
+                print(row_obj)
+                print("ERROR")
     return license.license_number

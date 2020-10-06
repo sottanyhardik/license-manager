@@ -226,7 +226,7 @@ class DownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
     def get_queryset(self):
         qs = self.model.objects.all()
         product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
-        return product_filtered_list.qs.order_by('company', 'modified_on')
+        return product_filtered_list.qs.order_by('company', 'item_name','modified_on')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

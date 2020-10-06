@@ -65,7 +65,7 @@
                 <th>BE No.</th>
                 <th>BE Dt.</th>
                 <th>Port</th>
-                <th>Quantity (KGS) | (PIECES)</th>
+                <th>Quantity {% if 'SKF INDIA' in data.grouper.name %}(Pieces){% else %}(KGS){% endif %}</th>
                 <th>Unit Price</th>
                 <th>Value ($)</th>
                 <th>Exc Rt.</th>
@@ -89,7 +89,7 @@
                     <td>{{ boe.get_total_fc }}</td>
                     <td>{{ boe.get_exchange_rate }}</td>
                     <td>{{ boe.get_total_inr }}</td>
-                    <td colspan="2">{{ boe.product_name }}</td>
+                    <td colspan="2">{{ boe.product_name.upper }}</td>
                     <td>{% if boe.invoice_no %}{{ boe.invoice_no }}{% else %}-{% endif %}</td>
                     <td colspan="4">
                         <table>

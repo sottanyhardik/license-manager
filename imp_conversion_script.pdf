@@ -1,0 +1,171 @@
+license = LicenseDetailsModel.objects.exclude(export_license__old_quantity=0).order_by('license_expiry_date')
+
+cdfia_list = []
+bdfia_list = []
+for dfia in license:
+    if dfia.get_norm_class == 'E1':
+        dict_data = {
+        'dfia':dfia.license_number,
+        'dfia_dt':str(dfia.license_date),
+        'dfia_exp':str(dfia.license_expiry_date),
+        'exporter':str(dfia.exporter)[:20],
+        'balance_cif':dfia.balance_cif
+        }
+        import_item = dfia.import_license.filter(item__head__name__icontains='sugar')
+        if import_item:
+            item = import_item.first()
+            dict_data['sugar_total']= item.quantity
+            dict_data['sugar_new'] = item.quantity - item.old_quantity
+            dict_data['sugar_old'] = item.old_quantity
+            dict_data['sugar_debited_quantity'] = item.debited_quantity
+            dict_data['sugar_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='juice')
+        if import_item:
+            item = import_item.first()
+            dict_data['juice_total'] = item.quantity
+            dict_data['juice_new'] = item.quantity - item.old_quantity
+            dict_data['juice_old'] = item.old_quantity
+            dict_data['juice_debited_quantity'] = item.debited_quantity
+            dict_data['juice_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='acid')
+        if import_item:
+            item = import_item.first()
+            dict_data['tartaric_total']= item.quantity
+            dict_data['tartaric_new'] = item.quantity - item.old_quantity
+            dict_data['tartaric_old'] = item.old_quantity
+            dict_data['tartaric_debited_quantity'] = item.debited_quantity
+            dict_data['tartaric_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='Essential')
+        if import_item:
+            item = import_item.first()
+            dict_data['essential_total']= item.quantity
+            dict_data['essential_new'] = item.quantity - item.old_quantity
+            dict_data['essential_old'] = item.old_quantity
+            dict_data['essential_debited_quantity'] = item.debited_quantity
+            dict_data['essential_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='other')
+        if import_item:
+            item = import_item.first()
+            dict_data['oci_total']= item.quantity
+            dict_data['oci_new'] = (item.quantity - item.old_quantity)
+            dict_data['oci_old'] = item.old_quantity
+            dict_data['oci_debited_quantity'] = item.debited_quantity
+            dict_data['oci_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='PP')
+        if import_item:
+            item = import_item.first()
+            dict_data['pp_total']= item.quantity
+            dict_data['pp_new'] = item.quantity - item.old_quantity
+            dict_data['pp_old'] = item.old_quantity
+            dict_data['pp_debited_quantity'] = item.debited_quantity
+            dict_data['pp_bal'] = item.quantity - item.debited_quantity
+        cdfia_list.append(dict_data)
+    elif dfia.get_norm_class == 'E5':
+        dict_data = {
+        'dfia':dfia.license_number,
+        'dfia_dt':str(dfia.license_date),
+        'dfia_exp':str(dfia.license_expiry_date),
+        'exporter':str(dfia.exporter)[:20],
+        'balance_cif':dfia.balance_cif
+        }
+        import_item = dfia.import_license.filter(item__head__name__icontains='wheat')
+        if import_item:
+            item = import_item.first()
+            dict_data['wheat_total'] = item.quantity
+            dict_data['wheat_new'] = item.quantity - item.old_quantity
+            dict_data['wheat_old'] = item.old_quantity
+            dict_data['wheat_debited_quantity'] = item.debited_quantity
+            dict_data['wheat_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='sugar')
+        if import_item:
+            item = import_item.first()
+            dict_data['sugar_total']= item.quantity
+            dict_data['sugar_new'] = item.quantity - item.old_quantity
+            dict_data['sugar_old'] = item.old_quantity
+            dict_data['sugar_debited_quantity'] = item.debited_quantity
+            dict_data['sugar_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='Palmolein')
+        if import_item:
+            item = import_item.first()
+            dict_data['palmolein_total']= item.quantity
+            dict_data['palmolein_new'] = item.quantity - item.old_quantity
+            dict_data['palmolein_old'] = item.old_quantity
+            dict_data['palmolein_debited_quantity'] = item.debited_quantity
+            dict_data['palmolein_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='Leavening')
+        if import_item:
+            item = import_item.first()
+            dict_data['leavening_total']= item.quantity
+            dict_data['leavening_new'] = item.quantity - item.old_quantity
+            dict_data['leavening_old'] = item.old_quantity
+            dict_data['leavening_debited_quantity'] = item.debited_quantity
+            dict_data['leavening_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='Flavour')
+        if import_item:
+            item = import_item.first()
+            dict_data['flavour_total']= item.quantity
+            dict_data['flavour_new'] = (item.quantity - item.old_quantity)
+            dict_data['flavour_old'] = item.old_quantity
+            dict_data['flavour_debited_quantity'] = item.debited_quantity
+            dict_data['flavour_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='Starch')
+        if import_item:
+            item = import_item.first()
+            dict_data['starch_total']= item.quantity
+            dict_data['starch_new'] = item.quantity - item.old_quantity
+            dict_data['starch_old'] = item.old_quantity
+            dict_data['starch_debited_quantity'] = item.debited_quantity
+            dict_data['starch_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='Dietary')
+        if import_item:
+            item = import_item.first()
+            dict_data['dietary_total']= item.quantity
+            dict_data['dietary_new'] = item.quantity - item.old_quantity
+            dict_data['dietary_old'] = item.old_quantity
+            dict_data['dietary_debited_quantity'] = item.debited_quantity
+            dict_data['dietary_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='milk')
+        if import_item:
+            item = import_item.first()
+            dict_data['milk_total']= item.quantity
+            dict_data['milk_new'] = item.quantity - item.old_quantity
+            dict_data['milk_old'] = item.old_quantity
+            dict_data['milk_debited_quantity'] = item.debited_quantity
+            dict_data['milk_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='Fruit')
+        if import_item:
+            item = import_item.first()
+            dict_data['fruit_total']= item.quantity
+            dict_data['fruit_new'] = item.quantity - item.old_quantity
+            dict_data['fruit_old'] = item.old_quantity
+            dict_data['fruit_debited_quantity'] = item.debited_quantity
+            dict_data['fruit_bal'] = item.quantity - item.debited_quantity
+        import_item = dfia.import_license.filter(item__head__name__icontains='PP')
+        if import_item:
+            item = import_item.first()
+            dict_data['pp_total']= item.quantity
+            dict_data['pp_new'] = item.quantity - item.old_quantity
+            dict_data['pp_old'] = item.old_quantity
+            dict_data['pp_debited_quantity'] = item.debited_quantity
+            dict_data['pp_bal'] = item.quantity - item.debited_quantity
+        bdfia_list.append(dict_data)
+
+
+import csv
+
+with open('confectionery_conversion.csv', 'w', newline='') as csvfile:
+    fieldnames = list(cdfia_list[0].keys())
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    for d in cdfia_list:
+        writer.writerow(d)
+
+
+
+
+with open('biscuit_conversion.csv', 'w', newline='') as csvfile:
+    fieldnames = list(bdfia_list[0].keys())
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    for d in bdfia_list:
+        writer.writerow(d)

@@ -23,3 +23,19 @@ def generate_tl():
         doc = DocxTemplate("ge_tl.docx")
         doc.render(context)
         doc.save(context['license_no'] + "_ge_tl.docx")
+
+
+def generate_documents_letters():
+    path = 'AMENDMENT/'
+    input_file = csv.DictReader(open("con_list.csv"))
+    for context in input_file:
+        doc = DocxTemplate("_sample_letter.docx")
+        if len(context['license']) != 10:
+            context['license'] = '0' + context['license']
+            if not 'rama' in context['exporter'].lower() and not 'rani' in context[
+                'exporter'].lower() and not 'parle' in context['exporter'].lower():
+                context['exporter'] = 'JASH MERCANTILE PRIVATE LIMITED'
+            elif 'parle' in context['exporter'].lower():
+                context['exporter'] = 'PARLE PRODCUCTS PRIVATE LIMITED'
+        doc.render(context)
+        doc.save(path + context['license'] + "_letter.docx")

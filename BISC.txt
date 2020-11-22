@@ -1,0 +1,74 @@
+license = LicenseDetailsModel.objects.all()
+for dfia in license:
+    dfia.user_comment = ''
+    dfia.save()
+
+
+with open('error.csv', newline='') as csvfile:
+    reader = csv.DictReader(csvfile)
+    for row in reader:
+        try:
+            dfia_no = row['DFIA No']
+            dfia = LicenseDetailsModel.objects.get(license_number=dfia_no)
+            dfia.user_comment = row['User Comment']
+            dfia.file_number = row['File No.']
+            dfia.save()
+        except:
+            pass
+
+
+
+import csv
+license = LicenseDetailsModel.objects.all()
+with open('biscuits.csv', 'w') as csvfile:
+    fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'DFIA File No', 'Exporter', 'BAL CIF', 'PALM OIL', 'PALM QTY','WHEY', 'WHEY QTY', 'Skimmed', 'Skimmed QTY',  'DF', 'DF QTY', 'FF', 'FF QTY', 'OCI', 'OCI QTY', 'VAL 10%']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    for dfia in license:
+        try:
+            dict_data = {
+                'DFIA':dfia.license_number,
+                'DFIA DT':str(dfia.license_date),
+                'DFIA EXP':str(dfia.license_expiry_date),
+                'DFIA File No':str(dfia.file_number),
+                'Exporter':dfia.exporter.name[:15],
+                'BAL CIF': float(dfia.balance_cif),
+                'DF':"",
+                'DF QTY':"",
+                'FF':"",
+                'FF QTY':"",
+                'WHEY':"",
+                'WHEY QTY':"",
+                'Skimmed':"",
+                'Skimmed QTY':"",
+                'OCI':"",
+                'OCI QTY':"",
+                'PALM OIL':"",
+                'PALM QTY':"",
+                'VAL 10%': round(dfia.export_license.first().cif_fc*.1,0)
+
+            }
+            if dfia.get_norm_class == 'E5':
+                import_item = dfia.import_license.filter(item__head__name__icontains='Palmolein')
+                if import_item.exists():
+                    dict_data['PALM OIL'] = import_item[0].hs_code
+                    dict_data['PALM QTY'] = import_item[0].balance_quantity
+                import_item = dfia.import_license.filter(item__head__name__icontains='dietary fibre')
+                if import_item.exists():
+                    dict_data['DF'] = import_item[0].hs_code
+                    dict_data['DF QTY'] = import_item[0].balance_quantity
+                import_item = dfia.import_license.filter(item__head__name__icontains='food flavour')
+                if import_item.exists():
+                    dict_data['FF'] = import_item[0].hs_code
+                    dict_data['FF QTY'] = import_item[0].balance_quantity
+                import_item = dfia.import_license.filter(item__head__name__icontains='milk & milk products')
+                if import_item.exists():
+                    dict_data['WHEY'] = import_item[0].hs_code
+                    dict_data['WHEY QTY'] = import_item[0].balance_quantity
+                import_item = dfia.import_license.filter(item__head__name__icontains='Skimmed')
+                if import_item.exists():
+                    dict_data['Skimmed'] = import_item[0].hs_code
+                    dict_data['Skimmed QTY'] = import_item[0].balance_quantity
+                writer.writerow(dict_data)
+        except Exception as e:
+            print(e)

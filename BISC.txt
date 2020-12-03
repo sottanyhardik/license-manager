@@ -20,7 +20,7 @@ with open('error.csv', newline='') as csvfile:
 
 import csv
 license = LicenseDetailsModel.objects.all()
-with open('biscuits.csv', 'w') as csvfile:
+with open('new_biscuits.csv', 'w') as csvfile:
     fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'DFIA File No', 'Exporter', 'BAL CIF', 'PALM OIL', 'PALM QTY','WHEY', 'WHEY QTY', 'Skimmed', 'Skimmed QTY',  'DF', 'DF QTY', 'FF', 'FF QTY', 'OCI', 'OCI QTY', 'VAL 10%']
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()

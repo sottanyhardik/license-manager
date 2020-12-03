@@ -187,9 +187,10 @@ class LicenseListView(FilterView):
             f = self.filterset_class(request.GET, queryset=self.model.objects.all())
             for d in f.qs:
                 d.balance_cif = d.get_balance_cif()
+                d.export_item = d.get_norm_class
                 d.save()
             query = f.qs.values('license_number', 'license_date', 'license_expiry_date', 'file_number',
-                                'exporter__name', 'balance_cif', 'user_comment', 'ledger_date')
+                                'exporter__name','export_item', 'balance_cif', 'user_comment', 'ledger_date')
             from djqscsv import render_to_csv_response
             return render_to_csv_response(query.order_by('license_expiry_date'))
         return super(LicenseListView, self).get(request, **kwargs)
@@ -1045,6 +1046,8 @@ class MovementUpdateView(UpdateWithInlinesView):
 
     def get_success_url(self):
         return reverse('movement-list')
+
+
 
 
 

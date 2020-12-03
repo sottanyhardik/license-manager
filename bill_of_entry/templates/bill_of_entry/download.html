@@ -91,7 +91,11 @@
                         <td>{{ boe.get_total_fc }}</td>
                         <td>{{ boe.get_exchange_rate }}</td>
                         <td>{{ boe.get_total_inr }}</td>
+                        {% if boe.product_name %}
                         <td colspan="2">{{ boe.product_name }}</td>
+                        {% else %}
+                        <td colspan="2">{{ boe.item_details.all.first.sr_number.item|truncatechars:25 }}</td>
+                        {% endif %}
                         <td>{% if boe.invoice_no %}{{ boe.invoice_no }}{% else %}-{% endif %}</td>
                         <td colspan="4">
                             <table>

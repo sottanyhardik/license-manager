@@ -225,7 +225,10 @@ class LicenseDetailsModel(models.Model):
             Q(item__head__name__icontains='flavour') | Q(item__head__name__icontains='fruit') | Q(
                 item__head__name__icontains='dietary'))
         for dimport in imports:
-            credit = credit - dimport.debited_value
+            if dimport.alloted_value:
+                credit = credit - dimport.debited_value - int(dimport.alloted_value)
+            else:
+                credit = credit - dimport.debited_value
         return round_down(credit)
 
     def get_balance_value(self):

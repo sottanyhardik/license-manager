@@ -231,6 +231,18 @@ class LicenseDetailsModel(models.Model):
                 credit = credit - dimport.debited_value
         return round_down(credit)
 
+    def get_per_c_cif(self):
+        credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        credit = credit * .02
+        imports = LicenseImportItemsModel.objects.filter(license=self).filter(
+            Q(item__head__name__icontains='other'))
+        for dimport in imports:
+            if dimport.alloted_value:
+                credit = credit - dimport.debited_value - int(dimport.alloted_value)
+            else:
+                credit = credit - dimport.debited_value
+        return round_down(credit)
+
     def get_balance_value(self):
         if self.get_norm_class == 'E5':
             return round(

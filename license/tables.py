@@ -314,7 +314,7 @@ class LicenseConfectineryReportTable(dt2.Table):
     other_confectionery = OCIQuantityColumn(verbose_name='Other Confectionery Ingredients', orderable=False,
                                             accessor='get_other_confectionery')
     pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
-    per_c_cif = PERCIFColumn(verbose_name='2% of CIF', accessor='get_per_c_cif', orderable=False)
+    per_cif = PERCIFColumn(verbose_name='2% of CIF', accessor='get_per_cif', orderable=False)
 
 
     class Meta:
@@ -322,7 +322,7 @@ class LicenseConfectineryReportTable(dt2.Table):
         per_page = 50
         fields = ['sr_no', 'license', 'license_expiry_date', 'party', 'balance_cif', 'sugar', 'liquid_glucose',
                   'fruit_juice', 'tartaric_acid',
-                  'essential_oil', 'food_colour', 'food_flavour', 'starch', 'other_confectionery', 'pp', 'user_comment','per_c_cif']
+                  'essential_oil', 'food_colour', 'food_flavour', 'starch', 'other_confectionery', 'pp', 'user_comment','per_cif']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_sr_no(self):

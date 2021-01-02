@@ -219,23 +219,17 @@ class LicenseDetailsModel(models.Model):
         return round(self.get_m_n_m() * 5, 0)
 
     def get_per_cif(self):
+        lic = LicenseExportItemModel.objects.filter(license=self)
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        credit = credit * .1
-        imports = LicenseImportItemsModel.objects.filter(license=self).filter(
-            Q(item__head__name__icontains='flavour') | Q(item__head__name__icontains='fruit') | Q(
-                item__head__name__icontains='dietary'))
-        for dimport in imports:
-            if dimport.alloted_value:
-                credit = credit - dimport.debited_value - int(dimport.alloted_value)
-            else:
-                credit = credit - dimport.debited_value
-        return round_down(credit)
-
-    def get_per_c_cif(self):
-        credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        credit = credit * .02
-        imports = LicenseImportItemsModel.objects.filter(license=self).filter(
-            Q(item__head__name__icontains='other'))
+        if 'E1' in str(lic[0].norm_class):
+            credit = credit * .02
+            imports = LicenseImportItemsModel.objects.filter(license=self).filter(
+                Q(item__head__name__icontains='other'))
+        else:
+            credit = credit * .1
+            imports = LicenseImportItemsModel.objects.filter(license=self).filter(
+                Q(item__head__name__icontains='flavour') | Q(item__head__name__icontains='fruit') | Q(
+                    item__head__name__icontains='dietary'))
         for dimport in imports:
             if dimport.alloted_value:
                 credit = credit - dimport.debited_value - int(dimport.alloted_value)

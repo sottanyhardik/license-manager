@@ -1,54 +1,40 @@
-license = LicenseDetailsModel.objects.all()
-for dfia in license:
-    dfia.user_comment = ''
-    dfia.save()
-
-
-with open('error.csv', newline='') as csvfile:
-    reader = csv.DictReader(csvfile)
-    for row in reader:
-        try:
-            dfia_no = row['DFIA No']
-            dfia = LicenseDetailsModel.objects.get(license_number=dfia_no)
-            dfia.user_comment = row['User Comment']
-            dfia.file_number = row['File No.']
-            dfia.save()
-        except:
-            pass
-
-
-
+d = []
+list1 = [a.split(' ')[0] for a in data_list.split('\n')]
+bisc = []
+conc_list = []
+not_found = []
+found_other = []
 import csv
-license = LicenseDetailsModel.objects.all()
-with open('new_biscuits.csv', 'w') as csvfile:
-    fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'DFIA File No', 'Exporter', 'BAL CIF', 'PALM OIL', 'PALM QTY','WHEY', 'WHEY QTY', 'Skimmed', 'Skimmed QTY',  'DF', 'DF QTY', 'FF', 'FF QTY', 'OCI', 'OCI QTY', 'VAL 10%']
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    writer.writeheader()
-    for dfia in license:
+biscuit_list = []
+list_exclude = LicenseDetailsModel.objects.all()
+for license in list1:
+    try:
+        dfia = list_exclude.get(license_number=license)
         try:
-            dict_data = {
-                'DFIA':dfia.license_number,
-                'DFIA DT':str(dfia.license_date),
-                'DFIA EXP':str(dfia.license_expiry_date),
-                'DFIA File No':str(dfia.file_number),
-                'Exporter':dfia.exporter.name[:15],
-                'BAL CIF': float(dfia.balance_cif),
-                'DF':"",
-                'DF QTY':"",
-                'FF':"",
-                'FF QTY':"",
-                'WHEY':"",
-                'WHEY QTY':"",
-                'Skimmed':"",
-                'Skimmed QTY':"",
-                'OCI':"",
-                'OCI QTY':"",
-                'PALM OIL':"",
-                'PALM QTY':"",
-                'VAL 10%': round(dfia.export_license.first().cif_fc*.1,0)
-
-            }
             if dfia.get_norm_class == 'E5':
+                dict_data = {
+                    'DFIA':"'" + dfia.license_number,
+                    'DFIA DT':str(dfia.license_date),
+                    'DFIA EXP':str(dfia.license_expiry_date),
+                    'DFIA File No':str(dfia.file_number),
+                    'Exporter':dfia.exporter.name[:15],
+                    'Notf No':dfia.notification_number,
+                    'BAL CIF': float(dfia.balance_cif),
+                    'SUGAR':"",
+                    'SUGAR QTY':"",
+                    'PALM OIL':"",
+                    'PALM QTY':"",
+                    'DF':"",
+                    'DF QTY':"",
+                    'FF':"",
+                    'FF QTY':"",
+                    'WHEY':"",
+                    'WHEY QTY':"",
+                    'Skimmed':"",
+                    'Skimmed QTY':"",
+                    'VAL 10%': dfia.get_per_cif()
+                }
+                bisc.append(dfia.license_number)
                 import_item = dfia.import_license.filter(item__head__name__icontains='Palmolein')
                 if import_item.exists():
                     dict_data['PALM OIL'] = import_item[0].hs_code
@@ -69,6 +55,91 @@ with open('new_biscuits.csv', 'w') as csvfile:
                 if import_item.exists():
                     dict_data['Skimmed'] = import_item[0].hs_code
                     dict_data['Skimmed QTY'] = import_item[0].balance_quantity
-                writer.writerow(dict_data)
+                import_item = dfia.import_license.filter(item__head__name__icontains='sugar')
+                if import_item.exists():
+                    dict_data['SUGAR'] = import_item[0].hs_code
+                    dict_data['SUGAR QTY'] = import_item[0].balance_quantity
+                biscuit_list.append(dict_data)
+            elif dfia.get_norm_class == 'E1':
+                dict_data = {
+                    'DFIA':"'" + dfia.license_number,
+                    'DFIA DT':str(dfia.license_date),
+                    'DFIA EXP':str(dfia.license_expiry_date),
+                    'DFIA File No':str(dfia.file_number),
+                    'Notf No':dfia.notification_number,
+                    'Exporter':dfia.exporter.name[:15],
+                    'BAL CIF': float(dfia.balance_cif),
+                    'SUGAR':"",
+                    'SUGAR QTY':"",
+                    'FF':"",
+                    'FF QTY':"",
+                }
+                import_item = dfia.import_license.filter(item__head__name__icontains='food flavour')
+                if import_item.exists():
+                    dict_data['FF'] = import_item[0].hs_code
+                    dict_data['FF QTY'] = import_item[0].balance_quantity
+                import_item = dfia.import_license.filter(item__head__name__icontains='juice')
+                if import_item.exists():
+                    dict_data['JUICE'] = import_item[0].hs_code
+                    dict_data['JUICE Qty'] = import_item[0].balance_quantity
+                import_item = dfia.import_license.filter(item__head__name__icontains='other')
+                if import_item.exists():
+                    dict_data['Other'] = import_item[0].hs_code
+                    dict_data['Other QTY'] = import_item[0].balance_quantity
+                import_item = dfia.import_license.filter(item__head__name__icontains='sugar')
+                if import_item.exists():
+                    dict_data['SUGAR'] = import_item[0].hs_code
+                    dict_data['SUGAR QTY'] = import_item[0].balance_quantity
+                conc_list.append(dict_data)
+            else:
+                dict_data = {
+                    'DFIA':"'" + dfia.license_number,
+                    'DFIA DT':str(dfia.license_date),
+                    'DFIA EXP':str(dfia.license_expiry_date),
+                    'DFIA File No':str(dfia.file_number),
+                    'Notf No':dfia.notification_number,
+                    'Exporter':dfia.exporter.name[:15],
+                    'BAL CIF': float(dfia.balance_cif),
+                }
+                found_other.append(dict_data)
         except Exception as e:
             print(e)
+    except Exception as e:
+        print(e)
+        dict_data = {
+            'DFIA':"'" + license,
+        }
+        not_found.append(dict_data)
+
+
+with open('biscuits.csv', 'w') as csvfile:
+    fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'DFIA File No', 'Notf No','Exporter', 'BAL CIF','SUGAR','SUGAR QTY', 'PALM OIL', 'PALM QTY','WHEY', 'WHEY QTY', 'Skimmed', 'Skimmed QTY',  'DF', 'DF QTY', 'FF', 'FF QTY', 'VAL 10%']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    for dict_data in biscuit_list:
+        writer.writerow(dict_data)
+
+
+
+with open('assorted_confectioney.csv', 'w') as csvfile:
+    fieldnames =['DFIA', 'DFIA DT', 'DFIA EXP', 'DFIA File No', 'Notf No', 'Exporter', 'BAL CIF', 'SUGAR', 'SUGAR QTY', 'FF', 'FF QTY', 'JUICE', 'JUICE Qty', 'Other', 'Other QTY']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    for dict_data in conc_list:
+        writer.writerow(dict_data)
+
+
+with open('not_found.csv', 'w') as csvfile:
+    fieldnames =['DFIA']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    for dict_data in not_found:
+        writer.writerow(dict_data)
+
+
+with open('found_other.csv', 'w') as csvfile:
+    fieldnames =['DFIA', 'DFIA DT', 'DFIA EXP', 'DFIA File No', 'Notf No', 'Exporter', 'BAL CIF']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    for dict_data in found_other:
+        writer.writerow(dict_data)

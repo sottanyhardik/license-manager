@@ -202,7 +202,14 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
                 from core.models import CompanyModel
                 company, bool = CompanyModel.objects.get_or_create(iec=dict_sb_data['iec'])
                 from bill_of_entry.models import BillOfEntryModel
-                BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(cha=dict_sb_data['cha'],company=company, is_fetch=True,appraisement=dict_sb_data['appraisement'])
+                BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(company=company,
+                                                                                               is_fetch=True)
+                boe = BillOfEntryModel.objects.get(bill_of_entry_number=data.bill_of_entry_number)
+                if 'cha' in list(dict_sb_data.keys()):
+                    boe.cha = dict_sb_data['cha']
+                if 'appraisement' in list(dict_sb_data.keys()):
+                    boe.appraisement = dict_sb_data['appraisement']
+                boe.save()
             else:
                 data.failed = data.failed + 1
                 data.save()

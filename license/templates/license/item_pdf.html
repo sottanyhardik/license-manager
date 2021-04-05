@@ -135,7 +135,7 @@
             </tr>
             </tbody>
         </table>
-        <table  class="table table-bordered table-striped tbordered">
+        <table class="table table-bordered table-striped tbordered">
             <thead>
             <th style="width: 10%">Date</th>
             <th style="width: 10%">Type</th>
@@ -143,28 +143,29 @@
             <th style="width: 10%">Quantity</th>
             <th style="width: 10%">CIF FC</th>
             <th style="width: 10%">CIF INR</th>
-            <th style="width: 40%">Company</th>
+            <th style="width: 30%">Company</th>
+            <th style="width: 10%">BILL Details</th>
             </thead>
             <tbody>
             {% for item in import_item.sorted_item_list.item_details %}
                 {% for foo in item.data_list %}
                     <tr style="border-bottom: 1px solid #000">
-                        <td >{{ foo.bill_of_entry.bill_of_entry_date }}</td>
-                        <td >{{ foo.get_transaction_type_display|title }}</td>
-                        <td >
+                        <td>{{ foo.bill_of_entry.bill_of_entry_date }}</td>
+                        <td>{{ foo.get_transaction_type_display|title }}</td>
+                        <td>
                             {% if foo.bill_of_entry %}
                                 {{ foo.bill_of_entry }}
                             {% endif %}
                         </td>
-                        <td >{{ foo.qty }}</td>
-                        <td >
+                        <td>{{ foo.qty }}</td>
+                        <td>
                             {% if foo.cif_fc == object.export_license.all.0.cif_fc %}
                                 0.0
                             {% else %}
                                 {{ foo.cif_fc }}
                             {% endif %}
                         </td>
-                        <td >
+                        <td>
                             {% if foo.cif_inr == object.export_license.all.0.cif_inr %}
                                 0.0
                             {% else %}
@@ -172,22 +173,29 @@
                             {% endif %}
                         </td>
                         <td>{{ item.company|title }}</td>
+                        <td>
+                            {% if foo.bill_of_entry.invoice_no %}
+                                {{ foo.bill_of_entry.invoice_no }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
                     </tr>
 
                 {% endfor %}
                 <tr style="border-bottom: 1px solid #000">
-                    <td ></td>
-                    <td ></td>
-                    <td >
+                    <td></td>
+                    <td></td>
+                    <td>
                         <b>Total</b>
                     </td>
                     <td>
                         <b>{{ item.sum_total_qty|floatformat:2 }}</b>
                     </td>
-                    <td >
+                    <td>
                         <b>{{ item.sum_total_cif_fc|floatformat:2 }}</b>
                     </td>
-                    <td >
+                    <td>
                         <b>{{ item.sum_total_cif_inr|floatformat:2 }}</b>
                     </td>
                     <td></td>

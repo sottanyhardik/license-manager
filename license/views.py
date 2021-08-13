@@ -188,7 +188,7 @@ class LicenseListView(FilterView):
             for d in f.qs:
                 d.balance_cif = d.get_balance_cif()
                 d.export_item = d.get_norm_class
-                d.license_number = "'" + d.license_number
+                d.license_number = d.license_number.replace(",",'')
                 d.save()
             query = f.qs.values('license_number', 'license_date','port__code', 'license_expiry_date', 'file_number',
                                 'exporter__name','export_item', 'balance_cif', 'user_comment', 'ledger_date')

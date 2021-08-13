@@ -189,7 +189,7 @@ class LicenseListView(FilterView):
                 d.balance_cif = d.get_balance_cif()
                 d.export_item = d.get_norm_class
                 d.save()
-            query = f.qs.values('license_number', 'license_date', 'license_expiry_date', 'file_number',
+            query = f.qs.values('license_number', 'license_date','port', 'license_expiry_date', 'file_number',
                                 'exporter__name','export_item', 'balance_cif', 'user_comment', 'ledger_date')
             from djqscsv import render_to_csv_response
             return render_to_csv_response(query.order_by('license_expiry_date'))

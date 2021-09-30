@@ -84,6 +84,8 @@ def generate_tl_software(data, tl_path, path=''):
             print(context)
             doc = DocxTemplate(tl_path)
             doc.render(context)
+            if len(str(context['license'])) == 9:
+                context['license'] = '0' + str(data['license'])
             try:
                 id = context['id']
                 context['file_number'] = ''

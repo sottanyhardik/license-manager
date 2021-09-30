@@ -212,7 +212,8 @@ class GenerateTransferLetterMEISView(View):
             'id':item.id,
             'company': meis_list[0].importer,
             'today': str(datetime.now().date()),
-            'license': item.dfia_no, 'license_date': item.dfia_date,
+            'license': item.dfia_no,
+            'license_date': item.dfia_date,
             'file_number': item.file_no,
             'v_allotment_inr': item.cif_inr,
             'exporter_name': item.exporter} for item in

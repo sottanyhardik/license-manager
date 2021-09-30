@@ -1,10 +1,223 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% extends "pdf_base.html" %}
+
+
+{% block extra_style %}
+
+    <style type="text/css">
+        @page {
+            size: A4 landscape;
+            margin: 1cm;
+        }
+
+
+        .table th,
+        .table td {
+            padding: 1px;
+            vertical-align: top;
+            border: 1px solid #000;
+            text-align: center;
+        }
+
+        .table thead th {
+            vertical-align: bottom;
+            border-bottom: 2px solid #000;
+        }
+
+        .table tbody + tbody {
+            border-top: 2px solid #000;
+        }
+
+        .table .table {
+            background-color: #fff;
+        }
+
+        .list-group {
+            display: block;
+            width: 100%;
+            list-style: none;
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+
+        .list-group p {
+            width: 100%;
+            height: 18px;
+            line-height: 20px;
+            list-style: none;
+            font-size: 1.1em;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <table class="table table-bordered table-striped tbordered">
+        <thead>
+        <th><h3>License Number</h3></th>
+        <th><h3>License Date</h3></th>
+        <th><h3>License Expiry</h3></th>
+        <th><h3>File Number</h3></th>
+        </thead>
+        <tbody>
+        <tr>
+            <td>
+                {{ object.license_number }}
+            </td>
+            <td>
+                {{ object.license_date }}
+            </td>
+            <td>
+                <p>{{ object.license_expiry_date }}</p>
+            </td>
+            <td>
+                <p>{{ object.file_number }}</p>
+            </td>
+        </tr>
+        </tbody>
+        <thead>
+        <th><h3>Exporter</h3></th>
+        <th><h3>Notification</h3></th>
+        <th><h3>Scheme Code</h3></th>
+        <th><h3>Port</h3></th>
+        </thead>
+        <tbody>
+        <tr>
+            <td>
+                <p>{{ object.exporter }}</p>
+            </td>
+            <td>
+                <p>{{ object.get_notification_number_display }}</p>
+            </td>
+            <td>
+                <p>{{ object.get_scheme_code_display }}</p>
+            </td>
+            <td>
+                <p>{{ object.port }}</p>
+            </td>
+
+        </tr>
+        </tbody>
+    </table>
+    <h3>
+        Export Items
+    </h3>
+    <table class="table table-bordered table-striped tbordered">
+        <thead>
+        <th>Item</th>
+        <th>Total CIF</th>
+        <th>Balance CIF</th>
+        </thead>
+        <tbody>
+        {% for export_item in object.export_license.all %}
+            <tr>
+                <td>{{ export_item.item|title }}</td>
+                <td>{{ export_item.cif_fc|title }}</td>
+                <td>{{ export_item.balance_cif_fc|title }}</td>
+            </tr>
+        {% endfor %}
+
+        </tbody>
+    </table>
+    <h3>
+        Import Items
+    </h3>
+    {% for import_item in object.import_license.all %}
+        <table style="margin-top:20px; margin-bottom:5px;" class="table table-bordered table-striped tbordered">
+            <thead>
+            <th>Sr No</th>
+            <th>Product Description</th>
+            <th>HS Code</th>
+            </thead>
+            <tbody>
+            <tr>
+                <td>{{ import_item.serial_number }}</td>
+                <td>{{ import_item.item }}</td>
+                <td>{{ import_item.hs_code }}</td>
+            </tr>
+            </tbody>
+        </table>
+        <table class="table table-bordered table-striped tbordered">
+            <thead>
+            <th style="width: 10%">Date</th>
+            <th style="width: 10%">Type</th>
+            <th style="width: 10%">BILL OF ENTRY</th>
+            <th style="width: 10%">BILL Details</th>
+            <th style="width: 10%">Quantity</th>
+            <th style="width: 10%">CIF FC</th>
+            <th style="width: 10%">CIF INR</th>
+            <th style="width: 40%">Company</th>
+            </thead>
+            <tbody>
+            {% for item in import_item.item_details.all %}
+                <tr style="border-bottom: 1px solid #000">
+                    <td>{{ item.bill_of_entry.bill_of_entry_date }}</td>
+                    <td>{{ item.get_transaction_type_display|title }}</td>
+                    <td>
+                        {% if item.bill_of_entry %}
+                            {{ item.bill_of_entry }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.bill_of_entry.invoice_no %}
+                            {{ item.bill_of_entry.invoice_no }}
+                        {% endif %}
+                    </td>
+                    <td>{{ item.qty }}</td>
+                    <td>
+                        {% if item.cif_fc == object.export_license.all.0.cif_fc %}
+                            0.0
+                        {% else %}
+                            {{ item.cif_fc }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.cif_inr == object.export_license.all.0.cif_inr %}
+                            0.0
+                        {% else %}
+                            {{ item.cif_inr }}
+                        {% endif %}
+                    </td>
+                    <td>{{ item.bill_of_entry.company|title }}</td>
+                </tr>
+            {% endfor %}
+            {% for item in import_item.allotment_details.all %}
+                {% if not item.allotment.bill_of_entry.all.exists %}
+                    <tr>
+                        <td>{{ item.allotment.modified_on }}</td>
+                        <td></td>
+                        <td>{{ item.allotment.get_type_display }}</td>
+                        <td></td>
+                        <td>{{ item.qty }}</td>
+                        <td>
+                            {{ item.cif_fc }}
+                        </td>
+                        <td>
+                            {{ item.cif_inr }}
+                        </td>
+                        <td>{{ item.allotment.company }}</td>
+                    </tr>
+                {% endif %}
+            {% endfor %}
+
+            </tbody>
+            <tfoot>
+            <tr>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid"></td>
+                <td style="width: 10%; border: 1px solid">
+                    <b>{{ import_item.balance_quantity }}</b></td>
+                <td style="width: 10%; border: 1px solid">
+
+                </td>
+                <td style="width: 10%; border: 1px solid">
+
+                </td>
+                <td style="width: 40%; border: 1px solid"></td>
+            </tr>
+
+            </tfoot>
+
+        </table>
+    {% endfor %}
+{% endblock %}

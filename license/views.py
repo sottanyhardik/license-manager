@@ -188,7 +188,7 @@ class LicenseListView(FilterView):
             for d in f.qs:
                 d.balance_cif = d.get_balance_cif()
                 d.export_item = d.get_norm_class
-                d.license_number = d.license_number.replace(",",'')
+                d.license_number = d.license_number.replace("'",'')
                 d.save()
             query = f.qs.values('license_number', 'license_date','port__code', 'license_expiry_date', 'file_number',
                                 'exporter__name','export_item', 'balance_cif', 'user_comment', 'ledger_date')
@@ -430,11 +430,13 @@ class PDFBiscuitsNewExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
         from license.tables import LicenseBiscuitReportTable
         from license.models import N2015
         try:
-            expiry_limit = datetime.datetime.strptime('2020-07-31', '%Y-%m-%d')
+            expiry_limit = datetime.datetime.strptime('2021-08-20', '%Y-%m-%d')
+            start_limit = datetime.datetime.strptime('2018-01-01', '%Y-%m-%d')
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expiry_limit,
+                                                                           license_expiry_date__gte=start_limit,
                                                                            is_self=True, is_au=False,
-                                                                           balance_cif__gte=4000).order_by(
+                                                                           balance_cif__gte=4000, export_license__old_quantity__lte=2).order_by(
                 'license_expiry_date')
             q_biscuits_queryset = biscuits_queryset.filter(
                 Q(exporter__name__icontains='Rama') | Q(exporter__name__icontains='rani'))
@@ -472,13 +474,13 @@ class PDFConfectioneryNewExpiredReportView(PDFTemplateResponseMixin, PagedFilter
         from license.tables import LicenseConfectineryReportTable
         from license.models import N2015
         try:
-            expiry_limit = datetime.datetime.strptime('2020-07-31', '%Y-%m-%d')
-            start_limit = datetime.datetime.strptime('2020-02-01', '%Y-%m-%d')
+            expiry_limit = datetime.datetime.strptime('2021-08-20', '%Y-%m-%d')
+            start_limit = datetime.datetime.strptime('2018-01-01', '%Y-%m-%d')
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expiry_limit,
                 license_expiry_date__gte=start_limit,
-                is_self=True, is_au=False, balance_cif__gte=4000).order_by('license_expiry_date')
+                is_self=True, is_au=False, balance_cif__gte=4000, export_license__old_quantity__lte=2).order_by('license_expiry_date')
 
             q_confectionery_queryset = confectionery_queryset.filter(exporter__name__icontains='Parle')
             table = LicenseConfectineryReportTable(

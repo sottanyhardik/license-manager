@@ -237,6 +237,38 @@ class LicenseDetailsModel(models.Model):
                 credit = credit - dimport.debited_value
         return round_down(credit)
 
+    def get_per_essential_oil(self):
+        lic = LicenseExportItemModel.objects.filter(license=self)
+        credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        if 'E1' in str(lic[0].norm_class):
+            credit = credit * .05
+            imports = LicenseImportItemsModel.objects.filter(license=self).filter(
+                Q(item__head__name__icontains='essential oil') | Q(item__head__name__icontains='food flavour'))
+        else:
+            imports = []
+        for dimport in imports:
+            if dimport.alloted_value:
+                credit = credit - dimport.debited_value - int(dimport.alloted_value)
+            else:
+                credit = credit - dimport.debited_value
+        return round_down(credit)
+
+    def get_per_emulsifier(self):
+        lic = LicenseExportItemModel.objects.filter(license=self)
+        credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        if 'E1' in str(lic[0].norm_class):
+            credit = credit * .03
+            imports = LicenseImportItemsModel.objects.filter(license=self).filter(
+                Q(item__head__name__icontains='emulsifier'))
+        else:
+            imports = []
+        for dimport in imports:
+            if dimport.alloted_value:
+                credit = credit - dimport.debited_value - int(dimport.alloted_value)
+            else:
+                credit = credit - dimport.debited_value
+        return round_down(credit)
+
     def get_balance_value(self):
         if self.get_norm_class == 'E5':
             return round(

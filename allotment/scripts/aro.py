@@ -84,7 +84,12 @@ def generate_tl_software(data, tl_path, path=''):
             print(context)
             doc = DocxTemplate(tl_path)
             doc.render(context)
-            doc.save(path + context['license'] + "_TL.docx")
+            try:
+                id = context['id']
+                context['file_number'] = ''
+                doc.save(path + context['license'] + '_' + str(id) + "_TL.docx")
+            except:
+                doc.save(path + context['license'] + "_TL.docx")
 
 
 def generate_sugar():

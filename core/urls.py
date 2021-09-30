@@ -19,4 +19,6 @@ urlpatterns = [
     path('item/', login_required(views.ListItemView.as_view()), name='item-list'),
     path('item/<int:pk>/update/', login_required(views.UpdateItemView.as_view()), name='item-update'),
     path('ledger/', login_required(views.UploadLedger.as_view()), name='ledger-upload'),
+    path('meis/upload/', login_required(views.UploadMEISView.as_view()), name='meis-upload'),
+    path('meis/generate/', login_required(views.GenerateTransferLetterMEISView.as_view()), name='generate_tl'),
 ]

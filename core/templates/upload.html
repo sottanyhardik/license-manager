@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h3>Upload File</h3>
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="file" name="myfile" required>
+                <button type="submit" class="btn btn-info">Upload</button>
+            </form>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <h3>DFIA LIST</h3>
+        </div>
+        <div class="card-body">
+            <a href="{% url 'generate_tl' %}" class="btn btn-info">GENERATE FILLED</a>
+            <a href="{% url 'generate_tl' %}?type=empty" class="btn btn-success">GENERATE BLANK</a>
+            <table class="table">
+                <thead>
+                <th>DFIA No</th>
+                <th>DFIA DT</th>
+                <th>Importer</th>
+                <th>Exporter</th>
+                <th>CIF INR</th>
+                <th>File No</th>
+                </thead>
+                <tbody>
+                {% for object in object_list %}
+                    <tr>
+                        <td>{{ object.dfia_no }}</td>
+                        <td>{{ object.dfia_date }}</td>
+                        <td>{{ object.importer }}</td>
+                        <td>{{ object.exporter }}</td>
+                        <td>{{ object.cif_inr }}</td>
+                        <td>{{ object.file_no }}</td>
+                    </tr>
+                {% endfor %}
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+{% endblock %}

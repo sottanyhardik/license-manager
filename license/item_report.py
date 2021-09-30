@@ -3,7 +3,7 @@ import datetime
 from django.db.models import Q, Sum
 
 from license import models as license
-from license.models import N2009, N2015, LicenseDetailsModel
+from license.models import N2009, N2015, LicenseDetailsModel, LicenseExportItemModel
 from license.tables import LicenseItemReportTable, LicenseBiscuitReportTable, LicenseConfectineryReportTable, \
     LicenseBiscuitNewReportTable
 from datetime import date
@@ -11,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
-                 minimun_qty=500, minimun_value=500, date_range=None, notification_number=False, maximum_qty=None):
+                 minimun_qty=500, minimun_value=500, date_range=None, notification_number=False, maximum_qty=None, item_name=None):
     if date_range:
         start = date_range.get('start')
         end = date_range.get('end')
@@ -22,11 +22,10 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
             start_object = datetime.datetime.strptime(end, '%Y-%m-%d')
             query_dict['license__license_expiry_date__lte'] = start_object
     else:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=0)
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
         query_dict['license__license_expiry_date__gte'] = expiry_limit
     if notification_number:
         query_dict['license__notification_number'] = notification_number
-    query_dict['license__export_license__norm_class__norm_class'] = 'E1'
     query_dict['license__is_self'] = True
     query_dict['license__is_au'] = False
     my_filter = Q()
@@ -59,7 +58,10 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
         'license__license_expiry_date')
     for object in query_set:
         object.available_quantity = object.balance_quantity
-        object.available_value = object.balance_cif_fc
+        if item_name and item_name == 'DF':
+            object.available_value = object.get_per_cif
+        else:
+            object.available_value = object.balance_cif_fc
         if object.cif_fc == 0.01:
             if object.comment and not 'individual' in object.comment.lower():
                 object.comment = object.comment + ' individual value error'
@@ -186,7 +188,6 @@ def dietary_query(date_range=None):
         'item__head__name__icontains': 'dietary fibre',
         'hs_code__hs_code__startswith': '08'
     }
-
     and_or_filter = [{
         'license__notification_number': N2009
     }]
@@ -196,8 +197,13 @@ def dietary_query(date_range=None):
         'license__export_license__old_quantity__gt': 1,
         'license__notification_number': N2015
     }]
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter, item_name ='DF')
+    tables = query_set_table(tables, queryset, 'Notification 019/2015')
+    and_or_filter = [{
+        'license__notification_number': N2015
+    }]
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
-    tables = query_set_table(tables, queryset, 'New Notification 019/2015')
+    tables = query_set_table(tables, queryset, 'Conversion Notification 019/2015')
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'dietary fibre',
@@ -261,11 +267,8 @@ def juice_query(date_range=None):
 
 def packing_query(date_range=None):
     tables = []
-    query_dict = {
-        'item__head__name__icontains': 'Packing Material',
-    }
-    query_dict['is_restrict'] = False
-    query_dict['available_quantity__lte'] = 10000
+    query_dict = {'item__head__name__icontains': 'Packing Material', 'is_restrict': False,
+                  'available_quantity__lte': 10000, 'license__export_license__norm_class__norm_class': 'E1'}
     queryset = all_queryset(query_dict, date_range=date_range)
     tables = query_set_table(tables, queryset, 'Less than 10000 Kg')
 

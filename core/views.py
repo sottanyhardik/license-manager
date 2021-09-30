@@ -185,10 +185,11 @@ class UploadMEISView(TemplateView):
             meis = models.MEISMODEL()
             meis.importer = data['Importer']
             meis.exporter = data['Exporter']
-            if len(str(data['DFIA'])) == 9:
-                meis.dfia_no = '0' + str(data['DFIA'])
+            dfia = str(data['DFIA']).split('.')[0]
+            if len(dfia) == 9:
+                meis.dfia_no = '0' + dfia
             else:
-                meis.dfia_no = str(data['DFIA'])
+                meis.dfia_no = dfia
             meis.dfia_date = data['DFIA_DT']
             meis.cif_inr = data['CIF_INR']
             meis.file_number = data['FILE_NUMBER']

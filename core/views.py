@@ -188,7 +188,7 @@ class UploadMEISView(TemplateView):
             if len(str(data['DFIA'])) == 9:
                 meis.dfia_no = '0' + str(data['DFIA'])
             else:
-                meis.dfia_no = data['DFIA']
+                meis.dfia_no = str(data['DFIA'])
             meis.dfia_date = data['DFIA_DT']
             meis.cif_inr = data['CIF_INR']
             meis.file_number = data['FILE_NUMBER']

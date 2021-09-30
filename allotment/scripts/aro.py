@@ -1,5 +1,5 @@
 import shutil
-from docx2pdf import convert
+
 from docxtpl import DocxTemplate
 
 import csv
@@ -89,11 +89,7 @@ def generate_tl_software(data, tl_path, path=''):
             try:
                 id = context['id']
                 context['file_number'] = ''
-                file_path_docx = path + context['license'] + '_' + str(id) + "_TL.docx"
-                file_path_pdf = path + context['license'] + '_' + str(id) + "_TL.pdf"
-                doc.save(file_path_docx)
-                convert(file_path_docx, file_path_pdf)
-                remove(file_path_docx)
+                doc.save(path + context['license'] + '_' + str(id) + "_TL.docx")
             except:
                 doc.save(path + context['license'] + "_TL.docx")
 

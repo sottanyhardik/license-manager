@@ -13,10 +13,20 @@ BOOLEAN_CHOICES = (
 )
 
 
+class ListFilter(django_filters.Filter):
+    def filter(self, queryset, value):
+        if value == "":
+            return queryset
+        value_list = value.split(u',')
+        queryset = queryset.filter(allotment_details__item__license__license_number__in=value_list).distinct()
+        return queryset
+
+
 class AllotmentItemFilter(django_filters.FilterSet):
     remove_expired = django_filters.BooleanFilter(field_name='license_expiry_date', method='check_expired',
                                                   label='Is Expired')
     remove_null = django_filters.BooleanFilter(method='remove_null_values', label='Remove Null')
+    license__license_number = ListFilter(field_name='license__license_number', label='License Numbers')
 
     class Meta:
         model = license_model.LicenseImportItemsModel
@@ -62,7 +72,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
 
 
 class AllotmentFilter(django_filters.FilterSet):
-    allotment_details__item__license__license_number = django_filters.CharFilter(label='License Number')
+    allotment_details__item__license__license_number = ListFilter(field_name='allotment_details__item__license__license_number', label='License Numbers')
     is_be = django_filters.BooleanFilter(method='check_be', label='Is BOE', initial=False)
 
     class Meta:

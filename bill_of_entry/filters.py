@@ -23,7 +23,7 @@ class ListFilter(django_filters.Filter):
 
 class BillOfEntryFilter(django_filters.FilterSet):
     is_self = django_filters.BooleanFilter(method='check_self', label='All')
-    item_details__sr_number__license__license_number = ListFilter(field_name='item_details__sr_number__license__license_number')
+    item_details__sr_number__license__license_number = ListFilter(field_name='item_details__sr_number__license__license_number', label='License Numbers')
     bill_of_entry_date = DateFromToRangeFilter(
         widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY', 'format': 'dd/mm/yyyy', 'type': 'date'}))
     is_invoice = django_filters.BooleanFilter(method='check_is_invoice', label='Is Invoice')

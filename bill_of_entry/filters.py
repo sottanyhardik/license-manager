@@ -11,16 +11,27 @@ BOOLEAN_CHOICES = (
     (False, 'No')
 )
 
+from django_filters.fields import Lookup
+
+
+class ListFilter(django_filters.Filter):
+    def filter(self, queryset, value):
+        value_list = value.split(u',')
+        queryset = queryset.filter(item_details__sr_number__license__license_number__in=value_list).distinct()
+        return queryset
+
 
 class BillOfEntryFilter(django_filters.FilterSet):
     is_self = django_filters.BooleanFilter(method='check_self', label='All')
-    item_details__sr_number__license__license_number = django_filters.CharFilter(label='License Number')
-    bill_of_entry_date = DateFromToRangeFilter(widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY','format':'dd/mm/yyyy', 'type':'date'}))
+    item_details__sr_number__license__license_number = ListFilter(field_name='item_details__sr_number__license__license_number')
+    bill_of_entry_date = DateFromToRangeFilter(
+        widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY', 'format': 'dd/mm/yyyy', 'type': 'date'}))
     is_invoice = django_filters.BooleanFilter(method='check_is_invoice', label='Is Invoice')
 
     class Meta:
         model = bill_of_entry.BillOfEntryModel
-        fields = ['company', 'bill_of_entry_number','port','product_name','is_self', 'item_details__sr_number__license__license_number','appraisement']
+        fields = ['company', 'bill_of_entry_number', 'port', 'product_name', 'is_self',
+                  'item_details__sr_number__license__license_number', 'appraisement']
         widgets = {
             'company': Select(attrs={'class': 'form-control'}),
         }
@@ -39,7 +50,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
             }
         }
 
-    def check_self(self, queryset, name,value):
+    def check_self(self, queryset, name, value):
         return queryset.filter(item_details__sr_number__license__is_self=True).distinct()
 
     def check_is_invoice(self, queryset, name, value):

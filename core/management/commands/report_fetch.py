@@ -20,8 +20,9 @@ class Command(BaseCommand):
         found_other = []
         import csv
         biscuit_list = []
-        from datetime import datetime
-        date = datetime.now()
+        import datetime
+        today = datetime.datetime.now()
+        date = today-datetime.timedelta(days=30)
         if status == 'expired':
             list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date)
         else:

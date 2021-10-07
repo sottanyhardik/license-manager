@@ -16,11 +16,14 @@ from django_filters.fields import Lookup
 
 class ListFilter(django_filters.Filter):
     def filter(self, queryset, value):
-        if value == "":
+        if value:
+            value_list = value.split(u',')
+            queryset = queryset.filter(item_details__sr_number__license__license_number__in=value_list).distinct()
             return queryset
-        value_list = value.split(u',')
-        queryset = queryset.filter(item_details__sr_number__license__license_number__in=value_list).distinct()
-        return queryset
+        elif value == "":
+            return queryset
+        else:
+            return queryset
 
 
 class BillOfEntryFilter(django_filters.FilterSet):

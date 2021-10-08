@@ -22,22 +22,10 @@ class ListFilter(django_filters.Filter):
         return queryset
 
 
-class ItemListFilter(django_filters.Filter):
-    def filter(self, queryset, value):
-        if value:
-            if value == "":
-                return queryset
-            value_list = value.split(u',')
-            queryset = queryset.filter(license__license_number__in=value_list).distinct()
-            return queryset
-        else:
-            return queryset
-
 class AllotmentItemFilter(django_filters.FilterSet):
     remove_expired = django_filters.BooleanFilter(field_name='license_expiry_date', method='check_expired',
                                                   label='Is Expired')
     remove_null = django_filters.BooleanFilter(method='remove_null_values', label='Remove Null')
-    license__license_number = ItemListFilter(field_name='license__license_number', label='License Numbers')
 
     class Meta:
         model = license_model.LicenseImportItemsModel

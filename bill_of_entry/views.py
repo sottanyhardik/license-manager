@@ -75,12 +75,20 @@ class BillOfEntryUpdateDetailView(UpdateView):
         object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
         return object
 
+    def get_success_url(self):
+        boe = self.kwargs.get('boe')
+        return reverse('bill-of-entry-ajax-list')+'?bill_of_entry_number=' + str(boe)
+
 
 class BillOfEntryUpdateView(UpdateWithInlinesView):
     template_name = 'bill_of_entry/add.html'
     model = bill_of_entry.BillOfEntryModel
     fields = ()
     inlines = [BillOfEntryLicenseImportItemInline, ]
+
+    def get_success_url(self):
+        boe = self.kwargs.get('boe')
+        return reverse('bill-of-entry-ajax-list')+'?bill_of_entry_number=' + str(boe)
 
     def dispatch(self, request, *args, **kwargs):
         # check if there is some video onsite

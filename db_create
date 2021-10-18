@@ -1,1 +1,6 @@
-15
+CREATE DATABASE lmanagement;
+CREATE USER lmanagement WITH PASSWORD 'lmanagement';
+ALTER ROLE lmanagement SET client_encoding TO 'utf8';
+ALTER ROLE lmanagement SET default_transaction_isolation TO 'read committed';
+ALTER ROLE lmanagement SET timezone TO 'UTC';
+GRANT ALL PRIVILEGES ON DATABASE lmanagement TO lmanagement;

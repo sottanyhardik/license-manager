@@ -1,0 +1,92 @@
+<div class="panel panel-default" style="margin-bottom: 2px">
+    <div class="panel-heading" role="tab" id="heading{{ object.id }}">
+        <a role="button" data-toggle="collapse" data-parent="#accordion" href="#collapse{{ object.id }}"
+           aria-expanded="true" aria-controls="collapse{{ object.id }}">
+            <div class="row" data-url="{% url 'license-detail' object.license_number %}"
+                 data-target="view{{ object.id }}"
+                 onclick="fetch_page(this)"
+            >
+                <div class="col-lg-1">
+                    <label>Notf No.</label>
+                    <span>{{ object.get_notification_number_display }}</span>
+                </div>
+                <div class="col-lg-1">
+                    <label>DFIA No</label>
+                    <span>{{ object.license_number }}</span>
+                </div>
+                <div class="col-lg-1">
+                    <label>DFIA Date</label>
+                    <span>{{ object.license_date }}</span>
+                </div>
+                <div class="col-lg-1">
+                    <label>DFIA Exp</label>
+                    <span>{{ object.license_expiry_date }}</span>
+                </div>
+                <div class="col-lg-2">
+                    <label>Exporter</label>
+                    <span>{{ object.exporter }}</span>
+                </div>
+                <div class="col-lg-1">
+                    <label>Norms</label>
+                    <span>{{ object.get_norm_class }}</span>
+                </div>
+                <div class="col-lg-1">
+                    <label>Port</label>
+                    <span>{{ object.port }}</span>
+                </div>
+                <div class="col-lg-1">
+                    <label>Bal CIF $</label>
+                    <span>{{ object.balance_cif }}</span>
+                </div>
+                <div class="col-lg-1">
+                    <label>Ledger Dt</label>
+                    <span>{{ object.ledger_date }}</span>
+                </div>
+                <div class="col-lg-2">
+                    <label>Remarks</label>
+                    <span>{{ object.user_comment }}</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div id="collapse{{ object.id }}" class="panel-collapse collapse in" role="tabpanel"
+         aria-labelledby="heading{{ object.id }}">
+        <div class="panel-body">
+            <div>
+                <!-- Nav tabs -->
+                <ul class="nav nav-tabs nav-pills" role="tablist">
+                    <li role="presentation">
+                        <a href="{% url 'license-detail' object.pk %}"
+                           data-url="{% url 'license-detail' object.license_number %}"
+                           data-target="view{{ object.id }}"
+                           onclick="fetch_page(this)"
+                           aria-controls="home" role="tab"
+                           data-toggle="tab">View</a></li>
+                    <li><a href="{% url 'license-update' object.pk %}"
+                           data-url="{% url 'license-update' object.license_number %}"
+                           data-target="view{{ object.id }}"
+                           onclick="fetch_page(this)"
+                           aria-controls="home" role="tab"
+                           data-toggle="tab">Update</a></li>
+                    <li><a href="{% url 'license-item-update' object.pk %}"
+                           data-url="{% url 'license-item-update' object.license_number %}"
+                           data-target="view{{ object.id }}"
+                           onclick="fetch_page(this)"
+                           aria-controls="home" role="tab"
+                           data-toggle="tab">Item Update</a></li>
+                </ul>
+
+                <!-- Tab panes -->
+                <div class="tab-content" style="text-align: center">
+                    <div role="tabpanel" class="tab-pane active" id="view{{ object.id }}">
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="profile">...</div>
+                    <div role="tabpanel" class="tab-pane" id="messages">...</div>
+                    <div role="tabpanel" class="tab-pane" id="settings">...</div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+</div>

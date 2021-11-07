@@ -35,6 +35,9 @@ class CompanyModel(models.Model):
     def get_absolute_url(self):
         return reverse('company-list')
 
+    class Meta:
+        ordering = ['name']
+
 
 class PortModel(models.Model):
     code = models.CharField(max_length=10)

@@ -67,7 +67,16 @@ class LicenseDetailCreateView(CreateWithInlinesView):
         return super(LicenseDetailCreateView, self).form_valid(form)
 
     def get_success_url(self):
-        return reverse('license-ajax-list') + '?license_number=' + self.object.license_number
+        return reverse('dfia-details', kwargs={'license':self.object.license_number})
+
+
+class DFIADetailView(DetailView):
+    template_name = 'dfia/box.html'
+    model = license.LicenseDetailsModel
+
+    def get_object(self, queryset=None):
+        object = self.model.objects.get(license_number=self.kwargs.get('license'))
+        return object
 
 
 class LicenseItemListUpdateView(UpdateWithInlinesView):
@@ -165,19 +174,21 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
 
 
 class LicenseListView(FilterView):
-    template_name = 'license/list.html'
+    template_name = 'dfia/list.html'
     model = license.LicenseDetailsModel
     filterset_class = filters.LicenseDetailFilter
     paginate_by = 50
-    queryset = license.LicenseDetailsModel.objects.filter(is_active=True)
+    queryset = license.LicenseDetailsModel.objects.filter()
     ordering = "license_expiry_date"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data()
-        context['is_active'] = True
+        context['is_active'] = self.request.GET.get('is_active')
         filterset_class = self.get_filterset_class()
         self.filterset = self.get_filterset(filterset_class)
         context['filter'] = self.filterset
+        context['page_title'] = 'DFIA List'
+        context['dfia_count'] = self.object_list.count()
         return context
 
     def get(self, request, **kwargs):

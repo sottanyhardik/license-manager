@@ -202,3 +202,7 @@ RQ_QUEUES = {
 
 DJANGO_TABLES2_TEMPLATE = "django_tables2/bootstrap.html"
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000 #
+
+
+EMAIL_BACKEND = "django.core.mail.backends.filebased.EmailBackend"
+EMAIL_FILE_PATH = os.path.join(BASE_DIR, "sent_emails")

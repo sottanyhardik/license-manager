@@ -31,7 +31,7 @@ class ExportItemsForm(forms.ModelForm):
             else:
                 field.widget.attrs['class'] = 'form-control'
             if 'Textarea' in str(field.widget):
-                field.widget.attrs['rows'] = '2'
+                field.widget.attrs['rows'] = '1'
 
 
 class ImportItemsForm(forms.ModelForm):
@@ -65,7 +65,7 @@ class ImportItemsForm(forms.ModelForm):
             if 'hs_code' in field_name or 'quantity' in field_name or 'unit' in field_name:
                 field.widget.attrs['class'] += ' span2'
             if 'Textarea' in str(field.widget):
-                field.widget.attrs['rows'] = '2'
+                field.widget.attrs['rows'] = '1'
 
 
 class LicenseDetailsForm(forms.ModelForm):
@@ -96,7 +96,7 @@ class LicenseDetailsForm(forms.ModelForm):
             else:
                 field.widget.attrs['class'] = 'form-control'
             if 'Textarea' in str(field.widget):
-                field.widget.attrs['rows'] = '2'
+                field.widget.attrs['rows'] = '1'
 
 
 class LicenseDocumentForm(forms.ModelForm):
@@ -114,7 +114,7 @@ class LicenseDocumentForm(forms.ModelForm):
             else:
                 field.widget.attrs['class'] = 'form-control'
             if 'Textarea' in str(field.widget):
-                field.widget.attrs['rows'] = '2'
+                field.widget.attrs['rows'] = '1'
 
 
 class LicenseInwardOutwardForm(forms.ModelForm):
@@ -149,5 +149,5 @@ class LicenseInwardOutwardForm(forms.ModelForm):
             else:
                 field.widget.attrs['class'] = 'form-control'
             if 'Textarea' in str(field.widget):
-                field.widget.attrs['rows'] = '2'
+                field.widget.attrs['rows'] = '1'
 

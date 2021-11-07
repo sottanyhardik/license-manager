@@ -13,7 +13,13 @@ from .models import MEISMODEL
 
 
 class DashboardView(TemplateView):
-    template_name = 'dashboard.html'
+    template_name = 'blank.html'
+
+    def get_context_data(self, **kwargs):
+        context = super(DashboardView, self).get_context_data(**kwargs)
+        context['page_title'] = "Dashboard"
+        return context
+
 
 
 class CreateCompanyView(CreateView):
@@ -159,9 +165,9 @@ class UploadLedger(TemplateView):
         from django.http import HttpResponseRedirect
         from django.urls import reverse
         if license:
-            return HttpResponseRedirect(reverse('license_ledge', kwargs={'license': license}))
+            return HttpResponseRedirect(reverse('license_ledger', kwargs={'license': license}))
         else:
-            return HttpResponseRedirect(reverse('ledger-upload'))
+            return HttpResponseRedirect(reverse('license-list'))
 
 
 class TemplateListView(TemplateView):

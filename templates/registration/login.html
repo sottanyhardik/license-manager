@@ -1,0 +1,40 @@
+{% extends 'base/login.html' %}
+{% block title %}Login{% endblock %}
+
+{% block content %}
+    <form action="#" method="post">
+        {% csrf_token %}
+        <label class="m-account--title">Login to your account</label>
+
+        <div class="form-group">
+            <div class="input-group">
+                <div class="input-group-prepend">
+                    <i class="fas fa-user"></i>
+                </div>
+
+                <input type="text" name="username" placeholder="Username" class="form-control" autocomplete="off"
+                       required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <div class="input-group">
+                <div class="input-group-prepend">
+                    <i class="fas fa-key"></i>
+                </div>
+
+                <input type="password" name="password" placeholder="Password" class="form-control" autocomplete="off"
+                       required>
+            </div>
+        </div>
+
+        <div class="m-account--actions">
+            <a href="{% url 'password_reset' %}" class="btn-link">Forgot Password?</a>
+
+            <button type="submit" class="btn btn-rounded btn-info">Login</button>
+        </div>
+        <div class="m-account--footer">
+            <p>&copy; 2021 PurpleHub</p>
+        </div>
+    </form>
+{% endblock %}

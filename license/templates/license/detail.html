@@ -1,86 +1,77 @@
 {% load formset_tags %}
 {% load static %}
 {% block content %}
-    <div class="row">
-        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
-            <div class="card">
-                <div class="card-header">
-                    Export Items
-                </div>
-                <div class="card-body table-responsive">
-                    <table class="table dataTable no-footer table-striped">
-                        <thead>
-                        <th>Item</th>
-                        <th>Total CIF</th>
-                        <th>Balance CIF</th>
-                        </thead>
-                        <tbody>
-                        {% for export_item in object.export_license.all %}
-                            <tr>
-                                <td>{{ export_item.item|title }}</td>
-                                <td>{{ export_item.cif_fc|title }}</td>
-                                <td>{{ export_item.balance_cif_fc|title }}</td>
-                            </tr>
-                        {% endfor %}
+    <div class="panel">
+        <div class="panel-heading">
+            <h4>Export Items</h4>
+        </div>
+        <div class="panel-body table-responsive">
+            <table class="table">
+                <thead>
+                <th>Item</th>
+                <th>Total CIF</th>
+                <th>Balance CIF</th>
+                </thead>
+                <tbody>
+                {% for export_item in object.export_license.all %}
+                    <tr>
+                        <td>{{ export_item.item|title }}</td>
+                        <td>{{ export_item.cif_fc|title }}</td>
+                        <td>{{ export_item.balance_cif_fc|title }}</td>
+                    </tr>
+                {% endfor %}
 
-                        </tbody>
+                </tbody>
 
-                    </table>
-                </div>
-            </div>
+            </table>
         </div>
     </div>
-    <div class="row">
-        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
-            <div class="card">
-                <div class="card-header ">
-                    Import Items
-                </div>
-                <div class="card-body table-responsive">
-                    <table class="table dataTable no-footer table-striped">
-                        <thead>
-                        <th>Sr No</th>
-                        <th>HS Code</th>
-                        <th>Item</th>
-                        <th>Total Quantity</th>
-                        <th>Old Quantity</th>
-                        <th>New Quantity</th>
-                        <th>Balance Quantity</th>
-                        <th>CIF FC</th>
-                        <th>Balance CIF FC</th>
-                        </thead>
-                        <tbody>
-                        {% for import_item in object.import_license.all %}
-                            <tr>
-                                <td>{{ import_item.serial_number }}</td>
-                                <td>{{ import_item.hs_code }}</td>
-                                <td>{{ import_item.item|title }}</td>
-                                <td>{{ import_item.quantity }}</td>
-                                <td>{{ import_item.old_quantity }}
-                                <td>{{ import_item.new_quantity }}
-                                <td>{{ import_item.balance_quantity }}
-                                <td>
-                                    {% if import_item.cif_fc and not import_item.cif_fc == 0 %}
-                                        {{ import_item.cif_fc }}
-                                    {% else %}
+    <div class="panel">
+        <div class="panel-heading">
+            <h4>Import Items</h4>
+        </div>
+        <div class="panel-body table-responsive">
+            <table class="table dataTable no-footer table-striped">
+                <thead>
+                <th>Sr No</th>
+                <th>HS Code</th>
+                <th>Item</th>
+                <th>Total Quantity</th>
+                <th>Old Quantity</th>
+                <th>New Quantity</th>
+                <th>Balance Quantity</th>
+                <th>CIF FC</th>
+                <th>Balance CIF FC</th>
+                </thead>
+                <tbody>
+                {% for import_item in object.import_license.all %}
+                    <tr>
+                        <td>{{ import_item.serial_number }}</td>
+                        <td>{{ import_item.hs_code }}</td>
+                        <td>{{ import_item.item|title }}</td>
+                        <td>{{ import_item.quantity }}</td>
+                        <td>{{ import_item.old_quantity }}
+                        <td>{{ import_item.new_quantity }}
+                        <td>{{ import_item.balance_quantity }}
+                        <td>
+                            {% if import_item.cif_fc and not import_item.cif_fc == 0 %}
+                                {{ import_item.cif_fc }}
+                            {% else %}
 
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if import_item.cif_fc and not import_item.cif_fc == 0 %}
-                                        {{ import_item.balance_cif_fc }}
-                                    {% else %}
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% endfor %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if import_item.cif_fc and not import_item.cif_fc == 0 %}
+                                {{ import_item.balance_cif_fc }}
+                            {% else %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
 
-                        </tbody>
+                </tbody>
 
-                    </table>
-                </div>
-            </div>
+            </table>
         </div>
     </div>
-
 {% endblock %}

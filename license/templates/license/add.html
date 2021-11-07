@@ -1,14 +1,15 @@
 {% load formset_tags %}
 {% load static %}
-<form action="{% if license %}{% url 'license-update' license %}{% else %}{% url 'license-add' %}{% endif %}" method="post" novalidate enctype="multipart/form-data">
+<form action="{% if license %}{% url 'license-update' license %}{% else %}{% url 'license-add' %}{% endif %}"
+      method="post" novalidate enctype="multipart/form-data">
     <div class="row">
-        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
-            <div class="card">
-                <div class="card-header">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-panel">
+            <div class="panel">
+                <div class="panel-heading">
                     <h3>License Details</h3>
                 </div>
 
-                <div class="card-body">
+                <div class="panel-body">
                     {% if form.errors %}
                         <div class="alert alert-danger">
                             <ul class="errorlist">
@@ -50,9 +51,9 @@
     {% if inlines %}
         {% for formset in inlines %}
             <div class="row">
-                <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
-                    <div class="card" id="{{ formset.prefix }}-id" data-formset-prefix="{{ formset.prefix }}">
-                        <div class="card-header">
+                <div class="col-xs-12 col-lg-12 grid-margin stretch-panel">
+                    <div class="panel" id="{{ formset.prefix }}-id" data-formset-prefix="{{ formset.prefix }}">
+                        <div class="panel-heading">
                             <h3>
                                 {% if formset.prefix == 'license_documents' %}
                                     License Documents
@@ -63,7 +64,7 @@
                                 {% endif %}
                             </h3>
                         </div>
-                        <div class="card-body">
+                        <div class="panel-body">
                             {% for form in formset.forms %}
                                 {% if form.errors %}
                                     <div class="alert alert-danger">
@@ -90,7 +91,7 @@
                             <div>
                                 {{ formset.management_form }}
 
-                                <div data-formset-body>
+                                <div data-formset-body class="table-responsive">
                                     <!-- New forms will be inserted in here -->
                                     {% for form in formset %}
                                         <div data-formset-form>
@@ -160,7 +161,7 @@
 
                             </div>
                         </div>
-                        <div class="card-footer">
+                        <div class="panel-footer">
                             <!-- This button will add a new form when clicked -->
                             <input type="button" class="btn btn-info" value="Add another" data-formset-add>
 
@@ -171,9 +172,9 @@
         {% endfor %}
     {% endif %}
     <div class="row">
-        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-panel">
             <input type="submit" class="btn btn-success full-width  ajax-post" onclick="ajax_post(this)"
-                   data-target="{% if license %}div-{{ license.id }}{% else %}license-list{% endif %}" value="Submit">
+                   data-target="{% if license %}view{{ license.id }}{% else %}license-list{% endif %}" value="Submit">
         </div>
     </div>
 </form>
@@ -226,7 +227,19 @@
             $(this).siblings('select').select2('open');
         }
     });
-
+    $(document).ready(function () {
+        $('form').submit(function () { // catch the form's submit event
+            $.ajax({ // create an AJAX call...
+                data: $(this).serialize(), // get the form data
+                type: 'POST', // GET or POST
+                url: $(this).attr('action'), // the file to call
+                success: function (response) { // on success..
+                    $('#DIV_CONTAINING_FORM').html(response); // update the DIV
+                }
+            });
+            return false;
+        });
+    });
 </script>
 <script>jQuery(function ($) {
     {% for formset in inlines %}

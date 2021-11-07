@@ -53,6 +53,12 @@ class LicenseDetailsModel(models.Model):
     is_expired = models.BooleanField(default=False)
     is_individual = models.BooleanField(default=False)
     ge_file_number = models.IntegerField(default=0)
+    created_on = models.DateField(auto_created=True)
+    created_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, null=True, blank=True,
+                                   related_name='dfia_created')
+    modified_on = models.DateField(auto_now=True)
+    modified_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, null=True, blank=True,
+                                    related_name='dfia_updated')
     admin_search_fields = ('license_number',)
 
     def __str__(self):

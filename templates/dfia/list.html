@@ -130,15 +130,21 @@
                                        onclick="fetch_page(this)"
                                        aria-controls="home" role="tab"
                                        data-toggle="tab">Item Update</a></li>
+                                <li><a href="{% url 'license-pdf' object.license_number %}"
+                                       aria-controls="home" role="tab"
+                                       data-toggle="tab">Download</a></li>
+                                <li><a href="{% url 'license_ledger' object.license_number %}"
+                                       aria-controls="home" role="tab"
+                                       data-toggle="tab">Ledger</a></li>
+                                <li><a href="{% url 'license_item_ledger_pdf' object.license_number %}"
+                                       aria-controls="home" role="tab"
+                                       data-toggle="tab">Item Ledger</a></li>
                             </ul>
 
                             <!-- Tab panes -->
                             <div class="tab-content" style="text-align: center">
                                 <div role="tabpanel" class="tab-pane active" id="view{{ object.id }}">
                                 </div>
-                                <div role="tabpanel" class="tab-pane" id="profile">...</div>
-                                <div role="tabpanel" class="tab-pane" id="messages">...</div>
-                                <div role="tabpanel" class="tab-pane" id="settings">...</div>
                             </div>
 
                         </div>

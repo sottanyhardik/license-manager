@@ -108,7 +108,7 @@
                             <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
                                 {% if allotment.bl_detail %}{{ allotment.bl_detail }}{% else %}-{% endif %}</td>
                             <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
-                                {% if allotment.eta %}{{ allotment.eta }}{% else %}-{% endif %}</td>
+                                {% if allotment.estimated_arrival_date %}{{ allotment.estimated_arrival_date }}{% else %}-{% endif %}</td>
                             <td colspan="4"
                                 {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
                                 <table>
@@ -204,7 +204,7 @@
                         <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
                             {% if allotment.bl_detail %}{{ allotment.bl_detail }}{% else %}-{% endif %}</td>
                         <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
-                            {% if allotment.eta %}{{ allotment.eta }}{% else %}-{% endif %}</td>
+                            {% if allotment.estimated_arrival_date %}{{ allotment.estimated_arrival_date }}{% else %}-{% endif %}</td>
                         <td colspan="4"
                             {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
                             <table>

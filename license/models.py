@@ -53,6 +53,7 @@ class LicenseDetailsModel(models.Model):
     is_expired = models.BooleanField(default=False)
     is_individual = models.BooleanField(default=False)
     ge_file_number = models.IntegerField(default=0)
+    fob = models.IntegerField(default=0)
     created_on = models.DateField(auto_created=True)
     created_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, null=True, blank=True,
                                    related_name='dfia_created')
@@ -122,6 +123,9 @@ class LicenseDetailsModel(models.Model):
     @property
     def opening_balance(self):
         return self.export_license.all().aggregate(sum=Sum('cif_fc'))['sum']
+
+    def opening_fob(self):
+        return self.export_license.all().aggregate(sum=Sum('fob_inr'))['sum']
 
     def get_wheat(self):
         return self.import_license.filter(item__head__name__icontains='wheat').first().balance_quantity

@@ -22,7 +22,7 @@ class Command(BaseCommand):
         biscuit_list = []
         import datetime
         today = datetime.datetime.now()
-        date = today-datetime.timedelta(days=30)
+        date = today-datetime.timedelta(days=120)
         if status == 'expired':
             list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date)
         else:
@@ -74,7 +74,7 @@ class Command(BaseCommand):
 
 def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_other, not_found):
     for dfia in list_exclude:
-        if dfia.get_balance_cif() > 500:
+        if dfia.get_balance_cif() > 0:
             try:
                 if dfia.get_norm_class == 'E5':
                     dict_data = {

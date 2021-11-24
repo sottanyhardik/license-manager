@@ -89,9 +89,9 @@ class AllotmentModel(models.Model):
 
 class AllotmentItems(models.Model):
     item = models.ForeignKey('license.LicenseImportItemsModel', on_delete=models.CASCADE,
-                             related_name='allotment_details')
+                             related_name='allotment_details', null=True, blank=True)
     allotment = models.ForeignKey('allotment.AllotmentModel', on_delete=models.CASCADE,
-                                  related_name='allotment_details')
+                                  related_name='allotment_details', null=True, blank=True)
     cif_inr = models.FloatField(default=0.0)
     cif_fc = models.FloatField(default=0.0)
     qty = models.FloatField(default=0.0)

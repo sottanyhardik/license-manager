@@ -47,7 +47,7 @@ class AllotmentModel(models.Model):
 
     def __str__(self):
         if self.invoice:
-            return "{0} {1} {2} {3} {4}".format(self.item_name, self.company.name, str(self.invoice),str(self.required_quantity), self.eta)
+            return "{0} {1} {2} {3} {4}".format(self.item_name, self.company.name, str(self.invoice),str(self.required_quantity), self.estimated_arrival_date)
         else:
             return "{0} {1} {2}".format(self.item_name, self.company.name,
                                             str(self.required_quantity))

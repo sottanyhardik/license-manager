@@ -21,7 +21,7 @@ class AllotmentForm(forms.ModelForm):
     class Meta:
         model = models.AllotmentModel
         fields = ['company', 'type', 'required_quantity', 'unit_value_per_unit', 'item_name', 'contact_person',
-                  'contact_number', 'port','invoice','bl_detail','eta','estimated_arrival_date']
+                  'contact_number', 'port','invoice','bl_detail','estimated_arrival_date']
 
     def __init__(self, *args, **kwargs):
         super(AllotmentForm, self).__init__(*args, **kwargs)

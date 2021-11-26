@@ -30,7 +30,6 @@ class AllotmentModel(models.Model):
     contact_person = models.CharField(max_length=255, null=True, blank=True)
     contact_number = models.CharField(max_length=255, null=True, blank=True)
     invoice = models.CharField(max_length=255, null=True, blank=True)
-    eta = models.CharField(max_length=255, null=True, blank=True)
     estimated_arrival_date = models.DateField(null=True, blank=True)
     bl_detail = models.CharField(max_length=255, null=True, blank=True)
     port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, null=True, blank=True)

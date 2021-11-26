@@ -23,10 +23,7 @@ class Command(BaseCommand):
         import datetime
         today = datetime.datetime.now()
         date = today-datetime.timedelta(days=120)
-        list1 = None
-        if list1:
-            list_exclude = LicenseDetailsModel.objects.filter(license_number__in=list1)
-        elif status == 'expired':
+        if status == 'expired':
             list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date)
         else:
             list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date)

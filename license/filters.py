@@ -24,6 +24,7 @@ class LicenseDetailFilter(django_filters.FilterSet):
             'is_audit': Select(attrs={'class': 'form-control'}),
             'is_null': Select(attrs={'class': 'form-control'}),
             'is_expired': Select(attrs={'class': 'form-control'}),
+            'is_not_registered': Select(attrs={'class': 'form-control'}),
         }
         filter_overrides = {
             models.CharField: {

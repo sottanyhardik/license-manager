@@ -43,6 +43,7 @@ class LicenseDetailsModel(models.Model):
     user_restrictions = models.TextField(null=True, blank=True)
     ledger_date = models.DateField(null=True, blank=True)
     is_audit = models.BooleanField(default=False)
+    is_not_registered = models.BooleanField(default=False)
     is_null = models.BooleanField(default=False)
     is_self = models.BooleanField(default=True)
     is_au = models.BooleanField(default=False)

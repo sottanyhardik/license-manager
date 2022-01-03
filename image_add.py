@@ -9,7 +9,7 @@ image_list =glob.glob("IMG/*")
 for image in image_list:
     out_image = image.split('/')[-1].replace('.png','.pdf')
     c = canvas.Canvas(out_image)
-    c.drawImage(image,160,100,40,40)
+    c.drawImage(image,140,70,40,40)
     c.save()
 
 

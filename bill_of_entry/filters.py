@@ -1,3 +1,4 @@
+from django.db.models import Q
 import django_filters
 from django.db import models
 from django.forms import Select
@@ -28,7 +29,8 @@ class ListFilter(django_filters.Filter):
 
 class BillOfEntryFilter(django_filters.FilterSet):
     is_self = django_filters.BooleanFilter(method='check_self', label='All')
-    item_details__sr_number__license__license_number = ListFilter(field_name='item_details__sr_number__license__license_number', label='License Numbers')
+    item_details__sr_number__license__license_number = ListFilter(
+        field_name='item_details__sr_number__license__license_number', label='License Numbers')
     bill_of_entry_date = DateFromToRangeFilter(
         widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY', 'format': 'dd/mm/yyyy', 'type': 'date'}))
     is_invoice = django_filters.BooleanFilter(method='check_is_invoice', label='Is Invoice')
@@ -67,6 +69,6 @@ class BillOfEntryFilter(django_filters.FilterSet):
 
     def check_is_ooc(self, queryset, name, value):
         if value:
-            return queryset.exclude(ooc_date=None)
+            return queryset.exclude(Q(ooc_date=None) | Q(ooc_date='N.A.'))
         else:
-            return queryset.filter(ooc_date=None)
+            return queryset.filter(Q(ooc_date=None) | Q(ooc_date='N.A.'))

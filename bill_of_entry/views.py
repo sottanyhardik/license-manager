@@ -138,8 +138,8 @@ class BillOfEntryFetchView(FormView):
         context['csrftoken'] = csrftoken
         data = self.kwargs.get('data')
         context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(
-            Q(is_fetch=False) | Q(appraisement=None)).order_by(
-            'bill_of_entry_date', 'id').count()
+        Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
+        failed=5).count()
         context['remain_captcha'] = context['remain_count'] / 3
         return context
 

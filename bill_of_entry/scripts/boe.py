@@ -185,7 +185,8 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
 
 def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
     from bill_of_entry.models import BillOfEntryModel
-    data = BillOfEntryModel.objects.filter(Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None)).exclude(
+    data = BillOfEntryModel.objects.filter(
+        Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
         failed=5).order_by('-id').first()
     if data:
         print("'''''''''''''''''\n{0}''''''''''''''''''''".format(data.bill_of_entry_number))

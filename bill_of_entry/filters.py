@@ -32,6 +32,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
     bill_of_entry_date = DateFromToRangeFilter(
         widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY', 'format': 'dd/mm/yyyy', 'type': 'date'}))
     is_invoice = django_filters.BooleanFilter(method='check_is_invoice', label='Is Invoice')
+    is_ooc = django_filters.BooleanFilter(method='check_is_ooc', label='Is OOC')
 
     class Meta:
         model = bill_of_entry.BillOfEntryModel
@@ -59,9 +60,13 @@ class BillOfEntryFilter(django_filters.FilterSet):
         return queryset.filter(item_details__sr_number__license__is_self=True).distinct()
 
     def check_is_invoice(self, queryset, name, value):
-        from datetime import datetime, timedelta
-        expiry_limit = datetime.today()
         if value:
             return queryset.exclude(invoice_no=None)
         else:
             return queryset.filter(invoice_no=None)
+
+    def check_is_ooc(self, queryset, name, value):
+        if value:
+            return queryset.exclude(ooc_date=None)
+        else:
+            return queryset.filter(ooc_date=None)

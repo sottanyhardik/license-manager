@@ -98,13 +98,16 @@ def be_details(cookies, data):
                 dict_data['iec'] = soup.findAll('td')[index].text.replace('\xa0', '')
             elif ddata.text == 'CHA No.':
                 dict_data['cha'] = soup.findAll('td')[index].text.replace('\xa0', '')
-        response = requests.post('https://www.enquiry.icegate.gov.in/enquiryatices/BE_IcesCURRST_action', headers=headers,
+        response = requests.post('https://www.enquiry.icegate.gov.in/enquiryatices/BE_IcesCURRST_action',
+                                 headers=headers,
                                  cookies=cookies, data=data, verify=False)
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(response.content.decode('utf-8'), 'html.parser')
         for index, data in enumerate(soup.findAll('th')):
             if data.text == 'APPRAISEMENT':
                 dict_data['appraisement'] = soup.findAll('td')[index].text.replace('\xa0', '')
+            elif data.text == 'OOC DATE':
+                dict_data['ooc_date'] = soup.findAll('td')[index].text.replace('\xa0', '')
         return dict_data
     except Exception as e:
         print(e)
@@ -151,7 +154,8 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
             data.save()
             return True
         date = data.bill_of_entry_date.strftime('%Y/%m/%d')
-        if request_bill_of_entry(cookies, csrftoken, data_dict[data.port.code], data.bill_of_entry_number, date, captcha):
+        if request_bill_of_entry(cookies, csrftoken, data_dict[data.port.code], data.bill_of_entry_number, date,
+                                 captcha):
             dict_data = {
                 'BE_NO': data.bill_of_entry_number,
                 'BE_DT': date,
@@ -163,7 +167,8 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
                 from core.models import CompanyModel
                 company, bool = CompanyModel.objects.get_or_create(iec=dict_sb_data['iec'])
                 from bill_of_entry.models import BillOfEntryModel
-                BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(cha=dict_sb_data['cha'],company=company, is_fetch=True)
+                BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(
+                    cha=dict_sb_data['cha'], company=company, is_fetch=True)
             else:
                 data.failed = data.failed + 1
                 data.save()
@@ -180,7 +185,8 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
 
 def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
     from bill_of_entry.models import BillOfEntryModel
-    data = BillOfEntryModel.objects.filter(Q(is_fetch=False)|Q(appraisement=None)).exclude(failed=5).order_by('id').first()
+    data = BillOfEntryModel.objects.filter(Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None)).exclude(
+        failed=5).order_by('id').first()
     if data:
         print("'''''''''''''''''\n{0}''''''''''''''''''''".format(data.bill_of_entry_number))
         if not data:
@@ -190,7 +196,8 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
             data.save()
             return True
         date = data.bill_of_entry_date.strftime('%Y/%m/%d')
-        if request_bill_of_entry(cookies, csrftoken, data_dict[data.port.code], data.bill_of_entry_number, date, captcha):
+        if request_bill_of_entry(cookies, csrftoken, data_dict[data.port.code], data.bill_of_entry_number, date,
+                                 captcha):
             dict_data = {
                 'BE_NO': data.bill_of_entry_number,
                 'BE_DT': date,
@@ -203,12 +210,14 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
                 company, bool = CompanyModel.objects.get_or_create(iec=dict_sb_data['iec'])
                 from bill_of_entry.models import BillOfEntryModel
                 BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(company=company,
-                                                                                               is_fetch=True)
+                                                                                                       is_fetch=True)
                 boe = BillOfEntryModel.objects.get(bill_of_entry_number=data.bill_of_entry_number)
                 if 'cha' in list(dict_sb_data.keys()):
                     boe.cha = dict_sb_data['cha']
                 if 'appraisement' in list(dict_sb_data.keys()):
                     boe.appraisement = dict_sb_data['appraisement']
+                if 'ooc_date' in list(dict_sb_data.keys()):
+                    boe.ooc_date = dict_sb_data['ooc_date']
                 boe.save()
             else:
                 data.failed = data.failed + 1
@@ -221,4 +230,3 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha):
         return True
     else:
         return False
-

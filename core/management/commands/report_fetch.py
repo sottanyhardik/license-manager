@@ -22,7 +22,7 @@ class Command(BaseCommand):
         biscuit_list = []
         import datetime
         today = datetime.datetime.now()
-        date = today-datetime.timedelta(days=120)
+        date = datetime.datetime.strptime('1 1 2019', '%d %m %Y')
         if status == 'expired':
             list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date)
         else:

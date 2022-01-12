@@ -17,6 +17,7 @@ class BillOfEntryModel(models.Model):
     is_fetch = models.BooleanField(default=False)
     failed = models.IntegerField(default=0)
     appraisement = models.CharField(max_length=255, null=True, blank=True)
+    ooc_date = models.CharField(max_length=255, null=True, blank=True)
     cha = models.CharField(max_length=255, null=True, blank=True)
     comments = models.TextField(null=True, blank=True)
     admin_search_fields = ['bill_of_entry_number', ]

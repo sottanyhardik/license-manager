@@ -47,9 +47,9 @@ class LicenseDetailFilter(django_filters.FilterSet):
         from datetime import datetime, timedelta
         expiry_limit = datetime.today()
         if value:
-            return queryset.filter(license_expiry_date__lt=expiry_limit).order_by('license_expiry_date')
+            return queryset.filter(license_expiry_date__lt=expiry_limit).order_by('-license_expiry_date')
         else:
-            return queryset.filter(license_expiry_date__gte=expiry_limit).order_by('license_expiry_date')
+            return queryset.filter(license_expiry_date__gte=expiry_limit).order_by('-license_expiry_date')
 
     def check_individual(self, queryset, name, value):
         if value:

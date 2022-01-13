@@ -66,6 +66,9 @@ class LicenseDetailsModel(models.Model):
     def __str__(self):
         return self.license_number
 
+    class Meta:
+        ordering = ('license_expiry_date',)
+
     @property
     def get_norm_class(self):
         return ','.join([export.norm_class.norm_class for export in self.export_license.all() if export.norm_class])
@@ -375,7 +378,7 @@ class LicenseImportItemsModel(models.Model):
     admin_search_fields = ('license__license_number',)
 
     class Meta:
-        ordering = ['serial_number']
+        ordering = ['license__license_expiry_date','serial_number']
 
     def __str__(self):
         return "{0}-{1}".format(str(self.license), str(self.serial_number))

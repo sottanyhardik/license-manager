@@ -14,11 +14,13 @@ BOOLEAN_CHOICES = (
 
 class LicenseDetailFilter(django_filters.FilterSet):
     is_individual = django_filters.BooleanFilter(method='check_individual', label='Is Individual')
+    is_expired = django_filters.BooleanFilter(method='check_expired', label='Is Expired')
+    is_null = django_filters.BooleanFilter(method='check_null', label='Is Null')
 
     class Meta:
         model = lic_model.LicenseDetailsModel
         fields = ['license_number', 'import_license__item__name', 'exporter', 'is_null', 'is_au',
-                  'is_incomplete','is_expired','is_active','is_not_registered']
+                  'is_incomplete', 'is_expired', 'is_active', 'is_not_registered']
         widgets = {
             'exporter': Select(attrs={'class': 'form-control'}),
             'is_audit': Select(attrs={'class': 'form-control'}),
@@ -45,15 +47,25 @@ class LicenseDetailFilter(django_filters.FilterSet):
         from datetime import datetime, timedelta
         expiry_limit = datetime.today()
         if value:
-            return queryset.filter(license_expiry_date__lt=expiry_limit)
+            return queryset.filter(license_expiry_date__lt=expiry_limit).order_by('license_expiry_date')
         else:
-            return queryset.filter(license_expiry_date__gte=expiry_limit)
+            return queryset.filter(license_expiry_date__gte=expiry_limit).order_by('license_expiry_date')
 
     def check_individual(self, queryset, name, value):
         if value:
             return queryset.filter(import_license__item_details__cif_fc=.01).distinct()
         else:
             return queryset
+
+    def check_null(self, queryset, name, value):
+        for set in queryset:
+            if not set.balance_cif == set.get_balance_cif():
+                set.balance_cif = set.get_balance_cif()
+                set.save()
+        if value:
+            return queryset.filter(balance_cif__lte=100).distinct()
+        else:
+            return queryset.filter(balance_cif__gte=100).distinct()
 
 
 class LicenseReportFilter(django_filters.FilterSet):
@@ -111,7 +123,7 @@ class LicenseInwardOutwardFilter(django_filters.FilterSet):
     class Meta:
         model = lic_model.LicenseInwardOutwardModel
         fields = ('date', 'license__ge_file_number', 'license', 'status', 'office', 'description',
-            'amd_sheets_number', 'copy', 'annexure', 'tl', 'aro', 'along_with')
+                  'amd_sheets_number', 'copy', 'annexure', 'tl', 'aro', 'along_with')
         filter_overrides = {
             models.CharField: {
                 'filter_class': django_filters.CharFilter,
@@ -126,5 +138,3 @@ class LicenseInwardOutwardFilter(django_filters.FilterSet):
                 },
             }
         }
-
-

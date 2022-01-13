@@ -30,7 +30,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
     class Meta:
         model = license_model.LicenseImportItemsModel
         fields = ['license__license_number', 'item__name', 'license__notification_number',
-                  'license__export_license__norm_class']
+                  'license__export_license__norm_class', 'hs_code__hs_code']
         widgets = {
             'license__notification_number': Select(attrs={'class': 'form-control'}),
         }
@@ -65,7 +65,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
         from datetime import datetime, timedelta
         expiry_limit = datetime.today() - timedelta(days=30)
         if value:
-            return queryset.filter(license__license_expiry_date__lt=expiry_limit)
+            return queryset.filter(license__license_expiry_date__lt=expiry_limit).order_by('license__license_expiry_date')
         else:
             return queryset.filter(license__license_expiry_date__gte=expiry_limit)
 

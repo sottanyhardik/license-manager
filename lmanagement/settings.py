@@ -46,7 +46,10 @@ INSTALLED_APPS = [
     'bill_of_entry.apps.BillOfEntryConfig',
     'allotment.apps.AllotmentConfig',
     'license_movement.apps.LicenseMovementConfig',
+    'ebrc.apps.EbrcConfig',
+    'shipping_bill.apps.ShippingBillConfig',
     'django.contrib.humanize',
+    'material',
 ]
 
 MIDDLEWARE = [

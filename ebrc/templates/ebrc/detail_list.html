@@ -3,8 +3,10 @@
 {% load render_table from django_tables2 %}
 {% load export_url from django_tables2 %}
 {% block content %}
-        <a href="{% export_url 'csv' %}" class="btn btn-default red-text">
+    <div class="card card-body">
+        <a href="{% export_url 'csv' %}" class="btn btn-info red-text">
             Download
         </a>
-    {% render_table table %}
+        {% render_table table %}
+    </div>
 {% endblock %}

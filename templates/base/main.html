@@ -218,6 +218,25 @@
                 </li>
                 <hr style="margin:0;border-top:1px solid orangered">
                 <li>
+                    <a href="#">E BRC</a>
+                    <ul style="display: none;">
+                        <li>
+                            <a href="{% url 'ebrc_main' %}?is_invoice=false">
+                                <i class="fa fa-list"></i>
+                                <span>E BRC Request</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'ebrc_list' %}?port=513">
+                                <i class="fa fa-list"></i>
+                                <span>EBRC List</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                <hr style="margin:0;border-top:1px solid orangered">
+                <li>
                     <a href="#">Reports</a>
                     <ul style="display: none;">
                         <li>

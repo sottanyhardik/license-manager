@@ -1,5 +1,7 @@
 from __future__ import absolute_import, unicode_literals
+from django.db.models import Q
 
+from bill_of_entry.scripts.boe import request_bill_of_entry, be_details
 from scripts.dgft_shipping_bill import get_shipping_dgft_cookies, get_dgft_shipping_details
 from .celery import app
 
@@ -36,7 +38,7 @@ def fetch_file(data,cookies,captcha):
 def dgft_shipping_details(data):
     from shipping_bill.models import FileUploadDetails
     file = FileUploadDetails.objects.get(pk=data)
-    from shipping_bill.models import ShippingDetails
+    from ebrc.models import ShippingDetails
     shipping_list = ShippingDetails.objects.filter(file_id=data)
     cookie = get_shipping_dgft_cookies()
     for shipping in shipping_list:
@@ -56,3 +58,51 @@ def dgft_shipping_details(data):
         else:
             pass
 
+
+@app.task
+def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha, data_id):
+    from bill_of_entry.models import BillOfEntryModel
+    data = BillOfEntryModel.objects.get(id=data_id)
+    if data:
+        print("'''''''''''''''''\n{0}''''''''''''''''''''".format(data.bill_of_entry_number))
+        if not data:
+            return True
+        if not data.bill_of_entry_date:
+            data.failed = 5
+            data.save()
+            return True
+        date = data.bill_of_entry_date.strftime('%Y/%m/%d')
+        if request_bill_of_entry(cookies, csrftoken, data_dict[data.port.code], data.bill_of_entry_number, date,
+                                 captcha):
+            dict_data = {
+                'BE_NO': data.bill_of_entry_number,
+                'BE_DT': date,
+                'beTrack_location': data.port,
+                '': ''
+            }
+            dict_sb_data = be_details(cookies, dict_data)
+            if dict_sb_data:
+                from core.models import CompanyModel
+                company, bool = CompanyModel.objects.get_or_create(iec=dict_sb_data['iec'])
+                from bill_of_entry.models import BillOfEntryModel
+                BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(company=company,
+                                                                                                       is_fetch=True)
+                boe = BillOfEntryModel.objects.get(bill_of_entry_number=data.bill_of_entry_number)
+                if 'cha' in list(dict_sb_data.keys()):
+                    boe.cha = dict_sb_data['cha']
+                if 'appraisement' in list(dict_sb_data.keys()):
+                    boe.appraisement = dict_sb_data['appraisement']
+                if 'ooc_date' in list(dict_sb_data.keys()):
+                    boe.ooc_date = dict_sb_data['ooc_date']
+                boe.save()
+            else:
+                data.failed = data.failed + 1
+                data.save()
+                print(False)
+        else:
+            data.failed = data.failed + 1
+            data.save()
+            print(False)
+        return True
+    else:
+        return False

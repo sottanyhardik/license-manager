@@ -10,7 +10,7 @@ from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import UpdateWithInlinesView, InlineFormSetFactory
 
 from bill_of_entry.models import RowDetails
-from bill_of_entry.scripts.boe import fetch_data_to_model
+from lmanagement.tasks import fetch_data_to_model
 from . import forms, tables, filters
 from . import models as bill_of_entry
 
@@ -149,13 +149,14 @@ class BillOfEntryFetchView(FormView):
         cookies = json.loads(self.request.POST.get('cookies'))
         csrftoken = self.request.POST.get('csrftoken')
         status = True
-        while status:
+        from bill_of_entry.models import BillOfEntryModel
+        data_list = BillOfEntryModel.objects.filter(
+            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
+            failed=5).order_by('bill_of_entry_date')
+        for data in data_list:
             from bill_of_entry.scripts.utils import port_dict
-            status = fetch_data_to_model(cookies, csrftoken, port_dict, kwargs, captcha)
-        if bill_of_entry.BillOfEntryModel.objects.filter(is_fetch=False).exclude(failed=5).exists():
-            return HttpResponseRedirect(reverse('bill-of-entry-list'))
-        else:
-            return HttpResponseRedirect(reverse('bill-of-entry-list'))
+            status = fetch_data_to_model.delay(cookies, csrftoken, port_dict, kwargs, captcha, data.pk)
+        return HttpResponseRedirect(reverse('bill-of-entry-list'))
 
 
 class BillOfEntryDeleteView(DeleteView):

@@ -138,8 +138,7 @@ class BillOfEntryFetchView(FormView):
         context['csrftoken'] = csrftoken
         data = self.kwargs.get('data')
         context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(
-        Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
-        failed=5).count()
+        Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).count()
         context['remain_captcha'] = context['remain_count'] / 3
         return context
 
@@ -150,9 +149,7 @@ class BillOfEntryFetchView(FormView):
         csrftoken = self.request.POST.get('csrftoken')
         status = True
         from bill_of_entry.models import BillOfEntryModel
-        data_list = BillOfEntryModel.objects.filter(
-            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
-            failed=5).order_by('bill_of_entry_date')
+        data_list = BillOfEntryModel.objects.filter(Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).order_by('bill_of_entry_date')
         for data in data_list:
             from bill_of_entry.scripts.utils import port_dict
             status = fetch_data_to_model.delay(cookies, csrftoken, port_dict, kwargs, captcha, data.pk)

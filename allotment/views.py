@@ -328,9 +328,9 @@ class GenerateTransferLetterView(FormView):
                     'company_address_1': self.request.POST.get('company_address_line1'),
                     'company_address_2': self.request.POST.get('company_address_line2'),
                     'today': str(datetime.now().date()),
-                    'license': item.license_number, 'license_date': item.license_date,
+                    'license': item.license_number, 'license_date': item.license_date.strftime("%d/%m/%Y"),
                     'file_number': item.file_number, 'quantity': item.qty,
-                    'v_allotment_inr': round(item.cif_fc * 72, 2),
+                    'v_allotment_inr': round(item.cif_fc * 75.4, 2),
                     'exporter_name': item.exporter.name,
                     'v_allotment_usd': item.cif_fc} for item in
                     allotment.allotment_details.all()]

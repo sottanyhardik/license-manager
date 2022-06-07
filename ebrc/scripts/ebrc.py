@@ -46,17 +46,16 @@ def get_list_shipping_bills(fetch_cookies, iec, ifsc, captext, file, shipping_bi
             'JSESSIONID': fetch_cookies,
         }
         headers = {
-            'Host': 'dgftebrc.nic.in:8100',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
             'Cache-Control': 'max-age=0',
+            'Connection': 'keep-alive',
             'Origin': 'http://dgftebrc.nic.in:8100',
-            'Upgrade-Insecure-Requests': '1',
-            'DNT': '1',
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             'Referer': 'http://dgftebrc.nic.in:8100/BRCQueryTrade/index.jsp',
-            'Accept-Language': 'en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7',
-            'AlexaToolbar-ALX_NS_PH': 'AlexaToolbar/alx-4.0.3',
+            'Upgrade-Insecure-Requests': '1',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36',
         }
+
         data = {
             'iec': iec,
             'ifsc': ifsc,
@@ -70,10 +69,10 @@ def get_list_shipping_bills(fetch_cookies, iec, ifsc, captext, file, shipping_bi
             'brcstat': 'A',
             'utilstat': ' ',
             'captext': captext,
-            'B1': 'Show Details'
+            'B1': 'Show Details',
         }
-        response = requests.post('http://dgftebrc.nic.in:8100/BRCQueryTrade/brcIssuedTrade.jsp', headers=headers,
-                                 cookies=cookies, data=data)
+        response = requests.post('http://dgftebrc.nic.in:8100/BRCQueryTrade/brcIssuedTrade.jsp', cookies=cookies,
+                                 headers=headers, data=data, verify=False)
         soup = BeautifulSoup(response.content, 'html.parser')
         table = soup.findAll('table')[-1]
         if 'BRC No' in table.text:
@@ -94,7 +93,8 @@ def get_list_shipping_bills(fetch_cookies, iec, ifsc, captext, file, shipping_bi
                     ebrcNumb = tds[10].find("input", {"id": "ebrcNumb"}).get('value')
                     recid = tds[10].find("input", {"id": "recid"}).get('value')
                     iec = tds[10].find("input", {"id": "iec"}).get('value')
-                    shipping_bill, bool = ShippingDetails.objects.get_or_create(shipping_bill=shipping_bill_no, file_id=file)
+                    shipping_bill, bool = ShippingDetails.objects.get_or_create(shipping_bill=shipping_bill_no,
+                                                                                file_id=file)
                     shipping_bill.shipping_port = shipping_port
                     shipping_bill.shipping_date = datetime.datetime.strptime(shipping_date, '%d.%m.%Y')
                     shipping_bill.save()
@@ -106,14 +106,14 @@ def get_list_shipping_bills(fetch_cookies, iec, ifsc, captext, file, shipping_bi
                         brc_utilisation_status=brc_utilisation_status,
                         ebrcNumb=ebrcNumb
                     )
-                    ebrc.recid=recid
+                    ebrc.recid = recid
                     ebrc.save()
                     try:
                         directory = "media/brc/{0}/".format(str(file))
                         import os
                         if not os.path.exists(directory):
                             os.makedirs(directory)
-                        file_name = '{0}{1}_{2}.pdf'.format(directory,str(shipping_bill.shipping_bill),str(ebrc.id))
+                        file_name = '{0}{1}_{2}.pdf'.format(directory, str(shipping_bill.shipping_bill), str(ebrc.id))
                         print(file_name)
                         data = get_pdf(fetch_cookies, ebrcNumb, iec, recid, file_name)
                     except:
@@ -130,7 +130,8 @@ def get_list_shipping_bills(fetch_cookies, iec, ifsc, captext, file, shipping_bi
                     shipping_bill_no = tds[3].text.strip()
                     shipping_port = tds[4].text
                     shipping_date = tds[5].text
-                    shipping_bill, bool = ShippingDetails.objects.get_or_create(shipping_bill=shipping_bill_no, file_id=file)
+                    shipping_bill, bool = ShippingDetails.objects.get_or_create(shipping_bill=shipping_bill_no,
+                                                                                file_id=file)
                     shipping_bill.shipping_port = shipping_port
                     shipping_bill.shipping_date = datetime.datetime.strptime(shipping_date, '%d.%m.%Y')
                     shipping_bill.save()
@@ -172,6 +173,6 @@ def get_pdf(fetch_cookies, ebrcNumb, iec, recid, file_name):
     response = requests.post('http://dgftebrc.nic.in:8100/BRCQueryTrade/eBRCPrint.jsp', headers=headers,
                              cookies=cookies, data=data)
     import pdfkit
-    pdfkit\
+    pdfkit \
         .from_string(response.content.decode('utf-8'), file_name)
     return True

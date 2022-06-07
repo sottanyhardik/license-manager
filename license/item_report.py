@@ -11,7 +11,8 @@ from dateutil.relativedelta import relativedelta
 
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
-                 minimun_qty=500, minimun_value=500, date_range=None, notification_number=False, maximum_qty=None, item_name=None):
+                 minimun_qty=500, minimun_value=1000, date_range=None, notification_number=False, maximum_qty=None,
+                 item_name=None):
     if date_range:
         start = date_range.get('start')
         end = date_range.get('end')
@@ -197,7 +198,7 @@ def dietary_query(date_range=None):
         'license__export_license__old_quantity__gt': 1,
         'license__notification_number': N2015
     }]
-    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter, item_name ='DF')
+    queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter, item_name='DF')
     tables = query_set_table(tables, queryset, 'Notification 019/2015')
     and_or_filter = [{
         'license__notification_number': N2015
@@ -268,7 +269,8 @@ def juice_query(date_range=None):
 def packing_query(date_range=None):
     tables = []
     query_dict = {'item__head__name__icontains': 'Packing Material', 'is_restrict': False,
-                  'available_quantity__lte': 10000, 'license__export_license__norm_class__norm_class': 'E1'}
+                  'available_quantity__lte': 10000,'license__export_license__norm_class__norm_class':'E 132'}
+
     queryset = all_queryset(query_dict, date_range=date_range)
     tables = query_set_table(tables, queryset, 'Less than 10000 Kg')
 
@@ -881,18 +883,18 @@ def essential_oil_query(date_range=None):
     return tables
 
 
-def biscuits_2009_expired_all(date_range={'start':'2001-04-01','end':'2020-09-01'}):
+def biscuits_2009_expired_all(date_range={'start': '2001-04-01', 'end': '2020-09-01'}):
     from license.tables import LicenseBiscuitReportTable
     tables = [
-              {'label': 'Biscuits 098/2019 Notification Ravi Foods',
-               'table': generate_table(biscuit_2009(date_range, exclude_party=['ravi',]),
-                                       LicenseBiscuitReportTable)}]
+        {'label': 'Biscuits 098/2019 Notification Ravi Foods',
+         'table': generate_table(biscuit_2009(date_range, exclude_party=['ravi', ]),
+                                 LicenseBiscuitReportTable)}]
     return tables
 
 
-def confectinery_2009_expired_all(date_range={'start':'2001-04-01','end':'2020-09-01'}):
+def confectinery_2009_expired_all(date_range={'start': '2001-04-01', 'end': '2020-09-01'}):
     from license.tables import LicenseConfectineryReportTable
     tables = [{'label': 'Confectinery 098/2019 Notification',
-               'table': generate_table(confectinery_2009(date_range, exclude_party=['ravi',]),
+               'table': generate_table(confectinery_2009(date_range, exclude_party=['ravi', ]),
                                        LicenseConfectineryReportTable)}]
     return tables

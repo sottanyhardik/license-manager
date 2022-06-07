@@ -131,6 +131,9 @@ class LicenseDetailsModel(models.Model):
     def opening_fob(self):
         return self.export_license.all().aggregate(sum=Sum('fob_inr'))['sum']
 
+    def opening_cif_inr(self):
+        return self.export_license.all().aggregate(sum=Sum('cif_inr'))['sum']
+
     def get_wheat(self):
         return self.import_license.filter(item__head__name__icontains='wheat').first().balance_quantity
 
@@ -237,8 +240,7 @@ class LicenseDetailsModel(models.Model):
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
         if 'E1' in str(lic[0].norm_class):
             credit = credit * .02
-            imports = LicenseImportItemsModel.objects.filter(license=self).filter(
-                Q(item__head__name__icontains='other'))
+            imports = LicenseImportItemsModel.objects.filter(license=self).filter(Q(item__head__name__icontains='other'))
         else:
             credit = credit * .1
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(

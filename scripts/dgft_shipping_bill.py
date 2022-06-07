@@ -9,7 +9,7 @@ def get_shipping_dgft_cookies():
         'Accept-Language': 'en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7',
         'AlexaToolbar-ALX_NS_PH': 'AlexaToolbar/alx-4.0.3',
     }
-    response = requests.get('http://dgftcom.nic.in/licasp/sbdetformnew.asp', headers=headers)
+    response = requests.get('http://dgftebrc.nic.in:8100/BRCQueryTrade/index.jsp', headers=headers)
     return response.headers['Set-Cookie'].split('; ')[0]
 
 

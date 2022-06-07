@@ -1,0 +1,16 @@
+[program:lmanagement]
+command=/home/django/lmanagement/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 lmanagement.wsgi
+directory=/home/django/lmanagement
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/lmanagement.err.log
+stdout_logfile=/var/log/lmanagement.out.log
+
+[program:lmanagement_celery]
+command=/home/django/lmanagement/venv/bin/celery -A lmanagement worker -l info
+directory=/home/django/lmanagement
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/lmanagement.err.log
+stdout_logfile=/var/log/lmanagement.out.log
+

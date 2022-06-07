@@ -22,7 +22,7 @@ class Command(BaseCommand):
         biscuit_list = []
         import datetime
         today = datetime.datetime.now()
-        date = datetime.datetime.strptime('1 1 2019', '%d %m %Y')
+        date = datetime.datetime.strptime('1 1 2010', '%d %m %Y')
         if status == 'expired':
             list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date)
         else:
@@ -72,6 +72,14 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Report Generated for  "%s"' % status))
 
 
+def fetch_total(import_item):
+    total = 0
+    for iitem in import_item:
+        total = total + iitem.balance_quantity
+    return total
+
+
+
 def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_other, not_found):
     for dfia in list_exclude:
         if dfia.get_balance_cif() > 0:
@@ -112,74 +120,61 @@ def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_othe
                     if import_item.exists():
                         dict_data['HSN G'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['GLUTEN QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['GLUTEN QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='Palmolein')
                     if import_item.exists():
                         dict_data['HSN P'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['RBD QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['RBD QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='dietary fibre')
                     if import_item.exists():
                         dict_data['HSN D'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['DF QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['DF QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='food flavour')
                     if import_item.exists():
                         dict_data['HSN F'] = "'" + import_item[0].hs_code.hs_code
-                        total = 0
-                        dict_data['FF QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['FF QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='fruit')
                     if import_item.exists():
                         dict_data['HSN Fr'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['Fruit Cocoa QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['Fruit Cocoa QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(hs_code__hs_code__icontains='3502')
                     if import_item.exists():
                         dict_data['HSN WPC'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['WPC QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['WPC QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(hs_code__hs_code__icontains='04041020').exclude(
                         hs_code__hs_code__icontains='3502')
                     if import_item.exists():
                         dict_data['HSN SWP'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['SWP QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['SWP QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(
                         Q(item__head__name__icontains='Skimmed') | Q(item__head__name__icontains='milk')).exclude(
                         Q(hs_code__hs_code__icontains='3502') | Q(hs_code__hs_code__icontains='04041020'))
                     if import_item.exists():
                         total = 0
                         dict_data['HSN M&M O'] = "'" + import_item[0].hs_code.hs_code
-                        dict_data['M&M O QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['M&M O QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='sugar')
                     if import_item.exists():
                         total = 0
-                        dict_data['SUGAR QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['SUGAR QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='Leavening Agent')
                     if import_item.exists():
                         total = 0
-                        dict_data['Leavening Agent QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['Leavening Agent QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='pp')
                     if import_item.exists():
                         total = 0
-                        dict_data['PP QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['PP QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='paper & paper board')
                     if import_item.exists():
                         dict_data['HSN PAP'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['Paper & Paper Board'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['Paper & Paper Board'] = fetch_total(import_item)
                     biscuit_list.append(dict_data)
                 elif dfia.get_norm_class == 'E1':
                     dict_data = {
@@ -219,55 +214,46 @@ def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_othe
                     if import_item.exists():
                         dict_data['HSN F'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['FF QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['FF QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='juice')
                     if import_item.exists():
                         dict_data['HSN Juice'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['JUICE Qty'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['JUICE Qty'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='other')
                     if import_item.exists():
                         dict_data['Other'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['Other Qty'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['Other Qty'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='sugar')
                     if import_item.exists():
                         dict_data['HSN SU'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['SUGAR QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['SUGAR QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='citric acid')
                     if import_item.exists():
                         dict_data['HSN TARTARIC'] = "'" + import_item[0].hs_code.hs_code
                         total = 0
-                        dict_data['TARTARIC Qty'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['TARTARIC Qty'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='essential oil')
                     if import_item.exists():
                         total = 0
-                        dict_data['ESSENTIAL OIL QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['ESSENTIAL OIL QTY'] = fetch_total(import_item)
                         dict_data['HSN E'] = "'" + import_item[0].hs_code.hs_code
                     import_item = dfia.import_license.filter(item__head__name__icontains='emulsifier')
                     if import_item.exists():
                         total = 0
-                        dict_data['EMULSIFIER QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['EMULSIFIER QTY'] = fetch_total(import_item)
                         dict_data['HSN EM'] = "'" + import_item[0].hs_code.hs_code
                     import_item = dfia.import_license.filter(item__head__name__icontains='pp')
                     if import_item.exists():
                         total = 0
-                        dict_data['PP QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['PP QTY'] = fetch_total(import_item)
                         dict_data['HSN PP'] = "'" + import_item[0].hs_code.hs_code
                     import_item = dfia.import_license.filter(item__head__name__icontains='paper & paper board')
                     if import_item.exists():
                         total = 0
-                        dict_data['Paper & Paper Board'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['Paper & Paper Board'] = fetch_total(import_item)
                         dict_data['HSN PAP'] = "'" + import_item[0].hs_code.hs_code
                     conc_list.append(dict_data)
                 elif dfia.get_norm_class == 'C969':
@@ -289,28 +275,23 @@ def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_othe
                     import_item = dfia.import_license.filter(item__name__icontains='Bearing')
                     if import_item.exists():
                         total = 0
-                        dict_data['Bearing QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['Bearing QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__name__icontains='Internal Combustion')
                     if import_item.exists():
                         total = 0
-                        dict_data['IC QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['IC QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__name__icontains='Valves')
                     if import_item.exists():
                         total = 0
-                        dict_data['Valves QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['Valves QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__name__icontains='Relevant Alloy Steel')
                     if import_item.exists():
                         total = 0
-                        dict_data['Alloy Steel QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['Alloy Steel QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__name__icontains='Relevant Hot Rolled')
                     if import_item.exists():
                         total = 0
-                        dict_data['Relevant Hot Rolled/ Cold Rolled Steel QTY'] = sum(
-                            [total := total + import_item.balance_quantity for import_item in import_item])
+                        dict_data['Relevant Hot Rolled/ Cold Rolled Steel QTY'] = fetch_total(import_item)
                     steel_other.append(dict_data)
                 else:
                     dict_data = {

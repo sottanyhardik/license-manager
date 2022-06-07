@@ -2,6 +2,7 @@ import csv
 from django.db.models import Sum
 from core.management.commands.report_fetch import fetch_total
 from license.models import LicenseDetailsModel
+from django.db.models import Q
 
 
 def fetch_data(list1):
@@ -26,363 +27,399 @@ def fetch_data(list1):
                 data_dict['Notf No'] = dfia.notification_number
                 data_dict['TOTAL CIF'] = float(dfia.opening_balance)
                 data_dict['BAL CIF'] = float(dfia.get_balance_cif())
-                data_dict['2% of CIF'] = int(dfia.opening_balance * .02)
-                data_dict['2% of CIF Balance'] = dfia.get_per_cif()
-                data_dict['5% of CIF'] = int(dfia.opening_balance * .05)
-                data_dict['5% of CIF Balance'] = dfia.get_per_essential_oil()
+                data_dict['10% of CIF'] = int(dfia.opening_balance * .1)
+                data_dict['10% of CIF Balance'] = dfia.get_per_cif()
                 data_dict['Is Individual'] = dfia.is_individual
-                data_dict['Is Conversion'] = ""
                 if dfia.export_license.all().first().old_quantity != 0.0 or dfia.notification_number == '098/2009':
-                    data_dict['2% of CIF Utilized'] = 0
-                    data_dict['2% of CIF Balance'] = 0
-                    data_dict['5% of CIF Utilized'] = 0
-                    data_dict['5% of CIF Balance'] = 0
-                    data_dict['2% of CIF'] = 0
-                    data_dict['5% of CIF'] = 0
+                    data_dict['10% of CIF Utilized'] = 0
+                    data_dict['10% of CIF Balance'] = 0
+                    data_dict['10% of CIF'] = 0
                     if dfia.export_license.all().first().old_quantity != 0.0:
                         data_dict['Is Conversion'] = True
                 else:
-                    data_dict['2% of CIF Utilized'] = int(dfia.opening_balance * .02) - data_dict['2% of CIF Balance']
-                    data_dict['5% of CIF Utilized'] = data_dict['5% of CIF'] - data_dict['5% of CIF Balance']
-                import_item = dfia.import_license.filter(item__head__name__icontains='juice')
+                    data_dict['10% of CIF Utilized'] = int(dfia.opening_balance * .1) - data_dict['10% of CIF Balance']
+                import_item = dfia.import_license.filter(item__head__name__icontains='wheat')
                 if import_item.exists():
-                    data_dict['HSN Juice'] = "'" + import_item[0].hs_code.hs_code
+                    data_dict['HSN G'] = "'" + import_item[0].hs_code.hs_code
                     total = 0
-                    data_dict['BAL JUICE Qty'] = fetch_total(import_item)
-                    data_dict['OLD JUICE Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
-                    data_dict['Total JUICE Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-                import_item = dfia.import_license.filter(item__head__name__icontains='other')
+                    data_dict['BAL GLUTEN QTY'] = fetch_total(import_item)
+                    data_dict['OLD GLUTEN Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
+                    data_dict['Total GLUTEN Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
+                import_item = dfia.import_license.filter(item__head__name__icontains='Palmolein')
                 if import_item.exists():
-                    data_dict['Other'] = "'" + import_item[0].hs_code.hs_code
+                    data_dict['HSN P'] = "'" + import_item[0].hs_code.hs_code
                     total = 0
-                    data_dict['BAL Other Qty'] = fetch_total(import_item)
-                    data_dict['OLD Other Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
-                    data_dict['Total Other Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-                import_item = dfia.import_license.filter(item__head__name__icontains='citric acid')
+                    data_dict['BAL RBD QTY'] = fetch_total(import_item)
+                    data_dict['Total RBD Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
+                import_item = dfia.import_license.filter(item__head__name__icontains='dietary fibre')
                 if import_item.exists():
-                    data_dict['HSN TARTARIC'] = "'" + import_item[0].hs_code.hs_code
+                    data_dict['HSN DF'] = "'" + import_item[0].hs_code.hs_code
                     total = 0
-                    data_dict['BAL TARTARIC Qty'] = fetch_total(import_item)
-                    data_dict['OLD TARTARIC Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
-                    data_dict['Total TARTARIC Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-                import_item = dfia.import_license.filter(item__head__name__icontains='essential oil')
+                    data_dict['BAL DF QTY'] = fetch_total(import_item)
+                    data_dict['OLD DF Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
+                    data_dict['Total DF Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
+                import_item = dfia.import_license.filter(item__head__name__icontains='food flavour')
+                if import_item.exists():
+                    data_dict['HSN FF'] = "'" + import_item[0].hs_code.hs_code
+                    data_dict['BAL FF QTY'] = fetch_total(import_item)
+                    data_dict['OLD FF Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
+                    data_dict['Total FF Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
+                import_item = dfia.import_license.filter(item__head__name__icontains='fruit')
+                if import_item.exists():
+                    data_dict['HSN Fr'] = "'" + import_item[0].hs_code.hs_code
+                    data_dict['BAL FC QTY'] = fetch_total(import_item)
+                    data_dict['OLD FC Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
+                    data_dict['Total FC Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
+                import_item = dfia.import_license.filter(hs_code__hs_code__icontains='3502')
+                if import_item.exists():
+                    data_dict['HSN WPC'] = "'" + import_item[0].hs_code.hs_code
+                    data_dict['BAL WPC QTY'] = fetch_total(import_item)
+                    data_dict['Total WPC Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
+                import_item = dfia.import_license.filter(hs_code__hs_code__icontains='04041020').exclude(
+                    hs_code__hs_code__icontains='3502')
+                if import_item.exists():
+                    data_dict['HSN SWP'] = "'" + import_item[0].hs_code.hs_code
+                    data_dict['BAL SWP QTY'] = fetch_total(import_item)
+                    data_dict['Total SWP Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
+                import_item = dfia.import_license.filter(
+                    Q(item__head__name__icontains='Skimmed') | Q(item__head__name__icontains='milk')).exclude(
+                    Q(hs_code__hs_code__icontains='3502') | Q(hs_code__hs_code__icontains='04041020'))
                 if import_item.exists():
                     total = 0
-                    data_dict['BAL ESSENTIAL OIL QTY'] = fetch_total(import_item)
-                    data_dict['HSN E'] = "'" + import_item[0].hs_code.hs_code
-                    data_dict['OLD ESSENTIAL OIL Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
-                    data_dict['Total ESSENTIAL OIL Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-
+                    data_dict['BAL M&M Oth QTY'] = fetch_total(import_item)
+                    data_dict['Total M&M Oth QTY'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
+                import_item = dfia.import_license.filter(item__head__name__icontains='sugar')
+                if import_item.exists():
+                    total = 0
+                    data_dict['BAL Sugar QTY'] = fetch_total(import_item)
+                    data_dict['Total Sugar QTY'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
+                import_item = dfia.import_license.filter(item__head__name__icontains='Leavening Agent')
+                if import_item.exists():
+                    data_dict['BAL Leavening Agent QTY'] = fetch_total(import_item)
+                    data_dict['Total Leavening Agent QTY'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
                 import_item = dfia.import_license.filter(item__head__name__icontains='pp')
                 if import_item.exists():
-                    total = 0
-                    data_dict['PP QTY'] = fetch_total(import_item)
                     data_dict['HSN PP'] = "'" + import_item[0].hs_code.hs_code
+                    data_dict['BAL PP QTY'] = fetch_total(import_item)
+                    data_dict['Total PP QTY'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
                 import_item = dfia.import_license.filter(item__head__name__icontains='paper & paper board')
                 if import_item.exists():
-                    total = 0
-                    data_dict['Paper & Paper Board'] = fetch_total(import_item)
                     data_dict['HSN PAP'] = "'" + import_item[0].hs_code.hs_code
-                else:
-                    data_dict['Paper & Paper Board'] = 0
-                    data_dict['HSN PAP'] = ''
+                    data_dict['BAL PAP QTY'] = fetch_total(import_item)
+                    data_dict['Total PAP QTY'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
         except Exception as e:
             print(e)
         conf_list.append(data_dict)
     return conf_list
 
 
-def generate_excel(conf_list):
-    with open('conf.csv', 'w', newline='') as csvfile:
+def generate_excel(data_list):
+    with open('bisc.csv', 'w', newline='') as csvfile:
         fieldnames = ['DFIA No', 'DFIA Dt', 'DFIA Exp', 'Exporter', 'PORT', 'Notf No', 'Ledger Date', 'TOTAL CIF',
-                      'BAL CIF', 'HSN Juice', 'Total JUICE Qty', 'OLD JUICE Qty', 'BAL JUICE Qty', 'Other',
-                      'Total Other Qty', 'OLD Other Qty', 'BAL Other Qty',
-                      '2% of CIF', '2% of CIF Utilized', '2% of CIF Balance', 'HSN TARTARIC','Total TARTARIC Qty','OLD TARTARIC Qty', 'BAL TARTARIC Qty',
-                      'HSN E',
-                      'Total ESSENTIAL OIL Qty','OLD ESSENTIAL OIL Qty','BAL ESSENTIAL OIL QTY', '5% of CIF', '5% of CIF Utilized', '5% of CIF Balance', 'HSN PP',
-                      'PP QTY',
-                      'HSN PAP', 'Paper & Paper Board', 'Is Individual', 'Is Conversion']
+                      'BAL CIF',
+                      'HSN G', 'Total GLUTEN Qty', 'OLD GLUTEN Qty', 'BAL GLUTEN QTY',
+                      'HSN P', 'Total RBD Qty', 'BAL RBD QTY',
+                      'HSN DF', 'Total DF Qty', 'OLD DF Qty', 'BAL DF QTY',
+                      'HSN FF', 'Total FF Qty', 'OLD FF Qty', 'BAL FF QTY',
+                      'HSN Fr', 'BAL FC QTY', 'OLD FC Qty', 'Total FC Qty',
+                      '10% of CIF', '10% of CIF Utilized', '10% of CIF Balance',
+                      'HSN WPC', 'Total WPC Qty', 'BAL WPC QTY',
+                      'HSN SWP', 'Total SWP Qty', 'BAL SWP QTY',
+                      'Total M&M Oth QTY', 'BAL M&M Oth QTY',
+                      'Total Sugar QTY', 'BAL Sugar QTY',
+                      'Total Leavening Agent QTY', 'BAL Leavening Agent QTY',
+                      'HSN PP', 'Total PP QTY', 'BAL PP QTY',
+                      'HSN PAP', 'Total PAP QTY', 'BAL PAP QTY',
+                      'Is Individual', 'Is Conversion']
+
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        for data_dict in conf_list:
+        for data_dict in data_list:
             writer.writerow(data_dict)
 
 
 def split_list():
-    abc = """1310049493
-    1310049613
-    1310049614
-    1310049615
-    1310049729
-    1310049730
-    1310049731
-    5610000027
-    5610000028
-    0310597347
-    0310597349
-    0310630708
-    0310630718
-    0310630728
-    0310633029
-    0310636056
-    0310636655
-    0310636663
-    0310636907
-    0310637421
-    0310641460
-    0310641469
-    0310644611
-    0310646062
-    0310647752
-    0310647753
-    0310647815
-    0310647817
-    0310650508
-    0310650527
-    0310661583
-    0310662034
-    0310662039
-    0310662215
-    0310662266
-    0310662899
-    0310664328
-    0310664391
-    0310664984
-    0310664990
-    0310664996
-    0310666396
-    0310666397
-    0310666615
-    0310668480
-    0310668515
-    0310670519
-    0310672125
-    0310680626
-    0310680666
-    0310681169
-    0310681423
-    0310681614
-    0310682293
-    0310683006
-    0310688679
-    0310688738
-    0310689110
-    0310695781
-    0310701906
-    0310702191
-    0310704333
-    0310705160
-    0310708920
-    0310709467
-    0310710902
-    0310710939
-    0310717723
-    0310719625
-    0310720147
-    0310720614
-    0310725206
-    0310727810
-    0310729488
-    0310732839
-    0310734181
-    0310734213
-    0310736181
-    0310736639
-    0310736984
-    0310737004
-    0310737558
-    0310737866
-    0310738219
-    0310738224
-    0310738485
-    0310738493
-    0310739005
-    0310739236
-    0310740474
-    0310740548
-    0310741126
-    0310741140
-    0310741319
-    0310741379
-    0310741564
-    0310742675
-    0310757968
-    0310766935
-    0310776850
-    0310776851
-    0310776854
-    0310782452
-    0310791395
-    0310793650
-    0310817639
-    0310824203
-    0310824205
-    0310825235
-    0310825251
-    0310825276
-    0310825596
-    0310826413
-    0310827444
-    0310828013
-    0310828052
-    0310828053
-    0310828054
-    0310828181
-    0310828182
-    0310828186
-    0310829056
-    0310829058
-    0310829894
-    0310829957
-    0310829977
-    0310829979
-    0310829991
-    0310830033
-    0310830036
-    0310830088
-    0310830434
-    0310830463
-    0310830479
-    0310831630
-    0310831825
-    0310831827
-    0310831829
-    0310831830
-    0310831831
-    0310831880
-    0310832148
-    0310832398
-    0310832430
-    0310832432
-    0310832433
-    0310832464
-    0310832769
-    0310833047
-    0310833141
-    0310833286
-    0310833303
-    0310833304
-    0310833305
-    0310833310
-    0310833321
-    0310833322
-    0310833701
-    0310833704
-    0310833793
-    0310833996
-    0310834151
-    0310834153
-    0310834296
-    0310834611
-    0310834613
-    0310834614
-    0310834746
-    0310834825
-    0310834894
-    0310834896
-    0310834960
-    0310834962
-    0310834967
-    0310834979
-    0310834980
-    0310835112
-    0310835198
-    0310835231
-    0310835310
-    0310835311
-    0310835515
-    0310835516
-    0310835522
-    0310835561
-    0310835562
-    0310835584
-    0310837138
-    0310837230
-    0310837231
-    0310837441
-    0310837555
-    0310837898
-    0310837955
-    0310837958
-    0310837961
-    0310838034
-    0310838036
-    0310838037
-    0310838039
-    0310838099
-    0310838176
-    0310838205
-    0310838320
-    0310838322
-    0310838326
-    0310838414
-    0310838475
-    0310838478
-    0310838697
-    0310838758
-    0310838862
-    0310838869
-    0310838966
-    0310839062
-    0310839069
-    0310839116
-    0310839125
-    0310839139
-    0310839460
-    0310839541
-    0310839542
-    0310839558
-    0310839625
-    0310839650
-    0311001739
-    0311002880
-    0311004194
-    0311004700
-    0311004734
-    0311004896
-    0311004899
-    0311004902
-    0311004904
-    0311004986
-    0311005000
-    0311005034
-    0311005265
-    0311005292
-    0311005308
-    0311005309
-    0311005358
-    0311005359
-    0311005481
-    0311005544
-    0311006172
-    0311006367
-    0311006570
-    0311006580
-    0311006745
-    0311006753
-    0311006789
-    0311006856
-    0311006923
-    0311007010
-    0311007151
-    0311007211
-    0311008153
-    0311008454
-    0311008507
-    0311008560
-    0311008660
-    0311008763
-    0311009149
-    0311009150
-    0311009211
-    0311009709
-    0311009882
-    0311009883
-    0311009992
-    0311010038
-    0311010062
-    0311011361
-    0810145959
-    0910051255
-    0910051341"""
+    abc = """1110028747
+3010083908
+3010088740
+5610000025
+5610000026
+5610000757
+5610000774
+5610005397
+5611000372
+5611000373
+5611000374
+5611000700
+5611000702
+5611000902
+5611000903
+0310597347
+0310649566
+0310651203
+0310662205
+0310662211
+0310662228
+0310662263
+0310662916
+0310663434
+0310663738
+0310663741
+0310664331
+0310680954
+0310681422
+0310681621
+0310682293
+0310683014
+0310689065
+0310694983
+0310696108
+0310701844
+0310702495
+0310704333
+0310705160
+0310709650
+0310713518
+0310714016
+0310721806
+0310721821
+0310727816
+0310729479
+0310729706
+0310729712
+0310732431
+0310732679
+0310732837
+0310733663
+0310734213
+0310734251
+0310736178
+0310736179
+0310736630
+0310736633
+0310736634
+0310736635
+0310736637
+0310736838
+0310736955
+0310736957
+0310736984
+0310737816
+0310737818
+0310737859
+0310737945
+0310738215
+0310738501
+0310738503
+0310739944
+0310740492
+0310740498
+0310740542
+0310740546
+0310740591
+0310740606
+0310740883
+0310740886
+0310740937
+0310741378
+0310741591
+0310742587
+0310743303
+0310763644
+0310776850
+0310776851
+0310776854
+0310818080
+0310818438
+0310821169
+0310823762
+0310825085
+0310826316
+0310826693
+0310827015
+0310827361
+0310827442
+0310827509
+0310827783
+0310828159
+0310828173
+0310828188
+0310829658
+0310829956
+0310829966
+0310829982
+0310830074
+0310830107
+0310830441
+0310830480
+0310831147
+0310831148
+0310831149
+0310831828
+0310831843
+0310831990
+0310831992
+0310832269
+0310832494
+0310832880
+0310832983
+0310832985
+0310833197
+0310833198
+0310833199
+0310833589
+0310833591
+0310833729
+0310833822
+0310833846
+0310834150
+0310834152
+0310834612
+0310834800
+0310834824
+0310834907
+0310834927
+0310834966
+0310834974
+0310834976
+0310835121
+0310835188
+0310835189
+0310835296
+0310835340
+0310835514
+0310835517
+0310835559
+0310836033
+0310836589
+0310837232
+0310837233
+0310837902
+0310837960
+0310837994
+0310837998
+0310838098
+0310838101
+0310838340
+0310838342
+0310838698
+0310838864
+0310838902
+0310838914
+0310838915
+0310838967
+0310838970
+0310839157
+0310839189
+0310839549
+0311001615
+0311001859
+0311002062
+0311002421
+0311004131
+0311004132
+0311004252
+0311004313
+0311004327
+0311004329
+0311004330
+0311004337
+0311004339
+0311004351
+0311004362
+0311004535
+0311004570
+0311004571
+0311004618
+0311004626
+0311004780
+0311004927
+0311004966
+0311005134
+0311005275
+0311005312
+0311005336
+0311005427
+0311005442
+0311005485
+0311005488
+0311005616
+0311005696
+0311005927
+0311006011
+0311006037
+0311006039
+0311006070
+0311006106
+0311006234
+0311006347
+0311006527
+0311006591
+0311006746
+0311006833
+0311007217
+0311007633
+0311008157
+0311008159
+0311008561
+0311008585
+0311008749
+0311009007
+0311009354
+0311009735
+0311009988
+0311010273
+0311010402
+0311010658
+0311010790
+0311010834
+0311010857
+0311010861
+0311011367
+0311011594
+0311011837
+0311012292
+0311013560
+0311013659
+0311013896
+0311014196
+0311014723
+0510336995
+0810145922
+0810145989
+0910052275
+0910052935
+0910052936
+0910054101
+0910054277
+0910054797
+0910054971
+0910055369
+0910055370
+0910055710
+0910055749
+0910055750
+0910055752
+0910055753
+0910055754
+0910055812
+0910056125
+0910056126
+0910057477
+0910057492
+0910058234
+0910058236
+0910059714
+0910059715
+0910059760
+0910059761
+0910060696
+0910060902
+0910061030
+0910061031
+0910061490
+0910061491
+0910061780
+0910061781
+0910061782"""
     return abc.split()

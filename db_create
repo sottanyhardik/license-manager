@@ -5,3 +5,44 @@ ALTER ROLE lmanagement SET client_encoding TO 'utf8';
 ALTER ROLE lmanagement SET default_transaction_isolation TO 'read committed';
 ALTER ROLE lmanagement SET timezone TO 'UTC';
 GRANT ALL PRIVILEGES ON DATABASE lmanagement TO lmanagement;
+
+
+
+Viral Solanki - 9869303461
+Colour - Green
+M/S Global Exim
+301, Neelkanth Corporate Park,
+Vidyavihar W,
+Near Vidyavihar Bus Depot,
+Mumbai 400086
+
+
+7691888,7721551,7721765,
+7720703 7720693 7720710 7722716
+7721317 03.03.22 7725960 7733583 04.03.
+22 7741039 05.03.22 7767747 7767755
+7767705 07.03.22
+
+
+text = """"8319664 8318730 8330163 8346262 8349185 8365663 8383471 8384808 8383682 8383454 8393979 """"
+
+list1 = text.split()
+
+l2 = []
+for l in list1:
+    if not '.' in l:
+        l2.append(l)
+
+
+
+BillOfEntryModel.objects.filter(bill_of_entry_number__in='8464886').update(invoice_no='2022-23/2')
+
+
+for a in list1:
+dfia = LicenseDetailsModel.objects.get(license_number=a)
+data_dict = {
+'DFIA No':"'"+a
+}
+data_dict['DFIA Dt'] = dfia.license_date.strftime('%d/%m/%Y')
+data_dict['DFIA Exp'] = dfia.license_expiry_date.strftime('%d/%m/%Y')
+data_dict['Exporter'] = str()

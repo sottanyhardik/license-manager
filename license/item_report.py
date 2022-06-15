@@ -23,7 +23,7 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
             start_object = datetime.datetime.strptime(end, '%Y-%m-%d')
             query_dict['license__license_expiry_date__lte'] = start_object
     else:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=180)
         query_dict['license__license_expiry_date__gte'] = expiry_limit
     if notification_number:
         query_dict['license__notification_number'] = notification_number

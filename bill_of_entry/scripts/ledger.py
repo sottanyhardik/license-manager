@@ -10,7 +10,7 @@ def extract_data(line, text):
     if '\t' in line:
         split_text = text + ' \t'
         try:
-            return line.split(split_text)[1].split('\t')[0].replace(':','').strip()
+            return line.split(split_text)[1].split('\t')[0].replace(':', '').strip()
         except:
             print(text)
             return None
@@ -29,6 +29,7 @@ def parse_file(data):
     data_dict = {
         'row': []
     }
+    data_dict['ledger_date'] = None
     for line in lines:
         if 'Printed By' in line:
             ledger_date = line.split('Dated:')[-1].strip().split(' ')[0]
@@ -36,6 +37,9 @@ def parse_file(data):
                 data_dict['ledger_date'] = datetime.datetime.strptime(ledger_date, '%d/%m/%Y')
             except:
                 data_dict['ledger_date'] = datetime.datetime.strptime(ledger_date, '%d/%m/%y')
+        else:
+            if not data_dict['ledger_date']:
+                data_dict['ledger_date'] = datetime.datetime.now()
         if 'Regn.No.' in line:
             data_dict['regn_no'] = extract_data(line, 'Regn.No.')
         if 'Regn.Date' in line:
@@ -66,7 +70,7 @@ def parse_file(data):
             data_dict['notification'] = extract_data(line, 'Notifcn.')
         if 'Credit-' in line:
             split_line = line.split('\t')
-            split_line[1] = split_line[1].strip().replace('/01/00','')
+            split_line[1] = split_line[1].strip().replace('/01/00', '')
             row_dict = {
                 'type': 'C',
                 'sr_no': split_line[1].strip(),
@@ -152,14 +156,14 @@ def parse_file(data):
         else:
             boe_port, bool = PortModel.objects.get_or_create(code=row['port'])
             bill_of_entry, bool = BillOfEntryModel.objects.get_or_create(bill_of_entry_number=row['be_number'])
-            bill_of_entry.bill_of_entry_date=datetime_object
-            bill_of_entry.port=boe_port
+            bill_of_entry.bill_of_entry_date = datetime_object
+            bill_of_entry.port = boe_port
             bill_of_entry.save()
             try:
                 drow_obj, bool = RowDetails.objects.get_or_create(sr_number=row_obj, transaction_type=row['type'],
                                                                   bill_of_entry=bill_of_entry)
                 drow_obj.cif_inr = row['cif_inr']
-                drow_obj.cif_fc = row['cif_fc'].replace(',','')
+                drow_obj.cif_fc = row['cif_fc'].replace(',', '')
                 drow_obj.qty = float(row['qty'])
                 drow_obj.save()
             except Exception as e:

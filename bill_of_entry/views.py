@@ -167,14 +167,15 @@ class BillOfEntryDeleteView(DeleteView):
 
 
 class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
+    table_class = tables.BillOfEntryTable
+    filterset_class = filters.BillOfEntryFilter
+    paginate_by = 50
     template_name = 'bill_of_entry/download.html'
     model = bill_of_entry.BillOfEntryModel
-    filter_class = filters.BillOfEntryFilter
 
     def get_queryset(self):
         qs = self.model.objects.all()
-        product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
-        return product_filtered_list.qs.order_by('company', 'product_name', 'bill_of_entry_date')
+        return qs.order_by('company', 'product_name', 'bill_of_entry_date')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

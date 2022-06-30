@@ -233,8 +233,9 @@ class GenerateTransferLetterMEISView(View):
             transfer_letter = TransferLetterModel.objects.get(name='GE FILLED MEIS')
         tl_path = transfer_letter.tl.path
         file_path = 'media/TL_' + 'meis' + '_' + transfer_letter.name.replace(' ', '_') + '/'
+        transfer_letter_name = transfer_letter.name.replace(' ', '_')
         from allotment.scripts.aro import generate_tl_software
-        generate_tl_software(data=data, tl_path=tl_path, path=file_path)
+        generate_tl_software(data=data, tl_path=tl_path, path=file_path,transfer_letter_name=transfer_letter_name)
         file_name = 'TL_' + 'meis' + '_' + 'GE' + '.zip'
         path_to_zip = make_archive(file_path, "zip", file_path)
         zip_file = open(path_to_zip, 'rb')

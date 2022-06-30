@@ -74,7 +74,7 @@ def generate_agreement():
         doc.save(context['license'] + "_Tri-party agreement.docx")
 
 
-def generate_tl_software(data, tl_path, path=''):
+def generate_tl_software(data, tl_path, path='', transfer_letter_name=""):
     if data:
         input_file = data
         import os
@@ -89,9 +89,9 @@ def generate_tl_software(data, tl_path, path=''):
             try:
                 id = context['id']
                 context['file_number'] = ''
-                doc.save(path + context['license'] + '_' + str(id) + "_TL.docx")
+                doc.save(path + context['license'] + '_' + transfer_letter_name + '_' + str(id) + "_TL.docx")
             except:
-                doc.save(path + context['license'] + "_TL.docx")
+                doc.save(path + context['license'] + '_' + transfer_letter_name + "_TL.docx")
 
 
 def generate_sugar():

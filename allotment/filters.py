@@ -74,6 +74,7 @@ class AllotmentFilter(django_filters.FilterSet):
     allotment_details__item__license__license_number = ListFilter(
         field_name='allotment_details__item__license__license_number', label='License Numbers')
     is_be = django_filters.BooleanFilter(method='check_be', label='Is BOE', initial=False)
+    is_alloted = django_filters.BooleanFilter(method='check_alloted', label='Is Alloted', initial=True)
 
     class Meta:
         model = allotment_model.AllotmentModel
@@ -114,3 +115,7 @@ class AllotmentFilter(django_filters.FilterSet):
 
     def check_be(self, queryset, name, value):
         return queryset.exclude(bill_of_entry__isnull=value).distinct()
+
+
+    def check_alloted(self, queryset, name, value):
+        return queryset.exclude(allotment_details__item__license__license_number__isnull=value).distinct()

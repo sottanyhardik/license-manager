@@ -73,92 +73,70 @@
     {% regroup object_list by company as company %}
     {% for data in company %}
         <h4 style="text-align: center">{{ data.grouper }}</h4>
-            {% regroup data.list by item_name as item_name %}
-            {% for item_name_data in item_name %}
-                <table class="table table-bordered">
-                    <tr>
-                        <th>Sr No</th>
-                        <th>Allotment Date</th>
-                        <th>Port</th>
-                        <th>Quantity (KGS)</th>
-                        <th>Unit Price ($)</th>
-                        <th>Value ($)</th>
-                        <th>Item Name</th>
-                        <th>Invoice</th>
-                        <th>ETD</th>
-                        <th>ETA</th>
-                        <th>DFIA No.</th>
-                        <th>Item Sr. NO.</th>
-                        <th>DFIA Qty.</th>
-                        <th>DFIA $.</th>
-                    </tr>
-                    <tbody>
-                    {% for allotment in item_name_data.list %}
-                        <tr>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ forloop.counter }}</td>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.modified_on }}</td>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.port }}</td>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.required_quantity|intcomma }}</td>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.unit_value_per_unit|intcomma }}</td>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.required_value|intcomma }}</td>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.item_name }}</td>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
-                                {% if allotment.invoice %}{{ allotment.invoice }}{% else %}-{% endif %}</td>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
-                                {% if allotment.bl_detail %}{{ allotment.bl_detail }}{% else %}-{% endif %}</td>
-                            <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
-                                {% if allotment.estimated_arrival_date %}{{ allotment.estimated_arrival_date }}{% else %}-{% endif %}</td>
-                            <td colspan="4"
-                                {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
-                                <table>
-                                    {% for allotment_detail in allotment.allotment_details.all %}
-                                        <tr>
-                                            <td>{{ allotment_detail.item.license }}</td>
-                                            <td>{{ allotment_detail.serial_number }}</td>
-                                            <td>{{ allotment_detail.qty|intcomma }}</td>
-                                            <td>{{ allotment_detail.cif_fc|intcomma }}</td>
-                                        </tr>
-                                    {% endfor %}
-                                    <tr>
-                                        <td><b>Total</b></td>
-                                        <td>-</td>
-                                        <td>{{ allotment.alloted_quantity|intcomma }}</td>
-                                        <td>{{ allotment.alloted_value|intcomma }}</td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    <tr>
-                        <td>-</td>
-                        <td>-</td>
-                        <td><b>Total Quantity</b></td>
-                        <td><b>{% get_total_quantity item_name_data.list %}</b></td>
-                        <td><b>Total USD $</b></td>
-                        <td><b>{% get_total item_name_data.list %}</b></td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>-</td>
-                    </tr>
-
-                    </tbody>
-                </table>
-                <br>
-            {% endfor %}
+        {% regroup data.list by item_name as item_name %}
+        {% for item_name_data in item_name %}
             <table class="table table-bordered">
+                <tr>
+                    <th>Sr No</th>
+                    <th>Allotment Date</th>
+                    <th>Port</th>
+                    <th>Quantity (KGS)</th>
+                    <th>Unit Price ($)</th>
+                    <th>Value ($)</th>
+                    <th>Item Name</th>
+                    <th>Invoice</th>
+                    <th>ETD</th>
+                    <th>ETA</th>
+                    <th>DFIA No.</th>
+                    <th>Item Sr. NO.</th>
+                    <th>DFIA Qty.</th>
+                    <th>DFIA $.</th>
+                </tr>
                 <tbody>
+                {% for allotment in item_name_data.list %}
+                    <tr>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ forloop.counter }}</td>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.modified_on }}</td>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.port }}</td>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.required_quantity|intcomma }}</td>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.unit_value_per_unit|intcomma }}</td>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.required_value|intcomma }}</td>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>{{ allotment.item_name }}</td>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
+                            {% if allotment.invoice %}{{ allotment.invoice }}{% else %}-{% endif %}</td>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
+                            {% if allotment.bl_detail %}{{ allotment.bl_detail }}{% else %}-{% endif %}</td>
+                        <td {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
+                            {% if allotment.estimated_arrival_date %}{{ allotment.estimated_arrival_date }}{% else %}
+                                -{% endif %}</td>
+                        <td colspan="4"
+                            {% if not allotment.allotment_details.all.exists %}class="pending"{% endif %}>
+                            <table>
+                                {% for allotment_detail in allotment.allotment_details.all %}
+                                    <tr>
+                                        <td>{{ allotment_detail.item.license }}</td>
+                                        <td>{{ allotment_detail.serial_number }}</td>
+                                        <td>{{ allotment_detail.qty|intcomma }}</td>
+                                        <td>{{ allotment_detail.cif_fc|intcomma }}</td>
+                                    </tr>
+                                {% endfor %}
+                                <tr>
+                                    <td><b>Total</b></td>
+                                    <td>-</td>
+                                    <td>{{ allotment.alloted_quantity|intcomma }}</td>
+                                    <td>{{ allotment.alloted_value|intcomma }}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                {% endfor %}
                 <tr>
                     <td>-</td>
                     <td>-</td>
                     <td><b>Total Quantity</b></td>
-                    <td><b>{% get_total_quantity data.list %}</b></td>
+                    <td><b>{% get_total_quantity item_name_data.list %}</b></td>
                     <td><b>Total USD $</b></td>
-                    <td><b>{% get_total data.list %}</b></td>
+                    <td><b>{% get_total item_name_data.list %}</b></td>
                     <td>-</td>
                     <td>-</td>
                     <td>-</td>
@@ -168,8 +146,31 @@
                     <td>-</td>
                     <td>-</td>
                 </tr>
+
                 </tbody>
             </table>
+            <br>
+        {% endfor %}
+        <table class="table table-bordered">
+            <tbody>
+            <tr>
+                <td>-</td>
+                <td>-</td>
+                <td><b>Total Quantity</b></td>
+                <td><b>{% get_total_quantity data.list %}</b></td>
+                <td><b>Total USD $</b></td>
+                <td><b>{% get_total data.list %}</b></td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+            </tbody>
+        </table>
     {% endfor %}
     <br>
     <table>

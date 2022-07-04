@@ -139,3 +139,11 @@ aro_details.csv
 import data list/*
 Item Report *
 License Report *
+/Reports/
+/IMG/
+/NR/
+/Qr/
+/Reports/
+*.pdf
+*.xlsx
+*.html

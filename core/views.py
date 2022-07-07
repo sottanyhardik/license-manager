@@ -217,7 +217,7 @@ class GenerateTransferLetterMEISView(View):
         meis_list = models.MEISMODEL.objects.all()
         data = [{
             'id':item.id,
-            'company': meis_list[0].importer,
+            'company': item.importer,
             'today': str(datetime.now().date()),
             'license': item.dfia_no,
             'license_date': item.dfia_date,

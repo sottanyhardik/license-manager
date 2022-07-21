@@ -9,7 +9,7 @@ import csv
 biscuit_list = []
 from datetime import datetime
 date = datetime.now()
-list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date)
+list_exclude = LicenseDetailsModel.objects.filter()
 for dfia in list_exclude:
     if dfia.get_balance_cif() > 500:
         try:

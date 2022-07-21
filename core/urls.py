@@ -6,7 +6,7 @@ from . import views
 urlpatterns = [
     # ex: /polls/
     path('', login_required(views.DashboardView.as_view()), name='dashboard'),
-    path('company/add/', login_required(views.CreateCompanyView.as_view()), name='company-add'),
+    path('company/add', login_required(views.CreateCompanyView.as_view()), name='company-add'),
     path('company/', login_required(views.ListCompanyView.as_view()), name='company-list'),
     path('company/<int:pk>/update/', login_required(views.UpdateCompanyView.as_view()), name='company-update'),
     path('sion/', login_required(views.ListSionView.as_view()), name='sion-list'),

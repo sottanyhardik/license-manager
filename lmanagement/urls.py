@@ -29,5 +29,6 @@ urlpatterns = [
                   path('django-rq/', include('django_rq.urls')),
                   path('ebrc/', include('ebrc.urls')),
                   path('shipping/', include('shipping_bill.urls')),
+                  path('scrap/', include('eScrap.urls')),
               ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + static(settings.STATIC_URL,
                                                                                          document_root=settings.STATIC_ROOT)

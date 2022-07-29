@@ -52,11 +52,7 @@ def fetch_captcha(cookies):
 def request_company(cookies, iec, captcha):
     import requests
     cookies = {
-        'JSESSIONID': 'FE9A5200A1021EB7E91801071146E7DE',
-        'TS01b48377': '016b3f3df41f95d071b0d0f82797b78a67ce6daa8d35e8b5424fa648b264eb8b1e116ac14a1b789e081306106c7e48a5b703a8c85ca33151e4d704de1660180cd18bec20ed',
-        'BIGipServerICEGATE_LOGIN_APP_6565': '2013856010.42265.0000',
-        'TS013f8d96': '016b3f3df4a442ab48f4ef6afc8051d3c76746ddcc35e8b5424fa648b264eb8b1e116ac14a6de1ee853be3f2246fae03f49e5741f0770f1b8c6559b008611a0a1f31faab92',
-        'style': 'blue',
+        'JSESSIONID': cookies,
     }
     headers = {
         'Connection': 'keep-alive',
@@ -72,7 +68,7 @@ def request_company(cookies, iec, captcha):
     }
     data = {
         'searchIECode': iec,
-        'captchaResp': '8sA2jO'
+        'captchaResp': captcha
     }
     response = requests.post('https://www.icegate.gov.in/EnqMod/searchIecCodeAction', headers=headers, cookies=cookies,
                              data=data, verify=False)

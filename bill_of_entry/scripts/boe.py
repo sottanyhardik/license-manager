@@ -141,4 +141,63 @@ def rms_details(cookies, data):
         print(e)
         return None
 
+def fetch_cookies_scrap():
+    import requests
 
+    headers = {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
+        'Cache-Control': 'max-age=0',
+        'Connection': 'keep-alive',
+        'Referer': 'https://icegate.gov.in/EnqMod/licenseDGFT/pages/index.jsp',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
+        'sec-ch-ua': '".Not/A)Brand";v="99", "Google Chrome";v="103", "Chromium";v="103"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
+    }
+
+    response = requests.get('https://icegate.gov.in/EnqMod/licenseDGFT/pages/inputDetailsForEDI', headers=headers)
+    page = response.content.decode('utf-8')
+    csrftoken = page.split('name="csrfPreventionSalt" value="')[-1].split('"')[0]
+    cookies = {
+        'JSESSIONID': response.headers['Set-Cookie'].split(';')[0].split('JSESSIONID=')[-1],
+        'style': 'blue',
+        'BIGipServerICEGATE_LOGIN_APP_6565':
+            response.headers['Set-Cookie'].split('BIGipServerICEGATE_LOGIN_APP_6565=')[-1].split(';')[0],
+    }
+    text = response.headers['Set-Cookie'].split('TS')[1].split(';')[0].split("=")
+    cookies['TS'+text[0]] = text[1]
+    text2 = response.headers['Set-Cookie'].split('TS')[2].split(';')[0].split("=")
+    cookies['TS' + text2[0]] = text2[1]
+    return cookies, csrftoken
+
+
+def fetch_captcha_scrap(cookies):
+    import requests
+    headers = {
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
+        'Connection': 'keep-alive',
+        'Referer': 'https://icegate.gov.in/EnqMod/licenseDGFT/pages/inputDetailsForEDI',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
+        'sec-ch-ua': '".Not/A)Brand";v="99", "Google Chrome";v="103", "Chromium";v="103"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
+    }
+
+    response = requests.get('https://icegate.gov.in/EnqMod/CaptchaImg.jpg;jsessionid=0FF10CFE6B35410C675BA8B2BAF48A9B',
+                            cookies=cookies, headers=headers)
+    text = response.headers['Set-Cookie'].split('TS')[1].split(';')[0].split("=")
+    cookies['TS' + text[0]] = text[1]
+    import base64
+    encoded = base64.b64encode(response.content)
+    encoded = 'data:image/jpeg;base64,' + encoded.decode('utf-8')
+    return encoded, cookies

@@ -173,6 +173,5 @@ def get_pdf(fetch_cookies, ebrcNumb, iec, recid, file_name):
     response = requests.post('http://dgftebrc.nic.in:8100/BRCQueryTrade/eBRCPrint.jsp', headers=headers,
                              cookies=cookies, data=data)
     import pdfkit
-    pdfkit \
-        .from_string(response.content.decode('utf-8'), file_name)
+    pdfkit.from_string(response.content.decode('utf-8'), file_name)
     return True

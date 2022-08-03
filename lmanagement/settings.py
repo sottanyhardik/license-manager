@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'shipping_bill.apps.ShippingBillConfig',
     'django.contrib.humanize',
     'material',
+    'eScrap',
 ]
 
 MIDDLEWARE = [

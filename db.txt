@@ -27,3 +27,12 @@ pg_restore -U lmanagement -d lmanagement
 lds = LicenseDetailsModel.objects.all()
 for ls in lds:
     ls.dbalance_cif
+
+
+[program:dgftglobalexim]
+command=/home/django/dgftglobalexim/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:8086 dgftGlobalExim.wsgi
+directory=/home/django/dgftglobalexim
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/dgftglobalexim.err.log
+stdout_logfile=/var/log/dgftglobalexim.out.log

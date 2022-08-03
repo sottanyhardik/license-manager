@@ -156,7 +156,7 @@ class EBRCFetch(FormView):
         captcha = self.request.POST.get('captcha')
         cookies = self.request.POST.get('cookies')
         data = self.kwargs.get('data')
-        fetch_file.delay(data, cookies, captcha)
+        fetch_file(data, cookies, captcha)
         return HttpResponseRedirect(reverse('ebrc_detail_list', kwargs={'data': data}))
 
 

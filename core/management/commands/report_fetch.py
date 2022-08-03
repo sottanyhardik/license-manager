@@ -62,7 +62,7 @@ class Command(BaseCommand):
             for dict_data in found_other:
                 writer.writerow(dict_data)
         with open('steel_{}.csv'.format(status), 'w') as csvfile:
-            fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'Notf No', 'Exporter', 'TOTAL CIF', 'BAL CIF', 'Bearing QTY',
+            fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'Notf No', 'Exporter', 'TOTAL CIF', 'BAL CIF', 'Battery QTY','Bearing QTY',
                           'IC QTY', 'Valves QTY', 'Alloy Steel QTY', 'Relevant Hot Rolled/ Cold Rolled Steel QTY',
                           'Is Individual']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -266,12 +266,18 @@ def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_othe
                         'TOTAL CIF': float(dfia.opening_balance),
                         'BAL CIF': float(dfia.get_balance_cif()),
                         'Bearing QTY': "",
+                        'Battery QTY': "",
                         'IC QTY': "",
                         'Valves QTY': "",
                         'Alloy Steel QTY': "",
                         'Relevant Hot Rolled/ Cold Rolled Steel QTY': "",
                         'Is Individual': dfia.is_individual,
                     }
+
+                    import_item = dfia.import_license.filter(item__name__icontains='Battery')
+                    if import_item.exists():
+                        total = 0
+                        dict_data['Battery QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__name__icontains='Bearing')
                     if import_item.exists():
                         total = 0

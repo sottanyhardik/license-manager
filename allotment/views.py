@@ -280,6 +280,7 @@ class ARODocumentGenerateView(FormView):
                          'v_allotment_inr': round(item.cif_fc * 72, 2), 'v_allotment_usd': item.cif_fc,
                          'sr_no': item.serial_number} for item in
                         allotment.allotment_details.all()]
+
                 file_path = 'media/ARO_ALLOTMENT_' + str(allotment_id) + '/'
                 from allotment.scripts.aro import generate_documents
                 generate_documents(data=data, path=file_path)

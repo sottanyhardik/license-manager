@@ -7,9 +7,13 @@ import json
 # Create your views here.
 from django.urls import reverse
 from django.views.generic import FormView
+from django_filters.views import FilterView
 
 from bill_of_entry.forms import BillOfEntryCaptcha
 from bill_of_entry.scripts.boe import fetch_cookies_scrap, fetch_captcha_scrap
+from core.utils import PagedFilteredTableView
+from eScrap import tables, filters
+from eScrap.models import CompanyLicenseModel
 from eScrap.scripts import fetch_iec_details
 from scripts.BOE import fetch_cookies
 
@@ -42,3 +46,12 @@ class IECFetchView(FormView):
         status = True
         status = fetch_iec_details(cookies, captcha)
         return HttpResponseRedirect(reverse('fetch_iec_details'))
+
+
+class CompanyLicenseListView(PagedFilteredTableView):
+    template_name = 'scrap/list.html'
+    model = CompanyLicenseModel
+    paginate_by = 50
+    table_class = tables.CompanyClassTable
+    filter_class = filters.LicenseCompanyFilter
+    ordering = "license_date"

@@ -9,6 +9,7 @@ class CompanyListModel(models.Model):
     address = models.TextField(null=True, blank=True)
     phone_number = models.CharField(max_length=255, null=True, blank=True)
     is_fetch = models.BooleanField(default=False)
+    port = models.ManyToManyField('core.PortModel', null=True, blank=True)
 
     def __str__(self):
         if self.company_name:
@@ -23,6 +24,7 @@ class CompanyLicenseModel(models.Model):
     license_no = models.CharField(max_length=255, null=True, blank=True)
     scheme = models.CharField(max_length=255, null=True, blank=True)
     license_date = models.DateField(null=True, blank=True)
+    port = models.CharField(max_length=10, null=True, blank=True)
     dgft_transmission_date = models.DateField(null=True, blank=True)
     date_of_integration = models.DateField(null=True, blank=True)
     error_code = models.CharField(max_length=255, null=True, blank=True)

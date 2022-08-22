@@ -19,6 +19,7 @@ class Command(BaseCommand):
         steel_other = []
         found_other = []
         import csv
+        namkeen_other = []
         biscuit_list = []
         import datetime
         today = datetime.datetime.now()
@@ -27,7 +28,7 @@ class Command(BaseCommand):
             list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date)
         else:
             list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date)
-        biscuit_list, bisc, conc_list, steel_other, found_other, not_found = fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, found_other, not_found)
+        biscuit_list, bisc, conc_list, steel_other, namkeen_other,found_other, not_found = fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen_other,found_other, not_found)
         with open('biscuits_{}.csv'.format(status), 'w') as csvfile:
             fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'Exporter', 'Notf No', 'TOTAL CIF', 'BAL CIF', 'SUGAR QTY',
                           'RBD QTY', 'HSN P', 'DF QTY', 'HSN D', 'FF QTY', 'HSN F', 'VAL 10%', 'VAL 10% Utilized',
@@ -55,6 +56,12 @@ class Command(BaseCommand):
             writer.writeheader()
             for dict_data in not_found:
                 writer.writerow(dict_data)
+        with open('namkeen_{}.csv'.format(status), 'w') as csvfile:
+            fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'Notf No', 'Exporter', 'TOTAL CIF', 'BAL CIF', 'Chickpeas QTY', 'Editable QTY', 'Relevant Additives QTY', 'Relevant Flavour QTY', 'Packing Material QTY', 'Is Individual']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for dict_data in namkeen_other:
+                writer.writerow(dict_data)
         with open('found_other_{}.csv'.format(status), 'w') as csvfile:
             fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'DFIA File No', 'Notf No', 'Exporter', 'BAL CIF']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -80,7 +87,7 @@ def fetch_total(import_item):
 
 
 
-def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_other, not_found):
+def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,namkeen_other,found_other, not_found):
     for dfia in list_exclude:
         if dfia.get_balance_cif() > 0:
             try:
@@ -256,6 +263,43 @@ def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_othe
                         dict_data['Paper & Paper Board'] = fetch_total(import_item)
                         dict_data['HSN PAP'] = "'" + import_item[0].hs_code.hs_code
                     conc_list.append(dict_data)
+                elif dfia.get_norm_class == 'E132':
+                    dict_data = {
+                        'DFIA': "'" + dfia.license_number,
+                        'DFIA DT': str(dfia.license_date),
+                        'DFIA EXP': str(dfia.license_expiry_date),
+                        'Notf No': dfia.notification_number,
+                        'Exporter': dfia.exporter.name[:15],
+                        'TOTAL CIF': float(dfia.opening_balance),
+                        'BAL CIF': float(dfia.get_balance_cif()),
+                        'Chickpeas QTY': "",
+                        'Editable QTY': "",
+                        'Relevant Additives QTY': "",
+                        'Relevant Flavour QTY': "",
+                        'Packing Material QTY': "",
+                        'Is Individual': dfia.is_individual,
+                    }
+                    import_item = dfia.import_license.filter(item__name__icontains='Chickpeas')
+                    if import_item.exists():
+                        total = 0
+                        dict_data['Chickpeas QTY'] = fetch_total(import_item)
+                    import_item = dfia.import_license.filter(item__name__icontains='Editable')
+                    if import_item.exists():
+                        total = 0
+                        dict_data['Editable QTY'] = fetch_total(import_item)
+                    import_item = dfia.import_license.filter(item__name__icontains='Relevant Food Additives')
+                    if import_item.exists():
+                        total = 0
+                        dict_data['Relevant Additives QTY'] = fetch_total(import_item)
+                    import_item = dfia.import_license.filter(item__name__icontains='Relevant Food Flavour')
+                    if import_item.exists():
+                        total = 0
+                        dict_data['Relevant Flavour QTY'] = fetch_total(import_item)
+                    import_item = dfia.import_license.filter(item__name__icontains='Packing Material')
+                    if import_item.exists():
+                        total = 0
+                        dict_data['Packing Material QTY'] = fetch_total(import_item)
+                    namkeen_other.append(dict_data)
                 elif dfia.get_norm_class == 'C969':
                     dict_data = {
                         'DFIA': "'" + dfia.license_number,
@@ -273,7 +317,6 @@ def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_othe
                         'Relevant Hot Rolled/ Cold Rolled Steel QTY': "",
                         'Is Individual': dfia.is_individual,
                     }
-
                     import_item = dfia.import_license.filter(item__name__icontains='Battery')
                     if import_item.exists():
                         total = 0
@@ -316,4 +359,4 @@ def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,found_othe
                     'DFIA': "'" + str(dfia),
                 }
                 not_found.append(dict_data)
-    return biscuit_list, bisc, conc_list, steel_other, found_other, not_found
+    return biscuit_list, bisc, conc_list, steel_other, namkeen_other, found_other, not_found

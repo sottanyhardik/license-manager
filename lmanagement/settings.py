@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'material',
     'eScrap',
+    'indian_numbers',
 ]
 
 MIDDLEWARE = [
@@ -210,3 +211,5 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000 #
 
 EMAIL_BACKEND = "django.core.mail.backends.filebased.EmailBackend"
 EMAIL_FILE_PATH = os.path.join(BASE_DIR, "sent_emails")
+
+USE_THOUSAND_SEPARATOR = True

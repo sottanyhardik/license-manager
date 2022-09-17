@@ -57,4 +57,7 @@ urlpatterns = [
     path('consolidate/pdf', login_required(views.LicensePDFConsolidateView.as_view()), name='consolidate'),
     path('movement/list/', login_required(views.MovementListView.as_view()), name='movement-list'),
     path('movement/update/', login_required(views.MovementUpdateView.as_view()), name='movement-update'),
+    path('summary/<slug:license>.pdf', login_required(views.PDFSummaryLicenseDetailView.as_view()),
+         name='license_summary'),
+
 ]

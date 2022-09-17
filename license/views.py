@@ -1,7 +1,7 @@
 import datetime
 import os
 from io import BytesIO, StringIO
-
+from django.db.models import Sum
 import xhtml2pdf.pisa as pisa
 from django.db.models import Q
 from django.http import HttpResponseRedirect
@@ -67,7 +67,7 @@ class LicenseDetailCreateView(CreateWithInlinesView):
         return super(LicenseDetailCreateView, self).form_valid(form)
 
     def get_success_url(self):
-        return reverse('dfia-details', kwargs={'license':self.object.license_number})
+        return reverse('dfia-details', kwargs={'license': self.object.license_number})
 
 
 class DFIADetailView(DetailView):
@@ -199,11 +199,11 @@ class LicenseListView(FilterView):
             for d in f.qs:
                 d.balance_cif = d.get_balance_cif()
                 d.export_item = d.get_norm_class
-                d.license_number = d.license_number.replace("'",'')
+                d.license_number = d.license_number.replace("'", '')
                 d.fob = d.opening_fob()
                 d.save()
-            query = f.qs.values('license_number', 'license_date','port__code', 'license_expiry_date', 'file_number',
-                                'exporter__name','export_item','fob', 'balance_cif', 'user_comment', 'ledger_date')
+            query = f.qs.values('license_number', 'license_date', 'port__code', 'license_expiry_date', 'file_number',
+                                'exporter__name', 'export_item', 'fob', 'balance_cif', 'user_comment', 'ledger_date')
             from djqscsv import render_to_csv_response
             return render_to_csv_response(query.order_by('license_expiry_date'))
         return super(LicenseListView, self).get(request, **kwargs)
@@ -448,7 +448,8 @@ class PDFBiscuitsNewExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
                                                                            license_expiry_date__lt=expiry_limit,
                                                                            license_expiry_date__gte=start_limit,
                                                                            is_self=True, is_au=False,
-                                                                           balance_cif__gte=4000, export_license__old_quantity__lte=2).order_by(
+                                                                           balance_cif__gte=4000,
+                                                                           export_license__old_quantity__lte=2).order_by(
                 'license_expiry_date')
             q_biscuits_queryset = biscuits_queryset.filter(
                 Q(exporter__name__icontains='Rama') | Q(exporter__name__icontains='rani'))
@@ -492,7 +493,8 @@ class PDFConfectioneryNewExpiredReportView(PDFTemplateResponseMixin, PagedFilter
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expiry_limit,
                 license_expiry_date__gte=start_limit,
-                is_self=True, is_au=False, balance_cif__gte=4000, export_license__old_quantity__lte=2).order_by('license_expiry_date')
+                is_self=True, is_au=False, balance_cif__gte=4000, export_license__old_quantity__lte=2).order_by(
+                'license_expiry_date')
 
             q_confectionery_queryset = confectionery_queryset.filter(exporter__name__icontains='Parle')
             table = LicenseConfectineryReportTable(
@@ -1063,6 +1065,24 @@ class MovementUpdateView(UpdateWithInlinesView):
         return reverse('movement-list')
 
 
+class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
+    template_name = 'license/summary_pdf.html'
+    model = license.LicenseDetailsModel
 
+    def get_object(self, queryset=None):
+        return self.model.objects.get(license_number=self.kwargs.get('license'))
 
-
+    def get_context_data(self, **kwargs):
+        context = super(PDFSummaryLicenseDetailView, self).get_context_data()
+        dfia = self.object
+        context['total_debits'] = round(dfia.get_total_allotment + self.object.get_total_debit, 2)
+        dict_list = []
+        import_item = dfia.import_license.filter(item__head__name__icontains='milk')
+        from core.management.commands.report_fetch import fetch_total
+        from bill_of_entry.models import RowDetails
+        RowDetails.objects.filter()
+        dict_data = {'name': "Milk & Milk", 'balance_qty': fetch_total(import_item),
+                     'total_quantity': import_item.aggregate(Sum('quantity')).get('quantity__sum')}
+        dict_list.append(dict_data)
+        context['item_list'] = dict_list
+        return context

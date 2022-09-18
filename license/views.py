@@ -17,7 +17,7 @@ from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineForm
 
 from core.utils import PagedFilteredTableView
 from license.excel import get_license_table
-from license.helper import round_down, check_license
+from license.helper import round_down, check_license, item_wise_debiting, item_wise_allotment, fetch_item_details
 from . import forms, tables, filters
 from . import models as license
 from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_milk_query, dietary_query, food_query, \
@@ -1075,14 +1075,38 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super(PDFSummaryLicenseDetailView, self).get_context_data()
         dfia = self.object
-        context['total_debits'] = round(dfia.get_total_allotment + self.object.get_total_debit, 2)
+        context['total_debits'] = round(dfia.get_total_allotment + dfia.get_total_debit, 2)
         dict_list = []
-        import_item = dfia.import_license.filter(item__head__name__icontains='milk')
-        from core.management.commands.report_fetch import fetch_total
-        from bill_of_entry.models import RowDetails
-        RowDetails.objects.filter()
-        dict_data = {'name': "Milk & Milk", 'balance_qty': fetch_total(import_item),
-                     'total_quantity': import_item.aggregate(Sum('quantity')).get('quantity__sum')}
-        dict_list.append(dict_data)
+        items = ['Wheat', 'Palmolein', 'Yeast', 'juice', 'milk', 'Packing Material']
+        for item in items:
+            if 'milk' in item:
+                import_item = dfia.import_license.filter(item__name__icontains=item)
+                if import_item:
+                    milk_dict = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code, dfia)
+                    print(milk_dict)
+                    total_qty = milk_dict['opening_balance']
+                    half = total_qty / 2
+                    wpc_dict = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code, dfia,
+                                                  'wpc')
+                    cheese_dict = fetch_item_details(import_item.first().item, '04060000', dfia, 'cheese')
+                    if wpc_dict['total_debited_qty'] > half:
+                        wpc_dict['opening_balance'] = wpc_dict['total_debited_qty']
+                        wpc_dict['balance_qty'] = 0
+                        cheese_dict['opening_balance'] = milk_dict['opening_balance'] - wpc_dict['total_debited_qty']
+                        cheese_dict['balance_qty'] = cheese_dict['opening_balance'] - cheese_dict['total_debited_qty']
+                    elif cheese_dict['total_debited_qty'] > half:
+                        cheese_dict['opening_balance'] = cheese_dict['total_debited_qty']
+                        cheese_dict['balance_qty'] = 0
+                        wpc_dict['opening_balance'] = milk_dict['opening_balance'] - cheese_dict['total_debited_qty']
+                        wpc_dict['balance_qty'] = wpc_dict['opening_balance'] - wpc_dict['total_debited_qty']
+                    dict_list.append(milk_dict)
+                    dict_list.append(wpc_dict)
+                    dict_list.append(cheese_dict)
+
+            else:
+                import_item = dfia.import_license.filter(item__name__icontains=item)
+                if import_item.first() and import_item.first().item:
+                    dict_data = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code, dfia)
+                    dict_list.append(dict_data)
         context['item_list'] = dict_list
         return context

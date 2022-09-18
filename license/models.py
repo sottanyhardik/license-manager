@@ -96,9 +96,13 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_total_allotment(self):
-        return AllotmentItems.objects.filter(item__license=self, allotment__type=ALLOTMENT,
+        total = AllotmentItems.objects.filter(item__license=self, allotment__type=ALLOTMENT,
                                              allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
             Sum('cif_fc'))['cif_fc__sum']
+        if total:
+            return total
+        else:
+            return 0
 
     def get_balance_cif(self):
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']

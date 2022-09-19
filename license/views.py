@@ -1099,6 +1099,11 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
                         cheese_dict['balance_qty'] = 0
                         wpc_dict['opening_balance'] = milk_dict['opening_balance'] - cheese_dict['total_debited_qty']
                         wpc_dict['balance_qty'] = wpc_dict['opening_balance'] - wpc_dict['total_debited_qty']
+                    else:
+                        wpc_dict['opening_balance'] = half
+                        wpc_dict['balance_qty'] = wpc_dict['opening_balance'] - wpc_dict['total_debited_qty']
+                        cheese_dict['opening_balance'] = half
+                        cheese_dict['balance_qty'] = cheese_dict['opening_balance'] - cheese_dict['total_debited_qty']
                     dict_list.append(milk_dict)
                     dict_list.append(wpc_dict)
                     dict_list.append(cheese_dict)

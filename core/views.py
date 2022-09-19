@@ -21,7 +21,6 @@ class DashboardView(TemplateView):
         return context
 
 
-
 class CreateCompanyView(CreateView):
     model = models.CompanyModel
     template_name = 'core/add.html'
@@ -132,6 +131,10 @@ class UpdateHSNCodeView(UpdateView):
     template_name = 'core/add.html'
     fields = "__all__"
 
+    def get_success_url(self):
+        from django.urls import reverse
+        return reverse('hs-code-update', kwargs={'pk': self.object.pk})
+
 
 class UploadLedger(TemplateView):
     template_name = 'core/ledger.html'
@@ -216,7 +219,7 @@ class GenerateTransferLetterMEISView(View):
         from datetime import datetime
         meis_list = models.MEISMODEL.objects.all()
         data = [{
-            'id':item.id,
+            'id': item.id,
             'company': item.importer,
             'today': str(datetime.now().date()),
             'license': item.dfia_no,
@@ -235,7 +238,7 @@ class GenerateTransferLetterMEISView(View):
         file_path = 'media/TL_' + 'meis' + '_' + transfer_letter.name.replace(' ', '_') + '/'
         transfer_letter_name = transfer_letter.name.replace(' ', '_')
         from allotment.scripts.aro import generate_tl_software
-        generate_tl_software(data=data, tl_path=tl_path, path=file_path,transfer_letter_name=transfer_letter_name)
+        generate_tl_software(data=data, tl_path=tl_path, path=file_path, transfer_letter_name=transfer_letter_name)
         file_name = 'TL_' + 'meis' + '_' + 'GE' + '.zip'
         path_to_zip = make_archive(file_path, "zip", file_path)
         zip_file = open(path_to_zip, 'rb')

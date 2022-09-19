@@ -81,6 +81,7 @@ class ItemNameModel(models.Model):
 class HSCodeModel(models.Model):
     hs_code = models.CharField(max_length=8, unique=True)
     product_description = models.TextField(null=True, blank=True)
+    unit_price = models.FloatField(default=0)
     basic_duty = models.CharField(max_length=225, null=True, blank=True)
     unit = models.CharField(max_length=255, null=True, blank=True)
     policy = models.CharField(max_length=255, null=True, blank=True)

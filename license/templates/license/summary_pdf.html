@@ -127,9 +127,28 @@
 
             {% endif %}
             {% for item in import_item.debiting %}
-                <tr style="border-bottom: 1px solid #000">
-                    <td colspan="1" style="background-color: lightgreen;">
-                        Debited
+                {% for data in item.data_list %}
+                    <tr style="border-bottom: 1px solid #000">
+                        <td colspan="1" style="color: red;">
+                            Debited
+                        </td>
+                        <td colspan="1">
+                            {{ data.qty|floatformat:2 }}
+                        </td>
+                        <td colspan="1">
+                            {{ data.cif_fc|div:data.qty|floatformat:2 }}
+                        </td>
+                        <td colspan="1">
+                            {{ data.cif_fc|floatformat:2 }}
+                        </td>
+                        <td colspan="2">{{ item.company|title }}</td>
+                    </tr>
+
+                {% endfor %}
+
+                <tr style="border-bottom: 1px solid #000;background-color: lightgreen;">
+                    <td colspan="1">
+                        Total
                     </td>
                     <td colspan="1">
                         {{ item.sum_total_qty|floatformat:2 }}
@@ -145,39 +164,41 @@
             {% endfor %}
             {% for item in import_item.allotment %}
                 {% for data in item.data_list %}
-                <tr style="border-bottom: 1px solid #000">
-                    <td colspan="1" style="color: red;">
-                        Alloted
-                    </td>
-                    <td colspan="1">
-                        {{ data.qty|floatformat:2 }}
-                    </td>
-                    <td colspan="1">
-                        {{ data.cif_fc|div:data.qty|floatformat:2 }}
-                    </td>
-                    <td colspan="1">
-                        {{ data.cif_fc|floatformat:2 }}
-                    </td>
-                    <td colspan="2">{{ item.company|title }}</td>
-                </tr>
+                    <tr style="border-bottom: 1px solid #000">
+                        <td colspan="1" style="color: red;">
+                            Alloted
+                        </td>
+                        <td colspan="1">
+                            {{ data.qty|floatformat:2 }}
+                        </td>
+                        <td colspan="1">
+                            {{ data.cif_fc|div:data.qty|floatformat:2 }}
+                        </td>
+                        <td colspan="1">
+                            {{ data.cif_fc|floatformat:2 }}
+                        </td>
+                        <td colspan="2">{{ item.company|title }}</td>
+                    </tr>
 
                 {% endfor %}
 
 
-                <tr style="border-bottom: 1px solid #000">
-                    <td colspan="1" style="color: red;">
-                        Total Allotment
+                <tr style="border-bottom: 1px solid #000;background-color: yellow;">
+                    <td colspan="1">
+                        <b>Total</b>
                     </td>
                     <td colspan="1">
-                        {{ item.sum_total_qty|floatformat:2 }}
+                        <b>{{ item.sum_total_qty|floatformat:2 }}</b>
                     </td>
                     <td colspan="1">
-                        {{ item.unit_price|floatformat:2 }}
+                        <b>{{ item.unit_price|floatformat:2 }}</b>
                     </td>
                     <td colspan="1">
-                        {{ item.sum_total_cif_fc|floatformat:2 }}
+                        <b>{{ item.sum_total_cif_fc|floatformat:2 }}</b>
                     </td>
-                    <td colspan="2">{{ item.company|title }}</td>
+                    <td colspan="2">
+                        <b>{{ item.company|title }}</b>
+                    </td>
                 </tr>
             {% endfor %}
             {% if not 'Milk' in import_item.name %}

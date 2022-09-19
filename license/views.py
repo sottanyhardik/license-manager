@@ -1077,6 +1077,7 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
         dfia = self.object
         context['total_debits'] = round(dfia.get_total_allotment + dfia.get_total_debit, 2)
         dict_list = []
+        estimation_dict = {}
         items = ['gluten', 'Palmolein', 'Yeast', 'juice', 'milk', 'Packing Material']
         for item in items:
             if 'milk' in item:

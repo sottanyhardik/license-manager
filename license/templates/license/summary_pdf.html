@@ -69,16 +69,16 @@
     <br>
     <table class="table table-bordered table-striped tbordered">
         <thead>
-        <th>Item</th>
-        <th>Total CIF</th>
-        <th>Balance CIF</th>
+        <th>Total CIF $</th>
+        <th>Total Debit $</th>
+        <th>Balance CIF $</th>
         </thead>
         <tbody>
         {% for export_item in object.export_license.all %}
             <tr>
-                <td>{{ export_item.item|title }}</td>
-                <td>{{ export_item.cif_fc|title }}</td>
-                <td>{{ export_item.balance_cif_fc|title }}</td>
+                <td>{{ export_item.cif_fc|floatformat:2 }}</td>
+                <td>{{ export_item.total_debits|floatformat:2 }}</td>
+                <td>{{ export_item.balance_cif_fc|floatformat:2 }}</td>
             </tr>
         {% endfor %}
 

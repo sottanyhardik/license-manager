@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'material',
     'eScrap',
     'indian_numbers',
+    'mathfilters',
 ]
 
 MIDDLEWARE = [

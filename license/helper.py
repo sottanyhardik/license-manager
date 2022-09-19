@@ -83,6 +83,7 @@ def item_wise_debiting(dfia, item_head, item_name=None):
             if not company in list(dict_return.keys()):
                 dict_return[company] = {}
             dict_return[company]['company'] = company
+            dict_return[company]['data_list'] = data.filter(bill_of_entry__company__name=company)
             dict_return[company]['sum_total_qty'] = data.filter(bill_of_entry__company__name=company).aggregate(
                 Sum('qty')).get('qty__sum', 0.00)
             dict_return[company]['sum_total_cif_fc'] = data.filter(bill_of_entry__company__name=company).aggregate(
@@ -119,6 +120,7 @@ def item_wise_allotment(dfia, item_head, item_name=None):
             if not company in list(dict_return.keys()):
                 dict_return[company] = {}
             dict_return[company]['company'] = company
+            dict_return[company]['data_list'] = data.filter(allotment__company__name=company).values()
             dict_return[company]['sum_total_qty'] = data.filter(allotment__company__name=company).aggregate(
                 Sum('qty')).get('qty__sum', 0.00)
             dict_return[company]['sum_total_cif_fc'] = data.filter(allotment__company__name=company).aggregate(

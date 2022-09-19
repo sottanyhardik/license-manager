@@ -77,7 +77,7 @@
         {% for export_item in object.export_license.all %}
             <tr>
                 <td>{{ export_item.cif_fc|floatformat:2 }}</td>
-                <td>{{ export_item.total_debits|floatformat:2 }}</td>
+                <td>{{ total_debits|floatformat:2 }}</td>
                 <td>{{ export_item.balance_cif_fc|floatformat:2 }}</td>
             </tr>
         {% endfor %}

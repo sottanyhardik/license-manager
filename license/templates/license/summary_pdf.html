@@ -232,5 +232,34 @@
             </tfoot>
         </table>
     {% endfor %}
+    <br>
+    <table class="table table-bordered table-striped tbordered" style="margin-top: 5px">
+    <tbody>
+    <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td><b>{{ balance_cif|floatformat:2 }}</b></td>
+    </tr>
+    {% for estimation in estimation_list %}
+        <tr>
+        <td>{{ estimation.name }}</td>
+        <td>{{ estimation.quantity|floatformat:2 }}</td>
+        <td>{{ estimation.unit_price|floatformat:2 }}</td>
+        <td>{{ estimation.value|floatformat:2 }}</td>
+        <td></td>
+        </tr>
+    {% endfor %}
+    <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td><b>{{ total_debits|floatformat:2 }}</b></td>
+        <td><b>{{ balance_value|floatformat:2 }}</b></td>
+    </tr>
+
+    </tbody>
+    </table>
 
 {% endblock %}

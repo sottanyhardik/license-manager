@@ -216,3 +216,12 @@ class MEISMODEL(models.Model):
 
     def __str__(self):
         return self.dfia_no
+
+
+class UnitPriceModel(models.Model):
+    name = models.CharField(max_length=255)
+    unit_price = models.FloatField(default=0)
+    label = models.CharField(max_length=255, default='')
+
+    def __str__(self):
+        return self.name

@@ -61,6 +61,10 @@ class LicenseDetailsModel(models.Model):
     modified_on = models.DateField(auto_now=True)
     modified_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, null=True, blank=True,
                                     related_name='dfia_updated')
+    is_cheese = models.BooleanField(default=True)
+    is_wpc = models.BooleanField(default=True)
+    is_yeast = models.BooleanField(default=True)
+    is_gluten = models.BooleanField(default=True)
     admin_search_fields = ('license_number',)
 
     def __str__(self):

@@ -1209,5 +1209,4 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
         context['balance_cif'] = dfia.balance_cif
         context['estimation_list'] = estimation_list
         context['balance_value'] = balance_value
-        context['total_debits'] = round(debits,2)
         return context

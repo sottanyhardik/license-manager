@@ -1188,7 +1188,7 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
             else:
                 ditem_dict['value'] = balance_value
                 debits = debits + ditem_dict['value']
-                ditem_dict['unit_price'] = balance_value/ditem_dict['quantity']
+                ditem_dict['unit_price'] = balance_value / ditem_dict['quantity']
                 balance_value = 0
             estimation_list.append(ditem_dict)
         if dfia.is_gluten and estimation_dict['gluten'] and estimation_dict['gluten']['balance_qty'] > 100:
@@ -1203,10 +1203,14 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
             else:
                 ditem_dict['value'] = balance_value
                 debits = debits + ditem_dict['value']
-                ditem_dict['unit_price'] = balance_value/ditem_dict['quantity']
+                ditem_dict['unit_price'] = balance_value / ditem_dict['quantity']
                 balance_value = 0
             estimation_list.append(ditem_dict)
         context['balance_cif'] = dfia.balance_cif
+        et = 0
+        for v in estimation_list:
+            et = et + v['value']
         context['estimation_list'] = estimation_list
+        context['estimation_total'] = et
         context['balance_value'] = balance_value
         return context

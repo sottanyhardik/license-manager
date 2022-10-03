@@ -84,8 +84,8 @@ class LicenseDetailsForm(forms.ModelForm):
         model = license_model.LicenseDetailsModel
         fields = ['scheme_code', 'notification_number', 'license_number', 'license_date', 'license_expiry_date',
                   'file_number', 'exporter', 'port', 'registration_number', 'registration_date', 'user_restrictions',
-                  'user_comment', 'is_self', 'is_au','is_not_registered', 'user_comment', 'ge_file_number','is_cheese',
-                  'is_wpc','is_yeast','is_gluten']
+                  'user_comment', 'is_self', 'is_au', 'is_not_registered', 'user_comment', 'ge_file_number',
+                  'cheese_unit', 'wpc_unit', 'yeast_unit', 'gluten_unit', 'palmolein_unit', 'juice_unit', 'is_item']
 
     def __init__(self, *args, **kwargs):
         super(LicenseDetailsForm, self).__init__(*args, **kwargs)
@@ -138,7 +138,7 @@ class LicenseInwardOutwardForm(forms.ModelForm):
     class Meta:
         model = license_model.LicenseInwardOutwardModel
         fields = ['date', 'license', 'status', 'office', 'description', 'amd_sheets_number', 'copy', 'annexure', 'tl',
-                  'aro','along_with']
+                  'aro', 'along_with']
 
     def __init__(self, *args, **kwargs):
         super(LicenseInwardOutwardForm, self).__init__(*args, **kwargs)
@@ -151,4 +151,3 @@ class LicenseInwardOutwardForm(forms.ModelForm):
                 field.widget.attrs['class'] = 'form-control'
             if 'Textarea' in str(field.widget):
                 field.widget.attrs['rows'] = '1'
-

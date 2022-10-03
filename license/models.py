@@ -61,10 +61,13 @@ class LicenseDetailsModel(models.Model):
     modified_on = models.DateField(auto_now=True)
     modified_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, null=True, blank=True,
                                     related_name='dfia_updated')
-    is_cheese = models.BooleanField(default=True)
-    is_wpc = models.BooleanField(default=True)
-    is_yeast = models.BooleanField(default=True)
-    is_gluten = models.BooleanField(default=True)
+    cheese_unit = models.FloatField(default=0)
+    juice_unit = models.FloatField(default=0)
+    wpc_unit = models.FloatField(default=0)
+    yeast_unit = models.FloatField(default=0)
+    gluten_unit = models.FloatField(default=0)
+    palmolein_unit = models.FloatField(default=0)
+    is_item = models.CharField(default="gluten,palmolein,yeast,juice,milk,Packing Material", max_length=255)
     admin_search_fields = ('license_number',)
 
     def __str__(self):
@@ -101,7 +104,7 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_total_allotment(self):
         total = AllotmentItems.objects.filter(item__license=self, allotment__type=ALLOTMENT,
-                                             allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+                                              allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
             Sum('cif_fc'))['cif_fc__sum']
         if total:
             return total
@@ -248,7 +251,8 @@ class LicenseDetailsModel(models.Model):
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
         if 'E1' in str(lic[0].norm_class):
             credit = credit * .02
-            imports = LicenseImportItemsModel.objects.filter(license=self).filter(Q(item__head__name__icontains='other'))
+            imports = LicenseImportItemsModel.objects.filter(license=self).filter(
+                Q(item__head__name__icontains='other'))
         else:
             credit = credit * .1
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
@@ -388,7 +392,7 @@ class LicenseImportItemsModel(models.Model):
     admin_search_fields = ('license__license_number',)
 
     class Meta:
-        ordering = ['license__license_expiry_date','serial_number']
+        ordering = ['license__license_expiry_date', 'serial_number']
 
     def __str__(self):
         return "{0}-{1}".format(str(self.license), str(self.serial_number))

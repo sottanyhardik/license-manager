@@ -111,25 +111,19 @@ def sugar_query(date_range=None):
 def rbd_query(date_range=None):
     tables = []
     query_dict = {
+        'item__name__icontains': '1513',
+    }
+    queryset = all_queryset(query_dict, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'PKO')
+    query_dict = {
         'item__head__name__icontains': 'RBD Palmolein Oil',
         'hs_code__hs_code__icontains': '15119020'
     }
-    queryset = all_queryset(query_dict, date_range=date_range)
-    tables = query_set_table(tables, queryset, 'RBD Palmolein Oil')
-    query_dict = {
-        'item__head__name__icontains': 'RBD Palmolein Oil',
-        'hs_code__hs_code__icontains': '15119010'
-    }
-    queryset = all_queryset(query_dict, date_range=date_range)
-    tables = query_set_table(tables, queryset, 'RBD Palm Oil')
-    query_dict = {
-        'item__head__name__icontains': 'RBD Palmolein Oil',
-    }
     exclude_or_filters = {
-        'hs_code__hs_code__in': ['15119010', '15119020']
+        'item__name__icontains': '1513'
     }
-    queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters, date_range=date_range)
-    tables = query_set_table(tables, queryset, 'Need Amendment')
+    queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters,date_range=date_range)
+    tables = query_set_table(tables, queryset, 'RBD Palmolein Oil')
     return tables
 
 
@@ -138,16 +132,40 @@ def milk_query(date_range=None):
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'milk & milk products',
-        'hs_code__hs_code__icontains': '04041020'
+        'item__name__icontains': '0404',
     }
     exclude_or_filters = {
-        'license__license_number': '0310832494'
+        'item__name__icontains': '0406',
     }
     queryset = all_queryset(query_dict, date_range=date_range, exclude_or_filters=exclude_or_filters)
     tables = query_set_table(tables, queryset, 'Whey Powder')
-    query_dict['license__license_number'] = '0310832494'
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__head__name__icontains': 'milk & milk products',
+    }
+    exclude_or_filters = {
+        'item__name__icontains': '3502,'
+    }
+    queryset = all_queryset(query_dict, date_range=date_range, exclude_or_filters=exclude_or_filters)
+    tables = query_set_table(tables, queryset, 'Whey Powder')
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__name__icontains': '0406',
+    }
+    exclude_or_filters = {
+        'item__name__icontains': '0406',
+    }
     queryset = all_queryset(query_dict, date_range=date_range)
     tables = query_set_table(tables, queryset, 'CHEESE')
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E132',
+        'item__name__icontains': '0406',
+    }
+    exclude_or_filters = {
+        'item__name__icontains': '0406',
+    }
+    queryset = all_queryset(query_dict, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'CHEESE NAMKEEN')
     return tables
 
 
@@ -377,7 +395,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
         start_object = datetime.datetime.strptime(start, '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = start_object
     else:
-        expiry_limit = datetime.datetime.strptime('2020-04-01', '%Y-%m-%d')
+        expiry_limit = datetime.datetime.strptime('2023-12-01', '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = expiry_limit
     if end:
         end_object = datetime.datetime.strptime(end, '%Y-%m-%d')
@@ -510,12 +528,9 @@ def biscuit_2019(date_range=None, party=None, exclude_party=None):
 
 
 def biscuit_2019_rama_rani(date_range=None):
-    tables = [{'label': 'RAMA RANI New Biscuits',
-               'table': generate_table(biscuit_2019(party=['rama', 'rani']),
-                                       LicenseBiscuitNewReportTable)}, {'label': 'Parle New Biscuits',
-                                                                        'table': generate_table(
-                                                                            biscuit_2019(party=['Parle']),
-                                                                            LicenseBiscuitNewReportTable)}]
+    tables = [{'label': 'New Biscuits',
+               'table': generate_table(biscuit_2019(party=[]),
+                                       LicenseBiscuitNewReportTable)}]
 
     return tables
 
@@ -609,13 +624,9 @@ def confectinery_2019(date_range=None, party=None, exclude_party=None):
 
 
 def confectinery_2019_rama_rani(date_range=None):
-    tables = [{'label': 'RAMA RANI New Confectinery',
-               'table': generate_table(confectinery_2019(date_range, party=['rama', 'rani', 'vanila']),
-                                       LicenseConfectineryReportTable)}, {'label': 'Parle New Confectinery',
-                                                                          'table': generate_table(
-                                                                              confectinery_2019(date_range,
-                                                                                                party=['Parle']),
-                                                                              LicenseConfectineryReportTable)}]
+    tables = [{'label': 'New Confectinery',
+               'table': generate_table(confectinery_2019(date_range, party=[]),
+                                       LicenseConfectineryReportTable)}]
 
     return tables
 

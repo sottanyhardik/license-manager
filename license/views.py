@@ -15,8 +15,8 @@ from django_filters.views import FilterView
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
-from core.utils import PagedFilteredTableView
 from license.excel import get_license_table
+from core.utils import PagedFilteredTableView
 from license.helper import round_down, check_license, item_wise_debiting, item_wise_allotment, fetch_item_details
 from . import forms, tables, filters
 from . import models as license
@@ -625,7 +625,7 @@ class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
             title = 'Sugar'
             tables = sugar_query()
         elif item == 'rbd':
-            title = 'RBD Palmolein Oil'
+            title = 'RBD / PKO'.capitalize()
             tables = rbd_query()
         elif item == 'whey':
             title = 'Milk & Milk [Whey]'

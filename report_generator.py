@@ -1,7 +1,7 @@
 from docxtpl import DocxTemplate
 import csv
 from docx2pdf import convert
-
+convert("word-pdf/")
 convert("Qr/")
 with open('Book14.csv', newline='') as csvfile:
     reader = csv.DictReader(csvfile)

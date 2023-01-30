@@ -1,6 +1,6 @@
 import csv
 from django.db.models import Sum
-from core.management.commands.report_fetch import fetch_total
+from core.management.commands.report_fetch import fetch_total, fetch_debited
 from license.models import LicenseDetailsModel
 from django.db.models import Q
 
@@ -56,18 +56,21 @@ def fetch_data(list1):
                     data_dict['HSN DF'] = "'" + import_item[0].hs_code.hs_code
                     total = 0
                     data_dict['BAL DF QTY'] = fetch_total(import_item)
+                    data_dict['Utilized DF Qty'] = fetch_debited(import_item)
                     data_dict['OLD DF Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
                     data_dict['Total DF Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
                 import_item = dfia.import_license.filter(item__head__name__icontains='food flavour')
                 if import_item.exists():
                     data_dict['HSN FF'] = "'" + import_item[0].hs_code.hs_code
                     data_dict['BAL FF QTY'] = fetch_total(import_item)
+                    data_dict['Utilized FF Qty'] = fetch_debited(import_item)
                     data_dict['OLD FF Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
                     data_dict['Total FF Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
                 import_item = dfia.import_license.filter(item__head__name__icontains='fruit')
                 if import_item.exists():
                     data_dict['HSN Fr'] = "'" + import_item[0].hs_code.hs_code
                     data_dict['BAL FC QTY'] = fetch_total(import_item)
+                    data_dict['Utilized FC Qty'] = fetch_debited(import_item)
                     data_dict['OLD FC Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
                     data_dict['Total FC Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
                 import_item = dfia.import_license.filter(hs_code__hs_code__icontains='3502')
@@ -88,7 +91,7 @@ def fetch_data(list1):
                     total = 0
                     data_dict['BAL M&M Oth QTY'] = fetch_total(import_item)
                     data_dict['Total M&M Oth QTY'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-                import_item = dfia.import_license.filter(item__head__name__icontains='sugar')
+                import_item = dfia.import_license.filter(item__name__icontains='starch')
                 if import_item.exists():
                     total = 0
                     data_dict['BAL Sugar QTY'] = fetch_total(import_item)
@@ -109,6 +112,7 @@ def fetch_data(list1):
                     data_dict['Total PAP QTY'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
         except Exception as e:
             print(e)
+            print(a)
         conf_list.append(data_dict)
     return conf_list
 
@@ -119,9 +123,9 @@ def generate_excel(data_list):
                       'BAL CIF',
                       'HSN G', 'Total GLUTEN Qty', 'OLD GLUTEN Qty', 'BAL GLUTEN QTY',
                       'HSN P', 'Total RBD Qty', 'BAL RBD QTY',
-                      'HSN DF', 'Total DF Qty', 'OLD DF Qty', 'BAL DF QTY',
-                      'HSN FF', 'Total FF Qty', 'OLD FF Qty', 'BAL FF QTY',
-                      'HSN Fr', 'BAL FC QTY', 'OLD FC Qty', 'Total FC Qty',
+                      'HSN DF', 'Total DF Qty', 'OLD DF Qty', 'Utilized DF Qty', 'BAL DF QTY',
+                      'HSN FF', 'Total FF Qty', 'OLD FF Qty', 'Utilized FF Qty', 'BAL FF QTY',
+                      'HSN Fr', 'BAL FC QTY', 'OLD FC Qty', 'Utilized FC Qty', 'Total FC Qty',
                       '10% of CIF', '10% of CIF Utilized', '10% of CIF Balance',
                       'HSN WPC', 'Total WPC Qty', 'BAL WPC QTY',
                       'HSN SWP', 'Total SWP Qty', 'BAL SWP QTY',

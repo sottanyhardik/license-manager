@@ -155,7 +155,8 @@ class UploadLedger(TemplateView):
         license = None
         for raw_file in files:
             file = raw_file.read()
-            full = file.decode('utf-8')
+            full = file.decode('latin-1').encode("utf-8")
+            full = full.decode()
             full = full.replace(',', '\t')
             for data in full.split('Page No:-1\t'):
                 try:

@@ -146,28 +146,48 @@ class LicenseDetailsModel(models.Model):
         return self.export_license.all().aggregate(sum=Sum('cif_inr'))['sum']
 
     def get_wheat(self):
-        return self.import_license.filter(item__head__name__icontains='wheat').first().balance_quantity
+        all = self.import_license.filter(item__head__name__icontains='wheat')
+        sum1 = 0
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def wheat(self):
         return self.import_license.filter(item__head__name__icontains='wheat').first()
 
     def get_sugar(self):
-        return self.import_license.filter(item__head__name__icontains='sugar').first().balance_quantity
+        all = self.import_license.filter(item__head__name__icontains='sugar')
+        sum1 = 0
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def sugar(self):
         return self.import_license.filter(item__head__name__icontains='sugar').first()
 
     def get_rbd(self):
-        return self.import_license.filter(item__head__name__icontains='rbd').first().balance_quantity
+        all = self.import_license.filter(Q(item__name__icontains='rbd')|Q(item__name__icontains='Pko')|Q(item__name__icontains='1513'))
+        sum1 = 0
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def rbd(self):
-        return self.import_license.filter(item__head__name__icontains='rbd').first()
+        return self.import_license.filter(Q(item__name__icontains='rbd')|Q(item__name__icontains='Pko')|Q(item__name__icontains='1513')).first()
 
     def food_flavour(self):
-        return self.import_license.filter(item__head__name__icontains='food flavour').first()
+        sum1 = 0
+        all = self.import_license.filter(Q(item__name__icontains='food flavour'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def dietary_fibre(self):
-        return self.import_license.filter(item__head__name__icontains='dietary fibre').first()
+        sum1 = 0
+        all = self.import_license.filter(Q(item__name__icontains='dietary fibre'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def get_leavening_agent(self):
         return self.import_license.filter(item__head__name__icontains='Leavening Agent').first().balance_quantity
@@ -191,7 +211,11 @@ class LicenseDetailsModel(models.Model):
         return self.import_license.filter(item__head__name__icontains='anti oxidant').first().balance_quantity
 
     def get_fruit(self):
-        return self.import_license.filter(item__head__name__icontains='fruit').first().balance_quantity
+        sum1 = 0
+        all = self.import_license.filter(Q(item__name__icontains='fruit')|Q(item__name__icontains='Cocoa'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def fruit(self):
         return self.import_license.filter(item__head__name__icontains='fruit').first()
@@ -257,7 +281,10 @@ class LicenseDetailsModel(models.Model):
             credit = credit * .1
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
                 Q(item__head__name__icontains='flavour') | Q(item__head__name__icontains='fruit') | Q(
-                    item__head__name__icontains='dietary'))
+                    item__head__name__icontains='dietary')|Q(
+                    item__head__name__icontains='Leavening')|Q(
+                    item__head__name__icontains='starch')|Q(
+                    item__head__name__icontains='Coco'))
         for dimport in imports:
             if dimport.alloted_value:
                 credit = credit - dimport.debited_value - int(dimport.alloted_value)

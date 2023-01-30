@@ -57,7 +57,10 @@ def parse_file(data):
         if 'Tot.Qty.' in line:
             data_dict['total_quantity'] = extract_data(line, 'Tot.Qty.')
         if 'IEC' in line:
-            data_dict['iec'] = extract_data(line, 'IEC')
+            try:
+                data_dict['iec'] = extract_data(line, 'IEC')
+            except Exception as e:
+                print(e)
         if 'Regn.No. \t:' in line:
             data_dict['registration_no'] = extract_data(line, 'Regn.No.')
         if 'Regn.Date \t:' in line:
@@ -120,6 +123,7 @@ def parse_file(data):
     except:
         pass
     license.save()
+    print(license.license_number)
     exp, bool = LicenseExportItemModel.objects.get_or_create(license=license)
     exp.net_quantity = data_dict['total_quantity']
     exp.cif_fc = data_dict['cif_fc']

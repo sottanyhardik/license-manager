@@ -359,7 +359,7 @@ class LicenseItemReportTable(dt2.Table):
     license_expiry = dt2.DateTimeColumn(format='d-m-Y', verbose_name='License Expiry Date',
                                         accessor='license.license_expiry_date')
     license_exporter = TruncatedTextColumn(verbose_name='Exporter', accessor='license.exporter.name')
-    item = TruncatedBigTextColumn(verbose_name='Item Description', accessor='item.name')
+    item = dt2.Column(verbose_name='Item Description', accessor='item.name')
     balance_quantity = ColumnWithThousandsSeparator()
     balance_cif_fc = ColumnWithThousandsSeparator()
 

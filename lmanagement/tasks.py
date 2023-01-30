@@ -3,7 +3,6 @@ from django.db.models import Q
 
 from bill_of_entry.scripts.boe import request_bill_of_entry, be_details
 from core.models import PortModel
-from eScrap.models import CompanyListModel
 from scripts.dgft_shipping_bill import get_shipping_dgft_cookies, get_dgft_shipping_details
 from .celery import app
 
@@ -111,43 +110,42 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha, data_id)
         return False
 
 
-@app.task
-def fetch_company_license(company_id, captcha, cookies, headers, port):
-    from bs4 import BeautifulSoup
-    from eScrap.models import CompanyLicenseModel, CompanyListModel
-    from datetime import date
-    from datetime import datetime
-    company = CompanyListModel.objects.get(pk=company_id)
-    data = {
-        'selLocationCd': port,
-        'searchIecNo': company.iec_number,
-        'licenseStartDate': '2022/01/01',
-        'licenseEndDate': datetime.now().strftime("%Y/%m/%d"),
-        'captchaValue': captcha,
-    }
-    import requests
-    response = requests.post('https://icegate.gov.in/EnqMod/licenseDGFT/pages/searchLicenseDGFTForEDI',
-                             cookies=cookies,
-                             headers=headers, data=data)
-    soup = BeautifulSoup(response.content.decode('utf-8'), 'html.parser')
-    table = soup.find('table')
-    trs = table.findAll('tr')
-    for tr in trs:
-        if not 'License No' in tr.text and not 'error code' in tr.text and not tr.text == '':
-            tds = tr.findAll('td')
-            print(tds)
-            if len(tds) != 0:
-                license, bool = CompanyLicenseModel.objects.get_or_create(license_no=tds[2].text, company=company)
-                license.status = tds[1].text
-                license.scheme = tds[3].text
-                license.port = port
-                license.license_date = datetime.strptime(tds[4].text.replace('\xa0', ''), '%d-%b-%Y')
-                license.dgft_transmission_date = datetime.strptime(tds[5].text.replace('\xa0', ''), '%d-%b-%Y')
-                license.date_of_integration = datetime.strptime(tds[6].text.replace('\xa0', ''), '%d-%b-%Y')
-                license.error_code = tds[7].text
-                license.file_number = tds[8].text
-                license.save()
-    port_obj = PortModel.objects.get(code=port)
-    company.port.add(port_obj)
-    company.is_fetch = True
-    company.save()
+# @app.task
+# def fetch_company_license(company_id, captcha, cookies, headers, port):
+#     from bs4 import BeautifulSoup
+#     from datetime import date
+#     from datetime import datetime
+#     company = CompanyListModel.objects.get(pk=company_id)
+#     data = {
+#         'selLocationCd': port,
+#         'searchIecNo': company.iec_number,
+#         'licenseStartDate': '2022/01/01',
+#         'licenseEndDate': datetime.now().strftime("%Y/%m/%d"),
+#         'captchaValue': captcha,
+#     }
+#     import requests
+#     response = requests.post('https://icegate.gov.in/EnqMod/licenseDGFT/pages/searchLicenseDGFTForEDI',
+#                              cookies=cookies,
+#                              headers=headers, data=data)
+#     soup = BeautifulSoup(response.content.decode('utf-8'), 'html.parser')
+#     table = soup.find('table')
+#     trs = table.findAll('tr')
+#     for tr in trs:
+#         if not 'License No' in tr.text and not 'error code' in tr.text and not tr.text == '':
+#             tds = tr.findAll('td')
+#             print(tds)
+#             if len(tds) != 0:
+#                 license, bool = CompanyLicenseModel.objects.get_or_create(license_no=tds[2].text, company=company)
+#                 license.status = tds[1].text
+#                 license.scheme = tds[3].text
+#                 license.port = port
+#                 license.license_date = datetime.strptime(tds[4].text.replace('\xa0', ''), '%d-%b-%Y')
+#                 license.dgft_transmission_date = datetime.strptime(tds[5].text.replace('\xa0', ''), '%d-%b-%Y')
+#                 license.date_of_integration = datetime.strptime(tds[6].text.replace('\xa0', ''), '%d-%b-%Y')
+#                 license.error_code = tds[7].text
+#                 license.file_number = tds[8].text
+#                 license.save()
+#     port_obj = PortModel.objects.get(code=port)
+#     company.port.add(port_obj)
+#     company.is_fetch = True
+#     company.save()

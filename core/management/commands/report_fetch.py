@@ -12,7 +12,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         status = options['status']
-        d = []
+        d = ['0310837893', '0310835522', '0310825235', '0310835516', '0310833996', '0310833846', '3011000356', '0310829977', '0310833304', '0310836033', '0310837232', '0310835296', '0311005481', '0311006856', '0310839558', '0310839625', '0310837138', '0310825251', '0311008763', '0310817639', '0310825276', '0311004927', '0311004570', '0310838758', '1310049729', '0311008874', '0310839650', '1310049731', '0310838205', '1310049708', '0310838475', '0311005034', '0310732839', '0310829056', '0310839125', '0310838869', '0310832769', '0310837441', '0310833591', '0311008621', '0810145959', '0310833701', '0310839541', '0310825596', '0310834614', '0310834613', '0310834960', '0310826316', '0310834979', '0310839062', '0310838414', '0310717723', '0310835311', '0310834962', '0310835515', '0310839542', '0310838034', '0310827444', '0310823762', '0311004902', '0310838697', '0310839139', '0310839116', '0310838036', '1310049730', '0310838320', '0310838326', '0310837230', '0310839069', '0310838966', '1310049615', '0310824203', '0310838037', '0310835198', '0310837960', '1310049614', '0310838039', '0310831827', '0310830479', '0310834980', '0311001739', '0310828188', '0310835231', '0310834825', '0310835562', '0310835310', '0310831149', '0310838322', '0310689110', '0310834976', '0310828054', '0310829058', '0311002408', '0310828182', '0310838176', '0310838478', '0310831148', '0311004535', '1310049493', '0310828013', '0310828053', '0310835340', '0310834611', '0310830463', '0310831829', '0310827783', '0310834966', '0310729488', '0310831147', '0310828052', '0310834974', '0310837231', '0310828186', '0310832148', '0310831830', '0310837958', '0310833704', '0311004700', '0310827015', '0310827361', '0310837961', '0310838967', '0310830088', '0311006923', '0310834907', '0310837898', '0310829957', '0310829979', '0310831825', '0310837902', '0310839460', '0310830434', '0310831843', '0310829894', '0310833589', '0310828181', '0310829991', '0310837994', '0310838099', '0311004986', '0310721806', '0311002880', '0310837955', '0310729706', '0310831828', '0311005544', '0310837555', '0310838862', '0311004194', '0310681621', '0310763644', '0310732679', '1310049613', '0310838914', '0310834927', '0310838902', '0310838098', '0310838340', '0310838101', '0311009007', '0310839157', '0310838864', '0311006527', '0310838970', '0310824205', '0310826413', '0310834296', '0310821169', '0310831630', '0310837568']
         bisc = []
         conc_list = []
         not_found = []
@@ -24,17 +24,29 @@ class Command(BaseCommand):
         import datetime
         today = datetime.datetime.now()
         date = datetime.datetime.strptime('1 1 2010', '%d %m %Y')
-        if status == 'expired':
-            list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date)
+        if d:
+            if status == 'expired':
+                list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__lt=today)
+            else:
+                list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date)
         else:
-            list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date)
-        biscuit_list, bisc, conc_list, steel_other, namkeen_other,found_other, not_found = fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen_other,found_other, not_found)
+            if status == 'expired':
+                list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__lt=today)
+            else:
+                list_exclude = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date)
+        biscuit_list, bisc, conc_list, steel_other, namkeen_other, found_other, not_found = fetch_data(list_exclude,
+                                                                                                       biscuit_list,
+                                                                                                       bisc, conc_list,
+                                                                                                       steel_other,
+                                                                                                       namkeen_other,
+                                                                                                       found_other,
+                                                                                                       not_found)
         with open('biscuits_{}.csv'.format(status), 'w') as csvfile:
             fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'Exporter', 'Notf No', 'TOTAL CIF', 'BAL CIF', 'SUGAR QTY',
                           'RBD QTY', 'HSN P', 'DF QTY', 'HSN D', 'FF QTY', 'HSN F', 'VAL 10%', 'VAL 10% Utilized',
                           'VAL 10% Balance', 'WPC QTY', 'HSN WPC', 'SWP QTY', 'HSN SWP', 'M&M O QTY', 'HSN M&M O',
-                          'GLUTEN QTY', 'HSN G', 'Fruit Cocoa QTY', 'HSN Fr', 'Leavening Agent QTY', 'PP QTY',
-                          'Paper & Paper Board', 'HSN PAP', 'Is Individual','Is Conversion']
+                          'GLUTEN QTY', 'HSN G', 'Fruit Cocoa QTY', 'HSN Fr', 'Leavening Agent QTY','Starch QTY', 'PP QTY',
+                          'Paper & Paper Board', 'HSN PAP', 'Is Individual', 'Is Conversion']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             for dict_data in biscuit_list:
@@ -45,7 +57,7 @@ class Command(BaseCommand):
                           'ESSENTIAL OIL QTY', 'HSN E', 'VAL 5%', 'VAL 5% Utilized', 'VAL 5% Balance', 'EMULSIFIER QTY',
                           'HSN EM', 'VAL 3%', 'VAL 3% Utilized', 'VAL 3% Balance', 'Other Qty', 'Other', 'VAL 2%',
                           'VAL 2% Utilized', 'VAL 2% Balance', 'PP QTY', 'HSN PP', 'Paper & Paper Board', 'HSN PAP',
-                          'Is Individual','Is Conversion']
+                          'Is Individual', 'Is Conversion']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             for dict_data in conc_list:
@@ -57,7 +69,9 @@ class Command(BaseCommand):
             for dict_data in not_found:
                 writer.writerow(dict_data)
         with open('namkeen_{}.csv'.format(status), 'w') as csvfile:
-            fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'Notf No', 'Exporter', 'TOTAL CIF', 'BAL CIF', 'Chickpeas QTY', 'Editable QTY', 'Relevant Additives QTY', 'Relevant Flavour QTY', 'Packing Material QTY', 'Is Individual']
+            fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'Notf No', 'Exporter', 'TOTAL CIF', 'BAL CIF', 'Chickpeas QTY',
+                          'Editable QTY', 'Relevant Additives QTY', 'Relevant Flavour QTY', 'Packing Material QTY',
+                          'Is Individual']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             for dict_data in namkeen_other:
@@ -69,7 +83,8 @@ class Command(BaseCommand):
             for dict_data in found_other:
                 writer.writerow(dict_data)
         with open('steel_{}.csv'.format(status), 'w') as csvfile:
-            fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'Notf No', 'Exporter', 'TOTAL CIF', 'BAL CIF', 'Battery QTY','Bearing QTY',
+            fieldnames = ['DFIA', 'DFIA DT', 'DFIA EXP', 'Notf No', 'Exporter', 'TOTAL CIF', 'BAL CIF', 'Battery QTY',
+                          'Bearing QTY',
                           'IC QTY', 'Valves QTY', 'Alloy Steel QTY', 'Relevant Hot Rolled/ Cold Rolled Steel QTY',
                           'Is Individual']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -85,11 +100,15 @@ def fetch_total(import_item):
         total = total + iitem.balance_quantity
     return total
 
+def fetch_debited(import_item):
+    total = 0
+    for iitem in import_item:
+        total = total + iitem.debited_quantity
+    return total
 
-
-def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,namkeen_other,found_other, not_found):
+def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen_other, found_other, not_found):
     for dfia in list_exclude:
-        if dfia.get_balance_cif() > 0:
+        if dfia.get_balance_cif() >= 0:
             try:
                 if dfia.get_norm_class == 'E5':
                     dict_data = {
@@ -173,6 +192,10 @@ def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,namkeen_ot
                     if import_item.exists():
                         total = 0
                         dict_data['Leavening Agent QTY'] = fetch_total(import_item)
+                    import_item = dfia.import_license.filter(item__head__name__icontains='starch')
+                    if import_item.exists():
+                        total = 0
+                        dict_data['Starch QTY'] = fetch_total(import_item)
                     import_item = dfia.import_license.filter(item__head__name__icontains='pp')
                     if import_item.exists():
                         total = 0
@@ -204,7 +227,6 @@ def fetch_data(list_exclude, biscuit_list,bisc, conc_list,steel_other,namkeen_ot
                     }
                     dict_data['VAL 2% Utilized'] = dict_data['VAL 2%'] - dict_data['VAL 2% Balance']
                     dict_data['VAL 5% Utilized'] = dict_data['VAL 5%'] - dict_data['VAL 5% Balance']
-                    print(dict_data['VAL 3% Balance'])
                     dict_data['VAL 3% Utilized'] = dict_data['VAL 3%'] - dict_data['VAL 3% Balance']
                     if dfia.export_license.all().first().old_quantity != 0.0:
                         dict_data['VAL 2% Utilized'] = 0

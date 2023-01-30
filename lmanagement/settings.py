@@ -46,12 +46,11 @@ INSTALLED_APPS = [
     'bill_of_entry.apps.BillOfEntryConfig',
     'allotment.apps.AllotmentConfig',
     'license_movement.apps.LicenseMovementConfig',
+    'report.apps.ReportConfig',
     'ebrc.apps.EbrcConfig',
     'shipping_bill.apps.ShippingBillConfig',
     'django.contrib.humanize',
     'material',
-    'eScrap',
-    'indian_numbers',
     'mathfilters',
 ]
 

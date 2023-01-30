@@ -1,3 +1,4 @@
+DROP DATABASE lmanagement;
 CREATE DATABASE lmanagement;
 CREATE USER lmanagement WITH PASSWORD 'lmanagement';
 ALTER ROLE lmanagement SET client_encoding TO 'utf8';

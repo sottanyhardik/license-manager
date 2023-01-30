@@ -111,11 +111,21 @@ def sugar_query(date_range=None):
 def rbd_query(date_range=None):
     tables = []
     query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
         'item__name__icontains': '1513',
     }
     queryset = all_queryset(query_dict, date_range=date_range)
     tables = query_set_table(tables, queryset, 'PKO')
+
     query_dict = {
+        'license__export_license__norm_class__norm_class': 'E132',
+        'item__name__icontains': '1513',
+    }
+    queryset = all_queryset(query_dict, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'PKO NAMKEEN')
+
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'RBD Palmolein Oil',
         'hs_code__hs_code__icontains': '15119020'
     }
@@ -124,6 +134,18 @@ def rbd_query(date_range=None):
     }
     queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters,date_range=date_range)
     tables = query_set_table(tables, queryset, 'RBD Palmolein Oil')
+
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E132',
+        'item__head__name__icontains': 'RBD Palmolein Oil',
+        'hs_code__hs_code__icontains': '15119020'
+    }
+    exclude_or_filters = {
+        'item__name__icontains': '1513'
+    }
+    queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters,date_range=date_range)
+    tables = query_set_table(tables, queryset, 'RBD Palmolein Oil Namkeen')
+
     return tables
 
 

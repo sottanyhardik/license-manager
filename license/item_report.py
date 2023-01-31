@@ -113,15 +113,28 @@ def rbd_query(date_range=None):
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
         'item__name__icontains': '1513',
+        'license__exporter__name__icontains': 'Parle',
     }
     queryset = all_queryset(query_dict, date_range=date_range)
-    tables = query_set_table(tables, queryset, 'PKO')
+    tables = query_set_table(tables, queryset, 'PKO PARLE')
+
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__name__icontains': '1513',
+    }
+    exclude_or_filters = {
+        'license__exporter__name__icontains': 'Parle',
+    }
+
+    queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters, date_range=date_range)
+    tables = query_set_table(tables, queryset, 'PKO OTHER')
 
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E132',
         'item__name__icontains': '1513',
     }
     queryset = all_queryset(query_dict, date_range=date_range)
+
     tables = query_set_table(tables, queryset, 'PKO NAMKEEN')
 
     query_dict = {
@@ -132,7 +145,7 @@ def rbd_query(date_range=None):
     exclude_or_filters = {
         'item__name__icontains': '1513'
     }
-    queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters,date_range=date_range)
+    queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters, date_range=date_range)
     tables = query_set_table(tables, queryset, 'RBD Palmolein Oil')
 
     query_dict = {
@@ -143,7 +156,7 @@ def rbd_query(date_range=None):
     exclude_or_filters = {
         'item__name__icontains': '1513'
     }
-    queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters,date_range=date_range)
+    queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters, date_range=date_range)
     tables = query_set_table(tables, queryset, 'RBD Palmolein Oil Namkeen')
 
     return tables
@@ -309,7 +322,7 @@ def juice_query(date_range=None):
 def packing_query(date_range=None):
     tables = []
     query_dict = {'item__head__name__icontains': 'Packing Material', 'is_restrict': False,
-                  'available_quantity__lte': 10000,'license__export_license__norm_class__norm_class':'E 132'}
+                  'available_quantity__lte': 10000, 'license__export_license__norm_class__norm_class': 'E 132'}
 
     queryset = all_queryset(query_dict, date_range=date_range)
     tables = query_set_table(tables, queryset, 'Less than 10000 Kg')

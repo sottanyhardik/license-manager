@@ -22,6 +22,8 @@ class CompanyModel(models.Model):
     phone_number = models.CharField(max_length=255, null=True, blank=True)
     email = models.EmailField(null=True, blank=True)
     address = models.TextField(null=True, blank=True)
+    address_line_1 = models.TextField(null=True, blank=True)
+    address_line_2 = models.TextField(null=True, blank=True)
     director_1 = models.TextField(null=True, blank=True)
     director_2 = models.TextField(null=True, blank=True)
     is_fetch = models.BooleanField(default=False)

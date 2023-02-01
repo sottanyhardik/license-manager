@@ -209,6 +209,13 @@ class GenerateTransferLetterView(FormView):
     def get_object(self):
         return self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
 
+    def get_initial(self):
+        initial = super().get_initial()
+        initial['company'] = str(self.get_object().company)
+        initial['company_address_line1'] = str(self.get_object().company.address_line_1)
+        initial['company_address_line2'] = str(self.get_object().company.address_line_2)
+        return initial
+
     def post(self, request, *args, **kwargs):
         from shutil import make_archive
         form = self.get_form()

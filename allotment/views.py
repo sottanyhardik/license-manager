@@ -311,6 +311,13 @@ class GenerateTransferLetterView(FormView):
         context = self.get_context_data(**kwargs)
         return self.render_to_response(context)
 
+    def get_initial(self):
+        initial = super().get_initial()
+        initial['company'] = str(self.get_object().company)
+        initial['company_address_line1'] = str(self.get_object().company.address_line_1)
+        initial['company_address_line2'] = str(self.get_object().company.address_line_2)
+        return initial
+
     def get_object(self):
         return self.model.objects.get(id=self.kwargs.get('pk'))
 

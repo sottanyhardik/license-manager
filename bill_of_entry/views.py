@@ -1,5 +1,6 @@
 # Create your views here.
 from django.db.models import Q
+from django.http import JsonResponse, HttpResponse
 from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, FormView, DeleteView, UpdateView, CreateView
@@ -9,6 +10,7 @@ from django_tables2.export import ExportMixin
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import UpdateWithInlinesView, InlineFormSetFactory
 
+from allotment.forms import TlForm
 from bill_of_entry.models import RowDetails
 from lmanagement.tasks import fetch_data_to_model
 from . import forms, tables, filters
@@ -77,7 +79,7 @@ class BillOfEntryUpdateDetailView(UpdateView):
 
     def get_success_url(self):
         boe = self.kwargs.get('boe')
-        return reverse('bill-of-entry-ajax-list')+'?bill_of_entry_number=' + str(boe)
+        return reverse('bill-of-entry-ajax-list') + '?bill_of_entry_number=' + str(boe)
 
 
 class BillOfEntryUpdateView(UpdateWithInlinesView):
@@ -88,7 +90,7 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
 
     def get_success_url(self):
         boe = self.kwargs.get('boe')
-        return reverse('bill-of-entry-ajax-list')+'?bill_of_entry_number=' + str(boe)
+        return reverse('bill-of-entry-ajax-list') + '?bill_of_entry_number=' + str(boe)
 
     def dispatch(self, request, *args, **kwargs):
         # check if there is some video onsite
@@ -138,7 +140,7 @@ class BillOfEntryFetchView(FormView):
         context['csrftoken'] = csrftoken
         data = self.kwargs.get('data')
         context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(
-        Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).count()
+            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).count()
         context['remain_captcha'] = context['remain_count'] / 3
         return context
 
@@ -149,7 +151,9 @@ class BillOfEntryFetchView(FormView):
         csrftoken = self.request.POST.get('csrftoken')
         status = True
         from bill_of_entry.models import BillOfEntryModel
-        data_list = BillOfEntryModel.objects.filter(Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).order_by('bill_of_entry_date')
+        data_list = BillOfEntryModel.objects.filter(
+            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).order_by(
+            'bill_of_entry_date')
         for data in data_list:
             from bill_of_entry.scripts.utils import port_dict
             status = fetch_data_to_model.delay(cookies, csrftoken, port_dict, kwargs, captcha, data.pk)
@@ -187,4 +191,59 @@ class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
         return context
 
 
+class GenerateTransferLetterView(FormView):
+    template_name = 'allotment/generate.html'
+    model = bill_of_entry.BillOfEntryModel
+    form_class = TlForm
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['type'] = True
+        context['object'] = self.get_object()
+        return context
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        return self.render_to_response(context)
+
+    def get_object(self):
+        return self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
+
+    def post(self, request, *args, **kwargs):
+        from shutil import make_archive
+        form = self.get_form()
+        if not form.is_valid():
+            return self.form_invalid(form)
+        else:
+            try:
+                boe_id = self.kwargs.get('boe')
+                boe = bill_of_entry.BillOfEntryModel.objects.get(bill_of_entry_number=boe_id)
+                from datetime import datetime
+                data = [{
+                    'company': self.request.POST.get('company'),
+                    'company_address_1': self.request.POST.get('company_address_line1'),
+                    'company_address_2': self.request.POST.get('company_address_line2'),
+                    'today': str(datetime.now().date()),
+                    'license': item.sr_number.license.license_number, 'license_date': item.sr_number.license_date.strftime("%d/%m/%Y"),
+                    'file_number': item.sr_number.license.file_number, 'quantity': item.qty,
+                    'v_allotment_inr': round(item.cif_inr, 2),
+                    'exporter_name': item.sr_number.license.exporter.name,
+                    'v_allotment_usd': item.cif_fc} for item in
+                    boe.item_details.all()]
+                tl = self.request.POST.get('tl_choice')
+                from core.models import TransferLetterModel
+                transfer_letter = TransferLetterModel.objects.get(pk=tl)
+                tl_path = transfer_letter.tl.path
+                file_path = 'media/TL_' + str(boe_id) + '_' + transfer_letter.name.replace(' ', '_') + '/'
+                from allotment.scripts.aro import generate_tl_software
+                generate_tl_software(data=data, tl_path=tl_path, path=file_path)
+                file_name = 'TL_' + str(boe_id) + '_' + transfer_letter.name.replace(' ', '_') + '.zip'
+                path_to_zip = make_archive(file_path, "zip", file_path)
+                zip_file = open(path_to_zip, 'rb')
+                response = HttpResponse(zip_file, content_type='application/force-download')
+                response['Content-Disposition'] = 'attachment; filename="%s"' % file_name
+                url = request.META.get('HTTP_ORIGIN') + path_to_zip.split('lmanagement')[-1]
+                return JsonResponse({'url': url, 'message': 'Success'})
+            except Exception as e:
+                print(e)
+                return self.form_invalid(form)

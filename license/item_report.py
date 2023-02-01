@@ -944,3 +944,5 @@ def confectinery_2009_expired_all(date_range={'start': '2001-04-01', 'end': '202
                'table': generate_table(confectinery_2009(date_range, exclude_party=['ravi', ]),
                                        LicenseConfectineryReportTable)}]
     return tables
+
+

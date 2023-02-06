@@ -304,8 +304,16 @@ def juice_query(date_range=None):
     }, {
         'license__notification_number': N2009
     }]
+
     queryset = all_queryset(query_dict, date_range=date_range, and_or_filter=and_or_filter)
     tables = query_set_table(tables, queryset)
+    query_dict = {
+        'license__export_license__norm_class__norm_class': 'E5',
+        'item__name__icontains': 'juice'
+    }
+    queryset = all_queryset(query_dict, date_range=date_range)
+    tables = query_set_table(tables, queryset)
+
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E1',
         'item__head__name__icontains': 'juice',

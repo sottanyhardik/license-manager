@@ -27,6 +27,7 @@
 
 
 
+
                                    {% url 'license-ajax-list' %}{% relative_url True 'is_active' request.GET.urlencode %}"
                            data-target="license-list" onclick="fetch_page(this)">Active Licenses</a>
                     </li>
@@ -39,54 +40,54 @@
                             <div class="tab-pane fade show active" id="license-list" role="tabpanel"
                                  aria-labelledby="license-list">
                                 <table class="table table-responsive table-bordered">
-                                {% if not 'EMPTY' in table.label %}
-                                    <thead>
-                                    <th>Sr NO</th>
-                                    <th>DFIA</th>
-                                    <th>DFIA DT</th>
-                                    <th>DFIA Exp</th>
-                                    <th>Exporter</th>
-                                    <th>Total CIF</th>
-                                    <th>Balance CIF</th>
-                                    <th>RBD QTY</th>
-                                    <th>RBD $</th>
-                                    <th>1513 QTY</th>
-                                    <th>1513 $</th>
-                                    <th>JUICE Qty</th>
-                                    <th>DF Qty</th>
-                                    <th>FF Qty</th>
-                                    <th>TOTAL Qty</th>
-                                    <th>Juice, DF & FF $</th>
-                                    <th>STARCH 1108 Qty</th>
-                                    <th>STARCH 3505 Qty</th>
-                                    <th>STARCH $</th>
-                                    <th>CHEESE Qty</th>
-                                    <th>CHEESE $</th>
-                                    <th>WPC Qty</th>
-                                    <th>WPC $</th>
-                                    <th>GLUTEN Qty</th>
-                                    <th>GLUTEN $</th>
-                                    <th>Leavening Agent Qty</th>
-                                    <th>PP Qty</th>
-                                    <th>PAP Qty</th>
-                                    <th>Balance CIF $</th>
-                                    </thead>
-                                {% else %}
-                                                                        <thead>
-                                    <th>Sr NO</th>
-                                    <th>DFIA</th>
-                                    <th>DFIA DT</th>
-                                    <th>DFIA Exp</th>
-                                    <th>Exporter</th>
-                                    <th>Total CIF</th>
-                                    <th>Balance CIF</th>
-                                    </thead>
-                                {% endif %}
+                                    {% if not 'EMPTY' in table.label %}
+                                        <thead>
+                                        <th>Sr NO</th>
+                                        <th>DFIA</th>
+                                        <th>DFIA DT</th>
+                                        <th>DFIA Exp</th>
+                                        <th>Exporter</th>
+                                        <th>Total CIF</th>
+                                        <th>Balance CIF</th>
+                                        <th>RBD QTY</th>
+                                        <th>RBD $</th>
+                                        <th>1513 QTY</th>
+                                        <th>1513 $</th>
+                                        <th>JUICE Qty</th>
+                                        <th>DF Qty</th>
+                                        <th>FF Qty</th>
+                                        <th>TOTAL Qty</th>
+                                        <th>Juice, DF & FF $</th>
+                                        <th>STARCH 1108 Qty</th>
+                                        <th>STARCH 3505 Qty</th>
+                                        <th>STARCH $</th>
+                                        <th>CHEESE Qty</th>
+                                        <th>CHEESE $</th>
+                                        <th>WPC Qty</th>
+                                        <th>WPC $</th>
+                                        <th>GLUTEN Qty</th>
+                                        <th>GLUTEN $</th>
+                                        <th>Leavening Agent Qty</th>
+                                        <th>PP Qty</th>
+                                        <th>PAP Qty</th>
+                                        <th>Balance CIF $</th>
+                                        </thead>
+                                    {% else %}
+                                        <thead>
+                                        <th>Sr NO</th>
+                                        <th>DFIA</th>
+                                        <th>DFIA DT</th>
+                                        <th>DFIA Exp</th>
+                                        <th>Exporter</th>
+                                        <th>Total CIF</th>
+                                        <th>Balance CIF</th>
+                                        </thead>
+                                    {% endif %}
                                     <tbody>
                                     {% if not 'EMPTY' in table.label %}
                                         {% for object in table.table %}
                                             <tr>
-                                                <td></td>
+                                                <td>{{ forloop.counter }}</td>
                                                 <td>'{{ object.license_number }}</td>
                                                 <td>{{ object.license_date }}</td>
                                                 <td>{{ object.license_expiry_date }}</td>
@@ -120,7 +121,7 @@
                                     {% else %}
                                         {% for object in table.table %}
                                             <tr>
-                                                <td></td>
+                                                <td>{{ forloop.counter }}</td>
                                                 <td>'{{ object.license_number }}</td>
                                                 <td>{{ object.license_date }}</td>
                                                 <td>{{ object.license_expiry_date }}</td>
@@ -140,4 +141,19 @@
             </div>
         </div>
     </div>
+{% endblock %}
+{% block extra_js_script %}
+    <script>
+
+        var table = document.getElementById("table"), sumVal = 0;
+
+        for (var i = 1; i < table.rows.length; i++) {
+            sumVal = sumVal + parseInt(table.rows[i].cells[2].innerHTML);
+        }
+
+        document.getElementById("val").innerHTML = "Sum Value = " + sumVal;
+        console.log(sumVal);
+
+    </script>
+
 {% endblock %}

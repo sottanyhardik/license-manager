@@ -60,5 +60,5 @@ urlpatterns = [
     path('movement/update/', login_required(views.MovementUpdateView.as_view()), name='movement-update'),
     path('summary/<slug:license>.pdf', login_required(views.PDFSummaryLicenseDetailView.as_view()),
          name='license_summary'),
-    path('report/biscuit/live', login_required(views.BiscuitLiveReportView.as_view()), name='report_conversion'),
+    path('report/biscuit/<slug:status>', login_required(views.BiscuitLiveReportView.as_view()), name='report_biscuit'),
 ]

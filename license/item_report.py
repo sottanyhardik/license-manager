@@ -444,7 +444,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
         end_object = datetime.datetime.strptime(end, '%Y-%m-%d')
         query_dict['license_expiry_date__lte'] = end_object
     elif is_expired:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         query_dict['license_expiry_date__lte'] = expiry_limit
     query_dict['is_self'] = is_self
     query_dict['is_au'] = is_au
@@ -499,7 +499,7 @@ def generate_table(queryset, table):
     return table
 
 
-def biscuit_conversion(date_range=None, party=None, exclude_party=None):
+def biscuit_conversion(date_range=None, party=None, exclude_party=None, status=False):
     query_dict = {
         'export_license__norm_class__norm_class': 'E5',
         'notification_number': N2015
@@ -519,7 +519,7 @@ def biscuit_conversion(date_range=None, party=None, exclude_party=None):
     exclude_or_filters = {
     }
     return get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
-                           exclude_or_filters=exclude_or_filters, exclude_and_filters=exclude_and_filters)
+                           exclude_or_filters=exclude_or_filters, exclude_and_filters=exclude_and_filters, is_expired=status)
 
 
 def confectionery_conversion(date_range=None, party=None, exclude_party=None):
@@ -609,8 +609,12 @@ def conversion_main(date_range=None):
     return tables
 
 
-def biscuit_live(date_range=None):
-    parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'])
+def biscuit_live(date_range=None, status=False):
+    if status == 'expired':
+        status=True
+    else:
+        status=False
+    parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'], status=status)
     empty_list = []
     parle_dfia = []
     other_dfia = []
@@ -619,7 +623,7 @@ def biscuit_live(date_range=None):
             parle_dfia.append(dfia)
         else:
             empty_list.append(dfia)
-    other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'])
+    other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], status=status)
     for dfia in other_dfia_qs:
         if dfia.get_balance_cif > 1000:
             other_dfia.append(dfia)

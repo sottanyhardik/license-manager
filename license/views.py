@@ -332,7 +332,8 @@ class BiscuitLiveReportView(PagedFilteredTableView, ListView):
 
     def get_context_data(self, **kwargs):
         context = super(BiscuitLiveReportView, self).get_context_data()
-        tables = biscuit_live()
+        status = self.kwargs.get('status')
+        tables = biscuit_live(status=status)
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context

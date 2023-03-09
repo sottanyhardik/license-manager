@@ -438,7 +438,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
         start_object = datetime.datetime.strptime(start, '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = start_object
     else:
-        expiry_limit = datetime.datetime.strptime('2023-01-01', '%Y-%m-%d')
+        expiry_limit = datetime.datetime.strptime('2000-01-01', '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = expiry_limit
     if end:
         end_object = datetime.datetime.strptime(end, '%Y-%m-%d')
@@ -618,14 +618,18 @@ def biscuit_live(date_range=None, status=False):
     empty_list = []
     parle_dfia = []
     other_dfia = []
+    if status:
+        limit = 20000
+    else:
+        limit = 1000
     for dfia in parle_dfia_qs:
-        if dfia.get_balance_cif > 1000:
+        if dfia.get_balance_cif > limit:
             parle_dfia.append(dfia)
         else:
             empty_list.append(dfia)
     other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], status=status)
     for dfia in other_dfia_qs:
-        if dfia.get_balance_cif > 1000:
+        if dfia.get_balance_cif > limit:
             other_dfia.append(dfia)
         else:
             empty_list.append(dfia)

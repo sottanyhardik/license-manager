@@ -9,7 +9,7 @@ from django.template.loader import get_template
 # Create your views here.
 from django.urls import reverse
 from django.views import View
-from django.views.generic import DetailView, TemplateView
+from django.views.generic import DetailView, TemplateView, ListView
 from django.views.generic.base import TemplateResponseMixin, ContextMixin
 from django_filters.views import FilterView
 from easy_pdf.views import PDFTemplateResponseMixin
@@ -25,7 +25,8 @@ from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_
     biscuit_2019_other, confectinery_2009, confectinery_2019, \
     confectinery_2019_other, biscuit_conversion, biscuit_2019_rama_rani, \
     conversion_main, conversion_other, confectinery_2019_rama_rani, confectinery_2009_all, biscuits_2009_all, \
-    generate_dict, tartaric_query, essential_oil_query, confectinery_2009_expired_all, biscuits_2009_expired_all
+    generate_dict, tartaric_query, essential_oil_query, confectinery_2009_expired_all, biscuits_2009_expired_all, \
+    biscuit_live
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -322,16 +323,16 @@ class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):
         return self.model.objects.get(license_number=self.kwargs.get('license'))
 
 
-class PDFCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
-    template_name = 'license/report_pdf.html'
+class BiscuitLiveReportView(PagedFilteredTableView, ListView):
+    template_name = 'license/biscuits_live.html'
     model = license.LicenseDetailsModel
     table_class = tables.LicenseBiscuitReportTable
     filter_class = filters.LicenseReportFilter
     context_object_name = 'license_list'
 
     def get_context_data(self, **kwargs):
-        context = super(PDFCReportView, self).get_context_data()
-        tables = conversion_main()
+        context = super(BiscuitLiveReportView, self).get_context_data()
+        tables = biscuit_live()
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context

@@ -111,6 +111,7 @@ class LicenseDetailsModel(models.Model):
         else:
             return 0
 
+    @property
     def get_balance_cif(self):
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
         debit = \
@@ -139,6 +140,7 @@ class LicenseDetailsModel(models.Model):
     def opening_balance(self):
         return self.export_license.all().aggregate(sum=Sum('cif_fc'))['sum']
 
+    @property
     def opening_fob(self):
         return self.export_license.all().aggregate(sum=Sum('fob_inr'))['sum']
 
@@ -165,81 +167,245 @@ class LicenseDetailsModel(models.Model):
     def sugar(self):
         return self.import_license.filter(item__head__name__icontains='sugar').first()
 
+    @property
     def get_rbd(self):
-        all = self.import_license.filter(Q(item__name__icontains='rbd')|Q(item__name__icontains='Pko')|Q(item__name__icontains='1513'))
+        all = self.import_license.filter(Q(item__name__icontains='rbd')).exclude(Q(item__name__icontains='1513'))
         sum1 = 0
         for d in all:
             sum1 = sum1 + d.balance_quantity
         return sum1
 
-    def rbd(self):
-        return self.import_license.filter(Q(item__name__icontains='rbd')|Q(item__name__icontains='Pko')|Q(item__name__icontains='1513')).first()
+    @property
+    def get_rbd_cif(self):
+        qty = self.get_rbd
+        if qty and qty > 100:
+            required_cif = self.get_rbd * 1
+            balance_cif = self.get_balance_cif - self.get_wpc_cif
+            if required_cif <= balance_cif:
+                return required_cif
+            else:
+                if balance_cif > 0:
+                    return balance_cif
+                else:
+                    return 0
+        else:
+            return 0
 
-    def food_flavour(self):
+    @property
+    def get_pko(self):
+        all = self.import_license.filter(Q(item__name__icontains='1513'))
         sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='food flavour'))
         for d in all:
             sum1 = sum1 + d.balance_quantity
         return sum1
 
-    def dietary_fibre(self):
-        sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='dietary fibre'))
-        for d in all:
-            sum1 = sum1 + d.balance_quantity
-        return sum1
+    @property
+    def get_pko_cif(self):
+        qty = self.get_pko
+        if qty and qty > 100:
+            balance_cif = self.get_balance_cif - self.get_cheese_cif
+            required_cif = qty * 1
+            if required_cif <= balance_cif:
+                return required_cif
+            else:
+                if balance_cif > 0:
+                    return balance_cif
+                else:
+                    return 0
+        else:
+            return 0
 
-    def get_leavening_agent(self):
-        return self.import_license.filter(item__head__name__icontains='Leavening Agent').first().balance_quantity
-
-    def leavening_agent(self):
-        return self.import_license.filter(item__head__name__icontains='Leavening Agent').first()
-
-    def get_emulsifier(self):
-        return self.import_license.filter(item__head__name__icontains='emulsifier').first().balance_quantity
-
+    @property
     def get_food_flavour(self):
-        return self.import_license.filter(item__head__name__icontains='food flavour').first().balance_quantity
+        sum1 = 0
+        all = self.import_license.filter(
+            Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(
+            item__name__icontains='juice')
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
-    def get_starch(self):
-        return self.import_license.filter(item__head__name__icontains='starch').first().balance_quantity
+    @property
+    def get_food_flavour_juice(self):
+        sum1 = 0
+        all = self.import_license.filter(Q(item__name__icontains='food flavour') & Q(item__name__icontains='juice'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
-    def get_food_colour(self):
-        return self.import_license.filter(item__head__name__icontains='food colour').first().balance_quantity
+    @property
+    def get_dietary_fibre(self):
+        sum1 = 0
+        all = self.import_license.filter(
+            Q(item__name__icontains='0802') & Q(item__name__icontains='dietary fibre')).exclude(
+            item__name__icontains='juice')
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
-    def get_anti_oxidant(self):
-        return self.import_license.filter(item__head__name__icontains='anti oxidant').first().balance_quantity
+    @property
+    def get_total_quantity_of_ff_df(self):
+        return self.get_food_flavour_juice + self.get_food_flavour + self.get_dietary_fibre
+
+    @property
+    def get_total_quantity_of_ff_df_cif(self):
+        qty = self.get_total_quantity_of_ff_df
+        if qty and qty > 100:
+            balance_cif = self.get_balance_cif - self.get_pko_cif
+            required_cif = qty * 2
+            if required_cif <= balance_cif:
+                return required_cif
+            else:
+                if balance_cif > 0:
+                    return balance_cif
+                else:
+                    return 0
+        else:
+            return 0
+
+    @property
+    def get_wheat_starch(self):
+        sum1 = 0
+        all = self.import_license.filter(
+            Q(item__head__name__icontains='starch') & Q(hs_code__hs_code__istartswith='11'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
+
+    @property
+    def get_modified_starch(self):
+        sum1 = 0
+        all = self.import_license.filter(
+            Q(item__head__name__icontains='starch') & Q(hs_code__hs_code__istartswith='35'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
+
+    @property
+    def get_starh_cif(self):
+        qty = self.get_wheat_starch + self.get_modified_starch
+        if qty and qty > 100:
+            required_cif = qty * 1
+            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_total_quantity_of_ff_df_cif
+            if required_cif <= balance_cif:
+                return required_cif
+            else:
+                if balance_cif > 0:
+                    return balance_cif
+                else:
+                    return 0
+        else:
+            return 0
+
+    @property
+    def get_leavening_agent(self):
+        sum1 = 0
+        all = self.import_license.filter(Q(item__name__icontains='Leavening Agent'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def get_fruit(self):
         sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='fruit')|Q(item__name__icontains='Cocoa'))
+        all = self.import_license.filter(Q(item__name__icontains='fruit') | Q(item__name__icontains='Cocoa'))
         for d in all:
             sum1 = sum1 + d.balance_quantity
         return sum1
 
-    def fruit(self):
-        return self.import_license.filter(item__head__name__icontains='fruit').first()
+    @property
+    def get_cheese(self):
+        sum1 = 0
+        all = self.import_license.filter(Q(item__name__icontains='0406') & Q(item__name__icontains='milk'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
-    def get_dietary_fibre(self):
-        return self.import_license.filter(item__head__name__icontains='dietary fibre').first().balance_quantity
+    @property
+    def get_cheese_cif(self):
+        qty = self.get_cheese
+        if qty and qty > 100:
+            balance_cif = self.get_balance_cif
+            required_cif = qty * 7.5
+            if required_cif <= balance_cif:
+                return required_cif
+            else:
+                if balance_cif > 0:
+                    return balance_cif
+                else:
+                    return 0
+        else:
+            return 0
 
-    def get_m_n_m(self):
-        return self.import_license.filter(item__head__name__icontains='milk').first().balance_quantity
+    @property
+    def get_wpc(self):
+        sum1 = 0
+        all = self.import_license.filter(item__head__name__icontains='milk').exclude(item__name__icontains='0406')
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
-    def m_n_m(self):
-        return self.import_license.filter(item__head__name__icontains='milk').first()
+    @property
+    def get_wpc_cif(self):
+        qty = self.get_wpc
+        if qty and qty > 100:
+            required_cif = qty * 7.5
+            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_total_quantity_of_ff_df_cif - self.get_starh_cif
+            if required_cif <= balance_cif:
+                return required_cif
+            else:
+                if balance_cif > 0:
+                    return balance_cif
+                else:
+                    return 0
+        else:
+            return 0
 
+    @property
+    def get_gluten(self):
+        sum1 = 0
+        all = self.import_license.filter(item__name__icontains='gluten')
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
+
+    @property
+    def get_gluten_cif(self):
+        qty = self.get_gluten
+        if qty and qty > 100:
+            required_cif = qty * 2
+            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif -self.get_wpc_cif
+            if required_cif <= balance_cif:
+                return required_cif
+            else:
+                if balance_cif > 0:
+                    return balance_cif
+                else:
+                    return 0
+        else:
+            return 0
+
+    @property
+    def cif_value_balance(self):
+        balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_gluten_cif
+        if balance_cif >= 0:
+            return balance_cif
+        else:
+            return -1
+
+    @property
     def get_pp(self):
-        return self.import_license.filter(item__head__name__icontains='pp').first().balance_quantity
-
-    def pp(self):
-        return self.import_license.filter(item__head__name__icontains='pp').first()
-
-    def get_bopp(self):
-        return self.import_license.filter(item__head__name__icontains='bopp').first().balance_quantity
-
-    def get_paper(self):
-        return self.import_license.filter(item__head__name__icontains='paper').first().balance_quantity
+        sum1 = 0
+        all = self.import_license.filter(item__head__name__icontains='pp')
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
+    @property
+    def get_paper_and_paper(self):
+        sum1 = 0
+        all = self.import_license.filter(item__head__name__icontains='paper and')
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def get_liquid_glucose(self):
         return self.import_license.filter(item__head__name__icontains='liquid glucose').first().balance_quantity
@@ -281,9 +447,9 @@ class LicenseDetailsModel(models.Model):
             credit = credit * .1
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
                 Q(item__head__name__icontains='flavour') | Q(item__head__name__icontains='fruit') | Q(
-                    item__head__name__icontains='dietary')|Q(
-                    item__head__name__icontains='Leavening')|Q(
-                    item__head__name__icontains='starch')|Q(
+                    item__head__name__icontains='dietary') | Q(
+                    item__head__name__icontains='Leavening') | Q(
+                    item__head__name__icontains='starch') | Q(
                     item__head__name__icontains='Coco'))
         for dimport in imports:
             if dimport.alloted_value:
@@ -327,10 +493,10 @@ class LicenseDetailsModel(models.Model):
     def get_balance_value(self):
         if self.get_norm_class == 'E5':
             return round(
-                self.get_balance_cif() - self.get_required_sugar_value() - self.get_required_rbd_value() - self.get_required_mnm_value(),
+                self.get_balance_cif - self.get_required_sugar_value() - self.get_required_rbd_value() - self.get_required_mnm_value(),
                 0)
         else:
-            return round(self.get_balance_cif() - self.get_required_sugar_value(), 0)
+            return round(self.get_balance_cif - self.get_required_sugar_value(), 0)
 
 
 KG = 'kg'

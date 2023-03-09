@@ -438,7 +438,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
         start_object = datetime.datetime.strptime(start, '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = start_object
     else:
-        expiry_limit = datetime.datetime.strptime('2023-12-01', '%Y-%m-%d')
+        expiry_limit = datetime.datetime.strptime('2023-01-01', '%Y-%m-%d')
         query_dict['license_expiry_date__gte'] = expiry_limit
     if end:
         end_object = datetime.datetime.strptime(end, '%Y-%m-%d')
@@ -517,7 +517,6 @@ def biscuit_conversion(date_range=None, party=None, exclude_party=None):
     else:
         exclude_and_filters = {}
     exclude_or_filters = {
-        'export_license__old_quantity': 0
     }
     return get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
                            exclude_or_filters=exclude_or_filters, exclude_and_filters=exclude_and_filters)
@@ -607,6 +606,33 @@ def conversion_main(date_range=None):
               {'label': 'Parle Biscuits',
                'table': generate_table(biscuit_conversion(date_range, party=['Parle']),
                                        LicenseBiscuitReportTable)}]
+    return tables
+
+
+def biscuit_live(date_range=None):
+    parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'])
+    empty_list = []
+    parle_dfia = []
+    other_dfia = []
+    for dfia in parle_dfia_qs:
+        if dfia.get_balance_cif > 1000:
+            parle_dfia.append(dfia)
+        else:
+            empty_list.append(dfia)
+    other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'])
+    for dfia in other_dfia_qs:
+        if dfia.get_balance_cif > 1000:
+            other_dfia.append(dfia)
+        else:
+            empty_list.append(dfia)
+    tables = [
+        {'label': 'Parle Biscuits',
+         'table': parle_dfia},
+        {'label': 'All Other DFIA',
+         'table': other_dfia},
+        {'label': 'EMPTY DFIA',
+         'table': empty_list}
+    ]
     return tables
 
 
@@ -952,5 +978,3 @@ def confectinery_2009_expired_all(date_range={'start': '2001-04-01', 'end': '202
                'table': generate_table(confectinery_2009(date_range, exclude_party=['ravi', ]),
                                        LicenseConfectineryReportTable)}]
     return tables
-
-

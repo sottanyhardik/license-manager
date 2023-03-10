@@ -667,13 +667,12 @@ def biscuit_2019_other(date_range=None):
     return tables
 
 
-def confectinery_2019(date_range=None, party=None, exclude_party=None,is_expired=False):
+def confectinery_query(date_range=None, party=None, exclude_party=None, is_expired=False):
     tables = []
     from license.tables import LicenseConfectineryReportTable
     from license.models import N2015
     query_dict = {
         'export_license__norm_class__norm_class': 'E1',
-        'notification_number': N2015,
         'export_license__old_quantity': 0
     }
     if party:
@@ -698,15 +697,15 @@ def confectinery_dfia(date_range=None, status=None):
         is_expired = True
     else:
         is_expired = False
-    tables = [{'label': 'Live Confectionery',
-               'table': confectinery_2019(date_range, party=[], is_expired=is_expired)}]
+    tables = [{'label': 'Confectionery',
+               'table': confectinery_query(date_range, party=[], is_expired=is_expired)}]
 
     return tables
 
 
 def confectinery_2019_other(date_range=None):
     tables = [{'label': 'Confectinery New Remaning [019/2015]',
-               'table': generate_table(confectinery_2019(date_range, exclude_party=['rama', 'rani', 'VANILA', 'parle']),
+               'table': generate_table(confectinery_query(date_range, exclude_party=['rama', 'rani', 'VANILA', 'parle']),
                                        LicenseConfectineryReportTable)}]
     return tables
 

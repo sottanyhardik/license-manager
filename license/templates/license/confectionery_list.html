@@ -42,28 +42,14 @@
                                         <th>Exporter</th>
                                         <th>Total CIF</th>
                                         <th>Balance CIF</th>
-                                        <th>RBD QTY</th>
-                                        <th>RBD $</th>
-                                        <th>1513 QTY</th>
-                                        <th>1513 $</th>
                                         <th>JUICE Qty</th>
-                                        <th>DF Qty</th>
-                                        <th>FF Qty</th>
-                                        <th>TOTAL Qty</th>
-                                        <th>Juice, DF & FF $</th>
-                                        <th>STARCH 1108 Qty</th>
-                                        <th>STARCH 3505 Qty</th>
-                                        <th>STARCH $</th>
-                                        <th>CHEESE Qty</th>
-                                        <th>CHEESE $</th>
-                                        <th>WPC Qty</th>
-                                        <th>WPC $</th>
-                                        <th>GLUTEN Qty</th>
-                                        <th>GLUTEN $</th>
-                                        <th>Leavening Agent Qty</th>
+                                        <th>TARTARIC Qty</th>
+                                        <th>ESSENTIAL OIL QTY</th>
+                                        <th>ESSENTIAL OIL CIF</th>
+                                        <th>OCI Qty</th>
+                                        <th>OCI CIF</th>
                                         <th>PP Qty</th>
                                         <th>PAP Qty</th>
-                                        <th>Balance CIF $</th>
                                         </thead>
                                     {% else %}
                                         <thead>
@@ -87,28 +73,14 @@
                                                 <td>{{ object.exporter }}</td>
                                                 <td>{{ object.opening_balance }}</td>
                                                 <td>{{ object.get_balance_cif }}</td>
-                                                <td>{{ object.get_rbd }}</td>
-                                                <td>{{ object.get_rbd_cif }}</td>
-                                                <td>{{ object.get_pko }}</td>
-                                                <td>{{ object.get_pko_cif }}</td>
-                                                <td>{{ object.get_food_flavour_juice }}</td>
-                                                <td>{{ object.get_dietary_fibre }}</td>
-                                                <td>{{ object.get_food_flavour }}</td>
-                                                <td>{{ object.get_total_quantity_of_ff_df }}</td>
-                                                <td>{{ object.get_total_quantity_of_ff_df_cif }}</td>
-                                                <td>{{ object.get_wheat_starch }}</td>
-                                                <td>{{ object.get_modified_starch }}</td>
-                                                <td>{{ object.get_starh_cif }}</td>
-                                                <td>{{ object.get_cheese }}</td>
-                                                <td>{{ object.get_cheese_cif }}</td>
-                                                <td>{{ object.get_wpc }}</td>
-                                                <td>{{ object.get_wpc_cif }}</td>
-                                                <td>{{ object.get_gluten }}</td>
-                                                <td>{{ object.get_gluten_cif }}</td>
-                                                <td>{{ object.get_leavening_agent }}</td>
+                                                <td>{{ object.get_juice }}</td>
+                                                <td>{{ object.get_tartaric_acid }}</td>
+                                                <td>{{ object.get_essential_oil }}</td>
+                                                <td>{{ object.get_per_essential_oil }}</td>
+                                                <td>{{ object.get_other_confectionery }}</td>
+                                                <td>{{ object.get_per_cif }}</td>
                                                 <td>{{ object.get_pp }}</td>
                                                 <td>{{ object.get_paper_and_paper }}</td>
-                                                <td>{{ object.cif_value_balance }}</td>
                                             </tr>
                                         {% endfor %}
                                     {% else %}

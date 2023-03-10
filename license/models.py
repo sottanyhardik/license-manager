@@ -373,7 +373,7 @@ class LicenseDetailsModel(models.Model):
         qty = self.get_gluten
         if qty and qty > 100:
             required_cif = qty * 2
-            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif -self.get_wpc_cif
+            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif
             if required_cif <= balance_cif:
                 return required_cif
             else:
@@ -399,25 +399,45 @@ class LicenseDetailsModel(models.Model):
         for d in all:
             sum1 = sum1 + d.balance_quantity
         return sum1
+
     @property
     def get_paper_and_paper(self):
         sum1 = 0
-        all = self.import_license.filter(item__head__name__icontains='paper and')
+        all = self.import_license.filter(Q(item__name__icontains='paper &') & Q(item__name__icontains='GSM'))
         for d in all:
             sum1 = sum1 + d.balance_quantity
         return sum1
 
-    def get_liquid_glucose(self):
-        return self.import_license.filter(item__head__name__icontains='liquid glucose').first().balance_quantity
+    @property
+    def get_juice(self):
+        sum1 = 0
+        all = self.import_license.filter(Q(hs_code__hs_code__istartswith='20') & Q(item__name__icontains='juice'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
+    @property
     def get_tartaric_acid(self):
-        return self.import_license.filter(item__head__name__icontains='acid').first().balance_quantity
+        sum1 = 0
+        all = self.import_license.filter(item__head__name__icontains='acid')
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
+    @property
     def get_essential_oil(self):
-        return self.import_license.filter(item__head__name__icontains='essential oil').first().balance_quantity
+        sum1 = 0
+        all = self.import_license.filter(item__head__name__icontains='essential oil')
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def get_other_confectionery(self):
-        return self.import_license.filter(item__head__name__icontains='other confectionery').first().balance_quantity
+        sum1 = 0
+        all = self.import_license.filter(item__head__name__icontains='other confectionery')
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     def get_starch_confectionery(self):
         from django.db.models import Q
@@ -456,7 +476,10 @@ class LicenseDetailsModel(models.Model):
                 credit = credit - dimport.debited_value - int(dimport.alloted_value)
             else:
                 credit = credit - dimport.debited_value
-        return round_down(credit)
+        if credit > 0:
+            return round_down(credit)
+        else:
+            return 0
 
     def get_per_essential_oil(self):
         lic = LicenseExportItemModel.objects.filter(license=self)
@@ -472,7 +495,10 @@ class LicenseDetailsModel(models.Model):
                 credit = credit - dimport.debited_value - int(dimport.alloted_value)
             else:
                 credit = credit - dimport.debited_value
-        return round_down(credit)
+        if credit > 0:
+            return round_down(credit)
+        else:
+            return 0
 
     def get_per_emulsifier(self):
         lic = LicenseExportItemModel.objects.filter(license=self)

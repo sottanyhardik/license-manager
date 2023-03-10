@@ -429,7 +429,8 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(item__head__name__icontains='essential oil')
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            if d:
+                sum1 = sum1 + d.balance_quantity
         return sum1
 
     def get_other_confectionery(self):

@@ -611,7 +611,7 @@ def biscuit_dfia(date_range=None, status=False):
     empty_list = []
     parle_dfia = []
     other_dfia = []
-    if status:
+    if is_expired:
         limit = 20000
     else:
         limit = 1000

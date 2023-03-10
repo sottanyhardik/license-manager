@@ -434,18 +434,12 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
     else:
         start = None
         end = None
-    if start:
-        start_object = datetime.datetime.strptime(start, '%Y-%m-%d')
-        query_dict['license_expiry_date__gte'] = start_object
-    else:
-        expiry_limit = datetime.datetime.strptime('2000-01-01', '%Y-%m-%d')
-        query_dict['license_expiry_date__gte'] = expiry_limit
-    if end:
-        end_object = datetime.datetime.strptime(end, '%Y-%m-%d')
-        query_dict['license_expiry_date__lte'] = end_object
-    elif is_expired:
+    if is_expired:
         expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
         query_dict['license_expiry_date__lte'] = expiry_limit
+    else:
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
+        query_dict['license_expiry_date__gte'] = expiry_limit
     query_dict['is_self'] = is_self
     query_dict['is_au'] = is_au
     for item in query_dict:
@@ -499,10 +493,9 @@ def generate_table(queryset, table):
     return table
 
 
-def biscuit_conversion(date_range=None, party=None, exclude_party=None, status=False):
+def biscuit_conversion(date_range=None, party=None, exclude_party=None, is_expired=False):
     query_dict = {
         'export_license__norm_class__norm_class': 'E5',
-        'notification_number': N2015
     }
     if party:
         or_filters = {
@@ -519,13 +512,13 @@ def biscuit_conversion(date_range=None, party=None, exclude_party=None, status=F
     exclude_or_filters = {
     }
     return get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
-                           exclude_or_filters=exclude_or_filters, exclude_and_filters=exclude_and_filters, is_expired=status)
+                           exclude_or_filters=exclude_or_filters, exclude_and_filters=exclude_and_filters,
+                           is_expired=is_expired)
 
 
 def confectionery_conversion(date_range=None, party=None, exclude_party=None):
     query_dict = {
         'export_license__norm_class__norm_class': 'E1',
-        'notification_number': N2015
     }
     if party:
         or_filters = {
@@ -609,12 +602,12 @@ def conversion_main(date_range=None):
     return tables
 
 
-def biscuit_live(date_range=None, status=False):
+def biscuit_dfia(date_range=None, status=False):
     if status == 'expired':
-        status=True
+        is_expired = True
     else:
-        status=False
-    parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'], status=status)
+        is_expired = False
+    parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'], is_expired=is_expired)
     empty_list = []
     parle_dfia = []
     other_dfia = []
@@ -627,7 +620,7 @@ def biscuit_live(date_range=None, status=False):
             parle_dfia.append(dfia)
         else:
             empty_list.append(dfia)
-    other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], status=status)
+    other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], is_expired=is_expired)
     for dfia in other_dfia_qs:
         if dfia.get_balance_cif > limit:
             other_dfia.append(dfia)
@@ -674,7 +667,7 @@ def biscuit_2019_other(date_range=None):
     return tables
 
 
-def confectinery_2019(date_range=None, party=None, exclude_party=None):
+def confectinery_2019(date_range=None, party=None, exclude_party=None,is_expired=False):
     tables = []
     from license.tables import LicenseConfectineryReportTable
     from license.models import N2015
@@ -696,14 +689,17 @@ def confectinery_2019(date_range=None, party=None, exclude_party=None):
     else:
         exclude_and_filters = {}
     queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
-                               exclude_and_filters=exclude_and_filters)
+                               exclude_and_filters=exclude_and_filters,is_expired=is_expired)
     return queryset
 
 
-def confectinery_2019_rama_rani(date_range=None):
-    tables = [{'label': 'New Confectinery',
-               'table': generate_table(confectinery_2019(date_range, party=[]),
-                                       LicenseConfectineryReportTable)}]
+def confectinery_dfia(date_range=None, status=None):
+    if status == 'expired':
+        is_expired = True
+    else:
+        is_expired = False
+    tables = [{'label': 'Live Confectionery',
+               'table': confectinery_2019(date_range, party=[], is_expired=is_expired)}]
 
     return tables
 

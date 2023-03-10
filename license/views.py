@@ -24,9 +24,9 @@ from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_
     packing_query, juice_query, oci_query, fruit_query, report_dict_generate, biscuit_2009, biscuit_2019, \
     biscuit_2019_other, confectinery_2009, confectinery_2019, \
     confectinery_2019_other, biscuit_conversion, biscuit_2019_rama_rani, \
-    conversion_main, conversion_other, confectinery_2019_rama_rani, confectinery_2009_all, biscuits_2009_all, \
+    conversion_main, conversion_other, confectinery_dfia, confectinery_2009_all, biscuits_2009_all, \
     generate_dict, tartaric_query, essential_oil_query, confectinery_2009_expired_all, biscuits_2009_expired_all, \
-    biscuit_live
+    biscuit_dfia
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -323,17 +323,31 @@ class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):
         return self.model.objects.get(license_number=self.kwargs.get('license'))
 
 
-class BiscuitLiveReportView(PagedFilteredTableView, ListView):
-    template_name = 'license/biscuits_live.html'
+class BiscuitReportView(PagedFilteredTableView, ListView):
+    template_name = 'license/biscuits_list.html'
     model = license.LicenseDetailsModel
     table_class = tables.LicenseBiscuitReportTable
     filter_class = filters.LicenseReportFilter
     context_object_name = 'license_list'
 
     def get_context_data(self, **kwargs):
-        context = super(BiscuitLiveReportView, self).get_context_data()
+        context = super(BiscuitReportView, self).get_context_data()
         status = self.kwargs.get('status')
-        tables = biscuit_live(status=status)
+        tables = biscuit_dfia(status=status)
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
+        return context
+
+
+class ConfectioneryReportView(PagedFilteredTableView, ListView):
+    template_name = 'license/biscuits_list.html'
+    model = license.LicenseDetailsModel
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(ConfectioneryReportView, self).get_context_data()
+        status = self.kwargs.get('status')
+        tables = confectinery_dfia(status=status)
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context
@@ -378,7 +392,7 @@ class PDFNewConfectioneryReportView(PDFTemplateResponseMixin, PagedFilteredTable
 
     def get_context_data(self, **kwargs):
         context = super(PDFNewConfectioneryReportView, self).get_context_data()
-        tables = confectinery_2019_rama_rani()
+        tables = confectinery_dfia()
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context

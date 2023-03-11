@@ -673,7 +673,6 @@ def confectinery_query(date_range=None, party=None, exclude_party=None, is_expir
     from license.models import N2015
     query_dict = {
         'export_license__norm_class__norm_class': 'E1',
-        'export_license__old_quantity': 0
     }
     if party:
         or_filters = {
@@ -688,7 +687,7 @@ def confectinery_query(date_range=None, party=None, exclude_party=None, is_expir
     else:
         exclude_and_filters = {}
     queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
-                               exclude_and_filters=exclude_and_filters,is_expired=is_expired)
+                               exclude_and_filters=exclude_and_filters, is_expired=is_expired)
     return queryset
 
 
@@ -697,16 +696,83 @@ def confectinery_dfia(date_range=None, status=None):
         is_expired = True
     else:
         is_expired = False
-    tables = [{'label': 'Confectionery',
-               'table': confectinery_query(date_range, party=[], is_expired=is_expired)}]
+    empty_list = []
+    dfia_list = []
+    if is_expired:
+        limit = 20000
+    else:
+        limit = 1000
+    dfia_qs = confectinery_query(date_range, party=[], is_expired=is_expired)
+    for dfia in dfia_qs:
+        if dfia.get_balance_cif > limit:
+            dfia_list.append(dfia)
+        else:
+            empty_list.append(dfia)
+    tables = [
+        {'label': 'All DFIA',
+         'table': dfia_list},
+        {'label': 'EMPTY DFIA',
+         'table': empty_list}
+    ]
+    return tables
 
+
+def namkeen_query(date_range=None, party=None, exclude_party=None, is_expired=False):
+    tables = []
+    from license.tables import LicenseConfectineryReportTable
+    from license.models import N2015
+    query_dict = {
+        'export_license__norm_class__norm_class': 'E132',
+    }
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
+    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
+                               exclude_and_filters=exclude_and_filters, is_expired=is_expired)
+    return queryset
+
+
+def namkeen_dfia(date_range=None, status=None):
+    if status == 'expired':
+        is_expired = True
+    else:
+        is_expired = False
+    empty_list = []
+    dfia_list = []
+    if is_expired:
+        limit = 20000
+    else:
+        limit = 1000
+    dfia_qs = namkeen_query(date_range, party=[], is_expired=is_expired)
+    for dfia in dfia_qs:
+        if dfia.get_balance_cif > limit:
+            dfia_list.append(dfia)
+        else:
+            empty_list.append(dfia)
+    tables = [
+        {'label': 'All DFIA',
+         'table': dfia_list},
+    ]
+    if empty_list:
+        tables.append({'label': 'EMPTY DFIA',
+         'table': empty_list})
     return tables
 
 
 def confectinery_2019_other(date_range=None):
     tables = [{'label': 'Confectinery New Remaning [019/2015]',
-               'table': generate_table(confectinery_query(date_range, exclude_party=['rama', 'rani', 'VANILA', 'parle']),
-                                       LicenseConfectineryReportTable)}]
+               'table': generate_table(
+                   confectinery_query(date_range, exclude_party=['rama', 'rani', 'VANILA', 'parle']),
+                   LicenseConfectineryReportTable)}]
     return tables
 
 

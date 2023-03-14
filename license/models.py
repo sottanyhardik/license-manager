@@ -147,8 +147,13 @@ class LicenseDetailsModel(models.Model):
     def opening_cif_inr(self):
         return self.export_license.all().aggregate(sum=Sum('cif_inr'))['sum']
 
-    def get_wheat(self):
-        all = self.import_license.filter(item__head__name__icontains='wheat')
+    @property
+    def get_chickpeas_obj(self):
+        return self.import_license.filter(item__name__icontains='Chickpeas').first()
+
+    @property
+    def get_chickpeas(self):
+        all = self.import_license.filter(item__name__icontains='Chickpeas')
         sum1 = 0
         for d in all:
             sum1 = sum1 + d.balance_quantity
@@ -214,6 +219,36 @@ class LicenseDetailsModel(models.Model):
                     return 0
         else:
             return 0
+
+    @property
+    def get_cmc(self):
+        sum1 = 0
+        all = self.import_license.filter(
+            Q(item__name__icontains='Additives'))
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
+
+    @property
+    def get_cmc_obj(self):
+        return self.import_license.filter(
+            Q(item__name__icontains='Additives')).first()
+
+
+    @property
+    def get_food_flavour_namkeen_obj(self):
+        return self.import_license.filter(
+            Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour')).distinct().first()
+
+
+    @property
+    def get_food_flavour_namkeen(self):
+        sum1 = 0
+        all = self.import_license.filter(
+            Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour')).distinct()
+        for d in all:
+            sum1 = sum1 + d.balance_quantity
+        return sum1
 
     @property
     def get_food_flavour(self):
@@ -457,6 +492,7 @@ class LicenseDetailsModel(models.Model):
     def get_required_mnm_value(self):
         return round(self.get_m_n_m() * 5, 0)
 
+    @property
     def get_per_cif(self):
         lic = LicenseExportItemModel.objects.filter(license=self)
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
@@ -482,6 +518,7 @@ class LicenseDetailsModel(models.Model):
         else:
             return 0
 
+    @property
     def get_per_essential_oil(self):
         lic = LicenseExportItemModel.objects.filter(license=self)
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
@@ -501,13 +538,14 @@ class LicenseDetailsModel(models.Model):
         else:
             return 0
 
-    def get_per_emulsifier(self):
+    @property
+    def get_per_black_pepper_cif(self):
         lic = LicenseExportItemModel.objects.filter(license=self)
         credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        if 'E1' in str(lic[0].norm_class):
+        if 'E132' in str(lic[0].norm_class):
             credit = credit * .03
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
-                Q(item__head__name__icontains='emulsifier'))
+                Q(item__name__icontains='pepper'))
         else:
             imports = []
         for dimport in imports:
@@ -515,7 +553,30 @@ class LicenseDetailsModel(models.Model):
                 credit = credit - dimport.debited_value - int(dimport.alloted_value)
             else:
                 credit = credit - dimport.debited_value
-        return round_down(credit)
+        if credit > 0:
+            return round_down(credit)
+        else:
+            return 0
+
+    @property
+    def get_cmc_cif(self):
+        lic = LicenseExportItemModel.objects.filter(license=self)
+        credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        if 'E132' in str(lic[0].norm_class):
+            credit = credit * .05
+            imports = LicenseImportItemsModel.objects.filter(license=self).filter(
+                Q(item__name__icontains='Additives'))
+        else:
+            imports = []
+        for dimport in imports:
+            if dimport.alloted_value:
+                credit = credit - dimport.debited_value - int(dimport.alloted_value)
+            else:
+                credit = credit - dimport.debited_value
+        if credit > 0:
+            return round_down(credit)
+        else:
+            return 0
 
     def get_balance_value(self):
         if self.get_norm_class == 'E5':

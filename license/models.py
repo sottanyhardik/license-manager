@@ -180,7 +180,7 @@ class LicenseDetailsModel(models.Model):
         qty = self.get_rbd
         if qty and qty > 100:
             required_cif = self.get_rbd * 1
-            balance_cif = self.get_balance_cif - self.get_wpc_cif
+            balance_cif = self.get_balance_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif
             if required_cif <= balance_cif:
                 return required_cif
             else:
@@ -203,7 +203,7 @@ class LicenseDetailsModel(models.Model):
     def get_pko_cif(self):
         qty = self.get_pko
         if qty and qty > 100:
-            balance_cif = self.get_balance_cif - self.get_cheese_cif
+            balance_cif = self.get_balance_cif - self.get_cheese_cif - self.get_total_quantity_of_ff_df_cif
             required_cif = qty * 1
             if required_cif <= balance_cif:
                 return required_cif
@@ -251,7 +251,7 @@ class LicenseDetailsModel(models.Model):
     def get_total_quantity_of_ff_df_cif(self):
         qty = self.get_total_quantity_of_ff_df
         if qty and qty > 100:
-            balance_cif = self.get_balance_cif - self.get_pko_cif
+            balance_cif = self.get_balance_cif
             required_cif = qty * 2
             if required_cif <= balance_cif:
                 return required_cif
@@ -373,7 +373,7 @@ class LicenseDetailsModel(models.Model):
         qty = self.get_gluten
         if qty and qty > 100:
             required_cif = qty * 2
-            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif
+            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif
             if required_cif <= balance_cif:
                 return required_cif
             else:
@@ -386,7 +386,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def cif_value_balance(self):
-        balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_gluten_cif
+        balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_gluten_cif - self.get_total_quantity_of_ff_df_cif - self.get_rbd_cif
         if balance_cif >= 0:
             return balance_cif
         else:

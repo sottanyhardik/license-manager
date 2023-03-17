@@ -108,7 +108,7 @@ def fetch_debited(import_item):
 
 def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen_other, found_other, not_found):
     for dfia in list_exclude:
-        if dfia.get_balance_cif() >= 0:
+        if dfia.get_balance_cif >= 0:
             try:
                 if dfia.get_norm_class == 'E5':
                     dict_data = {
@@ -118,7 +118,7 @@ def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen
                         'Exporter': dfia.exporter.name[:15],
                         'Notf No': dfia.notification_number,
                         'TOTAL CIF': float(dfia.opening_balance),
-                        'BAL CIF': float(dfia.get_balance_cif()),
+                        'BAL CIF': float(dfia.get_balance_cif),
                         'SUGAR QTY': "",
                         'RBD QTY': "",
                         'DF QTY': "",
@@ -214,7 +214,7 @@ def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen
                         'Notf No': dfia.notification_number,
                         'Exporter': dfia.exporter.name[:15],
                         'TOTAL CIF': float(dfia.opening_balance),
-                        'BAL CIF': float(dfia.get_balance_cif()),
+                        'BAL CIF': float(dfia.get_balance_cif),
                         'SUGAR QTY': "",
                         'FF QTY': "",
                         'VAL 2%': int(dfia.opening_balance * .02),
@@ -293,7 +293,7 @@ def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen
                         'Notf No': dfia.notification_number,
                         'Exporter': dfia.exporter.name[:15],
                         'TOTAL CIF': float(dfia.opening_balance),
-                        'BAL CIF': float(dfia.get_balance_cif()),
+                        'BAL CIF': float(dfia.get_balance_cif),
                         'Chickpeas QTY': "",
                         'Editable QTY': "",
                         'Relevant Additives QTY': "",
@@ -330,7 +330,7 @@ def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen
                         'Notf No': dfia.notification_number,
                         'Exporter': dfia.exporter.name[:15],
                         'TOTAL CIF': float(dfia.opening_balance),
-                        'BAL CIF': float(dfia.get_balance_cif()),
+                        'BAL CIF': float(dfia.get_balance_cif),
                         'Bearing QTY': "",
                         'Battery QTY': "",
                         'IC QTY': "",
@@ -372,7 +372,7 @@ def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen
                         'DFIA File No': str(dfia.file_number),
                         'Notf No': dfia.notification_number,
                         'Exporter': dfia.exporter.name[:15],
-                        'BAL CIF': float(dfia.get_balance_cif()),
+                        'BAL CIF': float(dfia.get_balance_cif),
                     }
                     found_other.append(dict_data)
             except Exception as e:

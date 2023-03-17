@@ -16,7 +16,7 @@ class ColumnTotal(dt2.Column):
 class BalanceCIFColumn(ColumnTotal):
 
     def render(self, record):
-        bills = record.get_balance_cif()
+        bills = record.get_balance_cif
         self.column_total += bills
         return intcomma(round(bills, 0))
 

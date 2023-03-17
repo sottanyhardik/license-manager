@@ -198,7 +198,7 @@ class LicenseListView(FilterView):
         if csv:
             f = self.filterset_class(request.GET, queryset=self.model.objects.all())
             for d in f.qs:
-                d.balance_cif = d.get_balance_cif()
+                d.balance_cif = d.get_balance_cif
                 d.export_item = d.get_norm_class
                 d.license_number = d.license_number.replace("'", '')
                 d.fob = d.opening_fob()

@@ -38,11 +38,11 @@ def round_down(n, decimals=0):
 def check_license():
     from license.models import LicenseDetailsModel
     for license in LicenseDetailsModel.objects.all():
-        if license.get_balance_cif() < 500:
+        if license.get_balance_cif < 500:
             license.is_null = True
         if not license.is_self:
             license.is_active = False
-        elif license.is_expired or not license.is_self or license.get_balance_cif() < 500 or license.is_au:
+        elif license.is_expired or not license.is_self or license.get_balance_cif < 500 or license.is_au:
             license.is_active = False
         else:
             license.is_active = True

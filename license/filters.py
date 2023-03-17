@@ -59,8 +59,8 @@ class LicenseDetailFilter(django_filters.FilterSet):
 
     def check_null(self, queryset, name, value):
         for set in queryset:
-            if not set.balance_cif == set.get_balance_cif():
-                set.balance_cif = set.get_balance_cif()
+            if not set.balance_cif == set.get_balance_cif:
+                set.balance_cif = set.get_balance_cif
                 set.save()
         if value:
             return queryset.filter(balance_cif__lte=100).distinct()

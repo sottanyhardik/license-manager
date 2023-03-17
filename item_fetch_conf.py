@@ -25,7 +25,7 @@ def fetch_data(list1):
                     data_dict['Ledger Date'] = dfia.ledger_date.strftime('%d/%m/%Y')
                 data_dict['Notf No'] = dfia.notification_number
                 data_dict['TOTAL CIF'] = float(dfia.opening_balance)
-                data_dict['BAL CIF'] = float(dfia.get_balance_cif())
+                data_dict['BAL CIF'] = float(dfia.get_balance_cif)
                 data_dict['2% of CIF'] = int(dfia.opening_balance * .02)
                 data_dict['2% of CIF Balance'] = dfia.get_per_cif()
                 data_dict['5% of CIF'] = int(dfia.opening_balance * .05)

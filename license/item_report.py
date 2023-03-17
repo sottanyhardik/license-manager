@@ -831,8 +831,8 @@ def generate_dict(object, total_dict, new=False):
         'usable_cif': '--'
     }
     dicts['balance'] = balance_dict
-    total_dict['balance']['cif'] = round(total_dict['balance']['cif'] + object.get_balance_cif(), 2)
-    balance = round(object.get_balance_cif(), 0)
+    total_dict['balance']['cif'] = round(total_dict['balance']['cif'] + object.get_balance_cif, 2)
+    balance = round(object.get_balance_cif, 0)
     cif_required = object.sugar().required_cif
     if balance < cif_required:
         cif_required = balance

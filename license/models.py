@@ -234,12 +234,10 @@ class LicenseDetailsModel(models.Model):
         return self.import_license.filter(
             Q(item__name__icontains='Additives')).first()
 
-
     @property
     def get_food_flavour_namkeen_obj(self):
         return self.import_license.filter(
             Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour')).distinct().first()
-
 
     @property
     def get_food_flavour_namkeen(self):
@@ -254,8 +252,7 @@ class LicenseDetailsModel(models.Model):
     def get_food_flavour(self):
         sum1 = 0
         all = self.import_license.filter(
-            Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(
-            item__name__icontains='juice')
+            Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(Q(item__name__icontains='juice') | Q(item__name__icontains='Fruit'))
         for d in all:
             sum1 = sum1 + d.balance_quantity
         return sum1
@@ -263,7 +260,8 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_food_flavour_juice(self):
         sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='food flavour') & Q(item__name__icontains='juice'))
+        all = self.import_license.filter(Q(item__name__icontains='food flavour')).filter(
+            Q(item__name__icontains='juice') | Q(item__name__icontains='2009') | Q(hs_code__hs_code__istartswith='2009') )
         for d in all:
             sum1 = sum1 + d.balance_quantity
         return sum1

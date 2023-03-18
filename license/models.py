@@ -260,8 +260,7 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_food_flavour_juice(self):
         sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='food flavour')).filter(
-            Q(item__name__icontains='juice') | Q(item__name__icontains='2009') | Q(hs_code__hs_code__istartswith='2009') )
+        all = self.import_license.filter(Q(item__name__icontains='juice') | Q(item__name__icontains='2009') | Q(hs_code__hs_code__istartswith='2009'))
         for d in all:
             sum1 = sum1 + d.balance_quantity
         return sum1

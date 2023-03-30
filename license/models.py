@@ -252,7 +252,7 @@ class LicenseDetailsModel(models.Model):
     def get_food_flavour(self):
         sum1 = 0
         all = self.import_license.filter(
-            Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(Q(item__name__icontains='juice') | Q(item__name__icontains='Fruit'))
+            Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(Q(hs_code__hs_code__istartswith='2009'))
         for d in all:
             sum1 += d.balance_quantity
         return sum1

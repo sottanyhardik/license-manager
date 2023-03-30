@@ -156,7 +156,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(item__name__icontains='Chickpeas')
         sum1 = 0
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     def wheat(self):
@@ -166,7 +166,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(item__head__name__icontains='sugar')
         sum1 = 0
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     def sugar(self):
@@ -177,7 +177,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(Q(item__name__icontains='rbd')).exclude(Q(item__name__icontains='1513'))
         sum1 = 0
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -201,7 +201,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(Q(item__name__icontains='1513'))
         sum1 = 0
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -226,7 +226,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(
             Q(item__name__icontains='Additives'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -245,7 +245,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(
             Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour')).distinct()
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -254,7 +254,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(
             Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(Q(item__name__icontains='juice') | Q(item__name__icontains='Fruit'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -262,7 +262,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(Q(item__name__icontains='juice') | Q(item__name__icontains='2009') | Q(hs_code__hs_code__istartswith='2009'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -272,7 +272,7 @@ class LicenseDetailsModel(models.Model):
             Q(item__name__icontains='0802') & Q(item__name__icontains='dietary fibre')).exclude(
             item__name__icontains='juice')
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -301,7 +301,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(
             Q(item__head__name__icontains='starch') & Q(hs_code__hs_code__istartswith='11'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -310,7 +310,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(
             Q(item__head__name__icontains='starch') & Q(hs_code__hs_code__istartswith='35'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -334,14 +334,14 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(Q(item__name__icontains='Leavening Agent'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     def get_fruit(self):
         sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='fruit') | Q(item__name__icontains='Cocoa'))
+        all = self.import_license.filter(Q(hs_code__hs_code__istartswith='2009')).filter(Q(item__name__icontains='fruit') | Q(item__name__icontains='Cocoa'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -349,7 +349,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(Q(item__name__icontains='0406') & Q(item__name__icontains='milk'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -373,7 +373,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(item__head__name__icontains='milk').exclude(item__name__icontains='0406')
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -397,7 +397,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(item__name__icontains='gluten')
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -429,7 +429,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(item__head__name__icontains='pp')
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -437,7 +437,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(Q(item__name__icontains='paper &') & Q(item__name__icontains='GSM'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -445,7 +445,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(Q(item__name__icontains='Relevant Fruit') | Q(item__name__icontains='juice'))
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -453,7 +453,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(item__head__name__icontains='acid')
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     @property
@@ -462,14 +462,14 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(item__head__name__icontains='essential oil')
         for d in all:
             if d:
-                sum1 = sum1 + d.balance_quantity
+                sum1 += d.balance_quantity
         return sum1
 
     def get_other_confectionery(self):
         sum1 = 0
         all = self.import_license.filter(item__head__name__icontains='other confectionery')
         for d in all:
-            sum1 = sum1 + d.balance_quantity
+            sum1 += d.balance_quantity
         return sum1
 
     def get_starch_confectionery(self):

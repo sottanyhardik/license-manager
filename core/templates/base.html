@@ -134,17 +134,6 @@
                         <li class="nav-item dropdown">
                             <a href="#" class="nav-link count-indicator "><i class="mdi mdi-message-reply-text"></i></a>
                         </li>
-                        <li class="nav-item nav-search d-none d-lg-block ml-3">
-                            <div class="input-group">
-                                <div class="input-group-prepend">
-                      <span class="input-group-text" id="search">
-                        <i class="mdi mdi-magnify"></i>
-                      </span>
-                                </div>
-                                <input type="text" class="form-control" placeholder="search" aria-label="search"
-                                       aria-describedby="search">
-                            </div>
-                        </li>
                     </ul>
                     <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-center">
                         <a class="navbar-brand brand-logo" href="{% url 'dashboard' %}"><img
@@ -156,64 +145,6 @@
                     <ul class="navbar-nav navbar-nav-right">
                         <li class="nav-item dropdown d-lg-flex d-none">
                             <a href="{% url 'movement-list' %}" class="btn btn-success">License Movement</a>
-                        </li>
-                        <li class="nav-item dropdown d-lg-flex d-none">
-                            <a class="dropdown-toggle show-dropdown-arrow btn btn-danger btn-sm"
-                               id="nreportDropdown" href="#" data-toggle="dropdown">
-                                Reports
-                            </a>
-                            <div class="dropdown-menu dropdown-menu-right navbar-dropdown preview-list"
-                                 aria-labelledby="nreportDropdown">
-                                <p class="mb-0 font-weight-medium float-left dropdown-header">Reports</p>
-                                <a href="{% url 'report_biscuit' 'live' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Live Biscuit DFIA License</a>
-                                <a href="{% url 'report_biscuit' 'expired' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Expired Biscuit DFIA License</a>
-                                <a href="{% url 'report_other_conversion' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    CONVERSION V's License</a>
-                                <a href="{% url 'report_new_biscuits' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Biscuits 2019 Notification</a>
-                                <a href="{% url 'report_new_confectionery' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Confectionery 2019 Notification</a>
-                                <a href="{% url 'report_new_biscuits_other' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Biscuits Other 2019 Notification</a>
-                                <a href="{% url 'report_new_confectionery_other' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Confectionery Other 2019 Notification</a>
-                                <a href="{% url 'report_bis_old' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Biscuits 2009 Notification</a>
-                                <a href="{% url 'report_con_old' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Confectionery 2009 Notification</a>
-                                <a href="{% url 'biscuits_expiried_old' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Expiry 098/2009 Biscuits</a>
-                                <a href="{% url 'biscuits_expiried_new' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Expiry 019/2015 Biscuits</a>
-                                <a href="{% url 'confectinery_expiried_old' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Expiry 098/2009 Confectinery</a>
-                                <a href="{% url 'confectinery_other_expiried_old' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Expiry Other 098/2009 Confectinery</a>
-                                <a href="{% url 'confectinery_expiried_new' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    Expiry 019/2015 Confectinery</a>
-                                <a href="{% url 'biscuits_au' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    AU Biscuits</a>
-                                <a href="{% url 'confectinery_au' %}" class="dropdown-item">
-                                    <i class="mdi mdi-file-pdf text-primary"></i>
-                                    AU Confectinery</a>
-                            </div>
                         </li>
                         <li class="nav-item dropdown d-lg-flex d-none">
                             <a class="dropdown-toggle show-dropdown-arrow btn btn-info"

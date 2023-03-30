@@ -339,7 +339,7 @@ class LicenseDetailsModel(models.Model):
 
     def get_fruit(self):
         sum1 = 0
-        all = self.import_license.filter(Q(hs_code__hs_code__istartswith='18050000')).filter(Q(item__name__icontains='fruit') | Q(item__name__icontains='Cocoa'))
+        all = self.import_license.filter(Q(hs_code__hs_code__istartswith='18050000')).filter(Q(item__name__icontains='fruit') | Q(item__name__icontains='Coco'))
         for d in all:
             sum1 += d.balance_quantity
         return sum1

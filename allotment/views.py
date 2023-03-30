@@ -1,4 +1,4 @@
-from django.db.models import Sum
+from django.db.models import Sum, F
 from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
 from django.views.generic import DetailView, CreateView, UpdateView, FormView
@@ -232,6 +232,8 @@ class DownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
         context = super().get_context_data(**kwargs)
         total = 0
         total_list = [total + int(data.required_value) for data in self.get_queryset()]
+        queryset = self.get_queryset().values('item_name').order_by('item_name').annotate(total_qty=Sum('required_quantity'), value=Sum(F('required_quantity')*F('unit_value_per_unit'))).distinct()
+        context['queryset'] = queryset
         context['total_cif'] = sum(total_list)
         import datetime
         context['today'] = datetime.datetime.now().date

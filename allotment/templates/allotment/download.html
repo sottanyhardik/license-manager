@@ -173,13 +173,26 @@
         </table>
     {% endfor %}
     <br>
-    <table>
+    <table class="table border">
+        <thead>
+        <th>Item</th>
+        <th>Quanity</th>
+        <th>Value</th>
+        </thead>
+        {% for item in queryset %}
+            <tr style="text-align: center">
+                <td>{{ item.item_name }}</td>
+                <td>{{ item.total_qty }}</td>
+                <td>{{ item.value|floatformat:2 }}</td>
+            </tr>
+        {% endfor %}
         <tr style="text-align: center">
             <td>-</td>
             <td><b>Total USD $</b></td>
             <td><b>{{ total }}</b></td>
-            <td>-</td>
         </tr>
+
+
     </table>
 
 {% endblock %}

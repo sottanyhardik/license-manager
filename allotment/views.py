@@ -291,7 +291,7 @@ class ARODocumentGenerateView(FormView):
                 zip_file = open(path_to_zip, 'rb')
                 response = HttpResponse(zip_file, content_type='application/force-download')
                 response['Content-Disposition'] = 'attachment; filename="%s"' % file_name
-                url = request.META.get('HTTP_ORIGIN') + path_to_zip.split('lmanagement')[-1]
+                url = request.headers.get('origin') + path_to_zip.split('lmanagement')[-1]
                 return JsonResponse({'url': url, 'message': 'Success'})
             except Exception as e:
                 print(e)
@@ -356,7 +356,7 @@ class GenerateTransferLetterView(FormView):
                 zip_file = open(path_to_zip, 'rb')
                 response = HttpResponse(zip_file, content_type='application/force-download')
                 response['Content-Disposition'] = 'attachment; filename="%s"' % file_name
-                url = request.META.get('HTTP_ORIGIN') + path_to_zip.split('lmanagement')[-1]
+                url = request.headers.get('origin') + path_to_zip.split('lmanagement')[-1]
                 return JsonResponse({'url': url, 'message': 'Success'})
             except Exception as e:
                 print(e)

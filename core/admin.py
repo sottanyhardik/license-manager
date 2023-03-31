@@ -23,6 +23,7 @@ for model_name, model in app.models.items():
         pass
 
 
+@admin.register(HSCodeDutyModel)
 class HSCodeDutyAdmin(admin.ModelAdmin):
     actions = ['download_csv']
     list_display = (
@@ -53,4 +54,3 @@ class HSCodeDutyAdmin(admin.ModelAdmin):
     download_csv.short_description = "Download CSV file for selected stats."
 
 
-admin.site.register(HSCodeDutyModel, HSCodeDutyAdmin)

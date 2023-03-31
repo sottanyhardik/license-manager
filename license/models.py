@@ -252,7 +252,8 @@ class LicenseDetailsModel(models.Model):
     def get_food_flavour(self):
         sum1 = 0
         all = self.import_license.filter(
-            Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(Q(hs_code__hs_code__istartswith='2009'))
+            Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(
+            Q(hs_code__hs_code__istartswith='2009'))
         for d in all:
             sum1 += d.balance_quantity
         return sum1
@@ -260,7 +261,8 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_food_flavour_juice(self):
         sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='juice') | Q(item__name__icontains='2009') | Q(hs_code__hs_code__istartswith='2009'))
+        all = self.import_license.filter(Q(item__name__icontains='juice') | Q(item__name__icontains='2009') | Q(
+            hs_code__hs_code__istartswith='2009'))
         for d in all:
             sum1 += d.balance_quantity
         return sum1
@@ -339,26 +341,28 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_fruit(self):
-        sum1 = 0
-        all = self.import_license.filter(Q(hs_code__hs_code__istartswith='18050000'))
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        """
+        Query Balance Cocoa Quantity
+        @return: Total Balance Quantity of Cocoa
+        """
+        return sum(
+            [item.balance_quantity for item in self.import_license.filter(Q(hs_code__hs_code__istartswith='18050000'))])
 
     @property
-    def get_cheese(self):
-        sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='0406') & Q(item__name__icontains='milk'))
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+    def get_cheese(self) -> float:
+        """
+        Query Balance Cheese Quantity
+        @return: Total Balance Quantity of Cheese
+        """
+        return sum([item.balance_quantity for item in
+                    self.import_license.filter(Q(item__name__icontains='0406') & Q(item__name__icontains='milk'))])
 
     @property
     def get_cheese_cif(self):
         qty = self.get_cheese
         if qty and qty > 100:
             balance_cif = self.get_balance_cif
-            required_cif = qty * 7.5
+            required_cif = qty * 6.8
             if required_cif <= balance_cif:
                 return required_cif
             else:
@@ -371,13 +375,14 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_wpc(self):
-        sum1 = 0
-        all = self.import_license.filter(item__head__name__icontains='milk').exclude(item__name__icontains='0406')
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        """
+                Query Balance WPC Quantity
+                @return: Total Balance Quantity of WPC
+        """
+        return sum([item.balance_quantity for item in
+                    self.import_license.filter(item__head__name__icontains='milk').exclude(
+                        item__name__icontains='0406')])
 
-    @property
     def get_wpc_cif(self):
         qty = self.get_wpc
         if qty and qty > 100:

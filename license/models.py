@@ -349,7 +349,7 @@ class LicenseDetailsModel(models.Model):
             [item.balance_quantity for item in self.import_license.filter(Q(hs_code__hs_code__istartswith='18050000'))])
 
     @property
-    def get_cheese(self) -> float:
+    def get_cheese(self):
         """
         Query Balance Cheese Quantity
         @return: Total Balance Quantity of Cheese
@@ -383,6 +383,7 @@ class LicenseDetailsModel(models.Model):
                     self.import_license.filter(item__head__name__icontains='milk').exclude(
                         item__name__icontains='0406')])
 
+    @property
     def get_wpc_cif(self):
         qty = self.get_wpc
         if qty and qty > 100:

@@ -1,9 +1,8 @@
-amqp
-appscript
-arabic-reshaper
-asgiref
-attrs
-autopep8
+amqp==5.0.9
+arabic-reshaper==2.1.1
+asgiref==3.6.0
+attrs==20.3.0
+autopep8==1.5.5
 backports.csv==1.0.7
 beautifulsoup4==4.9.3
 billiard==3.6.4.0

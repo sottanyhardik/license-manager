@@ -28,6 +28,7 @@
         .table thead th {
             vertical-align: bottom;
             border-bottom: 2px solid #000;
+            width: 100%;
         }
 
         .table tbody + tbody {
@@ -194,5 +195,5 @@
 
 
     </table>
-
+    {{ df|safe }}
 {% endblock %}

@@ -1,3 +1,4 @@
+import pandas as pd
 from django.db.models import Sum, F
 from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
@@ -279,7 +280,7 @@ class ARODocumentGenerateView(FormView):
                          'hs_code': '17019990',
                          'license': item.license_number, 'license_date': item.license_date,
                          'file_number': item.file_number, 'quantity': item.qty,
-                         'v_allotment_inr': round(item.cif_fc * 72, 2), 'v_allotment_usd': item.cif_fc,
+                         'v_allotment_inr': round(item.cif_fc * 83, 2), 'v_allotment_usd': item.cif_fc,
                          'sr_no': item.serial_number} for item in
                         allotment.allotment_details.all()]
 
@@ -361,3 +362,29 @@ class GenerateTransferLetterView(FormView):
             except Exception as e:
                 print(e)
                 return self.form_invalid(form)
+
+
+class PandasDownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
+    template_name = 'allotment/download.html'
+    model = allotments.AllotmentModel
+    filter_class = filters.AllotmentFilter
+
+    def get_queryset(self):
+        qs = self.model.objects.all()
+        product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
+        return product_filtered_list.qs.order_by('company', 'item_name', 'estimated_arrival_date')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        total = 0
+        total_list = [total + int(data.required_value) for data in self.get_queryset()]
+        queryset = self.get_queryset().values('item_name').order_by('item_name').annotate(total_qty=Sum('required_quantity'), value=Sum(F('required_quantity')*F('unit_value_per_unit'))).distinct()
+        context['queryset'] = queryset
+        context['total_cif'] = sum(total_list)
+        import datetime
+        context['today'] = datetime.datetime.now().date
+        df = pd.DataFrame(list(self.get_queryset().values('modified_on','port__code','required_quantity','unit_value_per_unit','item_name','invoice','bl_detail','estimated_arrival_date')))
+        df = df.assign(required_value=round(df['required_quantity'] * df['unit_value_per_unit'],2))
+        context['df'] = df.groupby(['item_name']).agg({'required_quantity':'sum','unit_value_per_unit':'mean', 'required_value':'sum'}).to_html(classes='table')
+        return context
+

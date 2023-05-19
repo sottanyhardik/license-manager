@@ -389,7 +389,7 @@ class LicenseDetailsModel(models.Model):
     def get_wpc_cif(self):
         qty = self.get_wpc
         if qty and qty > 100:
-            required_cif = qty * 7.5
+            required_cif = qty * 5.5
             balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_total_quantity_of_ff_df_cif - self.get_starh_cif
             if required_cif <= balance_cif:
                 return required_cif

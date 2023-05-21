@@ -32,7 +32,7 @@ def license_path(instance, filename):
 
 class LicenseDetailsModel(models.Model):
     scheme_code = models.CharField(choices=SCHEME_CODE_CHOICES, max_length=10, default=DFIA)
-    notification_number = models.CharField(choices=NOTIFICATION_NORM_CHOICES, max_length=10, default=N2015)
+    notification_number = models.CharField(choices=NOTIFICATION_NORM_CHOICES, max_length=10, default=N2023)
     license_number = models.CharField(max_length=50, unique=True)
     license_date = models.DateField(null=True, blank=True)
     license_expiry_date = models.DateField(null=True, blank=True)

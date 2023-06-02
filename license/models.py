@@ -69,6 +69,8 @@ class LicenseDetailsModel(models.Model):
     yeast_unit = models.FloatField(default=0)
     gluten_unit = models.FloatField(default=0)
     palmolein_unit = models.FloatField(default=0)
+    billing_rate = models.FloatField(default=0)
+    billing_amount = models.FloatField(default=0)
     is_item = models.CharField(default="gluten,palmolein,yeast,juice,milk,Packing Material", max_length=255)
     admin_search_fields = ('license_number',)
 
@@ -285,19 +287,24 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_total_quantity_of_ff_df_cif(self):
-        qty = self.get_total_quantity_of_ff_df
-        if qty and qty > 100:
-            balance_cif = self.get_balance_cif
-            required_cif = qty * 2
-            if required_cif <= balance_cif:
-                return required_cif
-            else:
-                if balance_cif > 0:
-                    return balance_cif
-                else:
-                    return 0
+        balance_cif = self.get_balance_cif
+        if balance_cif < self.get_per_cif:
+            return balance_cif
         else:
-            return 0
+            return self.get_per_cif
+        # qty = self.get_total_quantity_of_ff_df
+        # if qty and qty > 100:
+        #     balance_cif = self.get_balance_cif
+        #     required_cif = qty * 2
+        #     if required_cif <= balance_cif:
+        #         return required_cif
+        #     else:
+        #         if balance_cif > 0:
+        #             return balance_cif
+        #         else:
+        #             return 0
+        # else:
+        #     return 0
 
     @property
     def get_wheat_starch(self):

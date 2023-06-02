@@ -42,6 +42,8 @@
                                         <th>Exporter</th>
                                         <th>Total CIF</th>
                                         <th>Balance CIF</th>
+                                        <th>Billing Rate</th>
+                                        <th>Billing Amount</th>
                                         <th>JUICE Qty</th>
                                         <th>TARTARIC Qty</th>
                                         <th>ESSENTIAL OIL QTY</th>
@@ -73,6 +75,8 @@
                                                 <td>{{ object.exporter }}</td>
                                                 <td>{{ object.opening_balance }}</td>
                                                 <td>{{ object.get_balance_cif }}</td>
+                                                <td>{{ object.billing_rate }}</td>
+                                                <td>{{ object.billing_amount }}</td>
                                                 <td>{{ object.get_juice }}</td>
                                                 <td>{{ object.get_tartaric_acid }}</td>
                                                 <td>{{ object.get_essential_oil }}</td>

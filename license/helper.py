@@ -151,12 +151,10 @@ def fetch_item_details(import_item, hs_code, dfia, item_name=None):
                  'total_debited_qty': total_qty_debits + total_qty_alloted,
                  'sum_total_cif_fc': total_cif_debits + total_cif_alloted,
                  'opening_balance': LicenseImportItemsModel.objects.filter(license=dfia,
-                                                                           item__head=import_item.head).aggregate(
+                                                                           item__name__icontains=item_name).aggregate(
                      Sum('quantity')).get('quantity__sum', 0.00)
                  }
     dict_data['balance_qty'] = dict_data['opening_balance'] - dict_data['total_debited_qty']
-    if item_name:
-        dict_data['name'] = item_name
     if dict_data['total_debited_qty']:
         dict_data['unit_price'] = dict_data['sum_total_cif_fc'] / dict_data['total_debited_qty']
     else:

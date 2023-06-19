@@ -1109,68 +1109,18 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
         dict_list = []
         estimation_dict = {'balance_cif': "1", 'palmolein': None, 'yeast': None, 'juice': None, 'cheese': None,
                            'wpc': None, 'gluten': None}
-        items = ['gluten', 'palmolein', 'juice', 'Dietary','milk', 'Packing Material']
+        items = ['gluten', 'palmolein', '2009', 'Dietary','milk', 'Packing Material']
         for item in items:
-            if item == 'juice':
-                import_item = dfia.import_license.filter(
-                    Q(item__name__icontains='juice') | Q(item__name__icontains='flavour'))
-            else:
-                import_item = dfia.import_license.filter(item__name__icontains=item)
+            import_item = dfia.import_license.filter(item__name__icontains=item)
             if import_item.first() and import_item.first().item:
                 dict_data = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code,
-                                               dfia)
+                                               dfia, item_name=item)
                 dict_list.append(dict_data)
                 estimation_dict[item] = {'balance_qty': dict_data['balance_qty']}
         context['item_list'] = dict_list
         estimation_list = []
         balance_value = dfia.export_license.all().first().balance_cif_fc()
         context['balance_cif_fc'] = balance_value
-        debits = 0
-        if dfia.juice_unit != 0 and estimation_dict['juice'] and estimation_dict['juice']['balance_qty'] > 100:
-            from core.models import UnitPriceModel
-            ditem = UnitPriceModel.objects.get(name__icontains='juice')
-            ditem_dict = {'name': ditem.label, 'quantity': estimation_dict['juice']['balance_qty'],
-                          'unit_price': dfia.juice_unit}
-            max_juice_balance = dfia.export_license.all().first().cif_fc * .1
-            debits, max_juice_balance, ditem_dict = calculate_balance(max_juice_balance, ditem_dict, debits)
-            balance_value = balance_value - ditem_dict['value']
-            estimation_list.append(ditem_dict)
-        if dfia.palmolein_unit != 0 and estimation_dict['palmolein'] and estimation_dict['palmolein'][
-            'balance_qty'] > 100:
-            from core.models import UnitPriceModel
-            ditem = UnitPriceModel.objects.get(name='palmolein')
-            ditem_dict = {'name': ditem.label, 'quantity': estimation_dict['palmolein']['balance_qty'],
-                          'unit_price': dfia.palmolein_unit}
-            debits, balance_value, ditem_dict = calculate_balance(balance_value, ditem_dict, debits)
-            estimation_list.append(ditem_dict)
-        if dfia.yeast_unit != 0 and estimation_dict['yeast'] and estimation_dict['yeast']['balance_qty'] > 100:
-            from core.models import UnitPriceModel
-            ditem_dict = {'name': 'Yeast', 'quantity': estimation_dict['yeast']['balance_qty'],
-                          'unit_price': dfia.yeast_unit}
-            debits, balance_value, ditem_dict = calculate_balance(balance_value, ditem_dict, debits)
-            estimation_list.append(ditem_dict)
-        if dfia.cheese_unit != 0 and estimation_dict['cheese'] and estimation_dict['cheese']['balance_qty'] > 100:
-            from core.models import UnitPriceModel
-            ditem = UnitPriceModel.objects.get(name='cheese')
-            ditem_dict = {'name': ditem.label, 'quantity': estimation_dict['cheese']['balance_qty'],
-                          'unit_price': dfia.cheese_unit}
-            debits, balance_value, ditem_dict = calculate_balance(balance_value, ditem_dict, debits)
-            estimation_list.append(ditem_dict)
-        if dfia.wpc_unit != 0 and estimation_dict['wpc'] and estimation_dict['wpc']['balance_qty'] > 100:
-            from core.models import UnitPriceModel
-            ditem = UnitPriceModel.objects.get(name__icontains='wpc')
-            ditem_dict = {'name': ditem.label, 'quantity': estimation_dict['wpc']['balance_qty'],
-                          'unit_price': dfia.wpc_unit}
-            debits, balance_value, ditem_dict = calculate_balance(balance_value, ditem_dict, debits)
-            estimation_list.append(ditem_dict)
-        if dfia.gluten_unit != 0 and estimation_dict['gluten'] and estimation_dict['gluten']['balance_qty'] > 100:
-            from core.models import UnitPriceModel
-            ditem = UnitPriceModel.objects.get(name='gluten')
-            ditem_dict = {'name': ditem.label, 'quantity': estimation_dict['gluten']['balance_qty'],
-                          'unit_price': dfia.gluten_unit}
-            debits, balance_value, ditem_dict = calculate_balance(balance_value, ditem_dict, debits)
-            estimation_list.append(ditem_dict)
-        context['balance_cif'] = dfia.balance_cif
         et = 0
         for v in estimation_list:
             et = et + v['value']

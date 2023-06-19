@@ -1109,70 +1109,18 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
         dict_list = []
         estimation_dict = {'balance_cif': "1", 'palmolein': None, 'yeast': None, 'juice': None, 'cheese': None,
                            'wpc': None, 'gluten': None}
-        items = ['gluten', 'palmolein', 'yeast', 'juice', 'milk', 'Packing Material']
+        items = ['gluten', 'palmolein', 'juice', 'Dietary','milk', 'Packing Material']
         for item in items:
-            if 'milk' in item:
-                import_item = dfia.import_license.filter(item__name__icontains=item)
-                if import_item:
-                    milk_dict = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code, dfia)
-                    print(milk_dict)
-                    total_qty = milk_dict['opening_balance']
-                    if dfia.cheese_unit != 0 and dfia.wpc_unit != 0:
-                        half = total_qty / 2
-                        wpc_dict = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code,
-                                                      dfia,
-                                                      'wpc')
-                        cheese_dict = fetch_item_details(import_item.first().item, '04060000', dfia, 'cheese')
-                        if wpc_dict['total_debited_qty'] > half:
-                            wpc_dict['opening_balance'] = wpc_dict['total_debited_qty']
-                            wpc_dict['balance_qty'] = 0
-                            cheese_dict['opening_balance'] = milk_dict['opening_balance'] - wpc_dict[
-                                'total_debited_qty']
-                            cheese_dict['balance_qty'] = cheese_dict['opening_balance'] - cheese_dict[
-                                'total_debited_qty']
-                            estimation_dict['cheese'] = {'balance_qty': cheese_dict['balance_qty']}
-                        elif cheese_dict['total_debited_qty'] > half:
-                            cheese_dict['opening_balance'] = cheese_dict['total_debited_qty']
-                            cheese_dict['balance_qty'] = 0
-                            wpc_dict['opening_balance'] = milk_dict['opening_balance'] - cheese_dict[
-                                'total_debited_qty']
-                            wpc_dict['balance_qty'] = wpc_dict['opening_balance'] - wpc_dict['total_debited_qty']
-                            estimation_dict['wpc'] = {'balance_qty': wpc_dict['balance_qty']}
-                        else:
-                            wpc_dict['opening_balance'] = half
-                            wpc_dict['balance_qty'] = wpc_dict['opening_balance'] - wpc_dict['total_debited_qty']
-                            estimation_dict['wpc'] = {'balance_qty': wpc_dict['balance_qty']}
-                            cheese_dict['opening_balance'] = half
-                            cheese_dict['balance_qty'] = cheese_dict['opening_balance'] - cheese_dict[
-                                'total_debited_qty']
-                            estimation_dict['cheese'] = {'balance_qty': cheese_dict['balance_qty']}
-                        dict_list.append(milk_dict)
-                        dict_list.append(wpc_dict)
-                        dict_list.append(cheese_dict)
-                    elif dfia.cheese_unit != 0:
-                        cheese_dict = fetch_item_details(import_item.first().item, '04060000', dfia, 'cheese')
-                        dict_list.append(milk_dict)
-                        dict_list.append(cheese_dict)
-                        estimation_dict['cheese'] = {'balance_qty': cheese_dict['balance_qty']}
-                    elif dfia.wpc_unit != 0:
-                        wpc_dict = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code,
-                                                      dfia,
-                                                      'wpc')
-                        estimation_dict['wpc'] = {'balance_qty': wpc_dict['balance_qty']}
-                        dict_list.append(milk_dict)
-                        dict_list.append(wpc_dict)
+            if item == 'juice':
+                import_item = dfia.import_license.filter(
+                    Q(item__name__icontains='juice') | Q(item__name__icontains='flavour'))
             else:
-                if item in dfia.is_item:
-                    if item == 'juice':
-                        import_item = dfia.import_license.filter(
-                            Q(item__name__icontains='juice') | Q(item__name__icontains='flavour'))
-                    else:
-                        import_item = dfia.import_license.filter(item__name__icontains=item)
-                    if import_item.first() and import_item.first().item:
-                        dict_data = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code,
-                                                       dfia)
-                        dict_list.append(dict_data)
-                        estimation_dict[item] = {'balance_qty': dict_data['balance_qty']}
+                import_item = dfia.import_license.filter(item__name__icontains=item)
+            if import_item.first() and import_item.first().item:
+                dict_data = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code,
+                                               dfia)
+                dict_list.append(dict_data)
+                estimation_dict[item] = {'balance_qty': dict_data['balance_qty']}
         context['item_list'] = dict_list
         estimation_list = []
         balance_value = dfia.export_license.all().first().balance_cif_fc()

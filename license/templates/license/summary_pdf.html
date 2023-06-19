@@ -86,46 +86,23 @@
     </table>
     {% for import_item in item_list %}
         <table class="table table-bordered table-striped tbordered" style="margin-top: 5px">
-            {% if not 'Milk' in import_item.name %}
-                <thead>
-                <th colspan="1">Type</th>
-                <th colspan="1">Quantity</th>
-                <th colspan="1">Unit Price</th>
-                <th colspan="1">CIF FC</th>
-                <th colspan="2">Company</th>
-                </thead>
-                <tbody>
-                <tr>
-                    <td colspan="1">Opening</td>
-                    <td colspan="1" style="border: 1px solid">
-                        <b>{{ import_item.opening_balance|floatformat:2 }}</b></td>
-                    <td colspan="1" style="border: 1px solid;color: red;background-color: yellow;">
-                        <b>{{ import_item.hs_code }}</b></td>
-                    <td colspan="3" style="color: red;background-color: yellow;"><b>{{ import_item.name|title }}</b>
-                    </td>
-
-                </tr>
-                </tbody>
-            {% else %}
-                <thead>
-                <th colspan="1">Type</th>
-                <th colspan="1">Quantity</th>
-                <th colspan="1">HS Code</th>
-                <th colspan="5">Item</th>
-                </thead>
-                <tbody>
-                <tr>
-                    <td colspan="1">Opening</td>
-                    <td colspan="1" style="border: 1px solid">
-                        <b>{{ import_item.opening_balance|floatformat:2 }}</b></td>
-                    <td colspan="1" style="border: 1px solid;color: red;background-color: yellow;">
-                        <b>{{ import_item.hs_code }}</b></td>
-                    <td colspan="5" style="color: red;background-color: yellow;"><b>{{ import_item.name|title }}</b>
-                    </td>
-                </tr>
-                </tbody>
-
-            {% endif %}
+            <thead>
+            <th colspan="1">Type</th>
+            <th colspan="1">Quantity</th>
+            <th colspan="1">HS Code</th>
+            <th colspan="3">Item</th>
+            </thead>
+            <tbody>
+            <tr>
+                <td colspan="1">Opening</td>
+                <td colspan="1" style="border: 1px solid">
+                    <b>{{ import_item.opening_balance|floatformat:2 }}</b></td>
+                <td colspan="1" style="border: 1px solid;color: red;background-color: yellow;">
+                    <b>{{ import_item.hs_code }}</b></td>
+                <td colspan="3" style="color: red;background-color: yellow;"><b>{{ import_item.name|title }}</b>
+                </td>
+            </tr>
+            </tbody>
             {% for item in import_item.debiting %}
                 {% for data in item.data_list %}
                     <tr style="border-bottom: 1px solid #000">
@@ -201,7 +178,6 @@
                     </td>
                 </tr>
             {% endfor %}
-            {% if not 'Milk' in import_item.name %}
                 <tr>
                     <td style="width: 10%; border: 1px solid">Total Debits</td>
                     <td style="width: 10%; border: 1px solid">
@@ -228,38 +204,9 @@
                         <b>{{ import_item.balance_qty|floatformat:2 }}</b></td>
                     <td colspan="4"></td>
                 </tr>
-            {% endif %}
             </tfoot>
         </table>
     {% endfor %}
     <br>
-    <table class="table table-bordered table-striped tbordered" style="margin-top: 5px">
-    <tbody>
-    <tr>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td><b>{{ balance_cif_fc|floatformat:2 }}</b></td>
-    </tr>
-    {% for estimation in estimation_list %}
-        <tr>
-        <td>{{ estimation.name }}</td>
-        <td>{{ estimation.quantity|floatformat:2 }}</td>
-        <td>{{ estimation.unit_price|floatformat:2 }}</td>
-        <td>{{ estimation.value|floatformat:2 }}</td>
-        <td></td>
-        </tr>
-    {% endfor %}
-    <tr>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td><b>{{ estimation_total|floatformat:2 }}</b></td>
-        <td><b>{{ balance_value|floatformat:2 }}</b></td>
-    </tr>
-
-    </tbody>
-    </table>
 
 {% endblock %}

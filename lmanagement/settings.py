@@ -30,7 +30,7 @@ SECRET_KEY = 'cn^fjh#*dhrjzrzphy!ic-2u())f(*wju3u_(06f^zq!g@_%o('
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['128.199.22.9', 'localhost', '159.89.166.54','ksenterprises.agency']
+ALLOWED_HOSTS = ['128.199.22.9', 'localhost','192.168.100.9', '159.89.166.54','ksenterprises.agency']
 
 # Application definition
 

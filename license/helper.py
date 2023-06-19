@@ -146,22 +146,14 @@ def fetch_item_details(import_item, hs_code, dfia, item_name=None):
         debiting, total_qty_debits, total_cif_debits = item_wise_debiting(dfia, import_item.head)
         allotment, total_qty_alloted, total_cif_alloted = item_wise_allotment(dfia, import_item.head)
     from license.models import LicenseImportItemsModel
-    if 'milk' in import_item.name.lower() and not item_name:
-        dict_data = {'name': import_item.name, 'hs_code': hs_code,
-                     'opening_balance': LicenseImportItemsModel.objects.filter(license=dfia,
-                                                                               item__head=import_item.head).aggregate(
-                         Sum('quantity')).get('quantity__sum', 0.00)
-                     }
-        return dict_data
-    else:
-        dict_data = {'name': import_item.name, 'hs_code': hs_code, 'debiting': debiting,
-                     'allotment': allotment,
-                     'total_debited_qty': total_qty_debits + total_qty_alloted,
-                     'sum_total_cif_fc': total_cif_debits + total_cif_alloted,
-                     'opening_balance': LicenseImportItemsModel.objects.filter(license=dfia,
-                                                                               item__head=import_item.head).aggregate(
-                         Sum('quantity')).get('quantity__sum', 0.00)
-                     }
+    dict_data = {'name': import_item.name, 'hs_code': hs_code, 'debiting': debiting,
+                 'allotment': allotment,
+                 'total_debited_qty': total_qty_debits + total_qty_alloted,
+                 'sum_total_cif_fc': total_cif_debits + total_cif_alloted,
+                 'opening_balance': LicenseImportItemsModel.objects.filter(license=dfia,
+                                                                           item__head=import_item.head).aggregate(
+                     Sum('quantity')).get('quantity__sum', 0.00)
+                 }
     dict_data['balance_qty'] = dict_data['opening_balance'] - dict_data['total_debited_qty']
     if item_name:
         dict_data['name'] = item_name

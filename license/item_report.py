@@ -802,9 +802,9 @@ def tractor_dfia(date_range=None, status=None):
     empty_list = []
     dfia_list = []
     if is_expired:
-        limit = 20000
+        limit = 50000
     else:
-        limit = 1000
+        limit = 8000
     dfia_qs = tractor_query(date_range, party=[], is_expired=is_expired)
     for dfia in dfia_qs:
         if dfia.get_balance_cif > limit:

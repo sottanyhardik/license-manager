@@ -26,7 +26,7 @@ from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_
     confectinery_2019_other, biscuit_conversion, biscuit_2019_rama_rani, \
     conversion_main, conversion_other, confectinery_dfia, confectinery_2009_all, biscuits_2009_all, \
     generate_dict, tartaric_query, essential_oil_query, confectinery_2009_expired_all, biscuits_2009_expired_all, \
-    biscuit_dfia, namkeen_dfia
+    biscuit_dfia, namkeen_dfia, tractor_dfia
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -362,6 +362,20 @@ class NamkeenReportView(PagedFilteredTableView, ListView):
         context = super(NamkeenReportView, self).get_context_data()
         status = self.kwargs.get('status')
         tables = namkeen_dfia(status=status)
+        context['today_date'] = datetime.datetime.now().date()
+        context['tables'] = tables
+        return context
+
+
+class TractorReportView(PagedFilteredTableView, ListView):
+    template_name = 'license/tractor_list.html'
+    model = license.LicenseDetailsModel
+    context_object_name = 'license_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(TractorReportView, self).get_context_data()
+        status = self.kwargs.get('status')
+        tables = tractor_dfia(status=status)
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context

@@ -156,6 +156,35 @@ class LicenseDetailsModel(models.Model):
         return self.import_license.filter(item__name__icontains='Chickpeas').first()
 
     @property
+    def get_battery_obj(self):
+        return self.import_license.filter(item__name__icontains='battery')
+
+    @property
+    def get_alloy_steel_obj(self):
+        return self.import_license.filter(item__name__icontains='alloy steel')
+
+    @property
+    def get_battery_total(self):
+        items = self.get_battery_obj
+        return sum(item.quantity for item in items)
+
+    @property
+    def get_battery_balance(self):
+        items = self.get_battery_obj
+        return sum(item.balance_quantity for item in items)
+
+    @property
+    def get_alloy_steel_total(self):
+        items = self.get_alloy_steel_obj
+        return sum(item.quantity for item in items)
+
+    @property
+    def get_alloy_steel_balance(self):
+        items = self.get_alloy_steel_obj
+        return sum(item.balance_quantity for item in items)
+
+
+    @property
     def get_chickpeas(self):
         all = self.import_license.filter(item__name__icontains='Chickpeas')
         sum1 = 0
@@ -183,6 +212,14 @@ class LicenseDetailsModel(models.Model):
         for d in all:
             sum1 += d.balance_quantity
         return sum1
+
+    @property
+    def rbd_pd(self):
+        rbd = self.import_license.filter(Q(item__name__icontains='rbd')|Q(item__name__icontains='1513')).distinct()
+        if rbd:
+            return rbd.first().item.name
+        else:
+            return "Missing"
 
     @property
     def get_rbd_cif(self):

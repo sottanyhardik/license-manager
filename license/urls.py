@@ -37,7 +37,10 @@ urlpatterns = [
     path('summary/<slug:license>.pdf', login_required(views.PDFSummaryLicenseDetailView.as_view()),
          name='license_summary'),
     path('report/biscuit/<slug:status>', login_required(views.BiscuitReportView.as_view()), name='report_biscuit'),
-    path('report/confectionery/<slug:status>', login_required(views.ConfectioneryReportView.as_view()), name='report_confectionery'),
+    path('report/confectionery/<slug:status>', login_required(views.ConfectioneryReportView.as_view()),
+         name='report_confectionery'),
     path('report/namkeen/<slug:status>', login_required(views.NamkeenReportView.as_view()),
          name='report_namkeen'),
+    path('report/tractor/<slug:status>', login_required(views.TractorReportView.as_view()),
+         name='report_tractor'),
 ]

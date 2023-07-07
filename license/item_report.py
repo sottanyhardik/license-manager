@@ -3,7 +3,7 @@ import datetime
 from django.db.models import Q, Sum
 
 from license import models as license
-from license.models import N2009, N2015, LicenseDetailsModel, LicenseExportItemModel
+from license.models import N2009, N2015, LicenseDetailsModel, LicenseExportItemModel, N2023
 from license.tables import LicenseItemReportTable, LicenseBiscuitReportTable, LicenseConfectineryReportTable, \
     LicenseBiscuitNewReportTable
 from datetime import date
@@ -741,6 +741,31 @@ def namkeen_query(date_range=None, party=None, exclude_party=None, is_expired=Fa
     return queryset
 
 
+def tractor_query(date_range=None, party=None, exclude_party=None, is_expired=False,notification_number=N2023):
+    tables = []
+    from license.tables import LicenseConfectineryReportTable
+    from license.models import N2015
+    query_dict = {
+        'export_license__norm_class__norm_class': 'C969',
+        'notification_number': notification_number
+    }
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
+    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
+                               exclude_and_filters=exclude_and_filters, is_expired=is_expired)
+    return queryset
+
+
 def namkeen_dfia(date_range=None, status=None):
     if status == 'expired':
         is_expired = True
@@ -766,6 +791,35 @@ def namkeen_dfia(date_range=None, status=None):
         tables.append({'label': 'EMPTY DFIA',
          'table': empty_list})
     return tables
+
+
+
+def tractor_dfia(date_range=None, status=None):
+    if status == 'expired':
+        is_expired = True
+    else:
+        is_expired = False
+    empty_list = []
+    dfia_list = []
+    if is_expired:
+        limit = 20000
+    else:
+        limit = 1000
+    dfia_qs = tractor_query(date_range, party=[], is_expired=is_expired)
+    for dfia in dfia_qs:
+        if dfia.get_balance_cif > limit:
+            dfia_list.append(dfia)
+        else:
+            empty_list.append(dfia)
+    tables = [
+        {'label': 'All DFIA',
+         'table': dfia_list},
+    ]
+    if empty_list:
+        tables.append({'label': 'EMPTY DFIA',
+         'table': empty_list})
+    return tables
+
 
 
 def confectinery_2019_other(date_range=None):

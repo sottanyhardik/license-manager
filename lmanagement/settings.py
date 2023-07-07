@@ -30,7 +30,7 @@ SECRET_KEY = 'cn^fjh#*dhrjzrzphy!ic-2u())f(*wju3u_(06f^zq!g@_%o('
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['128.199.22.9', 'localhost','192.168.100.9', '159.89.166.54','ksenterprises.agency']
+ALLOWED_HOSTS = ['128.199.22.9', 'localhost', '127.0.0.1', '159.89.166.54', 'ksenterprises.agency']
 
 # Application definition
 
@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'material',
     'mathfilters',
+    # "debug_toolbar",
 ]
 
 MIDDLEWARE = [
@@ -67,6 +68,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # "debug_toolbar.middleware.DebugToolbarMiddleware",
 ]
 
 ROOT_URLCONF = 'lmanagement.urls'
@@ -211,11 +213,12 @@ RQ_QUEUES = {
 }
 
 DJANGO_TABLES2_TEMPLATE = "django_tables2/bootstrap.html"
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000 #
-
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000  #
 
 EMAIL_BACKEND = "django.core.mail.backends.filebased.EmailBackend"
 EMAIL_FILE_PATH = os.path.join(BASE_DIR, "sent_emails")
 
 USE_THOUSAND_SEPARATOR = True
-DEFAULT_AUTO_FIELD='django.db.models.AutoField'
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+
+# INTERNAL_IPS = ALLOWED_HOSTS

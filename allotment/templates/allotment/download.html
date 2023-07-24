@@ -60,7 +60,11 @@
 {% block content %}
     <table>
         <tr>
-            <td colspan="4"><h3>Pending Allotment</h3></td>
+            {% if is_alloted %}
+                <td colspan="4"><h3>Pending BOE</h3></td>
+            {% else %}
+                <td colspan="4"><h3>Pending Allotments</h3></td>
+            {% endif %}
             <td><b>{{ today }}</b></td>
         </tr>
         <tr style="text-align: center">

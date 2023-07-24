@@ -6,7 +6,7 @@ from django.urls import reverse
 class BillOfEntryModel(models.Model):
     company = models.ForeignKey('core.CompanyModel', related_name="bill_of_entry", on_delete=models.CASCADE, null=True,
                                 blank=True)
-    bill_of_entry_number = models.CharField(max_length=25, unique=True)
+    bill_of_entry_number = models.CharField(max_length=25)
     bill_of_entry_date = models.DateField(null=True, blank=True)
     port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, related_name='boe_port', null=True, blank=True)
     exchange_rate = models.FloatField(default=0)

@@ -236,6 +236,10 @@ class DownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
         queryset = self.get_queryset().values('item_name').order_by('item_name').annotate(total_qty=Sum('required_quantity'), value=Sum(F('required_quantity')*F('unit_value_per_unit'))).distinct()
         context['queryset'] = queryset
         context['total_cif'] = sum(total_list)
+        if self.request.GET.get('is_alloted') == 'true':
+            context['is_alloted'] = True
+        else:
+            context['is_alloted'] = False
         import datetime
         context['today'] = datetime.datetime.now().date
         return context

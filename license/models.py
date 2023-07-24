@@ -153,7 +153,16 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_chickpeas_obj(self):
-        return self.import_license.filter(item__name__icontains='Chickpeas').first()
+        return self.import_license.filter(item__name__icontains='Chickpeas')
+
+    @property
+    def get_chickpeas(self):
+        all = self.get_chickpeas_obj
+        sum1 = 0
+        for d in all:
+            sum1 += d.balance_quantity
+        return sum1
+
 
     @property
     def get_battery_obj(self):
@@ -182,15 +191,6 @@ class LicenseDetailsModel(models.Model):
     def get_alloy_steel_balance(self):
         items = self.get_alloy_steel_obj
         return sum(item.balance_quantity for item in items)
-
-
-    @property
-    def get_chickpeas(self):
-        all = self.import_license.filter(item__name__icontains='Chickpeas')
-        sum1 = 0
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
 
     def wheat(self):
         return self.import_license.filter(item__head__name__icontains='wheat').first()
@@ -262,29 +262,27 @@ class LicenseDetailsModel(models.Model):
             return 0
 
     @property
+    def get_cmc_obj(self):
+        return self.import_license.filter(
+            Q(item__name__icontains='Additives'))
+
+    @property
     def get_cmc(self):
         sum1 = 0
-        all = self.import_license.filter(
-            Q(item__name__icontains='Additives'))
+        all = self.get_cmc_obj
         for d in all:
             sum1 += d.balance_quantity
         return sum1
 
     @property
-    def get_cmc_obj(self):
-        return self.import_license.filter(
-            Q(item__name__icontains='Additives')).first()
-
-    @property
     def get_food_flavour_namkeen_obj(self):
         return self.import_license.filter(
-            Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour')).distinct().first()
+            Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour')).distinct()
 
     @property
     def get_food_flavour_namkeen(self):
         sum1 = 0
-        all = self.import_license.filter(
-            Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour')).distinct()
+        all = self.get_food_flavour_namkeen_obj
         for d in all:
             sum1 += d.balance_quantity
         return sum1
@@ -426,7 +424,7 @@ class LicenseDetailsModel(models.Model):
                 @return: Total Balance Quantity of WPC
         """
         return sum([item.balance_quantity for item in
-                    self.import_license.filter(item__head__name__icontains='milk').exclude(
+                    self.import_license.filter(item__name__icontains='milk').exclude(
                         item__name__icontains='0406')])
 
     @property

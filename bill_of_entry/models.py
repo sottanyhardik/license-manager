@@ -23,6 +23,7 @@ class BillOfEntryModel(models.Model):
     admin_search_fields = ['bill_of_entry_number', ]
 
     class Meta:
+        unique_together = ('company','bill_of_entry_number', 'bill_of_entry_date',)
         ordering = ('-bill_of_entry_date',)
 
     def __str__(self):

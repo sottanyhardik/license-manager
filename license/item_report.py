@@ -435,10 +435,10 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
         start = None
         end = None
     if is_expired:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
         query_dict['license_expiry_date__lte'] = expiry_limit
     else:
-        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=60)
+        expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
         query_dict['license_expiry_date__gte'] = expiry_limit
     query_dict['is_self'] = is_self
     query_dict['is_au'] = is_au
@@ -766,6 +766,31 @@ def tractor_query(date_range=None, party=None, exclude_party=None, is_expired=Fa
     return queryset
 
 
+def steel_query(date_range=None, party=None, exclude_party=None, is_expired=False,notification_number=N2023):
+    tables = []
+    from license.tables import LicenseConfectineryReportTable
+    from license.models import N2015
+    query_dict = {
+        'export_license__norm_class__norm_class__in': ['C471','C460','C473'],
+        'notification_number': notification_number
+    }
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
+    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
+                               exclude_and_filters=exclude_and_filters, is_expired=is_expired)
+    return queryset
+
+
 def namkeen_dfia(date_range=None, status=None):
     if status == 'expired':
         is_expired = True
@@ -806,6 +831,33 @@ def tractor_dfia(date_range=None, status=None):
     else:
         limit = 8000
     dfia_qs = tractor_query(date_range, party=[], is_expired=is_expired)
+    for dfia in dfia_qs:
+        if dfia.get_balance_cif > limit:
+            dfia_list.append(dfia)
+        else:
+            empty_list.append(dfia)
+    tables = [
+        {'label': 'All DFIA',
+         'table': dfia_list},
+    ]
+    if empty_list:
+        tables.append({'label': 'EMPTY DFIA',
+         'table': empty_list})
+    return tables
+
+
+def steel_dfia(date_range=None, status=None):
+    if status == 'expired':
+        is_expired = True
+    else:
+        is_expired = False
+    empty_list = []
+    dfia_list = []
+    if is_expired:
+        limit = 8000
+    else:
+        limit = 8000
+    dfia_qs = steel_query(date_range, party=['Grip','posco'], is_expired=is_expired)
     for dfia in dfia_qs:
         if dfia.get_balance_cif > limit:
             dfia_list.append(dfia)
@@ -1101,3 +1153,105 @@ def confectinery_2009_expired_all(date_range={'start': '2001-04-01', 'end': '202
                'table': generate_table(confectinery_2009(date_range, exclude_party=['ravi', ]),
                                        LicenseConfectineryReportTable)}]
     return tables
+
+
+def glass_dfia(date_range=None, status=None):
+    if status == 'expired':
+        is_expired = True
+    else:
+        is_expired = False
+    empty_list = []
+    dfia_list = []
+    if is_expired:
+        limit = 8000
+    else:
+        limit = 8000
+    dfia_qs = glass_query(date_range, party=[], is_expired=is_expired)
+    for dfia in dfia_qs:
+        if dfia.get_balance_cif > limit:
+            dfia_list.append(dfia)
+        else:
+            empty_list.append(dfia)
+    tables = [
+        {'label': 'All DFIA',
+         'table': dfia_list},
+    ]
+    if empty_list:
+        tables.append({'label': 'EMPTY DFIA',
+         'table': empty_list})
+    return tables
+
+def glass_query(date_range=None, party=None, exclude_party=None, is_expired=False,notification_number=N2023):
+    tables = []
+    from license.tables import LicenseConfectineryReportTable
+    from license.models import N2015
+    query_dict = {
+        'export_license__norm_class__norm_class': 'A3627',
+        'notification_number': notification_number
+    }
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
+    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
+                               exclude_and_filters=exclude_and_filters, is_expired=is_expired)
+    return queryset
+
+def pickle_dfia(date_range=None, status=None):
+    if status == 'expired':
+        is_expired = True
+    else:
+        is_expired = False
+    empty_list = []
+    dfia_list = []
+    if is_expired:
+        limit = 8000
+    else:
+        limit = 8000
+    dfia_qs = pickle_query(date_range, party=[], is_expired=is_expired)
+    for dfia in dfia_qs:
+        if dfia.get_balance_cif > limit:
+            dfia_list.append(dfia)
+        else:
+            empty_list.append(dfia)
+    tables = [
+        {'label': 'All DFIA',
+         'table': dfia_list},
+    ]
+    if empty_list:
+        tables.append({'label': 'EMPTY DFIA',
+         'table': empty_list})
+    return tables
+
+def pickle_query(date_range=None, party=None, exclude_party=None, is_expired=False,notification_number=N2023):
+    tables = []
+    from license.tables import LicenseConfectineryReportTable
+    from license.models import N2015
+    query_dict = {
+        'export_license__norm_class__norm_class': 'E126',
+        'notification_number': notification_number
+    }
+    if party:
+        or_filters = {
+            'exporter__name__icontains': party
+        }
+    else:
+        or_filters = {}
+    if exclude_party:
+        exclude_and_filters = {
+            'exporter__name__icontains': exclude_party
+        }
+    else:
+        exclude_and_filters = {}
+    queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
+                               exclude_and_filters=exclude_and_filters, is_expired=is_expired)
+    return queryset
+

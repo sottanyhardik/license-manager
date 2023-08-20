@@ -156,6 +156,57 @@ class LicenseDetailsModel(models.Model):
         return self.import_license.filter(item__name__icontains='Chickpeas')
 
     @property
+    def get_glass_formers(self):
+        object = self.import_license.filter(item__name__icontains='Glass Formers')
+        if object.first():
+            return object.first()
+        else:
+            return None
+
+    @property
+    def get_intermediates_namely(self):
+        object = self.import_license.filter(item__name__icontains='Intermediates namely')
+        if object.first():
+            return object.first()
+        else:
+            return None
+
+    @property
+    def get_other_special_additives(self):
+        object = self.import_license.filter(item__name__icontains='Other Special Additives')
+        if object.first():
+            return object.first()
+        else:
+            return None
+
+    @property
+    def get_modifiers_namely(self):
+        object = self.import_license.filter(item__name__icontains='Modifiers namely')
+        if object.first():
+            return object.first()
+        else:
+            return None
+
+
+    @property
+    def get_pickle_oil(self):
+        object = self.import_license.filter(Q(item__name__icontains='Fats and Oils')|Q(item__name__icontains='Oils and Fats'))
+        if object.first():
+            return object.first()
+        else:
+            return None
+
+
+    @property
+    def get_rfa(self):
+        object = self.import_license.filter(item__name__icontains='Food Additives')
+        if object.first():
+            return object.first()
+        else:
+            return None
+
+
+    @property
     def get_chickpeas(self):
         all = self.get_chickpeas_obj
         sum1 = 0
@@ -163,6 +214,18 @@ class LicenseDetailsModel(models.Model):
             sum1 += d.balance_quantity
         return sum1
 
+    @property
+    def get_chickpeas(self):
+        all = self.get_chickpeas_obj
+        sum1 = 0
+        for d in all:
+            sum1 += d.balance_quantity
+        return sum1
+
+    @property
+    def get_hs_steel(self):
+        all = self.import_license.all()
+        return all
 
     @property
     def get_battery_obj(self):

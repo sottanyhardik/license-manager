@@ -43,4 +43,11 @@ urlpatterns = [
          name='report_namkeen'),
     path('report/tractor/<slug:status>', login_required(views.TractorReportView.as_view()),
          name='report_tractor'),
+    path('report/steel/<slug:status>', login_required(views.SteelReportView.as_view()),
+         name='report_steel'),
+    path('report/glass/<slug:status>', login_required(views.GlassReportView.as_view()),
+         name='report_glass'),
+    path('report/pickle/<slug:status>', login_required(views.PickleReportView.as_view()),
+         name='report_pickle'),
+
 ]

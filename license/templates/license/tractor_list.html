@@ -50,6 +50,10 @@
                                         <th>Alloy Steel Description</th>
                                         <th>Total Alloy Steel Qty</th>
                                         <th>Balance Alloy Steel Qty</th>
+                                        <th>HOT ROLLED HSN Code</th>
+                                        <th>HOT ROLLED Description</th>
+                                        <th>Total HOT ROLLED Qty</th>
+                                        <th>Balance HOT ROLLED Qty</th>
                                         </thead>
                                     {% else %}
                                         <thead>
@@ -81,6 +85,10 @@
                                                 <td>{{ object.get_alloy_steel_obj.first.item.name }}</td>
                                                 <td>{{ object.get_alloy_steel_total }}</td>
                                                 <td>{{ object.get_alloy_steel_balance }}</td>
+                                                <td>'{{ object.get_hot_rolled_obj.first.hs_code }}</td>
+                                                <td>{{ object.get_hot_rolled_obj.first.item.name }}</td>
+                                                <td>{{ object.get_hot_rolled_total }}</td>
+                                                <td>{{ object.get_hot_rolled_balance }}</td>
                                             </tr>
                                         {% endfor %}
                                     {% else %}

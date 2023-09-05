@@ -180,6 +180,14 @@ class LicenseDetailsModel(models.Model):
             return None
 
     @property
+    def get_hot_rolled(self):
+        object = self.import_license.filter(item__name__icontains='HOT ROLLED')
+        if object.first():
+            return object.first()
+        else:
+            return None
+
+    @property
     def get_modifiers_namely(self):
         object = self.import_license.filter(item__name__icontains='Modifiers namely')
         if object.first():
@@ -236,6 +244,10 @@ class LicenseDetailsModel(models.Model):
         return self.import_license.filter(item__name__icontains='alloy steel')
 
     @property
+    def get_hot_rolled_obj(self):
+        return self.import_license.filter(item__name__icontains='HOT ROLLED')
+
+    @property
     def get_battery_total(self):
         items = self.get_battery_obj
         return sum(item.quantity for item in items)
@@ -253,6 +265,16 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_alloy_steel_balance(self):
         items = self.get_alloy_steel_obj
+        return sum(item.balance_quantity for item in items)
+
+    @property
+    def get_hot_rolled_total(self):
+        items = self.get_hot_rolled_obj
+        return sum(item.quantity for item in items)
+
+    @property
+    def get_hot_rolled_balance(self):
+        items = self.get_hot_rolled_obj
         return sum(item.balance_quantity for item in items)
 
     def wheat(self):

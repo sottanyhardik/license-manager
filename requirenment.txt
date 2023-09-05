@@ -6,7 +6,6 @@ autopep8==1.5.5
 backports.csv==1.0.7
 beautifulsoup4==4.9.3
 billiard==3.6.4.0
-cairocffi==1.4.0
 CairoSVG==2.5.1
 celery==5.2.3
 certifi==2020.12.5

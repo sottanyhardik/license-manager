@@ -108,6 +108,10 @@ class AllotmentItems(models.Model):
         return self.item.serial_number
 
     @property
+    def product_description(self):
+        return self.item.item.name
+
+    @property
     def license_number(self):
         return self.item.license.license_number
 

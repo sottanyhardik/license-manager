@@ -139,8 +139,10 @@ class BillOfEntryFetchView(FormView):
         context['fetch_cookies'] = json.dumps(cookies)
         context['csrftoken'] = csrftoken
         data = self.kwargs.get('data')
-        context['remain_count'] = bill_of_entry.BillOfEntryModel.objects.filter(
-            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).count()
+        from bill_of_entry.models import BillOfEntryModel
+        context['remain_count'] = BillOfEntryModel.objects.filter(
+            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
+            failed__lte=5).count()
         context['remain_captcha'] = context['remain_count'] / 3
         return context
 
@@ -152,7 +154,8 @@ class BillOfEntryFetchView(FormView):
         status = True
         from bill_of_entry.models import BillOfEntryModel
         data_list = BillOfEntryModel.objects.filter(
-            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(failed__lte=5).order_by(
+            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
+            failed__lte=5).order_by(
             'bill_of_entry_date')
         for data in data_list:
             from bill_of_entry.scripts.utils import port_dict
@@ -231,7 +234,8 @@ class GenerateTransferLetterView(FormView):
                     'company_address_1': self.request.POST.get('company_address_line1'),
                     'company_address_2': self.request.POST.get('company_address_line2'),
                     'today': str(datetime.now().date()),
-                    'license': item.sr_number.license.license_number, 'license_date': item.sr_number.license_date.strftime("%d/%m/%Y"),
+                    'license': item.sr_number.license.license_number,
+                    'license_date': item.sr_number.license_date.strftime("%d/%m/%Y"),
                     'file_number': item.sr_number.license.file_number, 'quantity': item.qty,
                     'v_allotment_inr': round(item.cif_inr, 2),
                     'exporter_name': item.sr_number.license.exporter.name,

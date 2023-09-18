@@ -195,15 +195,14 @@ class LicenseDetailsModel(models.Model):
         else:
             return None
 
-
     @property
     def get_pickle_oil(self):
-        object = self.import_license.filter(Q(item__name__icontains='Fats and Oils')|Q(item__name__icontains='Oils and Fats'))
+        object = self.import_license.filter(
+            Q(item__name__icontains='Fats and Oils') | Q(item__name__icontains='Oils and Fats'))
         if object.first():
             return object.first()
         else:
             return None
-
 
     @property
     def get_rfa(self):
@@ -212,7 +211,6 @@ class LicenseDetailsModel(models.Model):
             return object.first()
         else:
             return None
-
 
     @property
     def get_chickpeas(self):
@@ -300,7 +298,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def rbd_pd(self):
-        rbd = self.import_license.filter(Q(item__name__icontains='rbd')|Q(item__name__icontains='1513')).distinct()
+        rbd = self.import_license.filter(Q(item__name__icontains='rbd') | Q(item__name__icontains='1513')).distinct()
         if rbd:
             return rbd.first().item.name
         else:
@@ -324,7 +322,15 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_pko(self):
-        all = self.import_license.filter(Q(item__name__icontains='1513'))
+        all = self.import_license.filter(Q(item__name__icontains='1513')).exclude(Q(item__name__icontains='1509'))
+        sum1 = 0
+        for d in all:
+            sum1 += d.balance_quantity
+        return sum1
+
+    @property
+    def get_veg_oil(self):
+        all = self.import_license.filter(Q(item__name__icontains='1509'))
         sum1 = 0
         for d in all:
             sum1 += d.balance_quantity
@@ -343,6 +349,18 @@ class LicenseDetailsModel(models.Model):
                     return balance_cif
                 else:
                     return 0
+        else:
+            return 0
+
+    @property
+    def get_veg_oil_cif(self):
+        qty = self.get_veg_oil
+        if qty and qty > 100:
+            balance_cif = self.get_balance_cif - self.get_total_quantity_of_ff_df_cif - self.get_swp_cif
+            if balance_cif > 0:
+                return balance_cif
+            else:
+                return 0
         else:
             return 0
 
@@ -510,7 +528,16 @@ class LicenseDetailsModel(models.Model):
         """
         return sum([item.balance_quantity for item in
                     self.import_license.filter(item__name__icontains='milk').exclude(
-                        item__name__icontains='0406')])
+                        Q(item__name__icontains='0406') | Q(item__name__icontains='0404'))])
+
+    @property
+    def get_swp(self):
+        """
+                Query Balance WPC Quantity
+                @return: Total Balance Quantity of WPC
+        """
+        return sum([item.balance_quantity for item in
+                    self.import_license.filter(item__name__icontains='0404').exclude(item__name__icontains='0406')])
 
     @property
     def get_wpc_cif(self):
@@ -527,6 +554,23 @@ class LicenseDetailsModel(models.Model):
                     return 0
         else:
             return 0
+
+    @property
+    def get_swp_cif(self):
+        qty = self.get_swp
+        if qty and qty > 100:
+            required_cif = qty * 1
+            balance_cif = self.get_balance_cif - self.get_total_quantity_of_ff_df_cif
+            if required_cif <= balance_cif:
+                return required_cif
+            else:
+                if balance_cif > 0:
+                    return balance_cif
+                else:
+                    return 0
+        else:
+            return 0
+
 
     @property
     def get_gluten(self):

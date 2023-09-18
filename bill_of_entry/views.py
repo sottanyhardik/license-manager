@@ -152,7 +152,7 @@ class BillOfEntryFetchView(FormView):
         status = True
         from bill_of_entry.models import BillOfEntryModel
         data_list = BillOfEntryModel.objects.filter(
-            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).order_by(
+            Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(failed__lte=5).order_by(
             'bill_of_entry_date')
         for data in data_list:
             from bill_of_entry.scripts.utils import port_dict

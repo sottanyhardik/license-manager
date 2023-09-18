@@ -142,7 +142,7 @@ class BillOfEntryFetchView(FormView):
         from bill_of_entry.models import BillOfEntryModel
         context['remain_count'] = BillOfEntryModel.objects.filter(
             Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
-            failed__lte=5).count()
+            failed__gte=5).count()
         context['remain_captcha'] = context['remain_count'] / 3
         return context
 
@@ -155,7 +155,7 @@ class BillOfEntryFetchView(FormView):
         from bill_of_entry.models import BillOfEntryModel
         data_list = BillOfEntryModel.objects.filter(
             Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
-            failed__lte=5).order_by(
+            failed__gte=5).order_by(
             'bill_of_entry_date')
         for data in data_list:
             from bill_of_entry.scripts.utils import port_dict

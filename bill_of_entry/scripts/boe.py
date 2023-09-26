@@ -94,9 +94,11 @@ def be_details(cookies, data):
         tds = [td.text for td in soup.findAll('td') if td.text.strip() != '']
         dict_data = {}
         for index, ddata in enumerate(soup.findAll('th')):
-            if ddata.text == 'IEC':
+            if ddata.text == 'No Record found':
+                return None
+            elif ddata.text == 'IEC':
                 dict_data['iec'] = soup.findAll('td')[index].text.replace('\xa0', '')
-            elif ddata.text == 'CHA No.':
+            elif ddata.text == 'CHA Number':
                 dict_data['cha'] = soup.findAll('td')[index].text.replace('\xa0', '')
         response = requests.post('https://www.enquiry.icegate.gov.in/enquiryatices/BE_IcesCURRST_action',
                                  headers=headers,

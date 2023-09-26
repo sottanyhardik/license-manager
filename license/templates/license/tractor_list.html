@@ -54,6 +54,10 @@
                                         <th>HOT ROLLED Description</th>
                                         <th>Total HOT ROLLED Qty</th>
                                         <th>Balance HOT ROLLED Qty</th>
+                                        <th>BEARING HSN Code</th>
+                                        <th>BEARING Description</th>
+                                        <th>Total BEARING Qty</th>
+                                        <th>Balance BEARING Qty</th>
                                         </thead>
                                     {% else %}
                                         <thead>
@@ -89,6 +93,10 @@
                                                 <td>{{ object.get_hot_rolled_obj.first.item.name }}</td>
                                                 <td>{{ object.get_hot_rolled_total }}</td>
                                                 <td>{{ object.get_hot_rolled_balance }}</td>
+                                                <td>'{{ object.get_bearing.hs_code }}</td>
+                                                <td>{{ object.get_bearing.item.name }}</td>
+                                                <td>{{ object.get_bearing_total }}</td>
+                                                <td>{{ object.get_bearing_balance }}</td>
                                             </tr>
                                         {% endfor %}
                                     {% else %}

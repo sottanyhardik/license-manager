@@ -176,7 +176,7 @@ class BillOfEntryDeleteView(DeleteView):
 class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
     table_class = tables.BillOfEntryTable
     filterset_class = filters.BillOfEntryFilter
-    paginate_by = 50
+    paginate_by = 500
     template_name = 'bill_of_entry/download.html'
     model = bill_of_entry.BillOfEntryModel
 

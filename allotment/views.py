@@ -225,7 +225,7 @@ class DownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
     filter_class = filters.AllotmentFilter
 
     def get_queryset(self):
-        qs = self.model.objects.all()
+        qs = self.model.objects.exclude(port=513)
         product_filtered_list = self.filter_class(self.request.GET, queryset=qs)
         return product_filtered_list.qs.order_by('company', 'item_name', 'estimated_arrival_date')
 

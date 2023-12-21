@@ -1,5 +1,6 @@
 # Create your views here.
-from django.http import HttpResponse, JsonResponse
+from django.contrib import messages
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.views import View
 from django.views.generic import TemplateView, CreateView, UpdateView, DetailView
@@ -136,6 +137,10 @@ class UpdateHSNCodeView(UpdateView):
         return reverse('hs-code-update', kwargs={'pk': self.object.pk})
 
 
+class LedgerSuccess(TemplateView):
+    template_name = 'core/message.html'
+
+
 class UploadLedger(TemplateView):
     template_name = 'core/ledger.html'
 
@@ -144,13 +149,6 @@ class UploadLedger(TemplateView):
         return context
 
     def post(self, request, **kwargs):
-        # workbook = xlrd.open_workbook(files.temporary_file_path())
-        # worksheet = workbook.sheet_by_index(0)
-        # rows = []
-        # for column in range(worksheet.nrows):
-        #     for row in range(worksheet.nrows):
-        #         print(worksheet.cell(row, column).value)
-
         files = request.FILES.getlist('ledger')
         license = None
         for raw_file in files:
@@ -162,16 +160,13 @@ class UploadLedger(TemplateView):
                 try:
                     from bill_of_entry.scripts.ledger import parse_file
                     license = parse_file(data)
+                    messages.success(request, str(license))
                 except Exception as e:
-                    print(data)
-                    print(e)
-                    license = None
+                    messages.error(request, str(e))
         from django.http import HttpResponseRedirect
         from django.urls import reverse
-        if license:
-            return HttpResponseRedirect(reverse('license_ledger', kwargs={'license': license}))
-        else:
-            return HttpResponseRedirect(reverse('license-list'))
+        return HttpResponseRedirect(reverse('ledger-complete'))
+
 
 
 class TemplateListView(TemplateView):

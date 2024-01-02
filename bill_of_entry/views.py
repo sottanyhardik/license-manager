@@ -1,4 +1,6 @@
 # Create your views here.
+from decimal import Decimal
+
 from django.db.models import Q
 from django.http import JsonResponse, HttpResponse
 from django.http import HttpResponseRedirect
@@ -179,17 +181,12 @@ class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
     paginate_by = 500
     template_name = 'bill_of_entry/download.html'
     model = bill_of_entry.BillOfEntryModel
-
-    def get_queryset(self):
-        qs = self.model.objects.prefetch_related('item_details__sr_number__item',
-                                                 'item_details__sr_number__license').select_related('company').order_by(
-            'company', 'product_name', 'bill_of_entry_date')
-        return qs
+    ordering = ('company', 'product_name', 'bill_of_entry_date')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        total = 0
-        total_list = [total + int(data.get_total_inr) for data in self.get_queryset()]
+        queryset = self.filterset_class(self.request.GET, queryset=self.get_queryset()).qs
+        total_list = [Decimal(data.get_total_inr) for data in queryset]
         context['total_cif'] = sum(total_list)
         import datetime
         context['today'] = datetime.datetime.now().date

@@ -7,7 +7,7 @@ from django.db import models
 class FileUploadDetails(models.Model):
     iec = models.CharField(max_length=255, null=True, blank=True)
     ifsc = models.CharField(max_length=255, null=True, blank=True)
-    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='uploaded_files')
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, db_index=True, related_name='uploaded_files')
     file_name = models.CharField(max_length=255, null=True, blank=True)
     upload_time = models.CharField(max_length=255, null=True, blank=True)
 
@@ -33,7 +33,7 @@ class ShippingDetails(models.Model):
     file_number = models.CharField(max_length=255, null=True, blank=True)
     custom_file_number = models.CharField(max_length=255, null=True, blank=True)
     time_of_upload = models.CharField(max_length=255, null=True, blank=True)
-    file = models.ForeignKey('ebrc.FileUploadDetails', related_name='shipping_bills', blank=True, null=True, on_delete=models.CASCADE)
+    file = models.ForeignKey('ebrc.FileUploadDetails', db_index=True, related_name='shipping_bills', blank=True, null=True, on_delete=models.CASCADE)
     failed = models.IntegerField(default=0)
     ebrc = models.BooleanField(default=False)
     scroll_details = models.BooleanField(default=False)
@@ -72,7 +72,7 @@ class ShippingDetails(models.Model):
 
 
 class EbrcDetails(models.Model):
-    shipping_bill = models.ForeignKey('ebrc.ShippingDetails', on_delete=models.CASCADE, related_name='ebrc_list')
+    shipping_bill = models.ForeignKey('ebrc.ShippingDetails', on_delete=models.CASCADE, db_index=True, related_name='ebrc_list')
     brc_date = models.CharField(max_length=255, null=True, blank=True)
     brc_status = models.CharField(max_length=255, null=True, blank=True)
     realised_value = models.FloatField(default=0)

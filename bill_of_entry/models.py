@@ -4,14 +4,14 @@ from django.urls import reverse
 
 
 class BillOfEntryModel(models.Model):
-    company = models.ForeignKey('core.CompanyModel', related_name="bill_of_entry", on_delete=models.CASCADE, null=True,
+    company = models.ForeignKey('core.CompanyModel', db_index=True, related_name="bill_of_entry", on_delete=models.CASCADE, null=True,
                                 blank=True)
     bill_of_entry_number = models.CharField(max_length=25)
     bill_of_entry_date = models.DateField(null=True, blank=True)
-    port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, related_name='boe_port', null=True, blank=True)
+    port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, db_index=True, related_name='boe_port', null=True, blank=True)
     exchange_rate = models.FloatField(default=0)
     product_name = models.CharField(max_length=255, default='')
-    allotment = models.ManyToManyField('allotment.AllotmentModel', related_name="bill_of_entry", blank=True)
+    allotment = models.ManyToManyField('allotment.AllotmentModel', db_index=True, related_name="bill_of_entry", blank=True)
     invoice_no = models.CharField(max_length=255, null=True, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
     is_fetch = models.BooleanField(default=False)

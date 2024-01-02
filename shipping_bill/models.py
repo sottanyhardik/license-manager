@@ -3,7 +3,7 @@ from django.db import models
 
 # Create your models here.
 class FileUploadDetails(models.Model):
-    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='uploaded_files_shipping_bill')
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, db_index=True, related_name='uploaded_files_shipping_bill')
     iec_code = models.CharField(max_length=255, null=True, blank=True)
     file_name = models.CharField(max_length=255, null=True, blank=True)
     upload_time = models.CharField(max_length=255, null=True, blank=True)

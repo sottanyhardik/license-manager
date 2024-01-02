@@ -22,7 +22,7 @@ ROW_TYPE = (
 
 
 class AllotmentModel(models.Model):
-    company = models.ForeignKey('core.CompanyModel', related_name='company_allotments', on_delete=models.CASCADE)
+    company = models.ForeignKey('core.CompanyModel', db_index=True, related_name='company_allotments', on_delete=models.CASCADE)
     type = models.CharField(max_length=2, choices=ROW_TYPE, default=ALLOTMENT)
     required_quantity = models.FloatField(default=0)
     unit_value_per_unit = models.FloatField(default=0)
@@ -33,7 +33,7 @@ class AllotmentModel(models.Model):
     estimated_arrival_date = models.DateField(null=True, blank=True)
     bl_detail = models.CharField(max_length=255, null=True, blank=True)
     port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, null=True, blank=True)
-    related_company = models.ForeignKey('core.CompanyModel', related_name='related_company', on_delete=models.CASCADE,
+    related_company = models.ForeignKey('core.CompanyModel', db_index=True, related_name='related_company', on_delete=models.CASCADE,
                                         null=True, blank=True)
     created_on = models.DateField(auto_created=True, null=True, blank=True)
     created_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True,

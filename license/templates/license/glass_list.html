@@ -44,6 +44,9 @@
                                         <th>Balance CIF</th>
                                         <th>Glass Formers PD</th>
                                         <th>Glass Formers QTY</th>
+                                        <th>Glass Formers $</th>
+                                        <th>Borax</th>
+                                        <th>Borax $</th>
                                         <th>Intermediates namely PD</th>
                                         <th>Intermediates namely QTY</th>
                                         <th>Modifiers namely PD</th>
@@ -76,6 +79,9 @@
                                                 <td>{{ object.get_balance_cif }}</td>
                                                 <td>{{ object.get_glass_formers.item }}</td>
                                                 <td>{{ object.get_glass_formers.balance_quantity }}</td>
+                                                <td></td>
+                                                <td>{{ object.get_borax_balance_quantity }}</td>
+                                                <td></td>
                                                 <td>{{ object.get_intermediates_namely.item }}</td>
                                                 <td>{{ object.get_intermediates_namely.balance_quantity }}</td>
                                                 <td>{{ object.get_modifiers_namely.item }}</td>

@@ -181,8 +181,8 @@ class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
     model = bill_of_entry.BillOfEntryModel
 
     def get_queryset(self):
-        qs = self.model.objects.all()
-        return qs.order_by('company', 'product_name', 'bill_of_entry_date')
+        qs = self.model.objects.all().select_related('company').order_by('company', 'product_name','bill_of_entry_date')
+        return qs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

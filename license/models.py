@@ -1,9 +1,7 @@
 from django.db import models
-
 # Create your models here.
 from django.db.models import Sum, Q
 from django.urls import reverse
-from django.utils import timezone
 
 from allotment.models import AllotmentItems, Debit, ALLOTMENT
 from bill_of_entry.models import RowDetails, ARO

@@ -69,7 +69,7 @@ class ItemHeadModel(models.Model):
 
 
 class ItemNameModel(models.Model):
-    head = models.ForeignKey('core.ItemHeadModel', on_delete=models.CASCADE, db_index=True, related_name='items', null=True,
+    head = models.ForeignKey('core.ItemHeadModel', on_delete=models.CASCADE, related_name='items', null=True,
                              blank=True)
     name = models.CharField(max_length=255, unique=True)
 
@@ -109,8 +109,8 @@ class HeadSIONNormsModel(models.Model):
 
 
 class SionNormClassModel(models.Model):
-    head_norm = models.ForeignKey('core.HeadSIONNormsModel', on_delete=models.CASCADE, db_index=True, related_name='sion_head')
-    item = models.ForeignKey('core.ItemNameModel', db_index=True, related_name='norm_class', on_delete=models.CASCADE, null=True,
+    head_norm = models.ForeignKey('core.HeadSIONNormsModel', on_delete=models.CASCADE, related_name='sion_head')
+    item = models.ForeignKey('core.ItemNameModel', related_name='norm_class', on_delete=models.CASCADE, null=True,
                              blank=True)
     norm_class = models.CharField(max_length=10)
     url = models.URLField(null=True, blank=True, help_text="Please Enter Exim Guru URL")
@@ -133,12 +133,12 @@ class SionNormClassModel(models.Model):
 
 
 class SIONExportModel(models.Model):
-    norm_class = models.OneToOneField('core.SionNormClassModel', on_delete=models.CASCADE, db_index=True, related_name='export_norm')
-    item = models.ForeignKey('core.ItemNameModel', db_index=True, related_name='sion_export', on_delete=models.CASCADE, null=True,
+    norm_class = models.OneToOneField('core.SionNormClassModel', on_delete=models.CASCADE, related_name='export_norm')
+    item = models.ForeignKey('core.ItemNameModel', related_name='sion_export', on_delete=models.CASCADE, null=True,
                              blank=True)
     quantity = models.FloatField(default=0.0)
     unit = models.CharField(max_length=255, null=True, blank=True)
-    hs_code = models.ManyToManyField('core.HSCodeModel', blank=True, db_index=True, related_name='export_norms')
+    hs_code = models.ManyToManyField('core.HSCodeModel', blank=True, related_name='export_norms')
 
     def __str__(self):
         if self.item:
@@ -149,13 +149,13 @@ class SIONExportModel(models.Model):
 
 class SIONImportModel(models.Model):
     sr_no = models.IntegerField(default=0)
-    norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, db_index=True, related_name='import_norm')
-    item = models.ForeignKey('core.ItemNameModel', db_index=True, related_name='sion_import', on_delete=models.CASCADE, null=True,
+    norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='import_norm')
+    item = models.ForeignKey('core.ItemNameModel', related_name='sion_import', on_delete=models.CASCADE, null=True,
                              blank=True)
     quantity = models.FloatField(default=0.0)
     unit = models.CharField(max_length=255, null=True, blank=True)
     condition = models.CharField(max_length=255, null=True, blank=True)
-    hs_code = models.ManyToManyField('core.HSCodeModel', blank=True, db_index=True, related_name='import_norms')
+    hs_code = models.ManyToManyField('core.HSCodeModel', blank=True, related_name='import_norms')
 
     class Meta:
         ordering = ['sr_no']
@@ -193,7 +193,7 @@ class HSCodeDutyModel(models.Model):
 
 
 class ProductDescriptionModel(models.Model):
-    hs_code = models.ForeignKey('core.HSCodeDutyModel', on_delete=models.PROTECT, db_index=True, related_name='product_descriptions')
+    hs_code = models.ForeignKey('core.HSCodeDutyModel', on_delete=models.PROTECT, related_name='product_descriptions')
     product_description = models.TextField()
 
     def __str__(self):

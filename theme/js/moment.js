@@ -2043,7 +2043,7 @@
         return [nowValue.getFullYear(), nowValue.getMonth(), nowValue.getDate()];
     }
 
-    // convert an array to a date.
+    // my_docx_folder an array to a date.
     // the array should mirror the parameters below
     // note: all values past the year are optional and will default to the lowest possible value.
     // [year, month, day , hour, minute, second, millisecond]
@@ -4228,7 +4228,7 @@
 
         days += absFloor(hours / 24);
 
-        // convert days to months
+        // my_docx_folder days to months
         monthsFromDays = absFloor(daysToMonths(days));
         months += monthsFromDays;
         days -= absCeil(monthsToDays(monthsFromDays));

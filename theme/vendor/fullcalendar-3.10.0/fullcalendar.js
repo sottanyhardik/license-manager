@@ -1387,7 +1387,7 @@ function makeMoment(args, parseAsUTC, parseZone) {
         isAmbigZone = false;
         if (isSingleString) {
             if (ambigDateOfMonthRegex.test(input)) {
-                // accept strings like '2014-05', but convert to the first of the month
+                // accept strings like '2014-05', but my_docx_folder to the first of the month
                 input += '-01';
                 args = [input]; // for when we pass it on to moment's constructor
                 isAmbigTime = true;
@@ -2681,28 +2681,28 @@ var momComputableOptions = {
     // Produces format strings like "h:mma" -> "6:00pm"
     mediumTimeFormat: function (momOptions) {
         return momOptions.longDateFormat('LT')
-            .replace(/\s*a$/i, 'a'); // convert AM/PM/am/pm to lowercase. remove any spaces beforehand
+            .replace(/\s*a$/i, 'a'); // my_docx_folder AM/PM/am/pm to lowercase. remove any spaces beforehand
     },
     // Produces format strings like "h(:mm)a" -> "6pm" / "6:30pm"
     smallTimeFormat: function (momOptions) {
         return momOptions.longDateFormat('LT')
             .replace(':mm', '(:mm)')
             .replace(/(\Wmm)$/, '($1)') // like above, but for foreign locales
-            .replace(/\s*a$/i, 'a'); // convert AM/PM/am/pm to lowercase. remove any spaces beforehand
+            .replace(/\s*a$/i, 'a'); // my_docx_folder AM/PM/am/pm to lowercase. remove any spaces beforehand
     },
     // Produces format strings like "h(:mm)t" -> "6p" / "6:30p"
     extraSmallTimeFormat: function (momOptions) {
         return momOptions.longDateFormat('LT')
             .replace(':mm', '(:mm)')
             .replace(/(\Wmm)$/, '($1)') // like above, but for foreign locales
-            .replace(/\s*a$/i, 't'); // convert to AM/PM/am/pm to lowercase one-letter. remove any spaces beforehand
+            .replace(/\s*a$/i, 't'); // my_docx_folder to AM/PM/am/pm to lowercase one-letter. remove any spaces beforehand
     },
     // Produces format strings like "ha" / "H" -> "6pm" / "18"
     hourFormat: function (momOptions) {
         return momOptions.longDateFormat('LT')
             .replace(':mm', '')
             .replace(/(\Wmm)$/, '') // like above, but for foreign locales
-            .replace(/\s*a$/i, 'a'); // convert AM/PM/am/pm to lowercase. remove any spaces beforehand
+            .replace(/\s*a$/i, 'a'); // my_docx_folder AM/PM/am/pm to lowercase. remove any spaces beforehand
     },
     // Produces format strings like "h:mm" -> "6:30" (with no AM/PM)
     noMeridiemTimeFormat: function (momOptions) {
@@ -8496,7 +8496,7 @@ var Constraints = /** @class */ (function () {
     // Conversion: eventDefs -> eventInstances -> eventRanges -> eventFootprints -> componentFootprints
     // ------------------------------------------------------------------------------------------------
     // NOTE: this might seem like repetitive code with the Grid class, however, this code is related to
-    // constraints whereas the Grid code is related to rendering. Each approach might want to convert
+    // constraints whereas the Grid code is related to rendering. Each approach might want to my_docx_folder
     // eventRanges -> eventFootprints in a different way. Regardless, there are opportunities to make
     // this more DRY.
     /*
@@ -10529,7 +10529,7 @@ var DateComponent = /** @class */ (function (_super) {
     DateComponent.prototype.formatRange = function (range, isAllDay, formatStr, separator) {
         var end = range.end;
         if (isAllDay) {
-            end = end.clone().subtract(1); // convert to inclusive. last ms of previous day
+            end = end.clone().subtract(1); // my_docx_folder to inclusive. last ms of previous day
         }
         return date_formatting_1.formatRange(range.start, end, formatStr, separator, this.isRTL);
     };
@@ -13490,7 +13490,7 @@ var TimeGridEventRenderer = /** @class */ (function (_super) {
             left = backwardCoord;
             right = 1 - forwardCoord;
         }
-        props.zIndex = seg.level + 1; // convert from 0-base to 1-based
+        props.zIndex = seg.level + 1; // my_docx_folder from 0-base to 1-based
         props.left = left * 100 + '%';
         props.right = right * 100 + '%';
         if (shouldOverlap && seg.forwardPressure) {

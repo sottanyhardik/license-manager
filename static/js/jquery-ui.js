@@ -4994,7 +4994,7 @@ color.fn = jQuery.extend( color.prototype, {
 					var cache = space.cache;
 					each( space.props, function( key, prop ) {
 
-						// if the cache doesn't exist, and we know how to convert
+						// if the cache doesn't exist, and we know how to my_docx_folder
 						if ( !inst[ cache ] && space.to ) {
 
 							// if the value was null, we don't need to copy it
@@ -5782,7 +5782,7 @@ function _normalizeArguments( effect, options, speed, callback ) {
 		effect = effect.effect;
 	}
 
-	// convert to an object
+	// my_docx_folder to an object
 	effect = { effect: effect };
 
 	// catch (effect, null, ...)
@@ -8660,7 +8660,7 @@ $.extend(Datepicker.prototype, {
 				iValue += num[0].length;
 				return parseInt(num[0], 10);
 			},
-			// Extract a name from the string value and convert to an index
+			// Extract a name from the string value and my_docx_folder to an index
 			getName = function(match, shortNames, longNames) {
 				var index = -1,
 					names = $.map(lookAhead(match) ? longNames : shortNames, function (v, k) {

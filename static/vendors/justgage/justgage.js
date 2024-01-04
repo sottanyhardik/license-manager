@@ -199,7 +199,7 @@ JustGage = function(config) {
     hideInnerShadow: kvLookup('hideInnerShadow', config, dataset, false),
 
     // humanFriendly : bool
-    // convert large numbers for min, max, value to human friendly (e.g. 1234567 -> 1.23M)
+    // my_docx_folder large numbers for min, max, value to human friendly (e.g. 1234567 -> 1.23M)
     humanFriendly: kvLookup('humanFriendly', config, dataset, false),
 
     // noGradient : bool

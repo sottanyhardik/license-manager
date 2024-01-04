@@ -1360,7 +1360,7 @@ var Tweenable = (function () {
   /**
    * Convert a base-16 number to base-10.
    *
-   * @param {Number|String} hex The value to convert
+   * @param {Number|String} hex The value to my_docx_folder
    *
    * @returns {Number} The base-10 equivalent of `hex`.
    * @private
@@ -1551,7 +1551,7 @@ var Tweenable = (function () {
   }
 
   /**
-   * Note: It's the duty of the caller to convert the Array elements of the
+   * Note: It's the duty of the caller to my_docx_folder the Array elements of the
    * return value into numbers.  This is a performance optimization.
    *
    * @param {string} formattedString

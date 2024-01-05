@@ -63,7 +63,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
 
     def check_expired(self, queryset, name, value):
         from datetime import datetime, timedelta
-        expiry_limit = datetime.today() - timedelta(days=30)
+        expiry_limit = datetime.today() - timedelta(days=60)
         if value:
             return queryset.filter(license__license_expiry_date__lt=expiry_limit).order_by('license__license_expiry_date')
         else:

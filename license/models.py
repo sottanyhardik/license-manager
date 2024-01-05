@@ -319,12 +319,26 @@ class LicenseDetailsModel(models.Model):
         return sum1
 
     @property
+    def oil_queryset(self):
+        rbd = self.import_license.filter(Q(item__name__icontains='rbd') | Q(item__name__icontains='1513') | Q(
+            item__name__icontains='Edible Vegtable Oil') | Q(item__name__icontains='Edible Vegetable Oi')).distinct()
+        return rbd
+
+    @property
     def rbd_pd(self):
-        rbd = self.import_license.filter(Q(item__name__icontains='rbd') | Q(item__name__icontains='1513')).distinct()
+        rbd = self.oil_queryset
         if rbd:
             return rbd.first().item.name
         else:
             return "Missing"
+
+    @property
+    def oil_queryset_total(self):
+        all = self.oil_queryset
+        sum1 = 0
+        for d in all:
+            sum1 += d.balance_quantity
+        return sum1
 
     @property
     def get_rbd_cif(self):
@@ -352,7 +366,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_veg_oil(self):
-        all = self.import_license.filter(Q(item__name__icontains='1509'))
+        all = self.import_license.filter(Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable'))
         sum1 = 0
         for d in all:
             sum1 += d.balance_quantity
@@ -413,11 +427,33 @@ class LicenseDetailsModel(models.Model):
         return sum1
 
     @property
+    def get_food_flavour_qs(self):
+        all = self.import_license.filter(Q(item__name__icontains='flavour'))
+        return all
+
+    @property
+    def get_food_flavour_pd(self):
+        sum1 = 0
+        all = self.get_food_flavour_qs
+        if all.first():
+            return all.first().item.name
+        else:
+            return "Missing"
+
+    @property
+    def get_food_flavour_tq(self):
+        sum1 = 0
+        all = self.get_food_flavour_qs
+        for d in all:
+            sum1 += d.balance_quantity
+        return sum1
+
+    @property
     def get_food_flavour(self):
         sum1 = 0
         all = self.import_license.filter(
             Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(
-            Q(hs_code__hs_code__istartswith='2009'))
+            Q(hs_code__hs_code__istartswith='2009')|Q(item__name__icontains='2009'))
         for d in all:
             sum1 += d.balance_quantity
         return sum1
@@ -518,6 +554,37 @@ class LicenseDetailsModel(models.Model):
             [item.balance_quantity for item in self.import_license.filter(Q(hs_code__hs_code__istartswith='18050000'))])
 
     @property
+    def get_mnm_qs(self):
+        """
+        Query Balance Cheese Quantity
+        @return: Total Balance Quantity of Cheese
+        """
+        return self.import_license.filter(Q(item__name__icontains='milk'))
+
+
+    @property
+    def get_mnm_pd(self):
+        """
+        Query Balance Cheese Quantity
+        @return: Total Balance Quantity of Cheese
+        """
+        all = self.get_mnm_qs
+        if all.first():
+            return all.first().item.name
+        else:
+            return "Missing"
+
+    @property
+    def get_mnm_tq(self):
+        """
+        Query Balance Cheese Quantity
+        @return: Total Balance Quantity of Cheese
+        """
+        all = self.get_mnm_qs
+        return sum([item.balance_quantity for item in all])
+
+
+    @property
     def get_cheese(self):
         """
         Query Balance Cheese Quantity
@@ -593,7 +660,6 @@ class LicenseDetailsModel(models.Model):
         else:
             return 0
 
-
     @property
     def get_gluten(self):
         sum1 = 0
@@ -635,9 +701,51 @@ class LicenseDetailsModel(models.Model):
         return sum1
 
     @property
+    def get_paper_and_paper_qs(self):
+        all = self.import_license.filter(Q(item__name__icontains='paper'))
+        return all
+
+    @property
+    def get_paper_and_paper_pd(self):
+        all = self.get_paper_and_paper_qs
+        if all.first():
+            return all.first().item.name
+        else:
+            return 'Missing'
+
+    @property
+    def get_paper_and_paper_hsn(self):
+        all = self.get_paper_and_paper_qs
+        if all.first():
+            return str(all.first().hs_code)
+        else:
+            return 'Missing'
+
+    @property
+    def get_pp_qs(self):
+        all = self.import_license.filter(Q(hs_code__hs_code__istartswith='3902'))
+        return all
+
+    @property
+    def get_pp_pd(self):
+        all = self.get_pp_qs
+        if all.first():
+            return all.first().item.name
+        else:
+            return 'Missing'
+
+    @property
+    def get_pp_hsn(self):
+        all = self.get_pp_qs
+        if all.first():
+            return str(all.first().hs_code)
+        else:
+            return 'Missing'
+
+    @property
     def get_paper_and_paper(self):
         sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='paper &') & Q(item__name__icontains='GSM'))
+        all = self.get_paper_and_paper_qs
         for d in all:
             sum1 += d.balance_quantity
         return sum1

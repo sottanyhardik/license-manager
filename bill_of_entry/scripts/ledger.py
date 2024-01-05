@@ -142,7 +142,12 @@ def parse_file(data):
                     datetime_object = datetime.datetime.strptime(row['be_date'], '%d/%m/%y')
                 except:
                     datetime_object = datetime.datetime.strptime(row['be_date'].split(' ')[0], '%Y-%m-%d')
-        row_obj, bool = LicenseImportItemsModel.objects.get_or_create(serial_number=row['sr_no'], license=license)
+        try:
+            row_obj, bool = LicenseImportItemsModel.objects.get_or_create(serial_number=row['sr_no'], license=license)
+        except:
+            row_obj = LicenseImportItemsModel.objects.filter(serial_number=row['sr_no'], license=license)
+            if row_obj.first().hs_code:
+                print(row_obj)
         if row['type'] == Credit:
             row_obj.quantity = float(row['qty'])
             if float(data_dict['cif_fc']) != float(row['cif_fc']):

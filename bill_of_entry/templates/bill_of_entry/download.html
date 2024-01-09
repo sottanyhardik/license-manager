@@ -73,7 +73,11 @@
                     <th>Exc Rt.</th>
                     <th>Value (INR)</th>
                     <th colspan="2">Item Name</th>
-                    <th>Importer</th>
+                    <th>Invoice</th>
+                    <th>DFIA No.</th>
+                    <th>DFIA Qty.</th>
+                    <th>DFIA $.</th>
+                    <th>DFIA INR</th>
                 </tr>
                 <tbody>
                 {% for boe in product_data.list %}
@@ -92,7 +96,27 @@
                         {% else %}
                             <td colspan="2">{{ boe.item_details.all.first.sr_number.item|truncatechars:25 }}</td>
                         {% endif %}
-                        <td>{{ data.grouper.name }}</td>
+                        <td>{% if boe.invoice_no %}{{ boe.invoice_no }}{% else %}-{% endif %}</td>
+                        <td colspan="4">
+                            <table>
+                                {% for boe_detail in boe.item_details.all %}
+                                    <tr>
+                                        <td>{{ boe_detail.sr_number.license }}</td>
+                                        <td>{{ boe_detail.qty }}</td>
+                                        <td>{{ boe_detail.cif_fc }}</td>
+                                        <td>{{ boe_detail.cif_inr }}</td>
+
+                                    </tr>
+
+                                {% endfor %}
+                                <tr>
+                                    <td><b>Total</b></td>
+                                    <td>{{ boe.get_total_quantity }}</td>
+                                    <td>{{ boe.get_total_fc }}</td>
+                                    <td>{{ boe.get_total_inr }}</td>
+                                </tr>
+                            </table>
+                        </td>
                     </tr>
                 {% endfor %}
                 <tr>
@@ -106,6 +130,10 @@
                     <td>-</td>
                     <td><b>{% get_boe_total_inr product_data.list %}</b></td>
                     <td colspan="2">-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
                     <td>-</td>
                 </tr>
                 </tbody>

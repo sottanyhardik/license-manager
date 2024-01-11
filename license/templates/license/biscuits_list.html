@@ -57,10 +57,10 @@
                                         <th>FF Qty</th>
                                         <th>TOTAL Qty</th>
                                         <th>Fruit/Cocoa</th>
-                                        <th>Juice, DF & FF $</th>
+                                        <th>Leavening Agent Qty</th>
                                         <th>STARCH 1108 Qty</th>
                                         <th>STARCH 3505 Qty</th>
-                                        <th>STARCH $</th>
+                                        <th>Juice, DF & FF $</th>
                                         <th>MNM PD</th>
                                         <th>MNM QTY</th>
                                         <th>CHEESE Qty</th>
@@ -69,9 +69,6 @@
                                         <th>WPC $</th>
                                         <th>SWP QTY</th>
                                         <th>SWP $</th>
-                                        <th>GLUTEN Qty</th>
-                                        <th>GLUTEN $</th>
-                                        <th>Leavening Agent Qty</th>
                                         <th>PP HSN</th>
                                         <th>PP PD</th>
                                         <th>PP Qty</th>
@@ -117,10 +114,10 @@
                                                 <td>{{ object.get_food_flavour }}</td>
                                                 <td>{{ object.get_total_quantity_of_ff_df }}</td>
                                                 <td>{{ object.get_fruit }}</td>
-                                                <td>{{ object.get_total_quantity_of_ff_df_cif }}</td>
+                                                <td>{{ object.get_leavening_agent }}</td>
                                                 <td>{{ object.get_wheat_starch }}</td>
                                                 <td>{{ object.get_modified_starch }}</td>
-                                                <td>{{ object.get_starh_cif }}</td>
+                                                <td>{{ object.get_total_quantity_of_ff_df_cif }}</td>
                                                 <td>{{ object.get_mnm_pd }}</td>
                                                 <td>{{ object.get_mnm_tq }}</td>
                                                 <td>{{ object.get_cheese }}</td>
@@ -129,9 +126,8 @@
                                                 <td>{{ object.get_wpc_cif }}</td>
                                                 <td>{{ object.get_swp }}</td>
                                                 <td>{{ object.get_swp_cif }}</td>
-                                                <td>{{ object.get_gluten }}</td>
-                                                <td>{{ object.get_gluten_cif }}</td>
-                                                <td>{{ object.get_leavening_agent }}</td>
+{#                                                <td>{{ object.get_gluten }}</td>#}
+{#                                                <td>{{ object.get_gluten_cif }}</td>#}
                                                 <td>{{ object.get_pp_hsn }}</td>
                                                 <td>{{ object.get_pp_pd }}</td>
                                                 <td>{{ object.get_pp }}</td>

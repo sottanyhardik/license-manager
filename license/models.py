@@ -366,7 +366,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_veg_oil(self):
-        all = self.import_license.filter(Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable'))
+        all = self.import_license.filter(Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable')| Q(item__name__icontains='150000'))
         sum1 = 0
         for d in all:
             sum1 += d.balance_quantity
@@ -376,7 +376,7 @@ class LicenseDetailsModel(models.Model):
     def get_pko_cif(self):
         qty = self.get_pko
         if qty and qty > 100:
-            balance_cif = self.get_balance_cif - self.get_cheese_cif - self.get_total_quantity_of_ff_df_cif
+            balance_cif = self.get_balance_cif - self.get_cheese_cif - self.get_total_quantity_of_ff_df_cif - self.get_swp_cif
             required_cif = qty * 1
             if required_cif <= balance_cif:
                 return required_cif
@@ -660,29 +660,29 @@ class LicenseDetailsModel(models.Model):
         else:
             return 0
 
-    @property
-    def get_gluten(self):
-        sum1 = 0
-        all = self.import_license.filter(item__name__icontains='gluten')
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+    # @property
+    # def get_gluten(self):
+    #     sum1 = 0
+    #     all = self.import_license.filter(item__name__icontains='gluten')
+    #     for d in all:
+    #         sum1 += d.balance_quantity
+    #     return sum1
 
-    @property
-    def get_gluten_cif(self):
-        qty = self.get_gluten
-        if qty and qty > 100:
-            required_cif = qty * 2
-            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif
-            if required_cif <= balance_cif:
-                return required_cif
-            else:
-                if balance_cif > 0:
-                    return balance_cif
-                else:
-                    return 0
-        else:
-            return 0
+    # @property
+    # def get_gluten_cif(self):
+    #     qty = self.get_gluten
+    #     if qty and qty > 100:
+    #         required_cif = qty * 2
+    #         balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif
+    #         if required_cif <= balance_cif:
+    #             return required_cif
+    #         else:
+    #             if balance_cif > 0:
+    #                 return balance_cif
+    #             else:
+    #                 return 0
+    #     else:
+    #         return 0
 
     @property
     def cif_value_balance(self):

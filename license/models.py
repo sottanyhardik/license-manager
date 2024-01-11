@@ -312,7 +312,9 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_rbd(self):
-        all = self.import_license.filter(Q(item__name__icontains='rbd')).exclude(Q(item__name__icontains='1513'))
+        all = self.import_license.filter(Q(item__name__icontains='rbd')).exclude(Q(item__name__icontains='1513')|Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable') | Q(
+                item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
+                item__name__icontains='Edible Vegetable Oil/'))
         sum1 = 0
         for d in all:
             sum1 += d.balance_quantity
@@ -330,7 +332,7 @@ class LicenseDetailsModel(models.Model):
         if rbd:
             return rbd.first().item.name
         else:
-            return "Missing"
+            return 0
 
     @property
     def oil_queryset_total(self):
@@ -358,7 +360,9 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_pko(self):
-        all = self.import_license.filter(Q(item__name__icontains='1513')).exclude(Q(item__name__icontains='1509'))
+        all = self.import_license.filter(Q(item__name__icontains='1513')).exclude(Q(item__name__icontains='1509')|Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable') | Q(
+                item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
+                item__name__icontains='Edible Vegetable Oil/'))
         sum1 = 0
         for d in all:
             sum1 += d.balance_quantity
@@ -366,7 +370,10 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_veg_oil(self):
-        all = self.import_license.filter(Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable')| Q(item__name__icontains='150000'))
+        all = self.import_license.filter(
+            Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable') | Q(
+                item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
+                item__name__icontains='Edible Vegetable Oil/'))
         sum1 = 0
         for d in all:
             sum1 += d.balance_quantity
@@ -392,7 +399,7 @@ class LicenseDetailsModel(models.Model):
     def get_veg_oil_cif(self):
         qty = self.get_veg_oil
         if qty and qty > 100:
-            balance_cif = self.get_balance_cif - self.get_total_quantity_of_ff_df_cif - self.get_swp_cif
+            balance_cif = self.get_balance_cif - self.get_cheese_cif - self.get_total_quantity_of_ff_df_cif - self.get_swp_cif
             if balance_cif > 0:
                 return balance_cif
             else:
@@ -438,7 +445,7 @@ class LicenseDetailsModel(models.Model):
         if all.first():
             return all.first().item.name
         else:
-            return "Missing"
+            return 0
 
     @property
     def get_food_flavour_tq(self):
@@ -453,7 +460,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.import_license.filter(
             Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(
-            Q(hs_code__hs_code__istartswith='2009')|Q(item__name__icontains='2009'))
+            Q(hs_code__hs_code__istartswith='2009') | Q(item__name__icontains='2009'))
         for d in all:
             sum1 += d.balance_quantity
         return sum1
@@ -521,7 +528,7 @@ class LicenseDetailsModel(models.Model):
         return sum1
 
     @property
-    def get_starh_cif(self):
+    def get_starch_cif(self):
         qty = self.get_wheat_starch + self.get_modified_starch
         if qty and qty > 100:
             required_cif = qty * 1
@@ -561,7 +568,6 @@ class LicenseDetailsModel(models.Model):
         """
         return self.import_license.filter(Q(item__name__icontains='milk'))
 
-
     @property
     def get_mnm_pd(self):
         """
@@ -572,7 +578,7 @@ class LicenseDetailsModel(models.Model):
         if all.first():
             return all.first().item.name
         else:
-            return "Missing"
+            return 0
 
     @property
     def get_mnm_tq(self):
@@ -582,7 +588,6 @@ class LicenseDetailsModel(models.Model):
         """
         all = self.get_mnm_qs
         return sum([item.balance_quantity for item in all])
-
 
     @property
     def get_cheese(self):
@@ -633,7 +638,7 @@ class LicenseDetailsModel(models.Model):
         qty = self.get_wpc
         if qty and qty > 100:
             required_cif = qty * 5.5
-            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_total_quantity_of_ff_df_cif - self.get_starh_cif
+            balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_total_quantity_of_ff_df_cif - self.get_starch_cif
             if required_cif <= balance_cif:
                 return required_cif
             else:
@@ -673,7 +678,7 @@ class LicenseDetailsModel(models.Model):
     #     qty = self.get_gluten
     #     if qty and qty > 100:
     #         required_cif = qty * 2
-    #         balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif
+    #         balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starch_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif
     #         if required_cif <= balance_cif:
     #             return required_cif
     #         else:
@@ -686,7 +691,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def cif_value_balance(self):
-        balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starh_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_gluten_cif - self.get_total_quantity_of_ff_df_cif - self.get_rbd_cif
+        balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif - self.get_rbd_cif - self.get_veg_oil_cif
         if balance_cif >= 0:
             return balance_cif
         else:

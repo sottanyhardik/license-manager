@@ -362,7 +362,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_pko(self):
-        all = self.import_license.filter(Q(item__name__icontains='1513')).exclude(
+        all = self.import_license.filter(Q(item__name__icontains='1513') | Q(item__name__icontains="Pko")).exclude(
             Q(item__name__icontains='1509') | Q(item__name__icontains='1509') | Q(
                 item__name__icontains='Edible Vegtable') | Q(
                 item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
@@ -377,7 +377,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(
             Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable') | Q(
                 item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
-                item__name__icontains='Edible Vegetable Oil/'))
+                item__name__icontains='Edible Vegetable Oil/') | Q(item__name__icontains='Edible Vegetable Oil'))
         sum1 = 0
         for d in all:
             sum1 += d.balance_quantity

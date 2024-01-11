@@ -362,7 +362,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_pko(self):
-        all = self.import_license.filter(Q(item__name__icontains='1513') | Q(item__name__icontains="Pko")).exclude(
+        all = self.import_license.filter(Q(item__name__icontains='1513') | Q(item__name__icontains="Vegetable Oil")).exclude(
             Q(item__name__icontains='1509') | Q(item__name__icontains='1509') | Q(
                 item__name__icontains='Edible Vegtable') | Q(
                 item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(

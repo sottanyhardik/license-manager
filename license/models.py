@@ -312,7 +312,9 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_rbd(self):
-        all = self.import_license.filter(Q(item__name__icontains='rbd')).exclude(Q(item__name__icontains='1513')|Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable') | Q(
+        all = self.import_license.filter(Q(item__name__icontains='rbd')).exclude(
+            Q(item__name__icontains='1513') | Q(item__name__icontains='1509') | Q(
+                item__name__icontains='Edible Vegtable') | Q(
                 item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
                 item__name__icontains='Edible Vegetable Oil/'))
         sum1 = 0
@@ -332,7 +334,7 @@ class LicenseDetailsModel(models.Model):
         if rbd:
             return rbd.first().item.name
         else:
-            return 0
+            return "Missing"
 
     @property
     def oil_queryset_total(self):
@@ -360,7 +362,9 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_pko(self):
-        all = self.import_license.filter(Q(item__name__icontains='1513')).exclude(Q(item__name__icontains='1509')|Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable') | Q(
+        all = self.import_license.filter(Q(item__name__icontains='1513')).exclude(
+            Q(item__name__icontains='1509') | Q(item__name__icontains='1509') | Q(
+                item__name__icontains='Edible Vegtable') | Q(
                 item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
                 item__name__icontains='Edible Vegetable Oil/'))
         sum1 = 0
@@ -445,7 +449,7 @@ class LicenseDetailsModel(models.Model):
         if all.first():
             return all.first().item.name
         else:
-            return 0
+            return "Missing"
 
     @property
     def get_food_flavour_tq(self):
@@ -691,7 +695,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def cif_value_balance(self):
-        balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif - self.get_rbd_cif - self.get_veg_oil_cif
+        balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif - self.get_rbd_cif - self.get_veg_oil_cif - self.get_swp_cif
         if balance_cif >= 0:
             return balance_cif
         else:

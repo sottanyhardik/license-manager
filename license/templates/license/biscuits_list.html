@@ -43,19 +43,18 @@
                                         <th>Total CIF</th>
                                         <th>Balance CIF</th>
                                         <th>Total Veg QTY</th>
+                                        <th>RBD PD</th>
                                         <th>RBD QTY</th>
                                         <th>RBD $</th>
                                         <th>1513 QTY</th>
                                         <th>1513 $</th>
                                         <th>Veg Oil QTY</th>
                                         <th>Veg Oil $</th>
-                                        <th>RBD PD</th>
                                         <th>FF PD</th>
                                         <th>FF Total</th>
                                         <th>JUICE Qty</th>
                                         <th>DF Qty</th>
                                         <th>FF Qty</th>
-                                        <th>TOTAL Qty</th>
                                         <th>Fruit/Cocoa</th>
                                         <th>Leavening Agent Qty</th>
                                         <th>STARCH 1108 Qty</th>
@@ -99,6 +98,7 @@
                                                 <td>{{ object.exporter }}</td>
                                                 <td>{{ object.opening_balance }}</td>
                                                 <td>{{ object.get_balance_cif }}</td>
+                                                <td>{{ object.rbd_pd }}</td>
                                                 <td>{{ object.oil_queryset_total }}</td>
                                                 <td>{{ object.get_rbd }}</td>
                                                 <td>{{ object.get_rbd_cif }}</td>
@@ -106,13 +106,11 @@
                                                 <td>{{ object.get_pko_cif }}</td>
                                                 <td>{{ object.get_veg_oil }}</td>
                                                 <td>{{ object.get_veg_oil_cif }}</td>
-                                                <td>{{ object.rbd_pd }}</td>
                                                 <td>{{ object.get_food_flavour_pd }}</td>
                                                 <td>{{ object.get_food_flavour_tq }}</td>
                                                 <td>{{ object.get_food_flavour_juice }}</td>
                                                 <td>{{ object.get_dietary_fibre }}</td>
                                                 <td>{{ object.get_food_flavour }}</td>
-                                                <td>{{ object.get_total_quantity_of_ff_df }}</td>
                                                 <td>{{ object.get_fruit }}</td>
                                                 <td>{{ object.get_leavening_agent }}</td>
                                                 <td>{{ object.get_wheat_starch }}</td>

@@ -362,7 +362,8 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_pko(self):
-        all = self.import_license.filter(Q(item__name__icontains='1513') | Q(item__name__icontains="Vegetable Oil")).exclude(
+        all = self.import_license.filter(
+            Q(item__name__icontains='1513') | Q(item__name__icontains="Vegetable Oil")).exclude(
             Q(item__name__icontains='1509') | Q(item__name__icontains='1509') | Q(
                 item__name__icontains='Edible Vegtable') | Q(
                 item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
@@ -488,17 +489,27 @@ class LicenseDetailsModel(models.Model):
             sum1 += d.balance_quantity
         return sum1
 
-    @property
-    def get_total_quantity_of_ff_df(self):
-        return self.get_food_flavour_juice + self.get_food_flavour + self.get_dietary_fibre
 
     @property
     def get_total_quantity_of_ff_df_cif(self):
         balance_cif = self.get_balance_cif
-        if balance_cif < self.get_per_cif:
-            return balance_cif
+        per_cif = self.get_per_cif
+        if balance_cif < per_cif:
+            per_cif = balance_cif
+        product_description = self.get_food_flavour_pd
+        if 'Missing' in product_description:
+            return 0
+        elif '0908' in product_description:
+            required = self.get_food_flavour * 6.22
+        elif '2009' in product_description:
+            required = self.get_food_flavour_juice * 2.5
         else:
-            return self.get_per_cif
+            required = 0
+        required = required + self.get_fruit * 2.5
+        if required > per_cif:
+            return per_cif
+        else:
+            return required
         # qty = self.get_total_quantity_of_ff_df
         # if qty and qty > 100:
         #     balance_cif = self.get_balance_cif

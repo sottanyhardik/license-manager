@@ -27,6 +27,18 @@ class ListFilter(django_filters.Filter):
             return queryset
 
 
+class ListBOEFilter(django_filters.Filter):
+    def filter(self, queryset, value):
+        if value:
+            value_list = value.split(u',')
+            queryset = queryset.filter(bill_of_entry_number__in=value_list).distinct()
+            return queryset
+        elif value == "":
+            return queryset
+        else:
+            return queryset
+
+
 class BillOfEntryFilter(django_filters.FilterSet):
     is_self = django_filters.BooleanFilter(method='check_self', label='All')
     item_details__sr_number__license__license_number = ListFilter(
@@ -35,7 +47,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
         widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY', 'format': 'dd/mm/yyyy', 'type': 'date'}))
     is_invoice = django_filters.BooleanFilter(method='check_is_invoice', label='Is Invoice')
     is_ooc = django_filters.BooleanFilter(method='check_is_ooc', label='Is OOC')
-    bill_of_entry_number = ListFilter(
+    bill_of_entry_number = ListBOEFilter(
         field_name='bill_of_entry_number', label='BOE Numbers')
 
     class Meta:

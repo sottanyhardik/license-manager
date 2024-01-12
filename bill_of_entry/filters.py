@@ -35,6 +35,8 @@ class BillOfEntryFilter(django_filters.FilterSet):
         widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY', 'format': 'dd/mm/yyyy', 'type': 'date'}))
     is_invoice = django_filters.BooleanFilter(method='check_is_invoice', label='Is Invoice')
     is_ooc = django_filters.BooleanFilter(method='check_is_ooc', label='Is OOC')
+    bill_of_entry_number = ListFilter(
+        field_name='bill_of_entry_number', label='BOE Numbers')
 
     class Meta:
         model = bill_of_entry.BillOfEntryModel

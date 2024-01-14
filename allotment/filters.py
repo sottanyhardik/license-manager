@@ -4,6 +4,7 @@ import django_filters
 from django.db import models
 from django.forms import Select
 
+from core.models import PortModel, CompanyModel
 from license import models as license_model
 from allotment import models as allotment_model
 
@@ -15,10 +16,19 @@ BOOLEAN_CHOICES = (
 
 class ListFilter(django_filters.Filter):
     def filter(self, queryset, value):
-        if value == "":
+        if not value or value == "":
             return queryset
         value_list = value.split(u',')
         queryset = queryset.filter(allotment_details__item__license__license_number__in=value_list).distinct()
+        return queryset
+
+
+class ListPortFilter(django_filters.Filter):
+    def filter(self, queryset, value):
+        if not value or value == "":
+            return queryset
+        value_list = value.split(u',')
+        queryset = queryset.filter(port__code__in=value_list).distinct()
         return queryset
 
 
@@ -73,12 +83,18 @@ class AllotmentItemFilter(django_filters.FilterSet):
 class AllotmentFilter(django_filters.FilterSet):
     allotment_details__item__license__license_number = ListFilter(
         field_name='allotment_details__item__license__license_number', label='License Numbers')
+    exclude_company_name = django_filters.ModelMultipleChoiceFilter(
+        field_name='company__name', exclude=True, label='Exclude Company Name',
+        queryset=CompanyModel.objects.filter(company_allotments__isnull=False).distinct())
+
+    port_code = django_filters.ModelMultipleChoiceFilter(
+        field_name='port__code', label='Port Code', queryset=PortModel.objects.filter(allotments__isnull=False).distinct())
     is_be = django_filters.BooleanFilter(method='check_be', label='Is BOE', initial=False)
     is_alloted = django_filters.BooleanFilter(method='check_alloted', label='Is Alloted', initial=True)
 
     class Meta:
         model = allotment_model.AllotmentModel
-        fields = ['type', 'company', 'item_name', 'allotment_details__item__license__license_number', 'port']
+        fields = ['type', 'company', 'item_name']
         widgets = {
             'company': Select(attrs={'class': 'form-control'}),
             'type': Select(attrs={'class': 'form-control'}),

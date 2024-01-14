@@ -32,7 +32,7 @@ class AllotmentModel(models.Model):
     invoice = models.CharField(max_length=255, null=True, blank=True)
     estimated_arrival_date = models.DateField(null=True, blank=True)
     bl_detail = models.CharField(max_length=255, null=True, blank=True)
-    port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, null=True, blank=True)
+    port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, null=True, blank=True, related_name="allotments")
     related_company = models.ForeignKey('core.CompanyModel', related_name='related_company', on_delete=models.CASCADE,
                                         null=True, blank=True)
     created_on = models.DateField(auto_created=True, null=True, blank=True)

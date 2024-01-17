@@ -5,6 +5,7 @@ from django.forms import Select
 from django_filters import DateFromToRangeFilter
 
 from core.filter_helper import RangeWidget
+from core.models import CompanyModel
 from . import models as bill_of_entry
 
 BOOLEAN_CHOICES = (
@@ -40,6 +41,10 @@ class ListBOEFilter(django_filters.Filter):
 
 
 class BillOfEntryFilter(django_filters.FilterSet):
+    company = django_filters.ModelMultipleChoiceFilter(
+        field_name='company', label='Company Name',
+        queryset=CompanyModel.objects.filter(bill_of_entry__isnull=False).distinct())
+
     is_self = django_filters.BooleanFilter(method='check_self', label='All')
     item_details__sr_number__license__license_number = ListFilter(
         field_name='item_details__sr_number__license__license_number', label='License Numbers')

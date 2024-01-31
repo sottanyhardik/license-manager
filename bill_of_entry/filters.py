@@ -5,7 +5,7 @@ from django.forms import Select
 from django_filters import DateFromToRangeFilter
 
 from core.filter_helper import RangeWidget
-from core.models import CompanyModel
+from core.models import CompanyModel, PortModel
 from . import models as bill_of_entry
 
 BOOLEAN_CHOICES = (
@@ -44,6 +44,13 @@ class BillOfEntryFilter(django_filters.FilterSet):
     company = django_filters.ModelMultipleChoiceFilter(
         field_name='company', label='Company Name',
         queryset=CompanyModel.objects.filter(bill_of_entry__isnull=False).distinct())
+    exclude_company_name = django_filters.ModelMultipleChoiceFilter(
+        field_name='company__name', exclude=True, label='Exclude Company Name',
+        queryset=CompanyModel.objects.filter(company_allotments__isnull=False).distinct())
+
+    port = django_filters.ModelMultipleChoiceFilter(
+        field_name='port__code', label='Port Code',
+        queryset=PortModel.objects.filter(allotments__isnull=False).distinct())
 
     is_self = django_filters.BooleanFilter(method='check_self', label='All')
     item_details__sr_number__license__license_number = ListFilter(
@@ -57,7 +64,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
 
     class Meta:
         model = bill_of_entry.BillOfEntryModel
-        fields = ['company', 'bill_of_entry_number', 'port', 'product_name', 'is_self',
+        fields = ['company', 'exclude_company_name', 'bill_of_entry_number', 'port', 'product_name', 'is_self',
                   'item_details__sr_number__license__license_number', 'appraisement']
         widgets = {
             'company': Select(attrs={'class': 'form-control'}),

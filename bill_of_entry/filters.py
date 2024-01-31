@@ -50,7 +50,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
 
     port = django_filters.ModelMultipleChoiceFilter(
         field_name='port__code', label='Port Code',
-        queryset=PortModel.objects.filter(allotments__isnull=False).distinct())
+        queryset=PortModel.objects.filter(boe_port__isnull=False).distinct())
 
     is_self = django_filters.BooleanFilter(method='check_self', label='All')
     item_details__sr_number__license__license_number = ListFilter(

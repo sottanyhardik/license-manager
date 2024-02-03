@@ -52,7 +52,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
         field_name='port__code', label='Port Code',
         queryset=PortModel.objects.filter(boe_port__isnull=False).distinct())
 
-    is_self = django_filters.BooleanFilter(method='check_self', label='All')
+    is_ge = django_filters.BooleanFilter(method='check_self', label='All')
     item_details__sr_number__license__license_number = ListFilter(
         field_name='item_details__sr_number__license__license_number', label='License Numbers')
     bill_of_entry_date = DateFromToRangeFilter(
@@ -64,7 +64,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
 
     class Meta:
         model = bill_of_entry.BillOfEntryModel
-        fields = ['company', 'exclude_company_name', 'bill_of_entry_number', 'port', 'product_name', 'is_self',
+        fields = ['company', 'exclude_company_name', 'bill_of_entry_number', 'port', 'product_name', 'is_ge',
                   'item_details__sr_number__license__license_number', 'appraisement']
         widgets = {
             'company': Select(attrs={'class': 'form-control'}),
@@ -85,7 +85,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
         }
 
     def check_self(self, queryset, name, value):
-        return queryset.filter(item_details__sr_number__license__is_self=True).distinct()
+        return queryset.filter(item_details__sr_number__license__is_ge=True).distinct()
 
     def check_is_invoice(self, queryset, name, value):
         if value:

@@ -27,7 +27,7 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
         query_dict['license__license_expiry_date__gte'] = expiry_limit
     if notification_number:
         query_dict['license__notification_number'] = notification_number
-    query_dict['license__is_self'] = True
+    query_dict['license__is_ge'] = True
     query_dict['license__is_au'] = False
     my_filter = Q()
     for item in query_dict:
@@ -425,7 +425,7 @@ def fruit_query(date_range=None):
 
 
 def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_filters=None, exclude_and_filters=None,
-                    is_self=True, is_au=False,
+                    is_ge=True, is_au=False,
                     is_expired=False):
     my_filter = Q()
     if date_range:
@@ -440,7 +440,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
     else:
         expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
         query_dict['license_expiry_date__gte'] = expiry_limit
-    query_dict['is_self'] = is_self
+    query_dict['is_ge'] = is_ge
     query_dict['is_au'] = is_au
     for item in query_dict:
         my_filter &= Q(**{item: query_dict[item]})
@@ -493,9 +493,11 @@ def generate_table(queryset, table):
     return table
 
 
-def biscuit_conversion(date_range=None, party=None, exclude_party=None, is_expired=False):
+def biscuit_conversion(date_range=None, party=None, exclude_party=None, is_expired=False, is_mi=False, is_ge=False):
     query_dict = {
         'export_license__norm_class__norm_class': 'E5',
+        'is_mi': is_mi,
+        'is_ge': is_ge
     }
     if party:
         or_filters = {
@@ -602,38 +604,44 @@ def conversion_main(date_range=None):
     return tables
 
 
-def biscuit_dfia(date_range=None, status=False):
+def biscuit_dfia(date_range=None, status=False, party=None):
     if status == 'expired':
         is_expired = True
     else:
         is_expired = False
-    parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'], is_expired=is_expired)
-    empty_list = []
-    parle_dfia = []
-    other_dfia = []
     if is_expired:
         limit = 20000
     else:
         limit = 1000
-    for dfia in parle_dfia_qs:
-        if dfia.get_balance_cif > limit:
-            parle_dfia.append(dfia)
-        else:
-            empty_list.append(dfia)
-    other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], is_expired=is_expired)
-    for dfia in other_dfia_qs:
-        if dfia.get_balance_cif > limit:
-            other_dfia.append(dfia)
-        else:
-            empty_list.append(dfia)
-    tables = [
-        {'label': 'Parle Biscuits',
-         'table': parle_dfia},
-        {'label': 'All Other DFIA',
-         'table': other_dfia},
-        {'label': 'EMPTY DFIA',
-         'table': empty_list}
-    ]
+    empty_list = []
+    parle_dfia = []
+    other_dfia = []
+    tables = []
+    if party == 'parle':
+        parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'], is_expired=is_expired)
+        for dfia in parle_dfia_qs:
+            if dfia.get_balance_cif > limit:
+                parle_dfia.append(dfia)
+            else:
+                empty_list.append(dfia)
+        tables.append({'label': 'Parle Biscuits', 'table': parle_dfia})
+    elif party == 'mi':
+        other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], is_expired=is_expired, is_mi=True)
+        for dfia in other_dfia_qs:
+            if dfia.get_balance_cif > limit:
+                other_dfia.append(dfia)
+            else:
+                empty_list.append(dfia)
+        tables.append({'label': 'Nilesh Sir DFIA', 'table': other_dfia})
+    elif party == 'ge':
+        other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], is_expired=is_expired, is_ge=True)
+        for dfia in other_dfia_qs:
+            if dfia.get_balance_cif > limit:
+                other_dfia.append(dfia)
+            else:
+                empty_list.append(dfia)
+        tables.append({'label': 'GE DFIA', 'table': other_dfia})
+    tables.append({'label': 'EMPTY DFIA', 'table': empty_list})
     return tables
 
 
@@ -741,7 +749,7 @@ def namkeen_query(date_range=None, party=None, exclude_party=None, is_expired=Fa
     return queryset
 
 
-def tractor_query(date_range=None, party=None, exclude_party=None, is_expired=False,notification_number=N2023):
+def tractor_query(date_range=None, party=None, exclude_party=None, is_expired=False, notification_number=N2023):
     tables = []
     from license.tables import LicenseConfectineryReportTable
     from license.models import N2015
@@ -766,12 +774,12 @@ def tractor_query(date_range=None, party=None, exclude_party=None, is_expired=Fa
     return queryset
 
 
-def steel_query(date_range=None, party=None, exclude_party=None, is_expired=False,notification_number=N2023):
+def steel_query(date_range=None, party=None, exclude_party=None, is_expired=False, notification_number=N2023):
     tables = []
     from license.tables import LicenseConfectineryReportTable
     from license.models import N2015
     query_dict = {
-        'export_license__norm_class__norm_class__in': ['C471','C460','C473'],
+        'export_license__norm_class__norm_class__in': ['C471', 'C460', 'C473'],
         'notification_number': notification_number
     }
     if party:
@@ -814,9 +822,8 @@ def namkeen_dfia(date_range=None, status=None):
     ]
     if empty_list:
         tables.append({'label': 'EMPTY DFIA',
-         'table': empty_list})
+                       'table': empty_list})
     return tables
-
 
 
 def tractor_dfia(date_range=None, status=None):
@@ -842,7 +849,7 @@ def tractor_dfia(date_range=None, status=None):
     ]
     if empty_list:
         tables.append({'label': 'EMPTY DFIA',
-         'table': empty_list})
+                       'table': empty_list})
     return tables
 
 
@@ -857,7 +864,7 @@ def steel_dfia(date_range=None, status=None):
         limit = 8000
     else:
         limit = 8000
-    dfia_qs = steel_query(date_range, party=['Grip','posco'], is_expired=is_expired)
+    dfia_qs = steel_query(date_range, party=['Grip', 'posco'], is_expired=is_expired)
     for dfia in dfia_qs:
         if dfia.get_balance_cif > limit:
             dfia_list.append(dfia)
@@ -869,9 +876,8 @@ def steel_dfia(date_range=None, status=None):
     ]
     if empty_list:
         tables.append({'label': 'EMPTY DFIA',
-         'table': empty_list})
+                       'table': empty_list})
     return tables
-
 
 
 def confectinery_2019_other(date_range=None):
@@ -1178,10 +1184,11 @@ def glass_dfia(date_range=None, status=None):
     ]
     if empty_list:
         tables.append({'label': 'EMPTY DFIA',
-         'table': empty_list})
+                       'table': empty_list})
     return tables
 
-def glass_query(date_range=None, party=None, exclude_party=None, is_expired=False,notification_number=N2023):
+
+def glass_query(date_range=None, party=None, exclude_party=None, is_expired=False, notification_number=N2023):
     tables = []
     from license.tables import LicenseConfectineryReportTable
     from license.models import N2015
@@ -1204,6 +1211,7 @@ def glass_query(date_range=None, party=None, exclude_party=None, is_expired=Fals
     queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
                                exclude_and_filters=exclude_and_filters, is_expired=is_expired)
     return queryset
+
 
 def pickle_dfia(date_range=None, status=None):
     if status == 'expired':
@@ -1228,10 +1236,11 @@ def pickle_dfia(date_range=None, status=None):
     ]
     if empty_list:
         tables.append({'label': 'EMPTY DFIA',
-         'table': empty_list})
+                       'table': empty_list})
     return tables
 
-def pickle_query(date_range=None, party=None, exclude_party=None, is_expired=False,notification_number=N2023):
+
+def pickle_query(date_range=None, party=None, exclude_party=None, is_expired=False, notification_number=N2023):
     tables = []
     from license.tables import LicenseConfectineryReportTable
     from license.models import N2015
@@ -1254,4 +1263,3 @@ def pickle_query(date_range=None, party=None, exclude_party=None, is_expired=Fal
     queryset = get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
                                exclude_and_filters=exclude_and_filters, is_expired=is_expired)
     return queryset
-

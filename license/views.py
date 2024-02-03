@@ -333,7 +333,8 @@ class BiscuitReportView(PagedFilteredTableView, ListView):
     def get_context_data(self, **kwargs):
         context = super(BiscuitReportView, self).get_context_data()
         status = self.kwargs.get('status')
-        tables = biscuit_dfia(status=status)
+        party = self.kwargs.get('party')
+        tables = biscuit_dfia(status=status, party=party)
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context
@@ -407,6 +408,7 @@ class GlassReportView(PagedFilteredTableView, ListView):
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context
+
 
 class PickleReportView(PagedFilteredTableView, ListView):
     template_name = 'license/pickle_list.html'
@@ -532,7 +534,7 @@ class PDFBiscuitsNewExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expiry_limit,
                                                                            license_expiry_date__gte=start_limit,
-                                                                           is_self=True, is_au=False,
+                                                                           is_ge=True, is_au=False,
                                                                            balance_cif__gte=4000,
                                                                            export_license__old_quantity__lte=2).order_by(
                 'license_expiry_date')
@@ -578,7 +580,7 @@ class PDFConfectioneryNewExpiredReportView(PDFTemplateResponseMixin, PagedFilter
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expiry_limit,
                 license_expiry_date__gte=start_limit,
-                is_self=True, is_au=False, balance_cif__gte=4000, export_license__old_quantity__lte=2).order_by(
+                is_ge=True, is_au=False, balance_cif__gte=4000, export_license__old_quantity__lte=2).order_by(
                 'license_expiry_date')
 
             q_confectionery_queryset = confectionery_queryset.filter(exporter__name__icontains='Parle')
@@ -653,7 +655,7 @@ class PDFOtherConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedF
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expiry_limit,
-                is_self=True, is_au=False, balance_cif__gte=5000).order_by('license_expiry_date')
+                is_ge=True, is_au=False, balance_cif__gte=5000).order_by('license_expiry_date')
             q_confectionery_queryset = confectionery_queryset.exclude(
                 Q(exporter__name__icontains='parle') | Q(exporter__name__icontains='Rama') | Q(
                     exporter__name__icontains='rani'))
@@ -795,13 +797,13 @@ class PDFParleConfectioneryOldExpiredReportView(PDFTemplateResponseMixin, PagedF
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__gte=expiry_limit,
                 license_expiry_date__lte=start_limit,
-                is_self=True, is_au=False, balance_cif__gte=4000).order_by('license_expiry_date')
+                is_ge=True, is_au=False, balance_cif__gte=4000).order_by('license_expiry_date')
             queryset = check_query(queryset)
             table = LicenseConfectineryReportTable(queryset)
             tables.append({'label': 'Confectinery', 'table': table})
             queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                   license_expiry_date__gte=expiry_limit,
-                                                                  is_self=True, is_au=False,
+                                                                  is_ge=True, is_au=False,
                                                                   balance_cif__gte=4000).order_by(
                 'license_expiry_date')
 
@@ -834,7 +836,7 @@ class PDFAUConfectioneryReportView(PDFTemplateResponseMixin, PagedFilteredTableV
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__gte=expiry_limit,
-                is_self=True, is_au=True, balance_cif__gte=5000).order_by('license_expiry_date')
+                is_ge=True, is_au=True, balance_cif__gte=5000).order_by('license_expiry_date')
             q_confectionery_queryset = confectionery_queryset
             table = LicenseConfectineryReportTable(
                 q_confectionery_queryset.filter(notification_number=N2009).distinct())
@@ -842,7 +844,7 @@ class PDFAUConfectioneryReportView(PDFTemplateResponseMixin, PagedFilteredTableV
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expiry_limit,
-                is_self=True, is_au=True, balance_cif__gte=5000).order_by('license_expiry_date')
+                is_ge=True, is_au=True, balance_cif__gte=5000).order_by('license_expiry_date')
             q_confectionery_queryset = confectionery_queryset
             table = LicenseConfectineryReportTable(
                 q_confectionery_queryset.filter(notification_number=N2009).distinct())
@@ -871,7 +873,7 @@ class PDFAUBiscuitsReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
             expiry_limit = datetime.datetime.strptime('2020-02-29', '%Y-%m-%d')
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__gte=expiry_limit,
-                                                                           is_self=True, is_au=True,
+                                                                           is_ge=True, is_au=True,
                                                                            balance_cif__gte=4000).order_by(
                 'license_expiry_date')
 
@@ -881,7 +883,7 @@ class PDFAUBiscuitsReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
             tables.append({'label': 'AU Biscuits Active', 'table': table})
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expiry_limit,
-                                                                           is_self=True, is_au=True,
+                                                                           is_ge=True, is_au=True,
                                                                            balance_cif__gte=4000).order_by(
                 'license_expiry_date')
 
@@ -912,7 +914,7 @@ class PremiumCalculationView(PDFTemplateResponseMixin, PagedFilteredTableView):
             expiry_limit = datetime.datetime.strptime('2020-07-31', '%Y-%m-%d')
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__gte=expiry_limit,
-                                                                           is_self=True,
+                                                                           is_ge=True,
                                                                            balance_cif__gte=4000).order_by(
                 'license_expiry_date')
 
@@ -925,7 +927,7 @@ class PremiumCalculationView(PDFTemplateResponseMixin, PagedFilteredTableView):
             confectionery_queryset = license.LicenseDetailsModel.objects.filter(
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__gte=expiry_limit,
-                is_self=True,
+                is_ge=True,
                 balance_cif__gte=4000).order_by('license_expiry_date')
             q_confectionery_queryset = confectionery_queryset.filter(
                 Q(export_license__old_quantity=0) | Q(export_license__old_quantity=None))
@@ -1026,8 +1028,9 @@ class LicenseReportListView(TemplateResponseMixin, ContextMixin, View):
                 folder_name=file_name)
             self.render_to_file(report_dict_generate(confectinery_2009(date_range=date_range), 'Confectionery 98_2009'),
                                 folder_name=file_name)
-            self.render_to_file(report_dict_generate(confectinery_query(date_range=date_range), 'Confectionery 19_2015'),
-                                folder_name=file_name)
+            self.render_to_file(
+                report_dict_generate(confectinery_query(date_range=date_range), 'Confectionery 19_2015'),
+                folder_name=file_name)
             self.render_to_file(
                 report_dict_generate(confectinery_2019_other(date_range=date_range), 'Confectionery 19_2015 Other'),
                 folder_name=file_name)
@@ -1164,7 +1167,7 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
         dict_list = []
         estimation_dict = {'balance_cif': "1", 'palmolein': None, 'yeast': None, 'juice': None, 'cheese': None,
                            'wpc': None, 'gluten': None}
-        items = ['gluten', 'palmolein', '2009', 'Dietary','milk', 'Packing Material']
+        items = ['gluten', 'palmolein', '2009', 'Dietary', 'milk', 'Packing Material']
         for item in items:
             import_item = dfia.import_license.filter(item__name__icontains=item)
             if import_item.first() and import_item.first().item:

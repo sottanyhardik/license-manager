@@ -40,15 +40,15 @@ def check_license():
     for license in LicenseDetailsModel.objects.all():
         if license.get_balance_cif < 500:
             license.is_null = True
-        if not license.is_self:
+        if not license.is_ge:
             license.is_active = False
-        elif license.is_expired or not license.is_self or license.get_balance_cif < 500 or license.is_au:
+        elif license.is_expired or not license.is_ge or license.get_balance_cif < 500 or license.is_au:
             license.is_active = False
         else:
             license.is_active = True
         license.save()
     from django.db.models import Q
-    LicenseDetailsModel.objects.filter(is_self=True).filter(
+    LicenseDetailsModel.objects.filter(is_ge=True).filter(
         Q(license_expiry_date=None) | Q(file_number=None) | Q(notification_number=None) | Q(
             export_license__norm_class=None)).update(is_incomplete=True)
     from datetime import timedelta

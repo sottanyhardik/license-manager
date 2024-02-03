@@ -28,7 +28,7 @@ class CompanyModel(models.Model):
     director_2 = models.TextField(null=True, blank=True)
     is_fetch = models.BooleanField(default=False)
     failed = models.IntegerField(default=0)
-    is_self = models.BooleanField(default=True)
+    is_ge = models.BooleanField(default=True)
 
     def __str__(self):
         if self.name:

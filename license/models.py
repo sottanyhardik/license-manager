@@ -25,6 +25,16 @@ NOTIFICATION_NORM_CHOICES = (
     (N2023, '025/2023')
 )
 
+GE = 'GE'
+MI = 'NP'
+IP = 'IP'
+
+LICENCE_PURCHASE = (
+    (GE, 'GE Purchase'),
+    (MI, 'GE Operating'),
+    (IP, 'GE Item Purchase')
+)
+
 
 def license_path(instance, filename):
     return '{0}/{1}'.format(instance.license.license_number, "{0}.pdf".format(instance.type))
@@ -47,9 +57,7 @@ class LicenseDetailsModel(models.Model):
     is_audit = models.BooleanField(default=False)
     is_not_registered = models.BooleanField(default=False)
     is_null = models.BooleanField(default=False)
-    is_ge = models.BooleanField(default=True)
-    is_mi = models.BooleanField(default=False)
-    is_oth = models.BooleanField(default=False)
+    purchase_status = models.CharField(choices=LICENCE_PURCHASE, max_length=2, default=GE)
     is_au = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     balance_cif = models.FloatField(default=0.0)

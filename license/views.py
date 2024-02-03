@@ -20,13 +20,13 @@ from core.utils import PagedFilteredTableView
 from license.helper import round_down, check_license, item_wise_debiting, item_wise_allotment, fetch_item_details
 from . import forms, tables, filters
 from . import models as license
-from .item_report import sugar_query, rbd_query, milk_query, wpc_query, skimmed_milk_query, dietary_query, food_query, \
-    packing_query, juice_query, oci_query, fruit_query, report_dict_generate, biscuit_2009, biscuit_2019, \
-    biscuit_2019_other, confectinery_2009, confectinery_query, \
-    confectinery_2019_other, biscuit_conversion, biscuit_2019_rama_rani, \
-    conversion_main, conversion_other, confectinery_dfia, confectinery_2009_all, biscuits_2009_all, \
-    generate_dict, tartaric_query, essential_oil_query, confectinery_2009_expired_all, biscuits_2009_expired_all, \
-    biscuit_dfia, namkeen_dfia, tractor_dfia, steel_dfia, glass_dfia, pickle_dfia
+from .item_report import biscuit_dfia, confectinery_dfia, sugar_query, rbd_query, milk_query, wpc_query, \
+    skimmed_milk_query, dietary_query, food_query, fruit_query, packing_query, oci_query, juice_query, tartaric_query, \
+    essential_oil_query, conversion_other, namkeen_dfia, report_dict_generate, biscuit_2009, generate_dict, \
+    biscuit_conversion, biscuit_2019, conversion_main, biscuit_2019_rama_rani, biscuit_2019_other, confectinery_2009, \
+    confectinery_query, confectinery_2019_other, confectinery_2009_expired_all, biscuits_2009_all, steel_dfia, \
+    tractor_dfia, pickle_dfia, confectinery_2009_all, glass_dfia, biscuits_2009_expired_all
+from .models import GE
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -534,7 +534,7 @@ class PDFBiscuitsNewExpiryReportView(PDFTemplateResponseMixin, PagedFilteredTabl
             biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
                                                                            license_expiry_date__lt=expiry_limit,
                                                                            license_expiry_date__gte=start_limit,
-                                                                           is_ge=True, is_au=False,
+                                                                           purchase_status=GE, is_au=False,
                                                                            balance_cif__gte=4000,
                                                                            export_license__old_quantity__lte=2).order_by(
                 'license_expiry_date')
@@ -580,7 +580,7 @@ class PDFConfectioneryNewExpiredReportView(PDFTemplateResponseMixin, PagedFilter
                 export_license__norm_class__norm_class='E1',
                 license_expiry_date__lt=expiry_limit,
                 license_expiry_date__gte=start_limit,
-                is_ge=True, is_au=False, balance_cif__gte=4000, export_license__old_quantity__lte=2).order_by(
+                purchase_status=GE, is_au=False, balance_cif__gte=4000, export_license__old_quantity__lte=2).order_by(
                 'license_expiry_date')
 
             q_confectionery_queryset = confectionery_queryset.filter(exporter__name__icontains='Parle')
@@ -1054,14 +1054,15 @@ class LicenseReportListView(TemplateResponseMixin, ContextMixin, View):
 
 
 import xlsxwriter
+from django.utils.translation import gettext_lazy
+
 
 
 def WriteToExcel(weather_data, town=None):
     output = StringIO()
     workbook = xlsxwriter.Workbook(output)
     worksheet_s = workbook.add_worksheet("Summary")
-    from django.utils.translation import ugettext
-    title_text = "{0} {1}".format(ugettext("Weather History for"), 'town_text')
+    title_text = "{0} {1}".format(gettext_lazy("Weather History for"), 'town_text')
     title = workbook.add_format({
         'bold': True,
         'font_size': 14,
@@ -1076,9 +1077,9 @@ def WriteToExcel(weather_data, town=None):
         'border': 1
     })
     worksheet_s.merge_range('B2:H2', title_text, title)
-    worksheet_s.write(4, 0, ugettext("No"), header)
-    worksheet_s.write(4, 1, ugettext("Town"), header)
-    worksheet_s.write(4, 3, ugettext("Max T."), header)
+    worksheet_s.write(4, 0, gettext_lazy("No"), header)
+    worksheet_s.write(4, 1, gettext_lazy("Town"), header)
+    worksheet_s.write(4, 3, gettext_lazy("Max T."), header)
     # Here we will adding the code to add data
 
     workbook.close()

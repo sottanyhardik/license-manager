@@ -3,7 +3,7 @@ import datetime
 from django.db.models import Q, Sum
 
 from license import models as license
-from license.models import N2009, N2015, LicenseDetailsModel, LicenseExportItemModel, N2023
+from license.models import N2009, N2015, LicenseDetailsModel, LicenseExportItemModel, N2023, GE, MI
 from license.tables import LicenseItemReportTable, LicenseBiscuitReportTable, LicenseConfectineryReportTable, \
     LicenseBiscuitNewReportTable
 from datetime import date
@@ -12,7 +12,7 @@ from dateutil.relativedelta import relativedelta
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
                  minimun_qty=500, minimun_value=1000, date_range=None, notification_number=False, maximum_qty=None,
-                 item_name=None):
+                 item_name=None, purchase_status=GE):
     if date_range:
         start = date_range.get('start')
         end = date_range.get('end')
@@ -27,7 +27,7 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
         query_dict['license__license_expiry_date__gte'] = expiry_limit
     if notification_number:
         query_dict['license__notification_number'] = notification_number
-    query_dict['license__is_ge'] = True
+    query_dict['license__purchase_status'] = purchase_status
     query_dict['license__is_au'] = False
     my_filter = Q()
     for item in query_dict:
@@ -425,8 +425,7 @@ def fruit_query(date_range=None):
 
 
 def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_filters=None, exclude_and_filters=None,
-                    is_ge=True, is_au=False,
-                    is_expired=False):
+                    is_au=False, is_expired=False, purchase_status=GE):
     my_filter = Q()
     if date_range:
         start = date_range.get('start', None)
@@ -440,7 +439,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
     else:
         expiry_limit = datetime.datetime.today() - datetime.timedelta(days=30)
         query_dict['license_expiry_date__gte'] = expiry_limit
-    query_dict['is_ge'] = is_ge
+    query_dict['purchase_status'] = purchase_status
     query_dict['is_au'] = is_au
     for item in query_dict:
         my_filter &= Q(**{item: query_dict[item]})
@@ -493,11 +492,10 @@ def generate_table(queryset, table):
     return table
 
 
-def biscuit_conversion(date_range=None, party=None, exclude_party=None, is_expired=False, is_mi=False, is_ge=False):
+def biscuit_conversion(date_range=None, party=None, exclude_party=None, is_expired=False, purchase_status=GE):
     query_dict = {
         'export_license__norm_class__norm_class': 'E5',
-        'is_mi': is_mi,
-        'is_ge': is_ge
+        'purchase_status': purchase_status,
     }
     if party:
         or_filters = {
@@ -515,7 +513,7 @@ def biscuit_conversion(date_range=None, party=None, exclude_party=None, is_expir
     }
     return get_table_query(query_dict, date_range=date_range, or_filters=or_filters,
                            exclude_or_filters=exclude_or_filters, exclude_and_filters=exclude_and_filters,
-                           is_expired=is_expired)
+                           is_expired=is_expired, purchase_status=purchase_status)
 
 
 def confectionery_conversion(date_range=None, party=None, exclude_party=None):
@@ -604,7 +602,7 @@ def conversion_main(date_range=None):
     return tables
 
 
-def biscuit_dfia(date_range=None, status=False, party=None):
+def biscuit_dfia(date_range=None, status=False, party=GE):
     if status == 'expired':
         is_expired = True
     else:
@@ -618,7 +616,7 @@ def biscuit_dfia(date_range=None, status=False, party=None):
     other_dfia = []
     tables = []
     if party == 'parle':
-        parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'], is_expired=is_expired)
+        parle_dfia_qs = biscuit_conversion(date_range, party=['rama', 'rani', 'vanila', 'parle'])
         for dfia in parle_dfia_qs:
             if dfia.get_balance_cif > limit:
                 parle_dfia.append(dfia)
@@ -626,22 +624,22 @@ def biscuit_dfia(date_range=None, status=False, party=None):
                 empty_list.append(dfia)
         tables.append({'label': 'Parle Biscuits', 'table': parle_dfia})
     elif party == 'mi':
-        other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], is_expired=is_expired, is_mi=True)
+        other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], is_expired=is_expired,
+                                           purchase_status=MI)
         for dfia in other_dfia_qs:
             if dfia.get_balance_cif > limit:
                 other_dfia.append(dfia)
             else:
                 empty_list.append(dfia)
         tables.append({'label': 'Nilesh Sir DFIA', 'table': other_dfia})
-    elif party == 'ge':
-        other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], is_expired=is_expired, is_ge=True)
+    else:
+        other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], is_expired=True, purchase_status=GE)
         for dfia in other_dfia_qs:
             if dfia.get_balance_cif > limit:
                 other_dfia.append(dfia)
             else:
                 empty_list.append(dfia)
         tables.append({'label': 'GE DFIA', 'table': other_dfia})
-    tables.append({'label': 'EMPTY DFIA', 'table': empty_list})
     return tables
 
 

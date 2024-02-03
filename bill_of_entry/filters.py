@@ -85,7 +85,7 @@ class BillOfEntryFilter(django_filters.FilterSet):
         }
 
     def check_self(self, queryset, name, value):
-        return queryset.filter(item_details__sr_number__license__is_ge=True).distinct()
+        return queryset.filter(item_details__sr_number__license__purchase_status='GE').distinct()
 
     def check_is_invoice(self, queryset, name, value):
         if value:

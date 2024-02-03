@@ -47,7 +47,7 @@ def generate_tl():
     input_file = csv.DictReader(open("aro_details.csv"))
     for context in input_file:
         print(context)
-        if context['tl_company'] == 'ge':
+        if context['tl_company'] == 'GE':
             doc = DocxTemplate("__GE_TL.docx")
             doc.render(context)
             doc.save(context['sr_no'] + ' ' + context['license'] + "_GE_TL.docx")

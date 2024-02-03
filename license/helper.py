@@ -3,6 +3,7 @@ from django.db.models import Sum
 from allotment.models import AllotmentItems
 
 
+
 def calculate(self):
     from license.models import LicenseExportItemModel
     from bill_of_entry.models import RowDetails
@@ -37,18 +38,19 @@ def round_down(n, decimals=0):
 
 def check_license():
     from license.models import LicenseDetailsModel
+    from license.models import GE
     for license in LicenseDetailsModel.objects.all():
         if license.get_balance_cif < 500:
             license.is_null = True
-        if not license.is_ge:
+        if not license.purchase_status == GE:
             license.is_active = False
-        elif license.is_expired or not license.is_ge or license.get_balance_cif < 500 or license.is_au:
+        elif license.is_expired or not license.purchase_status == GE or license.get_balance_cif < 500 or license.is_au:
             license.is_active = False
         else:
             license.is_active = True
         license.save()
     from django.db.models import Q
-    LicenseDetailsModel.objects.filter(is_ge=True).filter(
+    LicenseDetailsModel.objects.filter(purchase_status=GE).filter(
         Q(license_expiry_date=None) | Q(file_number=None) | Q(notification_number=None) | Q(
             export_license__norm_class=None)).update(is_incomplete=True)
     from datetime import timedelta

@@ -616,7 +616,7 @@ def biscuit_dfia(date_range=None, status=False, party=GE):
     other_dfia = []
     tables = []
     if party == 'parle':
-        parle_dfia_qs = biscuit_conversion(date_range, party=['rama', 'rani', 'vanila', 'parle'])
+        parle_dfia_qs = biscuit_conversion(date_range, party=['parle'])
         for dfia in parle_dfia_qs:
             if dfia.get_balance_cif > limit:
                 parle_dfia.append(dfia)

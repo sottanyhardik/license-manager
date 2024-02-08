@@ -284,7 +284,7 @@ class ARODocumentGenerateView(FormView):
                          'hs_code': '17019990',
                          'license': item.license_number, 'license_date': item.license_date,
                          'file_number': item.file_number, 'quantity': item.qty,
-                         'v_allotment_inr': round(item.cif_fc * 83, 2), 'v_allotment_usd': item.cif_fc,
+                         'v_allotment_inr': round(item.cif_fc * 84.25, 2), 'v_allotment_usd': item.cif_fc,
                          'sr_no': item.serial_number} for item in
                         allotment.allotment_details.all()]
                 file_path = 'media/ARO_ALLOTMENT_' + str(allotment_id) + '/'
@@ -344,7 +344,7 @@ class GenerateTransferLetterView(FormView):
                     'today': str(datetime.now().date()),
                     'license': item.license_number, 'license_date': item.license_date.strftime("%d/%m/%Y"),
                     'file_number': item.file_number, 'quantity': item.qty,
-                    'v_allotment_inr': round(item.cif_fc * 75.4, 2),
+                    'v_allotment_inr': round(item.cif_fc * 84.25, 2),
                     'exporter_name': item.exporter.name,
                     'v_allotment_usd': item.cif_fc} for item in
                     allotment.allotment_details.all()]

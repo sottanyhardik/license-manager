@@ -810,7 +810,7 @@ class LicenseDetailsModel(models.Model):
     def get_orange_essential_oil(self):
         sum1 = 0
         all = self.import_license.filter(
-            Q(item__head__name__icontains='essential oil') | Q(item__name__icontains='Orange')).exclude(
+            Q(item__head__name__icontains='Essential oil')).exclude(
             Q(item__name__icontains='lemon') & Q(item__name__icontains='pippermint'))
         for d in all:
             if d:
@@ -821,7 +821,7 @@ class LicenseDetailsModel(models.Model):
     def get_lemon_essential_oil(self):
         sum1 = 0
         all = self.import_license.filter(
-            Q(item__head__name__icontains='essential oil') & Q(item__name__icontains='lemon'))
+            Q(item__head__name__icontains='Essential Oil') & Q(item__name__icontains='lemon'))
         for d in all:
             if d:
                 sum1 += d.balance_quantity

@@ -616,7 +616,7 @@ def biscuit_dfia(date_range=None, status=False, party=GE):
     other_dfia = []
     tables = []
     if party == 'parle':
-        parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'], is_expired=is_expired)
+        parle_dfia_qs = biscuit_conversion(date_range, party=['Parle'], is_expired=is_expired, purchase_status=GE)
         for dfia in parle_dfia_qs:
             if dfia.get_balance_cif > limit:
                 parle_dfia.append(dfia)
@@ -624,7 +624,7 @@ def biscuit_dfia(date_range=None, status=False, party=GE):
                 empty_list.append(dfia)
         tables.append({'label': 'Parle Biscuits', 'table': parle_dfia})
     elif party == 'mi':
-        other_dfia_qs = biscuit_conversion(date_range, exclude_party=['Parle'], is_expired=is_expired,
+        other_dfia_qs = biscuit_conversion(date_range, is_expired=is_expired,
                                            purchase_status=MI)
         for dfia in other_dfia_qs:
             if dfia.get_balance_cif > limit:

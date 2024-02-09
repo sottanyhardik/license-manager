@@ -441,6 +441,32 @@ class LicenseDetailsModel(models.Model):
             Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour')).distinct()
 
     @property
+    def get_food_flavour_confectionery_obj(self):
+        return self.import_license.filter(Q(item__name__icontains='Flavour') |
+                                          Q(item__name__icontains='Fruit Flavour') | Q(
+            item__name__icontains='food flavour')).distinct()
+
+    @property
+    def get_food_flavour_confectionery_obj_qty(self):
+        sum1 = 0
+        all = self.get_food_flavour_confectionery_obj
+        for d in all:
+            sum1 += d.balance_quantity
+        return sum1
+
+    @property
+    def get_food_flavour_confectionery_hsn(self):
+        food_flavour_confectionery_obj = self.get_food_flavour_confectionery_obj
+        first_item = food_flavour_confectionery_obj.first()
+        return str(first_item.hs_code) if first_item else 'Missing'
+
+    @property
+    def get_food_flavour_confectionery_pd(self):
+        food_flavour_confectionery_obj = self.get_food_flavour_confectionery_obj
+        first_item = food_flavour_confectionery_obj.first()
+        return str(first_item.item.name) if first_item else 'Missing'
+
+    @property
     def get_food_flavour_namkeen(self):
         sum1 = 0
         all = self.get_food_flavour_namkeen_obj
@@ -498,7 +524,6 @@ class LicenseDetailsModel(models.Model):
         for d in all:
             sum1 += d.balance_quantity
         return sum1
-
 
     @property
     def get_total_quantity_of_ff_df_cif(self):
@@ -690,30 +715,6 @@ class LicenseDetailsModel(models.Model):
         else:
             return 0
 
-    # @property
-    # def get_gluten(self):
-    #     sum1 = 0
-    #     all = self.import_license.filter(item__name__icontains='gluten')
-    #     for d in all:
-    #         sum1 += d.balance_quantity
-    #     return sum1
-
-    # @property
-    # def get_gluten_cif(self):
-    #     qty = self.get_gluten
-    #     if qty and qty > 100:
-    #         required_cif = qty * 2
-    #         balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_starch_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif
-    #         if required_cif <= balance_cif:
-    #             return required_cif
-    #         else:
-    #             if balance_cif > 0:
-    #                 return balance_cif
-    #             else:
-    #                 return 0
-    #     else:
-    #         return 0
-
     @property
     def cif_value_balance(self):
         balance_cif = self.get_balance_cif - self.get_pko_cif - self.get_cheese_cif - self.get_wpc_cif - self.get_total_quantity_of_ff_df_cif - self.get_rbd_cif - self.get_veg_oil_cif - self.get_swp_cif
@@ -724,11 +725,20 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_pp(self):
-        sum1 = 0
-        all = self.import_license.filter(item__head__name__icontains='pp')
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        total_quantity = 0
+        all_imports = self.import_license.filter(
+            item__head__name__icontains='pp'
+        ).exclude(
+            item__name__icontains='aluminium'
+        )
+        total_quantity = sum(entry.balance_quantity for entry in all_imports)
+        return total_quantity
+
+    @property
+    def get_aluminium(self):
+        all_entries = self.import_license.filter(item__name__icontains='Aluminium')
+        total_quantity = sum(entry.balance_quantity for entry in all_entries)
+        return total_quantity
 
     @property
     def get_paper_and_paper_qs(self):
@@ -797,9 +807,31 @@ class LicenseDetailsModel(models.Model):
         return sum1
 
     @property
-    def get_essential_oil(self):
+    def get_orange_essential_oil(self):
         sum1 = 0
-        all = self.import_license.filter(item__head__name__icontains='essential oil')
+        all = self.import_license.filter(
+            Q(item__name__icontains='essential oil') | Q(item__name__icontains='Orange')).exclude(
+            Q(item__name__icontains='lemon') & Q(item__name__icontains='pippermint'))
+        for d in all:
+            if d:
+                sum1 += d.balance_quantity
+        return sum1
+
+    @property
+    def get_lemon_essential_oil(self):
+        sum1 = 0
+        all = self.import_license.filter(
+            Q(item__name__icontains='essential oil') & Q(item__name__icontains='lemon'))
+        for d in all:
+            if d:
+                sum1 += d.balance_quantity
+        return sum1
+
+    @property
+    def get_pippermint_essential_oil(self):
+        sum1 = 0
+        all = self.import_license.filter(
+            Q(item__name__icontains='essential oil') & Q(item__name__icontains='pippermint'))
         for d in all:
             if d:
                 sum1 += d.balance_quantity
@@ -862,7 +894,9 @@ class LicenseDetailsModel(models.Model):
         if 'E1' in str(lic[0].norm_class):
             credit = credit * .05
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
-                Q(item__head__name__icontains='essential oil') | Q(item__head__name__icontains='food flavour'))
+                Q(item__name__icontains='essential oil') | Q(item__head__name__icontains='food flavour') | Q(
+                    item__name__icontains='Flavour') |
+                Q(item__name__icontains='Fruit Flavour') | Q(item__name__icontains='food flavour'))
         else:
             imports = []
         for dimport in imports:

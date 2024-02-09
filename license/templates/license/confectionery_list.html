@@ -42,15 +42,19 @@
                                         <th>Exporter</th>
                                         <th>Total CIF</th>
                                         <th>Balance CIF</th>
-                                        <th>Billing Rate</th>
-                                        <th>Billing Amount</th>
                                         <th>JUICE Qty</th>
                                         <th>TARTARIC Qty</th>
-                                        <th>ESSENTIAL OIL QTY</th>
+                                        <th>FOOD FLAVOUR HSN</th>
+                                        <th>FOOD FLAVOUR PD</th>
+                                        <th>FOOD FLAVOUR</th>
+                                        <th>ORANGE ESSENTIAL OIL QTY</th>
+                                        <th>LEMON ESSENTIAL OIL QTY</th>
+                                        <th>PIPPERMINT ESSENTIAL OIL QTY</th>
                                         <th>ESSENTIAL OIL CIF</th>
                                         <th>OCI Qty</th>
                                         <th>OCI CIF</th>
                                         <th>PP Qty</th>
+                                        <th>ALUMINIUM Qty</th>
                                         <th>PAP Qty</th>
                                         </thead>
                                     {% else %}
@@ -75,15 +79,19 @@
                                                 <td>{{ object.exporter }}</td>
                                                 <td>{{ object.opening_balance }}</td>
                                                 <td>{{ object.get_balance_cif }}</td>
-                                                <td>{{ object.billing_rate }}</td>
-                                                <td>{{ object.billing_amount }}</td>
                                                 <td>{{ object.get_juice }}</td>
                                                 <td>{{ object.get_tartaric_acid }}</td>
-                                                <td>{{ object.get_essential_oil }}</td>
+                                                <td>{{ object.get_food_flavour_confectionery_hsn }}</td>
+                                                <td>{{ object.get_food_flavour_confectionery_pd }}</td>
+                                                <td>{{ object.get_food_flavour_confectionery_obj_qty }}</td>
+                                                <td>{{ object.get_orange_essential_oil }}</td>
+                                                <td>{{ object.get_lemon_essential_oil }}</td>
+                                                <td>{{ object.get_pippermint_essential_oil }}</td>
                                                 <td>{{ object.get_per_essential_oil }}</td>
                                                 <td>{{ object.get_other_confectionery }}</td>
                                                 <td>{{ object.get_per_cif }}</td>
                                                 <td>{{ object.get_pp }}</td>
+                                                <td>{{ object.get_aluminium }}</td>
                                                 <td>{{ object.get_paper_and_paper }}</td>
                                             </tr>
                                         {% endfor %}

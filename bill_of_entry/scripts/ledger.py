@@ -141,7 +141,10 @@ def parse_file(data):
                 try:
                     datetime_object = datetime.datetime.strptime(row['be_date'], '%d/%m/%y')
                 except:
-                    datetime_object = datetime.datetime.strptime(row['be_date'].split(' ')[0], '%Y-%m-%d')
+                    try:
+                        datetime_object = datetime.datetime.strptime(row['be_date'].split(' ')[0], '%Y-%m-%d')
+                    except:
+                        datetime_object = datetime.datetime.strptime(row['be_date'].split(' ')[0], '%d/%m/%Y')
         try:
             row_obj, bool = LicenseImportItemsModel.objects.get_or_create(serial_number=row['sr_no'], license=license)
         except:

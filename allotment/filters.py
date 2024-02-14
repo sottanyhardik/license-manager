@@ -1,6 +1,7 @@
 import datetime
 
 import django_filters
+from django.conf import settings
 from django.db import models
 from django.forms import Select
 
@@ -73,7 +74,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
 
     def check_expired(self, queryset, name, value):
         from datetime import datetime, timedelta
-        expiry_limit = datetime.today() - timedelta(days=60)
+        expiry_limit = datetime.today() - timedelta(days=settings.EXPIRY_DAY)
         if value:
             return queryset.filter(license__license_expiry_date__lt=expiry_limit).order_by('license__license_expiry_date')
         else:

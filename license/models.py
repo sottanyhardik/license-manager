@@ -844,6 +844,13 @@ class LicenseDetailsModel(models.Model):
             sum1 += d.balance_quantity
         return sum1
 
+    def get_other_confectionery_pd(self):
+        all = self.import_license.filter(item__head__name__icontains='other confectionery')
+        if all.first():
+            return all.first().item.name
+        else:
+            return 'Missing'
+
     def get_starch_confectionery(self):
         from django.db.models import Q
         return self.import_license.filter(Q(item__head__name__icontains='starch') | Q(

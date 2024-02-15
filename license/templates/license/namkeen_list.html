@@ -54,6 +54,7 @@
                                         <th>Relevant Flavour QTY</th>
                                         <th>3% of CIF</th>
                                         <th>PP Qty</th>
+                                        <th>Aluminium Qty</th>
                                         </thead>
                                     {% else %}
                                         <thead>
@@ -89,6 +90,7 @@
                                                 <td>{{ object.get_food_flavour_namkeen }}</td>
                                                 <td>{{ object.get_per_black_pepper_cif }}</td>
                                                 <td>{{ object.get_pp }}</td>
+                                                <td>{{ object.get_aluminium }}</td>
                                             </tr>
                                         {% endfor %}
                                     {% else %}

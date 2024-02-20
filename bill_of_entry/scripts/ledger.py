@@ -31,12 +31,15 @@ def parse_file(data):
     }
     data_dict['ledger_date'] = None
     for line in lines:
-        if 'Printed By' in line:
-            ledger_date = line.split('Dated:')[-1].strip().split(' ')[0]
-            try:
-                data_dict['ledger_date'] = datetime.datetime.strptime(ledger_date, '%d/%m/%Y')
-            except:
-                data_dict['ledger_date'] = datetime.datetime.strptime(ledger_date, '%d/%m/%y')
+        try:
+            if 'Printed By' in line:
+                ledger_date = line.split('Dated:')[-1].strip().split(' ')[0]
+                try:
+                    data_dict['ledger_date'] = datetime.datetime.strptime(ledger_date, '%d/%m/%Y')
+                except:
+                    data_dict['ledger_date'] = datetime.datetime.strptime(ledger_date, '%d/%m/%y')
+        except:
+            data_dict['ledger_date'] = datetime.datetime.now()
         else:
             if not data_dict['ledger_date']:
                 data_dict['ledger_date'] = datetime.datetime.now()

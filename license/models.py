@@ -723,9 +723,20 @@ class LicenseDetailsModel(models.Model):
         else:
             return -1
 
+
+    @property
+    def get_pp_pd(self):
+        all = self.import_license.filter(
+            item__head__name__icontains='pp'
+        )
+        if all.first():
+            return all.first().item.name
+        else:
+            return 'Missing'
+
+
     @property
     def get_pp(self):
-        total_quantity = 0
         all_imports = self.import_license.filter(
             item__head__name__icontains='pp'
         ).exclude(
@@ -736,13 +747,13 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_aluminium(self):
-        all_entries = self.import_license.filter(item__name__icontains='Aluminium')
+        all_entries = self.import_license.filter(Q(item__name__icontains='Aluminium')|Q(item__name__icontains='7607'))
         total_quantity = sum(entry.balance_quantity for entry in all_entries)
         return total_quantity
 
     @property
     def get_paper_and_paper_qs(self):
-        all = self.import_license.filter(Q(item__name__icontains='paper'))
+        all = self.import_license.filter(Q(item__name__icontains='paper')).exclude(item__name__icontains='7607')
         return all
 
     @property
@@ -805,6 +816,26 @@ class LicenseDetailsModel(models.Model):
         for d in all:
             sum1 += d.balance_quantity
         return sum1
+
+    @property
+    def get_orange_essential_pd(self):
+        all = self.import_license.filter(
+            Q(item__head__name__icontains='Essential oil'))
+        if all.first():
+            return all.first().item.name
+        else:
+            return 'Missing'
+
+    @property
+    def get_orange_essential_total(self):
+        sum1 = 0
+        all = self.import_license.filter(
+            Q(item__head__name__icontains='Essential oil'))
+        for d in all:
+            if d:
+                sum1 += d.balance_quantity
+        return sum1
+
 
     @property
     def get_orange_essential_oil(self):

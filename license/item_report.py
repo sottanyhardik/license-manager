@@ -435,6 +435,8 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
         end = None
     if is_expired:
         expiry_limit = datetime.datetime.today() - datetime.timedelta(days=settings.EXPIRY_DAY)
+        START = datetime.datetime.today() - datetime.timedelta(days=180)
+        query_dict['license_expiry_date__gte'] = START
         query_dict['license_expiry_date__lte'] = expiry_limit
     else:
         expiry_limit = datetime.datetime.today() - datetime.timedelta(days=settings.EXPIRY_DAY)

@@ -68,7 +68,7 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
                 object.comment = object.comment + ' individual value error'
             else:
                 object.comment = 'individual value error'
-        expiry = date.today() + relativedelta(months=-2)
+        expiry = date.today() + relativedelta(months=-6)
         if object.license_expiry < expiry:
             if object.comment and not 'expired' in object.comment.lower():
                 object.comment = object.comment + ' expired'

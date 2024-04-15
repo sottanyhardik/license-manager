@@ -7,10 +7,12 @@ from license.models import LicenseDetailsModel, LicenseImportItemsModel, License
 
 
 def extract_data(line, text):
+    line = line.replace(" ",'').replace('Â', '').replace('\xa0', '')
+    text = text.replace(" ",'').replace('Â', '').replace('\xa0', '')
     if '\t' in line:
-        split_text = text + ' \t'
+        split_text = text + '\t'
         try:
-            return line.split(split_text)[1].split('\t')[0].replace(':', '').strip()
+            return line.split(split_text)[1].split('\t')[0].replace(':', '').replace(' ', '').strip()
         except:
             print(text)
             return None
@@ -31,6 +33,7 @@ def parse_file(data):
     }
     data_dict['ledger_date'] = None
     for line in lines:
+        line = line.replace(" ", '').replace('Â', '').replace('\xa0', '')
         try:
             if 'Printed By' in line:
                 ledger_date = line.split('Dated:')[-1].strip().split(' ')[0]
@@ -55,7 +58,7 @@ def parse_file(data):
             data_dict['foregin_currency'] = extract_data(line, 'Frgn.Curr')
         if 'CIF-INR.' in line:
             data_dict['cif_inr'] = extract_data(line, 'CIF-INR.')
-        if '\tCIF-FC \t:' in line:
+        if 'CIF-FC\t:' in line:
             data_dict['cif_fc'] = extract_data(line, 'CIF-FC')
         if 'Tot.Qty.' in line:
             data_dict['total_quantity'] = extract_data(line, 'Tot.Qty.')
@@ -64,15 +67,15 @@ def parse_file(data):
                 data_dict['iec'] = extract_data(line, 'IEC')
             except Exception as e:
                 print(e)
-        if 'Regn.No. \t:' in line:
+        if 'Regn.No.' in line:
             data_dict['registration_no'] = extract_data(line, 'Regn.No.')
-        if 'Regn.Date \t:' in line:
+        if 'Regn.Date' in line:
             data_dict['registration_date'] = datetime.datetime.strptime(extract_data(line, 'Regn.Date'), '%d/%m/%Y')
         if 'Iss.CH.' in line:
             data_dict['port'] = extract_data(line, 'Iss.CH.')
-        if 'Schm.Cd. \t:' in line:
+        if 'Schm.Cd.' in line:
             data_dict['scheme_code'] = extract_data(line, 'Schm.Cd.')
-        if 'Notifcn. ' in line:
+        if 'Notifcn.' in line:
             data_dict['notification'] = extract_data(line, 'Notifcn.')
         if 'Credit-' in line:
             split_line = line.split('\t')

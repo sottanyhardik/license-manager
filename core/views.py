@@ -156,7 +156,10 @@ class UploadLedger(TemplateView):
             full = file.decode('latin-1').encode("utf-8")
             full = full.decode()
             full = full.replace(',', '\t')
-            for data in full.split('Page No:-1\t'):
+            full = full.replace('Â', '')
+            full = full.replace('\xa0', ' ')
+            split_list = full.split('Page No:-1')
+            for data in split_list:
                 try:
                     from bill_of_entry.scripts.ledger import parse_file
                     license = parse_file(data)

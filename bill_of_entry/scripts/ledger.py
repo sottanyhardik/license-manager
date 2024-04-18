@@ -58,7 +58,7 @@ def parse_file(data):
             data_dict['foregin_currency'] = extract_data(line, 'Frgn.Curr')
         if 'CIF-INR.' in line:
             data_dict['cif_inr'] = extract_data(line, 'CIF-INR.')
-        if 'CIF-FC\t:' in line:
+        if '\tCIF-FC\t:' in line:
             data_dict['cif_fc'] = extract_data(line, 'CIF-FC')
         if 'Tot.Qty.' in line:
             data_dict['total_quantity'] = extract_data(line, 'Tot.Qty.')

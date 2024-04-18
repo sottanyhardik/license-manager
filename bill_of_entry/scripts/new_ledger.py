@@ -2,9 +2,6 @@ list1 = ['5611002535', '5611002533', '5211007631', '5211007496', '5211007086', '
 
 RowDetails.objects.filter(sr_number__license__license_number__in=list1,transaction_type='D').delete()
 
-{'\ufefftype': 'Debit-', 'sr_no': '9', '': 'E', 'CIFINR': '190796.74', 'CIFD': '2278.17', 'QTY': '1489', 'BENO': '2977781', 'BEDT': '11/04/24', 'PORT': 'INNSA1', 'DFIA': '\xa00311031510'}
-
-
 
 import csv
 from datetime import datetime

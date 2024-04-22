@@ -221,5 +221,5 @@ EMAIL_FILE_PATH = os.path.join(BASE_DIR, "sent_emails")
 USE_THOUSAND_SEPARATOR = True
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
-EXPIRY_DAY = 0
+EXPIRY_DAY = 365
 # INTERNAL_IPS = ALLOWED_HOSTS

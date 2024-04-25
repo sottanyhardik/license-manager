@@ -246,7 +246,8 @@ class GenerateTransferLetterView(FormView):
                 tl_path = transfer_letter.tl.path
                 file_path = 'media/TL_' + str(boe_id) + '_' + transfer_letter.name.replace(' ', '_') + '/'
                 from allotment.scripts.aro import generate_tl_software
-                generate_tl_software(data=data, tl_path=tl_path, path=file_path)
+                generate_tl_software(data=data, tl_path=tl_path, path=file_path,
+                                     transfer_letter_name=transfer_letter.name.replace(' ', '_'))
                 file_name = 'TL_' + str(boe_id) + '_' + transfer_letter.name.replace(' ', '_') + '.zip'
                 path_to_zip = make_archive(file_path, "zip", file_path)
                 zip_file = open(path_to_zip, 'rb')

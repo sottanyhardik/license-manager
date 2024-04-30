@@ -228,7 +228,7 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_rfa(self):
         object = self.import_license.filter(
-            Q(item__name__icontains='Food Additives') | Q(item__name__icontains='Food Additive'))
+            Q(item__name__icontains='Food Additives') | Q(item__name__icontains='Food Additive')|Q(item__name__icontains='0908'))
         if object.first():
             return object.first()
         else:

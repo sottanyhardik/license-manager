@@ -163,7 +163,9 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_chickpeas_obj(self):
-        return self.import_license.filter(item__name__icontains='Chickpeas')
+        return self.import_license.filter(
+            Q(item__name__icontains='Chickpeas') | Q(item__name__icontains='Green Peas') | Q(
+                item__name__icontains='Lentils'))
 
     @property
     def get_glass_formers(self):
@@ -229,14 +231,6 @@ class LicenseDetailsModel(models.Model):
             return object.first()
         else:
             return None
-
-    @property
-    def get_chickpeas(self):
-        all = self.get_chickpeas_obj
-        sum1 = 0
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
 
     @property
     def get_chickpeas(self):
@@ -438,7 +432,8 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_food_flavour_namkeen_obj(self):
         return self.import_license.filter(
-            Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour')).distinct()
+            Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour') | Q(
+                item__name__icontains='Cardamom')).distinct()
 
     @property
     def get_food_flavour_confectionery_obj(self):
@@ -723,7 +718,6 @@ class LicenseDetailsModel(models.Model):
         else:
             return -1
 
-
     @property
     def get_pp_pd(self):
         all = self.import_license.filter(
@@ -733,7 +727,6 @@ class LicenseDetailsModel(models.Model):
             return all.first().item.name
         else:
             return 'Missing'
-
 
     @property
     def get_pp(self):
@@ -747,7 +740,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_aluminium(self):
-        all_entries = self.import_license.filter(Q(item__name__icontains='Aluminium')|Q(item__name__icontains='7607'))
+        all_entries = self.import_license.filter(Q(item__name__icontains='Aluminium') | Q(item__name__icontains='7607'))
         total_quantity = sum(entry.balance_quantity for entry in all_entries)
         return total_quantity
 
@@ -835,7 +828,6 @@ class LicenseDetailsModel(models.Model):
             if d:
                 sum1 += d.balance_quantity
         return sum1
-
 
     @property
     def get_orange_essential_oil(self):

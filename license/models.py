@@ -433,7 +433,8 @@ class LicenseDetailsModel(models.Model):
     def get_food_flavour_namkeen_obj(self):
         return self.import_license.filter(
             Q(item__name__icontains='pepper') | Q(item__name__icontains='food flavour') | Q(
-                item__name__icontains='Cardamom')).distinct()
+                item__name__icontains='Cardamom') | Q(
+                item__name__icontains='Cardamon')).distinct()
 
     @property
     def get_food_flavour_confectionery_obj(self):

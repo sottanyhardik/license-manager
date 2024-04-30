@@ -177,7 +177,8 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_intermediates_namely(self):
-        object = self.import_license.filter(item__name__icontains='Intermediates namely')
+        object = self.import_license.filter(
+            Q(item__name__icontains='Intermediates namely') | Q(item__name__icontains='Aluminium Oxide'))
         if object.first():
             return object.first()
         else:
@@ -228,7 +229,8 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_rfa(self):
         object = self.import_license.filter(
-            Q(item__name__icontains='Food Additives') | Q(item__name__icontains='Food Additive')|Q(item__name__icontains='0908'))
+            Q(item__name__icontains='Food Additives') | Q(item__name__icontains='Food Additive') | Q(
+                item__name__icontains='0908'))
         if object.first():
             return object.first()
         else:

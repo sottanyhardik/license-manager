@@ -218,7 +218,8 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_pickle_oil(self):
         object = self.import_license.filter(
-            Q(item__name__icontains='Fats and Oils') | Q(item__name__icontains='Oils and Fats'))
+            Q(item__name__icontains='Fats and Oils') | Q(item__name__icontains='Oils and Fats') | Q(
+                item__name__icontains='Salad Oil'))
         if object.first():
             return object.first()
         else:
@@ -226,7 +227,8 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_rfa(self):
-        object = self.import_license.filter(item__name__icontains='Food Additives')
+        object = self.import_license.filter(
+            Q(item__name__icontains='Food Additives') | Q(item__name__icontains='Food Additive'))
         if object.first():
             return object.first()
         else:

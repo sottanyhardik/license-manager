@@ -738,9 +738,19 @@ class LicenseDetailsModel(models.Model):
         all_imports = self.import_license.filter(
             item__head__name__icontains='pp'
         ).exclude(
-            item__name__icontains='aluminium'
+            Q(item__name__icontains='Aluminium') | Q(item__name__icontains='7607')
         )
         total_quantity = sum(entry.balance_quantity for entry in all_imports)
+        return total_quantity
+
+    @property
+    def get_pp_total(self):
+        all_imports = self.import_license.filter(
+            item__head__name__icontains='pp'
+        ).exclude(
+            item__name__icontains='7607'
+        )
+        total_quantity = sum(entry.quantity for entry in all_imports)
         return total_quantity
 
     @property
@@ -751,7 +761,8 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_paper_and_paper_qs(self):
-        all = self.import_license.filter(Q(item__name__icontains='paper')).exclude(item__name__icontains='7607')
+        all = self.import_license.filter(Q(item__name__icontains='paper')).exclude(
+            Q(item__name__icontains='Aluminium') | Q(item__name__icontains='7607'))
         return all
 
     @property
@@ -879,10 +890,31 @@ class LicenseDetailsModel(models.Model):
         else:
             return 'Missing'
 
-    def get_starch_confectionery(self):
+    def get_starch_confectionery_qs(self):
         from django.db.models import Q
         return self.import_license.filter(Q(item__head__name__icontains='starch') | Q(
-            item__head__name__icontains='emulsifier')).first().balance_quantity
+            item__head__name__icontains='emulsifier'))
+
+    def get_starch_confectionery(self):
+        sum1 = 0
+        all = self.get_starch_confectionery_qs()
+        for d in all:
+            sum1 += d.balance_quantity
+        return sum1
+
+    def get_starch_confectionery_pd(self):
+        all = self.get_starch_confectionery_qs()
+        if all.first():
+            return all.first().item.name
+        else:
+            return 'Missing'
+
+    def get_starch_confectionery_hsn(self):
+        all = self.get_starch_confectionery_qs()
+        if all.first():
+            return str(all.first().hs_code)
+        else:
+            return 'Missing'
 
     def get_party_name(self):
         return str(self.exporter)[:8]
@@ -952,6 +984,26 @@ class LicenseDetailsModel(models.Model):
             credit = credit * .03
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
                 Q(item__name__icontains='pepper'))
+        else:
+            imports = []
+        for dimport in imports:
+            if dimport.alloted_value:
+                credit = credit - dimport.debited_value - int(dimport.alloted_value)
+            else:
+                credit = credit - dimport.debited_value
+        if credit > 0:
+            return round_down(credit)
+        else:
+            return 0
+
+    @property
+    def get_starch_per_cif(self):
+        lic = LicenseExportItemModel.objects.filter(license=self)
+        credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
+        if 'E1' in str(lic[0].norm_class):
+            credit = credit * .05
+            imports = LicenseImportItemsModel.objects.filter(license=self).filter(
+                Q(item__name__icontains='emulsifier'))
         else:
             imports = []
         for dimport in imports:

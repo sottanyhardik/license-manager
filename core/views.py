@@ -158,6 +158,7 @@ class UploadLedger(TemplateView):
             full = full.replace(',', '\t')
             full = full.replace('Â', '')
             full = full.replace('\xa0', ' ')
+            full = full.replace('No:-10', 'No:-T')
             split_list = full.split('Page No:-1')
             for data in split_list:
                 try:

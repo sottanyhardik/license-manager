@@ -32,6 +32,9 @@ class HSCodeDutyAdmin(admin.ModelAdmin):
     list_filter = ('is_fetch','is_fetch_xls')
     search_fields = ('hs_code',)
 
+    @admin.action(
+        description="Download CSV file for selected stats."
+    )
     def download_csv(self, request, queryset):
         import csv
         from django.http import HttpResponse
@@ -51,6 +54,5 @@ class HSCodeDutyAdmin(admin.ModelAdmin):
         response['Content-Disposition'] = 'attachment; filename=stat-info.csv'
         return response
 
-    download_csv.short_description = "Download CSV file for selected stats."
 
 

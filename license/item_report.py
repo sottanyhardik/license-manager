@@ -836,7 +836,7 @@ def tractor_dfia(date_range=None, status=None):
     if is_expired:
         limit = 50000
     else:
-        limit = 8000
+        limit = 999
     dfia_qs = tractor_query(date_range, party=[], is_expired=is_expired)
     for dfia in dfia_qs:
         if dfia.get_balance_cif > limit:
@@ -863,7 +863,7 @@ def steel_dfia(date_range=None, status=None):
     if is_expired:
         limit = 8000
     else:
-        limit = 8000
+        limit = 999
     dfia_qs = steel_query(date_range, party=['Grip', 'posco'], is_expired=is_expired)
     for dfia in dfia_qs:
         if dfia.get_balance_cif > limit:
@@ -1171,7 +1171,7 @@ def glass_dfia(date_range=None, status=None):
     if is_expired:
         limit = 8000
     else:
-        limit = 8000
+        limit = 200
     dfia_qs = glass_query(date_range, party=[], is_expired=is_expired)
     for dfia in dfia_qs:
         if dfia.get_balance_cif > limit:
@@ -1223,7 +1223,7 @@ def pickle_dfia(date_range=None, status=None):
     if is_expired:
         limit = 8000
     else:
-        limit = 8000
+        limit = 500
     dfia_qs = pickle_query(date_range, party=[], is_expired=is_expired)
     for dfia in dfia_qs:
         if dfia.get_balance_cif > limit:

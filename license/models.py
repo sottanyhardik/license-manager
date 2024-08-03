@@ -2,6 +2,8 @@ from django.db import models
 
 # Create your models here.
 from django.db.models import Sum, Q
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
 
@@ -238,11 +240,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_chickpeas(self):
-        all = self.get_chickpeas_obj
-        sum1 = 0
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.get_chickpeas_obj.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_hs_steel(self):
@@ -272,8 +270,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_battery_balance(self):
-        items = self.get_battery_obj
-        return sum(item.balance_quantity for item in items)
+        return self.get_battery_obj.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_alloy_steel_total(self):
@@ -282,8 +279,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_alloy_steel_balance(self):
-        items = self.get_alloy_steel_obj
-        return sum(item.balance_quantity for item in items)
+        return self.get_alloy_steel_obj.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_hot_rolled_total(self):
@@ -302,33 +298,26 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_bearing_balance(self):
-        items = self.get_bearing_obj
-        return sum(item.balance_quantity for item in items)
+        return self.get_bearing_obj.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     def wheat(self):
         return self.import_license.filter(item__head__name__icontains='wheat').first()
 
     def get_sugar(self):
-        all = self.import_license.filter(item__head__name__icontains='sugar')
-        sum1 = 0
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(item__head__name__icontains='sugar').aggregate(Sum('available_quantity'))[
+            'available_quantity__sum'] or 0
 
     def sugar(self):
         return self.import_license.filter(item__head__name__icontains='sugar').first()
 
     @property
     def get_rbd(self):
-        all = self.import_license.filter(Q(item__name__icontains='rbd')).exclude(
+        return self.import_license.filter(Q(item__name__icontains='rbd')).exclude(
             Q(item__name__icontains='1513') | Q(item__name__icontains='1509') | Q(
                 item__name__icontains='Edible Vegtable') | Q(
                 item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
-                item__name__icontains='Edible Vegetable Oil/'))
-        sum1 = 0
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+                item__name__icontains='Edible Vegetable Oil/')).aggregate(Sum('available_quantity'))[
+            'available_quantity__sum'] or 0
 
     @property
     def oil_queryset(self):
@@ -346,11 +335,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def oil_queryset_total(self):
-        all = self.oil_queryset
-        sum1 = 0
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.oil_queryset.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_rbd_cif(self):
@@ -370,27 +355,22 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_pko(self):
-        all = self.import_license.filter(
+        return self.import_license.filter(
             Q(item__name__icontains='1513') | Q(item__name__icontains="Vegetable Oil")).exclude(
             Q(item__name__icontains='1509') | Q(item__name__icontains='1509') | Q(
                 item__name__icontains='Edible Vegtable') | Q(
                 item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
-                item__name__icontains='Edible Vegetable Oil/'))
-        sum1 = 0
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+                item__name__icontains='Edible Vegetable Oil/')).aggregate(Sum('available_quantity'))[
+            'available_quantity__sum'] or 0
 
     @property
     def get_veg_oil(self):
-        all = self.import_license.filter(
+        return self.import_license.filter(
             Q(item__name__icontains='1509') | Q(item__name__icontains='Edible Vegtable') | Q(
                 item__name__icontains='150000') | Q(item__name__icontains='Edible Vegetable Oil /') | Q(
-                item__name__icontains='Edible Vegetable Oil/') | Q(item__name__icontains='Edible Vegetable Oil'))
-        sum1 = 0
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+                item__name__icontains='Edible Vegetable Oil/') | Q(
+                item__name__icontains='Edible Vegetable Oil')).aggregate(Sum('available_quantity'))[
+            'available_quantity__sum'] or 0
 
     @property
     def get_pko_cif(self):
@@ -427,11 +407,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_cmc(self):
-        sum1 = 0
-        all = self.get_cmc_obj
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.get_cmc_obj.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_food_flavour_namkeen_obj(self):
@@ -448,11 +424,8 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_food_flavour_confectionery_obj_qty(self):
-        sum1 = 0
-        all = self.get_food_flavour_confectionery_obj
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.get_food_flavour_confectionery_obj.aggregate(Sum('available_quantity'))[
+            'available_quantity__sum'] or 0
 
     @property
     def get_food_flavour_confectionery_hsn(self):
@@ -468,11 +441,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_food_flavour_namkeen(self):
-        sum1 = 0
-        all = self.get_food_flavour_namkeen_obj
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.get_food_flavour_namkeen_obj.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_food_flavour_qs(self):
@@ -490,40 +459,25 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_food_flavour_tq(self):
-        sum1 = 0
-        all = self.get_food_flavour_qs
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.get_food_flavour_qs.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_food_flavour(self):
-        sum1 = 0
-        all = self.import_license.filter(
+        return self.import_license.filter(
             Q(item__name__icontains='0802') & Q(item__name__icontains='food flavour')).exclude(
-            Q(hs_code__hs_code__istartswith='2009') | Q(item__name__icontains='2009'))
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+            Q(hs_code__hs_code__istartswith='2009') | Q(item__name__icontains='2009')).aggregate(
+            Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_food_flavour_juice(self):
-        sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='juice') | Q(item__name__icontains='2009') | Q(
-            hs_code__hs_code__istartswith='2009'))
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(Q(item__name__icontains='juice') | Q(item__name__icontains='2009') | Q(
+            hs_code__hs_code__istartswith='2009')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_dietary_fibre(self):
-        sum1 = 0
-        all = self.import_license.filter(
+        return self.import_license.filter(
             Q(item__name__icontains='0802') & Q(item__name__icontains='dietary fibre')).exclude(
-            item__name__icontains='juice')
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+            item__name__icontains='juice').aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_total_quantity_of_ff_df_cif(self):
@@ -561,21 +515,13 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_wheat_starch(self):
-        sum1 = 0
-        all = self.import_license.filter(
-            Q(item__head__name__icontains='starch') & Q(hs_code__hs_code__istartswith='11'))
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(
+            Q(item__head__name__icontains='starch') & Q(hs_code__hs_code__istartswith='11')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_modified_starch(self):
-        sum1 = 0
-        all = self.import_license.filter(
-            Q(item__head__name__icontains='starch') & Q(hs_code__hs_code__istartswith='35'))
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(
+            Q(item__head__name__icontains='starch') & Q(hs_code__hs_code__istartswith='35')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_starch_cif(self):
@@ -595,11 +541,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_leavening_agent(self):
-        sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='Leavening Agent'))
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(Q(item__name__icontains='Leavening Agent')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_fruit(self):
@@ -607,8 +549,7 @@ class LicenseDetailsModel(models.Model):
         Query Balance Cocoa Quantity
         @return: Total Balance Quantity of Cocoa
         """
-        return sum(
-            [item.balance_quantity for item in self.import_license.filter(Q(hs_code__hs_code__istartswith='18050000'))])
+        return self.import_license.filter(Q(hs_code__hs_code__istartswith='18050000')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_mnm_qs(self):
@@ -636,8 +577,7 @@ class LicenseDetailsModel(models.Model):
         Query Balance Cheese Quantity
         @return: Total Balance Quantity of Cheese
         """
-        all = self.get_mnm_qs
-        return sum([item.balance_quantity for item in all])
+        return self.get_mnm_qs.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_cheese(self):
@@ -645,8 +585,7 @@ class LicenseDetailsModel(models.Model):
         Query Balance Cheese Quantity
         @return: Total Balance Quantity of Cheese
         """
-        return sum([item.balance_quantity for item in
-                    self.import_license.filter(Q(item__name__icontains='0406') & Q(item__name__icontains='milk'))])
+        return self.import_license.filter(Q(item__name__icontains='0406') & Q(item__name__icontains='milk')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_cheese_cif(self):
@@ -670,9 +609,8 @@ class LicenseDetailsModel(models.Model):
                 Query Balance WPC Quantity
                 @return: Total Balance Quantity of WPC
         """
-        return sum([item.balance_quantity for item in
-                    self.import_license.filter(item__name__icontains='milk').exclude(
-                        Q(item__name__icontains='0406') | Q(item__name__icontains='0404'))])
+        return self.import_license.filter(item__name__icontains='milk').exclude(
+                        Q(item__name__icontains='0406') | Q(item__name__icontains='0404')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_swp(self):
@@ -680,8 +618,7 @@ class LicenseDetailsModel(models.Model):
                 Query Balance WPC Quantity
                 @return: Total Balance Quantity of WPC
         """
-        return sum([item.balance_quantity for item in
-                    self.import_license.filter(item__name__icontains='0404').exclude(item__name__icontains='0406')])
+        return self.import_license.filter(item__name__icontains='0404').exclude(item__name__icontains='0406').aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_wpc_cif(self):
@@ -735,13 +672,11 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_pp(self):
-        all_imports = self.import_license.filter(
+        return self.import_license.filter(
             item__head__name__icontains='pp'
         ).exclude(
             Q(item__name__icontains='Aluminium') | Q(item__name__icontains='7607')
-        )
-        total_quantity = sum(entry.balance_quantity for entry in all_imports)
-        return total_quantity
+        ).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_pp_total(self):
@@ -755,9 +690,7 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_aluminium(self):
-        all_entries = self.import_license.filter(Q(item__name__icontains='Aluminium') | Q(item__name__icontains='7607'))
-        total_quantity = sum(entry.balance_quantity for entry in all_entries)
-        return total_quantity
+        return self.import_license.filter(Q(item__name__icontains='Aluminium') | Q(item__name__icontains='7607')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_paper_and_paper_qs(self):
@@ -804,27 +737,15 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_paper_and_paper(self):
-        sum1 = 0
-        all = self.get_paper_and_paper_qs
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.get_paper_and_paper_qs.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_juice(self):
-        sum1 = 0
-        all = self.import_license.filter(Q(item__name__icontains='Relevant Fruit') | Q(item__name__icontains='juice'))
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(Q(item__name__icontains='Relevant Fruit') | Q(item__name__icontains='juice')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_tartaric_acid(self):
-        sum1 = 0
-        all = self.import_license.filter(item__head__name__icontains='acid')
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(item__head__name__icontains='acid').aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_orange_essential_pd(self):
@@ -837,51 +758,27 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_orange_essential_total(self):
-        sum1 = 0
-        all = self.import_license.filter(
-            Q(item__head__name__icontains='Essential oil'))
-        for d in all:
-            if d:
-                sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(
+            Q(item__head__name__icontains='Essential oil')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_orange_essential_oil(self):
-        sum1 = 0
-        all = self.import_license.filter(
+        return self.import_license.filter(
             Q(item__head__name__icontains='Essential oil')).exclude(
-            Q(item__name__icontains='lemon') & Q(item__name__icontains='pippermint'))
-        for d in all:
-            if d:
-                sum1 += d.balance_quantity
-        return sum1
+            Q(item__name__icontains='lemon') & Q(item__name__icontains='pippermint')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_lemon_essential_oil(self):
-        sum1 = 0
-        all = self.import_license.filter(
-            Q(item__head__name__icontains='Essential Oil') & Q(item__name__icontains='lemon'))
-        for d in all:
-            if d:
-                sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(
+            Q(item__head__name__icontains='Essential Oil') & Q(item__name__icontains='lemon')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_pippermint_essential_oil(self):
-        sum1 = 0
-        all = self.import_license.filter(
-            Q(item__head__name__icontains='essential oil') & Q(item__name__icontains='pippermint'))
-        for d in all:
-            if d:
-                sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(
+            Q(item__head__name__icontains='essential oil') & Q(item__name__icontains='pippermint')).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     def get_other_confectionery(self):
-        sum1 = 0
-        all = self.import_license.filter(item__head__name__icontains='other confectionery')
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.import_license.filter(item__head__name__icontains='other confectionery').aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     def get_other_confectionery_pd(self):
         all = self.import_license.filter(item__head__name__icontains='other confectionery')
@@ -896,11 +793,7 @@ class LicenseDetailsModel(models.Model):
             item__head__name__icontains='emulsifier'))
 
     def get_starch_confectionery(self):
-        sum1 = 0
-        all = self.get_starch_confectionery_qs()
-        for d in all:
-            sum1 += d.balance_quantity
-        return sum1
+        return self.get_starch_confectionery_qs().aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     def get_starch_confectionery_pd(self):
         all = self.get_starch_confectionery_qs()
@@ -1162,34 +1055,22 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def required_cif(self):
-        if self.balance_quantity > 100:
-            required = round(self.balance_quantity * self.item.head.unit_rate, 0) + 10
+        if self.available_quantity > 100:
+            required = round(self.available_quantity * self.item.head.unit_rate, 0) + 10
             return required
         else:
             return 0
 
     @property
     def balance_quantity(self):
-        if self.item and self.item.head and self.item.head.is_restricted and self.old_quantity:
-            credit = self.old_quantity
-        elif self.item and self.item.head and self.item.head.is_restricted and self.license.notification_number == N2015:
-            credit = self.quantity
-        else:
-            credit = self.quantity
-        debit = self.debited_quantity
-        alloted = self.alloted_quantity
-        if debit and alloted:
-            value = round_down(credit - debit - alloted, 0)
-        elif debit:
-            value = round_down(credit - debit, 0)
-        elif alloted:
-            value = round_down((credit - alloted), 0)
-        else:
-            value = round_down(credit, 0)
-        if value > 0:
-            return value
-        else:
-            return 0
+        credit = self.quantity
+        if self.item and self.item.head and self.item.head.is_restricted:
+            if self.old_quantity or self.license.notification_number == N2015:
+                credit = self.old_quantity or self.quantity
+        value = round_down(
+            credit - self.debited_quantity if self.debited_quantity else 0 - self.alloted_quantity if self.alloted_quantity else 0,
+            0)
+        return max(value, 0)
 
     @property
     def debited_value(self):
@@ -1389,3 +1270,10 @@ class LicenseInwardOutwardModel(models.Model):
     @property
     def ge_file_number(self):
         return self.license.ge_file_number
+
+
+@receiver(post_save, sender=LicenseImportItemsModel, dispatch_uid="update_balance")
+def update_balance(sender, instance, **kwargs):
+    if not instance.available_quantity == instance.balance_quantity:
+        instance.available_quantity = instance.balance_quantity
+        instance.save()

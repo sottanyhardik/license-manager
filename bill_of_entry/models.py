@@ -1,5 +1,7 @@
 from django.db import models
 from django.db.models import Sum
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.urls import reverse
 
 
@@ -105,3 +107,9 @@ class RowDetails(models.Model):
 
     class Meta:
         ordering = ['transaction_type', 'bill_of_entry__bill_of_entry_date']
+
+
+@receiver(post_save, sender=RowDetails, dispatch_uid="update_stock")
+def update_stock(sender, instance, **kwargs):
+    instance.sr_number.available_quantity = instance.sr_number.balance_quantity
+    instance.sr_number.save()

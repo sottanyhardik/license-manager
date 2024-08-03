@@ -2,6 +2,8 @@ from django.db import models
 
 # Create your models here.
 from django.db.models import Sum
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 from django.urls import reverse
 
 Credit = 'C'
@@ -150,3 +152,15 @@ class AllotmentItems(models.Model):
     @property
     def get_delete_url(self):
         return reverse('allotment-item-delete', kwargs={'pk': self.pk}) + '?allotment_id=' + str(self.allotment_id)
+
+
+@receiver(post_save, sender=AllotmentItems, dispatch_uid="update_stock")
+def update_stock(sender, instance, **kwargs):
+    instance.item.available_quantity = instance.item.balance_quantity
+    instance.item.save()
+
+
+@receiver(post_delete,sender=AllotmentItems)
+def delete_stock(sender,instance,*args,**kwargs):
+    instance.item.available_quantity = instance.item.balance_quantity
+    instance.item.save()

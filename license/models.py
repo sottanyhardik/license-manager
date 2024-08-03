@@ -310,6 +310,15 @@ class LicenseDetailsModel(models.Model):
     def sugar(self):
         return self.import_license.filter(item__head__name__icontains='sugar').first()
 
+    """
+    Vegetable Oil Logics 
+    """
+    @property
+    def oil_queryset(self):
+        rbd = self.import_license.filter(Q(item__name__icontains='rbd') | Q(item__name__icontains='1513') | Q(
+            item__name__icontains='Edible Vegtable Oil') | Q(item__name__icontains='Edible Vegetable Oi')|Q(item__name__icontains='Edible Vegetable Oi')).distinct()
+        return rbd
+
     @property
     def get_rbd(self):
         return self.import_license.filter(Q(item__name__icontains='rbd')).exclude(
@@ -319,11 +328,6 @@ class LicenseDetailsModel(models.Model):
                 item__name__icontains='Edible Vegetable Oil/')).aggregate(Sum('available_quantity'))[
             'available_quantity__sum'] or 0
 
-    @property
-    def oil_queryset(self):
-        rbd = self.import_license.filter(Q(item__name__icontains='rbd') | Q(item__name__icontains='1513') | Q(
-            item__name__icontains='Edible Vegtable Oil') | Q(item__name__icontains='Edible Vegetable Oi')).distinct()
-        return rbd
 
     @property
     def rbd_pd(self):
@@ -1067,9 +1071,7 @@ class LicenseImportItemsModel(models.Model):
         if self.item and self.item.head and self.item.head.is_restricted:
             if self.old_quantity or self.license.notification_number == N2015:
                 credit = self.old_quantity or self.quantity
-        value = round_down(
-            credit - self.debited_quantity if self.debited_quantity else 0 - self.alloted_quantity if self.alloted_quantity else 0,
-            0)
+        value = round_down(credit - self.debited_quantity - self.alloted_quantity, 0)
         return max(value, 0)
 
     @property

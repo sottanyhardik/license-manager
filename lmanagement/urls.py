@@ -19,7 +19,6 @@ from django.contrib import admin
 from django.urls import path, include
 
 urlpatterns = [
-                  path("__debug__/", include("debug_toolbar.urls")),
                   path('', include('core.urls')),
                   path('license/', include('license.urls')),
                   path('allotment/', include('allotment.urls')),

@@ -55,7 +55,6 @@ INSTALLED_APPS = [
     'ebrc.apps.EbrcConfig',
     'shipping_bill.apps.ShippingBillConfig',
     'django.contrib.humanize',
-    'material',
     'mathfilters',
     # "debug_toolbar",
 ]

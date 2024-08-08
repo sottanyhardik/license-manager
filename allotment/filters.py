@@ -40,7 +40,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
 
     class Meta:
         model = license_model.LicenseImportItemsModel
-        fields = ['license__license_number', 'item__name', 'license__notification_number',
+        fields = ['license__license_number', 'description', 'license__notification_number',
                   'license__export_license__norm_class', 'hs_code__hs_code']
         widgets = {
             'license__notification_number': Select(attrs={'class': 'form-control'}),

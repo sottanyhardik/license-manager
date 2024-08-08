@@ -112,7 +112,7 @@ def rbd_query(date_range=None):
     tables = []
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
-        'item__name__icontains': '1513',
+        'description__icontains': '1513',
         'license__exporter__name__icontains': 'Parle',
     }
     queryset = all_queryset(query_dict, date_range=date_range)
@@ -120,7 +120,7 @@ def rbd_query(date_range=None):
 
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
-        'item__name__icontains': '1513',
+        'description__icontains': '1513',
     }
     exclude_or_filters = {
         'license__exporter__name__icontains': 'Parle',
@@ -131,7 +131,7 @@ def rbd_query(date_range=None):
 
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E132',
-        'item__name__icontains': '1513',
+        'description__icontains': '1513',
     }
     queryset = all_queryset(query_dict, date_range=date_range)
 
@@ -143,7 +143,7 @@ def rbd_query(date_range=None):
         'hs_code__hs_code__icontains': '15119020'
     }
     exclude_or_filters = {
-        'item__name__icontains': '1513'
+        'description__icontains': '1513'
     }
     queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters, date_range=date_range)
     tables = query_set_table(tables, queryset, 'RBD Palmolein Oil')
@@ -154,7 +154,7 @@ def rbd_query(date_range=None):
         'hs_code__hs_code__icontains': '15119020'
     }
     exclude_or_filters = {
-        'item__name__icontains': '1513'
+        'description__icontains': '1513'
     }
     queryset = all_queryset(query_dict, exclude_or_filters=exclude_or_filters, date_range=date_range)
     tables = query_set_table(tables, queryset, 'RBD Palmolein Oil Namkeen')
@@ -167,10 +167,10 @@ def milk_query(date_range=None):
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
         'item__head__name__icontains': 'milk & milk products',
-        'item__name__icontains': '0404',
+        'description__icontains': '0404',
     }
     exclude_or_filters = {
-        'item__name__icontains': '0406',
+        'description__icontains': '0406',
     }
     queryset = all_queryset(query_dict, date_range=date_range, exclude_or_filters=exclude_or_filters)
     tables = query_set_table(tables, queryset, 'Whey Powder')
@@ -179,25 +179,25 @@ def milk_query(date_range=None):
         'item__head__name__icontains': 'milk & milk products',
     }
     exclude_or_filters = {
-        'item__name__icontains': '3502,'
+        'description__icontains': '3502,'
     }
     queryset = all_queryset(query_dict, date_range=date_range, exclude_or_filters=exclude_or_filters)
     tables = query_set_table(tables, queryset, 'Whey Powder')
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
-        'item__name__icontains': '0406',
+        'description__icontains': '0406',
     }
     exclude_or_filters = {
-        'item__name__icontains': '0406',
+        'description__icontains': '0406',
     }
     queryset = all_queryset(query_dict, date_range=date_range)
     tables = query_set_table(tables, queryset, 'CHEESE')
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E132',
-        'item__name__icontains': '0406',
+        'description__icontains': '0406',
     }
     exclude_or_filters = {
-        'item__name__icontains': '0406',
+        'description__icontains': '0406',
     }
     queryset = all_queryset(query_dict, date_range=date_range)
     tables = query_set_table(tables, queryset, 'CHEESE NAMKEEN')
@@ -211,7 +211,7 @@ def skimmed_milk_query(date_range=None):
         'item__head__name__icontains': 'milk & milk products',
     }
     or_filters = {
-        'item__name__icontains': ['skim', 'skimmed'],
+        'description__icontains': ['skim', 'skimmed'],
 
     }
     exclude_or_filters = {
@@ -309,7 +309,7 @@ def juice_query(date_range=None):
     tables = query_set_table(tables, queryset)
     query_dict = {
         'license__export_license__norm_class__norm_class': 'E5',
-        'item__name__icontains': 'juice'
+        'description__icontains': 'juice'
     }
     queryset = all_queryset(query_dict, date_range=date_range)
     tables = query_set_table(tables, queryset)

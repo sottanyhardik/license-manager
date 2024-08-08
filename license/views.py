@@ -1170,7 +1170,7 @@ class PDFSummaryLicenseDetailView(PDFTemplateResponseMixin, DetailView):
                            'wpc': None, 'gluten': None}
         items = ['gluten', 'palmolein', '2009', 'Dietary', 'milk', 'Packing Material']
         for item in items:
-            import_item = dfia.import_license.filter(item__name__icontains=item)
+            import_item = dfia.import_license.filter(description__icontains=item)
             if import_item.first() and import_item.first().item:
                 dict_data = fetch_item_details(import_item.first().item, import_item.first().hs_code.hs_code,
                                                dfia, item_name=item)

@@ -49,7 +49,7 @@ class ImportItemsForm(forms.ModelForm):
 
     class Meta:
         model = license_model.LicenseImportItemsModel
-        fields = ['serial_number', 'hs_code', 'item', 'quantity', 'old_quantity', 'cif_fc', 'comment', 'is_restrict']
+        fields = ['serial_number', 'hs_code', 'item','description', 'quantity', 'old_quantity', 'cif_fc', 'comment', 'is_restrict']
 
     def __init__(self, *args, **kwargs):
         super(ImportItemsForm, self).__init__(*args, **kwargs)

@@ -59,8 +59,6 @@ class ItemHeadModel(models.Model):
     name = models.CharField(max_length=255, unique=True)
     hs_code = models.CharField(max_length=255)
     unit_rate = models.FloatField(default=0)
-    biscuit_priority = models.FloatField(default=0)
-    confectionery_priority = models.FloatField(default=0)
     is_restricted = models.BooleanField(default=True)
     is_amend = models.BooleanField(default=False)
 
@@ -142,7 +140,7 @@ class SIONExportModel(models.Model):
 
     def __str__(self):
         if self.item:
-            return "{0} | {1}".format(self.norm_class, self.item.name)
+            return "{0} | {1}".format(self.norm_class, self.description)
         else:
             return "{0}".format(self.norm_class)
 
@@ -162,7 +160,7 @@ class SIONImportModel(models.Model):
 
     def __str__(self):
         if self.item:
-            return "{0} | {1}".format(self.norm_class, self.item.name)
+            return "{0} | {1}".format(self.norm_class, self.description)
         else:
             return "{0}".format(self.norm_class)
 

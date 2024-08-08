@@ -28,14 +28,14 @@ def convert(query, name):
             file = False
             counter = counter + 1
             for import_data in import_datas:
-                dict_data['import_item'] = str(import_data.item.name)
+                dict_data['import_item'] = str(import_data.description)
                 dict_data['quantity_balance'] = int(import_data.balance_quantity)
                 if not license.is_null and not int(import_data.balance_quantity) < 1000:
-                    if import_data.item.name in list(total_dict.keys()):
-                        total_dict[import_data.item.name] = int(import_data.balance_quantity) + total_dict[
-                            import_data.item.name]
+                    if import_data.description in list(total_dict.keys()):
+                        total_dict[import_data.description] = int(import_data.balance_quantity) + total_dict[
+                            import_data.description]
                     else:
-                        total_dict[import_data.item.name] = int(import_data.balance_quantity)
+                        total_dict[import_data.description] = int(import_data.balance_quantity)
                 writer.writerow(dict_data)
                 if file:
                     dict_data = {

@@ -31,8 +31,8 @@ def get_license_table(license):
     ]
     for item in license.export_license.all():
         item_list = []
-        if item.item and item.item.name:
-            item_list.append(item.item.name)
+        if item.item and item.description:
+            item_list.append(item.description)
         else:
             item_list.append("")
         item_list.append(item.cif_fc)
@@ -48,8 +48,8 @@ def get_license_table(license):
             item_list.append(str(item.hs_code.hs_code))
         else:
             item_list.append("")
-        if item.item and item.item.name:
-            item_list.append(item.item.name)
+        if item.item and item.description:
+            item_list.append(item.description)
         else:
             item_list.append("")
         item_list.append(item.quantity)

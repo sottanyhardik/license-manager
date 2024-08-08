@@ -91,7 +91,7 @@ def fetch_data(list1):
                     total = 0
                     data_dict['BAL M&M Oth QTY'] = fetch_total(import_item)
                     data_dict['Total M&M Oth QTY'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-                import_item = dfia.import_license.filter(item__name__icontains='starch')
+                import_item = dfia.import_license.filter(description__icontains='starch')
                 if import_item.exists():
                     total = 0
                     data_dict['BAL Sugar QTY'] = fetch_total(import_item)

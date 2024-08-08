@@ -103,7 +103,7 @@ class AllotmentItems(models.Model):
         ordering = ['qty', ]
 
     def __str__(self):
-        return self.item.item.name
+        return self.item.description
 
     @property
     def serial_number(self):
@@ -111,7 +111,7 @@ class AllotmentItems(models.Model):
 
     @property
     def product_description(self):
-        return self.item.item.name
+        return self.item.description
 
     @property
     def license_number(self):

@@ -93,6 +93,9 @@
                    data-url="{% url 'allotment-delete' object.id %}"
                    data-target="div-{{ object.id }}">Delete</a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'copy_allotment' object.id %}">Copy</a>
+            </li>
         </ul>
     </div>
     <div class="card-body data-target-div" id="div-{{ object.id }}">

@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.urls import path
 from . import views
+from .views import AllotmentCopyView
 
 urlpatterns = [
     # ex: /polls/
@@ -18,4 +19,5 @@ urlpatterns = [
     path('<int:pk>/generate/', login_required(views.ARODocumentGenerateView.as_view()), name='allotment-generate-aro'),
     path('<int:pk>/tl/', login_required(views.GenerateTransferLetterView.as_view()), name='allotment-tl'),
     path('pdownload/', login_required(views.PandasDownloadPendingAllotmentView.as_view()), name='allotment-pending-pandas'),
+    path('copy_allotment/<int:pk>/', AllotmentCopyView.as_view(), name='copy_allotment'),
 ]

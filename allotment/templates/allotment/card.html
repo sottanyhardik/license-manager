@@ -94,7 +94,10 @@
                    data-target="div-{{ object.id }}">Delete</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'copy_allotment' object.id %}">Copy</a>
+                <a class="nav-link" onclick="fetch_page(this)" data-toggle="pill" role="tab"
+                   aria-controls="pills-home" aria-selected="true" href="#div-{{ object.id }}"
+                   data-url="{% url 'copy_allotment' object.id %}"
+                   data-target="div-{{ object.id }}">Copy</a>
             </li>
         </ul>
     </div>

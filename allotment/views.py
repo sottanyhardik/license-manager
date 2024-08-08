@@ -405,4 +405,4 @@ class AllotmentCopyView(View):
         # Clone the object and save to DB
         allotment.pk = None  # Set `id` to None to create new object
         allotment.save()
-        return redirect('allotment-details', pk=allotment.pk)
+        return redirect('allotment-update', pk=allotment.pk)

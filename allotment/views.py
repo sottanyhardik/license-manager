@@ -7,7 +7,8 @@ from django.views.generic.base import TemplateResponseMixin, ContextMixin, View
 from django_filters.views import FilterView
 from easy_pdf.rendering import render_to_pdf
 from easy_pdf.views import PDFTemplateResponseMixin
-
+from django.shortcuts import get_object_or_404, redirect
+from .models import AllotmentModel
 from core.utils import PagedFilteredTableView
 from license import models as license_models
 from . import forms, tables, filters
@@ -396,3 +397,12 @@ class PandasDownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
             {'required_quantity': 'sum', 'unit_value_per_unit': 'mean', 'required_value': 'sum'}).to_html(
             classes='table')
         return context
+
+
+class AllotmentCopyView(View):
+    def get(self, request, *args, **kwargs):
+        allotment = get_object_or_404(AllotmentModel, pk=kwargs['pk'])
+        # Clone the object and save to DB
+        allotment.pk = None  # Set `id` to None to create new object
+        allotment.save()
+        return redirect('allotment-update', pk=allotment.pk)

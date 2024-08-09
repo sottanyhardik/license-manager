@@ -160,7 +160,7 @@ class SIONImportModel(models.Model):
 
     def __str__(self):
         if self.item:
-            return "{0} | {1}".format(self.norm_class, self.description)
+            return "{0} | {1}".format(self.norm_class, self.item)
         else:
             return "{0}".format(self.norm_class)
 

@@ -1,9 +1,5 @@
 from django.db.models import Sum
 
-from allotment.models import AllotmentItems
-
-
-
 def calculate(self):
     from license.models import LicenseExportItemModel
     from bill_of_entry.models import RowDetails
@@ -102,6 +98,7 @@ def item_wise_debiting(dfia, item_head, item_name=None):
 
 
 def item_wise_allotment(dfia, item_head, item_name=None):
+    from allotment.models import AllotmentItems
     dict_list = []
     dict_return = {}
     total_qty = 0

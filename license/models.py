@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from allotment.models import AllotmentItems, Debit, ALLOTMENT
 from bill_of_entry.models import RowDetails, ARO
+from core.scripts.calculate_balance import calculate_available_quantity
 from license.helper import round_down
 
 DFIA = "26"
@@ -101,56 +102,19 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_total_debit(self):
-        alloted = AllotmentItems.objects.filter(item__license=self, allotment__type=ARO,
-                                                allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-            Sum('cif_fc'))['cif_fc__sum']
-        debited = \
-            RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
-                'cif_fc__sum']
-        if debited and alloted:
-            total = debited + alloted
-        elif alloted:
-            total = alloted
-        elif debited:
-            total = debited
-        else:
-            total = 0
-        return round(total, 0)
+        return self.import_license.aggregate(total_debits=Sum('debited_value')).get('total_debits', 0)
 
     @property
     def get_total_allotment(self):
-        total = AllotmentItems.objects.filter(item__license=self, allotment__type=ALLOTMENT,
-                                              allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-            Sum('cif_fc'))['cif_fc__sum']
-        if total:
-            return total
-        else:
-            return 0
+        return self.import_license.aggregate(total_allotted=Sum('allotted_value')).get('total_allotted', 0)
 
     @property
     def get_balance_cif(self):
-        credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        debit = \
-            RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
-                'cif_fc__sum']
-        allotment = AllotmentItems.objects.filter(item__license=self,
-                                                  allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-            Sum('cif_fc'))['cif_fc__sum']
-        t_debit = 0
-        if debit:
-            t_debit = t_debit + debit
-        if allotment:
-            t_debit = t_debit + allotment
-        if credit and t_debit:
-            value = round(credit - t_debit, 0)
-        elif credit:
-            value = round(credit, 0)
-        else:
-            value = 0
-        if value > 0:
-            return value
-        else:
-            return 0
+        credit = self.opening_balance
+        debit = self.get_total_debit or 0
+        allotment = self.get_total_allotment or 0
+        t_debit = debit + allotment
+        return round_down(float(credit) - float(t_debit),2)
 
     @property
     def opening_balance(self):
@@ -442,7 +406,7 @@ class LicenseDetailsModel(models.Model):
     def get_food_flavour_confectionery_pd(self):
         food_flavour_confectionery_obj = self.get_food_flavour_confectionery_obj
         first_item = food_flavour_confectionery_obj.first()
-        return str(first_item.item.name) if first_item else 'Missing'
+        return str(first_item.description) if first_item else 'Missing'
 
     @property
     def get_food_flavour_namkeen(self):
@@ -458,7 +422,7 @@ class LicenseDetailsModel(models.Model):
         sum1 = 0
         all = self.get_food_flavour_qs
         if all.first():
-            return all.first().item.name
+            return all.first().description
         else:
             return "Missing"
 
@@ -481,8 +445,8 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_dietary_fibre(self):
         return self.import_license.filter(
-            Q(description__icontains='0802') & Q(item__name__icontains='dietary fibre')).exclude(
-            item__name__icontains='juice').aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
+            Q(description__icontains='0802') & Q(description__icontains='dietary fibre')).exclude(
+            description__icontains='juice').aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_total_quantity_of_ff_df_cif(self):
@@ -494,12 +458,12 @@ class LicenseDetailsModel(models.Model):
         if 'Missing' in product_description:
             return 0
         elif '0908' in product_description:
-            required = self.get_food_flavour * 6.22
+            required = float(self.get_food_flavour) * 6.22
         elif '2009' in product_description:
-            required = self.get_food_flavour_juice * 2.5
+            required = float(self.get_food_flavour_juice) * 2.5
         else:
             required = 0
-        required = required + self.get_fruit * 2.5
+        required = float(required) + float(self.get_fruit) * 2.5
         if required > per_cif:
             return per_cif
         else:
@@ -549,7 +513,7 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_leavening_agent(self):
         return \
-            self.import_license.filter(Q(item__name__icontains='Leavening Agent')).aggregate(Sum('available_quantity'))[
+            self.import_license.filter(Q(description__icontains='Leavening Agent')).aggregate(Sum('available_quantity'))[
                 'available_quantity__sum'] or 0
 
     @property
@@ -567,7 +531,7 @@ class LicenseDetailsModel(models.Model):
         Query Balance Cheese Quantity
         @return: Total Balance Quantity of Cheese
         """
-        return self.import_license.filter(Q(item__name__icontains='milk'))
+        return self.import_license.filter(Q(description__icontains='milk'))
 
     @property
     def get_mnm_pd(self):
@@ -577,7 +541,7 @@ class LicenseDetailsModel(models.Model):
         """
         all = self.get_mnm_qs
         if all.first():
-            return all.first().item.name
+            return all.first().description
         else:
             return 0
 
@@ -595,7 +559,7 @@ class LicenseDetailsModel(models.Model):
         Query Balance Cheese Quantity
         @return: Total Balance Quantity of Cheese
         """
-        return self.import_license.filter(Q(item__name__icontains='0406') & Q(item__name__icontains='milk')).aggregate(
+        return self.import_license.filter(Q(description__icontains='0406') & Q(description__icontains='milk')).aggregate(
             Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
@@ -603,7 +567,7 @@ class LicenseDetailsModel(models.Model):
         qty = self.get_cheese
         if qty and qty > 100:
             balance_cif = self.get_balance_cif
-            required_cif = qty * 6.8
+            required_cif = float(qty) * 6.8
             if required_cif <= balance_cif:
                 return required_cif
             else:
@@ -620,8 +584,8 @@ class LicenseDetailsModel(models.Model):
                 Query Balance WPC Quantity
                 @return: Total Balance Quantity of WPC
         """
-        return self.import_license.filter(item__name__icontains='milk').exclude(
-            Q(item__name__icontains='0406') | Q(item__name__icontains='0404')).aggregate(Sum('available_quantity'))[
+        return self.import_license.filter(description__icontains='milk').exclude(
+            Q(description__icontains='0406') | Q(description__icontains='0404')).aggregate(Sum('available_quantity'))[
             'available_quantity__sum'] or 0
 
     @property
@@ -630,7 +594,7 @@ class LicenseDetailsModel(models.Model):
                 Query Balance WPC Quantity
                 @return: Total Balance Quantity of WPC
         """
-        return self.import_license.filter(item__name__icontains='0404').exclude(item__name__icontains='0406').aggregate(
+        return self.import_license.filter(description__icontains='0404').exclude(description__icontains='0406').aggregate(
             Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
@@ -679,7 +643,7 @@ class LicenseDetailsModel(models.Model):
             item__head__name__icontains='pp'
         )
         if all.first():
-            return all.first().item.name
+            return all.first().description
         else:
             return 'Missing'
 
@@ -688,7 +652,7 @@ class LicenseDetailsModel(models.Model):
         return self.import_license.filter(
             item__head__name__icontains='pp'
         ).exclude(
-            Q(item__name__icontains='Aluminium') | Q(item__name__icontains='7607')
+            Q(description__icontains='Aluminium') | Q(description__icontains='7607')
         ).aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
@@ -696,7 +660,7 @@ class LicenseDetailsModel(models.Model):
         all_imports = self.import_license.filter(
             item__head__name__icontains='pp'
         ).exclude(
-            item__name__icontains='7607'
+            description__icontains='7607'
         )
         total_quantity = sum(entry.quantity for entry in all_imports)
         return total_quantity
@@ -704,20 +668,20 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_aluminium(self):
         return self.import_license.filter(
-            Q(item__name__icontains='Aluminium') | Q(item__name__icontains='7607')).aggregate(
+            Q(description__icontains='Aluminium') | Q(description__icontains='7607')).aggregate(
             Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_paper_and_paper_qs(self):
-        all = self.import_license.filter(Q(item__name__icontains='paper')).exclude(
-            Q(item__name__icontains='Aluminium') | Q(item__name__icontains='7607'))
+        all = self.import_license.filter(Q(description__icontains='paper')).exclude(
+            Q(description__icontains='Aluminium') | Q(description__icontains='7607'))
         return all
 
     @property
     def get_paper_and_paper_pd(self):
         all = self.get_paper_and_paper_qs
         if all.first():
-            return all.first().item.name
+            return all.first().description
         else:
             return 'Missing'
 
@@ -738,7 +702,7 @@ class LicenseDetailsModel(models.Model):
     def get_pp_pd(self):
         all = self.get_pp_qs
         if all.first():
-            return all.first().item.name
+            return all.first().description
         else:
             return 'Missing'
 
@@ -757,7 +721,7 @@ class LicenseDetailsModel(models.Model):
     @property
     def get_juice(self):
         return self.import_license.filter(
-            Q(item__name__icontains='Relevant Fruit') | Q(item__name__icontains='juice')).aggregate(
+            Q(description__icontains='Relevant Fruit') | Q(description__icontains='juice')).aggregate(
             Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
@@ -770,7 +734,7 @@ class LicenseDetailsModel(models.Model):
         all = self.import_license.filter(
             Q(item__head__name__icontains='Essential oil'))
         if all.first():
-            return all.first().item.name
+            return all.first().description
         else:
             return 'Missing'
 
@@ -784,19 +748,19 @@ class LicenseDetailsModel(models.Model):
     def get_orange_essential_oil(self):
         return self.import_license.filter(
             Q(item__head__name__icontains='Essential oil')).exclude(
-            Q(item__name__icontains='lemon') & Q(item__name__icontains='pippermint')).aggregate(
+            Q(description__icontains='lemon') & Q(description__icontains='pippermint')).aggregate(
             Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_lemon_essential_oil(self):
         return self.import_license.filter(
-            Q(item__head__name__icontains='Essential Oil') & Q(item__name__icontains='lemon')).aggregate(
+            Q(item__head__name__icontains='Essential Oil') & Q(description__icontains='lemon')).aggregate(
             Sum('available_quantity'))['available_quantity__sum'] or 0
 
     @property
     def get_pippermint_essential_oil(self):
         return self.import_license.filter(
-            Q(item__head__name__icontains='essential oil') & Q(item__name__icontains='pippermint')).aggregate(
+            Q(item__head__name__icontains='essential oil') & Q(description__icontains='pippermint')).aggregate(
             Sum('available_quantity'))['available_quantity__sum'] or 0
 
     def get_other_confectionery(self):
@@ -806,7 +770,7 @@ class LicenseDetailsModel(models.Model):
     def get_other_confectionery_pd(self):
         all = self.import_license.filter(item__head__name__icontains='other confectionery')
         if all.first():
-            return all.first().item.name
+            return all.first().description
         else:
             return 'Missing'
 
@@ -821,7 +785,7 @@ class LicenseDetailsModel(models.Model):
     def get_starch_confectionery_pd(self):
         all = self.get_starch_confectionery_qs()
         if all.first():
-            return all.first().item.name
+            return all.first().description
         else:
             return 'Missing'
 
@@ -861,10 +825,10 @@ class LicenseDetailsModel(models.Model):
                     item__head__name__icontains='starch') | Q(
                     item__head__name__icontains='Coco'))
         for dimport in imports:
-            if dimport.alloted_value:
-                credit = credit - dimport.debited_value - int(dimport.alloted_value)
+            if dimport.allotted_value:
+                credit = credit - float(dimport.debited_value) - float(dimport.allotted_value)
             else:
-                credit = credit - dimport.debited_value
+                credit = credit - float(dimport.debited_value)
         if credit > 0:
             return round_down(credit)
         else:
@@ -877,9 +841,9 @@ class LicenseDetailsModel(models.Model):
         if 'E1' in str(lic[0].norm_class):
             credit = credit * .05
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
-                Q(item__name__icontains='essential oil') | Q(item__head__name__icontains='food flavour') | Q(
-                    item__name__icontains='Flavour') |
-                Q(item__name__icontains='Fruit Flavour') | Q(item__name__icontains='food flavour'))
+                Q(description__icontains='essential oil') | Q(item__head__name__icontains='food flavour') | Q(
+                    description__icontains='Flavour') |
+                Q(description__icontains='Fruit Flavour') | Q(description__icontains='food flavour'))
         else:
             imports = []
         for dimport in imports:
@@ -899,7 +863,7 @@ class LicenseDetailsModel(models.Model):
         if 'E132' in str(lic[0].norm_class):
             credit = credit * .03
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
-                Q(item__name__icontains='pepper'))
+                Q(description__icontains='pepper'))
         else:
             imports = []
         for dimport in imports:
@@ -919,7 +883,7 @@ class LicenseDetailsModel(models.Model):
         if 'E1' in str(lic[0].norm_class):
             credit = credit * .05
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
-                Q(item__name__icontains='emulsifier'))
+                Q(description__icontains='emulsifier'))
         else:
             imports = []
         for dimport in imports:
@@ -939,7 +903,7 @@ class LicenseDetailsModel(models.Model):
         if 'E132' in str(lic[0].norm_class):
             credit = credit * .05
             imports = LicenseImportItemsModel.objects.filter(license=self).filter(
-                Q(item__name__icontains='Additives'))
+                Q(description__icontains='Additives'))
         else:
             imports = []
         for dimport in imports:
@@ -1037,10 +1001,12 @@ class LicenseImportItemsModel(models.Model):
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default=KG)
     cif_fc = models.FloatField(null=True, blank=True)
     cif_inr = models.FloatField(default=0)
-    available_quantity = models.FloatField(default=0.00)
-    available_value = models.FloatField(default=0.00)
-    debited_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    available_quantity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    available_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     debited_quantity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    debited_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    allotted_quantity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    allotted_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     is_restrict = models.BooleanField(default=False)
     comment = models.TextField(null=True, blank=True)
     admin_search_fields = ('license__license_number',)
@@ -1051,29 +1017,6 @@ class LicenseImportItemsModel(models.Model):
     def __str__(self):
         return "{0}-{1}".format(str(self.license), str(self.serial_number))
 
-    @property
-    def debited_quantity(self):
-        debited = self.item_details.filter(transaction_type='D').aggregate(Sum('qty'))['qty__sum']
-        alloted = self.allotment_details.filter(allotment__type=ARO).aggregate(Sum('qty'))['qty__sum']
-        if debited and alloted:
-            total = debited + alloted
-        elif alloted:
-            total = alloted
-        elif debited:
-            total = debited
-        else:
-            total = 0
-        return round(total, 0)
-
-    @property
-    def alloted_quantity(self):
-        alloted = self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
-                                                allotment__type=ALLOTMENT).aggregate(
-            Sum('qty'))['qty__sum']
-        if alloted:
-            return alloted
-        else:
-            return 0
 
     @property
     def required_cif(self):
@@ -1083,34 +1026,6 @@ class LicenseImportItemsModel(models.Model):
         else:
             return 0
 
-    @property
-    def balance_quantity(self):
-        credit = self.quantity
-        if self.item and self.item.head and self.item.head.is_restricted:
-            if self.old_quantity or self.license.notification_number == N2015:
-                credit = self.old_quantity or self.quantity
-        value = round_down(credit - self.debited_quantity - self.alloted_quantity, 0)
-        return max(value, 0)
-
-    @property
-    def debited_value(self):
-        debited = self.item_details.filter(transaction_type='D').aggregate(Sum('cif_fc'))['cif_fc__sum']
-        alloted = self.allotment_details.filter(allotment__type=ARO).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        if debited and alloted:
-            total = debited + alloted
-        elif alloted:
-            total = alloted
-        elif debited:
-            total = debited
-        else:
-            total = 0
-        return round(total, 0)
-
-    @property
-    def alloted_value(self):
-        return self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
-                                             allotment__type=ALLOTMENT).aggregate(
-            Sum('cif_fc'))['cif_fc__sum']
 
     @property
     def balance_cif_fc(self):
@@ -1204,7 +1119,7 @@ class LicenseImportItemsModel(models.Model):
 
     @property
     def usable(self):
-        if self.item.head:
+        if self.item and self.item.head:
             if self.license.notification_number == N2015 and self.item.head.is_restricted:
                 return self.old_quantity
         value = self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00)
@@ -1294,6 +1209,6 @@ class LicenseInwardOutwardModel(models.Model):
 
 @receiver(post_save, sender=LicenseImportItemsModel, dispatch_uid="update_balance")
 def update_balance(sender, instance, **kwargs):
-    if not instance.available_quantity == instance.balance_quantity:
-        instance.available_quantity = instance.balance_quantity
+    if not instance.available_quantity == calculate_available_quantity(instance):
+        instance.available_quantity = calculate_available_quantity(instance)
         instance.save()

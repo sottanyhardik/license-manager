@@ -26,12 +26,21 @@ def calculate_fields(apps, schema_editor):
         else:
             instance.description = ""
         instance.save()
+    LicenseExportItemModel = apps.get_model('license', 'LicenseExportItemModel')
+    for instance in LicenseExportItemModel.objects.all():
+        if instance.item is not None:
+            instance.description = instance.item.name
+        else:
+            instance.description = ""
+        instance.save()
 
 
 def remove_item(apps, schema_editor):
     LicenseImportItemsModel = apps.get_model('license',
                                              'LicenseImportItemsModel')  # Replace with real app and model name
     LicenseImportItemsModel.objects.all().update(item=None)
+    LicenseExportItemModel = apps.get_model('license', 'LicenseExportItemModel')
+    LicenseExportItemModel.objects.all().update(item=None)
 
 
 class Migration(migrations.Migration):

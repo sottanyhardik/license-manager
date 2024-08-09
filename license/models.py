@@ -943,6 +943,7 @@ CURRENCY_CHOICES = (
 class LicenseExportItemModel(models.Model):
     license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE,
                                 related_name='export_license')
+    description = models.CharField(max_length=255, blank=True, db_index=True, null=True)
     item = models.ForeignKey('core.ItemNameModel', related_name='export_licenses', on_delete=models.CASCADE, null=True,
                              blank=True)
     norm_class = models.ForeignKey('core.SionNormClassModel', null=True, blank=True, on_delete=models.CASCADE,
@@ -990,25 +991,23 @@ class LicenseExportItemModel(models.Model):
 class LicenseImportItemsModel(models.Model):
     serial_number = models.IntegerField(default=0)
     license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE, related_name='import_license')
-    hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.CASCADE, null=True, blank=True,
-                                related_name='import_item')
-    item = models.ForeignKey('core.ItemNameModel', related_name='license_items', on_delete=models.CASCADE, null=True,
-                             blank=True)
-    description = models.CharField(max_length=255, null=True, blank=True, db_index=True)
-    duty_type = models.CharField(max_length=255, default='Basic')
-    quantity = models.FloatField(default=0)
-    old_quantity = models.FloatField(default=0)
+    hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.CASCADE, blank=True, related_name='import_item', null=True)
+    item = models.ForeignKey('core.ItemNameModel', related_name='license_items', on_delete=models.CASCADE, blank=True, null=True)
+    description = models.CharField(max_length=255, blank=True, db_index=True, null=True)
+    duty_type = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    old_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default=KG)
-    cif_fc = models.FloatField(null=True, blank=True)
-    cif_inr = models.FloatField(default=0)
-    available_quantity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    available_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    debited_quantity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    debited_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    allotted_quantity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    allotted_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    cif_fc = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    cif_inr = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    available_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    available_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    debited_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    debited_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    allotted_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    allotted_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     is_restrict = models.BooleanField(default=False)
-    comment = models.TextField(null=True, blank=True)
+    comment = models.TextField(blank=True, null=True)
     admin_search_fields = ('license__license_number',)
 
     class Meta:
@@ -1021,7 +1020,7 @@ class LicenseImportItemsModel(models.Model):
     @property
     def required_cif(self):
         if self.available_quantity > 100:
-            required = round(self.available_quantity * self.item.head.unit_rate, 0) + 10
+            required = self.available_quantity * self.item.head.unit_rate
             return required
         else:
             return 0

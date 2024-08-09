@@ -126,8 +126,6 @@ class LicenseItemListUpdateView(UpdateWithInlinesView):
                                 except:
                                     import_item_obj = None
                             if import_item_obj:
-                                if not import_item_obj.item or import_item_obj.item.pk == 141:
-                                    import_item_obj.item = import_item.item
                                 if not import_item_obj.quantity:
                                     import_item_obj.quantity = round_down(
                                         export_item.net_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
@@ -136,13 +134,11 @@ class LicenseItemListUpdateView(UpdateWithInlinesView):
                                     import_item_obj.old_quantity = round_down(
                                         export_item.old_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
                                         0)
-                                if not import_item_obj.hs_code:
-                                    import_item_obj.hs_code = import_item.hs_code.first()
                                 import_item_obj.save()
                     else:
                         if self.object.import_license.all().first() and export_item.net_quantity != 0:
-                            value = round(
-                                self.object.import_license.all().first().quantity / export_item.net_quantity * 100)
+                            value = round(float(
+                                self.object.import_license.all().first().quantity) / float(export_item.net_quantity) * 100)
             self.inlines = [LicenseImportItemInline]
         return super(LicenseItemListUpdateView, self).get_inlines()
 

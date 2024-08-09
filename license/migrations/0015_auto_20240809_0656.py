@@ -13,9 +13,9 @@ def backwards(apps, schema_editor):
 
 
 def calculate_fields(apps, schema_editor):
-    LicenseImportItemsModel = apps.get_model('license',
-                                             'LicenseImportItemsModel')  # Replace with real app and model name
-    for instance in LicenseImportItemsModel.objects.all():
+    LicenceImportItemsModel = apps.get_model('licence',
+                                             'LicenceImportItemsModel')  # Replace with real app and model name
+    for instance in LicenceImportItemsModel.objects.all():
         instance.debited_quantity = calculate_debited_quantity(instance)  # Replace with real calculation logic
         instance.allotted_quantity = calculate_allotted_quantity(instance)  # Replace with real calculation logic
         instance.debited_value = calculate_debited_value(instance)  # Replace with real calculation logic
@@ -24,17 +24,22 @@ def calculate_fields(apps, schema_editor):
         if instance.item is not None:
             instance.description = instance.item.name
         else:
-            instance.description = " "
+            instance.description = ""
         instance.save()
-        instance.item = None
-        instance.save()
+
+
+def remove_item(apps, schema_editor):
+    LicenceImportItemsModel = apps.get_model('licence',
+                                             'LicenceImportItemsModel')  # Replace with real app and model name
+    LicenceImportItemsModel.objects.all().update(item=None)
 
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('license', '0017_remove_licenseimportitemsmodel_blocked_quantity_and_more'),
+        ('licence', '0014_remove_licenseimportitemsmodel_blocked_quantity_and_more'),
     ]
 
     operations = [
         migrations.RunPython(calculate_fields, backwards),
+        migrations.RunPython(remove_item, backwards),
     ]

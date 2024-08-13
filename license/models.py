@@ -935,7 +935,7 @@ class LicenseExportItemModel(models.Model):
     license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE,
                                 related_name='export_license')
     description = models.CharField(max_length=255, blank=True, db_index=True, null=True)
-    item = models.ForeignKey('core.ItemNameModel', related_name='export_licenses', on_delete=models.SET_NULL, null=True,
+    item = models.ForeignKey('core.ItemNameModel', related_name='export_licenses', on_delete=models.CASCADE, null=True,
                              blank=True)
     norm_class = models.ForeignKey('core.SionNormClassModel', null=True, blank=True, on_delete=models.CASCADE,
                                    related_name='export_item')
@@ -984,7 +984,7 @@ class LicenseImportItemsModel(models.Model):
     license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE, related_name='import_license')
     hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.CASCADE, blank=True, related_name='import_item',
                                 null=True)
-    item = models.ForeignKey('core.ItemNameModel', related_name='license_items', on_delete=models.SET, blank=True,
+    item = models.ForeignKey('core.ItemNameModel', related_name='license_items', on_delete=models.CASCADE, blank=True,
                              null=True)
     description = models.CharField(max_length=255, blank=True, db_index=True, null=True)
     duty_type = models.CharField(max_length=255)

@@ -38,4 +38,4 @@ def calculate_debited_value(instance):
 def calculate_allotted_value(instance):
     return instance.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
                                              allotment__type='AT').aggregate(
-        Sum('cif_fc'))['cif_fc__sum']
+        Sum('cif_fc'))['cif_fc__sum'] or 0

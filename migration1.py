@@ -35,14 +35,6 @@ def calculate_fields(apps, schema_editor):
         instance.save()
 
 
-def remove_item(apps, schema_editor):
-    LicenseImportItemsModel = apps.get_model('license',
-                                             'LicenseImportItemsModel')  # Replace with real app and model name
-    LicenseImportItemsModel.objects.all().update(item=None)
-    LicenseExportItemModel = apps.get_model('license', 'LicenseExportItemModel')
-    LicenseExportItemModel.objects.all().update(item=None)
-
-
 class Migration(migrations.Migration):
     dependencies = [
         ('license', '0014_remove_licenseimportitemsmodel_blocked_quantity_and_more'),
@@ -50,5 +42,4 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(calculate_fields, backwards),
-        migrations.RunPython(remove_item, backwards),
     ]

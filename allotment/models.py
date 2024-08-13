@@ -84,7 +84,7 @@ class AllotmentModel(models.Model):
             return 0
 
     @property
-    def alloted_value(self):
+    def allotted_value(self):
         value = self.allotment_details.aggregate(Sum('cif_fc'))['cif_fc__sum']
         if value:
             return int(value)

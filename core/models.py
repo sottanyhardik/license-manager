@@ -108,7 +108,7 @@ class HeadSIONNormsModel(models.Model):
 
 class SionNormClassModel(models.Model):
     head_norm = models.ForeignKey('core.HeadSIONNormsModel', on_delete=models.CASCADE, related_name='sion_head')
-    item = models.ForeignKey('core.ItemNameModel', related_name='norm_class', on_delete=models.CASCADE, null=True,
+    item = models.ForeignKey('core.ItemNameModel', related_name='norm_class', on_delete=models.SET_NULL, null=True,
                              blank=True)
     norm_class = models.CharField(max_length=10)
     url = models.URLField(null=True, blank=True, help_text="Please Enter Exim Guru URL")
@@ -132,7 +132,7 @@ class SionNormClassModel(models.Model):
 
 class SIONExportModel(models.Model):
     norm_class = models.OneToOneField('core.SionNormClassModel', on_delete=models.CASCADE, related_name='export_norm')
-    item = models.ForeignKey('core.ItemNameModel', related_name='sion_export', on_delete=models.CASCADE, null=True,
+    item = models.ForeignKey('core.ItemNameModel', related_name='sion_export', on_delete=models.SET_NULL, null=True,
                              blank=True)
     quantity = models.FloatField(default=0.0)
     unit = models.CharField(max_length=255, null=True, blank=True)
@@ -148,7 +148,7 @@ class SIONExportModel(models.Model):
 class SIONImportModel(models.Model):
     sr_no = models.IntegerField(default=0)
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='import_norm')
-    item = models.ForeignKey('core.ItemNameModel', related_name='sion_import', on_delete=models.CASCADE, null=True,
+    item = models.ForeignKey('core.ItemNameModel', related_name='sion_import', on_delete=models.SET_NULL, null=True,
                              blank=True)
     quantity = models.FloatField(default=0.0)
     unit = models.CharField(max_length=255, null=True, blank=True)

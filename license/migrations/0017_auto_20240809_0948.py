@@ -17,7 +17,6 @@ def createITEM(apps, schema_editor):
                                    'ItemNameModel')  # Replace with real app and model name
     ItemHeadModel = apps.get_model('core',
                                    'ItemHeadModel')  # Replace with real app and model name
-    ItemNameModel.objects.all().delete()
     head,bool = ItemHeadModel.objects.get_or_create(name='WHEAT GLUTEN')
     ItemNameModel.objects.get_or_create(name='WHEAT GLUTEN', head=head)
     head,bool = ItemHeadModel.objects.get_or_create(name='SUGAR')
@@ -39,7 +38,9 @@ def createITEM(apps, schema_editor):
     ItemNameModel.objects.get_or_create(name='WPC', head=head)
     ItemNameModel.objects.get_or_create(name='SWP', head=head)
     head,bool = ItemHeadModel.objects.get_or_create(name='PACKING MATERIAL')
-    ItemNameModel.objects.get_or_create(name='PP', head=head)
+    item,bool = ItemNameModel.objects.get_or_create(name='PP')
+    item.head = head
+    item.save()
     ItemNameModel.objects.get_or_create(name='PAPER & PAPER', head=head)
     ItemNameModel.objects.get_or_create(name='ALUMINIUM FOIL', head=head)
     head,bool = ItemHeadModel.objects.get_or_create(name='JUICE')

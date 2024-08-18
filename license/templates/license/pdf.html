@@ -146,7 +146,7 @@
             <tr>
                 <td>{{ import_item.serial_number }}</td>
                 <td>{{ import_item.hs_code }}</td>
-                <td>{{ import_item.description|title }}</td>
+                <td>{{ import_item.item|title }} - {{ import_item.description|title }}</td>
                 <td style="text-align: right">{% if import_item.quantity and import_item.quantity != 0 %}
                     {{ import_item.quantity }}{% else %}-{% endif %}</td>
                 <td style="text-align: right">{% if import_item.usable and import_item.usable != 0 %}

@@ -70,7 +70,7 @@ def createITEM(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('license', '0016_alter_licenseimportitemsmodel_allotted_quantity_and_more'),
+        ('license', '0015_auto_20240813_0131'),
     ]
 
     operations = [

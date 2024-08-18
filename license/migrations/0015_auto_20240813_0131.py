@@ -35,6 +35,18 @@ def calculate_fields(apps, schema_editor):
         instance.save()
 
 
+def delete_item(apps, schema_editor):
+    LicenseExportItemModel = apps.get_model('license', 'LicenseExportItemModel')
+    LicenseExportItemModel.objects.all().update(item=None)
+    LicenseImportItemsModel = apps.get_model('license', 'LicenseImportItemsModel')
+    LicenseImportItemsModel.objects.all().update(item=None)
+    SionNormClassModel = apps.get_model('core', 'SionNormClassModel')
+    SionNormClassModel.objects.all().update(item=None)
+    SIONExportModel = apps.get_model('core', 'SIONExportModel')
+    SIONExportModel.objects.all().update(item=None)
+    SIONImportModel = apps.get_model('core', 'SIONImportModel')
+    SIONImportModel.objects.all().update(item=None)
+
 class Migration(migrations.Migration):
     dependencies = [
         ('license', '0014_remove_licenseimportitemsmodel_blocked_quantity_and_more'),
@@ -42,4 +54,5 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(calculate_fields, backwards),
+        migrations.RunPython(delete_item, backwards),
     ]

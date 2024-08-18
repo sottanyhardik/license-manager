@@ -1,37 +1,23 @@
-from decimal import Decimal
+import numpy as np
+def solve_equations(y1, y2, Z1, Z2):
+    # Coefficients of the equations
+    a = np.array([[y1, y2], [1, 1]], dtype=float)
+    # Right-hand side of the equations
+    b = np.array([Z1, Z2], dtype=float)
+    # Solve the equations
+    x = np.linalg.solve(a, b)
+
+    # Check and enforce value constraints for x1 and x2
+    x = [0 if xi < 0 else xi for xi in x]
+
+    return x
 
 
-def optimize_product_usage(total_quantity, total_value):
-    total_quantity = Decimal(total_quantity)
-    total_value = Decimal(total_value)
-    quantity1 = Decimal(0)
-    unit_value1 = Decimal(1)
-
-    total_unit_value = Decimal(total_value / total_quantity)
-    if total_unit_value < 8:
-        unit_value2 = Decimal(8)
-    elif 8 <= total_unit_value < 9:
-        unit_value2 = Decimal(9)
-    else:
-        unit_value2 = total_unit_value
-
-    quantity2 = total_quantity  # Assign entire quantity to veg oil
-
-    # Calculate values
-    value1 = quantity1 * unit_value1
-    value2 = round(quantity2 * unit_value2, 2)
-    total_value_1_2 = value1 + value2
-
-    if total_value_1_2 > total_value:
-        balance = 0
-        value2 = total_value
-    else:
-        balance = total_value - total_value_1_2
-
-    unit_value2 = round(value2 / quantity2, 2)
-
+# call function with specific values
+def optimize_product_distribution(pko_quantity, available_value):
+    pko, veg_oil = solve_equations(1, 9, available_value,pko_quantity)
     return {
-        "pko": {"quantity": quantity1, "unit_value": unit_value1, "value": value1},
-        "veg_oil": {"quantity": quantity2, "unit_value": unit_value2, "value": value2},
-        "balance": balance
+        'pko': {"quantity": pko, "value": pko*1},
+        'veg_oil': {"quantity": veg_oil,
+                    "value": veg_oil*9}
     }

@@ -535,8 +535,8 @@ class LicenseDetailsModel(models.Model):
             available_value = self.use_balance_cif(cif_cheese, available_value)
         pko_quantity = self.get_pko.get('sum')
         if pko_quantity > 100:
-            from core.scripts.calculation import optimize_product_usage
-            veg_oil_details = optimize_product_usage(pko_quantity, available_value)
+            from core.scripts.calculation import optimize_product_distribution
+            veg_oil_details = optimize_product_distribution(pko_quantity, available_value)
             available_value = self.use_balance_cif(veg_oil_details.get('pko').get('value'), available_value)
             available_value = self.use_balance_cif(veg_oil_details.get('veg_oil').get('value'), available_value)
         return {'cif_juice': cif_juice, 'cif_swp': cif_swp, 'cif_cheese': cif_cheese, 'veg_oil': veg_oil_details,'available_value':available_value}

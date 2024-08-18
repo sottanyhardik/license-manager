@@ -51,6 +51,7 @@
                                         <th>Veg Oil QTY</th>
                                         <th>Veg Oil $</th>
                                         <th>FF PD</th>
+                                        <th>Juice, DF & FF $</th>
                                         <th>FF Total</th>
                                         <th>JUICE Qty</th>
                                         <th>DF Qty</th>
@@ -59,7 +60,6 @@
                                         <th>Leavening Agent Qty</th>
                                         <th>STARCH 1108 Qty</th>
                                         <th>STARCH 3505 Qty</th>
-                                        <th>Juice, DF & FF $</th>
                                         <th>MNM PD</th>
                                         <th>MNM QTY</th>
                                         <th>CHEESE Qty</th>
@@ -96,41 +96,41 @@
                                                 <td>{{ object.license_date }}</td>
                                                 <td>{{ object.license_expiry_date }}</td>
                                                 <td>{{ object.exporter }}</td>
-                                                <td>{{ object.opening_balance }}</td>
-                                                <td>{{ object.get_balance_cif }}</td>
+                                                <td>{{ object.opening_balance|floatformat:2 }}</td>
+                                                <td>{{ object.get_balance_cif|floatformat:2 }}</td>
                                                 <td>{{ object.rbd_pd }}</td>
-                                                <td>{{ object.oil_queryset_total }}</td>
-                                                <td>{{ object.get_rbd }}</td>
-                                                <td>{{ object.get_rbd_cif }}</td>
-                                                <td>{{ object.get_pko }}</td>
-                                                <td>{{ object.get_pko_cif }}</td>
-                                                <td>{{ object.get_veg_oil }}</td>
-                                                <td>{{ object.get_veg_oil_cif }}</td>
+                                                <td>{{ object.oil_queryset_total|floatformat:2 }}</td>
+                                                <td>{{ object.get_rbd.sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_rbd_cif|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance.veg_oil.pko.quantity|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance.veg_oil.pko.value|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance.veg_oil.veg_oil.quantity|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance.veg_oil.veg_oil.value|floatformat:2 }}</td>
                                                 <td>{{ object.get_food_flavour_pd }}</td>
+                                                <td>{{ object.cif_value_balance.cif_juice|floatformat:2 }}</td>
                                                 <td>{{ object.get_food_flavour_tq }}</td>
-                                                <td>{{ object.get_food_flavour_juice }}</td>
-                                                <td>{{ object.get_dietary_fibre }}</td>
-                                                <td>{{ object.get_food_flavour }}</td>
-                                                <td>{{ object.get_fruit }}</td>
-                                                <td>{{ object.get_leavening_agent }}</td>
-                                                <td>{{ object.get_wheat_starch }}</td>
-                                                <td>{{ object.get_modified_starch }}</td>
-                                                <td>{{ object.get_per_cif }}</td>
+                                                <td>{{ object.get_biscuit_juice.sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_dietary_fibre.sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_food_flavour.sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_biscuit_juice.sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_leavening_agent.sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_wheat_starch.sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_modified_starch.sum|floatformat:2 }}</td>
                                                 <td>{{ object.get_mnm_pd }}</td>
-                                                <td>{{ object.get_mnm_tq }}</td>
-                                                <td>{{ object.get_cheese }}</td>
-                                                <td>{{ object.get_cheese_cif }}</td>
-                                                <td>{{ object.get_wpc }}</td>
-                                                <td>{{ object.get_wpc_cif }}</td>
-                                                <td>{{ object.get_swp }}</td>
-                                                <td>{{ object.get_swp_cif }}</td>
+                                                <td>{{ object.get_mnm_tq.sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_cheese.sum|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance.cif_cheese|floatformat:2 }}</td>
+                                                <td>{{ object.get_wpc.sum|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance.cif_swp|floatformat:2 }}</td>
+                                                <td>{{ object.get_swp.sum }}</td>
+                                                <td>{{ object.cif_value_balance.cif_swp|floatformat:2 }}</td>
                                                 <td>{{ object.get_pp_hsn }}</td>
                                                 <td>{{ object.get_pp_pd }}</td>
                                                 <td>{{ object.get_pp }}</td>
                                                 <td>{{ object.get_paper_and_paper_hsn }}</td>
                                                 <td>{{ object.get_paper_and_paper_pd }}</td>
                                                 <td>{{ object.get_paper_and_paper }}</td>
-                                                <td>{{ object.cif_value_balance }}</td>
+                                                <td>{{ object.cif_value_balance.available_value|floatformat:2 }}</td>
                                             </tr>
                                         {% endfor %}
                                     {% else %}

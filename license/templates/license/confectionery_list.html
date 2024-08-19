@@ -47,20 +47,18 @@
                                         <th>FOOD FLAVOUR HSN</th>
                                         <th>FOOD FLAVOUR PD</th>
                                         <th>FOOD FLAVOUR</th>
+                                        <th>ESSENTIAL OIL HSN</th>
                                         <th>ESSENTIAL OIL PD</th>
-                                        <th>ESSENTIAL OIL TOTAL QTY</th>
-                                        <th>ORANGE ESSENTIAL OIL QTY</th>
-                                        <th>LEMON ESSENTIAL OIL QTY</th>
-                                        <th>PIPPERMINT ESSENTIAL OIL QTY</th>
+                                        <th>ESSENTIAL OIL QTY</th>
                                         <th>ESSENTIAL OIL CIF</th>
                                         <th>Emulsifier HSN</th>
                                         <th>Emulsifier PD</th>
                                         <th>Emulsifier QTY</th>
                                         <th>Emulsifier CIF</th>
+                                        <th>OCI HSN</th>
                                         <th>OCI PD</th>
                                         <th>OCI Qty</th>
                                         <th>OCI CIF</th>
-                                        <th>PP PD</th>
                                         <th>PP Qty</th>
                                         <th>ALUMINIUM Qty</th>
                                         <th>PAP Qty</th>
@@ -85,30 +83,28 @@
                                                 <td>{{ object.license_date }}</td>
                                                 <td>{{ object.license_expiry_date }}</td>
                                                 <td>{{ object.exporter }}</td>
-                                                <td>{{ object.opening_balance }}</td>
-                                                <td>{{ object.get_balance_cif }}</td>
-                                                <td>{{ object.get_juice }}</td>
-                                                <td>{{ object.get_tartaric_acid }}</td>
-                                                <td>{{ object.get_food_flavour_confectionery_hsn }}</td>
-                                                <td>{{ object.get_food_flavour_confectionery_pd }}</td>
-                                                <td>{{ object.get_food_flavour_confectionery_obj_qty }}</td>
-                                                <td>{{ object.get_orange_essential_pd }}</td>
-                                                <td>{{ object.get_orange_essential_total }}</td>
-                                                <td>{{ object.get_orange_essential_oil }}</td>
-                                                <td>{{ object.get_lemon_essential_oil }}</td>
-                                                <td>{{ object.get_pippermint_essential_oil }}</td>
-                                                <td>{{ object.get_per_essential_oil }}</td>
-                                                <td>{{ object.get_starch_confectionery_hsn }}</td>
-                                                <td>{{ object.get_starch_confectionery_pd }}</td>
-                                                <td>{{ object.get_starch_confectionery }}</td>
-                                                <td>{{ object.get_starch_per_cif }}</td>
-                                                <td>{{ object.get_other_confectionery_pd }}</td>
-                                                <td>{{ object.get_other_confectionery }}</td>
-                                                <td>{{ object.get_per_cif }}</td>
-                                                <td>{{ object.get_pp_pd }}</td>
-                                                <td>{{ object.get_pp }}</td>
-                                                <td>{{ object.get_aluminium }}</td>
-                                                <td>{{ object.get_paper_and_paper }}</td>
+                                                <td>{{ object.opening_balance|floatformat:2 }}</td>
+                                                <td>{{ object.get_balance_cif|floatformat:2 }}</td>
+                                                <td>{{ object.get_juice.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_tartaric_acid.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>'{{ object.get_food_flavour_confectionery.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_food_flavour_confectionery.description }}</td>
+                                                <td>{{ object.get_food_flavour_confectionery.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>'{{ object.get_essential_oil.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_essential_oil.description }}</td>
+                                                <td>{{ object.get_essential_oil.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_per_cif.fiveRestriction|floatformat:2 }}</td>
+                                                <td>'{{ object.get_starch_confectionery.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_starch_confectionery.description }}</td>
+                                                <td>{{ object.get_starch_confectionery.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_per_cif.threeRestriction|floatformat:2 }}</td>
+                                                <td>'{{ object.get_other_confectionery.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_other_confectionery.description }}</td>
+                                                <td>{{ object.get_other_confectionery.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_per_cif.twoRestriction|floatformat:2 }}</td>
+                                                <td>{{ object.get_pp.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_aluminium.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_paper_and_paper.available_quantity_sum|floatformat:2 }}</td>
                                             </tr>
                                         {% endfor %}
                                     {% else %}

@@ -63,7 +63,6 @@ def createItem():
     ItemNameModel.objects.get_or_create(name='ALUMINIUM FOIL', head=head)
     head, bool = ItemHeadModel.objects.get_or_create(name='JUICE')
     ItemNameModel.objects.get_or_create(name='FRUIT JUICE', head=head)
-    ItemNameModel.objects.get_or_create(name='TARTARIC ACID')
     head, bool = ItemHeadModel.objects.get_or_create(name='CONFECTIONERY 5% Restriction')
     ItemNameModel.objects.get_or_create(name='FOOD FLAVOUR CONFECTIONERY', head=head)
     ItemNameModel.objects.get_or_create(name='ESSENTIAL OIL', head=head)
@@ -228,7 +227,8 @@ def set_items():
              description__icontains="FOOD FLAVOURS") | Q(description__icontains="Flavours")) &
          Q(license__export_license__norm_class__norm_class='E5')),
         ('JUICE', (Q(description__icontains="Relevant Fruit") | Q(description__icontains='FRUITS FLAVOUR') | Q(
-            description__icontains='Fruit Flavour') | Q(description__icontains='2009') | Q(hs_code__hs_code__startswith='2009')) &
+            description__icontains='Fruit Flavour') | Q(description__icontains='2009') | Q(
+            hs_code__hs_code__startswith='2009')) &
          Q(license__export_license__norm_class__norm_class='E5')),
         ('LEAVENING AGENT', Q(description__icontains="LEAVENING AGENT") | Q(description__icontains='leaving agent') | Q(
             description__icontains='Yeast')),
@@ -241,9 +241,9 @@ def set_items():
          Q(description__icontains="vegetable shortening") | Q(description__icontains="rbd palmolein oil") | Q(
              hs_code__hs_code__startswith="15119020")),
         ('EDIBLE VEGETABLE OIL',
-         Q(description__icontains="EDIBLE VEGETABLE OIL") | Q(description__icontains="1500") | Q(
+         Q(description__icontains="EDIBLE VEGETABLE OIL") | Q(description__icontains="150000") | Q(
              description__icontains="1509") | Q(description__icontains="Relevant Fats and oils") | Q(
-             hs_code__hs_code__startswith="1500") | Q(description__icontains="Relevant Fats & oils")),
+             hs_code__hs_code__startswith="150000") | Q(description__icontains="Relevant Fats & oils")),
         ('PALM KERNEL OIL',
          Q(hs_code__hs_code__startswith="1513") | Q(description__icontains="1513")),
         ('OTHER CONFECTIONERY INGREDIENTS',
@@ -273,9 +273,6 @@ def set_items():
              description__icontains="Cardamom")) & Q(
              license__export_license__norm_class__norm_class='E132'))),
         ('FOOD FLAVOUR NAMKEEN',
-         (Q(description__icontains="Relevant Food Additives") & (Q(description__icontains="TBHQ")) & Q(
-             license__export_license__norm_class__norm_class='E132'))),
-        ('FOOD FLAVOUR NAMKEEN',
          (Q(description__icontains="relevant food flavour") | Q(description__icontains="FOOD FLAVOUR") | Q(
              description__icontains="relevant (food flour") | Q(description__icontains="Flavouring Agent") | Q(
              description__icontains="FOOD FLAVOURS") | Q(description__icontains="Flavours")) &
@@ -295,24 +292,29 @@ def set_items():
              license__export_license__norm_class__norm_class='E126'))),
         ('SANITATION AND CLEANING CHEMICALS', Q(description__icontains='SANITATION AND CLEANING CHEMICALS') &
          Q(license__export_license__norm_class__norm_class='E126')),
-        ('ALUMINIUM FOIL', Q(description__icontains='7607') | Q(description__icontains='ALUMINIUM FOIL') | Q(
-            hs_code__hs_code__startswith='7607')),
         ('PAPER BOARD', Q(description__icontains="Paper Board") | Q(description__icontains="PAPPER BOARD")),
         ('PAPER & PAPER', Q(description__icontains="PAPER") & ~Q(description__icontains="BOARD")),
         ('BOPP', Q(description__icontains="BOPP")),
         ('PP', (Q(hs_code__hs_code__startswith='39021000') | Q(description__icontains='Polypropylene') | Q(
             description__icontains='pp granules') | Q(
             description__icontains='packing material') | (
-                        Q(description__icontains='PP') & (
+                        Q(description__icontains='PP ') & (
                         Q(hs_code__hs_code__startswith='39') | Q(hs_code__hs_code__startswith='48'))) & (
                         ~Q(description__icontains='7607') | ~Q(description__icontains='ALUMINIUM FOIL') | ~Q(
                     hs_code__hs_code__startswith='7607')))),
         ('HDPE', Q(description__icontains="hdpe") | Q(description__icontains="hdep")),
         ('LDPE', Q(description__icontains="LDPE") | Q(description__icontains="LDEP")),
+        ('ALUMINIUM FOIL', Q(description__icontains='7607') | Q(description__icontains='ALUMINIUM FOIL') | Q(
+            hs_code__hs_code__startswith='7607')),
         ('COKE', Q(description__icontains="COKE")),
         ('BETEL NUT', Q(description__icontains="BETEL NUT")),
         ('SUPARI WHOLE', Q(description__icontains="SUPARI WHOLE")),
         ('COFFEE BEANS', Q(description__icontains="Coffee Beans")),
+        ('RELEVANT ADDITIVES DESCRIPTION',
+         Q(description__icontains="RELEVANT ADDITIVES DESCRIPTION") | Q(description__icontains="Methyl Cellulose")),
+        ('RELEVANT ADDITIVES DESCRIPTION',
+         (Q(description__icontains="Relevant Food Additives") & (Q(description__icontains="TBHQ")) & Q(
+             license__export_license__norm_class__norm_class='E132'))),
     ]
 
     for item_name, query_filter in items_and_filters:

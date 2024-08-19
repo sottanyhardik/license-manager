@@ -48,6 +48,7 @@
                                         <th>Relevant Food Additives HSN Code</th>
                                         <th>Relevant Food Additives PD</th>
                                         <th>Relevant Food Additives QTY</th>
+                                        <th>Relevant Food Additives 3% Value</th>
                                         <th>PP QTY</th>
                                         </thead>
                                     {% else %}
@@ -70,15 +71,16 @@
                                                 <td>{{ object.license_date }}</td>
                                                 <td>{{ object.license_expiry_date }}</td>
                                                 <td>{{ object.exporter }}</td>
-                                                <td>{{ object.opening_balance }}</td>
-                                                <td>{{ object.get_balance_cif }}</td>
-                                                <td>'{{ object.get_pickle_oil.hs_code }}</td>
-                                                <td>{{ object.get_pickle_oil.item }}</td>
-                                                <td>{{ object.get_pickle_oil.balance_quantity }}</td>
-                                                <td>'{{ object.get_rfa.hs_code }}</td>
-                                                <td>{{ object.get_rfa.item }}</td>
-                                                <td>{{ object.get_rfa.balance_quantity }}</td>
-                                                <td>{{ object.get_pp }}</td>
+                                                <td>{{ object.opening_balance|floatformat:2 }}</td>
+                                                <td>{{ object.get_balance_cif|floatformat:2 }}</td>
+                                                <td>'{{ object.get_veg_oil.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_veg_oil.description }}</td>
+                                                <td>{{ object.get_veg_oil.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>'{{ object.get_rfa.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_rfa.description }}</td>
+                                                <td>{{ object.get_rfa.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_per_cif.threeRestriction|floatformat:2 }}</td>
+                                                <td>{{ object.get_pp.available_quantity_sum|floatformat:2 }}</td>
                                             </tr>
                                         {% endfor %}
                                     {% else %}

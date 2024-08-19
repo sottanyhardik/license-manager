@@ -98,39 +98,39 @@
                                                 <td>{{ object.exporter }}</td>
                                                 <td>{{ object.opening_balance|floatformat:2 }}</td>
                                                 <td>{{ object.get_balance_cif|floatformat:2 }}</td>
-                                                <td>{{ object.rbd_pd }}</td>
-                                                <td>{{ object.oil_queryset_total|floatformat:2 }}</td>
-                                                <td>{{ object.get_rbd.sum|floatformat:2 }}</td>
-                                                <td>{{ object.get_rbd_cif|floatformat:2 }}</td>
-                                                <td>{{ object.cif_value_balance.veg_oil.pko.quantity|floatformat:2 }}</td>
-                                                <td>{{ object.cif_value_balance.veg_oil.pko.value|floatformat:2 }}</td>
-                                                <td>{{ object.cif_value_balance.veg_oil.veg_oil.quantity|floatformat:2 }}</td>
-                                                <td>{{ object.cif_value_balance.veg_oil.veg_oil.value|floatformat:2 }}</td>
-                                                <td>{{ object.get_food_flavour_pd }}</td>
-                                                <td>{{ object.cif_value_balance.cif_juice|floatformat:2 }}</td>
-                                                <td>{{ object.get_food_flavour_tq }}</td>
-                                                <td>{{ object.get_biscuit_juice.sum|floatformat:2 }}</td>
-                                                <td>{{ object.get_dietary_fibre.sum|floatformat:2 }}</td>
-                                                <td>{{ object.get_food_flavour.sum|floatformat:2 }}</td>
-                                                <td>{{ object.get_biscuit_juice.sum|floatformat:2 }}</td>
-                                                <td>{{ object.get_leavening_agent.sum|floatformat:2 }}</td>
-                                                <td>{{ object.get_wheat_starch.sum|floatformat:2 }}</td>
-                                                <td>{{ object.get_modified_starch.sum|floatformat:2 }}</td>
-                                                <td>{{ object.get_mnm_pd }}</td>
-                                                <td>{{ object.get_mnm_tq.sum|floatformat:2 }}</td>
-                                                <td>{{ object.get_cheese.sum|floatformat:2 }}</td>
-                                                <td>{{ object.cif_value_balance.cif_cheese|floatformat:2 }}</td>
-                                                <td>{{ object.get_wpc.sum|floatformat:2 }}</td>
-                                                <td>{{ object.cif_value_balance.cif_swp|floatformat:2 }}</td>
-                                                <td>{{ object.get_swp.sum }}</td>
-                                                <td>{{ object.cif_value_balance.cif_swp|floatformat:2 }}</td>
-                                                <td>{{ object.get_pp_hsn }}</td>
-                                                <td>{{ object.get_pp_pd }}</td>
-                                                <td>{{ object.get_pp }}</td>
-                                                <td>{{ object.get_paper_and_paper_hsn }}</td>
-                                                <td>{{ object.get_paper_and_paper_pd }}</td>
-                                                <td>{{ object.get_paper_and_paper }}</td>
-                                                <td>{{ object.cif_value_balance.available_value|floatformat:2 }}</td>
+                                                <td>{{ object.oil_queryset.description }}</td>
+                                                <td>{{ object.oil_queryset.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.veg_oil.get_rbd.quantity|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.veg_oil.get_rbd.value|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.veg_oil.pko.quantity|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.veg_oil.pko.value|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.veg_oil.veg_oil.quantity|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.veg_oil.veg_oil.value|floatformat:2 }}</td>
+                                                <td>{{ object.get_biscuit_juice.description }}{{ object.get_food_flavour.description }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.cif_juice|floatformat:2 }}</td>
+                                                <td>{{ object.get_biscuit_juice.available_quantity_sum }}{{ object.get_food_flavour.available_quantity_sum }}</td>
+                                                <td>{{ object.get_biscuit_juice.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_dietary_fibre.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_food_flavour.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_biscuit_juice.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_leavening_agent.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_wheat_starch.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_modified_starch.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_mnm_pd.description }}</td>
+                                                <td>{{ object.get_mnm_pd.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_cheese.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.cif_cheese|floatformat:2 }}</td>
+                                                <td>{{ object.get_wpc.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.cif_swp|floatformat:2 }}</td>
+                                                <td>{{ object.get_swp.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.cif_swp|floatformat:2 }}</td>
+                                                <td>'{{ object.get_pp.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_pp.description }}</td>
+                                                <td>{{ object.get_pp.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>'{{ object.get_paper_and_paper.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_paper_and_paper.description }}</td>
+                                                <td>{{ object.get_paper_and_paper.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.cif_value_balance_biscuits.available_value|floatformat:2 }}</td>
                                             </tr>
                                         {% endfor %}
                                     {% else %}

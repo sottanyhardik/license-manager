@@ -45,11 +45,13 @@
                                         <th>Cereal Flakes HSN</th>
                                         <th>Cereal Flakes Description</th>
                                         <th>Cereal Flakes Qty</th>
+                                        <th>Vegetable Oil PD</th>
                                         <th>RBD Oil</th>
                                         <th>1513/PKO Oil</th>
                                         <th>Relevant Additives Description</th>
                                         <th>Relevant Additives QTY</th>
                                         <th>5% of CIF</th>
+                                        <th>Relevant Flavour Hsn Code</th>
                                         <th>Relevant Flavour Description</th>
                                         <th>Relevant Flavour QTY</th>
                                         <th>3% of CIF</th>
@@ -76,21 +78,23 @@
                                                 <td>{{ object.license_date }}</td>
                                                 <td>{{ object.license_expiry_date }}</td>
                                                 <td>{{ object.exporter }}</td>
-                                                <td>{{ object.opening_balance }}</td>
-                                                <td>{{ object.get_balance_cif }}</td>
-                                                <td>'{{ object.get_chickpeas_obj.first.hs_code }}</td>
-                                                <td>{{ object.get_chickpeas_obj.first.description }}</td>
-                                                <td>{{ object.get_chickpeas }}</td>
-                                                <td>{{ object.get_rbd }}</td>
-                                                <td>{{ object.get_pko }}</td>
-                                                <td>{{ object.get_cmc_obj.first.description }}</td>
-                                                <td>{{ object.get_cmc }}</td>
-                                                <td>{{ object.get_cmc_cif }}</td>
-                                                <td>{{ object.get_food_flavour_namkeen_obj.first.description }}</td>
-                                                <td>{{ object.get_food_flavour_namkeen }}</td>
-                                                <td>{{ object.get_per_black_pepper_cif }}</td>
-                                                <td>{{ object.get_pp }}</td>
-                                                <td>{{ object.get_aluminium }}</td>
+                                                <td>{{ object.opening_balance|floatformat:2 }}</td>
+                                                <td>{{ object.get_balance_cif|floatformat:2 }}</td>
+                                                <td>'{{ object.get_chickpeas.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_chickpeas.description }}</td>
+                                                <td>{{ object.get_chickpeas.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.oil_queryset.description }}</td>
+                                                <td>{{ object.get_rbd.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_pko.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_cmc.description }}</td>
+                                                <td>{{ object.get_cmc.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_per_cif.fiveRestriction|floatformat:2 }}</td>
+                                                <td>'{{ object.get_food_flavour_namkeen.hs_code__hs_code }}</td>
+                                                <td>{{ object.get_food_flavour_namkeen.description }}</td>
+                                                <td>{{ object.get_food_flavour_namkeen.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_per_cif.threeRestriction|floatformat:2 }}</td>
+                                                <td>{{ object.get_pp.available_quantity_sum|floatformat:2 }}</td>
+                                                <td>{{ object.get_aluminium.available_quantity_sum|floatformat:2 }}</td>
                                             </tr>
                                         {% endfor %}
                                     {% else %}

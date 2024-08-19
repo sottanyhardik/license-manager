@@ -61,7 +61,7 @@
             <li class="nav-item">
                 <a class="nav-link" onclick="fetch_page(this)" data-toggle="pill" role="tab"
                    aria-controls="pills-home" aria-selected="true" href="#div-{{ object.id }}"
-                   data-url="{% url 'allotment-details' object.id %}?item__name={{ object.item_name }}&remove_expired=false&remove_null=true&sort=license_expiry"
+                   data-url="{% url 'allotment-details' object.id %}?description={{ object.item_name }}&remove_expired=false&remove_null=true&sort=license_expiry"
                    data-target="div-{{ object.id }}">Allotment</a>
             </li>
             <li class="nav-item">

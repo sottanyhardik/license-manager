@@ -1,9 +1,5 @@
 from django.db.models import Sum
 
-from allotment.models import AllotmentItems
-
-
-
 def calculate(self):
     from license.models import LicenseExportItemModel
     from bill_of_entry.models import RowDetails
@@ -102,6 +98,7 @@ def item_wise_debiting(dfia, item_head, item_name=None):
 
 
 def item_wise_allotment(dfia, item_head, item_name=None):
+    from allotment.models import AllotmentItems
     dict_list = []
     dict_return = {}
     total_qty = 0
@@ -148,12 +145,12 @@ def fetch_item_details(import_item, hs_code, dfia, item_name=None):
         debiting, total_qty_debits, total_cif_debits = item_wise_debiting(dfia, import_item.head)
         allotment, total_qty_alloted, total_cif_alloted = item_wise_allotment(dfia, import_item.head)
     from license.models import LicenseImportItemsModel
-    dict_data = {'name': import_item.name, 'hs_code': hs_code, 'debiting': debiting,
+    dict_data = {'name': import_description, 'hs_code': hs_code, 'debiting': debiting,
                  'allotment': allotment,
                  'total_debited_qty': total_qty_debits + total_qty_alloted,
                  'sum_total_cif_fc': total_cif_debits + total_cif_alloted,
                  'opening_balance': LicenseImportItemsModel.objects.filter(license=dfia,
-                                                                           item__name__icontains=item_name).aggregate(
+                                                                           description__icontains=item_name).aggregate(
                      Sum('quantity')).get('quantity__sum', 0.00)
                  }
     dict_data['balance_qty'] = dict_data['opening_balance'] - dict_data['total_debited_qty']

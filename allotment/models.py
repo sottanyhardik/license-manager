@@ -6,6 +6,8 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.urls import reverse
 
+from core.scripts.calculate_balance import calculate_available_quantity
+
 Credit = 'C'
 Debit = 'D'
 
@@ -34,7 +36,8 @@ class AllotmentModel(models.Model):
     invoice = models.CharField(max_length=255, null=True, blank=True)
     estimated_arrival_date = models.DateField(null=True, blank=True)
     bl_detail = models.CharField(max_length=255, null=True, blank=True)
-    port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, null=True, blank=True, related_name="allotments")
+    port = models.ForeignKey('core.PortModel', on_delete=models.CASCADE, null=True, blank=True,
+                             related_name="allotments")
     related_company = models.ForeignKey('core.CompanyModel', related_name='related_company', on_delete=models.CASCADE,
                                         null=True, blank=True)
     created_on = models.DateField(auto_created=True, null=True, blank=True)
@@ -49,10 +52,11 @@ class AllotmentModel(models.Model):
 
     def __str__(self):
         if self.invoice:
-            return "{0} {1} {2} {3} {4}".format(self.item_name, self.company.name, str(self.invoice),str(self.required_quantity), self.estimated_arrival_date)
+            return "{0} {1} {2} {3} {4}".format(self.item_name, self.company.name, str(self.invoice),
+                                                str(self.required_quantity), self.estimated_arrival_date)
         else:
             return "{0} {1} {2}".format(self.item_name, self.company.name,
-                                            str(self.required_quantity))
+                                        str(self.required_quantity))
 
     @property
     def required_value(self):
@@ -80,7 +84,7 @@ class AllotmentModel(models.Model):
             return 0
 
     @property
-    def alloted_value(self):
+    def allotted_value(self):
         value = self.allotment_details.aggregate(Sum('cif_fc'))['cif_fc__sum']
         if value:
             return int(value)
@@ -103,7 +107,7 @@ class AllotmentItems(models.Model):
         ordering = ['qty', ]
 
     def __str__(self):
-        return self.item.item.name
+        return self.item.description
 
     @property
     def serial_number(self):
@@ -111,7 +115,7 @@ class AllotmentItems(models.Model):
 
     @property
     def product_description(self):
-        return self.item.item.name
+        return self.item.description
 
     @property
     def license_number(self):
@@ -156,11 +160,11 @@ class AllotmentItems(models.Model):
 
 @receiver(post_save, sender=AllotmentItems, dispatch_uid="update_stock")
 def update_stock(sender, instance, **kwargs):
-    instance.item.available_quantity = instance.item.balance_quantity
+    instance.item.available_quantity = calculate_available_quantity(instance.item)
     instance.item.save()
 
 
-@receiver(post_delete,sender=AllotmentItems)
-def delete_stock(sender,instance,*args,**kwargs):
-    instance.item.available_quantity = instance.item.balance_quantity
+@receiver(post_delete, sender=AllotmentItems)
+def delete_stock(sender, instance, *args, **kwargs):
+    instance.item.available_quantity = calculate_available_quantity(instance.item)
     instance.item.save()

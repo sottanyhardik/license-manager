@@ -19,7 +19,7 @@ class LicenseDetailFilter(django_filters.FilterSet):
 
     class Meta:
         model = lic_model.LicenseDetailsModel
-        fields = ['license_number', 'import_license__item__name', 'exporter', 'is_null', 'is_au',
+        fields = ['license_number', 'import_license__description', 'exporter', 'is_null', 'is_au',
                   'is_incomplete', 'is_expired', 'is_active', 'is_not_registered']
         widgets = {
             'exporter': Select(attrs={'class': 'form-control'}),

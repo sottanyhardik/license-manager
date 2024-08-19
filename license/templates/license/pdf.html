@@ -116,8 +116,8 @@
         {% for export_item in object.export_license.all %}
             <tr>
                 <td>{{ export_item.item|title }}</td>
-                <td>{{ export_item.cif_fc|title }}</td>
-                <td>{{ export_item.balance_cif_fc|title }}</td>
+                <td>{{ export_item.cif_fc }}</td>
+                <td>{{ export_item.balance_cif_fc }}</td>
             </tr>
         {% endfor %}
 
@@ -146,25 +146,21 @@
             <tr>
                 <td>{{ import_item.serial_number }}</td>
                 <td>{{ import_item.hs_code }}</td>
-                <td>{{ import_item.item|title }}</td>
-                <td>{{ import_item.quantity }}</td>
-                <td>{{ import_item.usable }}</td>
-                <td>{% if import_item.cif_fc and import_item.cif_fc != 0 %}
-                    {{ import_item.cif_fc }}{% else %} {% endif %}</td>
-                <td>
-                    {% if import_item.debited_quantity %}
-                        {{ import_item.debited_quantity }}
-                    {% endif %}
-                </td>
-                <td>
-                    {% if import_item.debited_value %}
-                        {{ import_item.debited_value }}
-                    {% endif %}
-                </td>
-                <td>{% if import_item.alloted_quantity %}{{ import_item.alloted_quantity }}{% else %} {% endif %}</td>
-                <td>{% if import_item.alloted_value %}{{ import_item.alloted_value }}{% else %} {% endif %}</td>
-                <td>{% if import_item.balance_quantity %}{{ import_item.balance_quantity }}{% else %} {% endif %}</td>
-                <td>{% if import_item.balance_cif_fc != object.get_balance_cif %}{{ import_item.balance_cif_fc }}{% else %} {% endif %}</td>
+                <td>{{ import_item.item|title }} - {{ import_item.description|title }}</td>
+                <td style="text-align: right">{% if import_item.quantity and import_item.quantity != 0 %}
+                    {{ import_item.quantity }}{% else %}-{% endif %}</td>
+                <td style="text-align: right">{% if import_item.usable and import_item.usable != 0 %}
+                    {{ import_item.usable }}{% else %}-{% endif %}</td>
+                <td style="text-align: right">{% if import_item.cif_fc and import_item.cif_fc != 0 %}
+                    {{ import_item.cif_fc }}{% else %}-{% endif %}</td>
+                <td style="text-align: right">{% if import_item.debited_quantity and import_item.debited_quantity != 0 %}
+                    {{ import_item.debited_quantity }}{% else %}-{% endif %}</td>
+                <td  style="text-align: right">{% if import_item.debited_value and import_item.debited_value != 0 %}
+                    {{ import_item.debited_value }}{% else %}-{% endif %}</td>
+                <td style="text-align: right">{% if import_item.allotted_quantity %}{{ import_item.allotted_quantity }}{% else %}-{% endif %}</td>
+                <td style="text-align: right">{% if import_item.allotted_value %}{{ import_item.allotted_value }}{% else %}-{% endif %}</td>
+                <td style="text-align: right">{% if import_item.available_quantity %}{{ import_item.available_quantity }}{% else %}-{% endif %}</td>
+                <td style="text-align: right">{% if import_item.available_value %}{{ import_item.available_value }}{% else %}-{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -177,11 +173,11 @@
             <td> </td>
             <td> </td>
             <td>Total Debit USD</td>
-            <td><b>{{ object.get_total_debit }}</b></td>
+            <td  style="text-align: right"><b>{% if import_item.get_total_debit %}{{ import_item.get_total_debit }}{% else %}-{% endif %}</b></td>
             <td>Total Allotted USD</td>
-            <td><b>{{ object.get_total_allotment }}</b></td>
+            <td  style="text-align: right"><b>{% if import_item.get_total_allotment %}{{ import_item.get_total_allotment }}{% else %}-{% endif %}</b></td>
             <td>Total Balance USD</td>
-            <td><b>{{ object.get_balance_cif }}</b></td>
+            <td style="text-align: right"><b>{% if import_item.get_balance_cif %}{{ import_item.get_balance_cif }}{% else %}-{% endif %}</b></td>
         </tr>
         </tfoot>
     </table>

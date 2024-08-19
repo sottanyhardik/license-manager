@@ -4,8 +4,8 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('licence/report/biscuits/', login_required(views.PDFSummaryLicenseDetailView.as_view()),
-         name='licence_report_biscuits_new'),
+    path('license/report/biscuits/', login_required(views.PDFSummaryLicenseDetailView.as_view()),
+         name='license_report_biscuits_new'),
     path('analysis/', login_required(views.analysis), name='analysis'),
     path('add/', login_required(views.LicenseDetailCreateView.as_view()), name='license-add'),
     path('<slug:license>/new/', login_required(views.DFIADetailView.as_view()), name='dfia-details'),
@@ -30,8 +30,6 @@ urlpatterns = [
     path('item/report/list/', login_required(views.ItemListReportView.as_view()),
          name='item_report_list'),
     path('calc/premium', login_required(views.PremiumCalculationView.as_view()), name='premium'),
-    path('generate/report', login_required(views.LicenseReportListView.as_view()), name='report_list'),
-    path('consolidate/pdf', login_required(views.LicensePDFConsolidateView.as_view()), name='consolidate'),
     path('movement/list/', login_required(views.MovementListView.as_view()), name='movement-list'),
     path('movement/update/', login_required(views.MovementUpdateView.as_view()), name='movement-update'),
     path('summary/<slug:license>.pdf', login_required(views.PDFSummaryLicenseDetailView.as_view()),

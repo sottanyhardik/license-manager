@@ -34,8 +34,8 @@ class PDFCReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
     def get_context_data(self, **kwargs):
         context = super(PDFCReportView, self).get_context_data()
-        from license.item_report import confectinery_dfia
-        tables = confectinery_dfia()
+        from license.item_report import confectionery_dfia
+        tables = confectionery_dfia()
         context['today_date'] = datetime.datetime.now().date()
         context['tables'] = tables
         return context

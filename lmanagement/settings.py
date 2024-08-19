@@ -56,7 +56,7 @@ INSTALLED_APPS = [
     'shipping_bill.apps.ShippingBillConfig',
     'django.contrib.humanize',
     'mathfilters',
-    # "debug_toolbar",
+    "debug_toolbar",
 ]
 
 MIDDLEWARE = [
@@ -67,7 +67,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # "debug_toolbar.middleware.DebugToolbarMiddleware",
+    "debug_toolbar.middleware.DebugToolbarMiddleware",
 ]
 
 ROOT_URLCONF = 'lmanagement.urls'
@@ -220,5 +220,5 @@ EMAIL_FILE_PATH = os.path.join(BASE_DIR, "sent_emails")
 USE_THOUSAND_SEPARATOR = True
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
-EXPIRY_DAY = 365
-# INTERNAL_IPS = ALLOWED_HOSTS
+EXPIRY_DAY = 60
+INTERNAL_IPS = ALLOWED_HOSTS

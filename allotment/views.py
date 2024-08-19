@@ -58,7 +58,7 @@ class AllotmentUpdateView(UpdateView):
 
     def get_success_url(self):
         return reverse('allotment-details', kwargs={
-            'pk': self.object.pk}) + '?item__name=' + self.object.item_name + "&remove_expired=false&remove_null=true&sort=license_expiry"
+            'pk': self.object.pk}) + '?description=' + self.object.item_name + "&remove_expired=false&remove_null=true&sort=license_expiry"
 
 
 class AllotmentDeleteView(TemplateResponseMixin, ContextMixin, View):

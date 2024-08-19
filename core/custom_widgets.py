@@ -16,7 +16,7 @@ class HSCodeSingleWidget(ModelSelect2Widget):
 
 
 class NormWidget(ModelSelect2Widget):
-    search_fields = ['item__name__icontains', 'norm_class__icontains']
+    search_fields = ['description__icontains', 'norm_class__icontains']
     model = models.SionNormClassModel
 
 

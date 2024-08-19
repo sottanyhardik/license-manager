@@ -301,23 +301,23 @@ def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen
                         'Packing Material QTY': "",
                         'Is Individual': dfia.is_individual,
                     }
-                    import_item = dfia.import_license.filter(item__name__icontains='Chickpeas')
+                    import_item = dfia.import_license.filter(description__icontains='Chickpeas')
                     if import_item.exists():
                         total = 0
                         dict_data['Chickpeas QTY'] = fetch_total(import_item)
-                    import_item = dfia.import_license.filter(item__name__icontains='Editable')
+                    import_item = dfia.import_license.filter(description__icontains='Editable')
                     if import_item.exists():
                         total = 0
                         dict_data['Editable QTY'] = fetch_total(import_item)
-                    import_item = dfia.import_license.filter(item__name__icontains='Relevant Food Additives')
+                    import_item = dfia.import_license.filter(description__icontains='Relevant Food Additives')
                     if import_item.exists():
                         total = 0
                         dict_data['Relevant Additives QTY'] = fetch_total(import_item)
-                    import_item = dfia.import_license.filter(item__name__icontains='Relevant Food Flavour')
+                    import_item = dfia.import_license.filter(description__icontains='Relevant Food Flavour')
                     if import_item.exists():
                         total = 0
                         dict_data['Relevant Flavour QTY'] = fetch_total(import_item)
-                    import_item = dfia.import_license.filter(item__name__icontains='Packing Material')
+                    import_item = dfia.import_license.filter(description__icontains='Packing Material')
                     if import_item.exists():
                         total = 0
                         dict_data['Packing Material QTY'] = fetch_total(import_item)
@@ -339,27 +339,27 @@ def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen
                         'Relevant Hot Rolled/ Cold Rolled Steel QTY': "",
                         'Is Individual': dfia.is_individual,
                     }
-                    import_item = dfia.import_license.filter(item__name__icontains='Battery')
+                    import_item = dfia.import_license.filter(description__icontains='Battery')
                     if import_item.exists():
                         total = 0
                         dict_data['Battery QTY'] = fetch_total(import_item)
-                    import_item = dfia.import_license.filter(item__name__icontains='Bearing')
+                    import_item = dfia.import_license.filter(description__icontains='Bearing')
                     if import_item.exists():
                         total = 0
                         dict_data['Bearing QTY'] = fetch_total(import_item)
-                    import_item = dfia.import_license.filter(item__name__icontains='Internal Combustion')
+                    import_item = dfia.import_license.filter(description__icontains='Internal Combustion')
                     if import_item.exists():
                         total = 0
                         dict_data['IC QTY'] = fetch_total(import_item)
-                    import_item = dfia.import_license.filter(item__name__icontains='Valves')
+                    import_item = dfia.import_license.filter(description__icontains='Valves')
                     if import_item.exists():
                         total = 0
                         dict_data['Valves QTY'] = fetch_total(import_item)
-                    import_item = dfia.import_license.filter(item__name__icontains='Relevant Alloy Steel')
+                    import_item = dfia.import_license.filter(description__icontains='Relevant Alloy Steel')
                     if import_item.exists():
                         total = 0
                         dict_data['Alloy Steel QTY'] = fetch_total(import_item)
-                    import_item = dfia.import_license.filter(item__name__icontains='Relevant Hot Rolled')
+                    import_item = dfia.import_license.filter(description__icontains='Relevant Hot Rolled')
                     if import_item.exists():
                         total = 0
                         dict_data['Relevant Hot Rolled/ Cold Rolled Steel QTY'] = fetch_total(import_item)

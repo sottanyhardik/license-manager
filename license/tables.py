@@ -1,7 +1,10 @@
+import decimal
 import itertools
 
 import django_tables2 as dt2
 from django.contrib.humanize.templatetags.humanize import intcomma
+from django.template.defaultfilters import floatformat
+from django_tables2 import Column
 
 from . import models
 
@@ -18,7 +21,15 @@ class BalanceCIFColumn(ColumnTotal):
     def render(self, record):
         bills = record.get_balance_cif
         self.column_total += bills
-        return intcomma(round(bills, 0))
+        return intcomma(round(bills, 2))
+
+
+class TotalBalanceCIFColumn(ColumnTotal):
+
+    def render(self, record):
+        bills = record.opening_balance
+        self.column_total += bills
+        return intcomma(round(bills, 2))
 
 
 class PERCIFColumn(ColumnTotal):
@@ -225,32 +236,89 @@ class LicenseDetailTable(dt2.Table):
         return next(self.row_sr_no)
 
 
+class DecimalColumnWithTotal(Column):
+    def __init__(self, *args, **kwargs):
+        self.total = decimal.Decimal(0)  # Make sure total is a Decimal
+        super().__init__(*args, **kwargs)
+
+    def render(self, record):
+        value = decimal.Decimal(self.accessor.resolve(record))  # Make sure value is Decimal
+        self.total += value
+        return floatformat(value, 2)
+
+    def render_footer(self):
+        return floatformat(self.total, 2)
+
+
 class LicenseBiscuitReportTable(dt2.Table):
     sr_no = dt2.Column(empty_values=(), orderable=False)
-    license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
-                                 orderable=False)
+    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
-    balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    wheat_flour = WheatQuantityColumn(verbose_name='Wheat Flour', accessor='get_wheat', orderable=False)
-    sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
-    rbd = RBDQuantityColumn(verbose_name='RBD Palmolein', orderable=False, accessor='get_rbd')
-    leavening_agent = LAQuantityColumn(verbose_name='Leavening Agent', orderable=False, accessor='get_leavening_agent')
-    food_flavour = FFQuantityColumn(verbose_name='Food Flavour', orderable=False, accessor='get_food_flavour')
-    starch = StarchQuantityColumn(verbose_name='Starch', orderable=False, accessor='get_starch')
-    food_colour = ColourQuantityColumn(verbose_name='Food Colour', orderable=False, accessor='get_food_colour')
-    anti_oxidant = AntiOxidantQuantityColumn(verbose_name='Anti Oxidant', orderable=False, accessor='get_anti_oxidant')
-    fruit = FruitsQuantityColumn(verbose_name='Fruit', orderable=False, accessor='get_fruit')
-    dietary_fibre = DFQuantityColumn(verbose_name='Dietary Fibre', orderable=False, accessor='get_dietary_fibre')
-    m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
-    pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
+    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
+    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
+    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    veg_oil_hsn = dt2.Column(verbose_name='Vegetable Oil HSN Code', accessor='oil_queryset.hs_code__hs_code',
+                             orderable=False)
+    veg_oil_pd = dt2.Column(verbose_name='Vegetable Oil PD', accessor='oil_queryset.description', orderable=False)
+    total_veg_qty = DecimalColumnWithTotal(verbose_name='Total Veg QTY', accessor='oil_queryset.available_quantity_sum',
+                                           orderable=False)
+    rbd_qty = DecimalColumnWithTotal(verbose_name='RBD QTY',
+                                     accessor='cif_value_balance_biscuits.veg_oil.get_rbd.quantity', orderable=False)
+    rbd_cif = DecimalColumnWithTotal(verbose_name='RBD CIF',
+                                     accessor='cif_value_balance_biscuits.veg_oil.get_rbd.value', orderable=False)
+    pko_qty = DecimalColumnWithTotal(verbose_name='PKO QTY', accessor='cif_value_balance_biscuits.veg_oil.pko.quantity',
+                                     orderable=False)
+    pko_cif = DecimalColumnWithTotal(verbose_name='PKO CIF', accessor='cif_value_balance_biscuits.veg_oil.pko.value',
+                                     orderable=False)
+    veg_qty = DecimalColumnWithTotal(verbose_name='VEG QTY',
+                                     accessor='cif_value_balance_biscuits.veg_oil.veg_oil.quantity', orderable=False)
+    veg_cif = DecimalColumnWithTotal(verbose_name='VEG CIF',
+                                     accessor='cif_value_balance_biscuits.veg_oil.veg_oil.value', orderable=False)
+    ten_restriction = DecimalColumnWithTotal(verbose_name='10% Value Bal',
+                                             accessor='cif_value_balance_biscuits.cif_juice', orderable=False)
+    juice_pd = dt2.Column(verbose_name='Juice PD', accessor='get_biscuit_juice.description', orderable=False)
+    juice_qty = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_biscuit_juice.available_quantity_sum',
+                                       orderable=False)
+    ff_pd = dt2.Column(verbose_name='FF PD', accessor='get_food_flavour.description', orderable=False)
+    ff_qty = DecimalColumnWithTotal(verbose_name='FF QTY', accessor='get_food_flavour.available_quantity_sum',
+                                    orderable=False)
+    df_qty = DecimalColumnWithTotal(verbose_name='DF Qty', accessor='get_dietary_fibre.available_quantity_sum',
+                                    orderable=False)
+    f_f_qty = DecimalColumnWithTotal(verbose_name='Fruit/Cocoa', accessor='oil_queryset.available_quantity_sum',
+                                     orderable=False)
+    la_qty = DecimalColumnWithTotal(verbose_name='Leavening Agent Qty',
+                                    accessor='get_leavening_agent.available_quantity_sum',
+                                    orderable=False)
+    starch_1108 = DecimalColumnWithTotal(verbose_name='Starch 1108', accessor='get_wheat_starch.available_quantity_sum',
+                                         orderable=False)
+    starch_3505 = DecimalColumnWithTotal(verbose_name='Starch 3505',
+                                         accessor='get_modified_starch.available_quantity_sum', orderable=False)
+    mnm_pd = dt2.Column(verbose_name='Milk & Milk PD', accessor='get_mnm_pd.description', orderable=False)
+    mnm_qty = DecimalColumnWithTotal(verbose_name='Milk & Milk Qty', accessor='get_mnm_pd.available_quantity_sum',
+                                     orderable=False)
+    cheese_qty = DecimalColumnWithTotal(verbose_name='Cheese Qty', accessor='get_cheese.available_quantity_sum',
+                                        orderable=False)
+    cheese_cif = DecimalColumnWithTotal(verbose_name='Cheese CIF', accessor='cif_value_balance_biscuits.cif_cheese',
+                                        orderable=False)
+    swp_qty = DecimalColumnWithTotal(verbose_name='SWP QTY', accessor='get_swp.available_quantity_sum', orderable=False)
+    swp_cif = DecimalColumnWithTotal(verbose_name='SWP CIF', accessor='cif_value_balance_biscuits.cif_swp',
+                                     orderable=False)
+    wpc_qty = DecimalColumnWithTotal(verbose_name='WPC QTY', accessor='get_wpc.available_quantity_sum', orderable=False)
+    pp_hsn = dt2.Column(verbose_name='PP HSN', accessor='get_pp.hs_code__hs_code', orderable=False)
+    pp_pd = dt2.Column(verbose_name='PP PD', accessor='get_pp.description', orderable=False)
+    pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
+    pnp_hsn = dt2.Column(verbose_name='Paper & Paper HSN', accessor='get_paper_and_paper.hs_code__hs_code',
+                         orderable=False)
+    pnp_pd = dt2.Column(verbose_name='Paper & Paper PD', accessor='get_paper_and_paper.description', orderable=False)
+    pnp_qty = DecimalColumnWithTotal(verbose_name='Paper & Paper QTY',
+                                     accessor='get_paper_and_paper.available_quantity_sum', orderable=False)
+    balance_cif_value = DecimalColumnWithTotal(verbose_name='Wastage CIF',
+                                               accessor='cif_value_balance_biscuits.available_value', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel
-        per_page = 50
-        fields = ['sr_no', 'license', 'license_expiry_date',
-                  'party', 'balance_cif', 'wheat_flour', 'sugar', 'rbd', 'leavening_agent', 'food_flavour', 'starch',
-                  'food_colour', 'anti_oxidant', 'fruit', 'dietary_fibre', 'm_n_m', 'pp', 'user_comment']
+        per_page = 100
+        fields = []
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_sr_no(self):
@@ -258,33 +326,67 @@ class LicenseBiscuitReportTable(dt2.Table):
         return next(self.row_sr_no)
 
 
-class LicenseBiscuitNewReportTable(dt2.Table):
+class LicenseConfectioneryReportTable(dt2.Table):
     sr_no = dt2.Column(empty_values=(), orderable=False)
-    license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
-                                 orderable=False)
+    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
-    balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    wheat_flour = WheatQuantityColumn(verbose_name='Wheat Flour', accessor='get_wheat', orderable=False)
-    sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
-    rbd = RBDQuantityColumn(verbose_name='RBD Palmolein', orderable=False, accessor='get_rbd')
-    leavening_agent = LAQuantityColumn(verbose_name='Leavening Agent', orderable=False, accessor='get_leavening_agent')
-    food_flavour = FFQuantityColumn(verbose_name='Food Flavour', orderable=False, accessor='get_food_flavour')
-    starch = StarchQuantityColumn(verbose_name='Starch', orderable=False, accessor='get_starch')
-    food_colour = ColourQuantityColumn(verbose_name='Food Colour', orderable=False, accessor='get_food_colour')
-    anti_oxidant = AntiOxidantQuantityColumn(verbose_name='Anti Oxidant', orderable=False, accessor='get_anti_oxidant')
-    fruit = FruitsQuantityColumn(verbose_name='Fruit', orderable=False, accessor='get_fruit')
-    dietary_fibre = DFQuantityColumn(verbose_name='Dietary Fibre', orderable=False, accessor='get_dietary_fibre')
-    m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
-    pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
-    per_cif = PERCIFColumn(verbose_name='10% of CIF', accessor='get_per_cif', orderable=False)
+    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
+    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
+    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    get_juice = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_juice.available_quantity_sum',
+                                       orderable=False)
+    get_tartaric_acid = DecimalColumnWithTotal(verbose_name='Tartaric Acid Qty',
+                                               accessor='get_tartaric_acid.available_quantity_sum', orderable=False)
+    get_food_flavour_confectionery_hsn = dt2.Column(verbose_name='Food Flavour HSN',
+                                                    accessor='get_food_flavour_confectionery.hs_code__hs_code',
+                                                    orderable=False)
+    get_food_flavour_confectionery_pd = dt2.Column(verbose_name='Food Flavour PD',
+                                                   accessor='get_food_flavour_confectionery.description',
+                                                   orderable=False)
+    get_food_flavour_confectionery_qty = DecimalColumnWithTotal(verbose_name='Food Flavour QTY',
+                                                                accessor='get_food_flavour_confectionery.available_quantity_sum',
+                                                                orderable=False)
+    get_essential_oil_hsn = dt2.Column(verbose_name='Essential Oil HSN', accessor='get_essential_oil.hs_code__hs_code',
+                                       orderable=False)
+    get_essential_oil_pd = dt2.Column(verbose_name='Essential Oil PD', accessor='get_essential_oil.description',
+                                      orderable=False)
+    get_essential_oil_qty = DecimalColumnWithTotal(verbose_name='Essential Oil QTY',
+                                                   accessor='get_essential_oil.available_quantity_sum', orderable=False)
+    fiveRestriction = DecimalColumnWithTotal(verbose_name='5% Balance',
+                                             accessor='get_per_cif.fiveRestriction',
+                                             orderable=False)
+    get_starch_confectionery_hsn = dt2.Column(verbose_name='Emulsifier HSN',
+                                              accessor='get_starch_confectionery.hs_code__hs_code',
+                                              orderable=False)
+    get_starch_confectionery_pd = dt2.Column(verbose_name='Emulsifier PD',
+                                             accessor='get_starch_confectionery.description', orderable=False)
+    get_starch_confectionery_qty = DecimalColumnWithTotal(verbose_name='Emulsifier QTY',
+                                                          accessor='get_starch_confectionery.available_quantity_sum',
+                                                          orderable=False)
+    threeRestriction = DecimalColumnWithTotal(verbose_name='3% Balance',
+                                              accessor='get_per_cif.threeRestriction',
+                                              orderable=False)
+    get_other_confectionery_hsn = dt2.Column(verbose_name='OCI HSN',
+                                             accessor='get_other_confectionery.hs_code__hs_code',
+                                             orderable=False)
+    get_other_confectionery_pd = dt2.Column(verbose_name='OCI PD', accessor='get_other_confectionery.description',
+                                            orderable=False)
+    get_other_confectionery_qty = DecimalColumnWithTotal(verbose_name='OCI QTY',
+                                                         accessor='get_other_confectionery.available_quantity_sum',
+                                                         orderable=False)
+    twoRestriction = DecimalColumnWithTotal(verbose_name='2% Balance',
+                                            accessor='get_per_cif.twoRestriction',
+                                            orderable=False)
+    pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
+    get_aluminium = DecimalColumnWithTotal(verbose_name='Aluminium Foil QTY',
+                                           accessor='get_aluminium.available_quantity_sum', orderable=False)
+    pnp_qty = DecimalColumnWithTotal(verbose_name='Paper & Paper QTY',
+                                     accessor='get_paper_and_paper.available_quantity_sum', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['sr_no', 'license', 'license_expiry_date',
-                  'party', 'balance_cif', 'wheat_flour', 'sugar', 'rbd', 'leavening_agent', 'food_flavour', 'starch',
-                  'food_colour', 'anti_oxidant', 'fruit', 'dietary_fibre', 'm_n_m', 'pp', 'user_comment']
+        fields = []
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_sr_no(self):
@@ -292,43 +394,234 @@ class LicenseBiscuitNewReportTable(dt2.Table):
         return next(self.row_sr_no)
 
 
-class LicenseConfectineryReportTable(dt2.Table):
+class LicenseNamkeenReportTable(dt2.Table):
     sr_no = dt2.Column(empty_values=(), orderable=False)
-    license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
-                                 orderable=False)
+    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
-    balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
-    liquid_glucose = LiquidGlucoseQuantityColumn(verbose_name='Liquid Glucose', orderable=False,
-                                                 accessor='get_liquid_glucose')
-    fruit_juice = FruitsQuantityColumn(verbose_name='Fruit Juice', orderable=False, accessor='get_fruit')
-    tartaric_acid = TartaricAcidQuantityColumn(verbose_name='Tartaric Acid', orderable=False,
-                                               accessor='get_tartaric_acid')
-    essential_oil = EssentialOilQuantityColumn(verbose_name='Essential Oil', orderable=False,
-                                               accessor='get_essential_oil')
-    food_colour = ColourQuantityColumn(verbose_name='Food Colour', orderable=False, accessor='get_food_colour')
-    food_flavour = FFQuantityColumn(verbose_name='Food Flavour', orderable=False, accessor='get_food_flavour')
-    starch = StarchConfectioneryQuantityColumn(verbose_name='Emulsifier', orderable=False,
-                                               accessor='get_starch_confectionery')
-    other_confectionery = OCIQuantityColumn(verbose_name='Other Confectionery Ingredients', orderable=False,
-                                            accessor='get_other_confectionery')
-    pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
-    per_cif = PERCIFColumn(verbose_name='2% of CIF', accessor='get_per_cif', orderable=False)
+    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
+    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
+    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    get_chickpeas_hsn = dt2.Column(verbose_name='Chickpeas HSN', accessor='get_chickpeas.hs_code__hs_code',
+                                   orderable=False)
+    get_chickpeas_pd = dt2.Column(verbose_name='Chickpeas PD', accessor='get_chickpeas.description',
+                                  orderable=False)
+    get_chickpeas_qty = DecimalColumnWithTotal(verbose_name='Chickpeas QTY',
+                                               accessor='get_chickpeas.available_quantity_sum', orderable=False)
+    oil_queryset_hsn = dt2.Column(verbose_name='Vegetable Oil HSN', accessor='oil_queryset.hs_code__hs_code',
+                                  orderable=False)
+    oil_queryset_pd = dt2.Column(verbose_name='Vegetable Oil PD', accessor='oil_queryset.description',
+                                 orderable=False)
+    get_rbd = DecimalColumnWithTotal(verbose_name='RBD Oil QTY',
+                                     accessor='get_rbd.available_quantity_sum', orderable=False)
+    get_pko = DecimalColumnWithTotal(verbose_name='PKO Oil QTY',
+                                     accessor='get_pko.available_quantity_sum', orderable=False)
+    get_cmc_pd = dt2.Column(verbose_name='CMC PD', accessor='get_cmc.description',
+                            orderable=False)
+    get_cmc_qty = DecimalColumnWithTotal(verbose_name='CMC QTY',
+                                         accessor='get_cmc.available_quantity_sum', orderable=False)
+    get_cmc_value = DecimalColumnWithTotal(verbose_name='5% Restriction',
+                                           accessor='get_per_cif.fiveRestriction', orderable=False)
 
+    get_food_flavour_namkeen_hsn = dt2.Column(verbose_name='Food Flavour PD',
+                                              accessor='get_food_flavour_namkeen.hs_code__hs_code',
+                                              orderable=False)
+    get_food_flavour_namkeen_pd = dt2.Column(verbose_name='Food Flavour PD',
+                                             accessor='get_food_flavour_namkeen.description',
+                                             orderable=False)
+    get_food_flavour_namkeen_qty = DecimalColumnWithTotal(verbose_name='Food Flavour QTY',
+                                                          accessor='get_food_flavour_namkeen.available_quantity_sum',
+                                                          orderable=False)
+    threeRestriction = DecimalColumnWithTotal(verbose_name='3% Restriction',
+                                              accessor='get_per_cif.threeRestriction', orderable=False)
+    pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
+    get_aluminium = DecimalColumnWithTotal(verbose_name='Aluminium Foil QTY',
+                                           accessor='get_aluminium.available_quantity_sum', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel
         per_page = 50
-        fields = ['sr_no', 'license', 'license_expiry_date', 'party', 'balance_cif', 'sugar', 'liquid_glucose',
-                  'fruit_juice', 'tartaric_acid',
-                  'essential_oil', 'food_colour', 'food_flavour', 'starch', 'other_confectionery', 'pp', 'user_comment','per_cif']
+        fields = []
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_sr_no(self):
         self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
         return next(self.row_sr_no)
 
+
+class LicenseSteelReportTable(dt2.Table):
+    sr_no = dt2.Column(empty_values=(), orderable=False)
+    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
+    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
+    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
+    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    get_hot_rolled_hsn = dt2.Column(verbose_name='HOT ROLLED STEEL HSN', accessor='get_hot_rolled.hs_code__hs_code',
+                                    orderable=False)
+    get_hot_rolled_pd = dt2.Column(verbose_name='HOT ROLLED STEEL PD', accessor='get_hot_rolled.description',
+                                   orderable=False)
+    get_hot_rolled_qty = DecimalColumnWithTotal(verbose_name='HOT ROLLED STEEL QTY',
+                                                accessor='get_hot_rolled.available_quantity_sum', orderable=False)
+
+    class Meta:
+        model = models.LicenseDetailsModel
+        per_page = 50
+        fields = []
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
+
+
+class LicenseTractorReportTable(dt2.Table):
+    sr_no = dt2.Column(empty_values=(), orderable=False)
+    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
+    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
+    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
+    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    get_battery_hsn = dt2.Column(verbose_name='Battery HSN', accessor='get_battery.hs_code__hs_code',
+                                 orderable=False)
+    get_battery_pd = dt2.Column(verbose_name='Battery PD', accessor='get_battery.description',
+                                orderable=False)
+    get_battery_total_qty = DecimalColumnWithTotal(verbose_name='Battery TOTAL QTY',
+                                                   accessor='get_battery.quantity_sum', orderable=False)
+    get_battery_qty = DecimalColumnWithTotal(verbose_name='Battery QTY',
+                                             accessor='get_battery.available_quantity_sum', orderable=False)
+    get_alloy_steel_hsn = dt2.Column(verbose_name='ALLOY STEEL HSN', accessor='get_alloy_steel_total.hs_code__hs_code',
+                                     orderable=False)
+    get_alloy_steel_pd = dt2.Column(verbose_name='ALLOY STEEL PD', accessor='get_alloy_steel_total.description',
+                                    orderable=False)
+    get_alloy_steel_total_qty = DecimalColumnWithTotal(verbose_name='ALLOY STEEL TOTAL QTY',
+                                                       accessor='get_alloy_steel_total.quantity_sum', orderable=False)
+    get_alloy_steel_qty = DecimalColumnWithTotal(verbose_name='ALLOY STEEL QTY',
+                                                 accessor='get_alloy_steel_total.available_quantity_sum',
+                                                 orderable=False)
+    get_hot_rolled_hsn = dt2.Column(verbose_name='HOT ROLLED STEEL HSN', accessor='get_hot_rolled.hs_code__hs_code',
+                                    orderable=False)
+    get_hot_rolled_pd = dt2.Column(verbose_name='HOT ROLLED STEEL PD', accessor='get_hot_rolled.description',
+                                   orderable=False)
+    get_hot_rolled_total_qty = DecimalColumnWithTotal(verbose_name='HOT ROLLED STEEL TOTAL QTY',
+                                                      accessor='get_hot_rolled.quantity_sum', orderable=False)
+    get_hot_rolled_qty = DecimalColumnWithTotal(verbose_name='HOT ROLLED STEEL QTY',
+                                                accessor='get_hot_rolled.available_quantity_sum', orderable=False)
+    get_bearing_hsn = dt2.Column(verbose_name='BEARING HSN', accessor='get_bearing.hs_code__hs_code',
+                                 orderable=False)
+    get_bearing_pd = dt2.Column(verbose_name='BEARING PD', accessor='get_bearing.description',
+                                orderable=False)
+    get_bearing_total_qty = DecimalColumnWithTotal(verbose_name='BEARING TOTAL QTY',
+                                                   accessor='get_bearing.quantity_sum', orderable=False)
+    get_bearing_qty = DecimalColumnWithTotal(verbose_name='BEARING QTY',
+                                             accessor='get_bearing.available_quantity_sum', orderable=False)
+
+    class Meta:
+        model = models.LicenseDetailsModel
+        per_page = 50
+        fields = []
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
+
+
+class LicenseGlassReportTable(dt2.Table):
+    sr_no = dt2.Column(empty_values=(), orderable=False)
+    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
+    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
+    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
+    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+    get_glass_formers_pd = dt2.Column(verbose_name='Glass Former PD', accessor='get_glass_formers.description',
+                                      orderable=False)
+    get_glass_formers_total_qty = DecimalColumnWithTotal(verbose_name='Glass Former Total Qty',
+                                                         accessor='get_glass_formers.total',
+                                                         orderable=False)
+    borax_qty = DecimalColumnWithTotal(verbose_name='Borax QTY',
+                                       accessor='get_glass_formers.borax', orderable=False)
+    borax_value = DecimalColumnWithTotal(verbose_name='Borax Value',
+                                         accessor='cif_value_balance_glass.borax', orderable=False)
+    rutile_qty = DecimalColumnWithTotal(verbose_name='Rutile QTY',
+                                        accessor='get_glass_formers.rutile', orderable=False)
+    rutile_value = DecimalColumnWithTotal(verbose_name='Rutile Value',
+                                          accessor='cif_value_balance_glass.rutile', orderable=False)
+    get_intermediates_namely_pd = dt2.Column(verbose_name='Intermediates Namely PD',
+                                             accessor='get_intermediates_namely.description',
+                                             orderable=False)
+    get_intermediates_namely_qty = DecimalColumnWithTotal(verbose_name='Intermediates Namely Qty',
+                                                          accessor='get_intermediates_namely.available_quantity_sum',
+                                                          orderable=False)
+    get_modifiers_namely_pd = dt2.Column(verbose_name='Modifiers Namely PD',
+                                         accessor='get_modifiers_namely.description',
+                                         orderable=False)
+    get_modifiers_namely_qty = DecimalColumnWithTotal(verbose_name='Modifiers Namely Qty',
+                                                      accessor='get_modifiers_namely.available_quantity_sum',
+                                                      orderable=False)
+    get_modifiers_namely_cif = DecimalColumnWithTotal(verbose_name='Modifiers Namely Value',
+                                                      accessor='cif_value_balance_glass.soda_ash',
+                                                      orderable=False)
+    get_other_special_additives_pd = dt2.Column(verbose_name='OTHER SPECIAL ADDITIVES PD',
+                                                accessor='get_other_special_additives.description',
+                                                orderable=False)
+    get_other_special_additives_qty = DecimalColumnWithTotal(verbose_name='OTHER SPECIAL ADDITIVES Qty',
+                                                             accessor='get_other_special_additives.available_quantity_sum',
+                                                             orderable=False)
+    get_other_special_additives_cif = DecimalColumnWithTotal(verbose_name='OTHER SPECIAL ADDITIVES Value',
+                                                             accessor='cif_value_balance_glass.titanium',
+                                                             orderable=False)
+    pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
+    get_aluminium = DecimalColumnWithTotal(verbose_name='Aluminium Foil QTY',
+                                           accessor='get_aluminium.available_quantity_sum', orderable=False)
+    balance_cif_value = DecimalColumnWithTotal(verbose_name='Wastage CIF',
+                                               accessor='cif_value_balance_glass.balance_cif', orderable=False)
+
+    class Meta:
+        model = models.LicenseDetailsModel
+        per_page = 100
+        fields = []
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
+
+
+class LicensePickleReportTable(dt2.Table):
+    sr_no = dt2.Column(empty_values=(), orderable=False)
+    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
+    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
+    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
+    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+
+    get_veg_oil_hsn = dt2.Column(verbose_name='Relevant Fats and Oils HSN', accessor='get_veg_oil.hs_code__hs_code',
+                                 orderable=False)
+    get_veg_oil_pd = dt2.Column(verbose_name='Relevant Fats and Oils PD', accessor='get_veg_oil.description',
+                                orderable=False)
+    get_veg_oil_qty = DecimalColumnWithTotal(verbose_name='Relevant Fats and Oils QTY',
+                                             accessor='get_veg_oil.available_quantity_sum', orderable=False)
+
+    get_rfa_hsn = dt2.Column(verbose_name='Relevant Food Additives HSN', accessor='get_rfa.hs_code__hs_code',
+                                 orderable=False)
+    get_rfa_pd = dt2.Column(verbose_name='Relevant Food Additives PD', accessor='get_rfa.description',
+                                orderable=False)
+    get_rfa_qty = DecimalColumnWithTotal(verbose_name='Relevant Food Additives QTY',
+                                             accessor='get_rfa.available_quantity_sum', orderable=False)
+    threeRestriction = DecimalColumnWithTotal(verbose_name='3% Restriction',
+                                              accessor='get_per_cif.threeRestriction', orderable=False)
+    pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
+    get_aluminium = DecimalColumnWithTotal(verbose_name='Aluminium Foil QTY',
+                                           accessor='get_aluminium.available_quantity_sum', orderable=False)
+
+    class Meta:
+        model = models.LicenseDetailsModel
+        per_page = 100
+        fields = []
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+    def render_sr_no(self):
+        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
+        return next(self.row_sr_no)
 
 class TruncatedTextColumn(dt2.Column):
     '''A Column to limit to 100 characters and add an ellipsis'''
@@ -365,10 +658,10 @@ class LicenseItemReportTable(dt2.Table):
 
     class Meta:
         model = models.LicenseImportItemsModel
-        per_page = 50
+        per_page = 500
         fields = ['sr_no', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
                   'hs_code', 'item',
-                  'balance_quantity', 'balance_cif_fc', 'comment']
+                  'available_quantity', 'balance_cif_fc', 'comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_sr_no(self):

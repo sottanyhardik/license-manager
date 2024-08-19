@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load render_table from django_tables2 %}
+{% load core_tag %}
+{% load static %}
+{% load i18n %}
+{% block content %}
+    <div class="row">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card">
+                <div class="card-header">
+                    <h1>Active DFIA</h1>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        {% render_table higher_table 'django_tables2/bootstrap.html' %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card">
+                <div class="card-header">
+                    <h1>NULL DFIA</h1>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        {% render_table lower_table 'django_tables2/bootstrap.html' %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

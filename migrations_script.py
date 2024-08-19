@@ -241,9 +241,10 @@ def set_items():
          Q(description__icontains="vegetable shortening") | Q(description__icontains="rbd palmolein oil") | Q(
              hs_code__hs_code__startswith="15119020")),
         ('EDIBLE VEGETABLE OIL',
-         Q(description__icontains="EDIBLE VEGETABLE OIL") | Q(description__icontains="150000") | Q(
+         (Q(description__icontains="EDIBLE VEGETABLE OIL") | Q(description__icontains="150000") | Q(
              description__icontains="1509") | Q(description__icontains="Relevant Fats and oils") | Q(
-             hs_code__hs_code__startswith="150000") | Q(description__icontains="Relevant Fats & oils")),
+             hs_code__hs_code__startswith="150000") | Q(description__icontains="Relevant Fats & oils")) & ~Q(
+             license__export_license__norm_class__norm_class='E132')),
         ('PALM KERNEL OIL',
          Q(hs_code__hs_code__startswith="1513") | Q(description__icontains="1513")),
         ('OTHER CONFECTIONERY INGREDIENTS',

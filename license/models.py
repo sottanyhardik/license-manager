@@ -146,23 +146,28 @@ class LicenseDetailsModel(models.Model):
     def get_party_name(self):
         return str(self.exporter)[:8]
 
-    @property
+    @cached_property
     def get_glass_formers(self):
         total_quantity = self.get_item_data('RUTILE').get('quantity_sum')
         available_quantity = self.get_item_data('RUTILE').get('available_quantity_sum')
-        borax_quantity = total_quantity / Decimal('.620') * Decimal('.1')
-        debit = RowDetails.objects.filter(
-            sr_number__license=self,
-            bill_of_entry__company=567,
-            transaction_type=Debit
-        ).aggregate(Sum('cif_fc')).get('cif_fc__sum') or Decimal('0')
-        allotment = AllotmentItems.objects.filter(
-            item__license=self,
-            allotment__company=567,
-            allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-            Sum('cif_fc')).get('cif_fc__sum') or Decimal('0')
-        borax = max(Decimal(available_quantity) - Decimal(borax_quantity) - (Decimal(debit) + Decimal(allotment)), 0)
-        rutile = max(Decimal(available_quantity) - Decimal(borax), 0)
+        opening_balance = self.opening_balance
+        avg = float(opening_balance) / float(total_quantity)
+        if avg <= 3:
+            borax_quantity = (total_quantity / Decimal('.62')) * Decimal('.1')
+            debit = RowDetails.objects.filter(
+                sr_number__license=self,
+                bill_of_entry__company=567,
+                transaction_type=Debit
+            ).aggregate(Sum('qty')).get('qty__sum') or Decimal('0')
+            allotment = AllotmentItems.objects.filter(
+                item__license=self,
+                allotment__company=567,
+                allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+                Sum('qty')).get('qty__sum') or Decimal('0')
+            borax = min(Decimal(borax_quantity) - (Decimal(debit) + Decimal(allotment)),Decimal(available_quantity))
+        else:
+            borax = 0
+        rutile = min(Decimal(available_quantity) - Decimal(borax), Decimal(available_quantity))
         return {'borax': borax, 'rutile': rutile, 'total': total_quantity,
                 'description': self.get_item_data('RUTILE').get('description')}
 
@@ -180,12 +185,14 @@ class LicenseDetailsModel(models.Model):
 
     @cached_property
     def cif_value_balance_glass(self):
+        borax_qty = 0
+        soda_ash_qty = 0
+        titanium_qty = 0
         available_value = self.get_balance_cif
-        borax_qty = self.get_glass_formers.get('borax')
-        rutile_qty = self.get_glass_formers.get('rutile')
         soda_ash_qty = self.get_modifiers_namely.get('available_quantity_sum')
         titanium_qty = self.get_other_special_additives.get('available_quantity_sum')
-        pp_qty = self.get_pp.get('available_quantity_sum')
+        borax_qty = self.get_glass_formers.get('borax')
+        rutile_qty = self.get_glass_formers.get('rutile')
         borax_cif = soda_ash_cif = rutile_cif = titanium_cif = 0
         if borax_qty > 100:
             borax_cif = min(borax_qty * Decimal('.7'), available_value)
@@ -199,89 +206,28 @@ class LicenseDetailsModel(models.Model):
         if titanium_qty > 100:
             titanium_cif = min(titanium_qty * Decimal('1.8'), available_value)
             available_value = self.use_balance_cif(titanium_cif, available_value)
-        if pp_qty > 100:
-            pp_cif = pp_qty * Decimal('1')
-            available_value = self.use_balance_cif(pp_cif, available_value)
         return {'borax': borax_cif, 'rutile': rutile_cif, 'soda_ash': soda_ash_cif, 'titanium': titanium_cif,
                 'balance_cif': available_value}
-
-    @property
-    def get_hot_rolled(self):
-        object = self.import_license.filter(description__icontains='HOT ROLLED')
-        if object.first():
-            return object.first()
-        else:
-            return None
-
-    @property
-    def get_bearing(self):
-        object = self.import_license.filter(description__icontains='Bearing')
-        if object.first():
-            return object.first()
-        else:
-            return None
 
     @property
     def get_rfa(self):
         return self.get_item_data('FOOD FLAVOUR PICKLE')
 
     @property
-    def get_hs_steel(self):
-        all = self.import_license.all()
-        return all
+    def get_hot_rolled(self):
+        return self.get_item_data('HOT ROLLED STEEL')
 
     @property
-    def get_battery_obj(self):
-        return self.import_license.filter(description__icontains='battery')
+    def get_bearing(self):
+        return self.get_item_data('BEARING')
 
     @property
-    def get_alloy_steel_obj(self):
-        return self.import_license.filter(description__icontains='alloy steel')
-
-    @property
-    def get_hot_rolled_obj(self):
-        return self.import_license.filter(description__icontains='HOT ROLLED')
-
-    @property
-    def get_bearing_obj(self):
-        return self.import_license.filter(description__icontains='Bearing')
-
-    @property
-    def get_battery_total(self):
-        items = self.get_battery_obj
-        return sum(item.quantity for item in items)
-
-    @property
-    def get_battery_balance(self):
-        return self.get_battery_obj.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
+    def get_battery(self):
+        return self.get_item_data('AUTOMOTIVE BATTERY')
 
     @property
     def get_alloy_steel_total(self):
-        items = self.get_alloy_steel_obj
-        return sum(item.quantity for item in items)
-
-    @property
-    def get_alloy_steel_balance(self):
-        return self.get_alloy_steel_obj.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
-
-    @property
-    def get_hot_rolled_total(self):
-        items = self.get_hot_rolled_obj
-        return sum(item.quantity for item in items)
-
-    @property
-    def get_hot_rolled_balance(self):
-        items = self.get_hot_rolled_obj
-        return sum(item.balance_quantity for item in items)
-
-    @property
-    def get_bearing_total(self):
-        items = self.get_bearing_obj
-        return sum(item.quantity for item in items)
-
-    @property
-    def get_bearing_balance(self):
-        return self.get_bearing_obj.aggregate(Sum('available_quantity'))['available_quantity__sum'] or 0
+        return self.get_item_data('ALLOY STEEL')
 
     def wheat(self):
         return self.import_license.filter(item__head__name__icontains='wheat').first()
@@ -308,7 +254,7 @@ class LicenseDetailsModel(models.Model):
     @cached_property
     def import_license_head_grouped(self):
         return self.import_license.select_related('item', 'item__head').values('item__head__name', 'description',
-                                                                               'item__unit_price') \
+                                                                               'item__unit_price','hs_code__hs_code') \
             .annotate(available_quantity_sum=Sum('available_quantity'),
                       quantity_sum=Sum('quantity')) \
             .order_by('item__name')
@@ -413,11 +359,13 @@ class LicenseDetailsModel(models.Model):
             available_value = self.use_balance_cif(veg_oil_details.get('pko').get('value'), available_value)
             available_value = self.use_balance_cif(veg_oil_details.get('veg_oil').get('value'), available_value)
         elif veg_oil > 100:
-            veg_oil_details = optimize_product_distribution(0,
-                                                            self.get_veg_oil.get('item__unit_price', 9), pko_quantity,
-                                                            available_value)
-            available_value = self.use_balance_cif(veg_oil_details.get('pko').get('value'), available_value)
-            available_value = self.use_balance_cif(veg_oil_details.get('veg_oil').get('value'), available_value)
+            veg_oil_cif = veg_oil * self.get_veg_oil.get('item__unit_price')
+            veg_oil_details = {
+                'pko': {"quantity": 0, "value": 0 * 1},
+                'veg_oil': {"quantity": veg_oil, "value": min(veg_oil_cif, available_value)},
+                'get_rbd': {"quantity": 0, "value": 0}
+            }
+            available_value = self.use_balance_cif(min(veg_oil_cif, available_value), available_value)
         elif get_rbd > 100:
             rbd_cif = get_rbd * self.get_rbd.get('item__unit_price')
             veg_oil_details = {
@@ -425,7 +373,7 @@ class LicenseDetailsModel(models.Model):
                 'veg_oil': {"quantity": 0, "value": 0},
                 'get_rbd': {"quantity": get_rbd, "value": min(rbd_cif, available_value)}
             }
-            available_value = self.use_balance_cif(rbd_cif, available_value)
+            available_value = self.use_balance_cif(min(rbd_cif, available_value), available_value)
         else:
             veg_oil_details = {
                 'pko': {"quantity": 0, "value": 0 * 1},
@@ -825,4 +773,5 @@ class LicenseInwardOutwardModel(models.Model):
 def update_balance(sender, instance, **kwargs):
     if not instance.available_quantity == calculate_available_quantity(instance):
         instance.available_quantity = calculate_available_quantity(instance)
+        instance.available_value = instance.license.get_balance_cif
         instance.save()

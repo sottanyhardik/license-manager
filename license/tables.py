@@ -250,15 +250,25 @@ class DecimalColumnWithTotal(Column):
         return floatformat(self.total, 2)
 
 
-class LicenseBiscuitReportTable(dt2.Table):
+class PrefixMixin:
+    @staticmethod
+    def prefixed(field, **kwargs):
+        return dt2.TemplateColumn('\'{{record.%s}}' % field, **kwargs)
+
+
+class LicenseReportTable(dt2.Table):
     sr_no = dt2.Column(empty_values=(), orderable=False)
-    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
-    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
+    license_number = PrefixMixin.prefixed('license_number', verbose_name='DFIA No', orderable=False)
+    license_date = PrefixMixin.prefixed('license_date', verbose_name='DFIA Dt', orderable=False)
+    license_expiry_date = PrefixMixin.prefixed('license_expiry_date', verbose_name='Expiry Dt', orderable=False)
     party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
     total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
     balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    veg_oil_hsn = dt2.Column(verbose_name='Vegetable Oil HSN Code', accessor='oil_queryset.hs_code__hs_code',
-                             orderable=False)
+
+
+class LicenseBiscuitReportTable(LicenseReportTable):
+    veg_oil_hsn = PrefixMixin.prefixed('oil_queryset.hs_code__hs_code', verbose_name='Vegetable Oil HSN Code',
+                                       orderable=False)
     veg_oil_pd = dt2.Column(verbose_name='Vegetable Oil PD', accessor='oil_queryset.description', orderable=False)
     total_veg_qty = DecimalColumnWithTotal(verbose_name='Total Veg QTY', accessor='oil_queryset.available_quantity_sum',
                                            orderable=False)
@@ -304,11 +314,11 @@ class LicenseBiscuitReportTable(dt2.Table):
     swp_cif = DecimalColumnWithTotal(verbose_name='SWP CIF', accessor='cif_value_balance_biscuits.cif_swp',
                                      orderable=False)
     wpc_qty = DecimalColumnWithTotal(verbose_name='WPC QTY', accessor='get_wpc.available_quantity_sum', orderable=False)
-    pp_hsn = dt2.Column(verbose_name='PP HSN', accessor='get_pp.hs_code__hs_code', orderable=False)
+    pp_hsn = PrefixMixin.prefixed('get_pp.hs_code__hs_code', verbose_name='PP HSN', orderable=False)
     pp_pd = dt2.Column(verbose_name='PP PD', accessor='get_pp.description', orderable=False)
     pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
-    pnp_hsn = dt2.Column(verbose_name='Paper & Paper HSN', accessor='get_paper_and_paper.hs_code__hs_code',
-                         orderable=False)
+    pnp_hsn = PrefixMixin.prefixed('get_paper_and_paper.hs_code__hs_code', verbose_name='Paper & Paper HSN',
+                                   orderable=False)
     pnp_pd = dt2.Column(verbose_name='Paper & Paper PD', accessor='get_paper_and_paper.description', orderable=False)
     pnp_qty = DecimalColumnWithTotal(verbose_name='Paper & Paper QTY',
                                      accessor='get_paper_and_paper.available_quantity_sum', orderable=False)
@@ -326,28 +336,21 @@ class LicenseBiscuitReportTable(dt2.Table):
         return next(self.row_sr_no)
 
 
-class LicenseConfectioneryReportTable(dt2.Table):
-    sr_no = dt2.Column(empty_values=(), orderable=False)
-    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
-    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
-    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
-    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+class LicenseConfectioneryReportTable(LicenseReportTable):
     get_juice = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_juice.available_quantity_sum',
                                        orderable=False)
     get_tartaric_acid = DecimalColumnWithTotal(verbose_name='Tartaric Acid Qty',
                                                accessor='get_tartaric_acid.available_quantity_sum', orderable=False)
-    get_food_flavour_confectionery_hsn = dt2.Column(verbose_name='Food Flavour HSN',
-                                                    accessor='get_food_flavour_confectionery.hs_code__hs_code',
-                                                    orderable=False)
+    get_food_flavour_confectionery_hsn = PrefixMixin.prefixed('get_food_flavour_confectionery.hs_code__hs_code',
+                                                              verbose_name='Food Flavour HSN', orderable=False)
     get_food_flavour_confectionery_pd = dt2.Column(verbose_name='Food Flavour PD',
                                                    accessor='get_food_flavour_confectionery.description',
                                                    orderable=False)
     get_food_flavour_confectionery_qty = DecimalColumnWithTotal(verbose_name='Food Flavour QTY',
                                                                 accessor='get_food_flavour_confectionery.available_quantity_sum',
                                                                 orderable=False)
-    get_essential_oil_hsn = dt2.Column(verbose_name='Essential Oil HSN', accessor='get_essential_oil.hs_code__hs_code',
-                                       orderable=False)
+    get_essential_oil_hsn = PrefixMixin.prefixed('get_essential_oil.hs_code__hs_code', verbose_name='Essential Oil HSN',
+                                                 orderable=False)
     get_essential_oil_pd = dt2.Column(verbose_name='Essential Oil PD', accessor='get_essential_oil.description',
                                       orderable=False)
     get_essential_oil_qty = DecimalColumnWithTotal(verbose_name='Essential Oil QTY',
@@ -355,9 +358,8 @@ class LicenseConfectioneryReportTable(dt2.Table):
     fiveRestriction = DecimalColumnWithTotal(verbose_name='5% Balance',
                                              accessor='get_per_cif.fiveRestriction',
                                              orderable=False)
-    get_starch_confectionery_hsn = dt2.Column(verbose_name='Emulsifier HSN',
-                                              accessor='get_starch_confectionery.hs_code__hs_code',
-                                              orderable=False)
+    get_starch_confectionery_hsn = PrefixMixin.prefixed('get_starch_confectionery.hs_code__hs_code',
+                                                        verbose_name='Emulsifier HSN', orderable=False)
     get_starch_confectionery_pd = dt2.Column(verbose_name='Emulsifier PD',
                                              accessor='get_starch_confectionery.description', orderable=False)
     get_starch_confectionery_qty = DecimalColumnWithTotal(verbose_name='Emulsifier QTY',
@@ -366,9 +368,8 @@ class LicenseConfectioneryReportTable(dt2.Table):
     threeRestriction = DecimalColumnWithTotal(verbose_name='3% Balance',
                                               accessor='get_per_cif.threeRestriction',
                                               orderable=False)
-    get_other_confectionery_hsn = dt2.Column(verbose_name='OCI HSN',
-                                             accessor='get_other_confectionery.hs_code__hs_code',
-                                             orderable=False)
+    get_other_confectionery_hsn = PrefixMixin.prefixed('get_other_confectionery.hs_code__hs_code',
+                                                       verbose_name='OCI HSN', orderable=False)
     get_other_confectionery_pd = dt2.Column(verbose_name='OCI PD', accessor='get_other_confectionery.description',
                                             orderable=False)
     get_other_confectionery_qty = DecimalColumnWithTotal(verbose_name='OCI QTY',
@@ -394,21 +395,15 @@ class LicenseConfectioneryReportTable(dt2.Table):
         return next(self.row_sr_no)
 
 
-class LicenseNamkeenReportTable(dt2.Table):
-    sr_no = dt2.Column(empty_values=(), orderable=False)
-    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
-    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
-    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
-    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    get_chickpeas_hsn = dt2.Column(verbose_name='Chickpeas HSN', accessor='get_chickpeas.hs_code__hs_code',
-                                   orderable=False)
+class LicenseNamkeenReportTable(LicenseReportTable):
+    get_chickpeas_hsn = PrefixMixin.prefixed('get_chickpeas.hs_code__hs_code', verbose_name='Chickpeas HSN',
+                                             orderable=False)
     get_chickpeas_pd = dt2.Column(verbose_name='Chickpeas PD', accessor='get_chickpeas.description',
                                   orderable=False)
     get_chickpeas_qty = DecimalColumnWithTotal(verbose_name='Chickpeas QTY',
                                                accessor='get_chickpeas.available_quantity_sum', orderable=False)
-    oil_queryset_hsn = dt2.Column(verbose_name='Vegetable Oil HSN', accessor='oil_queryset.hs_code__hs_code',
-                                  orderable=False)
+    oil_queryset_hsn = PrefixMixin.prefixed('oil_queryset.hs_code__hs_code', verbose_name='Vegetable Oil HSN',
+                                            orderable=False)
     oil_queryset_pd = dt2.Column(verbose_name='Vegetable Oil PD', accessor='oil_queryset.description',
                                  orderable=False)
     get_rbd = DecimalColumnWithTotal(verbose_name='RBD Oil QTY',
@@ -422,9 +417,8 @@ class LicenseNamkeenReportTable(dt2.Table):
     get_cmc_value = DecimalColumnWithTotal(verbose_name='5% Restriction',
                                            accessor='get_per_cif.fiveRestriction', orderable=False)
 
-    get_food_flavour_namkeen_hsn = dt2.Column(verbose_name='Food Flavour PD',
-                                              accessor='get_food_flavour_namkeen.hs_code__hs_code',
-                                              orderable=False)
+    get_food_flavour_namkeen_hsn = PrefixMixin.prefixed('get_food_flavour_namkeen.hs_code__hs_code',
+                                                        verbose_name='Food Flavour PD', orderable=False)
     get_food_flavour_namkeen_pd = dt2.Column(verbose_name='Food Flavour PD',
                                              accessor='get_food_flavour_namkeen.description',
                                              orderable=False)
@@ -448,15 +442,9 @@ class LicenseNamkeenReportTable(dt2.Table):
         return next(self.row_sr_no)
 
 
-class LicenseSteelReportTable(dt2.Table):
-    sr_no = dt2.Column(empty_values=(), orderable=False)
-    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
-    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
-    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
-    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    get_hot_rolled_hsn = dt2.Column(verbose_name='HOT ROLLED STEEL HSN', accessor='get_hot_rolled.hs_code__hs_code',
-                                    orderable=False)
+class LicenseSteelReportTable(LicenseReportTable):
+    get_hot_rolled_hsn = PrefixMixin.prefixed('get_hot_rolled.hs_code__hs_code', verbose_name='HOT ROLLED STEEL HSN',
+                                              orderable=False)
     get_hot_rolled_pd = dt2.Column(verbose_name='HOT ROLLED STEEL PD', accessor='get_hot_rolled.description',
                                    orderable=False)
     get_hot_rolled_qty = DecimalColumnWithTotal(verbose_name='HOT ROLLED STEEL QTY',
@@ -473,23 +461,17 @@ class LicenseSteelReportTable(dt2.Table):
         return next(self.row_sr_no)
 
 
-class LicenseTractorReportTable(dt2.Table):
-    sr_no = dt2.Column(empty_values=(), orderable=False)
-    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
-    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
-    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
-    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    get_battery_hsn = dt2.Column(verbose_name='Battery HSN', accessor='get_battery.hs_code__hs_code',
-                                 orderable=False)
+class LicenseTractorReportTable(LicenseReportTable):
+    get_battery_hsn = PrefixMixin.prefixed('get_battery.hs_code__hs_code', verbose_name='Battery HSN',
+                                           orderable=False)
     get_battery_pd = dt2.Column(verbose_name='Battery PD', accessor='get_battery.description',
                                 orderable=False)
     get_battery_total_qty = DecimalColumnWithTotal(verbose_name='Battery TOTAL QTY',
                                                    accessor='get_battery.quantity_sum', orderable=False)
     get_battery_qty = DecimalColumnWithTotal(verbose_name='Battery QTY',
                                              accessor='get_battery.available_quantity_sum', orderable=False)
-    get_alloy_steel_hsn = dt2.Column(verbose_name='ALLOY STEEL HSN', accessor='get_alloy_steel_total.hs_code__hs_code',
-                                     orderable=False)
+    get_alloy_steel_hsn = PrefixMixin.prefixed('get_alloy_steel_total.hs_code__hs_code', verbose_name='ALLOY STEEL HSN',
+                                               orderable=False)
     get_alloy_steel_pd = dt2.Column(verbose_name='ALLOY STEEL PD', accessor='get_alloy_steel_total.description',
                                     orderable=False)
     get_alloy_steel_total_qty = DecimalColumnWithTotal(verbose_name='ALLOY STEEL TOTAL QTY',
@@ -497,16 +479,14 @@ class LicenseTractorReportTable(dt2.Table):
     get_alloy_steel_qty = DecimalColumnWithTotal(verbose_name='ALLOY STEEL QTY',
                                                  accessor='get_alloy_steel_total.available_quantity_sum',
                                                  orderable=False)
-    get_hot_rolled_hsn = dt2.Column(verbose_name='HOT ROLLED STEEL HSN', accessor='get_hot_rolled.hs_code__hs_code',
-                                    orderable=False)
+    get_hot_rolled_hsn = PrefixMixin.prefixed('get_hot_rolled.hs_code__hs_code',verbose_name='HOT ROLLED STEEL HSN',orderable=False)
     get_hot_rolled_pd = dt2.Column(verbose_name='HOT ROLLED STEEL PD', accessor='get_hot_rolled.description',
                                    orderable=False)
     get_hot_rolled_total_qty = DecimalColumnWithTotal(verbose_name='HOT ROLLED STEEL TOTAL QTY',
                                                       accessor='get_hot_rolled.quantity_sum', orderable=False)
     get_hot_rolled_qty = DecimalColumnWithTotal(verbose_name='HOT ROLLED STEEL QTY',
                                                 accessor='get_hot_rolled.available_quantity_sum', orderable=False)
-    get_bearing_hsn = dt2.Column(verbose_name='BEARING HSN', accessor='get_bearing.hs_code__hs_code',
-                                 orderable=False)
+    get_bearing_hsn = PrefixMixin.prefixed('get_bearing.hs_code__hs_code',verbose_name='BEARING HSN', orderable=False)
     get_bearing_pd = dt2.Column(verbose_name='BEARING PD', accessor='get_bearing.description',
                                 orderable=False)
     get_bearing_total_qty = DecimalColumnWithTotal(verbose_name='BEARING TOTAL QTY',
@@ -525,13 +505,7 @@ class LicenseTractorReportTable(dt2.Table):
         return next(self.row_sr_no)
 
 
-class LicenseGlassReportTable(dt2.Table):
-    sr_no = dt2.Column(empty_values=(), orderable=False)
-    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
-    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
-    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
-    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
+class LicenseGlassReportTable(LicenseReportTable):
     get_glass_formers_pd = dt2.Column(verbose_name='Glass Former PD', accessor='get_glass_formers.description',
                                       orderable=False)
     get_glass_formers_total_qty = DecimalColumnWithTotal(verbose_name='Glass Former Total Qty',
@@ -586,27 +560,20 @@ class LicenseGlassReportTable(dt2.Table):
         return next(self.row_sr_no)
 
 
-class LicensePickleReportTable(dt2.Table):
-    sr_no = dt2.Column(empty_values=(), orderable=False)
-    license_number = dt2.Column(verbose_name='DFIA No', accessor='license_number', orderable=False)
-    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
-    total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
-    balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-
-    get_veg_oil_hsn = dt2.Column(verbose_name='Relevant Fats and Oils HSN', accessor='get_veg_oil.hs_code__hs_code',
-                                 orderable=False)
+class LicensePickleReportTable(LicenseReportTable):
+    get_veg_oil_hsn = PrefixMixin.prefixed('get_veg_oil.hs_code__hs_code',verbose_name='Relevant Fats and Oils HSN',
+                                           orderable=False)
     get_veg_oil_pd = dt2.Column(verbose_name='Relevant Fats and Oils PD', accessor='get_veg_oil.description',
                                 orderable=False)
     get_veg_oil_qty = DecimalColumnWithTotal(verbose_name='Relevant Fats and Oils QTY',
                                              accessor='get_veg_oil.available_quantity_sum', orderable=False)
 
-    get_rfa_hsn = dt2.Column(verbose_name='Relevant Food Additives HSN', accessor='get_rfa.hs_code__hs_code',
-                                 orderable=False)
+    get_rfa_hsn = PrefixMixin.prefixed('get_rfa.hs_code__hs_code',verbose_name='Relevant Food Additives HSN',
+                                       orderable=False)
     get_rfa_pd = dt2.Column(verbose_name='Relevant Food Additives PD', accessor='get_rfa.description',
-                                orderable=False)
+                            orderable=False)
     get_rfa_qty = DecimalColumnWithTotal(verbose_name='Relevant Food Additives QTY',
-                                             accessor='get_rfa.available_quantity_sum', orderable=False)
+                                         accessor='get_rfa.available_quantity_sum', orderable=False)
     threeRestriction = DecimalColumnWithTotal(verbose_name='3% Restriction',
                                               accessor='get_per_cif.threeRestriction', orderable=False)
     pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
@@ -622,6 +589,7 @@ class LicensePickleReportTable(dt2.Table):
     def render_sr_no(self):
         self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
         return next(self.row_sr_no)
+
 
 class TruncatedTextColumn(dt2.Column):
     '''A Column to limit to 100 characters and add an ellipsis'''

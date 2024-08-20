@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from distlib.util import cached_property
 from django.db import models
-# Create your models here.
+
 from django.db.models import Sum, Q, IntegerField
 from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save
@@ -354,7 +354,7 @@ class LicenseDetailsModel(models.Model):
         from core.scripts.calculation import optimize_product_distribution
         if pko_quantity > 100 and available_value:
             veg_oil_details = optimize_product_distribution(self.get_pko.get('item__unit_price', 1),
-                                                            self.get_veg_oil.get('item__unit_price', 11), pko_quantity,
+                                                            self.get_veg_oil.get('item__unit_price', 9), pko_quantity,
                                                             available_value)
             available_value = self.use_balance_cif(veg_oil_details.get('pko').get('value'), available_value)
             available_value = self.use_balance_cif(veg_oil_details.get('veg_oil').get('value'), available_value)

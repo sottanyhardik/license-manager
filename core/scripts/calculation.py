@@ -13,8 +13,8 @@ def calculate_X2(Y2, Z1, Z2):
 def find_values(Y1, Y2, Z1, Z2):
     x0 = np.array([0, 0])  # initial values
     # Constraints
-    con1 = {'type': 'ineq', 'fun': lambda x: Z1 - x[0] * Y1 - x[1] * Y2}
-    con2 = {'type': 'ineq', 'fun': lambda x: Z2 - x[0] - x[1]}
+    con1 = {'type': 'eq', 'fun': lambda x: Z1 - x[0] * Y1 - x[1] * Y2}
+    con2 = {'type': 'eq', 'fun': lambda x: Z2 - x[0] - x[1]}
     cons = ([con1, con2])
     # Bounds
     bnds = ((0, None), (0, None))

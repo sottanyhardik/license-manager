@@ -111,5 +111,7 @@ class RowDetails(models.Model):
 
 @receiver(post_save, sender=RowDetails, dispatch_uid="update_stock")
 def update_stock(sender, instance, **kwargs):
-    instance.sr_number.available_quantity = instance.sr_number.balance_quantity
-    instance.sr_number.save()
+    from core.scripts.calculate_balance import calculate_available_quantity
+    if not instance.sr_number.available_quantity == calculate_available_quantity(instance.sr_number):
+        instance.sr_number.available_quantity = calculate_available_quantity(instance.sr_number)
+        instance.sr_number.save()

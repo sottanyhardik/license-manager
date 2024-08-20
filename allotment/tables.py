@@ -13,7 +13,7 @@ class AllotmentItemsTable(dt2.Table):
                                         accessor='license.license_expiry_date')
     license_exporter = dt2.Column(verbose_name='Exporter', accessor='license.exporter')
     balance_quantity = dt2.TemplateColumn(
-        '<spam id = "id_allotment_balance_{{ record.id }}" > {{ record.balance_quantity }} </spam>', orderable=False)
+        '<spam id = "id_allotment_balance_{{ record.id }}" > {{ record.available_quantity }} </spam>', orderable=False)
     balance_value = dt2.TemplateColumn(
         '<spam id = "id_allotment_balance_value_{{ record.id }}"> {{ record.balance_cif_fc }} </spam>', orderable=False)
     allotment_quantity = dt2.TemplateColumn(template_name='allotment/quantity_input.html', orderable=False)

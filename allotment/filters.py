@@ -64,9 +64,9 @@ class AllotmentItemFilter(django_filters.FilterSet):
         if value:
             id = []
             for row in queryset:
-                if row.available_quantity > 100 and row.balance_cif_fc > 100:
+                if row.balance_quantity > 100 and row.balance_cif_fc > 100:
                     id.append(row.id)
-                elif row.available_quantity > 100 and row.balance_cif_fc == 0.01:
+                elif row.balance_quantity > 100 and row.balance_cif_fc == 0.01:
                     id.append(row.id)
                     print(row.balance_cif_fc)
             return queryset.filter(id__in=id)
@@ -76,8 +76,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
         from datetime import datetime, timedelta
         expiry_limit = datetime.today() - timedelta(days=settings.EXPIRY_DAY)
         if value:
-            return queryset.filter(license__license_expiry_date__lt=expiry_limit).order_by(
-                'license__license_expiry_date')
+            return queryset.filter(license__license_expiry_date__lt=expiry_limit).order_by('license__license_expiry_date')
         else:
             return queryset.filter(license__license_expiry_date__gte=expiry_limit)
 
@@ -90,8 +89,7 @@ class AllotmentFilter(django_filters.FilterSet):
         queryset=CompanyModel.objects.filter(company_allotments__isnull=False).distinct())
 
     port_code = django_filters.ModelMultipleChoiceFilter(
-        field_name='port__code', label='Port Code',
-        queryset=PortModel.objects.filter(allotments__isnull=False).distinct())
+        field_name='port__code', label='Port Code', queryset=PortModel.objects.filter(allotments__isnull=False).distinct())
     is_be = django_filters.BooleanFilter(method='check_be', label='Is BOE', initial=False)
     is_alloted = django_filters.BooleanFilter(method='check_alloted', label='Is Alloted', initial=True)
 
@@ -134,6 +132,7 @@ class AllotmentFilter(django_filters.FilterSet):
 
     def check_be(self, queryset, name, value):
         return queryset.exclude(bill_of_entry__isnull=value).distinct()
+
 
     def check_alloted(self, queryset, name, value):
         return queryset.exclude(allotment_details__item__license__license_number__isnull=value).distinct()

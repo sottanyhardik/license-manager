@@ -109,7 +109,7 @@ def allotment_data(request, pk):
     elif not requested_allotment_value == 0:
         requested_allotment_quantity = requested_allotment_value / allotment.unit_value_per_unit
     row = license_models.LicenseImportItemsModel.objects.get(id=row_id)
-    row_balance_quantity = row.available_quantity
+    row_balance_quantity = row.balance_quantity
     row_balance_cif_fc = row.balance_cif_fc
     try:
         allotment_item = allotments.AllotmentItems.objects.get(item=row, allotment=allotment)
@@ -142,7 +142,7 @@ def allotment_data(request, pk):
         allotment_item.save()
         alloted_quantity = allotment.allotment_details.aggregate(Sum('qty'))['qty__sum']
         balance_quantity = allotment.required_quantity - alloted_quantity
-        ind_balance_quantity = license_models.LicenseImportItemsModel.objects.get(id=row_id).available_quantity
+        ind_balance_quantity = license_models.LicenseImportItemsModel.objects.get(id=row_id).balance_quantity
         ind_balance_value = license_models.LicenseImportItemsModel.objects.get(id=row_id).balance_cif_fc
         return JsonResponse({
             'allotment_quantity': round(allotment_item.qty, 2),

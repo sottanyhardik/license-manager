@@ -5,6 +5,7 @@ from django.db.models import Sum
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.urls import reverse
+from django.utils.functional import cached_property
 
 from core.scripts.calculate_balance import calculate_available_quantity
 
@@ -58,16 +59,16 @@ class AllotmentModel(models.Model):
             return "{0} {1} {2}".format(self.item_name, self.company.name,
                                         str(self.required_quantity))
 
-    @property
+    @cached_property
     def required_value(self):
         return round(self.required_quantity * self.unit_value_per_unit, 0)
 
-    @property
+    @cached_property
     def dfia_list(self):
         dfia = [i.item.license.license_number for i in self.allotment_details.all()]
         return ', '.join(dfia)
 
-    @property
+    @cached_property
     def balanced_quantity(self):
         qty = self.allotment_details.aggregate(Sum('qty'))['qty__sum']
         if qty:
@@ -75,7 +76,7 @@ class AllotmentModel(models.Model):
         else:
             return int(self.required_quantity)
 
-    @property
+    @cached_property
     def alloted_quantity(self):
         qty = self.allotment_details.aggregate(Sum('qty'))['qty__sum']
         if qty:
@@ -83,7 +84,7 @@ class AllotmentModel(models.Model):
         else:
             return 0
 
-    @property
+    @cached_property
     def allotted_value(self):
         value = self.allotment_details.aggregate(Sum('cif_fc'))['cif_fc__sum']
         if value:
@@ -109,51 +110,51 @@ class AllotmentItems(models.Model):
     def __str__(self):
         return self.item.description
 
-    @property
+    @cached_property
     def serial_number(self):
         return self.item.serial_number
 
-    @property
+    @cached_property
     def product_description(self):
         return self.item.description
 
-    @property
+    @cached_property
     def license_number(self):
         return self.item.license.license_number
 
-    @property
+    @cached_property
     def license_date(self):
         return self.item.license.license_date
 
-    @property
+    @cached_property
     def exporter(self):
         return self.item.license.exporter
 
-    @property
+    @cached_property
     def license_expiry(self):
         return self.item.license.license_expiry_date
 
-    @property
+    @cached_property
     def registration_number(self):
         return self.item.license.registration_number
 
-    @property
+    @cached_property
     def registration_date(self):
         return self.item.license.registration_date
 
-    @property
+    @cached_property
     def notification_number(self):
         return self.item.license.notification_number
 
-    @property
+    @cached_property
     def file_number(self):
         return self.item.license.file_number
 
-    @property
+    @cached_property
     def port_code(self):
         return self.item.license.port
 
-    @property
+    @cached_property
     def get_delete_url(self):
         return reverse('allotment-item-delete', kwargs={'pk': self.pk}) + '?allotment_id=' + str(self.allotment_id)
 

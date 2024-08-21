@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.functional import cached_property
 
 
 # Create your models here.
@@ -41,32 +42,32 @@ class ShippingDetails(models.Model):
     def __str__(self):
         return self.shipping_bill
 
-    @property
+    @cached_property
     def brc_date(self):
         return self.ebrc_list.first().brc_date
 
-    @property
+    @cached_property
     def brc_status(self):
         return self.ebrc_list.first().brc_status
 
-    @property
+    @cached_property
     def brc_amount(self):
         from django.db.models import Sum
         return self.ebrc_list.all().aggregate(Sum('realised_value'))['realised_value__sum']
 
-    @property
+    @cached_property
     def currency(self):
         return self.ebrc_list.first().currency
 
-    @property
+    @cached_property
     def date_of_realisation(self):
         return self.ebrc_list.first().date_of_realisation
 
-    @property
+    @cached_property
     def brc_utilisation_status(self):
         return self.ebrc_list.first().brc_utilisation_status
 
-    @property
+    @cached_property
     def brc_no(self):
         return ", ".join([ebrc.ebrcNumb for ebrc in self.ebrc_list.all()])
 

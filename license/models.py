@@ -6,6 +6,7 @@ from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
+from django.utils.functional import cached_property
 
 from allotment.models import AllotmentItems, Debit
 from bill_of_entry.models import RowDetails, ARO
@@ -98,20 +99,19 @@ class LicenseDetailsModel(models.Model):
         else:
             return 0
 
-    @property
+    @cached_property
     def get_norm_class(self):
         return ','.join([export.norm_class.norm_class for export in self.export_license.all() if export.norm_class])
 
     def get_absolute_url(self):
         return reverse('license-detail', kwargs={'license': self.license_number})
 
-    @property
+    @cached_property
     def opening_balance(self):
-        if not hasattr(self, "_opening_balance"):
-            self._opening_balance = self.export_license.all().aggregate(sum=Sum('cif_fc'))['sum']
-        return 0 if self._opening_balance is None else self._opening_balance
+        result = self.export_license.all().aggregate(sum=Sum('cif_fc'))['sum'] or 0
+        return result if result is not None else 0.0
 
-    @property
+    @cached_property
     def opening_fob(self):
         result = self.export_license.all().aggregate(sum=Sum('fob_inr'))['sum']
         return result if result is not None else 0.0
@@ -120,20 +120,18 @@ class LicenseDetailsModel(models.Model):
         result = self.export_license.all().aggregate(sum=Sum('cif_inr'))['sum']
         return result if result is not None else 0.0
 
-    @property
+    @cached_property
     def get_total_debit(self):
-        if not hasattr(self, "_get_total_debit"):
-            self._get_total_debit = self.import_license.aggregate(total_debits=Sum('debited_value'))['total_debits']
-        return 0 if self._get_total_debit is None else self._get_total_debit
+        result = self.import_license.aggregate(total_debits=Sum('debited_value'))['total_debits']
+        return result if result is not None else 0.0
 
-    @property
+    @cached_property
     def get_total_allotment(self):
-        if not hasattr(self, "_get_total_allotment"):
-            self._get_total_allotment = self.import_license.aggregate(total_allotted=Sum('allotted_value'))[
+        result = self.import_license.aggregate(total_allotted=Sum('allotted_value'))[
                 'total_allotted']
-        return 0 if self._get_total_allotment is None else self._get_total_allotment
+        return result if result is not None else 0.0
 
-    @property
+    @cached_property
     def get_balance_cif(self):
         credit = float(self.opening_balance)
         debit = float(self.get_total_debit)
@@ -144,7 +142,7 @@ class LicenseDetailsModel(models.Model):
     def get_party_name(self):
         return str(self.exporter)[:8]
 
-    @property
+    @cached_property
     def get_glass_formers(self):
         total_quantity = self.get_item_data('RUTILE').get('quantity_sum')
         available_quantity = self.get_item_data('RUTILE').get('available_quantity_sum')
@@ -169,19 +167,19 @@ class LicenseDetailsModel(models.Model):
         return {'borax': borax, 'rutile': rutile, 'total': total_quantity,
                 'description': self.get_item_data('RUTILE').get('description')}
 
-    @property
+    @cached_property
     def get_intermediates_namely(self):
         return self.get_item_data('ALUMINIUM OXIDE, ZINC OXIDE, ZIRCONIUM OXIDE')
 
-    @property
+    @cached_property
     def get_modifiers_namely(self):
         return self.get_item_data('SODA ASH')
 
-    @property
+    @cached_property
     def get_other_special_additives(self):
         return self.get_item_data('TITANIUM DIOXIDE')
 
-    @property
+    @cached_property
     def cif_value_balance_glass(self):
         available_value = self.get_balance_cif
         soda_ash_qty = self.get_modifiers_namely.get('available_quantity_sum')
@@ -204,27 +202,27 @@ class LicenseDetailsModel(models.Model):
         return {'borax': borax_cif, 'rutile': rutile_cif, 'soda_ash': soda_ash_cif, 'titanium': titanium_cif,
                 'balance_cif': available_value}
 
-    @property
+    @cached_property
     def get_rfa(self):
         return self.get_item_data('FOOD FLAVOUR PICKLE')
 
-    @property
+    @cached_property
     def get_hot_rolled(self):
         return self.get_item_data('HOT ROLLED STEEL')
 
-    @property
+    @cached_property
     def get_bearing(self):
         return self.get_item_data('BEARING')
 
-    @property
+    @cached_property
     def get_battery(self):
         return self.get_item_data('AUTOMOTIVE BATTERY')
 
-    @property
+    @cached_property
     def get_alloy_steel_total(self):
         return self.get_item_data('ALLOY STEEL')
 
-    @property
+    @cached_property
     def import_license_grouped(self):
         return self.import_license.select_related('item').values('hs_code__hs_code', 'item__name', 'description',
                                                                  'item__unit_price') \
@@ -236,7 +234,7 @@ class LicenseDetailsModel(models.Model):
         return next((item for item in self.import_license_grouped if item['item__name'] == item_name),
                     {'available_quantity_sum': 0, 'quantity_sum': 0})
 
-    @property
+    @cached_property
     def import_license_head_grouped(self):
         return self.import_license.select_related('item', 'item__head').values('item__head__name', 'description',
                                                                                'item__unit_price', 'hs_code__hs_code') \
@@ -252,47 +250,47 @@ class LicenseDetailsModel(models.Model):
     Vegetable Oil Logics 
     """
 
-    @property
+    @cached_property
     def oil_queryset(self):
         return self.get_item_head_data('VEGETABLE OIL')
 
-    @property
+    @cached_property
     def get_rbd(self):
         return self.get_item_data('RBD PALMOLEIN OIL')
 
-    @property
+    @cached_property
     def get_pko(self):
         return self.get_item_data('PALM KERNEL OIL')
 
-    @property
+    @cached_property
     def get_veg_oil(self):
         return self.get_item_data('EDIBLE VEGETABLE OIL')
 
-    @property
+    @cached_property
     def get_food_flavour(self):
         return self.get_item_data('FOOD FLAVOUR BISCUITS')
 
-    @property
+    @cached_property
     def get_biscuit_juice(self):
         return self.get_item_data('JUICE')
 
-    @property
+    @cached_property
     def get_dietary_fibre(self):
         return self.get_item_data('DIETARY FIBRE')
 
-    @property
+    @cached_property
     def get_wheat_starch(self):
         return self.get_item_data('STARCH 1108')
 
-    @property
+    @cached_property
     def get_modified_starch(self):
         return self.get_item_data('STARCH 3505')
 
-    @property
+    @cached_property
     def get_leavening_agent(self):
         return self.get_item_data('LEAVENING AGENT')
 
-    @property
+    @cached_property
     def get_fruit(self):
         """
         Query Balance Cocoa Quantity
@@ -300,23 +298,23 @@ class LicenseDetailsModel(models.Model):
         """
         return self.get_item_data('FRUIT/COCOA')
 
-    @property
+    @cached_property
     def get_mnm_pd(self):
         return self.get_item_head_data('MILK & MILK Product')
 
-    @property
+    @cached_property
     def get_wpc(self):
         return self.get_item_data('WPC')
 
-    @property
+    @cached_property
     def get_swp(self):
         return self.get_item_data('SWP')
 
-    @property
+    @cached_property
     def get_cheese(self):
         return self.get_item_data('CHEESE')
 
-    @property
+    @cached_property
     def cif_value_balance_biscuits(self):
         available_value = self.get_balance_cif
         restricted_value = self.get_per_cif.get('10_Restriction')
@@ -368,43 +366,43 @@ class LicenseDetailsModel(models.Model):
         return {'cif_juice': cif_juice, 'cif_swp': cif_swp, 'cif_cheese': cif_cheese, 'veg_oil': veg_oil_details,
                 'available_value': available_value}
 
-    @property
+    @cached_property
     def get_pp(self):
         return self.get_item_data('PP')
 
-    @property
+    @cached_property
     def get_aluminium(self):
         return self.get_item_data('ALUMINIUM FOIL')
 
-    @property
+    @cached_property
     def get_paper_and_paper(self):
         return self.get_item_data('PAPER & PAPER')
 
-    @property
+    @cached_property
     def get_cmc(self):
         return self.get_item_data('RELEVANT ADDITIVES DESCRIPTION')
 
-    @property
+    @cached_property
     def get_chickpeas(self):
         return self.get_item_data('CEREALS FLAKES')
 
-    @property
+    @cached_property
     def get_food_flavour_namkeen(self):
         return self.get_item_data('FOOD FLAVOUR NAMKEEN')
 
-    @property
+    @cached_property
     def get_juice(self):
         return self.get_item_data('FRUIT JUICE')
 
-    @property
+    @cached_property
     def get_tartaric_acid(self):
         return self.get_item_data('CITRIC ACID / TARTARIC ACID')
 
-    @property
+    @cached_property
     def get_essential_oil(self):
         return self.get_item_data('ESSENTIAL OIL')
 
-    @property
+    @cached_property
     def get_food_flavour_confectionery(self):
         return self.get_item_data('FOOD FLAVOUR CONFECTIONERY')
 
@@ -414,7 +412,7 @@ class LicenseDetailsModel(models.Model):
     def get_starch_confectionery(self):
         return self.get_item_data('EMULSIFIER')
 
-    @property
+    @cached_property
     def get_per_cif(self):
         lic = self.export_license.all().values('norm_class__norm_class')
         credit = self.opening_balance
@@ -556,7 +554,7 @@ class LicenseImportItemsModel(models.Model):
     def __str__(self):
         return "{0}-{1}".format(str(self.license), str(self.serial_number))
 
-    @property
+    @cached_property
     def required_cif(self):
         if self.available_quantity > 100:
             required = self.available_quantity * self.item.head.unit_rate
@@ -564,11 +562,11 @@ class LicenseImportItemsModel(models.Model):
         else:
             return 0
 
-    @property
+    @cached_property
     def balance_quantity(self):
         return calculate_available_quantity(self)
 
-    @property
+    @cached_property
     def balance_cif_fc(self):
         if not self.cif_fc or int(self.cif_fc) == 0 or self.cif_fc == 0.1:
             credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
@@ -595,15 +593,15 @@ class LicenseImportItemsModel(models.Model):
             t_debit = t_debit + allotment
         return int(credit - t_debit)
 
-    @property
+    @cached_property
     def license_expiry(self):
         return self.license.license_expiry_date
 
-    @property
+    @cached_property
     def license_date(self):
         return self.license.license_date
 
-    @property
+    @cached_property
     def sorted_item_list(self):
         dict_list = []
         dict_return = {}
@@ -631,11 +629,11 @@ class LicenseImportItemsModel(models.Model):
         dict_return['item_details'] = dict_list
         return dict_return
 
-    @property
+    @cached_property
     def total_debited_qty(self):
         return self.item_details.filter(transaction_type='D').aggregate(Sum('qty')).get('qty__sum', 0.00)
 
-    @property
+    @cached_property
     def total_debited_cif_fc(self):
         debited = self.item_details.filter(transaction_type='D').aggregate(Sum('cif_fc')).get('cif_fc__sum', 0.00)
         alloted = self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
@@ -650,15 +648,15 @@ class LicenseImportItemsModel(models.Model):
             total = 0
         return round(total, 0)
 
-    @property
+    @cached_property
     def total_debited_cif_inr(self):
         return self.item_details.filter(transaction_type='D').aggregate(Sum('cif_inr')).get('cif_inr__sum', 0.00)
 
-    @property
+    @cached_property
     def opening_balance(self):
         return self.item_details.filter(transaction_type='C').aggregate(Sum('qty')).get('qty__sum', 0.00)
 
-    @property
+    @cached_property
     def usable(self):
         if self.item and self.item.head:
             if self.license.notification_number == N2015 and self.item.head.is_restricted:
@@ -743,7 +741,7 @@ class LicenseInwardOutwardModel(models.Model):
             text = text + 'along with ' + str(self.along_with.name)
         return text
 
-    @property
+    @cached_property
     def ge_file_number(self):
         return self.license.ge_file_number
 

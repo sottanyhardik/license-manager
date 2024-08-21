@@ -570,7 +570,7 @@ var Tweenable = (function () {
    * Object following the same format as `linear`.
    *
    * `pos` should be a normalized `number` (between 0 and 1).
-   * @property formula
+   * @cached_property formula
    * @type {Object(function)}
    */
   Tweenable.prototype.formula = {

@@ -2,6 +2,7 @@
 
 # Create your models here.
 from django.urls import reverse
+from django.utils.functional import cached_property
 
 """Declare models for YOUR_APP app."""
 
@@ -185,7 +186,7 @@ class HSCodeDutyModel(models.Model):
     def __str__(self):
         return self.hs_code
 
-    @property
+    @cached_property
     def product_description(self):
         return '\n'.join([product_description['product_description'] for product_description in
                           self.product_descriptions.all().values('product_description')])

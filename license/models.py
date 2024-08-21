@@ -1,9 +1,7 @@
 from decimal import Decimal
 
-from distlib.util import cached_property
 from django.db import models
-
-from django.db.models import Sum, Q, IntegerField
+from django.db.models import Sum, IntegerField
 from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -146,7 +144,7 @@ class LicenseDetailsModel(models.Model):
     def get_party_name(self):
         return str(self.exporter)[:8]
 
-    @cached_property
+    @property
     def get_glass_formers(self):
         total_quantity = self.get_item_data('RUTILE').get('quantity_sum')
         available_quantity = self.get_item_data('RUTILE').get('available_quantity_sum')
@@ -164,7 +162,7 @@ class LicenseDetailsModel(models.Model):
                 allotment__company=567,
                 allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
                 Sum('qty')).get('qty__sum') or Decimal('0')
-            borax = min(Decimal(borax_quantity) - (Decimal(debit) + Decimal(allotment)),Decimal(available_quantity))
+            borax = min(Decimal(borax_quantity) - (Decimal(debit) + Decimal(allotment)), Decimal(available_quantity))
         else:
             borax = 0
         rutile = min(Decimal(available_quantity) - Decimal(borax), Decimal(available_quantity))
@@ -183,11 +181,8 @@ class LicenseDetailsModel(models.Model):
     def get_other_special_additives(self):
         return self.get_item_data('TITANIUM DIOXIDE')
 
-    @cached_property
+    @property
     def cif_value_balance_glass(self):
-        borax_qty = 0
-        soda_ash_qty = 0
-        titanium_qty = 0
         available_value = self.get_balance_cif
         soda_ash_qty = self.get_modifiers_namely.get('available_quantity_sum')
         titanium_qty = self.get_other_special_additives.get('available_quantity_sum')
@@ -229,17 +224,7 @@ class LicenseDetailsModel(models.Model):
     def get_alloy_steel_total(self):
         return self.get_item_data('ALLOY STEEL')
 
-    def wheat(self):
-        return self.import_license.filter(item__head__name__icontains='wheat').first()
-
-    def get_sugar(self):
-        return self.import_license.filter(item__head__name__icontains='sugar').aggregate(Sum('available_quantity'))[
-            'available_quantity__sum'] or 0
-
-    def sugar(self):
-        return self.import_license.filter(item__head__name__icontains='sugar').first()
-
-    @cached_property
+    @property
     def import_license_grouped(self):
         return self.import_license.select_related('item').values('hs_code__hs_code', 'item__name', 'description',
                                                                  'item__unit_price') \
@@ -251,10 +236,10 @@ class LicenseDetailsModel(models.Model):
         return next((item for item in self.import_license_grouped if item['item__name'] == item_name),
                     {'available_quantity_sum': 0, 'quantity_sum': 0})
 
-    @cached_property
+    @property
     def import_license_head_grouped(self):
         return self.import_license.select_related('item', 'item__head').values('item__head__name', 'description',
-                                                                               'item__unit_price','hs_code__hs_code') \
+                                                                               'item__unit_price', 'hs_code__hs_code') \
             .annotate(available_quantity_sum=Sum('available_quantity'),
                       quantity_sum=Sum('quantity')) \
             .order_by('item__name')
@@ -331,7 +316,7 @@ class LicenseDetailsModel(models.Model):
     def get_cheese(self):
         return self.get_item_data('CHEESE')
 
-    @cached_property
+    @property
     def cif_value_balance_biscuits(self):
         available_value = self.get_balance_cif
         restricted_value = self.get_per_cif.get('10_Restriction')
@@ -429,7 +414,7 @@ class LicenseDetailsModel(models.Model):
     def get_starch_confectionery(self):
         return self.get_item_data('EMULSIFIER')
 
-    @cached_property
+    @property
     def get_per_cif(self):
         lic = self.export_license.all().values('norm_class__norm_class')
         credit = self.opening_balance
@@ -530,25 +515,15 @@ class LicenseExportItemModel(models.Model):
             return ''
 
     def balance_cif_fc(self):
-        if not self.cif_fc or self.cif_fc == 0:
-            credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        else:
-            credit = self.cif_fc
+        credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))[
+                     'cif_fc__sum'] or 0
         debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
             Sum('cif_fc'))[
-            'cif_fc__sum']
+                    'cif_fc__sum'] or 0
         allotment = AllotmentItems.objects.filter(item__license=self.license,
                                                   allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-            Sum('cif_fc'))['cif_fc__sum']
-        t_debit = 0
-        if debit:
-            t_debit = t_debit + debit
-        if allotment:
-            t_debit = t_debit + allotment
-        if self.cif_fc:
-            return int(credit - t_debit)
-        else:
-            "Error"
+            Sum('cif_fc'))['cif_fc__sum'] or 0
+        return credit - (debit + allotment)
 
 
 class LicenseImportItemsModel(models.Model):
@@ -588,6 +563,10 @@ class LicenseImportItemsModel(models.Model):
             return required
         else:
             return 0
+
+    @property
+    def balance_quantity(self):
+        return calculate_available_quantity(self)
 
     @property
     def balance_cif_fc(self):

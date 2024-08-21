@@ -16,7 +16,6 @@ from urllib.parse import quote
 
 import django as django
 
-django.utils.http.urlquote = quote
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -147,7 +146,7 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
 ]
 
-STATIC_ROOT = os.path.join(BASE_DIR, "static_cdn", "static_root")
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 MEDIA_URL = '/media/'
 

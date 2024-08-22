@@ -49,6 +49,44 @@ def calculate_available_value(instance):
     else:
         head = None
     if instance.license and instance.license.get_per_cif and head and head.is_restricted:
-        balance_value = instance.license.get_per_cif.get(head.dict_key,available_value)
+        balance_value = instance.license.get_per_cif.get(head.dict_key, available_value)
     total = min(available_value, balance_value)
     return total
+
+
+def update_balance_values(item):
+    available_quantity = calculate_available_quantity(item)
+    debited_quantity = calculate_debited_quantity(item)
+    allotted_quantity = calculate_allotted_quantity(item)
+    allotted_value = calculate_allotted_value(item)
+    debited_value = calculate_debited_value(item)
+    available_value = calculate_available_value(item)
+
+    is_changed = False
+
+    if item.available_quantity != available_quantity:
+        item.available_quantity = available_quantity
+        is_changed = True
+
+    if item.debited_quantity != debited_quantity:
+        item.debited_quantity = debited_quantity
+        is_changed = True
+
+    if item.allotted_quantity != allotted_quantity:
+        item.allotted_quantity = allotted_quantity
+        is_changed = True
+
+    if item.allotted_value != allotted_value:
+        item.allotted_value = allotted_value
+        is_changed = True
+
+    if item.debited_value != debited_value:
+        item.debited_value = debited_value
+        is_changed = True
+
+    if item.available_value != available_value:
+        item.available_value = available_value
+        is_changed = True
+
+    if is_changed:
+        item.save()

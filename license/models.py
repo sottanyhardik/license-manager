@@ -7,10 +7,8 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
-
 from allotment.models import AllotmentItems, Debit
 from bill_of_entry.models import RowDetails, ARO
-from core.scripts.calculate_balance import calculate_available_quantity, calculate_available_value
 from license.helper import round_down
 
 DFIA = "26"
@@ -560,6 +558,7 @@ class LicenseImportItemsModel(models.Model):
 
     @cached_property
     def balance_quantity(self):
+        from core.scripts.calculate_balance import calculate_available_quantity
         return calculate_available_quantity(self)
 
     @cached_property
@@ -740,68 +739,12 @@ class LicenseInwardOutwardModel(models.Model):
 @receiver(post_save, sender=LicenseImportItemsModel, dispatch_uid="update_balance")
 def update_balance(sender, instance, **kwargs):
     item = instance
-    from core.scripts.calculate_balance import calculate_available_quantity
-    available_quantity = calculate_available_quantity(item)
-    if item.available_quantity != available_quantity:
-        item.available_quantity = available_quantity
-        item.save()
-    from core.scripts.calculate_balance import calculate_debited_quantity
-    debited_quantity = calculate_debited_quantity(item)
-    if item.debited_quantity != debited_quantity:
-        item.debited_quantity = debited_quantity
-        item.save()
-    from core.scripts.calculate_balance import calculate_allotted_quantity
-    allotted_quantity = calculate_allotted_quantity(item)
-    if item.allotted_quantity != allotted_quantity:
-        item.allotted_quantity = allotted_quantity
-        item.save()
-    from core.scripts.calculate_balance import calculate_allotted_value
-    allotted_value = calculate_allotted_value(item)
-    if item.allotted_value != allotted_value:
-        item.allotted_value = allotted_value
-        item.save()
-    from core.scripts.calculate_balance import calculate_debited_value
-    debited_value = calculate_debited_value(item)
-    if item.debited_value != debited_value:
-        item.debited_value = debited_value
-        item.save()
-    from core.scripts.calculate_balance import calculate_available_value
-    available_value = calculate_available_value(item)
-    if item.available_value != available_value:
-        item.available_value = available_value
-        item.save()
+    from core.scripts.calculate_balance import update_balance_values
+    update_balance_values(item)
 
 
 @receiver(post_delete, sender=LicenseImportItemsModel, dispatch_uid="post_delete")
 def delete_balance(sender, instance, **kwargs):
     item = instance
-    from core.scripts.calculate_balance import calculate_available_quantity
-    available_quantity = calculate_available_quantity(item)
-    if item.available_quantity != available_quantity:
-        item.available_quantity = available_quantity
-        item.save()
-    from core.scripts.calculate_balance import calculate_debited_quantity
-    debited_quantity = calculate_debited_quantity(item)
-    if item.debited_quantity != debited_quantity:
-        item.debited_quantity = debited_quantity
-        item.save()
-    from core.scripts.calculate_balance import calculate_allotted_quantity
-    allotted_quantity = calculate_allotted_quantity(item)
-    if item.allotted_quantity != allotted_quantity:
-        item.allotted_quantity = allotted_quantity
-        item.save()
-    from core.scripts.calculate_balance import calculate_allotted_value
-    allotted_value = calculate_allotted_value(item)
-    if item.allotted_value != allotted_value:
-        item.allotted_value = allotted_value
-        item.save()
-    from core.scripts.calculate_balance import calculate_debited_value
-    debited_value = calculate_debited_value(item)
-    if item.debited_value != debited_value:
-        item.debited_value = debited_value
-        item.save()
-    from core.scripts.calculate_balance import calculate_available_value
-    available_value = calculate_available_value(item)
-    if item.available_value != available_value:
-        item.available_value = available_value
-        item.save()
+    from core.scripts.calculate_balance import update_balance_values
+    update_balance_values(item)

@@ -58,9 +58,8 @@ class PortModel(models.Model):
 
 class ItemHeadModel(models.Model):
     name = models.CharField(max_length=255, unique=True)
-    hs_code = models.CharField(max_length=255)
     unit_rate = models.FloatField(default=0)
-    is_restricted = models.BooleanField(default=True)
+    is_restricted = models.BooleanField(default=False)
     dict_key = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):

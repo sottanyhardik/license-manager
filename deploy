@@ -1,21 +1,224 @@
-[program:lmanagement]
-command=/home/django/lmanagement/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 lmanagement.wsgi
+Sure, here’s a comprehensive guide that covers everything from creating a user to deploying a Django project using Gunicorn, Supervisor, Celery, RabbitMQ, Redis, and Nginx on an Ubuntu server.
+1. Create a New User
+Create a new user for managing the Django project:
+
+sudo adduser Django
+
+Grant sudo privileges to the django user:
+
+sudo usermod -aG sudo Django
+
+2. Add SSH Key
+On your local machine, copy the SSH public key to the server:
+
+ssh-copy-id django@167.71.233.211
+
+3. Set Up the Environment
+
+3.1. Install Dependencies
+
+Update and install necessary packages:
+
+sudo apt update
+sudo apt install python3-pip python3-venv git nginx postgresql postgresql-contrib rabbitmq-server redis-server
+
+3.2. Install Django and Gunicorn
+
+Switch to the django user:
+
+sudo su - django
+
+Create and activate a Python virtual environment:
+
+python3 -m venv venv
+source venv/bin/activate
+
+Install Django and Gunicorn:
+
+pip install django gunicorn
+
+4. Set Up PostgreSQL
+
+4.1. Create PostgreSQL User and Database
+
+Switch to the postgres user and open the PostgreSQL prompt:
+sudo -i -u postgres
+psql
+
+Create a new user and database:
+
+sql
+
+CREATE USER django_user WITH PASSWORD 'yourpassword';
+CREATE DATABASE lmanagement WITH OWNER django_user;
+\q
+
+Exit the postgres user:
+exit
+
+4.2. Load Database
+
+Load the database backup:
+psql -U django_user -d lmanagement -f /path/to/lmanagement_backup.sql
+
+5. Prepare Django Project
+
+5.1. Clone Your Django Project
+
+Clone the Django project repository:
+git clone your-repository-url /home/django/lmanagement
+cd /home/django/lmanagement
+
+5.2. Install Project Dependencies
+Install the project’s dependencies:
+
+pip install -r requirements.txt
+
+5.3. Collect Static Files
+Run Django’s collectstatic command:
+
+python manage.py collectstatic
+
+6. Set Up Gunicorn
+
+6.1. Create Gunicorn Service File
+
+Create a Gunicorn service file:
+
+sudo vim /etc/systemd/system/gunicorn.service
+
+Add the following configuration:
+
+[Unit]
+Description=gunicorn daemon for lmanagement
+After=network.target
+
+[Service]
+User=django
+Group=django
+WorkingDirectory=/home/django/lmanagement
+ExecStart=/home/django/lmanagement/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 lmanagement.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
+
+6.2. Start and Enable Gunicorn
+Enable and start the Gunicorn service:
+
+sudo systemctl daemon-reload
+sudo systemctl start gunicorn
+sudo systemctl enable gunicorn
+
+7. Set Up Supervisor for Celery
+
+7.1. Install Supervisor
+
+Install Supervisor:
+sudo apt install supervisor
+
+7.2. Create Supervisor Configuration
+Create a Supervisor configuration file for Celery:
+sudo vim /etc/supervisor/conf.d/celery.conf
+
+Add the following configuration:
+
+[program:celery]
+command=/home/django/lmanagement/venv/bin/celery -A lmanagement worker --loglevel=info
 directory=/home/django/lmanagement
 autostart=true
 autorestart=true
-stderr_logfile=/var/log/lmanagement.err.log
-stdout_logfile=/var/log/lmanagement.out.log
+user=django
 
-[program:lmanagement_celery]
-command=/home/django/lmanagement/venv/bin/celery -A lmanagement worker -l info
-directory=/home/django/lmanagement
-autostart=true
-autorestart=true
-stderr_logfile=/var/log/lmanagement.err.log
-stdout_logfile=/var/log/lmanagement.out.log
+7.3. Start Supervisor
+Update Supervisor and start Celery:
 
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start celery
 
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCwlUEBDTVKgtZO43i7b+SYr9YL1fxv/9TFAt8Tu4p4/TBW0hAnwOKAynLApAzAYBIk/9vr5Y+aYd6PmJCODQA+YCIc79a3yYzKgNjMBQbbiGSZmIGPgCnECV2djdk/tHmmuKZFpN+kAZdao1xi9O7mGnj+AGxB3rogrraZFHbzVre58WwJ3f5W+IMePBW2TwdljFNBwtoKPdcFZ6rBHYDTfzeMV/wHfNsP1pRSWSYU6QGUa6noCK1Xppo1sYkkafx8DGHg+l0blSKZMIc45oNRy/asE8XnAW6uWKXDHct2/bBfsZT5MxP/0wSBNpZ6kiklVPCVmSBjPiEt97cbo4sQHcsX+4/IUkSSlpgEJPNTlNFUTPT9BICPwBoSzt1NEIGwczmW9yWPZSWxZweGsgk+t589Ibyhs3hlEQE/SBTr1daBKgDsiYDNdLfY6LQqX5ljkRBYFDjMCCc19QaSdhayOpKz8Zss98YwfCsALAwlJoRR2OWDS2mLpnRC97XGJi0= babukababu@Hardiks-MacBook-Pro.local
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDm9NuEQkx/ELPnIskw+X09GGE1n+Wo872+8asGFFdBU1crTZdD7tnREEg7BrQOhPMDRitNn2LAy1OH4voNyEDWhFdi5y94e20qLhwUIv1yJ556ZDRUZqZ7p5b3xq+LAoHu++oUtCqzgG9Tv/lam2hty3KDMLCMhkE3muiterxFAYsUETJ4prLKw2sEV4EabGF7xMVCb8TaebsMhwu6ERBetExtgw3GwYdsF14zt35OH12TqAYwG4rZkGwMPX1iEITFwF5KNgOV2/uugUuMwRGosPj4aLsEmbKruHi1wPhxxEP/THAoavUEDWj7zFUd0AUqJdEhZ/hwuMnjEdLEtLH2mr+iF6UzJocEGpi5YzFJFMw53XODVw4Is1QwJKRilV4m/sfARAeSnGqCQjVx7Vh45sFEmjwRpqJJ6ZMA7G7S5xnN6NyKC9OGEXLXLGo3TSNHWWpmykVJQLPq0WR7avScz7dfcJ3CZ7J7EKApP7NqT2xy55wjScPEVfU7oZkFsJk= babukababu@Hardiks-MacBook-Air.local
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDss+kkYbRlyrbeIIXrmr7uxqlizV/Gnzc4Of9/hq7Y/NNqvh9/OHFScWu0BG+fnuBUR7/GzNFdLceIARs+jXDXzP6663bIgFULLzN70qWkOAIcA34WdYoGj2IqvVQkcWRLn2LDTy0HQg/q6H8anG79KfBYfS/EeLvm+WpziNIymcJx1MlQl/xTm0xDdcDgYqUtQlvQQ+ununovSxigXMN5uQZZ9SvnzA7ndF7qlQ9keN3tItzOKizQmTlqL5ivzdam/iPtN1wmOOB0kKjxOB0f+G7eunlvv/DK5v6wWZGEr/sbjgRYf7rmxj9dg1L3YKQM+JIQzLd+UCH0Nudef9nZEj6pWcWBE8T4gdKVxpYhdGOeRJJSwrcSbPZE9zWl/0q6zLWSYrg6otjd3JYwdwCOIGItjSHQN74V3S1pL10m3i6D+iodClyzV3unD5AJ955iUgto8P3y5zSg8tXV8qvfhMBmPi2ZzIYjo+8uHU3knaE8yHzfKaj54+9dPrljJj8= babukababu@Hardiks-Laptop.local
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDiBblwNnIfXxKLJQLMmk/yetFoC/nUSxg+zFHbTRn3nkmuN6YEgdsuQ/3VX5vJ37xkxCPwHtoyi/usNa8cBqmt2yT+q/ClOQqpyKUyPBTZ42v+r5fadwP8OJLPzODK8V4K1fcMNzY8rcM8QrTq2sZyWM82WDyrjYZqu08SLG+D9CA6Pd6VUOcg2meDm6FnXcrRKikwRSG0zuj4wm0sq7P+tP5mIBaks+H34L1bJhVD7j9ZDRdPiZn7XLEHYHJqaHBJS8h/eqYfNT9FbN2cS3IKEs+0BSaX1wmn5VdfsFmwp7qq61trnI3Q/Hf6XIFdg4l7mkNUuxCWLOuTLf+347YpGpHC95liwPBLkOzbDG4/0INUt6LHFyfbmIxS/pddgt9VEi9G++OPgTK7KcihFg71ns+MVDy9bvQYURvXiEJ4MIM8SGyVDbMkTrwfOks0xRMQuC5+3vab/K0hpC8ahLExDdPTYj2K7DC3g87QlEwW0e/n8JlfGm97fsbiaUm0500= babbukababbu@Hardiks-Laptop.local
+8. Install and Configure RabbitMQ
+8.1. Install RabbitMQ
+RabbitMQ should already be installed from the dependencies, but ensure it’s running:
+
+sudo systemctl start rabbitmq-server
+sudo systemctl enable rabbitmq-server
+
+8.2. Create RabbitMQ User and Virtual Host
+Add a user and set permissions:
+
+sudo rabbitmqctl add_user django_user yourpassword
+sudo rabbitmqctl set_user_tags django_user administrator
+sudo rabbitmqctl add_vhost lmanagement
+sudo rabbitmqctl set_permissions -p lmanagement django_user ".*" ".*" ".*"
+
+9. Install and Configure Redis
+9.1. Start Redis
+Ensure Redis is running:
+
+sudo systemctl start redis-server
+sudo systemctl enable redis-server
+
+10. Configure Nginx
+10.1. Create Nginx Configuration File
+Create and edit the Nginx configuration file:
+
+sudo vim /etc/nginx/sites-available/lmanagement
+
+Add the following configuration:
+nginx
+
+server {
+    listen 80;
+    server_name 167.71.233.211;  # Your IP or domain name
+
+    location /static/ {
+        alias /home/django/lmanagement/static_cdn/static_root/;
+    }
+
+    location /media/ {
+        alias /home/django/lmanagement/media/;
+    }
+
+    location / {
+        include proxy_params;
+        proxy_pass http://127.0.0.1:8000;
+    }
+}
+
+10.2. Enable Nginx Configuration
+Create a symbolic link to enable the site:
+
+sudo ln -s /etc/nginx/sites-available/lmanagement /etc/nginx/sites-enabled/
+
+10.3. Test and Restart Nginx
+Test the Nginx configuration and restart the service:
+
+sudo nginx -t
+sudo systemctl restart nginx
+
+11. Finalize Setup
+11.1. Check Permissions
+Ensure that all directories and files have appropriate permissions:
+
+sudo chown -R django:www-data /home/django/lmanagement
+sudo chmod -R 755 /home/django/lmanagement/static_cdn/static_root
+sudo chmod -R 755 /home/django/lmanagement/media
+
+11.2. Review Logs
+Check the logs if you encounter issues:
+•	Nginx logs: sudo tail -f /var/log/nginx/error.log
+•	Gunicorn logs: sudo journalctl -u gunicorn
+
+Summary
+1.	Create and Configure User: Create a django user and configure SSH access.
+2.	Set Up Environment: Install dependencies, set up a Python virtual environment, and install Django and Gunicorn.
+3.	Configure PostgreSQL: Set up a PostgreSQL user and database, and import the database backup.
+4.	Prepare Django Project: Clone the project, install dependencies, and collect static files.
+5.	Set Up Gunicorn: Configure and start Gunicorn.
+6.	Set Up Celery with Supervisor: Install Supervisor, configure Celery, and start it.
+7.	Install and Configure RabbitMQ: Ensure RabbitMQ is running and set up user and permissions.
+8.	Install and Configure Redis: Ensure Redis is running.
+9.	Configure Nginx: Set up Nginx to serve the Django project and static files.
+10.	Final Checks: Verify permissions, check logs for errors, and ensure everything is running smoothly.
+
+This guide should provide a comprehensive path from setting up your server to deploying

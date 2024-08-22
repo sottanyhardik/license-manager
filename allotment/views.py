@@ -5,9 +5,10 @@ from django.urls import reverse
 from django.views.generic import DetailView, CreateView, UpdateView, FormView
 from django.views.generic.base import TemplateResponseMixin, ContextMixin, View
 from django_filters.views import FilterView
-from easy_pdf.rendering import render_to_pdf
 from easy_pdf.views import PDFTemplateResponseMixin
 from django.shortcuts import get_object_or_404, redirect
+
+from core.scripts.script import render_to_pdf
 from .models import AllotmentModel
 from core.utils import PagedFilteredTableView
 from license import models as license_models

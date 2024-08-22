@@ -55,12 +55,14 @@ INSTALLED_APPS = [
     'shipping_bill.apps.ShippingBillConfig',
     'django.contrib.humanize',
     'mathfilters',
+    'corsheaders',
     # "debug_toolbar",
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -146,7 +148,7 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
 ]
 
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = os.path.join(BASE_DIR, "static_cdn", "static_root")
 
 MEDIA_URL = '/media/'
 
@@ -157,6 +159,10 @@ from django.urls import reverse_lazy
 LOGIN_URL = reverse_lazy('login')
 LOGIN_REDIRECT_URL = reverse_lazy('dashboard')
 LOGOUT_REDIRECT_URL = reverse_lazy('login')
+
+SECURE_HEADERS = {
+    'Cross-Origin-Opener-Policy': 'unsafe-none',  # or omit to disable it
+}
 
 CACHES = {
     "default": {
@@ -221,3 +227,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 EXPIRY_DAY = 60
 # INTERNAL_IPS = ALLOWED_HOSTS
+
+CORS_ALLOW_ALL_ORIGINS = True

@@ -7,8 +7,6 @@ from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
 
-from core.scripts.calculate_balance import calculate_available_quantity
-
 Credit = 'C'
 Debit = 'D'
 
@@ -161,11 +159,67 @@ class AllotmentItems(models.Model):
 
 @receiver(post_save, sender=AllotmentItems, dispatch_uid="update_stock")
 def update_stock(sender, instance, **kwargs):
-    instance.item.available_quantity = calculate_available_quantity(instance.item)
-    instance.item.save()
+    item = instance.item
+    from core.scripts.calculate_balance import calculate_available_quantity
+    available_quantity = calculate_available_quantity(item)
+    if item.available_quantity != available_quantity:
+        item.available_quantity = available_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_quantity
+    debited_quantity = calculate_debited_quantity(item)
+    if item.debited_quantity != debited_quantity:
+        item.debited_quantity = debited_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_quantity
+    allotted_quantity = calculate_allotted_quantity(item)
+    if item.allotted_quantity != allotted_quantity:
+        item.allotted_quantity = allotted_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_value
+    allotted_value = calculate_allotted_value(item)
+    if item.allotted_value != allotted_value:
+        item.allotted_value = allotted_value
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_value
+    debited_value = calculate_debited_value(item)
+    if item.debited_value != debited_value:
+        item.debited_value = debited_value
+        item.save()
+    available_value = item.license.get_balance_cif
+    if item.available_value != available_value:
+        item.available_value = available_value
+        item.save()
 
 
 @receiver(post_delete, sender=AllotmentItems)
 def delete_stock(sender, instance, *args, **kwargs):
-    instance.item.available_quantity = calculate_available_quantity(instance.item)
-    instance.item.save()
+    item = instance.item
+    from core.scripts.calculate_balance import calculate_available_quantity
+    available_quantity = calculate_available_quantity(item)
+    if item.available_quantity != available_quantity:
+        item.available_quantity = available_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_quantity
+    debited_quantity = calculate_debited_quantity(item)
+    if item.debited_quantity != debited_quantity:
+        item.debited_quantity = debited_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_quantity
+    allotted_quantity = calculate_allotted_quantity(item)
+    if item.allotted_quantity != allotted_quantity:
+        item.allotted_quantity = allotted_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_value
+    allotted_value = calculate_allotted_value(item)
+    if item.allotted_value != allotted_value:
+        item.allotted_value = allotted_value
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_value
+    debited_value = calculate_debited_value(item)
+    if item.debited_value != debited_value:
+        item.debited_value = debited_value
+        item.save()
+    available_value = item.license.get_balance_cif
+    if item.available_value != available_value:
+        item.available_value = available_value
+        item.save()

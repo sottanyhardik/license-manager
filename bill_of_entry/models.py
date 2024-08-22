@@ -1,6 +1,6 @@
 from django.db import models
 from django.db.models import Sum
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
@@ -26,7 +26,7 @@ class BillOfEntryModel(models.Model):
     admin_search_fields = ['bill_of_entry_number', ]
 
     class Meta:
-        unique_together = ('company','bill_of_entry_number', 'bill_of_entry_date',)
+        unique_together = ('company', 'bill_of_entry_number', 'bill_of_entry_date',)
         ordering = ('-bill_of_entry_date',)
 
     def __str__(self):
@@ -112,7 +112,67 @@ class RowDetails(models.Model):
 
 @receiver(post_save, sender=RowDetails, dispatch_uid="update_stock")
 def update_stock(sender, instance, **kwargs):
+    item = instance.sr_number
     from core.scripts.calculate_balance import calculate_available_quantity
-    if not instance.sr_number.available_quantity == calculate_available_quantity(instance.sr_number):
-        instance.sr_number.available_quantity = calculate_available_quantity(instance.sr_number)
-        instance.sr_number.save()
+    available_quantity = calculate_available_quantity(item)
+    if item.available_quantity != available_quantity:
+        item.available_quantity = available_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_quantity
+    debited_quantity = calculate_debited_quantity(item)
+    if item.debited_quantity != debited_quantity:
+        item.debited_quantity = debited_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_quantity
+    allotted_quantity = calculate_allotted_quantity(item)
+    if item.allotted_quantity != allotted_quantity:
+        item.allotted_quantity = allotted_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_value
+    allotted_value = calculate_allotted_value(item)
+    if item.allotted_value != allotted_value:
+        item.allotted_value = allotted_value
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_value
+    debited_value = calculate_debited_value(item)
+    if item.debited_value != debited_value:
+        item.debited_value = debited_value
+        item.save()
+    available_value = item.license.get_balance_cif
+    if item.available_value != available_value:
+        item.available_value = available_value
+        item.save()
+
+
+@receiver(post_delete, sender=RowDetails)
+def delete_stock(sender, instance, *args, **kwargs):
+    item = instance.sr_number
+    from core.scripts.calculate_balance import calculate_available_quantity
+    available_quantity = calculate_available_quantity(item)
+    if item.available_quantity != available_quantity:
+        item.available_quantity = available_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_quantity
+    debited_quantity = calculate_debited_quantity(item)
+    if item.debited_quantity != debited_quantity:
+        item.debited_quantity = debited_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_quantity
+    allotted_quantity = calculate_allotted_quantity(item)
+    if item.allotted_quantity != allotted_quantity:
+        item.allotted_quantity = allotted_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_value
+    allotted_value = calculate_allotted_value(item)
+    if item.allotted_value != allotted_value:
+        item.allotted_value = allotted_value
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_value
+    debited_value = calculate_debited_value(item)
+    if item.debited_value != debited_value:
+        item.debited_value = debited_value
+        item.save()
+    available_value = item.license.get_balance_cif
+    if item.available_value != available_value:
+        item.available_value = available_value
+        item.save()

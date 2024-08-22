@@ -39,3 +39,16 @@ def calculate_allotted_value(instance):
     return instance.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
                                              allotment__type='AT').aggregate(
         Sum('cif_fc'))['cif_fc__sum'] or 0
+
+
+def calculate_available_value(instance):
+    available_value = instance.license.get_balance_cif
+    balance_value = available_value
+    head = instance.item.head
+    if head and head.is_restricted:
+        balance_value = instance.license.get_per_cif.get(head.dict_key,available_value)
+    total = min(available_value, balance_value)
+    return total
+
+
+

@@ -118,7 +118,7 @@ class LicenseItemListUpdateView(UpdateWithInlinesView):
                                         license=self.object,
                                         serial_number=import_item.sr_no)
                                 except:
-                                    pass
+                                    import_item_obj = None
                             else:
                                 try:
                                     import_item_obj = license.LicenseImportItemsModel.objects.get(license=self.object,

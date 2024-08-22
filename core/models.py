@@ -61,7 +61,7 @@ class ItemHeadModel(models.Model):
     hs_code = models.CharField(max_length=255)
     unit_rate = models.FloatField(default=0)
     is_restricted = models.BooleanField(default=True)
-    is_amend = models.BooleanField(default=False)
+    dict_key = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
         return self.name

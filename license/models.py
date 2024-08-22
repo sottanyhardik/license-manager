@@ -3,14 +3,14 @@ from decimal import Decimal
 from django.db import models
 from django.db.models import Sum, IntegerField
 from django.db.models.functions import Coalesce
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
 
 from allotment.models import AllotmentItems, Debit
 from bill_of_entry.models import RowDetails, ARO
-from core.scripts.calculate_balance import calculate_available_quantity
+from core.scripts.calculate_balance import calculate_available_quantity, calculate_available_value
 from license.helper import round_down
 
 DFIA = "26"
@@ -87,10 +87,6 @@ class LicenseDetailsModel(models.Model):
     class Meta:
         ordering = ('license_expiry_date',)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.available_cif = float(self.get_balance_cif)
-
     def use_balance_cif(self, amount, available_cif):
         amount = float(amount)  # convert float 'amount' to Decimal
         if amount <= available_cif:
@@ -120,18 +116,18 @@ class LicenseDetailsModel(models.Model):
         result = self.export_license.all().aggregate(sum=Sum('cif_inr'))['sum']
         return result if result is not None else 0.0
 
-    @cached_property
+    @property
     def get_total_debit(self):
         result = self.import_license.aggregate(total_debits=Sum('debited_value'))['total_debits']
         return result if result is not None else 0.0
 
-    @cached_property
+    @property
     def get_total_allotment(self):
         result = self.import_license.aggregate(total_allotted=Sum('allotted_value'))[
-                'total_allotted']
+            'total_allotted']
         return result if result is not None else 0.0
 
-    @cached_property
+    @property
     def get_balance_cif(self):
         credit = float(self.opening_balance)
         debit = float(self.get_total_debit)
@@ -575,23 +571,18 @@ class LicenseImportItemsModel(models.Model):
         if not self.cif_fc or self.cif_fc == 0.01:
             debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
                 Sum('cif_fc'))[
-                'cif_fc__sum']
+                'cif_fc__sum'] or 0
             allotment = AllotmentItems.objects.filter(item__license=self.license,
                                                       allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-                Sum('cif_fc'))['cif_fc__sum']
+                Sum('cif_fc'))['cif_fc__sum'] or 0
         else:
             debit = RowDetails.objects.filter(sr_number=self).filter(transaction_type=Debit).aggregate(
                 Sum('cif_fc'))[
-                'cif_fc__sum']
+                'cif_fc__sum'] or 0
             allotment = AllotmentItems.objects.filter(item=self,
                                                       allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-                Sum('cif_fc'))['cif_fc__sum']
-        t_debit = 0
-        if debit:
-            t_debit = t_debit + debit
-        if allotment:
-            t_debit = t_debit + allotment
-        return int(credit - t_debit)
+                Sum('cif_fc'))['cif_fc__sum'] or 0
+        return float(credit) - float(debit) - float(allotment)
 
     @cached_property
     def license_expiry(self):
@@ -748,7 +739,67 @@ class LicenseInwardOutwardModel(models.Model):
 
 @receiver(post_save, sender=LicenseImportItemsModel, dispatch_uid="update_balance")
 def update_balance(sender, instance, **kwargs):
-    if not instance.available_quantity == calculate_available_quantity(instance):
-        instance.available_quantity = calculate_available_quantity(instance)
-        instance.available_value = instance.license.get_balance_cif
-        instance.save()
+    item = instance
+    from core.scripts.calculate_balance import calculate_available_quantity
+    available_quantity = calculate_available_quantity(item)
+    if item.available_quantity != available_quantity:
+        item.available_quantity = available_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_quantity
+    debited_quantity = calculate_debited_quantity(item)
+    if item.debited_quantity != debited_quantity:
+        item.debited_quantity = debited_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_quantity
+    allotted_quantity = calculate_allotted_quantity(item)
+    if item.allotted_quantity != allotted_quantity:
+        item.allotted_quantity = allotted_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_value
+    allotted_value = calculate_allotted_value(item)
+    if item.allotted_value != allotted_value:
+        item.allotted_value = allotted_value
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_value
+    debited_value = calculate_debited_value(item)
+    if item.debited_value != debited_value:
+        item.debited_value = debited_value
+        item.save()
+    available_value = calculate_available_value(item)
+    if item.available_value != available_value:
+        item.available_value = available_value
+        item.save()
+
+@receiver(post_delete, sender=LicenseImportItemsModel, dispatch_uid="post_delete")
+def delete_balance(sender, instance, **kwargs):
+    item = instance
+    from core.scripts.calculate_balance import calculate_available_quantity
+    available_quantity = calculate_available_quantity(item)
+    if item.available_quantity != available_quantity:
+        item.available_quantity = available_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_quantity
+    debited_quantity = calculate_debited_quantity(item)
+    if item.debited_quantity != debited_quantity:
+        item.debited_quantity = debited_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_quantity
+    allotted_quantity = calculate_allotted_quantity(item)
+    if item.allotted_quantity != allotted_quantity:
+        item.allotted_quantity = allotted_quantity
+        item.save()
+    from core.scripts.calculate_balance import calculate_allotted_value
+    allotted_value = calculate_allotted_value(item)
+    if item.allotted_value != allotted_value:
+        item.allotted_value = allotted_value
+        item.save()
+    from core.scripts.calculate_balance import calculate_debited_value
+    debited_value = calculate_debited_value(item)
+    if item.debited_value != debited_value:
+        item.debited_value = debited_value
+        item.save()
+    available_value = item.license.get_balance_cif
+    if item.available_value != available_value:
+        item.available_value = available_value
+        item.save()
+

@@ -138,7 +138,8 @@ def update_stock(sender, instance, **kwargs):
     if item.debited_value != debited_value:
         item.debited_value = debited_value
         item.save()
-    available_value = item.license.get_balance_cif
+    from core.scripts.calculate_balance import calculate_available_value
+    available_value = calculate_available_value(item)
     if item.available_value != available_value:
         item.available_value = available_value
         item.save()
@@ -172,7 +173,8 @@ def delete_stock(sender, instance, *args, **kwargs):
     if item.debited_value != debited_value:
         item.debited_value = debited_value
         item.save()
-    available_value = item.license.get_balance_cif
+    from core.scripts.calculate_balance import calculate_available_value
+    available_value = calculate_available_value(item)
     if item.available_value != available_value:
         item.available_value = available_value
         item.save()

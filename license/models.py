@@ -571,14 +571,14 @@ class LicenseImportItemsModel(models.Model):
         if not self.cif_fc or self.cif_fc == 0.01:
             debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
                 Sum('cif_fc'))[
-                'cif_fc__sum'] or 0
+                        'cif_fc__sum'] or 0
             allotment = AllotmentItems.objects.filter(item__license=self.license,
                                                       allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
                 Sum('cif_fc'))['cif_fc__sum'] or 0
         else:
             debit = RowDetails.objects.filter(sr_number=self).filter(transaction_type=Debit).aggregate(
                 Sum('cif_fc'))[
-                'cif_fc__sum'] or 0
+                        'cif_fc__sum'] or 0
             allotment = AllotmentItems.objects.filter(item=self,
                                                       allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
                 Sum('cif_fc'))['cif_fc__sum'] or 0
@@ -765,10 +765,12 @@ def update_balance(sender, instance, **kwargs):
     if item.debited_value != debited_value:
         item.debited_value = debited_value
         item.save()
+    from core.scripts.calculate_balance import calculate_available_value
     available_value = calculate_available_value(item)
     if item.available_value != available_value:
         item.available_value = available_value
         item.save()
+
 
 @receiver(post_delete, sender=LicenseImportItemsModel, dispatch_uid="post_delete")
 def delete_balance(sender, instance, **kwargs):
@@ -798,8 +800,8 @@ def delete_balance(sender, instance, **kwargs):
     if item.debited_value != debited_value:
         item.debited_value = debited_value
         item.save()
-    available_value = item.license.get_balance_cif
+    from core.scripts.calculate_balance import calculate_available_value
+    available_value = calculate_available_value(item)
     if item.available_value != available_value:
         item.available_value = available_value
         item.save()
-

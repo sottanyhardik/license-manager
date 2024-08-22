@@ -44,7 +44,10 @@ def calculate_allotted_value(instance):
 def calculate_available_value(instance):
     available_value = instance.license.get_balance_cif
     balance_value = available_value
-    head = instance.item.head
+    if instance.item:
+        head = instance.item.head
+    else:
+        head = None
     if head and head.is_restricted:
         balance_value = instance.license.get_per_cif.get(head.dict_key,available_value)
     total = min(available_value, balance_value)

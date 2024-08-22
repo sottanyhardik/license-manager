@@ -48,7 +48,7 @@ def calculate_available_value(instance):
         head = instance.item.head
     else:
         head = None
-    if head and head.is_restricted:
+    if instance.license and instance.license.get_per_cif and head and head.is_restricted:
         balance_value = instance.license.get_per_cif.get(head.dict_key,available_value)
     total = min(available_value, balance_value)
     return total

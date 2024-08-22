@@ -52,6 +52,3 @@ def calculate_available_value(instance):
         balance_value = instance.license.get_per_cif.get(head.dict_key,available_value)
     total = min(available_value, balance_value)
     return total
-
-
-

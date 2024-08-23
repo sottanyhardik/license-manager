@@ -741,8 +741,12 @@ def update_balance(sender, instance, **kwargs):
     item = instance
     from core.scripts.calculate_balance import update_balance_values
     update_balance_values(item)
-    from migrations_script import set_items
-    set_items()
+    from migrations_script import filter_list
+    items_and_filters = filter_list()
+    for item_name, query_filter in items_and_filters:
+        from core.models import ItemNameModel
+        nItem = ItemNameModel.objects.get(name=item_name)
+        LicenseImportItemsModel.objects.filter(license=instance.license).filter(query_filter).update(item=nItem)
 
 
 @receiver(post_delete, sender=LicenseImportItemsModel, dispatch_uid="post_delete")

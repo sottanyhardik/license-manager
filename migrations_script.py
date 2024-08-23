@@ -138,13 +138,8 @@ def createItem():
     return None
 
 
-def set_items():
-    from django.apps import apps
+def filter_list():
     from django.db.models import Q
-
-    LicenseImportItemsModel = apps.get_model('license', 'LicenseImportItemsModel')
-    ItemNameModel = apps.get_model('core', 'ItemNameModel')
-
     items_and_filters = [
         ('SODIUM NITRATE', Q(description__icontains="Sodium Nitrate")),
         ('TITANIUM DIOXIDE', Q(description__icontains='Titanium Dioxide')),
@@ -317,7 +312,14 @@ def set_items():
          (Q(description__icontains="Relevant Food Additives") & (Q(description__icontains="TBHQ")) & Q(
              license__export_license__norm_class__norm_class='E132'))),
     ]
+    return items_and_filters
 
+
+def set_items():
+    from django.apps import apps
+    LicenseImportItemsModel = apps.get_model('license', 'LicenseImportItemsModel')
+    ItemNameModel = apps.get_model('core', 'ItemNameModel')
+    items_and_filters = filter_list()
     for item_name, query_filter in items_and_filters:
         item = ItemNameModel.objects.get(name=item_name)
         LicenseImportItemsModel.objects.filter(query_filter).update(item=item)

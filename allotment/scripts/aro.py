@@ -1,8 +1,10 @@
 import shutil
 
-from docxtpl import DocxTemplate
+
 
 import csv
+
+from docxtpl import DocxTemplate
 
 
 def remove(path):
@@ -26,7 +28,6 @@ def generate_documents(data=None, path=''):
     else:
         input_file = csv.DictReader(open("aro_details.csv"))
     for context in input_file:
-        print(context)
         doc = DocxTemplate("_consent_letter.docx")
         doc.render(context)
         doc.save(path + context['license'] + "_consent_letter.docx")
@@ -81,7 +82,6 @@ def generate_tl_software(data, tl_path, path='', transfer_letter_name=""):
         remove(path)
         os.mkdir(path)
         for context in data:
-            print(context)
             doc = DocxTemplate(tl_path)
             doc.render(context)
             if len(str(context['license'])) == 9:

@@ -1,7 +1,12 @@
 # Create your views here.
+
+import re
+
 from django.contrib import messages
 from django.http import HttpResponse
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView, CreateView, UpdateView, DetailView
 from extra_views import UpdateWithInlinesView, InlineFormSetFactory
@@ -11,6 +16,7 @@ from core.scripts.sion import fetch_sion_data
 from core.utils import PagedFilteredTableView
 from . import models, tables, filters, forms
 from .models import MEISMODEL
+from .scripts.ledger import fetch_page_data
 
 
 class DashboardView(TemplateView):
@@ -150,28 +156,24 @@ class UploadLedger(TemplateView):
 
     def post(self, request, **kwargs):
         files = request.FILES.getlist('ledger')
-        license = None
-        for raw_file in files:
-            file = raw_file.read()
-            full = file.decode('latin-1').encode("utf-8")
-            full = full.decode()
-            full = full.replace(',', '\t')
-            full = full.replace('Â', '')
-            full = full.replace('\xa0', ' ')
-            for i in range(10, 20):
-                full = full.replace('No:-{}'.format(i), 'No:-T')
-            split_list = full.split('Page No:-1')
+        for file_sequence_number, raw_file in enumerate(files, start=1):
+            file_content = raw_file.read().decode()
+            # Prepare the content
+            clean_content = file_content.replace(',', '\t').replace('Â', '').replace('\xa0', ' ')
+            split_list = re.split(r'(?<!\d)Page No:-1(?!\d)', clean_content)
+            # Check if split_list is not empty before deleting first element
+            if split_list:
+                del split_list[0]
             for data in split_list:
                 try:
-                    from bill_of_entry.scripts.ledger import parse_file
-                    license = parse_file(data)
+                    license = fetch_page_data(data)
                     messages.success(request, str(license))
+                    # please elaborate on what you'd like to do with the license number in case of exceptions
+                    # this is where you might want to put that logic
                 except Exception as e:
-                    messages.error(request, str(e))
-        from django.http import HttpResponseRedirect
-        from django.urls import reverse
+                    exception_message = f"Error with file sequence number {file_sequence_number}: {str(e)}"
+                    messages.error(request, exception_message)
         return HttpResponseRedirect(reverse('ledger-complete'))
-
 
 
 class TemplateListView(TemplateView):

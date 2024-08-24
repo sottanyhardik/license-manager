@@ -542,8 +542,10 @@ class LicenseImportItemsModel(models.Model):
     comment = models.TextField(blank=True, null=True)
     admin_search_fields = ('license__license_number',)
 
+
     class Meta:
         ordering = ['license__license_expiry_date', 'serial_number']
+        unique_together = (('license', 'serial_number'),)
 
     def __str__(self):
         return "{0}-{1}".format(str(self.license), str(self.serial_number))
@@ -739,18 +741,11 @@ class LicenseInwardOutwardModel(models.Model):
 @receiver(post_save, sender=LicenseImportItemsModel, dispatch_uid="update_balance")
 def update_balance(sender, instance, **kwargs):
     item = instance
-    from core.scripts.calculate_balance import update_balance_values
-    update_balance_values(item)
+    from bill_of_entry.tasks import update_balance_values_task
+    update_balance_values_task.delay(item.id)
     from migrations_script import filter_list
     items_and_filters = filter_list()
     for item_name, query_filter in items_and_filters:
         from core.models import ItemNameModel
         nItem = ItemNameModel.objects.get(name=item_name)
         LicenseImportItemsModel.objects.filter(license=instance.license).filter(query_filter).update(item=nItem)
-
-
-@receiver(post_delete, sender=LicenseImportItemsModel, dispatch_uid="post_delete")
-def delete_balance(sender, instance, **kwargs):
-    item = instance
-    from core.scripts.calculate_balance import update_balance_values
-    update_balance_values(item)

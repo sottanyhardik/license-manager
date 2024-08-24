@@ -742,7 +742,7 @@ class LicenseInwardOutwardModel(models.Model):
 def update_balance(sender, instance, **kwargs):
     item = instance
     from bill_of_entry.tasks import update_balance_values_task
-    update_balance_values_task.delay(item.id)
+    update_balance_values_task(item.id)
     from migrations_script import filter_list
     items_and_filters = filter_list()
     for item_name, query_filter in items_and_filters:

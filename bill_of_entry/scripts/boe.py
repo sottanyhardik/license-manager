@@ -24,6 +24,10 @@ def fetch_cookies():
             response.headers['Set-Cookie'].split('BIGipServerapp_trackenquiry_test=')[-1].split(';')[0],
         'BIGipServerEnquiry_Icegate_443':
             response.headers['Set-Cookie'].split('BIGipServerEnquiry_Icegate_443=')[-1].split(';')[0],
+        'TS01b027c2':
+            response.headers['Set-Cookie'].split('TS01b027c2=')[-1].split(';')[0],
+        'TS01446d08':
+            response.headers['Set-Cookie'].split('TS01446d08=')[-1].split(';')[0],
     }
     return cookies, csrftoken
 

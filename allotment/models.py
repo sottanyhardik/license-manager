@@ -160,12 +160,12 @@ class AllotmentItems(models.Model):
 @receiver(post_save, sender=AllotmentItems, dispatch_uid="update_stock")
 def update_stock(sender, instance, **kwargs):
     item = instance.item
-    from core.scripts.calculate_balance import update_balance_values
-    update_balance_values(item)
+    from bill_of_entry.tasks import update_balance_values_task
+    update_balance_values_task(item.id)
 
 
 @receiver(post_delete, sender=AllotmentItems)
 def delete_stock(sender, instance, *args, **kwargs):
     item = instance.item
-    from core.scripts.calculate_balance import update_balance_values
-    update_balance_values(item)
+    from bill_of_entry.tasks import update_balance_values_task
+    update_balance_values_task.delay(item.id)

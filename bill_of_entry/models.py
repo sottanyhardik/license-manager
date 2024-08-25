@@ -109,16 +109,18 @@ class RowDetails(models.Model):
     class Meta:
         ordering = ['transaction_type', 'bill_of_entry__bill_of_entry_date']
 
+    def __str__(self):
+        return self.sr_number
 
 @receiver(post_save, sender=RowDetails, dispatch_uid="update_stock")
 def update_stock(sender, instance, **kwargs):
     item = instance.sr_number
-    from core.scripts.calculate_balance import update_balance_values
-    update_balance_values(item)
+    from bill_of_entry.tasks import update_balance_values_task
+    update_balance_values_task(item.id)
 
 
 @receiver(post_delete, sender=RowDetails)
 def delete_stock(sender, instance, *args, **kwargs):
     item = instance.sr_number
-    from core.scripts.calculate_balance import update_balance_values
-    update_balance_values(item)
+    from bill_of_entry.tasks import update_balance_values_task
+    update_balance_values_task(item.id)

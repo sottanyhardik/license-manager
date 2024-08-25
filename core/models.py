@@ -45,7 +45,7 @@ class CompanyModel(models.Model):
 
 
 class PortModel(models.Model):
-    code = models.CharField(max_length=10)
+    code = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:

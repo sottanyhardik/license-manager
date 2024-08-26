@@ -76,15 +76,15 @@ def update_balance_values(item):
         item.allotted_quantity = allotted_quantity
         is_changed = True
 
-    if item.allotted_value != allotted_value:
+    if float(item.allotted_value) != float(allotted_value):
         item.allotted_value = allotted_value
         is_changed = True
 
-    if item.debited_value != debited_value:
+    if float(item.debited_value) != float(debited_value):
         item.debited_value = debited_value
         is_changed = True
 
-    if item.available_value != available_value:
+    if float(item.available_value) != float(available_value):
         item.available_value = available_value
         is_changed = True
 

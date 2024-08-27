@@ -173,11 +173,11 @@
             <td> </td>
             <td> </td>
             <td>Total Debit USD</td>
-            <td  style="text-align: right"><b>{% if import_item.get_total_debit %}{{ import_item.get_total_debit }}{% else %}-{% endif %}</b></td>
+            <td  style="text-align: right"><b>{% if object.get_total_debit %}{{ object.get_total_debit }}{% else %}-{% endif %}</b></td>
             <td>Total Allotted USD</td>
-            <td  style="text-align: right"><b>{% if import_item.get_total_allotment %}{{ import_item.get_total_allotment }}{% else %}-{% endif %}</b></td>
+            <td  style="text-align: right"><b>{% if object.get_total_allotment %}{{ object.get_total_allotment }}{% else %}-{% endif %}</b></td>
             <td>Total Balance USD</td>
-            <td style="text-align: right"><b>{% if import_item.get_balance_cif %}{{ import_item.get_balance_cif }}{% else %}-{% endif %}</b></td>
+            <td style="text-align: right"><b>{% if object.get_balance_cif %}{{ object.get_balance_cif }}{% else %}-{% endif %}</b></td>
         </tr>
         </tfoot>
     </table>

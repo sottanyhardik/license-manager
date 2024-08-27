@@ -162,6 +162,14 @@ class LicenseDetailsModel(models.Model):
                 'description': self.get_item_data('RUTILE').get('description')}
 
     @cached_property
+    def borax_quantity(self):
+        return self.get_glass_formers.get('borax')
+
+    @cached_property
+    def rutile_quantity(self):
+        return self.get_glass_formers.get('rutile')
+
+    @cached_property
     def get_intermediates_namely(self):
         return self.get_item_data('ALUMINIUM OXIDE, ZINC OXIDE, ZIRCONIUM OXIDE')
 

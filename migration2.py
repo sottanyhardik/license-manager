@@ -66,7 +66,7 @@ def createITEM(apps, schema_editor):
     ItemNameModel.objects.get_or_create(name='INTERMEDIATES NAMELY')
     ItemNameModel.objects.get_or_create(name='SODA ASH')
     ItemNameModel.objects.get_or_create(name='TITANIUM DIOXIDE')
-
+    ItemNameModel.objects.filter(id__in=[72,70,61,60,49,44,39,38,37,36,34,33,31,30,28,27,25,24,23,19,18,17,16,15,14,10,6,5]).update(is_active=True)
 
 class Migration(migrations.Migration):
     dependencies = [

@@ -643,6 +643,18 @@ class LicenseItemReportTable(dt2.Table):
         return next(self.row_sr_no)
 
 
+class RutileLicenseItemReportTable(LicenseItemReportTable):
+    rutile_quantity = dt2.Column()
+    borax_quantity = dt2.Column()
+
+    class Meta:
+        fields = ['sr_no', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
+                  'hs_code', 'item', 'rutile_quantity', 'borax_quantity', 'available_quantity', 'available_value',
+                  'comment']
+        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
+
+
+
 class LicenseInwardOutwardTable(dt2.Table):
     sr_no = dt2.Column(empty_values=(), orderable=False)
     ge_file_number = dt2.Column(orderable=False)

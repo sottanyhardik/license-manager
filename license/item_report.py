@@ -8,7 +8,7 @@ from django.db.models import Q, Sum
 from core.models import ItemNameModel
 from license import models as license
 from license.models import N2009, N2015, LicenseDetailsModel, N2023, GE, MI, LicenseImportItemsModel
-from license.tables import LicenseItemReportTable, LicenseConfectioneryReportTable
+from license.tables import LicenseItemReportTable, LicenseConfectioneryReportTable, RutileLicenseItemReportTable
 
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
@@ -716,7 +716,28 @@ def item_filter(date_range=None, item=None):
     tables = []
     item_details = ItemNameModel.objects.get(id=item)
     expiry_limit = datetime.datetime.today() - datetime.timedelta(days=15)
-    queryset = LicenseImportItemsModel.objects.filter(Q(item_id=item) & Q(license__license_expiry_date__gte=expiry_limit) & Q(available_quantity__gte=250) &  Q(available_value__gte=500))
-    tables.append({'label': item_details.name.title(), 'table': LicenseItemReportTable(queryset),
-                   'total': queryset.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
+    if item_details.head.name in ['PACKING MATERIAL']:
+        queryset = LicenseImportItemsModel.objects.filter(
+            Q(item_id=item) & Q(license__license_expiry_date__gte=expiry_limit) & Q(available_quantity__gte=250) & Q(
+                available_value__gte=500) & ~Q(license__export_license__norm_class__norm_class='E5'))
+        tables.append({'label': item_details.name.title(), 'table': LicenseItemReportTable(queryset),
+                       'total': queryset.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
+    if item_details.head.name in ['MILK & MILK Product']:
+        queryset = LicenseImportItemsModel.objects.filter(
+            Q(item_id=item) & Q(license__license_expiry_date__gte=expiry_limit) & Q(available_quantity__gte=250) & Q(
+                available_value__gte=500) & Q(license__export_license__norm_class__norm_class='E5'))
+        tables.append({'label': item_details.name.title(), 'table': LicenseItemReportTable(queryset),
+                       'total': queryset.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
+    elif item_details.name in ['RUTILE']:
+        queryset = LicenseImportItemsModel.objects.filter(
+            Q(item_id=item) & Q(license__license_expiry_date__gte=expiry_limit) & Q(available_quantity__gte=50) & Q(
+                available_value__gte=100))
+        tables.append({'label': item_details.name.title(), 'table': RutileLicenseItemReportTable(queryset),
+                       'total': queryset.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
+    else:
+        queryset = LicenseImportItemsModel.objects.filter(
+            Q(item_id=item) & Q(license__license_expiry_date__gte=expiry_limit) & Q(available_quantity__gte=250) & Q(
+                available_value__gte=500))
+        tables.append({'label': item_details.name.title(), 'table': LicenseItemReportTable(queryset),
+                       'total': queryset.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
     return tables

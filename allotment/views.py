@@ -1,19 +1,24 @@
+from datetime import datetime
+from shutil import make_archive
+
 import pandas as pd
 from django.db.models import Sum, F
 from django.http import JsonResponse, HttpResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import DetailView, CreateView, UpdateView, FormView
 from django.views.generic.base import TemplateResponseMixin, ContextMixin, View
 from django_filters.views import FilterView
 from easy_pdf.views import PDFTemplateResponseMixin
-from django.shortcuts import get_object_or_404, redirect
 
+from allotment.scripts.aro import generate_tl_software
+from core.models import TransferLetterModel
 from core.scripts.script import render_to_pdf
-from .models import AllotmentModel
 from core.utils import PagedFilteredTableView
 from license import models as license_models
 from . import forms, tables, filters
 from . import models as allotments
+from .models import AllotmentModel
 
 
 class AllotmentView(FilterView):
@@ -266,7 +271,6 @@ class ARODocumentGenerateView(FormView):
         return self.model.objects.get(id=self.kwargs.get('pk'))
 
     def post(self, request, *args, **kwargs):
-        from shutil import make_archive
         form = self.get_form()
         if not form.is_valid():
             return self.form_invalid(form)
@@ -330,44 +334,56 @@ class GenerateTransferLetterView(FormView):
         return self.model.objects.get(id=self.kwargs.get('pk'))
 
     def post(self, request, *args, **kwargs):
-        from shutil import make_archive
         form = self.get_form()
         if not form.is_valid():
             return self.form_invalid(form)
-        else:
-            try:
-                allotment_id = self.kwargs.get('pk')
-                allotment = allotments.AllotmentModel.objects.get(id=allotment_id)
-                from datetime import datetime
-                data = [{
-                    'company': self.request.POST.get('company'),
-                    'company_address_1': self.request.POST.get('company_address_line1'),
-                    'company_address_2': self.request.POST.get('company_address_line2'),
+
+        try:
+            allotment_id = self.kwargs['pk']
+            allotment = AllotmentModel.objects.get(id=allotment_id)
+
+            data = [
+                {
+                    'company': request.POST['company'],
+                    'company_address_1': request.POST['company_address_line1'],
+                    'company_address_2': request.POST['company_address_line2'],
                     'today': str(datetime.now().date()),
-                    'license': item.license_number, 'license_date': item.license_date.strftime("%d/%m/%Y"),
-                    'file_number': item.file_number, 'quantity': item.qty,
+                    'license': item.license_number,
+                    'license_date': item.license_date.strftime("%d/%m/%Y"),
+                    'file_number': item.file_number,
+                    'quantity': item.qty,
                     'v_allotment_inr': round(item.cif_fc * 84.25, 2),
                     'exporter_name': item.exporter.name,
-                    'v_allotment_usd': item.cif_fc} for item in
-                    allotment.allotment_details.all()]
-                tl = self.request.POST.get('tl_choice')
-                from core.models import TransferLetterModel
-                transfer_letter = TransferLetterModel.objects.get(pk=tl)
-                tl_path = transfer_letter.tl.path
-                file_path = 'media/TL_' + str(allotment_id) + '_' + transfer_letter.name.replace(' ', '_') + '/'
-                from allotment.scripts.aro import generate_tl_software
-                generate_tl_software(data=data, tl_path=tl_path, path=file_path,
-                                     transfer_letter_name=transfer_letter.name.replace(' ', '_'))
-                file_name = 'TL_' + str(allotment_id) + '_' + transfer_letter.name.replace(' ', '_') + '.zip'
-                path_to_zip = make_archive(file_path, "zip", file_path)
-                zip_file = open(path_to_zip, 'rb')
-                response = HttpResponse(zip_file, content_type='application/force-download')
-                response['Content-Disposition'] = 'attachment; filename="%s"' % file_name
-                url = request.headers.get('origin') + path_to_zip.split('lmanagement')[-1]
-                return JsonResponse({'url': url, 'message': 'Success'})
-            except Exception as e:
-                print(e)
-                return self.form_invalid(form)
+                    'v_allotment_usd': item.cif_fc
+                }
+                for item in allotment.allotment_details.all()
+            ]
+
+            tl_choice = request.POST['tl_choice']
+            transfer_letter = TransferLetterModel.objects.get(pk=tl_choice)
+
+            file_path = f'media/TL_{allotment_id}_{transfer_letter.name.replace(" ", "_")}/'
+            generate_tl_software(
+                data=data,
+                tl_path=transfer_letter.tl.path,
+                path=file_path,
+                transfer_letter_name=transfer_letter.name.replace(' ', '_')
+            )
+            if file_path[-1] == '/':
+                file_path = file_path[:-1]
+            file_name = f'TL_{allotment_id}_{transfer_letter.name.replace(" ", "_")}.zip'
+            path_to_zip = make_archive(file_path.rstrip('/'), 'zip', file_path.rstrip('/'))
+
+            zip_file = open(path_to_zip, 'rb')
+            response = HttpResponse(zip_file, content_type='application/force-download')
+            response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+
+            url = request.headers['origin'] + path_to_zip.split('lmanagement')[-1]
+            return JsonResponse({'url': url, 'message': 'Success'})
+
+        except Exception as e:
+            print(e)
+            return self.form_invalid(form)
 
 
 class PandasDownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):

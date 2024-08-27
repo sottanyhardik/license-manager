@@ -267,7 +267,7 @@ class GenerateTransferLetterView(FormView):
                 generate_tl_software(data=data, tl_path=tl_path, path=file_path,
                                      transfer_letter_name=transfer_letter.name.replace(' ', '_'))
                 file_name = 'TL_' + str(boe_id) + '_' + transfer_letter.name.replace(' ', '_') + '.zip'
-                path_to_zip = make_archive(file_path, "zip", file_path)
+                path_to_zip = make_archive(file_path.rstrip('/'), 'zip', file_path.rstrip('/'))
                 zip_file = open(path_to_zip, 'rb')
                 response = HttpResponse(zip_file, content_type='application/force-download')
                 response['Content-Disposition'] = 'attachment; filename="%s"' % file_name

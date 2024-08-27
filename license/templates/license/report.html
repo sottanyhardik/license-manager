@@ -3,36 +3,13 @@
 {% block content %}
     <div class="card">
         <div class="card-header text-center">
-            Norms Wise Report
-        </div>
-        <div class="card-body">
-            <p>4. <a href="{% url 'report_biscuit' 'expired' 'all' %}">Expired Biscuits</a></p>
-            <p>6. <a href="{% url 'report_confectionery' 'expired' %}">Expired Confectionery</a></p>
-            <p>8. <a href="{% url 'report_tractor' 'expired' %}">Expired Tractors</a></p>
-            <p>10. <a href="{% url 'report_steel' 'expired' %}">Expired Steels</a></p>
-            <p>12. <a href="{% url 'report_namkeen' 'expired' %}">Expired Namkeen</a></p>
-            <p>14. <a href="{% url 'report_pickle' 'expired' %}">Expired Pickel</a></p>
-            <p>16. <a href="{% url 'report_glass' 'expired' %}">Expired Glass</a></p>
-        </div>
-    </div>
-    <div class="card">
-        <div class="card-header text-center">
             Item Wise Reports
         </div>
         <div class="card-body">
-            <p>1. <a href="{% url 'item_report_list' %}?item=sugar">Sugar</a></p>
-            <p>2. <a href="{% url 'item_report_list' %}?item=rbd"> RBD Palomein</a></p>
-            <p>3. <a href="{% url 'item_report_list' %}?item=dietary"> Dietry Fibre</a></p>
-            <p>4. <a href="{% url 'item_report_list' %}?item=flavour"> Food Flavour</a></p>
-            <p>5. <a href="{% url 'item_report_list' %}?item=whey"> Milk & Milk [Whey]</a></p>
-            <p>6. <a href="{% url 'item_report_list' %}?item=skimmed"> Milk & Milk [Skimmed]</a></p>
-            <p>7. <a href="{% url 'item_report_list' %}?item=wpc"> Milk & Milk [WPC]</a></p>
-            <p>8. <a href="{% url 'item_report_list' %}?item=fruit"> Fruit (Biscuits)</a></p>
-            <p>9. <a href="{% url 'item_report_list' %}?item=juice"> Fruit Juice</a></p>
-            <p>10. <a href="{% url 'item_report_list' %}?item=oci"> Other Confectionery Ingredients</a></p>
-            <p>11. <a href="{% url 'item_report_list' %}?item=pp"> Packing Material</a></p>
-            <p>12. <a href="{% url 'item_report_list' %}?item=tartaric"> Tartaric</a></p>
-            <p>13. <a href="{% url 'item_report_list' %}?item=essential"> Essential Oil</a></p>
+            {% for item in items %}
+                <p>{{ forloop.counter }} <a href="{% url 'item_report_list' %}?item={{ item.id }}">{{ item.name }}</a>
+                </p>
+            {% endfor %}
         </div>
     </div>
 {% endblock %}

@@ -408,6 +408,7 @@ class LicenseDetailsModel(models.Model):
 
     @cached_property
     def get_per_cif(self):
+        available_value = self.get_balance_cif
         lic = self.export_license.all().values('norm_class__norm_class')
         credit = self.opening_balance
         if 'E132' in str(lic.first().get('norm_class__norm_class')):
@@ -423,8 +424,8 @@ class LicenseDetailsModel(models.Model):
                 total_allotted_value=Coalesce(Sum('allotted_value'), 0, output_field=IntegerField())
             )
             conf_5 = result['total_debited_value'] + result['total_allotted_value']
-            return {'threeRestriction': max(round_down(credit_3 - conf_3), 0),
-                    'fiveRestriction': max(round_down(credit_5 - conf_5), 0)}
+            return {'threeRestriction': min(available_value, max(round_down(credit_3 - conf_3), 0)),
+                    'fiveRestriction': min(available_value, max(round_down(credit_5 - conf_5), 0))}
         elif 'E126' in str(lic.first().get('norm_class__norm_class')):
             credit_3 = credit * .03
             result = self.import_license.filter(item__head__name='PICKLE 3% Restriction').aggregate(
@@ -432,7 +433,7 @@ class LicenseDetailsModel(models.Model):
                 total_allotted_value=Coalesce(Sum('allotted_value'), 0, output_field=IntegerField())
             )
             conf_3 = result['total_debited_value'] + result['total_allotted_value']
-            return {'threeRestriction': max(round_down(credit_3 - conf_3), 0)}
+            return {'threeRestriction': min(available_value, max(round_down(credit_3 - conf_3), 0))}
         elif 'E1' in str(lic.first().get('norm_class__norm_class')):
             credit_2 = credit * .02
             result = self.import_license.filter(item__head__name='CONFECTIONERY 2% Restriction').aggregate(
@@ -452,9 +453,9 @@ class LicenseDetailsModel(models.Model):
                 total_allotted_value=Coalesce(Sum('allotted_value'), 0, output_field=IntegerField())
             )
             conf_5 = result['total_debited_value'] + result['total_allotted_value']
-            return {'twoRestriction': max(round_down(credit_2 - conf_2), 0),
-                    'threeRestriction': max(round_down(credit_3 - conf_3), 0),
-                    'fiveRestriction': max(round_down(credit_5 - conf_5), 0)}
+            return {'twoRestriction': min(available_value, max(round_down(credit_2 - conf_2), 0)),
+                    'threeRestriction': min(available_value, max(round_down(credit_3 - conf_3), 0)),
+                    'fiveRestriction': min(available_value, max(round_down(credit_5 - conf_5), 0))}
         elif 'E5' in str(lic.first().get('norm_class__norm_class')):
             credit = credit * .1
             result = self.import_license.filter(item__head__name='BISCUIT 10% Restriction').aggregate(
@@ -462,7 +463,7 @@ class LicenseDetailsModel(models.Model):
                 total_allotted_value=Coalesce(Sum('allotted_value'), 0, output_field=IntegerField())
             )
             total_value = result['total_debited_value'] + result['total_allotted_value']
-            return {'10_Restriction': max(round_down(credit - total_value), 0)}
+            return {'tenRestriction': min(max(round_down(credit - total_value), 0), available_value)}
 
 
 KG = 'kg'
@@ -541,7 +542,6 @@ class LicenseImportItemsModel(models.Model):
     is_restrict = models.BooleanField(default=False)
     comment = models.TextField(blank=True, null=True)
     admin_search_fields = ('license__license_number',)
-
 
     class Meta:
         ordering = ['license__license_expiry_date', 'serial_number']

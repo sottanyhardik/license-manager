@@ -25,7 +25,7 @@ def createITEM(apps, schema_editor):
     ItemNameModel.objects.get_or_create(name='RBD PALMOLEIN OIL', head=head)
     ItemNameModel.objects.get_or_create(name='EDIBLE VEGETABLE OIL', head=head)
     ItemNameModel.objects.get_or_create(name='PALM KERNEL OIL', head=head)
-    head,bool = ItemHeadModel.objects.get_or_create(name='BISCUIT 10_Restriction')
+    head,bool = ItemHeadModel.objects.get_or_create(name='BISCUIT tenRestriction')
     ItemNameModel.objects.get_or_create(name='FOOD FLAVOUR BISCUITS', head=head)
     ItemNameModel.objects.get_or_create(name='JUICE', head=head)
     ItemNameModel.objects.get_or_create(name='DIETARY FIBRE', head=head)

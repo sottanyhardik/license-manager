@@ -22,8 +22,7 @@ from license.excel import get_license_table
 from license.helper import round_down, check_license, fetch_item_details
 from . import forms, tables, filters
 from . import models as license
-from .item_report import item_filter, namkeen_dfia, confectionery_dfia, biscuit_dfia, tractor_dfia, steel_dfia, \
-    glass_dfia, pickle_dfia
+from .item_report import item_filter
 from .models import GE, MI, LicenseDetailsModel
 from .tables import LicenseBiscuitReportTable, LicenseConfectioneryReportTable, LicenseNamkeenReportTable, \
     LicenseSteelReportTable, LicenseTractorReportTable, LicenseGlassReportTable, LicensePickleReportTable
@@ -249,14 +248,6 @@ class PDFLicenseDetailView(PDFTemplateResponseMixin, DetailView):
         return self.model.objects.get(license_number=self.kwargs.get('license'))
 
 
-class PDFAmendmentLicenseDetailView(PDFTemplateResponseMixin, DetailView):
-    template_name = 'license/pdf_amend.html'
-    model = license.LicenseDetailsModel
-
-    def get_object(self, queryset=None):
-        return self.model.objects.get(license_number=self.kwargs.get('license'))
-
-
 class ExcelLicenseDetailView(View):
 
     def get(self, request, license):
@@ -303,13 +294,13 @@ class ExcelLicenseDetailView(View):
         return response
 
 
-class LicenseVerifyView(View):
-
-    def get(self, requests, pk):
-        license_obj = license.LicenseDetailsModel.objects.get(id=pk)
-        license_obj.is_audit = True
-        license_obj.save()
-        return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license_obj.license_number}))
+# class LicenseVerifyView(View):
+#
+#     def get(self, requests, pk):
+#         license_obj = license.LicenseDetailsModel.objects.get(id=pk)
+#         license_obj.is_audit = True
+#         license_obj.save()
+#         return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license_obj.license_number}))
 
 
 class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):
@@ -417,6 +408,8 @@ class ItemReportView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super(ItemReportView, self).get_context_data()
+        from core.models import ItemNameModel
+        context['items'] = ItemNameModel.objects.filter(is_active=True).values('name', 'id')
         return context
 
 
@@ -432,10 +425,6 @@ class ItemListReportView(PDFTemplateResponseMixin, TemplateView):
         tables = item_filter(item=item)
         context['page_title'] = title
         context['tables'] = tables
-        for table in tables:
-            if table['total']:
-                total_quantity = total_quantity + table['total']
-        context['total_quantity'] = total_quantity
         context['today'] = datetime.datetime.now().date()
         return context
 
@@ -577,49 +566,6 @@ class PDFAUBiscuitsReportView(PDFTemplateResponseMixin, PagedFilteredTableView):
 
             context['tables'] = tables
         except:
-            pass
-        return context
-
-
-class PremiumCalculationView(PDFTemplateResponseMixin, PagedFilteredTableView):
-    template_name = 'license/preimum_calc.html'
-    model = license.LicenseDetailsModel
-    table_class = tables.LicenseBiscuitPreimiumTable
-    context_object_name = 'license_list'
-
-    def get_context_data(self, **kwargs):
-        context = super(PremiumCalculationView, self).get_context_data()
-        tables = []
-        from allotment.scripts.aro import fetch_cif
-        fetch_cif()
-        from license.models import N2015
-        try:
-            expiry_limit = datetime.datetime.strptime('2020-07-31', '%Y-%m-%d')
-            biscuits_queryset = license.LicenseDetailsModel.objects.filter(export_license__norm_class__norm_class='E5',
-                                                                           license_expiry_date__gte=expiry_limit,
-                                                                           is_ge=True,
-                                                                           balance_cif__gte=4000).order_by(
-                'license_expiry_date')
-
-            q_biscuits_queryset = biscuits_queryset.filter(
-                Q(export_license__old_quantity=0) | Q(export_license__old_quantity=None))
-            from license.tables import LicenseBiscuitPreimiumTable
-            table = LicenseBiscuitPreimiumTable(
-                q_biscuits_queryset.filter(notification_number=N2015).distinct())
-            tables.append({'label': 'Biscuits Active', 'table': table})
-            confectionery_queryset = license.LicenseDetailsModel.objects.filter(
-                export_license__norm_class__norm_class='E1',
-                license_expiry_date__gte=expiry_limit,
-                is_ge=True,
-                balance_cif__gte=4000).order_by('license_expiry_date')
-            q_confectionery_queryset = confectionery_queryset.filter(
-                Q(export_license__old_quantity=0) | Q(export_license__old_quantity=None))
-            from license.tables import LicenseConfectioneryPreimiumTable
-            table = LicenseConfectioneryPreimiumTable(
-                q_confectionery_queryset.filter(notification_number=N2015).distinct())
-            tables.append({'label': 'Confectionery Active', 'table': table})
-            context['tables'] = tables
-        except Exception as e:
             pass
         return context
 

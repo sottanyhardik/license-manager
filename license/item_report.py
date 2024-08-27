@@ -5,8 +5,9 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.db.models import Q, Sum
 
+from core.models import ItemNameModel
 from license import models as license
-from license.models import N2009, N2015, LicenseDetailsModel, N2023, GE, MI
+from license.models import N2009, N2015, LicenseDetailsModel, N2023, GE, MI, LicenseImportItemsModel
 from license.tables import LicenseItemReportTable, LicenseConfectioneryReportTable
 
 
@@ -59,7 +60,7 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
         'license__license_expiry_date')
     for object in query_set:
         if item_name and item_name == 'DF':
-            object.available_value = object.license.get_per_cif.get('10_Restriction') or 0
+            object.available_value = object.license.get_per_cif.get('tenRestriction') or 0
         else:
             object.available_value = object.license.opening_balance
         if object.cif_fc == 0.01:
@@ -451,7 +452,6 @@ def steel_dfia(date_range=None, status=None):
     return tables
 
 
-
 def generate_dict(object, total_dict, new=False):
     dicts = {'license_number': object.license_number, 'license_date': object.license_date,
              'license_expiry': object.license_expiry_date, 'exporter': object.exporter}
@@ -611,6 +611,7 @@ def generate_dict(object, total_dict, new=False):
     }
     return dicts, total_dict
 
+
 def glass_dfia(date_range=None, status=None):
     if status == 'expired':
         is_expired = True
@@ -713,9 +714,9 @@ def pickle_query(date_range=None, party=None, exclude_party=None, is_expired=Fal
 
 def item_filter(date_range=None, item=None):
     tables = []
-    query_dict = {
-        'item__name__icontains': item
-    }
-    queryset = all_queryset(query_dict)
-    tables = query_set_table(tables, queryset, label="EDIBLE VEGETABLE OIL")
+    item_details = ItemNameModel.objects.get(id=item)
+    expiry_limit = datetime.datetime.today() - datetime.timedelta(days=15)
+    queryset = LicenseImportItemsModel.objects.filter(Q(item_id=item) & Q(license__license_expiry_date__gte=expiry_limit) & Q(available_quantity__gte=250) &  Q(available_value__gte=500))
+    tables.append({'label': item_details.name.title(), 'table': LicenseItemReportTable(queryset),
+                   'total': queryset.aggregate(Sum('available_quantity')).get('available_quantity__sum', 0.0)})
     return tables

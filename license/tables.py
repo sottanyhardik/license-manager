@@ -479,14 +479,15 @@ class LicenseTractorReportTable(LicenseReportTable):
     get_alloy_steel_qty = DecimalColumnWithTotal(verbose_name='ALLOY STEEL QTY',
                                                  accessor='get_alloy_steel_total.available_quantity_sum',
                                                  orderable=False)
-    get_hot_rolled_hsn = PrefixMixin.prefixed('get_hot_rolled.hs_code__hs_code',verbose_name='HOT ROLLED STEEL HSN',orderable=False)
+    get_hot_rolled_hsn = PrefixMixin.prefixed('get_hot_rolled.hs_code__hs_code', verbose_name='HOT ROLLED STEEL HSN',
+                                              orderable=False)
     get_hot_rolled_pd = dt2.Column(verbose_name='HOT ROLLED STEEL PD', accessor='get_hot_rolled.description',
                                    orderable=False)
     get_hot_rolled_total_qty = DecimalColumnWithTotal(verbose_name='HOT ROLLED STEEL TOTAL QTY',
                                                       accessor='get_hot_rolled.quantity_sum', orderable=False)
     get_hot_rolled_qty = DecimalColumnWithTotal(verbose_name='HOT ROLLED STEEL QTY',
                                                 accessor='get_hot_rolled.available_quantity_sum', orderable=False)
-    get_bearing_hsn = PrefixMixin.prefixed('get_bearing.hs_code__hs_code',verbose_name='BEARING HSN', orderable=False)
+    get_bearing_hsn = PrefixMixin.prefixed('get_bearing.hs_code__hs_code', verbose_name='BEARING HSN', orderable=False)
     get_bearing_pd = dt2.Column(verbose_name='BEARING PD', accessor='get_bearing.description',
                                 orderable=False)
     get_bearing_total_qty = DecimalColumnWithTotal(verbose_name='BEARING TOTAL QTY',
@@ -561,14 +562,14 @@ class LicenseGlassReportTable(LicenseReportTable):
 
 
 class LicensePickleReportTable(LicenseReportTable):
-    get_veg_oil_hsn = PrefixMixin.prefixed('get_veg_oil.hs_code__hs_code',verbose_name='Relevant Fats and Oils HSN',
+    get_veg_oil_hsn = PrefixMixin.prefixed('get_veg_oil.hs_code__hs_code', verbose_name='Relevant Fats and Oils HSN',
                                            orderable=False)
     get_veg_oil_pd = dt2.Column(verbose_name='Relevant Fats and Oils PD', accessor='get_veg_oil.description',
                                 orderable=False)
     get_veg_oil_qty = DecimalColumnWithTotal(verbose_name='Relevant Fats and Oils QTY',
                                              accessor='get_veg_oil.available_quantity_sum', orderable=False)
 
-    get_rfa_hsn = PrefixMixin.prefixed('get_rfa.hs_code__hs_code',verbose_name='Relevant Food Additives HSN',
+    get_rfa_hsn = PrefixMixin.prefixed('get_rfa.hs_code__hs_code', verbose_name='Relevant Food Additives HSN',
                                        orderable=False)
     get_rfa_pd = dt2.Column(verbose_name='Relevant Food Additives PD', accessor='get_rfa.description',
                             orderable=False)
@@ -610,8 +611,13 @@ class TruncatedBigTextColumn(dt2.Column):
 
 
 class ColumnWithThousandsSeparator(dt2.Column):
+    column_total = 0
+
     def render(self, value):
-        return intcomma(value)
+        return intcomma(round(value, 2))
+
+    def render_footer(self, bound_column, table):
+        return intcomma(round(self.column_total, 0))
 
 
 class LicenseItemReportTable(dt2.Table):
@@ -621,71 +627,15 @@ class LicenseItemReportTable(dt2.Table):
                                         accessor='license.license_expiry_date')
     license_exporter = TruncatedTextColumn(verbose_name='Exporter', accessor='license.exporter.name')
     item = dt2.Column(verbose_name='Item Description', accessor='description')
-    balance_quantity = ColumnWithThousandsSeparator()
-    balance_cif_fc = ColumnWithThousandsSeparator()
+    available_quantity = DecimalColumnWithTotal(verbose_name='Available Qty', accessor='available_quantity',
+                                                orderable=False)
+    available_value = DecimalColumnWithTotal(verbose_name='Available CIF', accessor='available_value', orderable=False)
 
     class Meta:
         model = models.LicenseImportItemsModel
         per_page = 500
         fields = ['sr_no', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
-                  'hs_code', 'item',
-                  'available_quantity', 'balance_cif_fc', 'comment']
-        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
-
-    def render_sr_no(self):
-        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
-        return next(self.row_sr_no)
-
-
-class LicenseBiscuitPreimiumTable(dt2.Table):
-    sr_no = dt2.Column(empty_values=(), orderable=False)
-    license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
-                                 orderable=False)
-    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    license_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
-    balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
-    sugar_value = ColumnTotal(verbose_name='Required Sugar Value', orderable=False, accessor='get_required_sugar_value')
-    rbd = RBDQuantityColumn(verbose_name='RBD Palmolein', orderable=False, accessor='get_rbd')
-    rbd_value = ColumnTotal(verbose_name='Required RBD Value', orderable=False, accessor='get_required_rbd_value')
-    m_n_m = MNMQuantityColumn(verbose_name='M & M', orderable=False, accessor='get_m_n_m')
-    m_n_m_value = ColumnTotal(verbose_name='Required M & M Value', orderable=False, accessor='get_required_mnm_value')
-    pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
-    paper = PaperQuantityColumn(verbose_name='Paper & Paper Board', orderable=False, accessor='get_paper')
-    balance_value = ColumnTotal(verbose_name='Balance CIF For PP', orderable=False, accessor='get_balance_value')
-
-    class Meta:
-        model = models.LicenseDetailsModel
-        per_page = 50
-        fields = ['sr_no', 'license', 'license_date', 'license_expiry_date',
-                  'party', 'balance_cif']
-        attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
-
-    def render_sr_no(self):
-        self.row_sr_no = getattr(self, 'row_sr_no', itertools.count(start=1))
-        return next(self.row_sr_no)
-
-
-class LicenseConfectioneryPreimiumTable(dt2.Table):
-    sr_no = dt2.Column(empty_values=(), orderable=False)
-    license = dt2.TemplateColumn('<a href="/license/{{ record.license_number }}/">{{ record.license_number }}</a>',
-                                 orderable=False)
-    license_expiry_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    license_date = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Expiry')
-    party = dt2.Column(verbose_name='Party', accessor='get_party_name', orderable=False)
-    balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    sugar = SugarQuantityColumn(verbose_name='Sugar', orderable=False, accessor='get_sugar')
-    sugar_value = ColumnTotal(verbose_name='Required Sugar Value', orderable=False, accessor='get_required_sugar_value')
-    pp = PPQuantityColumn(verbose_name='PP', orderable=False, accessor='get_pp')
-    paper = PaperQuantityColumn(verbose_name='Paper & Paper Board', orderable=False, accessor='get_paper')
-    balance_value = ColumnTotal(verbose_name='Balance CIF For PP', orderable=False, accessor='get_balance_value')
-
-    class Meta:
-        model = models.LicenseDetailsModel
-        per_page = 50
-        fields = ['sr_no', 'license', 'license_date', 'license_expiry_date',
-                  'party', 'balance_cif']
+                  'hs_code', 'item', 'available_quantity', 'available_value', 'comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 
     def render_sr_no(self):

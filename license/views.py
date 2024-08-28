@@ -319,10 +319,15 @@ class BaseReportView(TemplateView):
 
     def get_queryset(self):
         date = datetime.datetime.now() - datetime.timedelta(days=30)
-        return self.model.objects.filter(license_expiry_date__gte=date,
-                                         export_license__norm_class__norm_class=self.norm_class,
-                                         purchase_status=GE)
-
+        is_expired = self.kwargs.get('status') == 'expired'
+        if not is_expired:
+            return self.model.objects.filter(license_expiry_date__gte=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class,
+                                             purchase_status=GE)
+        else:
+            return self.model.objects.filter(license_expiry_date__lt=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class,
+                                             purchase_status=GE)
     def get_context_data(self, **kwargs):
         queryset = self.get_queryset()
         lower_balance_query = queryset.filter(balance_cif__lt=500)
@@ -345,61 +350,84 @@ class BiscuitReportView(BaseReportView):
     def get_queryset(self):
         date = datetime.datetime.now() - datetime.timedelta(days=30)
         party = self.kwargs.get('party')
+        is_expired = self.kwargs.get('status') == 'expired'
         if party == 'parle':
-            queryset = LicenseDetailsModel.objects.filter(exporter__name__icontains=self.kwargs.get('party'),
-                                                          license_expiry_date__gte=date,
-                                                          export_license__norm_class__norm_class='E5',
-                                                          purchase_status=GE)
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(exporter__name__icontains=self.kwargs.get('party'),
+                                                              license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=GE)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(exporter__name__icontains=self.kwargs.get('party'),
+                                                              license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=GE)
         elif party == 'mi':
-            queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
-                                                          export_license__norm_class__norm_class='E5',
-                                                          purchase_status=MI)
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=MI)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=MI)
         elif party == 'sm':
-            queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
-                                                          export_license__norm_class__norm_class='E5',
-                                                          purchase_status=SM)
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=SM)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=SM)
         elif party == 'ot':
-            queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
-                                                          export_license__norm_class__norm_class='E5',
-                                                          purchase_status=OT)
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=OT)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=OT)
         else:
-            queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
-                                                          export_license__norm_class__norm_class='E5',
-                                                          purchase_status=GE).exclude(exporter__name__icontains='parle')
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=GE).exclude(exporter__name__icontains='parle')
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=GE).exclude(exporter__name__icontains='parle')
         return queryset
 
 
 class ConfectioneryReportView(BaseReportView):
-    norm_class = 'E1'
+    norm_class = ['E1',]
     table_class = LicenseConfectioneryReportTable
 
 
 class NamkeenReportView(BaseReportView):
-    norm_class = 'E132'
+    norm_class = ['E132',]
     table_class = LicenseNamkeenReportTable
 
 
 class TractorReportView(BaseReportView):
-    norm_class = 'C969'
+    norm_class = ['C969',]
     table_class = LicenseTractorReportTable
 
 
 class SteelReportView(BaseReportView):
+    norm_class = ['C471', 'C460', 'C473']
     table_class = LicenseSteelReportTable
-
-    def get_queryset(self):
-        date = datetime.datetime.now() - datetime.timedelta(days=30)
-        return self.model.objects.filter(export_license__norm_class__norm_class__in=['C471', 'C460', 'C473'],
-                                         license_expiry_date__gte=date)
 
 
 class GlassReportView(BaseReportView):
-    norm_class = 'A3627'
+    norm_class = ['A3627', ]
     table_class = LicenseGlassReportTable
 
 
 class PickleReportView(BaseReportView):
-    norm_class = 'E126'
+    norm_class = ['E126', ]
     table_class = LicensePickleReportTable
 
 

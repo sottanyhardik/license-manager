@@ -246,70 +246,152 @@
                             </a>
                         </li>
                         <li>
-                            <a href="{% url 'report_biscuit' 'live' 'parle' %}">
+                            <a href="#">
                                 <i class="fa fa-list"></i>
-                                <span>Parle Biscuits List</span>
+                                <span>Live DFIA List</span>
                             </a>
+                            <ul>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'live' 'parle' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Parle Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'live' 'mi' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>MI Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'live' 'GE' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>GE Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'live' 'sm' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>SM Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'live' 'ot' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Other Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_confectionery' 'live' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Confectionery List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_namkeen' 'live' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Namkeen List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_pickle' 'live' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Pickle List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_tractor' 'live' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Tractor List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_steel' 'live' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Steel List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_glass' 'live' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Glass List</span>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                         <li>
-                            <a href="{% url 'report_biscuit' 'live' 'mi' %}">
+                            <a href="#">
                                 <i class="fa fa-list"></i>
-                                <span>MI Biscuits List</span>
+                                <span>Expired DFIA List</span>
                             </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'report_biscuit' 'live' 'GE' %}">
-                                <i class="fa fa-list"></i>
-                                <span>GE Biscuits List</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'report_biscuit' 'live' 'sm' %}">
-                                <i class="fa fa-list"></i>
-                                <span>SM Biscuits List</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'report_biscuit' 'live' 'ot' %}">
-                                <i class="fa fa-list"></i>
-                                <span>Other Biscuits List</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'report_confectionery' 'live' %}">
-                                <i class="fa fa-list"></i>
-                                <span>Confectionery List</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'report_namkeen' 'live' %}">
-                                <i class="fa fa-list"></i>
-                                <span>Namkeen List</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'report_pickle' 'live' %}">
-                                <i class="fa fa-list"></i>
-                                <span>Pickle List</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'report_tractor' 'live' %}">
-                                <i class="fa fa-list"></i>
-                                <span>Tractor List</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'report_steel' 'live' %}">
-                                <i class="fa fa-list"></i>
-                                <span>Steel List</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'report_glass' 'live' %}">
-                                <i class="fa fa-list"></i>
-                                <span>Glass List</span>
-                            </a>
+                            <ul>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'expired' 'parle' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Parle Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'expired' 'mi' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>MI Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'expired' 'GE' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>GE Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'expired' 'sm' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>SM Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_biscuit' 'expired' 'ot' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Other Biscuits List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_confectionery' 'expired' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Confectionery List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_namkeen' 'expired' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Namkeen List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_pickle' 'expired' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Pickle List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_tractor' 'expired' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Tractor List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_steel' 'expired' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Steel List</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{% url 'report_glass' 'expired' %}">
+                                        <i class="fa fa-list"></i>
+                                        <span>Glass List</span>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
 
                     </ul>

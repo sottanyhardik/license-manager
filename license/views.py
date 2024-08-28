@@ -23,7 +23,7 @@ from license.helper import round_down, check_license, fetch_item_details
 from . import forms, tables, filters
 from . import models as license
 from .item_report import item_filter
-from .models import GE, MI, LicenseDetailsModel, SM
+from .models import GE, MI, LicenseDetailsModel, SM, OT
 from .tables import LicenseBiscuitReportTable, LicenseConfectioneryReportTable, LicenseNamkeenReportTable, \
     LicenseSteelReportTable, LicenseTractorReportTable, LicenseGlassReportTable, LicensePickleReportTable
 

@@ -356,7 +356,7 @@ class LicenseDetailsModel(models.Model):
             veg_oil_cif = veg_oil * self.get_veg_oil.get('item__unit_price')
             veg_oil_details = {
                 'pko': {"quantity": 0, "value": 0 * 1},
-                'veg_oil': {"quantity": veg_oil, "value": max(veg_oil_cif, available_value)},
+                'veg_oil': {"quantity": veg_oil, "value": min(veg_oil_cif, available_value)},
                 'get_rbd': {"quantity": 0, "value": 0}
             }
             available_value = self.use_balance_cif(min(veg_oil_cif, available_value), available_value)

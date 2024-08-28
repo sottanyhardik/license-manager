@@ -323,7 +323,7 @@ class LicenseDetailsModel(models.Model):
     @cached_property
     def cif_value_balance_biscuits(self):
         available_value = self.get_balance_cif
-        restricted_value = self.get_per_cif.get('10_Restriction')
+        restricted_value = self.get_per_cif.get('tenRestriction')
         cif_juice = cif_swp = cif_cheese = veg_oil_details = 0
         juice_quantity = self.get_biscuit_juice.get('available_quantity_sum')
         if juice_quantity > 50 and restricted_value > 200:

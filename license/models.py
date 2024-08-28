@@ -30,11 +30,15 @@ NOTIFICATION_NORM_CHOICES = (
 GE = 'GE'
 MI = 'NP'
 IP = 'IP'
+SM = 'SM'
+OT = 'OT'
 
 LICENCE_PURCHASE = (
     (GE, 'GE Purchase'),
     (MI, 'GE Operating'),
-    (IP, 'GE Item Purchase')
+    (IP, 'GE Item Purchase'),
+    (SM, 'SM Purchase'),
+    (OT, 'OT Purchase'),
 )
 
 

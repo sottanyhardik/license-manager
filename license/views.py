@@ -23,7 +23,7 @@ from license.helper import round_down, check_license, fetch_item_details
 from . import forms, tables, filters
 from . import models as license
 from .item_report import item_filter
-from .models import GE, MI, LicenseDetailsModel
+from .models import GE, MI, LicenseDetailsModel, SM
 from .tables import LicenseBiscuitReportTable, LicenseConfectioneryReportTable, LicenseNamkeenReportTable, \
     LicenseSteelReportTable, LicenseTractorReportTable, LicenseGlassReportTable, LicensePickleReportTable
 
@@ -354,6 +354,14 @@ class BiscuitReportView(BaseReportView):
             queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
                                                           export_license__norm_class__norm_class='E5',
                                                           purchase_status=MI)
+        elif party == 'sm':
+            queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                          export_license__norm_class__norm_class='E5',
+                                                          purchase_status=SM)
+        elif party == 'ot':
+            queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                          export_license__norm_class__norm_class='E5',
+                                                          purchase_status=OT)
         else:
             queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
                                                           export_license__norm_class__norm_class='E5',

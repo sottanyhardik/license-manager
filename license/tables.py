@@ -507,6 +507,8 @@ class LicenseTractorReportTable(LicenseReportTable):
 
 
 class LicenseGlassReportTable(LicenseReportTable):
+    average_unit_price = dt2.Column(verbose_name='Average', accessor='average_unit_price',
+                                      orderable=False)
     get_glass_formers_pd = dt2.Column(verbose_name='Glass Former PD', accessor='get_glass_formers.description',
                                       orderable=False)
     get_glass_formers_total_qty = DecimalColumnWithTotal(verbose_name='Glass Former Total Qty',
@@ -518,6 +520,8 @@ class LicenseGlassReportTable(LicenseReportTable):
                                          accessor='cif_value_balance_glass.borax', orderable=False)
     rutile_qty = DecimalColumnWithTotal(verbose_name='Rutile QTY',
                                         accessor='get_glass_formers.rutile', orderable=False)
+    unit_price = dt2.Column(verbose_name='Unit Price', accessor='average_unit_price',
+                                      orderable=False)
     rutile_value = DecimalColumnWithTotal(verbose_name='Rutile Value',
                                           accessor='cif_value_balance_glass.rutile', orderable=False)
     get_intermediates_namely_pd = dt2.Column(verbose_name='Intermediates Namely PD',

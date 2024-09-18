@@ -317,11 +317,8 @@ class LicenseBiscuitReportTable(LicenseReportTable):
     pp_hsn = PrefixMixin.prefixed('get_pp.hs_code__hs_code', verbose_name='PP HSN', orderable=False)
     pp_pd = dt2.Column(verbose_name='PP PD', accessor='get_pp.description', orderable=False)
     pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
-    pnp_hsn = PrefixMixin.prefixed('get_paper_and_paper.hs_code__hs_code', verbose_name='Paper & Paper HSN',
-                                   orderable=False)
-    pnp_pd = dt2.Column(verbose_name='Paper & Paper PD', accessor='get_paper_and_paper.description', orderable=False)
-    pnp_qty = DecimalColumnWithTotal(verbose_name='Paper & Paper QTY',
-                                     accessor='get_paper_and_paper.available_quantity_sum', orderable=False)
+    get_aluminium = DecimalColumnWithTotal(verbose_name='Aluminium Foil QTY',
+                                           accessor='get_aluminium.available_quantity_sum', orderable=False)
     balance_cif_value = DecimalColumnWithTotal(verbose_name='Wastage CIF',
                                                accessor='cif_value_balance_biscuits.available_value', orderable=False)
 

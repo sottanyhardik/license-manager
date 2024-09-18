@@ -32,14 +32,20 @@ def find_values(Y1, Y2, Z1, Z2):
 
 
 # call function with specific values
-def optimize_product_distribution(pko_unit, veg_oil_unit, pko_quantity, available_value):
-    pko, veg_oil = find_values(float(pko_unit), float(veg_oil_unit), float(available_value), float(pko_quantity))
-    return {
-        'pko': {"quantity": pko, "value": Decimal(pko) * pko_unit},
-        'veg_oil': {"quantity": veg_oil, "value": Decimal(veg_oil) * veg_oil_unit},
-        'get_rbd': {"quantity": 0, "value": 0}
-    }
-
+def optimize_product_distribution(pko_unit, veg_oil_unit, available_qty, available_value, is_pko):
+    pko, veg_oil = find_values(float(pko_unit), float(veg_oil_unit), float(available_value), float(available_qty))
+    if is_pko:
+        return {
+            'pko': {"quantity": pko, "value": Decimal(pko) * Decimal(pko_unit)},
+            'veg_oil': {"quantity": veg_oil, "value": Decimal(veg_oil) * Decimal(veg_oil_unit)},
+            'get_rbd': {"quantity": 0, "value": 0}
+        }
+    else:
+        return {
+            'pko': {"quantity": 0, "value": 0},
+            'veg_oil': {"quantity": veg_oil, "value": Decimal(veg_oil) * Decimal(veg_oil_unit)},
+            'get_rbd': {"quantity": pko, "value": Decimal(pko) * Decimal(pko_unit)}
+        }
 # write a python function to find X1 & X2
 # X1*Y1 + X2*Y2<=Z1
 # X1 + X2<=Z2

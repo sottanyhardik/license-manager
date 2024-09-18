@@ -345,31 +345,29 @@ class LicenseDetailsModel(models.Model):
             cif_cheese = min(cif_cheese, available_value)
             available_value = self.use_balance_cif(cif_cheese, available_value)
         pko_quantity = self.get_pko.get('available_quantity_sum')
-        veg_oil = self.get_veg_oil.get('available_quantity_sum')
-        get_rbd = self.get_rbd.get('available_quantity_sum')
+        veg_oil_quantity = self.get_veg_oil.get('available_quantity_sum')
+        rbd_quantity = self.get_rbd.get('available_quantity_sum')
         from core.scripts.calculation import optimize_product_distribution
         if pko_quantity > 100 and available_value:
-            veg_oil_details = optimize_product_distribution(self.get_pko.get('item__unit_price', 1),
-                                                            self.get_veg_oil.get('item__unit_price', 9), pko_quantity,
-                                                            available_value)
+            veg_oil_details = optimize_product_distribution(self.get_pko.get('item__unit_price', 1.340),
+                                                            self.get_veg_oil.get('item__unit_price', 7), pko_quantity,
+                                                            available_value, is_pko=True)
             pko = min(veg_oil_details.get('pko').get('value'), available_value)
             available_value = self.use_balance_cif(pko, available_value)
             veg_oil = min(veg_oil_details.get('veg_oil').get('value'), available_value)
             available_value = self.use_balance_cif(veg_oil, available_value)
-        elif veg_oil > 100:
-            veg_oil_cif = veg_oil * self.get_veg_oil.get('item__unit_price')
-            veg_oil_details = {
-                'pko': {"quantity": 0, "value": 0 * 1},
-                'veg_oil': {"quantity": veg_oil, "value": min(veg_oil_cif, available_value)},
-                'get_rbd': {"quantity": 0, "value": 0}
-            }
-            available_value = self.use_balance_cif(min(veg_oil_cif, available_value), available_value)
-        elif get_rbd > 100:
-            rbd_cif = get_rbd * self.get_rbd.get('item__unit_price')
+        elif veg_oil_quantity > 100:
+            veg_oil_details = optimize_product_distribution(0.985,7, veg_oil_quantity, available_value, is_pko=False)
+            rbd = min(veg_oil_details.get('get_rbd').get('value'), available_value)
+            available_value = self.use_balance_cif(rbd, available_value)
+            veg_oil = min(veg_oil_details.get('veg_oil').get('value'), available_value)
+            available_value = self.use_balance_cif(veg_oil, available_value)
+        elif rbd_quantity > 100:
+            rbd_cif = rbd_quantity * self.get_rbd.get('item__unit_price')
             veg_oil_details = {
                 'pko': {"quantity": 0, "value": 0 * 1},
                 'veg_oil': {"quantity": 0, "value": 0},
-                'get_rbd': {"quantity": get_rbd, "value": min(rbd_cif, available_value)}
+                'get_rbd': {"quantity": rbd_quantity, "value": min(rbd_cif, available_value)}
             }
             available_value = self.use_balance_cif(min(rbd_cif, available_value), available_value)
         else:

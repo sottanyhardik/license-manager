@@ -348,7 +348,13 @@ class LicenseDetailsModel(models.Model):
         veg_oil_quantity = self.get_veg_oil.get('available_quantity_sum')
         rbd_quantity = self.get_rbd.get('available_quantity_sum')
         from core.scripts.calculation import optimize_product_distribution
-        if pko_quantity > 100 and available_value:
+        if pko_quantity > 100 and available_value < (pko_quantity*self.get_pko.get('item__unit_price', 1.340)):
+            veg_oil_details = {
+                'pko': {"quantity": Decimal(Decimal(available_value)/Decimal(self.get_pko.get('item__unit_price', 1.340))), "value": available_value},
+                'veg_oil': {"quantity": 0, "value": 0},
+                'get_rbd': {"quantity": 0, "value": 0}
+            }
+        elif pko_quantity > 100 and available_value:
             veg_oil_details = optimize_product_distribution(self.get_pko.get('item__unit_price', 1.340),
                                                             self.get_veg_oil.get('item__unit_price', 7), pko_quantity,
                                                             available_value, is_pko=True)

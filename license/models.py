@@ -175,7 +175,7 @@ class LicenseDetailsModel(models.Model):
 
     @cached_property
     def average_unit_price(self):
-        return round(Decimal(self.cif_value_balance_glass.get('rutile'))/self.get_glass_formers.get('rutile'), 2)
+        return round(Decimal(self.cif_value_balance_glass.get('rutile')) / self.get_glass_formers.get('rutile'), 2)
 
     @cached_property
     def get_intermediates_namely(self):
@@ -241,8 +241,17 @@ class LicenseDetailsModel(models.Model):
             .order_by('item__name')
 
     def get_item_data(self, item_name):
-        return next((item for item in self.import_license_grouped if item['item__name'] == item_name),
-                    {'available_quantity_sum': 0, 'quantity_sum': 0})
+        if item_name in ['JUICE','FOOD FLAVOUR BISCUITS','DIETARY FIBRE','LEAVENING AGENT','STARCH 1108','STARCH 3505','FRUIT/COCOA']:
+            restricted_value = self.get_per_cif.get('tenRestriction')
+            if restricted_value > 200:
+                return next((item for item in self.import_license_grouped if item['item__name'] == item_name),
+                            {'available_quantity_sum': 0, 'quantity_sum': 0})
+            else:
+                return {'available_quantity_sum': 0, 'quantity_sum': 0}
+
+        else:
+            return next((item for item in self.import_license_grouped if item['item__name'] == item_name),
+                        {'available_quantity_sum': 0, 'quantity_sum': 0})
 
     @cached_property
     def import_license_head_grouped(self):
@@ -348,9 +357,11 @@ class LicenseDetailsModel(models.Model):
         veg_oil_quantity = self.get_veg_oil.get('available_quantity_sum')
         rbd_quantity = self.get_rbd.get('available_quantity_sum')
         from core.scripts.calculation import optimize_product_distribution
-        if pko_quantity > 100 and available_value < (pko_quantity*self.get_pko.get('item__unit_price', 1.340)):
+        if pko_quantity > 100 and available_value < (pko_quantity * self.get_pko.get('item__unit_price', 1.340)):
             veg_oil_details = {
-                'pko': {"quantity": Decimal(Decimal(available_value)/Decimal(self.get_pko.get('item__unit_price', 1.340))), "value": available_value},
+                'pko': {"quantity": Decimal(
+                    Decimal(available_value) / Decimal(self.get_pko.get('item__unit_price', 1.340))),
+                        "value": available_value},
                 'veg_oil': {"quantity": 0, "value": 0},
                 'get_rbd': {"quantity": 0, "value": 0}
             }
@@ -363,7 +374,7 @@ class LicenseDetailsModel(models.Model):
             veg_oil = min(veg_oil_details.get('veg_oil').get('value'), available_value)
             available_value = self.use_balance_cif(veg_oil, available_value)
         elif veg_oil_quantity > 100:
-            veg_oil_details = optimize_product_distribution(0.985,7, veg_oil_quantity, available_value, is_pko=False)
+            veg_oil_details = optimize_product_distribution(0.985, 7, veg_oil_quantity, available_value, is_pko=False)
             rbd = min(veg_oil_details.get('get_rbd').get('value'), available_value)
             available_value = self.use_balance_cif(rbd, available_value)
             veg_oil = min(veg_oil_details.get('veg_oil').get('value'), available_value)
@@ -382,7 +393,8 @@ class LicenseDetailsModel(models.Model):
                 'veg_oil': {"quantity": 0, "value": 0},
                 'get_rbd': {"quantity": 0, "value": 0}
             }
-        return {'cif_juice': cif_juice, 'cif_swp': cif_swp, 'cif_cheese': cif_cheese, 'veg_oil': veg_oil_details,
+        return {'cif_juice': cif_juice, 'restricted_value': restricted_value, 'cif_swp': cif_swp,
+                'cif_cheese': cif_cheese, 'veg_oil': veg_oil_details,
                 'available_value': available_value}
 
     @cached_property

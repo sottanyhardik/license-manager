@@ -285,16 +285,18 @@ class LicenseBiscuitReportTable(LicenseReportTable):
     veg_cif = DecimalColumnWithTotal(verbose_name='VEG CIF',
                                      accessor='cif_value_balance_biscuits.veg_oil.veg_oil.value', orderable=False)
     ten_restriction = DecimalColumnWithTotal(verbose_name='10% Value Bal',
-                                             accessor='cif_value_balance_biscuits.cif_juice', orderable=False)
+                                             accessor='cif_value_balance_biscuits.restricted_value', orderable=False)
     juice_pd = dt2.Column(verbose_name='Juice PD', accessor='get_biscuit_juice.description', orderable=False)
     juice_qty = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_biscuit_juice.available_quantity_sum',
                                        orderable=False)
+    juice_cif = DecimalColumnWithTotal(verbose_name='JUICE CIF',
+                                             accessor='cif_value_balance_biscuits.cif_juice', orderable=False)
     ff_pd = dt2.Column(verbose_name='FF PD', accessor='get_food_flavour.description', orderable=False)
     ff_qty = DecimalColumnWithTotal(verbose_name='FF QTY', accessor='get_food_flavour.available_quantity_sum',
                                     orderable=False)
     df_qty = DecimalColumnWithTotal(verbose_name='DF Qty', accessor='get_dietary_fibre.available_quantity_sum',
                                     orderable=False)
-    f_f_qty = DecimalColumnWithTotal(verbose_name='Fruit/Cocoa', accessor='oil_queryset.available_quantity_sum',
+    f_f_qty = DecimalColumnWithTotal(verbose_name='Fruit/Cocoa', accessor='get_fruit.available_quantity_sum',
                                      orderable=False)
     la_qty = DecimalColumnWithTotal(verbose_name='Leavening Agent Qty',
                                     accessor='get_leavening_agent.available_quantity_sum',

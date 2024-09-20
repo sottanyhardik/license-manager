@@ -298,11 +298,15 @@ class LicenseBiscuitReportTable(LicenseReportTable):
                                     orderable=False)
     f_f_qty = DecimalColumnWithTotal(verbose_name='Fruit/Cocoa', accessor='get_fruit.available_quantity_sum',
                                      orderable=False)
+    f_f_cif = DecimalColumnWithTotal(verbose_name='Fruit/Cocoa CIF',
+                                       accessor='cif_value_balance_biscuits.f_f_cif', orderable=False)
     la_qty = DecimalColumnWithTotal(verbose_name='Leavening Agent Qty',
                                     accessor='get_leavening_agent.available_quantity_sum',
                                     orderable=False)
     starch_1108 = DecimalColumnWithTotal(verbose_name='Starch 1108', accessor='get_wheat_starch.available_quantity_sum',
                                          orderable=False)
+    starch__1108_cif = DecimalColumnWithTotal(verbose_name='Starch 1108 CIF',
+                                       accessor='cif_value_balance_biscuits.wheat_starch_cif', orderable=False)
     starch_3505 = DecimalColumnWithTotal(verbose_name='Starch 3505',
                                          accessor='get_modified_starch.available_quantity_sum', orderable=False)
     mnm_pd = dt2.Column(verbose_name='Milk & Milk PD', accessor='get_mnm_pd.description', orderable=False)

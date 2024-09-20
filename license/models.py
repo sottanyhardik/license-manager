@@ -241,7 +241,8 @@ class LicenseDetailsModel(models.Model):
             .order_by('item__name')
 
     def get_item_data(self, item_name):
-        if item_name in ['JUICE','FOOD FLAVOUR BISCUITS','DIETARY FIBRE','LEAVENING AGENT','STARCH 1108','STARCH 3505','FRUIT/COCOA']:
+        if item_name in ['JUICE', 'FOOD FLAVOUR BISCUITS', 'DIETARY FIBRE', 'LEAVENING AGENT', 'STARCH 1108',
+                         'STARCH 3505', 'FRUIT/COCOA']:
             restricted_value = self.get_per_cif.get('tenRestriction')
             if restricted_value > 200:
                 return next((item for item in self.import_license_grouped if item['item__name'] == item_name),
@@ -337,11 +338,13 @@ class LicenseDetailsModel(models.Model):
     def cif_value_balance_biscuits(self):
         available_value = self.get_balance_cif
         restricted_value = self.get_per_cif.get('tenRestriction')
-        cif_juice = cif_swp = cif_cheese = veg_oil_details = 0
+        cif_juice = cif_swp = cif_cheese = f_f_cif = wheat_starch_cif = 0
         juice_quantity = self.get_biscuit_juice.get('available_quantity_sum')
         if juice_quantity > 50 and restricted_value > 200:
             cif_juice = min(juice_quantity * self.get_biscuit_juice.get('item__unit_price'), restricted_value)
-            cif_juice = min(cif_juice, available_value)
+            restrict_value = min(available_value, restricted_value)
+            cif_juice = min(cif_juice, restrict_value)
+            restricted_value = self.use_balance_cif(cif_juice, restricted_value)
             available_value = self.use_balance_cif(cif_juice, available_value)
         swp_quantity = self.get_swp.get('available_quantity_sum')
         if swp_quantity > 100:
@@ -361,7 +364,7 @@ class LicenseDetailsModel(models.Model):
             veg_oil_details = {
                 'pko': {"quantity": Decimal(
                     Decimal(available_value) / Decimal(self.get_pko.get('item__unit_price', 1.340))),
-                        "value": available_value},
+                    "value": available_value},
                 'veg_oil': {"quantity": 0, "value": 0},
                 'get_rbd': {"quantity": 0, "value": 0}
             }
@@ -393,9 +396,23 @@ class LicenseDetailsModel(models.Model):
                 'veg_oil': {"quantity": 0, "value": 0},
                 'get_rbd': {"quantity": 0, "value": 0}
             }
+        wheat_starch_quantity = self.get_wheat_starch.get('available_quantity_sum')
+        if wheat_starch_quantity > 100:
+            wheat_starch_cif = wheat_starch_quantity * self.get_wheat_starch.get('item__unit_price')
+            restrict_value = min(available_value, restricted_value)
+            wheat_starch_cif = min(wheat_starch_cif, restrict_value)
+            restricted_value = self.use_balance_cif(wheat_starch_cif, restricted_value)
+            available_value = self.use_balance_cif(wheat_starch_cif, available_value)
+        cocoa_quantity = self.get_fruit.get('available_quantity_sum')
+        if cocoa_quantity > 100:
+            f_f_cif = cocoa_quantity * self.get_fruit.get('item__unit_price')
+            restrict_value = min(available_value, restricted_value)
+            f_f_cif = min(f_f_cif, restrict_value)
+            restricted_value = self.use_balance_cif(f_f_cif, restricted_value)
+            available_value = self.use_balance_cif(f_f_cif, available_value)
         return {'cif_juice': cif_juice, 'restricted_value': restricted_value, 'cif_swp': cif_swp,
-                'cif_cheese': cif_cheese, 'veg_oil': veg_oil_details,
-                'available_value': available_value}
+                'cif_cheese': cif_cheese, 'veg_oil': veg_oil_details, 'f_f_cif': f_f_cif,
+                'wheat_starch_cif': wheat_starch_cif, 'available_value': available_value}
 
     @cached_property
     def get_pp(self):

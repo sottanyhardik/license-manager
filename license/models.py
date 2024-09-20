@@ -337,14 +337,14 @@ class LicenseDetailsModel(models.Model):
     @cached_property
     def cif_value_balance_biscuits(self):
         available_value = self.get_balance_cif
-        restricted_value = self.get_per_cif.get('tenRestriction')
+        restricted_value = restricted_value_new = self.get_per_cif.get('tenRestriction')
         cif_juice = cif_swp = cif_cheese = f_f_cif = wheat_starch_cif = 0
         juice_quantity = self.get_biscuit_juice.get('available_quantity_sum')
         if juice_quantity > 50 and restricted_value > 200:
             cif_juice = min(juice_quantity * self.get_biscuit_juice.get('item__unit_price'), restricted_value)
             restrict_value = min(available_value, restricted_value)
             cif_juice = min(cif_juice, restrict_value)
-            restricted_value = self.use_balance_cif(cif_juice, restricted_value)
+            restricted_value_new = self.use_balance_cif(cif_juice, restricted_value)
             available_value = self.use_balance_cif(cif_juice, available_value)
         swp_quantity = self.get_swp.get('available_quantity_sum')
         if swp_quantity > 100:
@@ -399,16 +399,16 @@ class LicenseDetailsModel(models.Model):
         wheat_starch_quantity = self.get_wheat_starch.get('available_quantity_sum')
         if wheat_starch_quantity > 100:
             wheat_starch_cif = wheat_starch_quantity * self.get_wheat_starch.get('item__unit_price')
-            restrict_value = min(available_value, restricted_value)
+            restrict_value = min(available_value, restricted_value_new)
             wheat_starch_cif = min(wheat_starch_cif, restrict_value)
-            restricted_value = self.use_balance_cif(wheat_starch_cif, restricted_value)
+            restricted_value_new = self.use_balance_cif(wheat_starch_cif, restricted_value_new)
             available_value = self.use_balance_cif(wheat_starch_cif, available_value)
         cocoa_quantity = self.get_fruit.get('available_quantity_sum')
         if cocoa_quantity > 100:
             f_f_cif = cocoa_quantity * self.get_fruit.get('item__unit_price')
-            restrict_value = min(available_value, restricted_value)
+            restrict_value = min(available_value, restricted_value_new)
             f_f_cif = min(f_f_cif, restrict_value)
-            restricted_value = self.use_balance_cif(f_f_cif, restricted_value)
+            restricted_value_new = self.use_balance_cif(f_f_cif, restricted_value_new)
             available_value = self.use_balance_cif(f_f_cif, available_value)
         return {'cif_juice': cif_juice, 'restricted_value': restricted_value, 'cif_swp': cif_swp,
                 'cif_cheese': cif_cheese, 'veg_oil': veg_oil_details, 'f_f_cif': f_f_cif,

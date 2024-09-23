@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.functional import cached_property
 from allotment.models import AllotmentItems, Debit
 from bill_of_entry.models import RowDetails, ARO
+from core.models import ItemNameModel
 from license.helper import round_down
 
 DFIA = "26"
@@ -359,6 +360,8 @@ class LicenseDetailsModel(models.Model):
         pko_quantity = self.get_pko.get('available_quantity_sum')
         veg_oil_quantity = self.get_veg_oil.get('available_quantity_sum')
         rbd_quantity = self.get_rbd.get('available_quantity_sum')
+        veg_oil_qs = ItemNameModel.objects.filter(name='EDIBLE VEGETABLE OIL').first()
+        veg_oil_cif = veg_oil_qs.unit_price if veg_oil_qs and veg_oil_qs.unit_price is not None else 8
         from core.scripts.calculation import optimize_product_distribution
         if pko_quantity > 100 and available_value < (pko_quantity * self.get_pko.get('item__unit_price', 1.340)):
             veg_oil_details = {
@@ -370,14 +373,14 @@ class LicenseDetailsModel(models.Model):
             }
         elif pko_quantity > 100 and available_value:
             veg_oil_details = optimize_product_distribution(self.get_pko.get('item__unit_price', 1.340),
-                                                            self.get_veg_oil.get('item__unit_price', 7), pko_quantity,
+                                                            veg_oil_cif, pko_quantity,
                                                             available_value, is_pko=True)
             pko = min(veg_oil_details.get('pko').get('value'), available_value)
             available_value = self.use_balance_cif(pko, available_value)
             veg_oil = min(veg_oil_details.get('veg_oil').get('value'), available_value)
             available_value = self.use_balance_cif(veg_oil, available_value)
         elif veg_oil_quantity > 100:
-            veg_oil_details = optimize_product_distribution(0.985, 7, veg_oil_quantity, available_value, is_pko=False)
+            veg_oil_details = optimize_product_distribution(0.985, veg_oil_cif, veg_oil_quantity, available_value, is_pko=False)
             rbd = min(veg_oil_details.get('get_rbd').get('value'), available_value)
             available_value = self.use_balance_cif(rbd, available_value)
             veg_oil = min(veg_oil_details.get('veg_oil').get('value'), available_value)

@@ -340,6 +340,8 @@ class LicenseBiscuitReportTable(LicenseReportTable):
 
 
 class LicenseConfectioneryReportTable(LicenseReportTable):
+    get_sugar = DecimalColumnWithTotal(verbose_name='Sugar Qty', accessor='sugar_quantity.available_quantity_sum',
+                                       orderable=False)
     get_juice = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_juice.available_quantity_sum',
                                        orderable=False)
     get_tartaric_acid = DecimalColumnWithTotal(verbose_name='Tartaric Acid Qty',

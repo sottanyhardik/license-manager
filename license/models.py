@@ -267,6 +267,10 @@ class LicenseDetailsModel(models.Model):
         return next((item for item in self.import_license_head_grouped if item['item__head__name'] == item_name),
                     {'available_quantity_sum': 0, 'quantity_sum': 0})
 
+    @cached_property
+    def sugar_quantity(self):
+        return self.get_item_data('SUGAR')
+
     """
     Vegetable Oil Logics 
     """

@@ -109,36 +109,10 @@ class LicenseItemListUpdateView(UpdateWithInlinesView):
         if not self.object.is_audit:
             if self.object.export_license.all().exists():
                 for export_item in self.object.export_license.all():
-                    if export_item.norm_class:
-                        for import_item in export_item.norm_class.import_norm.all():
-                            if not self.object.ledger_date:
-                                try:
-                                    import_item_obj, bool = license.LicenseImportItemsModel.objects.get_or_create(
-                                        license=self.object,
-                                        serial_number=import_item.sr_no)
-                                except:
-                                    import_item_obj = None
-                            else:
-                                try:
-                                    import_item_obj = license.LicenseImportItemsModel.objects.get(license=self.object,
-                                                                                                  serial_number=import_item.sr_no)
-                                except:
-                                    import_item_obj = None
-                            if import_item_obj:
-                                if not import_item_obj.quantity:
-                                    import_item_obj.quantity = round_down(
-                                        export_item.net_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
-                                        3)
-                                if import_item_obj.old_quantity == 0:
-                                    import_item_obj.old_quantity = round_down(
-                                        export_item.old_quantity * import_item.quantity / export_item.norm_class.export_norm.quantity,
-                                        0)
-                                import_item_obj.save()
-                    else:
-                        if self.object.import_license.all().first() and export_item.net_quantity != 0:
-                            value = round(float(
-                                self.object.import_license.all().first().quantity) / float(
-                                export_item.net_quantity) * 100)
+                    if self.object.import_license.all().first() and export_item.net_quantity != 0:
+                        value = round(float(
+                            self.object.import_license.all().first().quantity) / float(
+                            export_item.net_quantity) * 100)
             self.inlines = [LicenseImportItemInline]
         return super(LicenseItemListUpdateView, self).get_inlines()
 

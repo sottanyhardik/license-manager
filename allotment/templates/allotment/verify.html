@@ -70,7 +70,7 @@
                         </thead>
                         <tbody>
                         {% for allotment in object.allotment_details.all %}
-                            <tr>
+                            <tr {% if not allotment.ledger %}style="background-color: #FFFF00; color: #FF0000"{% endif %}>
                                 <td>{{ forloop.counter }}</td>
                                 <td>{{ allotment.serial_number }}</td>
                                 <td>{{ allotment.license_number }}</td>

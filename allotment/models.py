@@ -113,6 +113,11 @@ class AllotmentItems(models.Model):
         return self.item.serial_number
 
     @cached_property
+    def ledger(self):
+        return self.item.license.ledger_date
+
+
+    @cached_property
     def product_description(self):
         return self.item.description
 

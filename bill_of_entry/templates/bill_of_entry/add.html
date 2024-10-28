@@ -4,7 +4,7 @@
 {% block content %}
     <form action="
 
-            {% if inlines %}{% url 'bill-of-entry-items'  object.bill_of_entry_number %}{% elif object %}{% url 'bill-of-entry-update' object.bill_of_entry_number %}{% else %}{% url 'bill-of-entry-create' %}{% endif %}"
+            {% if inlines %}{% url 'bill-of-entry-items'  object.bill_of_entry_number object.company_id %}{% elif object %}{% url 'bill-of-entry-update' object.bill_of_entry_number %}{% else %}{% url 'bill-of-entry-create' %}{% endif %}"
           method="post" novalidate
           enctype="multipart/form-data">
         {% csrf_token %}

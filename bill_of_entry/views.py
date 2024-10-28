@@ -100,7 +100,7 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
         return super(BillOfEntryUpdateView, self).dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
-        object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
+        object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'), company_id=self.kwargs.get('company'))
         return object
 
     def get_inlines(self):

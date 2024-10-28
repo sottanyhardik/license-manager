@@ -16,7 +16,6 @@ click-plugins
 click-repl
 cryptography
 cssselect2
-Cython
 defusedxml
 distlib
 distro

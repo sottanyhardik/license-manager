@@ -76,11 +76,11 @@ class BillOfEntryUpdateDetailView(UpdateView):
     form_class = forms.BillOfEntryForm
 
     def get_object(self, queryset=None):
-        object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
+        object = self.model.objects.get(id=self.kwargs.get('pk'))
         return object
 
     def get_success_url(self):
-        boe = self.kwargs.get('boe')
+        boe = self.object.bill_of_entry_number
         return reverse('bill-of-entry-ajax-list') + '?bill_of_entry_number=' + str(boe)
 
 
@@ -91,7 +91,7 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
     inlines = [BillOfEntryLicenseImportItemInline, ]
 
     def get_success_url(self):
-        boe = self.kwargs.get('boe')
+        boe = self.object.bill_of_entry_number
         return reverse('bill-of-entry-ajax-list') + '?bill_of_entry_number=' + str(boe)
 
     def dispatch(self, request, *args, **kwargs):
@@ -100,7 +100,7 @@ class BillOfEntryUpdateView(UpdateWithInlinesView):
         return super(BillOfEntryUpdateView, self).dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):
-        object = self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'), company_id=self.kwargs.get('company'))
+        object = self.model.objects.get(id=self.kwargs.get('pk'))
         return object
 
     def get_inlines(self):
@@ -227,7 +227,7 @@ class GenerateTransferLetterView(FormView):
         return self.render_to_response(context)
 
     def get_object(self):
-        return self.model.objects.get(bill_of_entry_number=self.kwargs.get('boe'))
+        return self.model.objects.get(id=self.kwargs.get('pk'))
 
     def get_initial(self):
         initial = super().get_initial()

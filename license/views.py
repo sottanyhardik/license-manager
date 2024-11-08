@@ -3,6 +3,7 @@ import os
 from io import BytesIO, StringIO
 
 import xlsxwriter
+from django.shortcuts import redirect
 from django.utils.translation import gettext_lazy
 import xhtml2pdf.pisa as pisa
 from django.db.models import Q
@@ -26,6 +27,7 @@ from .item_report import item_filter
 from .models import GE, MI, LicenseDetailsModel, SM, OT
 from .tables import LicenseBiscuitReportTable, LicenseConfectioneryReportTable, LicenseNamkeenReportTable, \
     LicenseSteelReportTable, LicenseTractorReportTable, LicenseGlassReportTable, LicensePickleReportTable
+from .tasks import update_items
 
 
 class LicenseExportItemInline(InlineFormSetFactory):
@@ -688,3 +690,10 @@ def calculate_balance(balance_value, ditem_dict, debits):
         ditem_dict['unit_price'] = balance_value / ditem_dict['quantity']
         balance_value = 0
     return debits, balance_value, ditem_dict
+
+
+class RefreshItems(View):
+    def get(self, request, *args, **kwargs):
+        # Check if the 'run_task' parameter is present in the query string
+        update_items.delay()  # Run the task in the background
+        return redirect(reverse('dashboard'))  # Redirect back to the same page without parameters

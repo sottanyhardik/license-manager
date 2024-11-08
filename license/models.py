@@ -799,7 +799,7 @@ class LicenseInwardOutwardModel(models.Model):
         return self.license.ge_file_number
 
 
-@receiver(post_save, sender=LicenseImportItemsModel, dispatch_uid="update_balance")
+@receiver(post_save, sender=LicenseImportItemsModel)
 def update_balance(sender, instance, **kwargs):
     item = instance
     from bill_of_entry.tasks import update_balance_values_task

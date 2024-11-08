@@ -240,6 +240,12 @@
                     <a href="#">Reports</a>
                     <ul style="display: none;">
                         <li>
+                            <a href="{% url 'refresh_items' %}">
+                                <i class="fa fa-list"></i>
+                                <span>Refresh Balance</span>
+                            </a>
+                        </li>
+                        <li>
                             <a href="{% url 'item_report' %}">
                                 <i class="fa fa-list"></i>
                                 <span>Items List</span>

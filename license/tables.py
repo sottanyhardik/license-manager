@@ -290,7 +290,7 @@ class LicenseBiscuitReportTable(LicenseReportTable):
     juice_qty = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_biscuit_juice.available_quantity_sum',
                                        orderable=False)
     juice_cif = DecimalColumnWithTotal(verbose_name='JUICE CIF',
-                                             accessor='cif_value_balance_biscuits.cif_juice', orderable=False)
+                                       accessor='cif_value_balance_biscuits.cif_juice', orderable=False)
     ff_pd = dt2.Column(verbose_name='FF PD', accessor='get_food_flavour.description', orderable=False)
     ff_qty = DecimalColumnWithTotal(verbose_name='FF QTY', accessor='get_food_flavour.available_quantity_sum',
                                     orderable=False)
@@ -299,14 +299,14 @@ class LicenseBiscuitReportTable(LicenseReportTable):
     f_f_qty = DecimalColumnWithTotal(verbose_name='Fruit/Cocoa', accessor='get_fruit.available_quantity_sum',
                                      orderable=False)
     f_f_cif = DecimalColumnWithTotal(verbose_name='Fruit/Cocoa CIF',
-                                       accessor='cif_value_balance_biscuits.f_f_cif', orderable=False)
+                                     accessor='cif_value_balance_biscuits.f_f_cif', orderable=False)
     la_qty = DecimalColumnWithTotal(verbose_name='Leavening Agent Qty',
                                     accessor='get_leavening_agent.available_quantity_sum',
                                     orderable=False)
     starch_1108 = DecimalColumnWithTotal(verbose_name='Starch 1108', accessor='get_wheat_starch.available_quantity_sum',
                                          orderable=False)
     starch__1108_cif = DecimalColumnWithTotal(verbose_name='Starch 1108 CIF',
-                                       accessor='cif_value_balance_biscuits.wheat_starch_cif', orderable=False)
+                                              accessor='cif_value_balance_biscuits.wheat_starch_cif', orderable=False)
     starch_3505 = DecimalColumnWithTotal(verbose_name='Starch 3505',
                                          accessor='get_modified_starch.available_quantity_sum', orderable=False)
     mnm_pd = dt2.Column(verbose_name='Milk & Milk PD', accessor='get_mnm_pd.description', orderable=False)
@@ -342,6 +342,10 @@ class LicenseBiscuitReportTable(LicenseReportTable):
 class LicenseConfectioneryReportTable(LicenseReportTable):
     get_sugar = DecimalColumnWithTotal(verbose_name='Sugar Qty', accessor='sugar_quantity.available_quantity_sum',
                                        orderable=False)
+    get_juice_hsn = PrefixMixin.prefixed('get_juice.hs_code__hs_code', verbose_name='Juice HSN', orderable=False)
+    get_juice_pd = dt2.Column(verbose_name='Juice PD', accessor='get_juice.description',
+                              orderable=False)
+
     get_juice = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_juice.available_quantity_sum',
                                        orderable=False)
     get_tartaric_acid = DecimalColumnWithTotal(verbose_name='Tartaric Acid Qty',
@@ -513,7 +517,7 @@ class LicenseTractorReportTable(LicenseReportTable):
 
 class LicenseGlassReportTable(LicenseReportTable):
     average_unit_price = dt2.Column(verbose_name='Average', accessor='average_unit_price',
-                                      orderable=False)
+                                    orderable=False)
     get_glass_formers_pd = dt2.Column(verbose_name='Glass Former PD', accessor='get_glass_formers.description',
                                       orderable=False)
     get_glass_formers_total_qty = DecimalColumnWithTotal(verbose_name='Glass Former Total Qty',
@@ -526,7 +530,7 @@ class LicenseGlassReportTable(LicenseReportTable):
     rutile_qty = DecimalColumnWithTotal(verbose_name='Rutile QTY',
                                         accessor='get_glass_formers.rutile', orderable=False)
     unit_price = dt2.Column(verbose_name='Unit Price', accessor='average_unit_price',
-                                      orderable=False)
+                            orderable=False)
     rutile_value = DecimalColumnWithTotal(verbose_name='Rutile Value',
                                           accessor='cif_value_balance_glass.rutile', orderable=False)
     get_intermediates_namely_pd = dt2.Column(verbose_name='Intermediates Namely PD',
@@ -661,7 +665,6 @@ class RutileLicenseItemReportTable(LicenseItemReportTable):
                   'hs_code', 'item', 'rutile_quantity', 'borax_quantity', 'available_quantity', 'available_value',
                   'comment']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
-
 
 
 class LicenseInwardOutwardTable(dt2.Table):

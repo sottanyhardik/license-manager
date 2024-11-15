@@ -256,7 +256,7 @@ class GenerateTransferLetterView(FormView):
                     'file_number': item.sr_number.license.file_number, 'quantity': item.qty,
                     'v_allotment_inr': round(item.cif_inr, 2),
                     'exporter_name': item.sr_number.license.exporter.name,
-                    'v_allotment_usd': item.cif_fc,'boe':item.bill_of_entry.bill_of_entry_number} for item in
+                    'v_allotment_usd': item.cif_fc,'boe':"BE NUMBER :- " + item.bill_of_entry.bill_of_entry_number} for item in
                     boe.item_details.all()]
                 tl = self.request.POST.get('tl_choice')
                 from core.models import TransferLetterModel

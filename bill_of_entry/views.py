@@ -244,7 +244,7 @@ class GenerateTransferLetterView(FormView):
         else:
             try:
                 boe_id = self.kwargs.get('boe')
-                boe = bill_of_entry.BillOfEntryModel.objects.get(bill_of_entry_number=boe_id)
+                boe = bill_of_entry.BillOfEntryModel.objects.get(id=self.kwargs.get('pk'))
                 from datetime import datetime
                 data = [{
                     'company': self.request.POST.get('company'),

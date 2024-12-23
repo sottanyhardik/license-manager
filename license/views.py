@@ -294,7 +294,7 @@ class BaseReportView(TemplateView):
     table_class = None
 
     def get_queryset(self):
-        date = datetime.datetime.strptime('2023-01-01', '%Y-%m-%d').date()
+        date = datetime.datetime.now() - datetime.timedelta(days=30)
         is_expired = self.kwargs.get('status') == 'expired'
         if not is_expired:
             return self.model.objects.filter(license_expiry_date__gte=date,
@@ -324,7 +324,7 @@ class BiscuitReportView(BaseReportView):
     table_class = LicenseBiscuitReportTable
 
     def get_queryset(self):
-        date = datetime.datetime.strptime('2023-01-01', '%Y-%m-%d').date()
+        date = datetime.datetime.now() - datetime.timedelta(days=30)
         party = self.kwargs.get('party')
         is_expired = self.kwargs.get('status') == 'expired'
         if party == 'parle':

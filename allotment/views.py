@@ -344,7 +344,7 @@ class GenerateTransferLetterView(FormView):
 
             data = [
                 {
-                    'status': item.sr_number.license.purchase_status,
+                    'status': item.purchase_status,
                     'company': request.POST['company'],
                     'company_address_1': request.POST['company_address_line1'],
                     'company_address_2': request.POST['company_address_line2'],

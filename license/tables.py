@@ -286,11 +286,15 @@ class LicenseBiscuitReportTable(LicenseReportTable):
                                      accessor='cif_value_balance_biscuits.veg_oil.veg_oil.value', orderable=False)
     ten_restriction = DecimalColumnWithTotal(verbose_name='10% Value Bal',
                                              accessor='cif_value_balance_biscuits.restricted_value', orderable=False)
+    juice_hsn = PrefixMixin.prefixed('get_biscuit_juice.hs_code__hs_code', verbose_name='JUICE HSN Code',
+                                       orderable=False)
     juice_pd = dt2.Column(verbose_name='Juice PD', accessor='get_biscuit_juice.description', orderable=False)
     juice_qty = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_biscuit_juice.available_quantity_sum',
                                        orderable=False)
     juice_cif = DecimalColumnWithTotal(verbose_name='JUICE CIF',
                                        accessor='cif_value_balance_biscuits.cif_juice', orderable=False)
+    ff_hsn = PrefixMixin.prefixed('get_food_flavour.hs_code__hs_code', verbose_name='FF HSN Code',
+                                     orderable=False)
     ff_pd = dt2.Column(verbose_name='FF PD', accessor='get_food_flavour.description', orderable=False)
     ff_qty = DecimalColumnWithTotal(verbose_name='FF QTY', accessor='get_food_flavour.available_quantity_sum',
                                     orderable=False)

@@ -715,7 +715,7 @@ def pickle_query(date_range=None, party=None, exclude_party=None, is_expired=Fal
 def item_filter(date_range=None, item=None):
     tables = []
     item_details = ItemNameModel.objects.get(id=item)
-    expiry_limit = datetime.datetime.today() - datetime.timedelta(days=15)
+    expiry_limit = datetime.datetime.strptime('2023-01-01', '%Y-%m-%d').date()
     if item_details.head.name in ['PACKING MATERIAL']:
         queryset = LicenseImportItemsModel.objects.filter(
             Q(item_id=item) & Q(license__license_expiry_date__gte=expiry_limit) & Q(available_quantity__gte=250) & Q(

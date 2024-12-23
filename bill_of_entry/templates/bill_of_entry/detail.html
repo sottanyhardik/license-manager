@@ -13,14 +13,16 @@
                         <th>Quantity</th>
                         <th>CIF FC</th>
                         <th>CIF INR</th>
+                        <th>STATUS</th>
                         </thead>
                         <tbody>
                         {% for items in object.item_details.all %}
                             <tr>
-                                <td>{{ items.sr_number }}</td>
+                                <td>{{ items.sr_number.license.license_number }}</td>
                                 <td>{{ items.qty|title }}</td>
                                 <td>{{ items.cif_fc|title }}</td>
                                 <td>{{ items.cif_inr|title }}</td>
+                                <td>{{ items.sr_number.license.get_purchase_status_display }}</td>
                             </tr>
                         {% endfor %}
 

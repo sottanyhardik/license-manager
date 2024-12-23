@@ -89,9 +89,9 @@ def generate_tl_software(data, tl_path, path='', transfer_letter_name=""):
             try:
                 id = context['id']
                 context['file_number'] = ''
-                doc.save(path + context['license'] + '_' + transfer_letter_name + '_' + str(id) + "_TL.docx")
+                doc.save(path + context['license'] + '_'+ context['status'] + '_' + transfer_letter_name + '_' + str(id) + "_TL.docx")
             except:
-                doc.save(path + context['license'] + '_' + transfer_letter_name + "_TL.docx")
+                doc.save(path + context['license'] + '_' + context['status'] + '_' + transfer_letter_name + "_TL.docx")
 
 
 def generate_sugar():

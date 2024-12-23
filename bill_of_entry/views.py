@@ -247,6 +247,7 @@ class GenerateTransferLetterView(FormView):
                 boe = bill_of_entry.BillOfEntryModel.objects.get(id=self.kwargs.get('pk'))
                 from datetime import datetime
                 data = [{
+                    'status': item.sr_number.license.purchase_status,
                     'company': self.request.POST.get('company'),
                     'company_address_1': self.request.POST.get('company_address_line1'),
                     'company_address_2': self.request.POST.get('company_address_line2'),
@@ -258,15 +259,16 @@ class GenerateTransferLetterView(FormView):
                     'exporter_name': item.sr_number.license.exporter.name,
                     'v_allotment_usd': item.cif_fc,'boe':"BE NUMBER :- " + item.bill_of_entry.bill_of_entry_number} for item in
                     boe.item_details.all()]
+                be_number=boe.bill_of_entry_number
                 tl = self.request.POST.get('tl_choice')
                 from core.models import TransferLetterModel
                 transfer_letter = TransferLetterModel.objects.get(pk=tl)
                 tl_path = transfer_letter.tl.path
-                file_path = 'media/TL_' + str(boe_id) + '_' + transfer_letter.name.replace(' ', '_') + '/'
+                file_path = 'media/TL_' + str(be_number) + '_' + transfer_letter.name.replace(' ', '_') + '/'
                 from allotment.scripts.aro import generate_tl_software
                 generate_tl_software(data=data, tl_path=tl_path, path=file_path,
                                      transfer_letter_name=transfer_letter.name.replace(' ', '_'))
-                file_name = 'TL_' + str(boe_id) + '_' + transfer_letter.name.replace(' ', '_') + '.zip'
+                file_name = 'TL_' + str(be_number) + '_' + transfer_letter.name.replace(' ', '_') + '.zip'
                 path_to_zip = make_archive(file_path.rstrip('/'), 'zip', file_path.rstrip('/'))
                 zip_file = open(path_to_zip, 'rb')
                 response = HttpResponse(zip_file, content_type='application/force-download')

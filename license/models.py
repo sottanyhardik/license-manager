@@ -263,7 +263,7 @@ class LicenseDetailsModel(models.Model):
                 return {
                     'hs_code__hs_code': first_entry['hs_code__hs_code'],
                     'item__name': first_entry['item__name'],
-                    'description': "Paper & Paper Board / PP/ Aluminium Foil (HS Code 7607)",
+                    'description': first_entry['description'],
                     'item__unit_price': first_entry['item__unit_price'],
                     'available_quantity_sum': available_quantity_sum,
                     'quantity_sum': quantity_sum

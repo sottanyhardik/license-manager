@@ -352,6 +352,11 @@ class LicenseConfectioneryReportTable(LicenseReportTable):
 
     get_juice = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_juice.available_quantity_sum',
                                        orderable=False)
+    get_wpc_hsn = PrefixMixin.prefixed('get_wpc.hs_code__hs_code', verbose_name='WPC HSN', orderable=False)
+    get_wpc_pd = dt2.Column(verbose_name='WPC PD', accessor='get_wpc.description',
+                              orderable=False)
+    get_wpc = DecimalColumnWithTotal(verbose_name='WPC Qty', accessor='get_wpc.available_quantity_sum',
+                                       orderable=False)
     get_tartaric_acid = DecimalColumnWithTotal(verbose_name='Tartaric Acid Qty',
                                                accessor='get_tartaric_acid.available_quantity_sum', orderable=False)
     get_food_flavour_confectionery_hsn = PrefixMixin.prefixed('get_food_flavour_confectionery.hs_code__hs_code',

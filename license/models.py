@@ -242,18 +242,45 @@ class LicenseDetailsModel(models.Model):
             .order_by('item__name')
 
     def get_item_data(self, item_name):
-        if item_name in ['JUICE', 'FOOD FLAVOUR BISCUITS', 'DIETARY FIBRE', 'LEAVENING AGENT', 'STARCH 1108',
-                         'STARCH 3505', 'FRUIT/COCOA']:
-            restricted_value = self.get_per_cif.get('tenRestriction')
+        """
+        Fetches consolidated data for a specific item, summing up quantities across all matching entries.
+        """
+
+        def fetch_item(item_name):
+            normalized_name = item_name.strip().lower()
+            # Filter all matching entries for the specified item_name
+            matching_items = [
+                item for item in self.import_license_grouped
+                if item['item__name'] and item['item__name'].strip().lower() == normalized_name
+            ]
+
+            if matching_items:
+                # Consolidate data
+                available_quantity_sum = sum(item['available_quantity_sum'] for item in matching_items)
+                quantity_sum = sum(item['quantity_sum'] for item in matching_items)
+                # Use the first entry for static fields like 'hs_code__hs_code' and 'description'
+                first_entry = matching_items[0]
+                return {
+                    'hs_code__hs_code': first_entry['hs_code__hs_code'],
+                    'item__name': first_entry['item__name'],
+                    'description': "Paper & Paper Board / PP/ Aluminium Foil (HS Code 7607)",
+                    'item__unit_price': first_entry['item__unit_price'],
+                    'available_quantity_sum': available_quantity_sum,
+                    'quantity_sum': quantity_sum
+                }
+            return {'available_quantity_sum': 0, 'quantity_sum': 0}
+
+        restricted_items = ['JUICE', 'FOOD FLAVOUR BISCUITS', 'DIETARY FIBRE',
+                            'LEAVENING AGENT', 'STARCH 1108', 'STARCH 3505', 'FRUIT/COCOA']
+
+        if item_name in restricted_items:
+            restricted_value = self.get_per_cif.get('tenRestriction', 0)
             if restricted_value > 200:
-                return next((item for item in self.import_license_grouped if item['item__name'] == item_name),
-                            {'available_quantity_sum': 0, 'quantity_sum': 0})
+                return fetch_item(item_name)
             else:
                 return {'available_quantity_sum': 0, 'quantity_sum': 0}
 
-        else:
-            return next((item for item in self.import_license_grouped if item['item__name'] == item_name),
-                        {'available_quantity_sum': 0, 'quantity_sum': 0})
+        return fetch_item(item_name)
 
     @cached_property
     def import_license_head_grouped(self):
@@ -367,16 +394,16 @@ class LicenseDetailsModel(models.Model):
         veg_oil_qs = ItemNameModel.objects.filter(name='EDIBLE VEGETABLE OIL').first()
         veg_oil_cif = veg_oil_qs.unit_price if veg_oil_qs and veg_oil_qs.unit_price is not None else 8
         from core.scripts.calculation import optimize_product_distribution
-        if pko_quantity > 100 and available_value < (pko_quantity * self.get_pko.get('item__unit_price', 1.340)):
+        if pko_quantity > 100 and available_value < (pko_quantity * self.get_pko.get('item__unit_price', 1.21)):
             veg_oil_details = {
                 'pko': {"quantity": Decimal(
-                    Decimal(available_value) / Decimal(self.get_pko.get('item__unit_price', 1.340))),
+                    Decimal(available_value) / Decimal(self.get_pko.get('item__unit_price', 1.21))),
                     "value": available_value},
                 'veg_oil': {"quantity": 0, "value": 0},
                 'get_rbd': {"quantity": 0, "value": 0}
             }
         elif pko_quantity > 100 and available_value:
-            veg_oil_details = optimize_product_distribution(self.get_pko.get('item__unit_price', 1.340),
+            veg_oil_details = optimize_product_distribution(self.get_pko.get('item__unit_price', 1.21),
                                                             veg_oil_cif, pko_quantity,
                                                             available_value, is_pko=True)
             pko = min(veg_oil_details.get('pko').get('value'), available_value)
@@ -384,7 +411,7 @@ class LicenseDetailsModel(models.Model):
             veg_oil = min(veg_oil_details.get('veg_oil').get('value'), available_value)
             available_value = self.use_balance_cif(veg_oil, available_value)
         elif veg_oil_quantity > 100:
-            veg_oil_details = optimize_product_distribution(0.985, veg_oil_cif, veg_oil_quantity, available_value, is_pko=False)
+            veg_oil_details = optimize_product_distribution(1.1, veg_oil_cif, veg_oil_quantity, available_value, is_pko=False)
             rbd = min(veg_oil_details.get('get_rbd').get('value'), available_value)
             available_value = self.use_balance_cif(rbd, available_value)
             veg_oil = min(veg_oil_details.get('veg_oil').get('value'), available_value)

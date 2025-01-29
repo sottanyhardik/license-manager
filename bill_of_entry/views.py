@@ -158,7 +158,7 @@ class BillOfEntryFetchView(FormView):
         data_list = BillOfEntryModel.objects.filter(
             Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).exclude(
             failed__gte=5).order_by(
-            'bill_of_entry_date')
+            '-bill_of_entry_date')
         for data in data_list:
             from bill_of_entry.scripts.utils import port_dict
             status = fetch_data_to_model.delay(cookies, csrftoken, port_dict, kwargs, captcha, data.pk)

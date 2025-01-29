@@ -24,24 +24,33 @@ def fetch_cookies():
             response.headers['Set-Cookie'].split('BIGipServerapp_trackenquiry_test=')[-1].split(';')[0],
         'BIGipServerEnquiry_Icegate_443':
             response.headers['Set-Cookie'].split('BIGipServerEnquiry_Icegate_443=')[-1].split(';')[0],
-        'TS01b027c2':
-            response.headers['Set-Cookie'].split('TS01b027c2=')[-1].split(';')[0],
+        'TS018ff48e':
+            response.headers['Set-Cookie'].split('TS018ff48e=')[-1].split(';')[0],
         'TS01446d08':
             response.headers['Set-Cookie'].split('TS01446d08=')[-1].split(';')[0],
+
     }
+    print(cookies)
+    print(csrftoken)
     return cookies, csrftoken
 
 
 def fetch_captcha(cookies):
     import requests
     headers = {
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
         'Connection': 'keep-alive',
+        'DNT': '1',
+        'Referer': 'https://enquiry.icegate.gov.in/enquiryatices/beTrackIces',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'Cache-Control': 'max-age=0',
-        'Upgrade-Insecure-Requests': '1',
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en',
+        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
     }
     response = requests.get('https://enquiry.icegate.gov.in/enquiryatices/CaptchaImg.jpg', headers=headers,
                             cookies=cookies, verify=False)
@@ -53,16 +62,23 @@ def fetch_captcha(cookies):
 
 def request_bill_of_entry(cookies, csrftoken, port, be_no, date, captcha):
     headers = {
-        'Host': 'enquiry.icegate.gov.in',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
         'Cache-Control': 'max-age=0',
-        'Origin': 'https://enquiry.icegate.gov.in',
-        'Upgrade-Insecure-Requests': '1',
+        'Connection': 'keep-alive',
+        'Content-Type': 'application/x-www-form-urlencoded',
         'DNT': '1',
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-        'Referer': 'https://enquiry.icegate.gov.in/enquiryatices/sbTrack',
-        'Accept-Language': 'en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7',
-        'AlexaToolbar-ALX_NS_PH': 'AlexaToolbar/alx-4.0.3',
+        'Origin': 'https://enquiry.icegate.gov.in',
+        'Referer': 'https://enquiry.icegate.gov.in/enquiryatices/beTrackIces',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+        'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132", "Google Chrome";v="132"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
     }
     data = {
         'csrfPreventionSalt': csrftoken,
@@ -81,15 +97,22 @@ def request_bill_of_entry(cookies, csrftoken, port, be_no, date, captcha):
 
 def be_details(cookies, data):
     headers = {
-        'Origin': 'https://enquiry.icegate.gov.in',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en',
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36',
-        'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': '*/*',
-        'Referer': 'https://enquiry.icegate.gov.in/enquiryatices/BETrack_Ices_action',
+        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
         'Connection': 'keep-alive',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'DNT': '1',
+        'Origin': 'https://enquiry.icegate.gov.in',
+        'Referer': 'https://enquiry.icegate.gov.in/enquiryatices/BETrack_Ices_action',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+        'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132", "Google Chrome";v="132"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
     }
+
     response = requests.post('https://enquiry.icegate.gov.in/enquiryatices/BE_IcesDetails_action', headers=headers,
                              cookies=cookies, data=data, verify=False)
     try:
@@ -123,14 +146,20 @@ def be_details(cookies, data):
 def rms_details(cookies, data):
     import requests
     headers = {
-        'Origin': 'https://enquiry.icegate.gov.in',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en',
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36',
-        'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': '*/*',
-        'Referer': 'https://enquiry.icegate.gov.in/enquiryatices/BETrack_Ices_action',
+        'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
         'Connection': 'keep-alive',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'DNT': '1',
+        'Origin': 'https://enquiry.icegate.gov.in',
+        'Referer': 'https://enquiry.icegate.gov.in/enquiryatices/BETrack_Ices_action',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+        'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132", "Google Chrome";v="132"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
     }
     response = requests.post('https://www.enquiry.icegate.gov.in/enquiryatices/BE_IcesCURRST_action', headers=headers,
                              cookies=cookies, data=data, verify=True)
@@ -146,6 +175,7 @@ def rms_details(cookies, data):
     except Exception as e:
         print(e)
         return None
+
 
 def fetch_cookies_scrap():
     import requests
@@ -177,7 +207,7 @@ def fetch_cookies_scrap():
             response.headers['Set-Cookie'].split('BIGipServerICEGATE_LOGIN_APP_6565=')[-1].split(';')[0],
     }
     text = response.headers['Set-Cookie'].split('TS')[1].split(';')[0].split("=")
-    cookies['TS'+text[0]] = text[1]
+    cookies['TS' + text[0]] = text[1]
     text2 = response.headers['Set-Cookie'].split('TS')[2].split(';')[0].split("=")
     cookies['TS' + text2[0]] = text2[1]
     return cookies, csrftoken

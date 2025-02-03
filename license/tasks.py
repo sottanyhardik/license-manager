@@ -9,7 +9,7 @@ from license.models import LicenseImportItemsModel
 def update_items():
     current_date = datetime.now()
     date_90_days_ago = current_date - timedelta(days=90)
-    items = LicenseImportItemsModel.objects.filter(license__license_expiry_date__gte=date_90_days_ago)
+    items = LicenseImportItemsModel.objects.filter(license__license_expiry_date__gte=date_90_days_ago).order_by('license__license_expiry_date')
     for item in items:
         from bill_of_entry.tasks import update_balance_values_task
         update_balance_values_task(item.id)

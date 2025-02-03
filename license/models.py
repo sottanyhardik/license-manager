@@ -10,6 +10,7 @@ from django.utils.functional import cached_property
 from allotment.models import AllotmentItems, Debit
 from bill_of_entry.models import RowDetails, ARO
 from core.models import ItemNameModel
+from core.scripts.calculation import optimize_oil_distribution, split_quantity_with_flags
 from license.helper import round_down
 
 DFIA = "26"
@@ -368,104 +369,105 @@ class LicenseDetailsModel(models.Model):
 
     @cached_property
     def cif_value_balance_biscuits(self):
+        # Cached database queries to reduce redundant calls
         available_value = self.get_balance_cif
-        restricted_value = restricted_value_new = self.get_per_cif.get('tenRestriction')
-        cif_juice = cif_swp = cif_cheese = f_f_cif = wheat_starch_cif = 0
-        juice_quantity = self.get_biscuit_juice.get('available_quantity_sum')
+        restricted_value = self.get_per_cif.get('tenRestriction', 0)
+
+        # Cache item details
+        biscuit_juice = self.get_biscuit_juice
+        juice_quantity = biscuit_juice.get('available_quantity_sum', 0)
+        juice_unit_price = biscuit_juice.get('item__unit_price', 0)
+
+        # Initialize CIF values
+        cif_juice = cif_swp = cif_cheese = wpc_cif = 0
+
+        # Juice CIF Calculation
         if juice_quantity > 50 and restricted_value > 200:
-            cif_juice = min(juice_quantity * self.get_biscuit_juice.get('item__unit_price'), restricted_value)
-            restrict_value = min(available_value, restricted_value)
-            cif_juice = min(cif_juice, restrict_value)
-            restricted_value_new = self.use_balance_cif(cif_juice, restricted_value)
+            cif_juice = min(juice_quantity * juice_unit_price, restricted_value, available_value)
+            restricted_value = self.use_balance_cif(cif_juice, restricted_value)
             available_value = self.use_balance_cif(cif_juice, available_value)
-        swp_quantity = self.get_swp.get('available_quantity_sum')
-        if swp_quantity > 100:
-            cif_swp = swp_quantity * self.get_swp.get('item__unit_price')
-            cif_swp = min(cif_swp, available_value)
-            available_value = self.use_balance_cif(cif_swp, available_value)
-        cheese_quantity = self.get_cheese.get('available_quantity_sum')
-        if cheese_quantity > 100:
-            cif_cheese = cheese_quantity * self.get_cheese.get('item__unit_price')
-            cif_cheese = min(cif_cheese, available_value)
-            available_value = self.use_balance_cif(cif_cheese, available_value)
-        wpc_quantity = self.get_wpc.get('available_quantity_sum')
-        oil_hsn = self.oil_queryset.get('hs_code__hs_code')
-        oil_pd = self.oil_queryset.get('description')
-        veg_oil_qs = ItemNameModel.objects.filter(name='EDIBLE VEGETABLE OIL').first()
-        veg_oil_cif = veg_oil_qs.unit_price if veg_oil_qs and veg_oil_qs.unit_price is not None else 8
-        from core.scripts.calculation import optimize_product_distribution
-        use_pko = use_olive = use_pomace = use_rbd = False
-        u_pko_oil = u_olive_oil = u_pomace_oil = u_rbd_oil = 0
-        if '15132110' in oil_hsn:
-            use_pko = True
-            u_pko_oil = 1.3
-        if '1500' in oil_pd:
-            use_olive = use_pomace = True
-            u_olive_oil = 6
-            u_pomace_oil = 3
-        if '15119020' in oil_hsn:
-            use_rbd = True
-            u_rbd_oil = 1.1
-        total_oil_available = self.oil_queryset.get('available_quantity_sum')
-        from core.scripts.calculation import optimize_oil_distribution
+
+        # SWP, Cheese, and WPC Calculations
+        for item_type, threshold, cif_var in [
+            (self.get_swp, 100, 'cif_swp'),
+            (self.get_cheese, 100, 'cif_cheese'),
+        ]:
+            quantity = item_type.get('available_quantity_sum', 0)
+            if quantity > threshold:
+                unit_price = item_type.get('item__unit_price', 0)
+                locals()[cif_var] = min(quantity * unit_price, available_value)
+                available_value = self.use_balance_cif(locals()[cif_var], available_value)
+
+        # Oil Distribution Logic
+        oil_info = self.oil_queryset
+        oil_hsn = oil_info.get('hs_code__hs_code', '')
+        oil_pd = oil_info.get('description', '')
+
+        # Define Oil Usage Flags & Prices
+        oil_types = {
+            'pko_oil': ('15132110', 1.3, False),
+            'olive_oil': ('1500', 6, False),
+            'pomace_oil': ('1500', 3, False),
+            'rbd_oil': ('15119020', 1.1, False)
+        }
+
+        total_oil_available = oil_info.get('available_quantity_sum', 0)
+        for key, (hs_code, price, used) in oil_types.items():
+            if hs_code in oil_hsn or hs_code in oil_pd:
+                oil_types[key] = (hs_code, price, True)
+
         oil_data = optimize_oil_distribution(
-            u_olive_oil, u_pomace_oil, u_pko_oil, u_rbd_oil,
+            oil_types['olive_oil'][1], oil_types['pomace_oil'][1],
+            oil_types['pko_oil'][1], oil_types['rbd_oil'][1],
             available_value, total_oil_available,
-            use_olive, use_pomace, use_pko, use_rbd
+            oil_types['olive_oil'][2], oil_types['pomace_oil'][2],
+            oil_types['pko_oil'][2], oil_types['rbd_oil'][2]
         )
+
         if oil_data.get('total_value_used'):
-            cif_oil = min(oil_data.get('total_value_used'), available_value)
-            available_value = self.use_balance_cif(cif_oil, available_value)
-        oil_data["cif_olive_oil"] = u_olive_oil * oil_data.get('olive_oil')
-        oil_data["cif_pko_oil"] = u_pko_oil * oil_data.get('pko_oil')
-        oil_data["cif_rbd_oil"] = u_rbd_oil * oil_data.get('rbd_oil')
-        oil_data["cif_pomace_oil"] = u_pomace_oil * oil_data.get('pomace_oil')
-        if available_value > 0:
-            total_milk = self.get_mnm_pd.get('available_quantity_sum')
-            total_milk_cif = Decimal(available_value) + Decimal(cif_swp) + Decimal(cif_cheese)
-            milk_pd = self.get_mnm_pd.get('description')
-            milk_hsn = self.get_mnm_pd.get('hs_code__hs_code')
-            WPC = SWP = CHEESE = False
-            if '3502' in milk_pd or '3502' in milk_hsn:
-                WPC = True
-            if '0404' in milk_pd or '0404' in milk_hsn:
-                SWP = True
-            if '0406' in milk_pd or '0406' in milk_hsn:
-                CHEESE = True
-            from core.scripts.calculation import split_quantity_with_flags
-            swp_unit = float(self.get_swp.get('item__unit_price', 1))
-            cheese_unit = float(self.get_cheese.get('item__unit_price', 5.5))
-            wpc_unit = float(self.get_wpc.get('item__unit_price', 15))
-            swp_quantity, cheese_quantity, wpc_quantity = split_quantity_with_flags(
-                total_milk, total_milk_cif, swp_unit, cheese_unit, wpc_unit, SWP, CHEESE, WPC)
-            if swp_quantity > 0:
-                cif_swp = swp_quantity * swp_unit
-                cif_swp = min(cif_swp, total_milk_cif)
-                total_milk_cif = self.use_balance_cif(float(cif_swp), float(total_milk_cif))
-            else:
-                cif_swp = 0
-            if cheese_quantity > 0:
-                cif_cheese = cheese_quantity * cheese_unit
-                cif_cheese = min(cif_cheese, total_milk_cif)
-                total_milk_cif = self.use_balance_cif(float(cif_cheese), float(total_milk_cif))
-            else:
-                cif_cheese = 0
-            if wpc_quantity > 0:
-                wpc_cif = wpc_quantity * wpc_unit
-                wpc_cif = min(wpc_cif, total_milk_cif)
-                total_milk_cif = self.use_balance_cif(float(wpc_cif), float(total_milk_cif))
-            else:
-                wpc_cif = 0
-            return {'cif_juice': cif_juice, 'restricted_value': restricted_value, 'qty_swp': swp_quantity,
-                    'cif_swp': cif_swp, 'qty_cheese': cheese_quantity,
-                    'cif_cheese': cif_cheese, 'qty_wpc': wpc_quantity, 'cif_wpc': wpc_cif,
-                    'veg_oil': oil_data, 'f_f_cif': f_f_cif,
-                    'wheat_starch_cif': wheat_starch_cif, 'available_value': total_milk_cif}
-        return {'cif_juice': cif_juice, 'restricted_value': restricted_value, 'qty_swp': swp_quantity,
-                'cif_swp': cif_swp,
-                'qty_cheese': cheese_quantity, 'cif_cheese': cif_cheese, 'qty_wpc': wpc_quantity, 'cif_wpc': 0,
-                'veg_oil': oil_data, 'f_f_cif': f_f_cif,
-                'available_value': available_value}
+            available_value = self.use_balance_cif(oil_data.get('total_value_used'), available_value)
+
+        # Milk Product Distribution
+        total_milk = self.get_mnm_pd.get('available_quantity_sum', 0)
+        total_milk_cif = Decimal(available_value) + Decimal(cif_swp) + Decimal(cif_cheese)
+        milk_pd = self.get_mnm_pd.get('description', '')
+        milk_hsn = self.get_mnm_pd.get('hs_code__hs_code', '')
+
+        # Milk Type Flags
+        milk_flags = {'WPC': '3502', 'SWP': '0404', 'CHEESE': '0406'}
+        milk_usage = {key: flag in milk_pd or flag in milk_hsn for key, flag in milk_flags.items()}
+
+        # Unit Prices
+        unit_prices = {
+            'swp': float(self.get_swp.get('item__unit_price', 1)),
+            'cheese': float(self.get_cheese.get('item__unit_price', 5.5)),
+            'wpc': float(self.get_wpc.get('item__unit_price', 15))
+        }
+
+        swp_quantity, cheese_quantity, wpc_quantity = split_quantity_with_flags(
+            total_milk, total_milk_cif, unit_prices['swp'],
+            unit_prices['cheese'], unit_prices['wpc'],
+            milk_usage['SWP'], milk_usage['CHEESE'], milk_usage['WPC']
+        )
+
+        # Final Milk CIF Calculations
+        for key, quantity in [('swp', swp_quantity), ('cheese', cheese_quantity), ('wpc', wpc_quantity)]:
+            if quantity > 0:
+                locals()[f'cif_{key}'] = min(quantity * unit_prices[key], total_milk_cif)
+                total_milk_cif = self.use_balance_cif(locals()[f'cif_{key}'], total_milk_cif)
+
+        return {
+            'cif_juice': cif_juice,
+            'restricted_value': restricted_value,
+            'qty_swp': swp_quantity,
+            'cif_swp': cif_swp,
+            'qty_cheese': cheese_quantity,
+            'cif_cheese': cif_cheese,
+            'qty_wpc': wpc_quantity,
+            'cif_wpc': wpc_cif,
+            'veg_oil': oil_data,
+            'available_value': total_milk_cif
+        }
 
     @cached_property
     def get_pp(self):

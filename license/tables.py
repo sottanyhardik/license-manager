@@ -517,6 +517,48 @@ class LicenseTractorReportTable(LicenseReportTable):
                                                    accessor='get_bearing.quantity_sum', orderable=False)
     get_bearing_qty = DecimalColumnWithTotal(verbose_name='BEARING QTY',
                                              accessor='get_bearing.available_quantity_sum', orderable=False)
+    get_radiator_hsn = PrefixMixin.prefixed('get_radiator.hs_code__hs_code', verbose_name='RADIATOR HSN',
+                                            orderable=False)
+    get_radiator_pd = dt2.Column(verbose_name='RADIATOR PD', accessor='get_radiator.description', orderable=False)
+    get_radiator_total_qty = DecimalColumnWithTotal(verbose_name='RADIATOR TOTAL QTY',
+                                                    accessor='get_radiator.quantity_sum', orderable=False)
+    get_radiator_qty = DecimalColumnWithTotal(verbose_name='RADIATOR QTY',
+                                              accessor='get_radiator.available_quantity_sum', orderable=False)
+    get_clutch_hsn = PrefixMixin.prefixed('get_clutch.hs_code__hs_code', verbose_name='CLUTCH HSN', orderable=False)
+    get_clutch_pd = dt2.Column(verbose_name='CLUTCH PD', accessor='get_clutch.description', orderable=False)
+    get_clutch_total_qty = DecimalColumnWithTotal(verbose_name='CLUTCH TOTAL QTY', accessor='get_clutch.quantity_sum',
+                                                  orderable=False)
+    get_clutch_qty = DecimalColumnWithTotal(verbose_name='CLUTCH QTY', accessor='get_clutch.available_quantity_sum',
+                                            orderable=False)
+    get_seat_hsn = PrefixMixin.prefixed('get_seat.hs_code__hs_code', verbose_name='SEAT HSN', orderable=False)
+    get_seat_pd = dt2.Column(verbose_name='SEAT PD', accessor='get_seat.description', orderable=False)
+    get_seat_total_qty = DecimalColumnWithTotal(verbose_name='SEAT TOTAL QTY', accessor='get_seat.quantity_sum',
+                                                orderable=False)
+    get_seat_qty = DecimalColumnWithTotal(verbose_name='SEAT QTY', accessor='get_seat.available_quantity_sum',
+                                          orderable=False)
+
+    get_brake_hsn = PrefixMixin.prefixed('get_brake.hs_code__hs_code', verbose_name='BRAKE HSN', orderable=False)
+    get_brake_pd = dt2.Column(verbose_name='BRAKE PD', accessor='get_brake.description', orderable=False)
+    get_brake_total_qty = DecimalColumnWithTotal(verbose_name='BRAKE TOTAL QTY', accessor='get_brake.quantity_sum',
+                                                 orderable=False)
+    get_brake_qty = DecimalColumnWithTotal(verbose_name='BRAKE QTY', accessor='get_brake.available_quantity_sum',
+                                           orderable=False)
+
+    get_alternator_hsn = PrefixMixin.prefixed('get_alternator.hs_code__hs_code', verbose_name='ALTERNATOR HSN',
+                                              orderable=False)
+    get_alternator_pd = dt2.Column(verbose_name='ALTERNATOR PD', accessor='get_alternator.description', orderable=False)
+    get_alternator_total_qty = DecimalColumnWithTotal(verbose_name='ALTERNATOR TOTAL QTY',
+                                                      accessor='get_alternator.quantity_sum', orderable=False)
+    get_alternator_qty = DecimalColumnWithTotal(verbose_name='ALTERNATOR QTY',
+                                                accessor='get_alternator.available_quantity_sum', orderable=False)
+
+    get_air_filter_hsn = PrefixMixin.prefixed('get_air_filter.hs_code__hs_code', verbose_name='AIR FILTER HSN',
+                                              orderable=False)
+    get_air_filter_pd = dt2.Column(verbose_name='AIR FILTER PD', accessor='get_air_filter.description', orderable=False)
+    get_air_filter_total_qty = DecimalColumnWithTotal(verbose_name='AIR FILTER TOTAL QTY',
+                                                      accessor='get_air_filter.quantity_sum', orderable=False)
+    get_air_filter_qty = DecimalColumnWithTotal(verbose_name='AIR FILTER QTY',
+                                                accessor='get_air_filter.available_quantity_sum', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel

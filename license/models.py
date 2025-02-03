@@ -235,6 +235,30 @@ class LicenseDetailsModel(models.Model):
         return self.get_item_data('ALLOY STEEL')
 
     @cached_property
+    def get_radiator(self):
+        return self.get_item_data('RADIATOR')
+
+    @cached_property
+    def get_clutch(self):
+        return self.get_item_data('CLUTCH ASSEMBLY')
+
+    @cached_property
+    def get_seat(self):
+        return self.get_item_data('SEAT ASSEMBLY')
+
+    @cached_property
+    def get_brake(self):
+        return self.get_item_data('BRAKE ASSEMBLY')
+
+    @cached_property
+    def get_alternator(self):
+        return self.get_item_data('ALTERNATOR')
+
+    @cached_property
+    def get_air_filter(self):
+        return self.get_item_data('AIR FILTER')
+
+    @cached_property
     def import_license_grouped(self):
         return self.import_license.select_related('item').values('hs_code__hs_code', 'item__name', 'description',
                                                                  'item__unit_price') \

@@ -273,17 +273,21 @@ class LicenseBiscuitReportTable(LicenseReportTable):
     total_veg_qty = DecimalColumnWithTotal(verbose_name='Total Veg QTY', accessor='oil_queryset.available_quantity_sum',
                                            orderable=False)
     rbd_qty = DecimalColumnWithTotal(verbose_name='RBD QTY',
-                                     accessor='cif_value_balance_biscuits.veg_oil.get_rbd.quantity', orderable=False)
+                                     accessor='cif_value_balance_biscuits.veg_oil.rbd_oil', orderable=False)
     rbd_cif = DecimalColumnWithTotal(verbose_name='RBD CIF',
-                                     accessor='cif_value_balance_biscuits.veg_oil.get_rbd.value', orderable=False)
-    pko_qty = DecimalColumnWithTotal(verbose_name='PKO QTY', accessor='cif_value_balance_biscuits.veg_oil.pko.quantity',
+                                     accessor='cif_value_balance_biscuits.veg_oil.cif_rbd_oil', orderable=False)
+    pko_qty = DecimalColumnWithTotal(verbose_name='PKO QTY', accessor='cif_value_balance_biscuits.veg_oil.pko_oil',
                                      orderable=False)
-    pko_cif = DecimalColumnWithTotal(verbose_name='PKO CIF', accessor='cif_value_balance_biscuits.veg_oil.pko.value',
+    pko_cif = DecimalColumnWithTotal(verbose_name='PKO CIF', accessor='cif_value_balance_biscuits.veg_oil.cif_pko_oil',
                                      orderable=False)
-    veg_qty = DecimalColumnWithTotal(verbose_name='VEG QTY',
-                                     accessor='cif_value_balance_biscuits.veg_oil.veg_oil.quantity', orderable=False)
-    veg_cif = DecimalColumnWithTotal(verbose_name='VEG CIF',
-                                     accessor='cif_value_balance_biscuits.veg_oil.veg_oil.value', orderable=False)
+    veg_qty = DecimalColumnWithTotal(verbose_name='Olive QTY',
+                                     accessor='cif_value_balance_biscuits.veg_oil.olive_oil', orderable=False)
+    veg_cif = DecimalColumnWithTotal(verbose_name='Olive CIF',
+                                     accessor='cif_value_balance_biscuits.veg_oil.cif_olive_oil', orderable=False)
+    pomace_qty = DecimalColumnWithTotal(verbose_name='Pomace QTY',
+                                     accessor='cif_value_balance_biscuits.veg_oil.pomace_oil', orderable=False)
+    pomace_cif = DecimalColumnWithTotal(verbose_name='Pomace CIF',
+                                     accessor='cif_value_balance_biscuits.veg_oil.cif_pomace_oil', orderable=False)
     ten_restriction = DecimalColumnWithTotal(verbose_name='10% Value Bal',
                                              accessor='cif_value_balance_biscuits.cif_juice', orderable=False)
     juice_hsn = PrefixMixin.prefixed('get_biscuit_juice.hs_code__hs_code', verbose_name='JUICE HSN Code',
@@ -316,14 +320,15 @@ class LicenseBiscuitReportTable(LicenseReportTable):
     mnm_pd = dt2.Column(verbose_name='Milk & Milk PD', accessor='get_mnm_pd.description', orderable=False)
     mnm_qty = DecimalColumnWithTotal(verbose_name='Milk & Milk Qty', accessor='get_mnm_pd.available_quantity_sum',
                                      orderable=False)
-    cheese_qty = DecimalColumnWithTotal(verbose_name='Cheese Qty', accessor='get_cheese.available_quantity_sum',
+    cheese_qty = DecimalColumnWithTotal(verbose_name='Cheese Qty', accessor='cif_value_balance_biscuits.qty_cheese',
                                         orderable=False)
     cheese_cif = DecimalColumnWithTotal(verbose_name='Cheese CIF', accessor='cif_value_balance_biscuits.cif_cheese',
                                         orderable=False)
-    swp_qty = DecimalColumnWithTotal(verbose_name='SWP QTY', accessor='get_swp.available_quantity_sum', orderable=False)
+    swp_qty = DecimalColumnWithTotal(verbose_name='SWP QTY', accessor='cif_value_balance_biscuits.qty_swp', orderable=False)
     swp_cif = DecimalColumnWithTotal(verbose_name='SWP CIF', accessor='cif_value_balance_biscuits.cif_swp',
                                      orderable=False)
-    wpc_qty = DecimalColumnWithTotal(verbose_name='WPC QTY', accessor='get_wpc.available_quantity_sum', orderable=False)
+    wpc_qty = DecimalColumnWithTotal(verbose_name='WPC QTY', accessor='cif_value_balance_biscuits.qty_wpc', orderable=False)
+    wpc_cif = DecimalColumnWithTotal(verbose_name='WPC CIF', accessor='cif_value_balance_biscuits.cif_wpc', orderable=False)
     pp_hsn = PrefixMixin.prefixed('get_pp.hs_code__hs_code', verbose_name='PP HSN', orderable=False)
     pp_pd = dt2.Column(verbose_name='PP PD', accessor='get_pp.description', orderable=False)
     pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)

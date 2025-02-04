@@ -243,8 +243,8 @@ class LicenseDetailsModel(models.Model):
         return self.get_item_data('CLUTCH ASSEMBLY')
 
     @cached_property
-    def get_seat(self):
-        return self.get_item_data('SEAT ASSEMBLY')
+    def get_wiring(self):
+        return self.get_item_data('WIRING HANRNESS')
 
     @cached_property
     def get_brake(self):
@@ -255,8 +255,8 @@ class LicenseDetailsModel(models.Model):
         return self.get_item_data('ALTERNATOR')
 
     @cached_property
-    def get_air_filter(self):
-        return self.get_item_data('AIR FILTER')
+    def get_fuel_filter(self):
+        return self.get_item_data('FUEL FILTER')
 
     @cached_property
     def import_license_grouped(self):

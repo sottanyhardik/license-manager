@@ -530,11 +530,11 @@ class LicenseTractorReportTable(LicenseReportTable):
                                                   orderable=False)
     get_clutch_qty = DecimalColumnWithTotal(verbose_name='CLUTCH QTY', accessor='get_clutch.available_quantity_sum',
                                             orderable=False)
-    get_seat_hsn = PrefixMixin.prefixed('get_seat.hs_code__hs_code', verbose_name='SEAT HSN', orderable=False)
-    get_seat_pd = dt2.Column(verbose_name='SEAT PD', accessor='get_seat.description', orderable=False)
-    get_seat_total_qty = DecimalColumnWithTotal(verbose_name='SEAT TOTAL QTY', accessor='get_seat.quantity_sum',
+    get_wiring_hsn = PrefixMixin.prefixed('get_wiring.hs_code__hs_code', verbose_name='WIRING HSN', orderable=False)
+    get_wiring_pd = dt2.Column(verbose_name='WIRING PD', accessor='get_wiring.description', orderable=False)
+    get_wiring_total_qty = DecimalColumnWithTotal(verbose_name='WIRING TOTAL QTY', accessor='get_wiring.quantity_sum',
                                                 orderable=False)
-    get_seat_qty = DecimalColumnWithTotal(verbose_name='SEAT QTY', accessor='get_seat.available_quantity_sum',
+    get_wiring_qty = DecimalColumnWithTotal(verbose_name='WIRING QTY', accessor='get_wiring.available_quantity_sum',
                                           orderable=False)
 
     get_brake_hsn = PrefixMixin.prefixed('get_brake.hs_code__hs_code', verbose_name='BRAKE HSN', orderable=False)
@@ -552,13 +552,13 @@ class LicenseTractorReportTable(LicenseReportTable):
     get_alternator_qty = DecimalColumnWithTotal(verbose_name='ALTERNATOR QTY',
                                                 accessor='get_alternator.available_quantity_sum', orderable=False)
 
-    get_air_filter_hsn = PrefixMixin.prefixed('get_air_filter.hs_code__hs_code', verbose_name='AIR FILTER HSN',
+    get_fuel_filter_hsn = PrefixMixin.prefixed('get_fuel_filter.hs_code__hs_code', verbose_name='FUEL FILTER HSN',
                                               orderable=False)
-    get_air_filter_pd = dt2.Column(verbose_name='AIR FILTER PD', accessor='get_air_filter.description', orderable=False)
-    get_air_filter_total_qty = DecimalColumnWithTotal(verbose_name='AIR FILTER TOTAL QTY',
-                                                      accessor='get_air_filter.quantity_sum', orderable=False)
-    get_air_filter_qty = DecimalColumnWithTotal(verbose_name='AIR FILTER QTY',
-                                                accessor='get_air_filter.available_quantity_sum', orderable=False)
+    get_fuel_filter_pd = dt2.Column(verbose_name='FUEL FILTER PD', accessor='get_fuel_filter.description', orderable=False)
+    get_fuel_filter_total_qty = DecimalColumnWithTotal(verbose_name='FUEL FILTER TOTAL QTY',
+                                                      accessor='get_fuel_filter.quantity_sum', orderable=False)
+    get_fuel_filter_qty = DecimalColumnWithTotal(verbose_name='FUEL FILTER QTY',
+                                                accessor='get_fuel_filter.available_quantity_sum', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel

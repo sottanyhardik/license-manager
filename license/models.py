@@ -93,6 +93,7 @@ class LicenseDetailsModel(models.Model):
 
     def use_balance_cif(self, amount, available_cif):
         amount = float(amount)  # convert float 'amount' to Decimal
+        available_cif = float(available_cif)  # convert float 'amount' to Decimal
         if amount <= available_cif:
             available_cif -= amount
             return available_cif

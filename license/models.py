@@ -451,6 +451,11 @@ class LicenseDetailsModel(models.Model):
 
         if oil_data.get('total_value_used'):
             available_value = self.use_balance_cif(oil_data.get('total_value_used'), available_value)
+            oil_data['cif_rbd_oil'] = min(oil_data.get('rbd_oil',0) * float(oil_types['rbd_oil'][1]), oil_data.get('total_value_used'))
+            oil_data['cif_pko_oil'] = min(oil_data.get('pko_oil', 0) * float(oil_types['pko_oil'][1]), oil_data.get('total_value_used'))
+            oil_data['cif_olive_oil'] = min(oil_data.get('olive_oil', 0) * float(oil_types['olive_oil'][1]), oil_data.get('total_value_used'))
+            oil_data['cif_pomace_oil'] = min(oil_data.get('pomace_oil', 0) * float(oil_types['pomace_oil'][1]), oil_data.get('total_value_used'))
+
 
         # Milk Product Distribution
         total_milk = self.get_mnm_pd.get('available_quantity_sum', 0)
@@ -475,13 +480,14 @@ class LicenseDetailsModel(models.Model):
             milk_usage['SWP'], milk_usage['CHEESE'], milk_usage['WPC']
         )
 
-        # Final Milk CIF Calculations
-        for key, quantity in [('swp', swp_quantity), ('cheese', cheese_quantity), ('wpc', wpc_quantity)]:
-            if quantity > 0:
-                locals()[f'cif_{key}'] = min(quantity * unit_prices[key], total_milk_cif)
-                total_milk_cif = self.use_balance_cif(locals()[f'cif_{key}'], total_milk_cif)
+        cif_swp = min(swp_quantity * unit_prices['swp'], total_milk_cif)
+        total_milk_cif = self.use_balance_cif(cif_swp, total_milk_cif)
+        cif_cheese = min(cheese_quantity * unit_prices['cheese'], total_milk_cif)
+        total_milk_cif = self.use_balance_cif(cif_cheese, total_milk_cif)
+        wpc_cif = min(wpc_quantity * unit_prices['wpc'], total_milk_cif)
+        total_milk_cif = self.use_balance_cif(wpc_cif, total_milk_cif)
 
-        return {
+        data_dict = {
             'cif_juice': cif_juice,
             'restricted_value': restricted_value,
             'qty_swp': swp_quantity,
@@ -493,6 +499,7 @@ class LicenseDetailsModel(models.Model):
             'veg_oil': oil_data,
             'available_value': total_milk_cif
         }
+        return data_dict
 
     @cached_property
     def get_pp(self):

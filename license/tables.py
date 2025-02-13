@@ -285,20 +285,20 @@ class LicenseBiscuitReportTable(LicenseReportTable):
     veg_cif = DecimalColumnWithTotal(verbose_name='Olive CIF',
                                      accessor='cif_value_balance_biscuits.veg_oil.cif_olive_oil', orderable=False)
     pomace_qty = DecimalColumnWithTotal(verbose_name='Pomace QTY',
-                                     accessor='cif_value_balance_biscuits.veg_oil.pomace_oil', orderable=False)
+                                        accessor='cif_value_balance_biscuits.veg_oil.pomace_oil', orderable=False)
     pomace_cif = DecimalColumnWithTotal(verbose_name='Pomace CIF',
-                                     accessor='cif_value_balance_biscuits.veg_oil.cif_pomace_oil', orderable=False)
+                                        accessor='cif_value_balance_biscuits.veg_oil.cif_pomace_oil', orderable=False)
     ten_restriction = DecimalColumnWithTotal(verbose_name='10% Value Bal',
                                              accessor='cif_value_balance_biscuits.cif_juice', orderable=False)
     juice_hsn = PrefixMixin.prefixed('get_biscuit_juice.hs_code__hs_code', verbose_name='JUICE HSN Code',
-                                       orderable=False)
+                                     orderable=False)
     juice_pd = dt2.Column(verbose_name='Juice PD', accessor='get_biscuit_juice.description', orderable=False)
     juice_qty = DecimalColumnWithTotal(verbose_name='Juice Qty', accessor='get_biscuit_juice.available_quantity_sum',
                                        orderable=False)
     juice_cif = DecimalColumnWithTotal(verbose_name='JUICE CIF',
                                        accessor='cif_value_balance_biscuits.cif_juice', orderable=False)
     ff_hsn = PrefixMixin.prefixed('get_food_flavour.hs_code__hs_code', verbose_name='FF HSN Code',
-                                     orderable=False)
+                                  orderable=False)
     ff_pd = dt2.Column(verbose_name='FF PD', accessor='get_food_flavour.description', orderable=False)
     ff_qty = DecimalColumnWithTotal(verbose_name='FF QTY', accessor='get_food_flavour.available_quantity_sum',
                                     orderable=False)
@@ -324,11 +324,14 @@ class LicenseBiscuitReportTable(LicenseReportTable):
                                         orderable=False)
     cheese_cif = DecimalColumnWithTotal(verbose_name='Cheese CIF', accessor='cif_value_balance_biscuits.cif_cheese',
                                         orderable=False)
-    swp_qty = DecimalColumnWithTotal(verbose_name='SWP QTY', accessor='cif_value_balance_biscuits.qty_swp', orderable=False)
+    swp_qty = DecimalColumnWithTotal(verbose_name='SWP QTY', accessor='cif_value_balance_biscuits.qty_swp',
+                                     orderable=False)
     swp_cif = DecimalColumnWithTotal(verbose_name='SWP CIF', accessor='cif_value_balance_biscuits.cif_swp',
                                      orderable=False)
-    wpc_qty = DecimalColumnWithTotal(verbose_name='WPC QTY', accessor='cif_value_balance_biscuits.qty_wpc', orderable=False)
-    wpc_cif = DecimalColumnWithTotal(verbose_name='WPC CIF', accessor='cif_value_balance_biscuits.cif_wpc', orderable=False)
+    wpc_qty = DecimalColumnWithTotal(verbose_name='WPC QTY', accessor='cif_value_balance_biscuits.qty_wpc',
+                                     orderable=False)
+    wpc_cif = DecimalColumnWithTotal(verbose_name='WPC CIF', accessor='cif_value_balance_biscuits.cif_wpc',
+                                     orderable=False)
     pp_hsn = PrefixMixin.prefixed('get_pp.hs_code__hs_code', verbose_name='PP HSN', orderable=False)
     pp_pd = dt2.Column(verbose_name='PP PD', accessor='get_pp.description', orderable=False)
     pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
@@ -359,9 +362,9 @@ class LicenseConfectioneryReportTable(LicenseReportTable):
                                        orderable=False)
     get_wpc_hsn = PrefixMixin.prefixed('get_wpc.hs_code__hs_code', verbose_name='WPC HSN', orderable=False)
     get_wpc_pd = dt2.Column(verbose_name='WPC PD', accessor='get_wpc.description',
-                              orderable=False)
+                            orderable=False)
     get_wpc = DecimalColumnWithTotal(verbose_name='WPC Qty', accessor='get_wpc.available_quantity_sum',
-                                       orderable=False)
+                                     orderable=False)
     get_tartaric_acid = DecimalColumnWithTotal(verbose_name='Tartaric Acid Qty',
                                                accessor='get_tartaric_acid.available_quantity_sum', orderable=False)
     get_food_flavour_confectionery_hsn = PrefixMixin.prefixed('get_food_flavour_confectionery.hs_code__hs_code',
@@ -406,6 +409,7 @@ class LicenseConfectioneryReportTable(LicenseReportTable):
                                            accessor='get_aluminium.available_quantity_sum', orderable=False)
     pnp_qty = DecimalColumnWithTotal(verbose_name='Paper & Paper QTY',
                                      accessor='get_paper_and_paper.available_quantity_sum', orderable=False)
+    condition_sheet = dt2.Column(verbose_name='Condition Sheet', accessor='condition_sheet', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel
@@ -453,6 +457,7 @@ class LicenseNamkeenReportTable(LicenseReportTable):
     pp_qty = DecimalColumnWithTotal(verbose_name='PP QTY', accessor='get_pp.available_quantity_sum', orderable=False)
     get_aluminium = DecimalColumnWithTotal(verbose_name='Aluminium Foil QTY',
                                            accessor='get_aluminium.available_quantity_sum', orderable=False)
+    condition_sheet = dt2.Column(verbose_name='Condition Sheet', accessor='condition_sheet', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel
@@ -533,9 +538,9 @@ class LicenseTractorReportTable(LicenseReportTable):
     get_wiring_hsn = PrefixMixin.prefixed('get_wiring.hs_code__hs_code', verbose_name='WIRING HSN', orderable=False)
     get_wiring_pd = dt2.Column(verbose_name='WIRING PD', accessor='get_wiring.description', orderable=False)
     get_wiring_total_qty = DecimalColumnWithTotal(verbose_name='WIRING TOTAL QTY', accessor='get_wiring.quantity_sum',
-                                                orderable=False)
+                                                  orderable=False)
     get_wiring_qty = DecimalColumnWithTotal(verbose_name='WIRING QTY', accessor='get_wiring.available_quantity_sum',
-                                          orderable=False)
+                                            orderable=False)
 
     get_brake_hsn = PrefixMixin.prefixed('get_brake.hs_code__hs_code', verbose_name='BRAKE HSN', orderable=False)
     get_brake_pd = dt2.Column(verbose_name='BRAKE PD', accessor='get_brake.description', orderable=False)
@@ -553,12 +558,13 @@ class LicenseTractorReportTable(LicenseReportTable):
                                                 accessor='get_alternator.available_quantity_sum', orderable=False)
 
     get_fuel_filter_hsn = PrefixMixin.prefixed('get_fuel_filter.hs_code__hs_code', verbose_name='FUEL FILTER HSN',
-                                              orderable=False)
-    get_fuel_filter_pd = dt2.Column(verbose_name='FUEL FILTER PD', accessor='get_fuel_filter.description', orderable=False)
+                                               orderable=False)
+    get_fuel_filter_pd = dt2.Column(verbose_name='FUEL FILTER PD', accessor='get_fuel_filter.description',
+                                    orderable=False)
     get_fuel_filter_total_qty = DecimalColumnWithTotal(verbose_name='FUEL FILTER TOTAL QTY',
-                                                      accessor='get_fuel_filter.quantity_sum', orderable=False)
+                                                       accessor='get_fuel_filter.quantity_sum', orderable=False)
     get_fuel_filter_qty = DecimalColumnWithTotal(verbose_name='FUEL FILTER QTY',
-                                                accessor='get_fuel_filter.available_quantity_sum', orderable=False)
+                                                 accessor='get_fuel_filter.available_quantity_sum', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel

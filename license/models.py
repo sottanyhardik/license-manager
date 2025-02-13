@@ -60,6 +60,7 @@ class LicenseDetailsModel(models.Model):
     registration_number = models.CharField(max_length=10, null=True, blank=True)
     registration_date = models.DateField(null=True, blank=True)
     user_comment = models.TextField(null=True, blank=True)
+    condition_sheet = models.TextField(null=True, blank=True)
     user_restrictions = models.TextField(null=True, blank=True)
     ledger_date = models.DateField(null=True, blank=True)
     is_audit = models.BooleanField(default=False)

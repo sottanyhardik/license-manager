@@ -422,9 +422,16 @@ class LicenseDetailsModel(models.Model):
                 quantity = item_type.get('available_quantity_sum', 0)
                 if quantity > threshold:
                     unit_price = item_type.get('item__unit_price', 0)
-                    locals()[cif_var] = min(quantity * unit_price, available_value)
-                    available_value = self.use_balance_cif(locals()[cif_var], available_value)
+                    if cif_var == 'cif_swp':
+                        swp_quantity = quantity
+                        cif_swp = min(swp_quantity * unit_price, available_value)
+                        available_value = self.use_balance_cif(cif_swp, available_value)
+                    elif cif_var == 'cif_cheese':
+                        cheese_quantity = quantity
+                        cif_cheese = min(cheese_quantity * unit_price, available_value)
+                        available_value = self.use_balance_cif(cif_cheese, available_value)
 
+            available_value = self.use_balance_cif(locals()[cif_var], available_value)
             # Oil Distribution Logic
             oil_info = self.oil_queryset
             oil_hsn = oil_info.get('hs_code__hs_code', '')

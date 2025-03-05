@@ -440,7 +440,7 @@ class LicenseDetailsModel(models.Model):
             # Define Oil Usage Flags & Prices
             oil_types = {
                 'pko_oil': ('15132110', 1.3, False),
-                'olive_oil': ('1500', 6, False),
+                'olive_oil': ('1500', 4.75, False),
                 'pomace_oil': ('1500', 3, False),
                 'rbd_oil': ('15119020', 1.1, False)
             }

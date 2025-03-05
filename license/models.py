@@ -393,12 +393,7 @@ class LicenseDetailsModel(models.Model):
     def get_cheese(self):
         return self.get_item_data('CHEESE')
 
-    from decimal import Decimal
-    from scipy.optimize import linprog
-
-    from decimal import Decimal
-    from scipy.optimize import linprog
-
+    @cached_property
     def cif_value_balance_biscuits(self):
         available_value = self.get_balance_cif
 

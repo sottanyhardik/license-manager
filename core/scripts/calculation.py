@@ -106,46 +106,58 @@ def optimize_oil_distribution(
     else:
         return {"error": "Optimization was not successful."}
 
+
+from scipy.optimize import linprog
+
+from scipy.optimize import linprog
+
+
 def optimize_milk_distribution(
-    SWP_price=1, cheese_unit=5.5, wpc_unit=15,
-    available_value=100, total_milk=50,
-    use_swp=True, use_cheese=True, use_wpc=True
+        SWP_price=1, cheese_unit=5.5, wpc_unit=15,
+        available_value=100, total_milk=50,
+        use_swp=True, use_cheese=True, use_wpc=True
 ):
-    """Solve a linear programming problem to optimize the distribution of total_milk
-    into SWP, CHEESE, and WPC while ensuring constraints on available_value."""
 
-    # Apply selection by setting unit price to zero for disallowed ingredients
-    u_swp = SWP_price if use_swp else 0
-    u_cheese = cheese_unit if use_cheese else 0
-    u_wpc = wpc_unit if use_wpc else 0
+    """Optimizes milk distribution ensuring:
+    - Total milk is fully utilized (`SWP + CHEESE + WPC = total_milk`)
+    - Maximizes value while ensuring `remaining_value ≈ 0`
+    - SWP and CHEESE can be zero if they don't contribute efficiently
 
-    # Objective function coefficients (maximize total value, so negate for minimization)
-    c = [-u_swp, -u_cheese, -u_wpc, 0]  # Slack milk is neutral
+    Returns:
+    - Allocated SWP, CHEESE, and WPC
+    - Total value used
+    """
 
-    # Constraints matrix
-    A_ub = [[u_swp, u_cheese, u_wpc, 0]]  # Total cost constraint
-    b_ub = [available_value]
+    # Step 1: Set unit prices based on allowed products
+    unit_prices = {
+        'swp': SWP_price if use_swp else 0,
+        'cheese': cheese_unit if use_cheese else 0,
+        'wpc': wpc_unit if use_wpc else 0
+    }
 
-    A_eq = [[1 if use_swp else 0, 1 if use_cheese else 0, 1 if use_wpc else 0, 1]]  # Total milk used constraint
-    b_eq = [total_milk]
+    # Step 2: Define the linear programming problem
+    c = [-unit_prices['swp'], -unit_prices['cheese'], -unit_prices['wpc']]  # Maximize total value used
+    A_ub = [
+        [unit_prices['swp'], unit_prices['cheese'], unit_prices['wpc']],
+        [1, 1, 1]
+    ]  # Cost constraint ≤ available_value
+    b_ub = [available_value, total_milk]
 
-    # Variable bounds (all must be non-negative)
-    bounds = [(0, None) if use_swp else (0, 0),
-              (0, None) if use_cheese else (0, 0),
-              (0, None) if use_wpc else (0, 0),
-              (0, total_milk)]  # Slack milk can only take up to the max available
+    bounds = [
+        (0, total_milk) if use_swp else (0, 0),
+        (0, total_milk) if use_cheese else (0, 0),
+        (0, total_milk) if use_wpc else (0, 0)
+    ]
 
-    # Solve the linear programming problem using HiGHS solver
-    result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
+    # Solve the linear programming problem
+    result = linprog(c, A_ub=A_ub, b_ub=b_ub,  bounds=bounds, method='highs')
 
-    # Check if the optimization was successful and return results
     if result.success:
         return {
             "SWP": result.x[0] if use_swp else 0,
             "CHEESE": result.x[1] if use_cheese else 0,
             "WPC": result.x[2] if use_wpc else 0,
-            "slack_milk": result.x[3],  # How much milk was unused (if any)
-            "total_value_used": -result.fun
+            "total_value_used": -result.fun  # Maximized total value used
         }
     else:
         return {"error": "Optimization was not successful."}

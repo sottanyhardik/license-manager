@@ -298,12 +298,11 @@ class BaseReportView(TemplateView):
         is_expired = self.kwargs.get('status') == 'expired'
         if not is_expired:
             return self.model.objects.filter(license_expiry_date__gte=date,
-                                             export_license__norm_class__norm_class__in=self.norm_class,
-                                             purchase_status=GE)
+                                             export_license__norm_class__norm_class__in=self.norm_class)
         else:
             return self.model.objects.filter(license_expiry_date__lt=date,
-                                             export_license__norm_class__norm_class__in=self.norm_class,
-                                             purchase_status=GE)
+                                             export_license__norm_class__norm_class__in=self.norm_class)
+
     def get_context_data(self, **kwargs):
         queryset = self.get_queryset()
         lower_balance_query = queryset.filter(balance_cif__lt=500)

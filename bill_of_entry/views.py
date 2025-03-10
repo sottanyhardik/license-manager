@@ -196,7 +196,7 @@ class DownloadPendingBillView(PDFTemplateResponseMixin, FilterView):
 class DownloadPortView(PDFTemplateResponseMixin, FilterView):
     table_class = tables.BillOfEntryTable
     filterset_class = filters.BillOfEntryFilter
-    paginate_by = 500
+    paginate_by = 5000
     template_name = 'bill_of_entry/download_port.html'
     model = bill_of_entry.BillOfEntryModel
     ordering = ('company', 'product_name', 'bill_of_entry_date')

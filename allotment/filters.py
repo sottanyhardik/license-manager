@@ -4,7 +4,9 @@ import django_filters
 from django.conf import settings
 from django.db import models
 from django.forms import Select
+from django_filters import DateFromToRangeFilter
 
+from core.filter_helper import RangeWidget
 from core.models import PortModel, CompanyModel
 from license import models as license_model
 from allotment import models as allotment_model
@@ -40,7 +42,7 @@ class AllotmentItemFilter(django_filters.FilterSet):
 
     class Meta:
         model = license_model.LicenseImportItemsModel
-        fields = ['license__license_number', 'description', 'license__notification_number',
+        fields = ['license__license_number', 'item__name', 'license__notification_number',
                   'license__export_license__norm_class', 'hs_code__hs_code']
         widgets = {
             'license__notification_number': Select(attrs={'class': 'form-control'}),
@@ -92,6 +94,8 @@ class AllotmentFilter(django_filters.FilterSet):
         field_name='port__code', label='Port Code', queryset=PortModel.objects.filter(allotments__isnull=False).distinct())
     is_be = django_filters.BooleanFilter(method='check_be', label='Is BOE', initial=False)
     is_alloted = django_filters.BooleanFilter(method='check_alloted', label='Is Alloted', initial=True)
+    modified_on = DateFromToRangeFilter(
+        widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY', 'format': 'dd/mm/yyyy', 'type': 'date'}))
 
     class Meta:
         model = allotment_model.AllotmentModel

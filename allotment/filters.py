@@ -4,6 +4,7 @@ import django_filters
 from django.conf import settings
 from django.db import models
 from django.forms import Select
+from django.utils.timezone import now
 from django_filters import DateFromToRangeFilter
 
 from core.filter_helper import RangeWidget
@@ -36,14 +37,13 @@ class ListPortFilter(django_filters.Filter):
 
 
 class AllotmentItemFilter(django_filters.FilterSet):
-    remove_expired = django_filters.BooleanFilter(field_name='license_expiry_date', method='check_expired',
-                                                  label='Is Expired')
+    remove_expired = django_filters.BooleanFilter(method='filter_expired', label='Is Expired')
     remove_null = django_filters.BooleanFilter(method='remove_null_values', label='Remove Null')
 
     class Meta:
         model = license_model.LicenseImportItemsModel
-        fields = ['license__license_number', 'item__name', 'license__notification_number',
-                  'license__export_license__norm_class', 'hs_code__hs_code']
+        fields = ['license__license_number', 'license__notification_number',
+                  'license__export_license__norm_class', 'hs_code__hs_code','description']
         widgets = {
             'license__notification_number': Select(attrs={'class': 'form-control'}),
         }
@@ -74,13 +74,15 @@ class AllotmentItemFilter(django_filters.FilterSet):
             return queryset.filter(id__in=id)
         return queryset
 
-    def check_expired(self, queryset, name, value):
-        from datetime import datetime, timedelta
-        expiry_limit = datetime.today() - timedelta(days=settings.EXPIRY_DAY)
+    def filter_expired(self, queryset, name, value):
+        """ ✅ Optimized expired license filtering using timezone.now() """
+        expiry_days = getattr(settings, "EXPIRY_DAY", 30)  # ✅ Default to 30 days if setting not found
+        expiry_limit = now() - datetime.timedelta(days=expiry_days)
+
         if value:
-            return queryset.filter(license__license_expiry_date__lt=expiry_limit).order_by('license__license_expiry_date')
-        else:
-            return queryset.filter(license__license_expiry_date__gte=expiry_limit)
+            return queryset.filter(license__license_expiry_date__lt=expiry_limit).order_by(
+                'license__license_expiry_date')
+        return queryset.filter(license__license_expiry_date__gte=expiry_limit)
 
 
 class AllotmentFilter(django_filters.FilterSet):

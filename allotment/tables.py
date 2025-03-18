@@ -23,7 +23,7 @@ class AllotmentItemsTable(dt2.Table):
         model = license_model.LicenseImportItemsModel
         per_page = 50
         fields = ['counter', 'serial_number', 'license', 'license_date', 'license_expiry', 'license_exporter',
-                  'hs_code', 'item',
+                  'hs_code', 'description',
                   'balance_quantity', 'balance_value', 'allotment_quantity', 'allotment_value', 'unit']
         attrs = {"class": "table table-bordered dataTable js-exportable"}
 

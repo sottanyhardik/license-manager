@@ -679,11 +679,11 @@ class LicenseExportItemModel(models.Model):
 
 class LicenseImportItemsModel(models.Model):
     serial_number = models.IntegerField(default=0)
-    license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE, related_name='import_license')
+    license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE, related_name='import_license', db_index=True)
     hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.CASCADE, blank=True, related_name='import_item',
-                                null=True)
+                                null=True, db_index=True)
     item = models.ForeignKey('core.ItemNameModel', related_name='license_items', on_delete=models.CASCADE, blank=True,
-                             null=True)
+                             null=True, db_index=True)
     description = models.CharField(max_length=255, blank=True, db_index=True, null=True)
     duty_type = models.CharField(max_length=255)
     quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
@@ -704,6 +704,11 @@ class LicenseImportItemsModel(models.Model):
     class Meta:
         ordering = ['license__license_expiry_date', 'serial_number']
         unique_together = (('license', 'serial_number'),)
+        indexes = [
+            models.Index(fields=['license']),  # ✅ Optimized indexing
+            models.Index(fields=['hs_code']),  # ✅ Optimized indexing
+            models.Index(fields=['item']),  # ✅ Optimized indexing
+        ]
 
     def __str__(self):
         return "{0}-{1}".format(str(self.license), str(self.serial_number))

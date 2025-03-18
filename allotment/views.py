@@ -91,6 +91,8 @@ class AllotmentDeleteView(TemplateResponseMixin, ContextMixin, View):
         return HttpResponseRedirect(success_url)
 
 
+from django.shortcuts import get_object_or_404
+
 class StartAllotmentView(PagedFilteredTableView):
     template_name = 'allotment/item.html'
     model = license_models.LicenseImportItemsModel
@@ -98,11 +100,16 @@ class StartAllotmentView(PagedFilteredTableView):
     filter_class = filters.AllotmentItemFilter
     page_head = 'Item List'
 
+    def get_queryset(self):
+        """
+        Optimize queryset to prefetch related data and avoid redundant queries.
+        """
+        return self.model.objects.select_related("license").all()
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['allotment_object'] = allotments.AllotmentModel.objects.get(id=self.kwargs.get('pk'))
+        context['allotment_object'] = get_object_or_404(allotments.AllotmentModel, id=self.kwargs.get('pk'))
         return context
-
 
 def allotment_data(request, pk):
     row_id = request.POST.get('row')

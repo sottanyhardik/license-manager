@@ -110,7 +110,7 @@ class RowDetails(models.Model):
         ordering = ['transaction_type', 'bill_of_entry__bill_of_entry_date']
 
     def __str__(self):
-        return self.sr_number
+        return str(self.sr_number)
 
 @receiver(post_save, sender=RowDetails, dispatch_uid="update_stock")
 def update_stock(sender, instance, **kwargs):

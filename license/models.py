@@ -85,6 +85,8 @@ class LicenseDetailsModel(models.Model):
     billing_rate = models.FloatField(default=0)
     billing_amount = models.FloatField(default=0)
     admin_search_fields = ('license_number',)
+    current_owner = models.ForeignKey('core.CompanyModel', on_delete=models.PROTECT, null=True, blank=True,
+                                      related_name='online_data')
 
     def __str__(self):
         return self.license_number
@@ -496,11 +498,11 @@ class LicenseDetailsModel(models.Model):
                 True, True, True
             )
 
-            cif_swp = min(milk_data.get('SWP',0) * unit_prices['swp'], total_milk_cif)
+            cif_swp = min(milk_data.get('SWP', 0) * unit_prices['swp'], total_milk_cif)
             total_milk_cif = self.use_balance_cif(cif_swp, total_milk_cif)
-            cif_cheese = min(milk_data.get('CHEESE',0) * unit_prices['cheese'], total_milk_cif)
+            cif_cheese = min(milk_data.get('CHEESE', 0) * unit_prices['cheese'], total_milk_cif)
             total_milk_cif = self.use_balance_cif(cif_cheese, total_milk_cif)
-            wpc_cif = min(milk_data.get('WPC',0) * unit_prices['wpc'], total_milk_cif)
+            wpc_cif = min(milk_data.get('WPC', 0) * unit_prices['wpc'], total_milk_cif)
             total_milk_cif = self.use_balance_cif(wpc_cif, total_milk_cif)
             available_value = total_milk_cif
         else:
@@ -679,7 +681,8 @@ class LicenseExportItemModel(models.Model):
 
 class LicenseImportItemsModel(models.Model):
     serial_number = models.IntegerField(default=0)
-    license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE, related_name='import_license', db_index=True)
+    license = models.ForeignKey('license.LicenseDetailsModel', on_delete=models.CASCADE, related_name='import_license',
+                                db_index=True)
     hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.CASCADE, blank=True, related_name='import_item',
                                 null=True, db_index=True)
     item = models.ForeignKey('core.ItemNameModel', related_name='license_items', on_delete=models.CASCADE, blank=True,

@@ -264,7 +264,7 @@ class LicenseReportTable(dt2.Table):
     party = dt2.Column(verbose_name='Exporter', accessor='exporter__name', orderable=False)
     total_cif = DecimalColumnWithTotal(verbose_name='Total CIF', accessor='opening_balance', orderable=False)
     balance_cif = DecimalColumnWithTotal(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
-    online = dt2.Column(verbose_name='Online', accessor='current_owner__name', orderable=False)
+
 
 class LicenseBiscuitReportTable(LicenseReportTable):
     veg_oil_hsn = PrefixMixin.prefixed('oil_queryset.hs_code__hs_code', verbose_name='Vegetable Oil HSN Code',

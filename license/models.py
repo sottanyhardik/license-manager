@@ -64,6 +64,7 @@ class LicenseDetailsModel(models.Model):
     user_restrictions = models.TextField(null=True, blank=True)
     ledger_date = models.DateField(null=True, blank=True)
     is_audit = models.BooleanField(default=False)
+    is_mnm = models.BooleanField(default=False)
     is_not_registered = models.BooleanField(default=False)
     is_null = models.BooleanField(default=False)
     purchase_status = models.CharField(choices=LICENCE_PURCHASE, max_length=2, default=GE)

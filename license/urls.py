@@ -34,6 +34,8 @@ urlpatterns = [
          name='report_biscuit'),
     path('report/confectionery/<slug:status>', login_required(views.ConfectioneryReportView.as_view()),
          name='report_confectionery'),
+    path('report/confectionery/milk/<slug:status>', login_required(views.ConfectioneryMilkReportView.as_view()),
+         name='report_confectionery_milk'),
     path('report/namkeen/<slug:status>', login_required(views.NamkeenReportView.as_view()),
          name='report_namkeen'),
     path('report/tractor/<slug:status>', login_required(views.TractorReportView.as_view()),

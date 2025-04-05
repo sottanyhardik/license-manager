@@ -380,6 +380,32 @@ class ConfectioneryReportView(BaseReportView):
     norm_class = ['E1',]
     table_class = LicenseConfectioneryReportTable
 
+    def get_queryset(self):
+        date = datetime.datetime.now() - datetime.timedelta(days=30)
+        is_expired = self.kwargs.get('status') == 'expired'
+        if not is_expired:
+            return self.model.objects.filter(license_expiry_date__gte=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class,is_mnm=False)
+        else:
+            return self.model.objects.filter(license_expiry_date__lt=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class,is_mnm=False)
+
+
+class ConfectioneryMilkReportView(BaseReportView):
+    norm_class = ['E1',]
+    table_class = LicenseConfectioneryReportTable
+
+    def get_queryset(self):
+        date = datetime.datetime.now() - datetime.timedelta(days=30)
+        is_expired = self.kwargs.get('status') == 'expired'
+        if not is_expired:
+            return self.model.objects.filter(license_expiry_date__gte=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class,is_mnm=True)
+        else:
+            return self.model.objects.filter(license_expiry_date__lt=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class,is_mnm=True)
+
+
 
 class NamkeenReportView(BaseReportView):
     norm_class = ['E132',]

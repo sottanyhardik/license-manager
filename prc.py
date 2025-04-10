@@ -6,7 +6,7 @@ from PRC.fetch_prc import fetch_scrip_ownership
 from license.models import LicenseDetailsModel  # just to get list1
 
 list1 = LicenseDetailsModel.objects.filter(
-    license_expiry_date__gte=date(2024, 4, 1), license_number='5211012527'
+    license_expiry_date__gte=date(2024, 4, 1)
 ).order_by('-license_expiry_date')
 
 # SERVER_API = "http://localhost:8000/api/update-license-transfer/"

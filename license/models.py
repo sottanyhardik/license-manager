@@ -626,6 +626,9 @@ class LicenseDetailsModel(models.Model):
             total_value = result['total_debited_value'] + result['total_allotted_value']
             return {'tenRestriction': min(max(round_down(credit - total_value), 0), available_value)}
 
+    @cached_property
+    def latest_transfer(self):
+        return self.transfers.order_by('-transfer_date', '-id').first()
 
 KG = 'kg'
 
@@ -937,7 +940,10 @@ class LicenseTransferModel(models.Model):
     user_id_acceptance = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
-        return f"Transfer from {self.from_company.iec if self.from_company else 'N/A'} to {self.to_company.iec if self.to_company else 'N/A'} on {self.transfer_date}"
+        if self.transfer_date:
+            return f"{self.transfer_status} from {self.from_company.name if self.from_company else 'N/A'} to {self.to_company.name if self.to_company else 'N/A'} on {self.transfer_date.date()}"
+        else:
+            return f"{self.transfer_status} from {self.from_company.name if self.from_company else 'N/A'} to {self.to_company.name if self.to_company else 'N/A'} on {self.transfer_initiation_date.date()}"
 
     def from_company_name(self):
         return self.from_company.name if self.from_company else "-"

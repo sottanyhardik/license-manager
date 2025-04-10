@@ -99,9 +99,10 @@
                                 <span>{{ object.ledger_date }}</span>
                             </div>
                             <div class="col-lg-2">
-                                <label>Remarks</label>
-                                <span>{{ object.user_comment }}</span>
+                                <label>Transfer Status</label>
+                                <span {% if object.latest_transfer.transfer_status == 'Transfer - Pending Acceptance' %}style="color: red"{% endif %}>{% if object.latest_transfer %}{{ object.latest_transfer }}{% endif %}</span>
                             </div>
+
                         </div>
                     </a>
                 </div>

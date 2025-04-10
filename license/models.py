@@ -916,3 +916,35 @@ def update_balance(sender, instance, **kwargs):
         from core.models import ItemNameModel
         nItem = ItemNameModel.objects.get(name=item_name)
         LicenseImportItemsModel.objects.filter(license=instance.license).filter(query_filter).update(item=nItem)
+
+
+class LicenseTransferModel(models.Model):
+    license = models.ForeignKey(LicenseDetailsModel, on_delete=models.CASCADE, related_name="transfers")
+
+    transfer_date = models.DateField(null=True, blank=True)
+
+    from_company = models.ForeignKey('core.CompanyModel', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_from')
+    to_company = models.ForeignKey('core.CompanyModel', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_to')
+
+    transfer_status = models.CharField(max_length=50)
+    transfer_initiation_date = models.DateTimeField(null=True, blank=True)
+    transfer_acceptance_date = models.DateTimeField(null=True, blank=True)
+
+    cbic_status = models.CharField(max_length=100, null=True, blank=True)
+    cbic_response_date = models.DateTimeField(null=True, blank=True)
+
+    user_id_transfer_initiation = models.CharField(max_length=100, null=True, blank=True)
+    user_id_acceptance = models.CharField(max_length=100, null=True, blank=True)
+
+    def __str__(self):
+        return f"Transfer from {self.from_company.iec if self.from_company else 'N/A'} to {self.to_company.iec if self.to_company else 'N/A'} on {self.transfer_date}"
+
+    def from_company_name(self):
+        return self.from_company.name if self.from_company else "-"
+
+    from_company_name.short_description = "From Company"
+
+    def to_company_name(self):
+        return self.to_company.name if self.to_company else "-"
+
+    to_company_name.short_description = "To Company"

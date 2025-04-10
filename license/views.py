@@ -176,7 +176,7 @@ class LicenseListView(FilterView):
                 d.fob = d.opening_fob
                 d.save()
             query = f.qs.values('license_number', 'license_date', 'port__code', 'license_expiry_date', 'file_number',
-                                'exporter__name', 'export_item', 'fob', 'balance_cif', 'user_comment', 'ledger_date')
+                                'exporter__name', 'export_item', 'fob', 'balance_cif', 'user_comment', 'ledger_date','current_owner__name')
             from djqscsv import render_to_csv_response
             return render_to_csv_response(query.order_by('license_expiry_date'))
         return super(LicenseListView, self).get(request, **kwargs)

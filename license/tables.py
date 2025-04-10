@@ -410,6 +410,7 @@ class LicenseConfectioneryReportTable(LicenseReportTable):
     pnp_qty = DecimalColumnWithTotal(verbose_name='Paper & Paper QTY',
                                      accessor='get_paper_and_paper.available_quantity_sum', orderable=False)
     condition_sheet = dt2.Column(verbose_name='Condition Sheet', accessor='condition_sheet', orderable=False)
+    owner = dt2.Column(verbose_name='Owner', accessor='current_owner__name', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel

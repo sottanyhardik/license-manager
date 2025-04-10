@@ -22,4 +22,6 @@ urlpatterns = [
     path('ledger_complete/', login_required(views.LedgerSuccess.as_view()), name='ledger-complete'),
     path('meis/upload/', login_required(views.UploadMEISView.as_view()), name='meis-upload'),
     path('meis/generate/', login_required(views.GenerateTransferLetterMEISView.as_view()), name='generate_tl'),
+    # this url is to update transfer dfia status on server
+    path('api/update-license-transfer/', views.save_license_transfer, name='save_license_transfer'),
 ]

@@ -13,7 +13,7 @@ from extra_views import UpdateWithInlinesView, InlineFormSetFactory
 from tablib import Dataset
 
 from core.scripts.sion import fetch_sion_data
-from core.utils import PagedFilteredTableView
+from core.utils import PagedFilteredTableView, safe_parse_date
 from . import models, tables, filters, forms
 from .models import MEISMODEL
 from .scripts.ledger import fetch_page_data
@@ -248,3 +248,69 @@ class GenerateTransferLetterMEISView(View):
         response = HttpResponse(zip_file, content_type='application/force-download')
         response['Content-Disposition'] = 'attachment; filename="%s"' % file_name
         return response
+
+
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.utils.dateparse import parse_datetime, parse_date
+from license.models import LicenseDetailsModel, LicenseTransferModel
+from core.models import CompanyModel
+import json
+
+@csrf_exempt
+def save_license_transfer(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+
+            license_number = data["license_number"]
+            license_date = data["license_date"]
+            exporter_iec = data["exporter_iec"]
+
+            # Find the license
+            dfia = LicenseDetailsModel.objects.get(
+                license_number=license_number, license_date=license_date, exporter__iec=exporter_iec
+            )
+
+            # Handle current owner
+            owner_data = data.get("current_owner")
+            if owner_data:
+                current_owner, _ = CompanyModel.objects.update_or_create(
+                    iec=owner_data["iec"],
+                    defaults={"name": owner_data.get("name")}
+                )
+                dfia.current_owner = current_owner
+                dfia.save()
+
+            # Handle transfers
+            for transfer in data.get("transfers", []):
+                from_company, _ = CompanyModel.objects.update_or_create(
+                    iec=transfer["from_iec"],
+                    defaults={"name": transfer.get("from_iec_entity_name")}
+                )
+                to_company, _ = CompanyModel.objects.update_or_create(
+                    iec=transfer["to_iec"],
+                    defaults={"name": transfer.get("to_iec_entity_name")}
+                )
+
+                LicenseTransferModel.objects.update_or_create(
+                    license=dfia,
+                    from_company=from_company,
+                    to_company=to_company,
+                    transfer_initiation_date=parse_datetime(transfer["transfer_initiation_date"]),
+                    defaults={
+                        "transfer_status": transfer.get("transfer_status"),
+                        "transfer_date": safe_parse_date(transfer.get("transfer_date")),
+                        "transfer_acceptance_date": parse_datetime(transfer.get("transfer_acceptance_date")) if transfer.get("transfer_acceptance_date") else None,
+                        "cbic_status": transfer.get("cbic_status"),
+                        "cbic_response_date": parse_datetime(transfer.get("cbic_response_date")) if transfer.get("cbic_response_date") else None,
+                        "user_id_transfer_initiation": transfer.get("user_id_transfer_initiation"),
+                        "user_id_acceptance": transfer.get("user_id_acceptance"),
+                    }
+                )
+
+            return JsonResponse({"status": "success"}, status=201)
+
+        except Exception as e:
+            return JsonResponse({"status": "error", "message": str(e)}, status=400)
+    return JsonResponse({"status": "invalid method"}, status=405)

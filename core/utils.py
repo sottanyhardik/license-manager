@@ -1,7 +1,9 @@
+from datetime import datetime
 from io import BytesIO
 
 from django.http import HttpResponse
 from django.template.loader import get_template
+from django.utils.dateparse import parse_datetime, parse_date
 from django_tables2 import SingleTableView
 from django_tables2.export import ExportMixin
 from xhtml2pdf import pisa
@@ -36,3 +38,34 @@ def render_to_pdf(template_src, context_dict={}):
     if not pdf.err:
         return HttpResponse(result.getvalue(), content_type='application/pdf')
     return None
+
+
+
+
+def safe_parse_datetime(value):
+    """Parse date or datetime from various formats safely."""
+    if not value:
+        return None
+    # Try ISO format first
+    dt = parse_datetime(value)
+    if dt:
+        return dt
+    # Try ISO date
+    dt = parse_date(value)
+    if dt:
+        return datetime.combine(dt, datetime.min.time())
+    # Try custom 'DD/MM/YYYY'
+    try:
+        return datetime.strptime(value, '%d/%m/%Y')
+    except Exception:
+        pass
+    # Try fallback format
+    try:
+        return datetime.strptime(value, '%d-%m-%Y')
+    except Exception:
+        pass
+    return None
+
+def safe_parse_date(value):
+    dt = safe_parse_datetime(value)
+    return dt.date() if dt else None

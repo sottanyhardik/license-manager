@@ -88,6 +88,7 @@ class LicenseDetailsModel(models.Model):
     admin_search_fields = ('license_number',)
     current_owner = models.ForeignKey('core.CompanyModel', on_delete=models.PROTECT, null=True, blank=True,
                                       related_name='online_data')
+    file_transfer_status = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return self.license_number

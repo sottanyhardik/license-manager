@@ -5,12 +5,11 @@ from datetime import date
 from PRC.fetch_prc import fetch_scrip_ownership
 from license.models import LicenseDetailsModel  # just to get list1
 
-list1 = LicenseDetailsModel.objects.filter(license_number='0311042894',
-    license_expiry_date__gte=date(2024, 4, 1)
-).order_by('-license_expiry_date')
+list1 = LicenseDetailsModel.objects.filter(current_owner=None).order_by('-license_expiry_date')
 
 # SERVER_API = "http://localhost:8000/api/update-license-transfer/"
 SERVER_API = "http://167.71.233.211/api/update-license-transfer/"
+
 
 for dfia in list1:
     try:

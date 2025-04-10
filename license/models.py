@@ -941,7 +941,7 @@ class LicenseTransferModel(models.Model):
 
     def __str__(self):
         if self.transfer_date:
-            return f"{self.transfer_status} from {self.from_company.name if self.from_company else 'N/A'} to {self.to_company.name if self.to_company else 'N/A'} on {self.transfer_date.date()}"
+            return f"{self.transfer_status} from {self.from_company.name if self.from_company else 'N/A'} to {self.to_company.name if self.to_company else 'N/A'} on {self.transfer_date}"
         else:
             return f"{self.transfer_status} from {self.from_company.name if self.from_company else 'N/A'} to {self.to_company.name if self.to_company else 'N/A'} on {self.transfer_initiation_date.date()}"
 

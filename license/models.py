@@ -628,7 +628,12 @@ class LicenseDetailsModel(models.Model):
 
     @cached_property
     def latest_transfer(self):
-        return self.transfers.order_by('-transfer_date', '-id').first()
+        if self.transfers.order_by('-transfer_date', '-id'):
+            return self.transfers.order_by('-transfer_date', '-id').first()
+        elif self.current_owner:
+            return "Current Owner is {}".format(self.current_owner.name)
+        else:
+            return "Data Not Found"
 
 KG = 'kg'
 

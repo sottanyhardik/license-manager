@@ -489,21 +489,26 @@ class LicenseDetailsModel(models.Model):
                                              pomace_cif=pomace_cif,
                                              pko_cif=pko_cif)
         # Ensure oil CIF values are calculated correctly
-        if oil_data.get('Total CIF'):
-            available_value = self.use_balance_cif(oil_data.get('Total CIF'), available_value)
+        if oil_data.get('Total_CIF'):
+            available_value = self.use_balance_cif(oil_data.get('Total_CIF'), available_value)
             oil_data['rbd_oil'] = oil_data.get('RBD QTY', 0)
             oil_data['cif_rbd_oil'] = min(oil_data.get('rbd_oil', 0) * float(rbd_cif),
-                                          oil_data.get('Total CIF'))
+                                          oil_data.get('Total_CIF'))
             oil_data['pko_oil'] = oil_data.get('PKO QTY', 0)
             oil_data['cif_pko_oil'] = min(oil_data.get('pko_oil', 0) * float(pko_cif),
-                                          oil_data.get('Total CIF'))
+                                          oil_data.get('Total_CIF'))
             oil_data['olive_oil'] = oil_data.get('Olive QTY', 0)
             oil_data['cif_olive_oil'] = min(oil_data.get('olive_oil', 0) * float(olive_cif),
-                                            oil_data.get('Total CIF'))
+                                            oil_data.get('Total_CIF'))
             oil_data['pomace_oil'] = oil_data.get('Pomace QTY', 0)
             oil_data['cif_pomace_oil'] = min(oil_data.get('pomace_oil', 0) * float(pomace_cif),
-                                             oil_data.get('Total CIF'))
-        print(oil_data)
+                                             oil_data.get('Total_CIF'))
+        elif pko_cif:
+            oil_data['pko_oil'] = total_oil_available
+            oil_data['cif_pko_oil'] = float(pko_cif) * float(total_oil_available)
+        elif rbd_cif:
+            oil_data['rbd_oil'] = total_oil_available
+            oil_data['cif_rbd_oil'] = float(rbd_cif) * float(total_oil_available)
         # Milk Product Distribution
         total_milk = self.get_mnm_pd.get('available_quantity_sum', 0)
         total_milk_cif = Decimal(available_value) + Decimal(cif_swp) + Decimal(cif_cheese)

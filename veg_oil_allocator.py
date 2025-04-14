@@ -69,6 +69,6 @@ def allocate_priority_oils_with_min_pomace(total_qty, total_cif_budget,
             output[f"{oil['name']} QTY"] = 0
             output[f"{oil['name']} CIF"] = 0
 
-    output["Total Veg QTY"] = round(sum(output.get(f"{oil['name']} QTY", 0) for oil in oils), 2)
-    output["Total CIF"] = round(sum(output.get(f"{oil['name']} CIF", 0) for oil in oils), 2)
+    output["Total_Veg_QTY"] = round(sum(output.get(f"{oil['name']} QTY", 0) for oil in oils), 2)
+    output["Total_CIF"] = round(sum(output.get(f"{oil['name']} CIF", 0) for oil in oils), 2)
     return output

@@ -7,11 +7,14 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
+from reportlab.lib.colors import olive
+
 from allotment.models import AllotmentItems, Debit
 from bill_of_entry.models import RowDetails, ARO
 from core.models import ItemNameModel
 from core.scripts.calculation import optimize_oil_distribution, optimize_milk_distribution
 from license.helper import round_down
+from veg_oil_allocator import allocate_priority_oils_with_min_pomace
 
 DFIA = "26"
 
@@ -454,7 +457,7 @@ class LicenseDetailsModel(models.Model):
         oil_pd = oil_info.get('description', '')
 
         oil_types = {
-            'pko_oil': ('15132110', 1.3, False),
+            'pko_oil': ('15132110', 1.2, False),
             'olive_oil': ('1500', 4.75, False),
             'pomace_oil': ('1500', 3, False),
             'rbd_oil': ('15119020', 1.1, False)
@@ -464,26 +467,43 @@ class LicenseDetailsModel(models.Model):
             if hs_code in oil_hsn or hs_code in oil_pd:
                 oil_types[key] = (hs_code, price, True)
 
-        oil_data = optimize_oil_distribution(
-            oil_types['olive_oil'][1], oil_types['pomace_oil'][1],
-            oil_types['pko_oil'][1], oil_types['rbd_oil'][1],
-            available_value, total_oil_available,
-            oil_types['olive_oil'][2], oil_types['pomace_oil'][2],
-            oil_types['pko_oil'][2], oil_types['rbd_oil'][2]
-        )
-
+        if not oil_types['olive_oil'][2]:
+            olive_cif = 0
+        else:
+            olive_cif = oil_types['olive_oil'][1]
+        if not oil_types['pko_oil'][2]:
+            pko_cif = 0
+        else:
+            pko_cif = oil_types['pko_oil'][1]
+        if not oil_types['pomace_oil'][2]:
+            pomace_cif = 0
+        else:
+            pomace_cif = oil_types['pomace_oil'][1]
+        if not oil_types['rbd_oil'][2]:
+            rbd_cif = 0
+        else:
+            rbd_cif = oil_types['rbd_oil'][1]
+        oil_data = allocate_priority_oils_with_min_pomace(total_oil_available,available_value,
+                                             olive_cif=olive_cif,
+                                             rbd_cif=rbd_cif,
+                                             pomace_cif=pomace_cif,
+                                             pko_cif=pko_cif)
         # Ensure oil CIF values are calculated correctly
-        if oil_data.get('total_value_used'):
-            available_value = self.use_balance_cif(oil_data.get('total_value_used'), available_value)
-            oil_data['cif_rbd_oil'] = min(oil_data.get('rbd_oil', 0) * float(oil_types['rbd_oil'][1]),
-                                          oil_data.get('total_value_used'))
-            oil_data['cif_pko_oil'] = min(oil_data.get('pko_oil', 0) * float(oil_types['pko_oil'][1]),
-                                          oil_data.get('total_value_used'))
-            oil_data['cif_olive_oil'] = min(oil_data.get('olive_oil', 0) * float(oil_types['olive_oil'][1]),
-                                            oil_data.get('total_value_used'))
-            oil_data['cif_pomace_oil'] = min(oil_data.get('pomace_oil', 0) * float(oil_types['pomace_oil'][1]),
-                                             oil_data.get('total_value_used'))
-
+        if oil_data.get('Total CIF'):
+            available_value = self.use_balance_cif(oil_data.get('Total CIF'), available_value)
+            oil_data['rbd_oil'] = oil_data.get('RBD QTY', 0)
+            oil_data['cif_rbd_oil'] = min(oil_data.get('rbd_oil', 0) * float(rbd_cif),
+                                          oil_data.get('Total CIF'))
+            oil_data['pko_oil'] = oil_data.get('PKO QTY', 0)
+            oil_data['cif_pko_oil'] = min(oil_data.get('pko_oil', 0) * float(pko_cif),
+                                          oil_data.get('Total CIF'))
+            oil_data['olive_oil'] = oil_data.get('Olive QTY', 0)
+            oil_data['cif_olive_oil'] = min(oil_data.get('olive_oil', 0) * float(olive_cif),
+                                            oil_data.get('Total CIF'))
+            oil_data['pomace_oil'] = oil_data.get('Pomace QTY', 0)
+            oil_data['cif_pomace_oil'] = min(oil_data.get('pomace_oil', 0) * float(pomace_cif),
+                                             oil_data.get('Total CIF'))
+        print(oil_data)
         # Milk Product Distribution
         total_milk = self.get_mnm_pd.get('available_quantity_sum', 0)
         total_milk_cif = Decimal(available_value) + Decimal(cif_swp) + Decimal(cif_cheese)

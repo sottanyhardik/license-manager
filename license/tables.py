@@ -270,7 +270,7 @@ class LicenseBiscuitReportTable(LicenseReportTable):
     veg_oil_hsn = PrefixMixin.prefixed('oil_queryset.hs_code__hs_code', verbose_name='Vegetable Oil HSN Code',
                                        orderable=False)
     veg_oil_pd = dt2.Column(verbose_name='Vegetable Oil PD', accessor='oil_queryset.description', orderable=False)
-    total_veg_qty = DecimalColumnWithTotal(verbose_name='Total Veg QTY', accessor='cif_value_balance_biscuits.available_quantity_sum.veg_oil.Total_Veg_QTY',
+    total_veg_qty = DecimalColumnWithTotal(verbose_name='Total Veg QTY', accessor='oil_queryset.available_quantity_sum',
                                            orderable=False)
     rbd_qty = DecimalColumnWithTotal(verbose_name='RBD QTY',
                                      accessor='cif_value_balance_biscuits.veg_oil.rbd_oil', orderable=False)

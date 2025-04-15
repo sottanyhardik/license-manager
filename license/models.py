@@ -435,7 +435,6 @@ class LicenseDetailsModel(models.Model):
         # SWP, Cheese, and WPC Calculations
         for item_type, threshold, cif_var in [
             (self.get_swp, 100, "cif_swp"),
-            (self.get_cheese, 100, "cif_cheese"),
         ]:
             quantity = item_type.get("available_quantity_sum", 0)
             if quantity > threshold:
@@ -503,12 +502,34 @@ class LicenseDetailsModel(models.Model):
             oil_data['pomace_oil'] = oil_data.get('Pomace QTY', 0)
             oil_data['cif_pomace_oil'] = min(oil_data.get('pomace_oil', 0) * float(pomace_cif),
                                              oil_data.get('Total_CIF'))
+        elif olive_cif:
+            oil_data['olive_oil'] = total_oil_available
+            oil_data['cif_olive_oil'] = float(olive_cif) * float(total_oil_available)
+            if pko_cif and oil_data['cif_olive_oil'] > float(available_value):
+                oil_data['pko_oil'] = total_oil_available
+                oil_data['cif_pko_oil'] = min(float(pko_cif) * float(total_oil_available),oil_data.get('Total_CIF'))
+                if oil_data['cif_pko_oil'] <= 0:
+                    oil_data['pko_oil'] = 0
+                oil_data['olive_oil'] = 0
+                oil_data['cif_olive_oil'] = 0
+                available_value = self.use_balance_cif(oil_data['cif_pko_oil'], available_value)
+            elif rbd_cif and oil_data['cif_olive_oil'] > float(available_value):
+                oil_data['rbd_oil'] = total_oil_available
+                oil_data['cif_rbd_oil'] = min(float(rbd_cif) * float(total_oil_available),oil_data.get('Total_CIF'))
+                if oil_data['cif_rbd_oil'] <= 0:
+                    oil_data['rbd_oil'] = 0
+                available_value = self.use_balance_cif(oil_data['cif_rbd_oil'], available_value)
+                oil_data['olive_oil'] = 0
+                oil_data['cif_olive_oil'] = 0
+            available_value = self.use_balance_cif(oil_data['cif_olive_oil'], available_value)
         elif pko_cif:
             oil_data['pko_oil'] = total_oil_available
             oil_data['cif_pko_oil'] = float(pko_cif) * float(total_oil_available)
+            available_value = self.use_balance_cif(oil_data['cif_pko_oil'], available_value)
         elif rbd_cif:
             oil_data['rbd_oil'] = total_oil_available
             oil_data['cif_rbd_oil'] = float(rbd_cif) * float(total_oil_available)
+            available_value = self.use_balance_cif(oil_data['cif_rbd_oil'], available_value)
         # Milk Product Distribution
         total_milk = self.get_mnm_pd.get('available_quantity_sum', 0)
         total_milk_cif = Decimal(available_value) + Decimal(cif_swp) + Decimal(cif_cheese)

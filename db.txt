@@ -11,6 +11,12 @@ GRANT ALL ON DATABASE lmanagement TO lmanagement;
 ALTER DATABASE lmanagement OWNER TO lmanagement;
 GRANT USAGE, CREATE ON SCHEMA PUBLIC TO lmanagement;
 
+PGPASSWORD=lmanagement pg_dump -U lmanagement -h localhost -p 5432 -F c -b -v -f lmanagement.backup lmanagement
+scp django@167.71.233.211:/home/django/lmanagement.backup .
+PGPASSWORD=lmanagement pg_restore -U lmanagement -h localhost -p 5432 -d lmanagement -v lmanagement.backup
+
+PGPASSWORD=lmanagement createdb -U lmanagement -h localhost -p 5432 lmanagement
+
 
 https://stackoverflow.com/questions/39767810/cant-install-psycopg2-package-through-pip-install-is-this-because-of-sierra
 

@@ -249,6 +249,10 @@ def filter_list():
         ('FRUIT JUICE', (Q(description__icontains="Juice") | Q(description__icontains="Fruit Concentrate") | Q(
             description__icontains='Relevant fruit')) & Q(
             license__export_license__norm_class__norm_class='E1')),
+        ('WPC', (
+                (Q(hs_code='3502') | Q(description__icontains='milk')) &
+                Q(license__export_license__norm_class__norm_class='E1')
+        )),
         ('FOOD FLAVOUR CONFECTIONERY',
          (Q(description__icontains="relevant food flavour") | Q(description__icontains="FOOD FLAVOUR") | Q(
              description__icontains="relevant (food flour") | Q(description__icontains="Flavouring Agent") | Q(

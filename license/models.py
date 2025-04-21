@@ -37,6 +37,7 @@ MI = 'NP'
 IP = 'IP'
 SM = 'SM'
 OT = 'OT'
+CO = 'CO'
 
 LICENCE_PURCHASE = (
     (GE, 'GE Purchase'),
@@ -44,6 +45,7 @@ LICENCE_PURCHASE = (
     (IP, 'GE Item Purchase'),
     (SM, 'SM Purchase'),
     (OT, 'OT Purchase'),
+    (CO, 'Conversion'),
 )
 
 

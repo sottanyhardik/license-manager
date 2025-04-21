@@ -38,6 +38,7 @@ IP = 'IP'
 SM = 'SM'
 OT = 'OT'
 CO = 'CO'
+RA = 'RA'
 
 LICENCE_PURCHASE = (
     (GE, 'GE Purchase'),
@@ -45,7 +46,7 @@ LICENCE_PURCHASE = (
     (IP, 'GE Item Purchase'),
     (SM, 'SM Purchase'),
     (OT, 'OT Purchase'),
-    (CO, 'Conversion'),
+    (RA, 'Ravi Foods'),
 )
 
 

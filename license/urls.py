@@ -32,7 +32,7 @@ urlpatterns = [
          name='license_summary'),
     path('report/biscuit/<slug:status>/<slug:party>/', login_required(views.BiscuitReportView.as_view()),
          name='report_biscuit'),
-    path('report/confectionery/<slug:status>', login_required(views.ConfectioneryReportView.as_view()),
+    path('report/confectionery/<slug:status>/<slug:party>/', login_required(views.ConfectioneryReportView.as_view()),
          name='report_confectionery'),
     path('report/confectionery/milk/<slug:status>', login_required(views.ConfectioneryMilkReportView.as_view()),
          name='report_confectionery_milk'),

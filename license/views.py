@@ -24,7 +24,7 @@ from license.helper import round_down, check_license, fetch_item_details
 from . import forms, tables, filters
 from . import models as license
 from .item_report import item_filter
-from .models import GE, MI, LicenseDetailsModel, SM, OT
+from .models import GE, MI, LicenseDetailsModel, SM, OT, CO
 from .tables import LicenseBiscuitReportTable, LicenseConfectioneryReportTable, LicenseNamkeenReportTable, \
     LicenseSteelReportTable, LicenseTractorReportTable, LicenseGlassReportTable, LicensePickleReportTable
 from .tasks import update_items
@@ -177,7 +177,8 @@ class LicenseListView(FilterView):
                 d.file_transfer_status = str(d.latest_transfer)
                 d.save()
             query = f.qs.values('license_number', 'license_date', 'port__code', 'license_expiry_date', 'file_number',
-                                'exporter__name', 'export_item', 'fob', 'balance_cif', 'user_comment', 'ledger_date','file_transfer_status')
+                                'exporter__name', 'export_item', 'fob', 'balance_cif', 'user_comment', 'ledger_date',
+                                'file_transfer_status')
             from djqscsv import render_to_csv_response
             return render_to_csv_response(query.order_by('license_expiry_date'))
         return super(LicenseListView, self).get(request, **kwargs)
@@ -365,35 +366,57 @@ class BiscuitReportView(BaseReportView):
                 queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
                                                               export_license__norm_class__norm_class='E5',
                                                               purchase_status=OT)
+        elif party.lower() == 'co':
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=CO)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=CO)
         else:
             if not is_expired:
                 queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
                                                               export_license__norm_class__norm_class='E5',
-                                                              purchase_status=GE).exclude(exporter__name__icontains='parle')
+                                                              purchase_status=GE).exclude(
+                    exporter__name__icontains='parle')
             else:
                 queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
                                                               export_license__norm_class__norm_class='E5',
-                                                              purchase_status=GE).exclude(exporter__name__icontains='parle')
+                                                              purchase_status=GE).exclude(
+                    exporter__name__icontains='parle')
         return queryset
 
 
 class ConfectioneryReportView(BaseReportView):
-    norm_class = ['E1',]
+    norm_class = ['E1', ]
     table_class = LicenseConfectioneryReportTable
 
     def get_queryset(self):
         date = datetime.datetime.now() - datetime.timedelta(days=30)
         is_expired = self.kwargs.get('status') == 'expired'
-        if not is_expired:
+        party = self.kwargs.get('party')
+        if party.lower() == 'co' and not is_expired:
             return self.model.objects.filter(license_expiry_date__gte=date,
-                                             export_license__norm_class__norm_class__in=self.norm_class,is_mnm=False)
+                                             export_license__norm_class__norm_class__in=self.norm_class, is_mnm=False,
+                                             purchase_status=CO)
+        elif party.lower() == 'co' and is_expired:
+            return self.model.objects.filter(license_expiry_date__lt=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class, is_mnm=False,
+                                             purchase_status=CO)
+        elif not is_expired:
+            return self.model.objects.filter(license_expiry_date__gte=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class,
+                                             is_mnm=False).exclude(purchase_status=CO)
         else:
             return self.model.objects.filter(license_expiry_date__lt=date,
-                                             export_license__norm_class__norm_class__in=self.norm_class,is_mnm=False)
+                                             export_license__norm_class__norm_class__in=self.norm_class,
+                                             is_mnm=False).exclude(purchase_status=CO)
 
 
 class ConfectioneryMilkReportView(BaseReportView):
-    norm_class = ['E1',]
+    norm_class = ['E1', ]
     table_class = LicenseConfectioneryReportTable
 
     def get_queryset(self):
@@ -401,20 +424,21 @@ class ConfectioneryMilkReportView(BaseReportView):
         is_expired = self.kwargs.get('status') == 'expired'
         if not is_expired:
             return self.model.objects.filter(license_expiry_date__gte=date,
-                                             export_license__norm_class__norm_class__in=self.norm_class,is_mnm=True)
+                                             export_license__norm_class__norm_class__in=self.norm_class,
+                                             is_mnm=True).exclude(purchase_status=CO)
         else:
             return self.model.objects.filter(license_expiry_date__lt=date,
-                                             export_license__norm_class__norm_class__in=self.norm_class,is_mnm=True)
-
+                                             export_license__norm_class__norm_class__in=self.norm_class,
+                                             is_mnm=True).exclude(purchase_status=CO)
 
 
 class NamkeenReportView(BaseReportView):
-    norm_class = ['E132',]
+    norm_class = ['E132', ]
     table_class = LicenseNamkeenReportTable
 
 
 class TractorReportView(BaseReportView):
-    norm_class = ['C969',]
+    norm_class = ['C969', ]
     table_class = LicenseTractorReportTable
 
 

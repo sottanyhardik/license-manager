@@ -612,6 +612,7 @@ class LicenseDetailsModel(models.Model):
     def get_food_flavour_confectionery(self):
         return self.get_item_data('FOOD FLAVOUR CONFECTIONERY')
 
+    @cached_property
     def get_other_confectionery(self):
         return self.get_item_data('OTHER CONFECTIONERY INGREDIENTS')
 

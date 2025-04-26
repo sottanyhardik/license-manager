@@ -27,9 +27,9 @@ def fetch_data(list1):
                 data_dict['TOTAL CIF'] = float(dfia.opening_balance)
                 data_dict['BAL CIF'] = float(dfia.get_balance_cif)
                 data_dict['2% of CIF'] = int(dfia.opening_balance * .02)
-                data_dict['2% of CIF Balance'] = dfia.get_per_cif()
+                data_dict['2% of CIF Balance'] = dfia.get_per_cif.get('twoRestriction')
                 data_dict['5% of CIF'] = int(dfia.opening_balance * .05)
-                data_dict['5% of CIF Balance'] = dfia.get_per_essential_oil()
+                data_dict['5% of CIF Balance'] = dfia.get_per_cif.get('fiveRestriction')
                 data_dict['Is Individual'] = dfia.is_individual
                 data_dict['Is Conversion'] = ""
                 if dfia.export_license.all().first().old_quantity != 0.0 or dfia.notification_number == '098/2009':
@@ -42,53 +42,42 @@ def fetch_data(list1):
                     if dfia.export_license.all().first().old_quantity != 0.0:
                         data_dict['Is Conversion'] = True
                 else:
-                    data_dict['2% of CIF Utilized'] = int(dfia.opening_balance * .02) - data_dict['2% of CIF Balance']
-                    data_dict['5% of CIF Utilized'] = data_dict['5% of CIF'] - data_dict['5% of CIF Balance']
-                import_item = dfia.import_license.filter(item__head__name__icontains='juice')
-                if import_item.exists():
-                    data_dict['HSN Juice'] = "'" + import_item[0].hs_code.hs_code
-                    total = 0
-                    data_dict['BAL JUICE Qty'] = fetch_total(import_item)
-                    data_dict['OLD JUICE Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
-                    data_dict['Total JUICE Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-                import_item = dfia.import_license.filter(item__head__name__icontains='other')
-                if import_item.exists():
-                    data_dict['Other'] = "'" + import_item[0].hs_code.hs_code
-                    total = 0
-                    data_dict['BAL Other Qty'] = fetch_total(import_item)
-                    data_dict['OLD Other Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
-                    data_dict['Total Other Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-                import_item = dfia.import_license.filter(item__head__name__icontains='citric acid')
-                if import_item.exists():
-                    data_dict['HSN TARTARIC'] = "'" + import_item[0].hs_code.hs_code
-                    total = 0
-                    data_dict['BAL TARTARIC Qty'] = fetch_total(import_item)
-                    data_dict['OLD TARTARIC Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
-                    data_dict['Total TARTARIC Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-                import_item = dfia.import_license.filter(item__head__name__icontains='essential oil')
-                if import_item.exists():
-                    total = 0
-                    data_dict['BAL ESSENTIAL OIL QTY'] = fetch_total(import_item)
-                    data_dict['HSN E'] = "'" + import_item[0].hs_code.hs_code
-                    data_dict['OLD ESSENTIAL OIL Qty'] = import_item.aggregate(Sum('old_quantity'))['old_quantity__sum']
-                    data_dict['Total ESSENTIAL OIL Qty'] = import_item.aggregate(Sum('quantity'))['quantity__sum']
-
-                import_item = dfia.import_license.filter(item__head__name__icontains='pp')
-                if import_item.exists():
-                    total = 0
-                    data_dict['PP QTY'] = fetch_total(import_item)
-                    data_dict['HSN PP'] = "'" + import_item[0].hs_code.hs_code
-                import_item = dfia.import_license.filter(item__head__name__icontains='paper & paper board')
-                if import_item.exists():
-                    total = 0
-                    data_dict['Paper & Paper Board'] = fetch_total(import_item)
-                    data_dict['HSN PAP'] = "'" + import_item[0].hs_code.hs_code
-                else:
-                    data_dict['Paper & Paper Board'] = 0
-                    data_dict['HSN PAP'] = ''
+                    data_dict['2% of CIF Utilized'] = int(dfia.opening_balance * .02) - data_dict.get(
+                        '2% of CIF Balance')
+                    data_dict['5% of CIF Utilized'] = float(data_dict.get('5% of CIF', 0)) - data_dict.get(
+                        '5% of CIF Balance', 0)
+                import_item = dfia.get_juice
+                data_dict['HSN Juice'] = "'" + import_item.get('hs_code__hs_code')
+                data_dict['BAL JUICE Qty'] = import_item.get('available_quantity_sum')
+                data_dict['Total JUICE Qty'] = import_item.get('quantity_sum')
+                import_item = dfia.get_other_confectionery
+                data_dict['HSN Other'] = "'" + import_item.get('hs_code__hs_code')
+                data_dict['BAL Other Qty'] = import_item.get('available_quantity_sum')
+                data_dict['Total Other Qty'] = import_item.get('quantity_sum')
+                import_item = dfia.get_tartaric_acid
+                data_dict['HSN TARTARIC'] = "'" + import_item.get('hs_code__hs_code')
+                data_dict['BAL TARTARIC Qty'] = import_item.get('available_quantity_sum')
+                data_dict['Total TARTARIC Qty'] = import_item.get('quantity_sum')
+                import_item = dfia.get_essential_oil
+                data_dict['HSN ESSENTIAL OIL'] = "'" + import_item.get('hs_code__hs_code')
+                data_dict['BAL ESSENTIAL OIL Qty'] = import_item.get('available_quantity_sum')
+                data_dict['Total ESSENTIAL OIL Qty'] = import_item.get('quantity_sum')
+                import_item = dfia.get_pp
+                data_dict['HSN PP'] = "'" + import_item.get('hs_code__hs_code')
+                data_dict['BAL PP Qty'] = import_item.get('available_quantity_sum')
+                data_dict['Total PP Qty'] = import_item.get('quantity_sum')
+                import_item = dfia.get_aluminium
+                data_dict['HSN Aluminium Foil'] = "'" + import_item.get('hs_code__hs_code')
+                data_dict['BAL Aluminium Foil Qty'] = import_item.get('available_quantity_sum')
+                data_dict['Total Aluminium Foil Qty'] = import_item.get('quantity_sum')
+                import_item = dfia.get_paper_and_paper
+                data_dict['HSN Paper'] = "'" + import_item.get('hs_code__hs_code')
+                data_dict['BAL Paper Qty'] = import_item.get('available_quantity_sum')
+                data_dict['Total Paper Qty'] = import_item.get('quantity_sum')
         except Exception as e:
             print(e)
-        conf_list.append(data_dict)
+            print(a)
+    conf_list.append(data_dict)
     return conf_list
 
 
@@ -97,9 +86,11 @@ def generate_excel(conf_list):
         fieldnames = ['DFIA No', 'DFIA Dt', 'DFIA Exp', 'Exporter', 'PORT', 'Notf No', 'Ledger Date', 'TOTAL CIF',
                       'BAL CIF', 'HSN Juice', 'Total JUICE Qty', 'OLD JUICE Qty', 'BAL JUICE Qty', 'Other',
                       'Total Other Qty', 'OLD Other Qty', 'BAL Other Qty',
-                      '2% of CIF', '2% of CIF Utilized', '2% of CIF Balance', 'HSN TARTARIC','Total TARTARIC Qty','OLD TARTARIC Qty', 'BAL TARTARIC Qty',
+                      '2% of CIF', '2% of CIF Utilized', '2% of CIF Balance', 'HSN TARTARIC', 'Total TARTARIC Qty',
+                      'OLD TARTARIC Qty', 'BAL TARTARIC Qty',
                       'HSN E',
-                      'Total ESSENTIAL OIL Qty','OLD ESSENTIAL OIL Qty','BAL ESSENTIAL OIL QTY', '5% of CIF', '5% of CIF Utilized', '5% of CIF Balance', 'HSN PP',
+                      'Total ESSENTIAL OIL Qty', 'OLD ESSENTIAL OIL Qty', 'BAL ESSENTIAL OIL QTY', '5% of CIF',
+                      '5% of CIF Utilized', '5% of CIF Balance', 'HSN PP',
                       'PP QTY',
                       'HSN PAP', 'Paper & Paper Board', 'Is Individual', 'Is Conversion']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)

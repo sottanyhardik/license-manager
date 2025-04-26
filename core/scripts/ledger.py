@@ -102,10 +102,15 @@ def parse_file(data):
                 'cif_fc': split_line[4].strip() or 0,
                 'qty': float(split_line[5].strip()) if split_line[5].strip() else 0.0,
                 'be_number': split_line[7].strip() if row_type == 'D' else '',
-                'be_date': datetime.datetime.strptime(split_line[8].strip(), '%d/%m/%y').strftime(
-                    '%Y/%m/%d') if row_type == 'D' else '',
+                'be_date': '',
                 'port': split_line[9].strip() if row_type == 'D' else '',
             }
+            if row_type == 'D':
+                try:
+                    row_dict['be_date'] =datetime.datetime.strptime(split_line[8].strip(), '%d/%m/%Y').strftime('%Y/%m/%d')
+                except Exception as e:
+                    row_dict['be_date'] = datetime.datetime.strptime(split_line[8].strip(), '%d/%m/%y').strftime(
+                        '%Y/%m/%d')
             data_dict['row'].append(row_dict)
 
     return data_dict

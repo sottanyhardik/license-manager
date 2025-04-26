@@ -612,7 +612,6 @@ class LicenseDetailsModel(models.Model):
     def get_food_flavour_confectionery(self):
         return self.get_item_data('FOOD FLAVOUR CONFECTIONERY')
 
-    @cached_property
     def get_other_confectionery(self):
         return self.get_item_data('OTHER CONFECTIONERY INGREDIENTS')
 
@@ -769,9 +768,9 @@ class LicenseImportItemsModel(models.Model):
         ordering = ['license__license_expiry_date', 'serial_number']
         unique_together = (('license', 'serial_number'),)
         indexes = [
-            models.Index(fields=['license']),  # ✅ Optimized indexing
-            models.Index(fields=['hs_code']),  # ✅ Optimized indexing
-            models.Index(fields=['item']),  # ✅ Optimized indexing
+            models.Index(fields=['license']),  # âœ… Optimized indexing
+            models.Index(fields=['hs_code']),  # âœ… Optimized indexing
+            models.Index(fields=['item']),  # âœ… Optimized indexing
         ]
 
     def __str__(self):

@@ -308,9 +308,6 @@ class LicenseBiscuitReportTable(LicenseReportTable):
                                      orderable=False)
     f_f_cif = DecimalColumnWithTotal(verbose_name='Fruit/Cocoa CIF',
                                      accessor='cif_value_balance_biscuits.f_f_cif', orderable=False)
-    la_hsn = PrefixMixin.prefixed('get_leavening_agent.hs_code__hs_code', verbose_name='LEAVING HSN Code',
-                                  orderable=False)
-    la_pd = dt2.Column(verbose_name='LEAVING PD', accessor='get_leavening_agent.description', orderable=False)
     la_qty = DecimalColumnWithTotal(verbose_name='Leavening Agent Qty',
                                     accessor='get_leavening_agent.available_quantity_sum',
                                     orderable=False)

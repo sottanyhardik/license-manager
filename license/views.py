@@ -1,26 +1,21 @@
 import datetime
-import os
-from io import BytesIO, StringIO
+from io import StringIO
 
 import xlsxwriter
-from django.shortcuts import redirect
-from django.utils.translation import gettext_lazy
-import xhtml2pdf.pisa as pisa
 from django.db.models import Q
 from django.http import HttpResponseRedirect
-from django.template.loader import get_template
+from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils.translation import gettext_lazy
 from django.views import View
-from django.views.generic import DetailView, TemplateView, ListView
-from django.views.generic.base import TemplateResponseMixin, ContextMixin
+from django.views.generic import DetailView, TemplateView
 from django_filters.views import FilterView
-from django_tables2 import SingleTableView
 from easy_pdf.views import PDFTemplateResponseMixin
 from extra_views import CreateWithInlinesView, UpdateWithInlinesView, InlineFormSetFactory
 
 from core.utils import PagedFilteredTableView
 from license.excel import get_license_table
-from license.helper import round_down, check_license, fetch_item_details
+from license.helper import check_license, fetch_item_details
 from . import forms, tables, filters
 from . import models as license
 from .item_report import item_filter
@@ -328,10 +323,73 @@ class BiscuitReportView(BaseReportView):
         date = datetime.datetime.now() - datetime.timedelta(days=30)
         party = self.kwargs.get('party')
         is_expired = self.kwargs.get('status') == 'expired'
-        list1 = ['0311009150', '1310049708', '1311000658', '0311008874', '0311006172', '1310049493', '1310049730', '1310049731', '1310049729', '3010105354', '0311009211', '0310831147', '0310831148', '0310831149', '0311005544', '0311011361', '0311008454', '0311008660', '0310839564', '0311008560', '0310837902', '0311007633', '0310832494', '0311004194', '0311009709', '0310831880', '0310837998', '0310834896', '0310831843', '0310834967', '0310833305', '0310831831', '0310833286', '0310835559', '0310839189', '0310832432', '0310832433', '0310832398', '0310832430', '0310833793', '0310833141', '0311002408', '0311005542', '0310833589', '0311008621', '0310833591', '0311008153', '0311008507']
-        queryset = LicenseDetailsModel.objects.filter(license_number__in=list1,
-                                                      export_license__norm_class__norm_class='E5',
-                                                      purchase_status=GE)
+        if party == 'parle':
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(exporter__name__icontains=self.kwargs.get('party'),
+                                                              license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=GE)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(exporter__name__icontains=self.kwargs.get('party'),
+                                                              license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=GE)
+        elif party == 'mi':
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=MI)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=MI)
+        elif party == 'sm':
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=SM)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=SM)
+        elif party == 'ot':
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=OT)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=OT)
+        elif party.lower() == 'co':
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=CO)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=CO)
+        elif party.lower() == 'ra':
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=RA)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=RA)
+        else:
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=GE).exclude(
+                    exporter__name__icontains='parle')
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=GE).exclude(
+                    exporter__name__icontains='parle')
         return queryset
 
 
@@ -340,10 +398,26 @@ class ConfectioneryReportView(BaseReportView):
     table_class = LicenseConfectioneryReportTable
 
     def get_queryset(self):
-        list1 = ['0311009150', '1310049708', '1311000658', '0311008874', '0311006172', '1310049493', '1310049730', '1310049731', '1310049729', '3010105354', '0311009211', '0310831147', '0310831148', '0310831149', '0311005544', '0311011361', '0311008454', '0311008660', '0310839564', '0311008560', '0310837902', '0311007633', '0310832494', '0311004194', '0311009709', '0310831880', '0310837998', '0310834896', '0310831843', '0310834967', '0310833305', '0310831831', '0310833286', '0310835559', '0310839189', '0310832432', '0310832433', '0310832398', '0310832430', '0310833793', '0310833141', '0311002408', '0311005542', '0310833589', '0311008621', '0310833591', '0311008153', '0311008507']
-        queryset = LicenseDetailsModel.objects.filter(license_number__in=list1,
-                                                      export_license__norm_class__norm_class='E1')
-        return queryset
+        date = datetime.datetime.now() - datetime.timedelta(days=30)
+        is_expired = self.kwargs.get('status') == 'expired'
+        party = self.kwargs.get('party')
+        if party.lower() == 'co' and not is_expired:
+            return self.model.objects.filter(license_expiry_date__gte=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class, is_mnm=False,
+                                             purchase_status=CO)
+        elif party.lower() == 'co' and is_expired:
+            return self.model.objects.filter(license_expiry_date__lt=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class, is_mnm=False,
+                                             purchase_status=CO)
+        elif not is_expired:
+            return self.model.objects.filter(license_expiry_date__gte=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class,
+                                             is_mnm=False).exclude(purchase_status=CO)
+        else:
+            return self.model.objects.filter(license_expiry_date__lt=date,
+                                             export_license__norm_class__norm_class__in=self.norm_class,
+                                             is_mnm=False).exclude(purchase_status=CO)
+
 
 class ConfectioneryMilkReportView(BaseReportView):
     norm_class = ['E1', ]
@@ -363,14 +437,8 @@ class ConfectioneryMilkReportView(BaseReportView):
 
 
 class NamkeenReportView(BaseReportView):
+    norm_class = ['E132', ]
     table_class = LicenseNamkeenReportTable
-
-    def get_queryset(self):
-        list1 = ['0311009150', '1310049708', '1311000658', '0311008874', '0311006172', '1310049493', '1310049730', '1310049731', '1310049729', '3010105354', '0311009211', '0310831147', '0310831148', '0310831149', '0311005544', '0311011361', '0311008454', '0311008660', '0310839564', '0311008560', '0310837902', '0311007633', '0310832494', '0311004194', '0311009709', '0310831880', '0310837998', '0310834896', '0310831843', '0310834967', '0310833305', '0310831831', '0310833286', '0310835559', '0310839189', '0310832432', '0310832433', '0310832398', '0310832430', '0310833793', '0310833141', '0311002408', '0311005542', '0310833589', '0311008621', '0310833591', '0311008153', '0311008507']
-
-        queryset = LicenseDetailsModel.objects.filter(license_number__in=list1,
-                                                      export_license__norm_class__norm_class='E132')
-        return queryset
 
 
 class TractorReportView(BaseReportView):
@@ -379,14 +447,8 @@ class TractorReportView(BaseReportView):
 
 
 class SteelReportView(BaseReportView):
+    norm_class = ['C471', 'C460', 'C473']
     table_class = LicenseSteelReportTable
-
-    def get_queryset(self):
-        list1 = ['0311009150', '1310049708', '1311000658', '0311008874', '0311006172', '1310049493', '1310049730', '1310049731', '1310049729', '3010105354', '0311009211', '0310831147', '0310831148', '0310831149', '0311005544', '0311011361', '0311008454', '0311008660', '0310839564', '0311008560', '0310837902', '0311007633', '0310832494', '0311004194', '0311009709', '0310831880', '0310837998', '0310834896', '0310831843', '0310834967', '0310833305', '0310831831', '0310833286', '0310835559', '0310839189', '0310832432', '0310832433', '0310832398', '0310832430', '0310833793', '0310833141', '0311002408', '0311005542', '0310833589', '0311008621', '0310833591', '0311008153', '0311008507']
-        queryset = LicenseDetailsModel.objects.filter(license_number__in=list1,
-                                                      export_license__norm_class__norm_class__in=['C471', 'C460', 'C473'])
-        return queryset
-
 
 
 class GlassReportView(BaseReportView):

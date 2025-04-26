@@ -165,10 +165,14 @@ class UploadLedger(TemplateView):
             if split_list:
                 del split_list[0]
             for data in split_list:
-                license = fetch_page_data(data)
-                messages.success(request, str(license))
-                # please elaborate on what you'd like to do with the license number in case of exceptions
-                # this is where you might want to put that logic
+                try:
+                    license = fetch_page_data(data)
+                    messages.success(request, str(license))
+                    # please elaborate on what you'd like to do with the license number in case of exceptions
+                    # this is where you might want to put that logic
+                except Exception as e:
+                    exception_message = f"Error with file sequence number {file_sequence_number}: {str(e)}"
+                    messages.error(request, exception_message)
         return HttpResponseRedirect(reverse('ledger-complete'))
 
 

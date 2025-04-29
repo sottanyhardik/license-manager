@@ -848,6 +848,33 @@ class LicenseImportItemsModel(models.Model):
         return dict_return
 
     @cached_property
+    def sorted_allotment_list(self):
+        dict_list = []
+        dict_return = {}
+        data = self.allotment_details.filter(is_boe=False).order_by('allotment__company',
+                                          'allotment__modified_on')
+        company_data = list(set([c['allotment__company__name'] for c in
+                                 self.allotment_details.filter(is_boe=False).order_by('allotment__company',
+                                                            'allotment__modified_on','allotment__unit_value_per_unit').values(
+                                     'allotment__company__name')]))
+        for company in company_data:
+            if company:
+                if not company in list(dict_return.keys()):
+                    dict_return[company] = {}
+                dict_return[company]['company'] = company
+                dict_return[company]['data_list'] = data.filter(allotment__company__name=company,is_boe=False)
+                dict_return[company]['sum_total_qty'] = data.filter(allotment__company__name=company,is_boe=False).aggregate(
+                    Sum('qty')).get('qty__sum', 0.00)
+                dict_return[company]['sum_total_cif_fc'] = data.filter(allotment__company__name=company,is_boe=False).aggregate(
+                    Sum('cif_fc')).get('cif_fc__sum', 0.00)
+        for company in company_data:
+            if company:
+                dict_list.append(dict_return[company])
+        dict_return['item_details'] = dict_list
+        return dict_return
+
+
+    @cached_property
     def total_debited_qty(self):
         return self.item_details.filter(transaction_type='D').aggregate(Sum('qty')).get('qty__sum', 0.00)
 

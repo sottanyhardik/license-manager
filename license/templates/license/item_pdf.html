@@ -202,8 +202,44 @@
                 </tr>
                 <tr style="border: 1px solid"></tr>
             {% endfor %}
+            <br>
+            {% for item in import_item.sorted_allotment_list.item_details %}
+                <tr>
+                    <td style="width: 10%; border: 1px solid">
+                        <b>Date</b>
+                    </td>
+                    <td style="width: 10%; border: 1px solid">
+                        <b>Quantity</b>
+                    </td>
+                    <td style="width: 10%; border: 1px solid">
+                        <b>Unit Price</b>
+                    </td>
+                    <td style="width: 10%; border: 1px solid">
+                        <b>CIF FC</b>
+                    </td>
+                    <td style="width: 10%; border: 1px solid">
+                        <b>Invoice</b>
+                    </td>
+                    <td style="width: 30%; border: 1px solid">
+                        <b>Company</b>
+                    </td>
+                </tr>
 
+                {% for foo in item.data_list %}
+                    <tr>
+                        <td>{{ foo.allotment.modified_on }}</td>
+                        <td>{{ foo.qty }}</td>
+                        <td>{{ foo.allotment.unit_value_per_unit }}</td>
+                        <td>{{ foo.cif_fc }}</td>
+                        <td>{% if foo.allotment.invoice %}{{ foo.allotment.invoice }}{% endif %}</td>
+                        <td style="width: 30%;">{{ foo.allotment.company.name }}</td>
+                    </tr>
+
+                {% endfor %}
+
+            {% endfor %}
             </tbody>
+
             <tfoot>
             <tr>
                 <td style="width: 10%; border: 1px solid"></td>

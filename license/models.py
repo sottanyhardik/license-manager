@@ -146,11 +146,15 @@ class LicenseDetailsModel(models.Model):
 
     @property
     def get_balance_cif(self):
-        credit = float(self.opening_balance)
-        debit = float(self.get_total_debit)
-        allotment = float(self.get_total_allotment)
-        t_debit = debit + allotment
-        return round_down(credit - t_debit, 2)
+        credit = LicenseExportItemModel.objects.filter(license=self).aggregate(Sum('cif_fc'))[
+                     'cif_fc__sum'] or 0
+        debit = RowDetails.objects.filter(sr_number__license=self).filter(transaction_type=Debit).aggregate(
+            Sum('cif_fc'))[
+                    'cif_fc__sum'] or 0
+        allotment = AllotmentItems.objects.filter(item__license=self,
+                                                  allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+            Sum('cif_fc'))['cif_fc__sum'] or 0
+        return credit - (debit + allotment)
 
     def get_party_name(self):
         return str(self.exporter)[:8]

@@ -154,7 +154,7 @@ class LicenseDetailsModel(models.Model):
         allotment = AllotmentItems.objects.filter(item__license=self,
                                                   allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
             Sum('cif_fc'))['cif_fc__sum'] or 0
-        return credit - (debit + allotment)
+        return round_down(credit - (debit + allotment),2)
 
     def get_party_name(self):
         return str(self.exporter)[:8]

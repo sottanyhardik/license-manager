@@ -1,0 +1,16 @@
+-- Drop and recreate the database and user
+DROP DATABASE IF EXISTS lmanagement;
+DROP ROLE IF EXISTS lmanagement;
+
+CREATE USER lmanagement WITH PASSWORD 'lmanagement';
+CREATE DATABASE lmanagement OWNER lmanagement;
+
+-- Set defaults
+ALTER ROLE lmanagement SET client_encoding TO 'utf8';
+ALTER ROLE lmanagement SET default_transaction_isolation TO 'read committed';
+ALTER ROLE lmanagement SET timezone TO 'UTC';
+
+-- Grant necessary privileges
+GRANT ALL PRIVILEGES ON DATABASE lmanagement TO lmanagement;
+GRANT ALL ON SCHEMA public TO lmanagement;
+GRANT USAGE, CREATE ON SCHEMA public TO lmanagement;

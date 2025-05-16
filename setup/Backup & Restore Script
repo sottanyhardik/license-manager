@@ -1,0 +1,12 @@
+# Dump database from remote server to a compressed file
+PGPASSWORD=lmanagement pg_dump -U lmanagement -h localhost -p 5432 -F c -b -v -f lmanagement.backup lmanagement
+
+# Copy backup from remote to local
+scp django@167.71.233.211:/home/django/lmanagement.backup .
+
+# Drop and recreate DB locally
+PGPASSWORD=lmanagement dropdb -U lmanagement -h localhost -p 5432 --if-exists lmanagement
+PGPASSWORD=lmanagement createdb -U lmanagement -h localhost -p 5432 -O lmanagement lmanagement
+
+# Restore locally
+PGPASSWORD=lmanagement pg_restore -U lmanagement -h localhost -p 5432 -d lmanagement -v lmanagement.backup

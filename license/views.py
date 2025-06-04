@@ -1,4 +1,5 @@
 import datetime
+import json
 from io import StringIO
 
 import xlsxwriter
@@ -283,6 +284,41 @@ class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):
     def get_object(self, queryset=None):
         return self.model.objects.get(license_number=self.kwargs.get('license'))
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        object = self.get_object()
+        import_items = object.import_license.all()
+        dict_list = []
+        for item in import_items:
+            from django.db.models import Q
+            import json
+
+            # Step 1: Get all item_details as list of dicts (excluding 'id' for comparison)
+            item_details_qs = item.item_details.all()
+            item_list = list(item_details_qs.values())
+
+            # Step 2: Track seen items (excluding 'id') and delete if duplicate or 'transaction_type' == 'C'
+            seen = set()
+            to_delete_ids = []
+
+            for obj in item_list:
+                if obj.get('transaction_type') == 'C':
+                    to_delete_ids.append(obj['id'])
+                    continue
+
+                # Create a key without 'id' to check for duplicates
+                d = {k: v for k, v in obj.items() if k != 'id'}
+                key = json.dumps(d, sort_keys=True)
+
+                if key in seen:
+                    to_delete_ids.append(obj['id'])  # Duplicate
+                else:
+                    seen.add(key)
+
+            # Step 3: Delete from database
+            if to_delete_ids:
+                item.item_details.filter(id__in=to_delete_ids).delete()
+        return context
 
 class BaseReportView(TemplateView):
     template_name = 'license/report_list.html'

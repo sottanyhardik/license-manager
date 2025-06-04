@@ -129,9 +129,9 @@
             </thead>
             <tbody>
             <tr>
-                <td>{{ import_item.serial_number }}</td>
-                <td>{{ import_item.item }}</td>
-                <td>{{ import_item.hs_code }}</td>
+<td>{% if import_item.serial_number %}{{ import_item.serial_number }}{% else %}{% endif %}</td>
+<td>{% if import_item.item %}{{ import_item.item }}{% else %}{% endif %}</td>
+<td>{% if import_item.hs_code %}{{ import_item.hs_code }}{% else %}{% endif %}</td>
             </tr>
             </tbody>
         </table>

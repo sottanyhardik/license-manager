@@ -277,12 +277,12 @@ class ExcelLicenseDetailView(View):
 #         return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license_obj.license_number}))
 
 
+import json
 from django.shortcuts import get_object_or_404
 from django.views.generic.detail import DetailView
 from easy_pdf.views import PDFTemplateResponseMixin
-import json
+from . import models as license
 
-from . import models as license  # adjust if your model import path differs
 
 class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):
     template_name = 'license/pdf_ledger.html'
@@ -291,30 +291,40 @@ class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):
 
     def get_object(self, queryset=None):
         license_number = self.kwargs.get('license')
-        return get_object_or_404(self.model, license_number=license_number)
+
+        return get_object_or_404(
+            self.model.objects.prefetch_related(
+                'export_license',
+                'import_license__item_details__bill_of_entry__company',
+                'import_license__allotment_details__allotment__company',
+            ).select_related('port', 'exporter'),
+            license_number=license_number
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        license_obj = self.get_object()
+        license_obj = context["object"]
 
         for import_item in license_obj.import_license.all():
             seen = set()
-            to_delete_ids = []
+            deduped_items = []
 
-            for item in import_item.item_details.all():
+            for item in list(import_item.item_details.all()):
                 item_dict = {
                     k: v for k, v in item.__dict__.items()
-                    if k != 'id' and not k.startswith('_')
+                    if k not in ['id', '_state']
                 }
                 key = json.dumps(item_dict, sort_keys=True)
 
-                if item.transaction_type == 'C' or key in seen:
-                    to_delete_ids.append(item.id)
-                else:
+                if item.transaction_type != 'C' and key not in seen:
                     seen.add(key)
+                    deduped_items.append(item)
 
-            if to_delete_ids:
-                import_item.item_details.filter(id__in=to_delete_ids).delete()
+            import_item.item_details_cached = deduped_items
+            import_item.allotments_filtered = [
+                allot for allot in import_item.allotment_details.all()
+                if not allot.allotment.bill_of_entry.all().exists()
+            ]
 
         context["object"] = license_obj
         return context

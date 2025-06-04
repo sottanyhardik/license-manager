@@ -84,7 +84,7 @@
     <tbody>
         {% for export_item in object.export_license.all %}
         <tr>
-            <td>{{ export_item.item|default:'' }}</td>
+            <td>{{ export_item.item|default:' ' }}</td>
             <td>{{ export_item.cif_fc }}</td>
             <td>{{ export_item.balance_cif_fc }}</td>
         </tr>
@@ -104,8 +104,8 @@
         </thead>
         <tbody>
             <tr>
-                <td>{{ import_item.serial_number|default:'' }}</td>
-                <td>{{ import_item.item|default:'' }}</td>
+                <td>{{ import_item.serial_number|default:' ' }}</td>
+                <td>{{ import_item.item|default:' ' }}</td>
                 <td>{{ import_item.hs_code|default:' ' }}</td>
             </tr>
         </tbody>
@@ -125,7 +125,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in import_item.item_details.all %}
+            {% for item in import_item.item_details_cached %}
             <tr>
                 <td>{{ item.bill_of_entry.bill_of_entry_date|default:'' }}</td>
                 <td>{{ item.get_transaction_type_display|title }}</td>
@@ -138,8 +138,7 @@
             </tr>
             {% endfor %}
 
-            {% for item in import_item.allotment_details.all %}
-                {% if not item.allotment.bill_of_entry.all.exists %}
+            {% for item in import_item.allotments_filtered %}
                 <tr>
                     <td>{{ item.allotment.modified_on }}</td>
                     <td> </td>
@@ -150,7 +149,6 @@
                     <td>{{ item.cif_inr }}</td>
                     <td>{{ item.allotment.company }}</td>
                 </tr>
-                {% endif %}
             {% endfor %}
         </tbody>
         <tfoot>

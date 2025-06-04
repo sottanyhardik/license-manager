@@ -277,47 +277,46 @@ class ExcelLicenseDetailView(View):
 #         return HttpResponseRedirect(reverse('license-detail', kwargs={'license': license_obj.license_number}))
 
 
+from django.shortcuts import get_object_or_404
+from django.views.generic.detail import DetailView
+from easy_pdf.views import PDFTemplateResponseMixin
+import json
+
+from . import models as license  # adjust if your model import path differs
+
 class PDFLedgerLicenseDetailView(PDFTemplateResponseMixin, DetailView):
     template_name = 'license/pdf_ledger.html'
     model = license.LicenseDetailsModel
+    context_object_name = 'object'
 
     def get_object(self, queryset=None):
-        return self.model.objects.get(license_number=self.kwargs.get('license'))
+        license_number = self.kwargs.get('license')
+        return get_object_or_404(self.model, license_number=license_number)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        object = self.get_object()
-        import_items = object.import_license.all()
-        dict_list = []
-        for item in import_items:
-            from django.db.models import Q
-            import json
+        license_obj = self.get_object()
 
-            # Step 1: Get all item_details as list of dicts (excluding 'id' for comparison)
-            item_details_qs = item.item_details.all()
-            item_list = list(item_details_qs.values())
-
-            # Step 2: Track seen items (excluding 'id') and delete if duplicate or 'transaction_type' == 'C'
+        for import_item in license_obj.import_license.all():
             seen = set()
             to_delete_ids = []
 
-            for obj in item_list:
-                if obj.get('transaction_type') == 'C':
-                    to_delete_ids.append(obj['id'])
-                    continue
+            for item in import_item.item_details.all():
+                item_dict = {
+                    k: v for k, v in item.__dict__.items()
+                    if k != 'id' and not k.startswith('_')
+                }
+                key = json.dumps(item_dict, sort_keys=True)
 
-                # Create a key without 'id' to check for duplicates
-                d = {k: v for k, v in obj.items() if k != 'id'}
-                key = json.dumps(d, sort_keys=True)
-
-                if key in seen:
-                    to_delete_ids.append(obj['id'])  # Duplicate
+                if item.transaction_type == 'C' or key in seen:
+                    to_delete_ids.append(item.id)
                 else:
                     seen.add(key)
 
-            # Step 3: Delete from database
             if to_delete_ids:
-                item.item_details.filter(id__in=to_delete_ids).delete()
+                import_item.item_details.filter(id__in=to_delete_ids).delete()
+
+        context["object"] = license_obj
         return context
 
 class BaseReportView(TemplateView):

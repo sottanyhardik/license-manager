@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Upload Shipping Bill Excel</h2>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Upload</button>
+</form>
+
+{% if success %}
+    <p style="color:green">{{ success }}</p>
+{% endif %}
+
+{% endblock %}

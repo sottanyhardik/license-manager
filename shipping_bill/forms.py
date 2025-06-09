@@ -22,3 +22,9 @@ class ShippingBillCaptcha(forms.Form):
         cookies = cleaned_data.get('cookies')
         if not captcha and not cookies:
             raise forms.ValidationError('ALL Fields Are Compulsory!')
+
+
+from django import forms
+
+class ExcelUploadForm(forms.Form):
+    file = forms.FileField(label="Upload Excel File")

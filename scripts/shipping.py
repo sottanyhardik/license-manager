@@ -2,6 +2,8 @@ import requests
 from django.contrib import messages
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
+from shipping_bill.models import ShippingDetailsOther
+
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
@@ -144,9 +146,7 @@ def fetch_current_status(cookies, data, request=None):
         return None
 
 
-def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha, request=None):
-    from ebrc.models import ShippingDetails
-    data = ShippingDetails.objects.filter(shipping_port__isnull=False, scroll_details=False, file_id=kwargs.get('data')).exclude(failed=5).order_by('-failed').first()
+def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha, request=None, data=None):
     if data:
         print("'''''''''''''''''\n{0}''''''''''''''''''''".format(data.shipping_bill))
         if not data:
@@ -155,7 +155,9 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha, request=
             data.failed = 5
             data.save()
             return True
-        date = data.shipping_date.strftime('%Y/%m/%d')
+        from datetime import datetime
+        date = datetime.strptime(data.shipping_date, '%Y-%m-%d %H:%M:%S').strftime('%Y/%m/%d')
+
         if request_shipping_bill(cookies, csrftoken, data_dict[data.shipping_port], data.shipping_bill, date, captcha, request=request):
             dict_data = {
                 'sbTrack_location': data_dict[data.shipping_port],

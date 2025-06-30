@@ -17,7 +17,7 @@ def fetch_eligible_licenses():
     Get all licenses with expiry date in the future.
     """
     return LicenseDetailsModel.objects.filter(
-        license_expiry_date__gte="2024-01-01"
+        license_expiry_date__gte="2025-06-01"
     ).order_by("-license_expiry_date")
 
 

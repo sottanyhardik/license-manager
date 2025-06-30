@@ -27,13 +27,13 @@ def delete_item(apps, schema_editor):
 
 
 def createITEM(apps, schema_editor):
-    from migrations_script import null_all_export_items
+    from setup.migrations_script import null_all_export_items
     null_all_export_items()
-    from migrations_script import delete_all_items
+    from setup.migrations_script import delete_all_items
     delete_all_items()
-    from migrations_script import createItem
+    from setup.migrations_script import createItem
     createItem()
-    from migrations_script import set_items
+    from setup.migrations_script import set_items
     set_items()
 
 

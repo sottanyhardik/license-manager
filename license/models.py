@@ -3,17 +3,17 @@ from decimal import Decimal
 from django.db import models
 from django.db.models import Sum, IntegerField
 from django.db.models.functions import Coalesce
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
-from reportlab.lib.colors import olive
 
 from allotment.models import AllotmentItems, Debit
 from bill_of_entry.models import RowDetails, ARO
 from core.models import ItemNameModel
-from core.scripts.calculation import optimize_oil_distribution, optimize_milk_distribution
+from core.scripts.calculation import optimize_milk_distribution
 from license.helper import round_down
+from setup.migrations_script import filter_list
 from veg_oil_allocator import allocate_priority_oils_with_min_pomace
 
 DFIA = "26"
@@ -154,7 +154,7 @@ class LicenseDetailsModel(models.Model):
         allotment = AllotmentItems.objects.filter(item__license=self,
                                                   allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
             Sum('cif_fc'))['cif_fc__sum'] or 0
-        return credit - (debit + allotment)
+        return round_down(credit - (debit + allotment),2)
 
     def get_party_name(self):
         return str(self.exporter)[:8]
@@ -1000,7 +1000,6 @@ def update_balance(sender, instance, **kwargs):
     item = instance
     from bill_of_entry.tasks import update_balance_values_task
     update_balance_values_task(item.id)
-    from migrations_script import filter_list
     items_and_filters = filter_list()
     for item_name, query_filter in items_and_filters:
         from core.models import ItemNameModel

@@ -347,6 +347,7 @@ class ShippingBillFetchView(FormView):
             'INCHJ6': 'WARDHA ICD (INCHJ6)',
             'INDRC6':'RCIPL SEZ/Noida',
             'INTMI6':'IIFFCO-SEZ/Nellore',
+            'INPJN6': 'JNPT SEZ MUMBAI (INPJN6)',
         }
         status = True
         shipping_bills = ShippingDetailsOther.objects.filter(scroll_date=None, failed__lte=2)

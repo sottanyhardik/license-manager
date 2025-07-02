@@ -89,7 +89,8 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha, data_id)
                 from bill_of_entry.models import BillOfEntryModel
                 BillOfEntryModel.objects.filter(bill_of_entry_number=data.bill_of_entry_number).update(company=company,
                                                                                                        is_fetch=True)
-                boe = BillOfEntryModel.objects.get(bill_of_entry_number=data.bill_of_entry_number)
+                boe = BillOfEntryModel.objects.get(bill_of_entry_number=data.bill_of_entry_number,
+                                                   bill_of_entry_date=data.bill_of_entry_date)
                 if 'cha' in list(dict_sb_data.keys()):
                     boe.cha = dict_sb_data['cha']
                 if 'appraisement' in list(dict_sb_data.keys()):

@@ -161,7 +161,7 @@ class BillOfEntryFetchView(FormView):
             '-bill_of_entry_date')
         for data in data_list:
             from bill_of_entry.scripts.utils import port_dict
-            status = fetch_data_to_model(cookies, csrftoken, port_dict, kwargs, captcha, data.pk)
+            status = fetch_data_to_model.delay(cookies, csrftoken, port_dict, kwargs, captcha, data.pk)
         return HttpResponseRedirect(reverse('bill-of-entry-list'))
 
 

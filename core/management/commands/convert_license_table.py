@@ -34,8 +34,8 @@ class Command(BaseCommand):
         dict_list = parse_license_data(rows)
 
         for dict_data in dict_list:
-            from parse_object import create_ledger_object
-            create_ledger_object(dict_data)
+            from core.scripts.ledger import create_object
+            create_object(dict_data)
             self.stdout.write(
                 self.style.SUCCESS(f"Successfully Created for DFIA {(dict_data['lic_no'])}."))
         self.stdout.write(self.style.SUCCESS(f"Successfully converted to dict_list with {len(dict_list)} licenses."))

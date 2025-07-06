@@ -1,9 +1,8 @@
 import csv
-import json
 import os
 from django.core.management.base import BaseCommand
 
-from file_data import parse_license_data
+from scripts.parse_ledger import parse_license_data
 
 
 class Command(BaseCommand):
@@ -33,7 +32,10 @@ class Command(BaseCommand):
                 rows.append(row)
 
         dict_list = parse_license_data(rows)
-        from core.scripts.ledger import create_object
+
         for dict_data in dict_list:
-            create_object(dict_data)
+            from parse_object import create_ledger_object
+            create_ledger_object(dict_data)
+            self.stdout.write(
+                self.style.SUCCESS(f"Successfully Created for DFIA {(dict_data['lic_no'])}."))
         self.stdout.write(self.style.SUCCESS(f"Successfully converted to dict_list with {len(dict_list)} licenses."))

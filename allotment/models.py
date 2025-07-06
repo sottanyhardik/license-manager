@@ -49,6 +49,7 @@ class AllotmentModel(models.Model):
     class Meta:
         ordering = ['estimated_arrival_date', ]
 
+
     def __str__(self):
         if self.invoice:
             return "{0} {1} {2} {3} {4}".format(self.item_name, self.company.name, str(self.invoice),
@@ -104,6 +105,7 @@ class AllotmentItems(models.Model):
 
     class Meta:
         ordering = ['qty', ]
+        unique_together = ('item', 'allotment')
 
     def __str__(self):
         return self.item.description

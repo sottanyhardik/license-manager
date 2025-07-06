@@ -39,6 +39,7 @@ SM = 'SM'
 OT = 'OT'
 CO = 'CO'
 RA = 'RA'
+LM = 'LM'
 
 LICENCE_PURCHASE = (
     (GE, 'GE Purchase'),
@@ -48,6 +49,7 @@ LICENCE_PURCHASE = (
     (OT, 'OT Purchase'),
     (CO, 'Conversion'),
     (RA, 'Ravi Foods'),
+    (LM, 'LM Purchase'),
 )
 
 

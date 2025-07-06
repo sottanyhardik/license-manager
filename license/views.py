@@ -20,7 +20,7 @@ from license.helper import check_license, fetch_item_details
 from . import forms, tables, filters
 from . import models as license
 from .item_report import item_filter
-from .models import GE, MI, LicenseDetailsModel, SM, OT, CO, RA
+from .models import GE, MI, LicenseDetailsModel, SM, OT, CO, RA, LM
 from .tables import LicenseBiscuitReportTable, LicenseConfectioneryReportTable, LicenseNamkeenReportTable, \
     LicenseSteelReportTable, LicenseTractorReportTable, LicenseGlassReportTable, LicensePickleReportTable
 from .tasks import update_items
@@ -424,6 +424,15 @@ class BiscuitReportView(BaseReportView):
                 queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
                                                               export_license__norm_class__norm_class='E5',
                                                               purchase_status=RA)
+        elif party.lower() == 'lm':
+            if not is_expired:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=LM)
+            else:
+                queryset = LicenseDetailsModel.objects.filter(license_expiry_date__lt=date,
+                                                              export_license__norm_class__norm_class='E5',
+                                                              purchase_status=LM)
         else:
             if not is_expired:
                 queryset = LicenseDetailsModel.objects.filter(license_expiry_date__gte=date,

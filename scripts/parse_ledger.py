@@ -34,6 +34,8 @@ def parse_license_data(rows):
         elif row[0] == "RA No.":
             current["port"] = row[5]
         elif row[0] == "IEC":
+            if len(row[1]) == 9:
+                row[1] = "0" + row[1]
             current["iec"] = row[1]
             current["scheme_code"] = row[3]
             current["notification"] = row[5]

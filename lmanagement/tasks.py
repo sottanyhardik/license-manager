@@ -1,4 +1,6 @@
 from __future__ import absolute_import, unicode_literals
+
+from celery import shared_task
 from django.db.models import Q
 
 from bill_of_entry.scripts.boe import request_bill_of_entry, be_details
@@ -150,3 +152,14 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha, data_id)
 #     company.port.add(port_obj)
 #     company.is_fetch = True
 #     company.save()
+
+
+@shared_task
+def delete_license_details_by_numbers(license_numbers):
+    """
+    Deletes LicenseDetailsModel entries matching the given license_numbers.
+    Expects a list of strings.
+    """
+    from license.models import LicenseDetailsModel
+    data = LicenseDetailsModel.objects.get(license_number=license_numbers).delete()
+    return f"Deleted {data} LicenseDetailsModel records with license_numbers: {license_numbers}"

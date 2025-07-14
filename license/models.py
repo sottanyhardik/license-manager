@@ -1040,5 +1040,4 @@ class LicenseTransferModel(models.Model):
 
     def to_company_name(self):
         return self.to_company.name if self.to_company else "-"
-
     to_company_name.short_description = "To Company"

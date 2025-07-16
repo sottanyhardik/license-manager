@@ -26,7 +26,7 @@ class BillOfEntryModel(models.Model):
     admin_search_fields = ['bill_of_entry_number', ]
 
     class Meta:
-        unique_together = ('company', 'bill_of_entry_number', 'bill_of_entry_date',)
+        unique_together = ('bill_of_entry_number', 'bill_of_entry_date','port')
         ordering = ('-bill_of_entry_date',)
 
     def __str__(self):
@@ -108,6 +108,7 @@ class RowDetails(models.Model):
 
     class Meta:
         ordering = ['transaction_type', 'bill_of_entry__bill_of_entry_date']
+        unique_together = ('bill_of_entry', 'sr_number', 'transaction_type')
 
     def __str__(self):
         return str(self.sr_number)

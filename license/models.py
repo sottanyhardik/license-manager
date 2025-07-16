@@ -39,6 +39,7 @@ SM = 'SM'
 OT = 'OT'
 CO = 'CO'
 RA = 'RA'
+LM = 'LM'
 
 LICENCE_PURCHASE = (
     (GE, 'GE Purchase'),
@@ -48,6 +49,7 @@ LICENCE_PURCHASE = (
     (OT, 'OT Purchase'),
     (CO, 'Conversion'),
     (RA, 'Ravi Foods'),
+    (LM, 'LM Purchase'),
 )
 
 
@@ -627,7 +629,7 @@ class LicenseDetailsModel(models.Model):
         available_value = self.get_balance_cif
         lic = self.export_license.all().values('norm_class__norm_class')
         credit = self.opening_balance
-        if 'E132' in str(lic.first().get('norm_class__norm_class')):
+        if lic.first() is not None and 'E132' in str(lic.first().get('norm_class__norm_class')):
             credit_3 = credit * .03
             result = self.import_license.filter(item__head__name='NAMKEEN 3% Restriction').aggregate(
                 total_debited_value=Coalesce(Sum('debited_value'), 0, output_field=IntegerField()),
@@ -642,7 +644,7 @@ class LicenseDetailsModel(models.Model):
             conf_5 = result['total_debited_value'] + result['total_allotted_value']
             return {'threeRestriction': min(available_value, max(round_down(credit_3 - conf_3), 0)),
                     'fiveRestriction': min(available_value, max(round_down(credit_5 - conf_5), 0))}
-        elif 'E126' in str(lic.first().get('norm_class__norm_class')):
+        elif lic.first() is not None and 'E126' in str(lic.first().get('norm_class__norm_class')):
             credit_3 = credit * .03
             result = self.import_license.filter(item__head__name='PICKLE 3% Restriction').aggregate(
                 total_debited_value=Coalesce(Sum('debited_value'), 0, output_field=IntegerField()),
@@ -650,7 +652,7 @@ class LicenseDetailsModel(models.Model):
             )
             conf_3 = result['total_debited_value'] + result['total_allotted_value']
             return {'threeRestriction': min(available_value, max(round_down(credit_3 - conf_3), 0))}
-        elif 'E1' in str(lic.first().get('norm_class__norm_class')):
+        elif lic.first() is not None and 'E1' in str(lic.first().get('norm_class__norm_class')):
             credit_2 = credit * .02
             result = self.import_license.filter(item__head__name='CONFECTIONERY 2% Restriction').aggregate(
                 total_debited_value=Coalesce(Sum('debited_value'), 0, output_field=IntegerField()),
@@ -672,7 +674,7 @@ class LicenseDetailsModel(models.Model):
             return {'twoRestriction': min(available_value, max(round_down(credit_2 - conf_2), 0)),
                     'threeRestriction': min(available_value, max(round_down(credit_3 - conf_3), 0)),
                     'fiveRestriction': min(available_value, max(round_down(credit_5 - conf_5), 0))}
-        elif 'E5' in str(lic.first().get('norm_class__norm_class')):
+        elif lic.first() and 'E5' in str(lic.first().get('norm_class__norm_class')):
             credit = credit * .1
             result = self.import_license.filter(item__head__name='BISCUIT 10% Restriction').aggregate(
                 total_debited_value=Coalesce(Sum('debited_value'), 0, output_field=IntegerField()),
@@ -1038,5 +1040,4 @@ class LicenseTransferModel(models.Model):
 
     def to_company_name(self):
         return self.to_company.name if self.to_company else "-"
-
     to_company_name.short_description = "To Company"

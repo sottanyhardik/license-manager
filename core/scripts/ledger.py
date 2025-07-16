@@ -5,7 +5,6 @@ from django.db.models import Q
 from bill_of_entry.models import BillOfEntryModel, RowDetails
 from bill_of_entry.tasks import update_balance_values_task
 from core.models import CompanyModel, PortModel
-from core.scripts.calculate_balance import update_balance_values
 from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
 
 
@@ -155,48 +154,63 @@ def bulk_get_or_create_license_items(type_credit_list, license):
         return license_sr_dict
 
 
+
+
 def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
     unique_bill_entries = {}
+
+    # Normalize date format and deduplicate by (be_number, be_date)
     for item in type_debit_list:
         try:
             date_object = datetime.datetime.strptime(item["be_date"], "%Y/%m/%d")
             item["be_date"] = date_object.strftime("%Y-%m-%d")
-        except:
-            pass
-        key = (item["be_number"], item["be_date"])
-        if key not in unique_bill_entries:
-            unique_bill_entries[key] = item
-    existing_entries = BillOfEntryModel.objects.filter(
-        bill_of_entry_number__in=[item['be_number'] for item in type_debit_list],
-        bill_of_entry_date__in=[item['be_date'] for item in type_debit_list]
+        except Exception:
+            try:
+                item["be_date"] = item["be_date"].strftime("%Y-%m-%d")
+            except:
+                pass
+        key = (item["be_number"], item["be_date"],existing_ports[item["port"]])
+        unique_bill_entries[key] = item
+
+    fetch_numbers = set((k[0], k[1], k[2].id) for k in unique_bill_entries.keys())
+
+    # Fetch existing (be_number, be_date, port) to skip them
+    existing = BillOfEntryModel.objects.filter(
+        bill_of_entry_number__in=[k[0] for k in fetch_numbers],
+        bill_of_entry_date__in=[k[1] for k in fetch_numbers],
+        port_id__in=[k[2] for k in fetch_numbers]
     )
-    existing_entry_map = {(be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d')): be for be in
-                          existing_entries}
-    to_update = []
+
+    # Build a set of (be_number, be_date, port_id) already in DB
+    existing_set = set(
+        (be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d'), existing_ports[be.port.code])
+        for be in existing
+    )
+
     to_create = []
-    for be_number, be_date in unique_bill_entries:
-        corresponding_entry = existing_entry_map.get((be_number, be_date))
-        if corresponding_entry is not None:
-            corresponding_entry.port = existing_ports.get(unique_bill_entries.get((be_number, be_date))["port"])
-            # Add other fields to update here
-            to_update.append(corresponding_entry)
-        else:
-            # If BillOfEntryModel instance does not exist, prepare to create it
+    for (be_number, be_date, port_id), item in unique_bill_entries.items():
+        if (be_number, be_date, port_id) not in existing_set:
             to_create.append(
                 BillOfEntryModel(
                     bill_of_entry_number=be_number,
                     bill_of_entry_date=be_date,
-                    port=existing_ports.get(unique_bill_entries.get((be_number, be_date))["port"]),
+                    port_id=port_id.id,
                 )
             )
+
     with transaction.atomic():
-        BillOfEntryModel.objects.bulk_update(to_update, ['port'])  # List other fields in the update list
         BillOfEntryModel.objects.bulk_create(to_create)
-    existing_entries = BillOfEntryModel.objects.filter(
+
+    # Return all related entries
+    result = BillOfEntryModel.objects.filter(
         bill_of_entry_number__in=[item['be_number'] for item in type_debit_list],
+        bill_of_entry_date__in=[item['be_date'] for item in type_debit_list]
     )
-    existing_entry_map = {be.bill_of_entry_number: be for be in existing_entries}
-    return existing_entry_map
+
+    return {
+        be.bill_of_entry_number: be
+        for be in result
+    }
 
 
 def create_object(data_dict):

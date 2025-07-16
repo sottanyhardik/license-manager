@@ -1,5 +1,6 @@
 # Create your views here.
-
+import csv
+import io
 import re
 
 from django.contrib import messages
@@ -16,7 +17,7 @@ from core.scripts.sion import fetch_sion_data
 from core.utils import PagedFilteredTableView, safe_parse_date
 from . import models, tables, filters, forms
 from .models import MEISMODEL
-from .scripts.ledger import fetch_page_data
+from .scripts.ledger import fetch_page_data, create_object
 
 
 class DashboardView(TemplateView):
@@ -156,23 +157,37 @@ class UploadLedger(TemplateView):
 
     def post(self, request, **kwargs):
         files = request.FILES.getlist('ledger')
-        for file_sequence_number, raw_file in enumerate(files, start=1):
-            file_content = raw_file.read().decode()
-            # Prepare the content
-            clean_content = file_content.replace(',', '\t').replace('Â', '').replace('\xa0', ' ')
-            split_list = re.split(r'(?<!\d)Page No:-1(?!\d)', clean_content)
-            # Check if split_list is not empty before deleting first element
-            if split_list:
-                del split_list[0]
-            for data in split_list:
-                try:
-                    license = fetch_page_data(data)
-                    messages.success(request, str(license))
-                    # please elaborate on what you'd like to do with the license number in case of exceptions
-                    # this is where you might want to put that logic
-                except Exception as e:
-                    exception_message = f"Error with file sequence number {file_sequence_number}: {str(e)}"
-                    messages.error(request, exception_message)
+
+        for file_sequence_number, uploaded_file in enumerate(files, start=1):
+            try:
+                # Decode the uploaded file and wrap it for csv.reader
+                decoded_file = uploaded_file.read().decode('utf-8-sig')
+                decoded_file = decoded_file.replace(': ', '')
+                csvfile = io.StringIO(decoded_file)
+
+                reader = csv.reader(csvfile)
+
+                rows = []
+                for row in reader:
+                    if not any(field.strip() for field in row):
+                        continue
+                    rows.append(row)
+
+                from scripts.parse_ledger import parse_license_data
+                dict_list = parse_license_data(rows)
+
+                for dict_data in dict_list:
+                    create_object(dict_data)
+                    messages.success(request, f"✅ Created DFIA: {dict_data.get('lic_no', 'Unknown')}")
+
+                messages.success(
+                    request,
+                    f"✅ File {uploaded_file.name} processed: {len(dict_list)} licenses created."
+                )
+
+            except Exception as e:
+                messages.error(request, f"❌ Error processing file {uploaded_file.name}: {str(e)}")
+
         return HttpResponseRedirect(reverse('ledger-complete'))
 
 

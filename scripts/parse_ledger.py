@@ -1,6 +1,16 @@
 import datetime
 
 
+def parse_date(date_str):
+    from datetime import datetime
+    for fmt in ("%d/%m/%Y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(date_str, fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
 def parse_license_data(rows):
     """
     Parses a list of rows (from CSV or OCR extraction) into structured dict_list based on license groupings.
@@ -67,7 +77,7 @@ def parse_license_data(rows):
                     "cif_fc": float(row[4]) if row[4] else 0,
                     "qty": float(row[5]) if row[5] else 0,
                     "be_number": row[7] if len(row) > 5 else None,
-                    "be_date": datetime.datetime.strptime(row[8], "%d/%m/%Y") if len(row) > 6 else None,
+                    "be_date": parse_date(row[8]) if len(row) > 8 else None,
                     "port": row[9] if len(row) > 7 else None
                 }
             current["row"].append(txn)

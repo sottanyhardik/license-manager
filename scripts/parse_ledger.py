@@ -24,14 +24,14 @@ def parse_license_data(rows):
             if len(row[5]) == 9:
                 row[5] = "0" + row[5]
             current = {
-                "ledger_date":datetime.datetime.now().date(),
+                "ledger_date": datetime.datetime.now().date(),
                 "registration_no": row[1],
                 "registration_date": row[3],
                 "lic_no": row[5],
                 "lic_date": row[7],
-                "row":[]
+                "row": []
             }
-        elif row[0] == "RA No.":
+        elif row[0] == "RANo.":
             current["port"] = row[5]
         elif row[0] == "IEC":
             if len(row[1]) == 9:
@@ -43,8 +43,8 @@ def parse_license_data(rows):
 
         elif row[0].lower() == "tot.duty":
             current["cif_inr"] = float(row[3]) if row[3] else 0
-            current["total_quantity"]= float(row[5]) if row[5] else 0
-            current["cif_fc"]= float(row[7]) if row[7] else 0
+            current["total_quantity"] = float(row[5]) if row[5] else 0
+            current["cif_fc"] = float(row[7]) if row[7] else 0
 
         elif row[0] and row[0].lower() in ["credit-", "debit-"]:
             if row[0].lower() == 'credit-':

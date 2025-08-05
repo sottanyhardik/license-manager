@@ -1,7 +1,6 @@
 # Create your views here.
 import csv
 import io
-import re
 
 from django.contrib import messages
 from django.http import HttpResponse
@@ -17,7 +16,7 @@ from core.scripts.sion import fetch_sion_data
 from core.utils import PagedFilteredTableView, safe_parse_date
 from . import models, tables, filters, forms
 from .models import MEISMODEL
-from .scripts.ledger import fetch_page_data, create_object
+from .scripts.ledger import create_object
 
 
 class DashboardView(TemplateView):
@@ -163,6 +162,7 @@ class UploadLedger(TemplateView):
                 # Decode the uploaded file and wrap it for csv.reader
                 decoded_file = uploaded_file.read().decode('utf-8-sig')
                 decoded_file = decoded_file.replace(': ', '')
+                decoded_file = decoded_file.replace(' ', '')
                 csvfile = io.StringIO(decoded_file)
 
                 reader = csv.reader(csvfile)
@@ -267,10 +267,11 @@ class GenerateTransferLetterMEISView(View):
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-from django.utils.dateparse import parse_datetime, parse_date
+from django.utils.dateparse import parse_datetime
 from license.models import LicenseDetailsModel, LicenseTransferModel
 from core.models import CompanyModel
 import json
+
 
 @csrf_exempt
 def save_license_transfer(request):
@@ -316,9 +317,12 @@ def save_license_transfer(request):
                     defaults={
                         "transfer_status": transfer.get("transfer_status"),
                         "transfer_date": safe_parse_date(transfer.get("transfer_date")),
-                        "transfer_acceptance_date": parse_datetime(transfer.get("transfer_acceptance_date")) if transfer.get("transfer_acceptance_date") else None,
+                        "transfer_acceptance_date": parse_datetime(
+                            transfer.get("transfer_acceptance_date")) if transfer.get(
+                            "transfer_acceptance_date") else None,
                         "cbic_status": transfer.get("cbic_status"),
-                        "cbic_response_date": parse_datetime(transfer.get("cbic_response_date")) if transfer.get("cbic_response_date") else None,
+                        "cbic_response_date": parse_datetime(transfer.get("cbic_response_date")) if transfer.get(
+                            "cbic_response_date") else None,
                         "user_id_transfer_initiation": transfer.get("user_id_transfer_initiation"),
                         "user_id_acceptance": transfer.get("user_id_acceptance"),
                     }

@@ -39,7 +39,7 @@ class Command(BaseCommand):
         skip_rows = bool(opts.get("no_rows"))
         dry_run = bool(opts.get("dry_run"))
 
-        qs = LicenseDetailsModel.objects.all()
+        qs = LicenseDetailsModel.objects.filter(license_expiry_date__gte='2025-01-01')
         if license_number:
             qs = qs.filter(license_number=license_number)
 

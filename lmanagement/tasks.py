@@ -63,7 +63,7 @@ def dgft_shipping_details(data):
 
 
 @app.task
-def fetch_data_to_model(cookies, csrftoken, data_dict, kwargs, captcha, data_id):
+def fetch_data_to_model(cookies, csrftoken, data_dict, captcha, data_id):
     from bill_of_entry.models import BillOfEntryModel
     data = BillOfEntryModel.objects.filter(pk=data_id).filter(
         Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).order_by('failed').first()

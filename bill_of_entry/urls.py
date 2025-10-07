@@ -10,7 +10,6 @@ urlpatterns = [
     path('<slug:boe>', login_required(views.BillOfEntryDetailView.as_view()), name='bill-of-entry-detail'),
     path('<slug:pk>/update', login_required(views.BillOfEntryUpdateDetailView.as_view()), name='bill-of-entry-update'),
     path('<slug:pk>/item', login_required(views.BillOfEntryUpdateView.as_view()), name='bill-of-entry-items'),
-    path('<slug:boe>/delete', login_required(views.BillOfEntryDeleteView.as_view()), name='bill-of-entry-delete'),
     path('fetch/', login_required(views.BillOfEntryFetchView.as_view()), name='bill_of_entry_fetch'),
     path('download/', login_required(views.DownloadPendingBillView.as_view()), name='bill_of_entry_pending'),
     path('<slug:pk>/tl', login_required(views.GenerateTransferLetterView.as_view()), name='bill-of-entry-tl'),

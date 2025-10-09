@@ -1,3 +1,5 @@
+from django.urls import reverse
+
 from .common import (
     DetailView, UpdateView, UpdateWithInlinesView, InlineFormSetFactory,
     RowDetails, forms, bill_of_entry

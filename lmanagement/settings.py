@@ -13,10 +13,6 @@ https://docs.djangoproject.com/en/2.2/ref/settings/
 import os
 import django as django
 
-from urllib.parse import quote
-
-django.utils.http.urlquote = quote
-
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,7 +26,7 @@ SECRET_KEY = 'cn^fjh#*dhrjzrzphy!ic-2u())f(*wju3u_(06f^zq!g@_%o('
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['167.71.233.211', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['143.244.139.121', 'localhost', '127.0.0.1']
 
 # Application definition
 
@@ -51,7 +47,6 @@ INSTALLED_APPS = [
     'bill_of_entry.apps.BillOfEntryConfig',
     'allotment.apps.AllotmentConfig',
     'license_movement.apps.LicenseMovementConfig',
-    'report.apps.ReportConfig',
     'django.contrib.humanize',
     'mathfilters',
     'accounts.apps.AccountsConfig',

@@ -96,8 +96,6 @@ class AllotmentFilter(django_filters.FilterSet):
         field_name='port__code', label='Port Code', queryset=PortModel.objects.filter(allotments__isnull=False).distinct())
     is_be = django_filters.BooleanFilter(method='check_be', label='Is BOE', initial=False)
     is_alloted = django_filters.BooleanFilter(method='check_alloted', label='Is Alloted', initial=True)
-    modified_on = DateFromToRangeFilter(
-        widget=RangeWidget(attrs={'placeholder': 'DD/MM/YYYY', 'format': 'dd/mm/yyyy', 'type': 'date'}))
 
     class Meta:
         model = allotment_model.AllotmentModel

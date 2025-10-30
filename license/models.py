@@ -86,12 +86,6 @@ class LicenseDetailsModel(models.Model):
     is_individual = models.BooleanField(default=False)
     ge_file_number = models.IntegerField(default=0)
     fob = models.IntegerField(default=0, null=True, blank=True)
-    created_on = models.DateField(auto_created=True, null=True, blank=True)
-    created_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, null=True, blank=True,
-                                   related_name='dfia_created')
-    modified_on = models.DateField(auto_now=True)
-    modified_by = models.ForeignKey('auth.User', on_delete=models.PROTECT, null=True, blank=True,
-                                    related_name='dfia_updated')
     billing_rate = models.FloatField(default=0)
     billing_amount = models.FloatField(default=0)
     admin_search_fields = ('license_number',)
@@ -858,10 +852,10 @@ class LicenseImportItemsModel(models.Model):
         dict_list = []
         dict_return = {}
         data = self.allotment_details.filter(is_boe=False).order_by('allotment__company',
-                                          'allotment__modified_on')
+                                          'allotment__id')
         company_data = list(set([c['allotment__company__name'] for c in
                                  self.allotment_details.filter(is_boe=False).order_by('allotment__company',
-                                                            'allotment__modified_on','allotment__unit_value_per_unit').values(
+                                                            'allotment__id','allotment__unit_value_per_unit').values(
                                      'allotment__company__name')]))
         for company in company_data:
             if company:

@@ -42,7 +42,6 @@ class AllotmentTable(dt2.Table):
     delete = dt2.TemplateColumn('<a href="{% url "allotment-delete" record.id %}"><i class="mdi mdi-share"></i></a>',
                                 orderable=False)
     bl_detail = dt2.Column(verbose_name='BL Details')
-    modified_on = dt2.DateTimeColumn(format='d-m-Y', verbose_name='Allotment Date')
     required_quantity = dt2.Column(verbose_name='Quantity')
     unit_value_per_unit = dt2.Column(verbose_name='Unit Price')
     value = dt2.Column(verbose_name='Value', accessor='required_value')
@@ -51,7 +50,7 @@ class AllotmentTable(dt2.Table):
     class Meta:
         model = allotment_model.AllotmentModel
         per_page = 50
-        fields = ['counter', 'type', 'modified_on', 'company', 'required_quantity', 'unit_value_per_unit','value',
+        fields = ['counter', 'type', 'company', 'required_quantity', 'unit_value_per_unit','value',
                   'item_name', 'license', 'port', 'invoice', 'eta']
         attrs = {"class": "table table-bordered table-striped table-hover dataTable js-exportable dark-bg"}
 

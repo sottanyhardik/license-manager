@@ -91,14 +91,6 @@ class UpdateSionView(UpdateWithInlinesView):
         fetch_sion_data(object)
         return object
 
-    def form_valid(self, form):
-        import datetime
-        if not form.instance.created_by:
-            form.instance.created_by = self.request.user
-            form.instance.created_on = datetime.datetime.now()
-        form.instance.modified_by = self.request.user
-        form.instance.modified_on = datetime.datetime.now()
-        return super().form_valid(form)
 
 
 class CreateHSNCodeView(CreateView):

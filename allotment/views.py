@@ -26,7 +26,7 @@ class AllotmentView(FilterView):
     model = allotments.AllotmentModel
     filter_class = filters.AllotmentFilter
     page_head = 'Item List'
-    ordering = ['modified_on']
+    ordering = ['id']
 
     def get_queryset(self):
         qs = self.model.objects.all()
@@ -408,7 +408,7 @@ class PandasDownloadPendingAllotmentView(PDFTemplateResponseMixin, FilterView):
         import datetime
         context['today'] = datetime.datetime.now().date
         df = pd.DataFrame(list(
-            self.get_queryset().values('modified_on', 'port__code', 'required_quantity', 'unit_value_per_unit',
+            self.get_queryset().values('port__code', 'required_quantity', 'unit_value_per_unit',
                                        'item_name', 'invoice', 'bl_detail', 'estimated_arrival_date')))
         df = df.assign(required_value=round(df['required_quantity'] * df['unit_value_per_unit'], 2))
         context['df'] = df.groupby(['item_name']).agg(

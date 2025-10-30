@@ -52,10 +52,9 @@ INSTALLED_APPS = [
     'allotment.apps.AllotmentConfig',
     'license_movement.apps.LicenseMovementConfig',
     'report.apps.ReportConfig',
-    'ebrc.apps.EbrcConfig',
-    'shipping_bill.apps.ShippingBillConfig',
     'django.contrib.humanize',
     'mathfilters',
+    'accounts.apps.AccountsConfig',
 ]
 
 MIDDLEWARE = [
@@ -220,3 +219,4 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 EXPIRY_DAY = 60
 # INTERNAL_IPS = ALLOWED_HOSTS
+AUTH_USER_MODEL = 'accounts.User'

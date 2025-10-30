@@ -1,14 +1,12 @@
 # Create your models here.
 
 # Create your models here.
+from django.conf import settings
 from django.urls import reverse
 from django.utils.functional import cached_property
 
 """Declare models for YOUR_APP app."""
 
-from django.contrib.auth.models import AbstractUser
-
-from django.contrib.auth.models import AbstractUser  ## A new class is imported. ##
 from django.core.validators import RegexValidator
 from django.db import models
 
@@ -115,12 +113,6 @@ class SionNormClassModel(models.Model):
     norm_class = models.CharField(max_length=10)
     url = models.URLField(null=True, blank=True, help_text="Please Enter Exim Guru URL")
     is_fetch = models.BooleanField(default=False)
-    created_on = models.DateField(auto_created=True)
-    created_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True,
-                                   related_name='sion_created')
-    modified_on = models.DateField(auto_now=True)
-    modified_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True,
-                                    related_name='sion_updated')
 
     def __str__(self):
         if self.item:

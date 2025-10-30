@@ -56,13 +56,6 @@ class LicenseDetailCreateView(CreateWithInlinesView):
     form_class = forms.LicenseDetailsForm
     inlines = [LicenseExportItemInline, ]
 
-    def form_valid(self, form):
-        if not form.instance.created_by:
-            form.instance.created_by = self.request.user
-            form.instance.created_on = datetime.datetime.now()
-        form.instance.modified_by = self.request.user
-        form.instance.modified_on = datetime.datetime.now()
-        return super(LicenseDetailCreateView, self).form_valid(form)
 
     def get_success_url(self):
         return reverse('dfia-details', kwargs={'license': self.object.license_number})
@@ -95,13 +88,6 @@ class LicenseItemListUpdateView(UpdateWithInlinesView):
         object = self.model.objects.get(license_number=self.kwargs.get('license'))
         return object
 
-    def form_valid(self, form):
-        if not form.instance.created_by:
-            form.instance.created_by = self.request.user
-            form.instance.created_on = datetime.datetime.now()
-        form.instance.modified_by = self.request.user
-        form.instance.modified_on = datetime.datetime.now()
-        return super(LicenseItemListUpdateView, self).form_valid(form)
 
     def get_inlines(self):
         if not self.object.is_audit:
@@ -132,14 +118,6 @@ class LicenseDetailUpdateView(UpdateWithInlinesView):
     def get_object(self, queryset=None):
         object = self.model.objects.get(license_number=self.kwargs.get('license'))
         return object
-
-    def form_valid(self, form):
-        if not form.instance.created_by:
-            form.instance.created_by = self.request.user
-            form.instance.created_on = datetime.datetime.now()
-        form.instance.modified_by = self.request.user
-        form.instance.modified_on = datetime.datetime.now()
-        return super(LicenseDetailUpdateView, self).form_valid(form)
 
 
 class LicenseListView(FilterView):

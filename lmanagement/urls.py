@@ -25,7 +25,6 @@ urlpatterns = [
                   path('bill_of_entry/', include('bill_of_entry.urls')),
                   path('admin/', admin.site.urls),
                   path('select2/', include('django_select2.urls')),
-                  path('accounts/', include('django.contrib.auth.urls')),
-                  path('django-rq/', include('django_rq.urls')),
+                  path('api/accounts/', include('accounts.urls', namespace='accounts')),
               ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + static(settings.STATIC_URL,
                                                                                          document_root=settings.STATIC_ROOT)

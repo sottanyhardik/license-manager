@@ -1,17 +1,20 @@
-# FILE: accounts/urls.py
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, RegistrationView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from django.urls import path
+from .views.auth import (
+    LoginView, LogoutView, MeView,
+)
+from .views.password import (
 
-app_name = "accounts"
+    PasswordResetRequestView, PasswordResetConfirmView)
 
-router = DefaultRouter()
-router.register(r"users", UserViewSet, basename="user")
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
-    path("register/", RegistrationView.as_view(), name="register"),
-    path("token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
-    path("", include(router.urls)),
+    path("auth/login/", LoginView.as_view(), name="api-login"),
+    path("auth/logout/", LogoutView.as_view(), name="api-logout"),
+    path("auth/me/", MeView.as_view(), name="api-me"),
+    path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+
+    # Forgot password
+    path("auth/password-reset/", PasswordResetRequestView.as_view(), name="password_reset_request"),
+    path("auth/password-reset-confirm/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
 ]

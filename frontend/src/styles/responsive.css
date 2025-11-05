@@ -1,0 +1,17 @@
+/* ============================================================
+   RESPONSIVE DESIGN
+============================================================ */
+@media (max-width: 992px) {
+  .sidebar-custom {
+    width: 200px;
+    padding: 1rem;
+  }
+
+  .main-content {
+    padding: 1rem;
+  }
+
+  .session-timer {
+    display: none; /* hides timer text on small screens */
+  }
+}

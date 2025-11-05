@@ -1,0 +1,23 @@
+/* ============================================================
+   PROFILE PAGE STYLING
+============================================================ */
+.form-control-custom {
+  border-radius: var(--radius);
+  border: 1px solid #ddd !important;
+  padding: 0.6rem;
+}
+
+.form-control-custom:disabled {
+  background-color: #f3f3f3 !important;
+}
+
+.btn-orange {
+  background-color: var(--color-accent) !important;
+  border: none !important;
+  color: #fff !important;
+  transition: background-color 0.2s ease;
+}
+
+.btn-orange:hover {
+  background-color: #e56d00 !important;
+}

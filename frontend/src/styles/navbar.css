@@ -1,0 +1,34 @@
+.navbar-custom {
+  background-color: var(--color-dark) !important;
+  color: var(--text-light) !important;
+}
+
+.navbar-custom a {
+  color: var(--color-accent) !important;
+  text-decoration: none;
+}
+
+.navbar-custom a:hover {
+  color: var(--color-accent) !important;
+}
+
+.profile-toggle {
+  background: transparent !important;
+  border: 1px solid #ccc !important;
+  color: var(--text-light) !important;
+}
+
+.profile-toggle:hover,
+.profile-toggle:focus {
+  border-color: var(--color-accent) !important;
+  color: var(--color-accent) !important;
+}
+
+.session-timer {
+  color: var(--text-light) !important;
+  font-weight: 500;
+}
+
+.session-timer i {
+  color: var(--warning) !important;
+}

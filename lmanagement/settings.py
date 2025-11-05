@@ -54,6 +54,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # corsheaders middleware must be high so preflight responses are handled early
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -185,20 +186,63 @@ CACHES = {
 }
 
 # ---------------------------------------------------------------------
-# CORS (for Vite frontend)
+# CORS (for Vite / React frontend)
 # ---------------------------------------------------------------------
+# Note: For development we explicitly whitelist origins (do not use allow-all in production).
 CORS_ALLOW_ALL_ORIGINS = False
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # default Vite port
     "http://127.0.0.1:5173",
+    "http://localhost:3000",  # sometimes Vite is proxied to 3000 in dev
+    "http://127.0.0.1:3000",
 ]
-CSRF_TRUSTED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+# Allow cookies (credentials) across origins when frontend sends withCredentials
+CORS_ALLOW_CREDENTIALS = True
+
+# Extend allowed headers to include CSRF and Authorization (case-insensitive)
+try:
+    # import default headers from corsheaders if available
+    from corsheaders.defaults import default_headers
+    CORS_ALLOW_HEADERS = list(default_headers) + [
+        "X-CSRFToken",
+        "x-csrftoken",
+        "Authorization",
+        "authorization",
+    ]
+except Exception:
+    # fallback - minimal safe set
+    CORS_ALLOW_HEADERS = [
+        "accept",
+        "accept-encoding",
+        "authorization",
+        "content-type",
+        "origin",
+        "user-agent",
+        "x-csrftoken",
+        "x-requested-with",
+    ]
+
+# Optional: expose headers to browser
+CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken", "Authorization"]
+
+# CSRF trusted origins for Django's CSRF checks (if you use session auth)
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 # ---------------------------------------------------------------------
 # Email (file backend for dev)
 # ---------------------------------------------------------------------
-EMAIL_BACKEND = "django.core.mail.backends.filebased.EmailBackend"
-EMAIL_FILE_PATH = BASE_DIR / "sent_emails"
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# Optional: also set a from email for clarity
+DEFAULT_FROM_EMAIL = "info@labdhimercantile.com"
+FRONTEND_URL = "http://localhost:5173"  # update for production
 
 # ---------------------------------------------------------------------
 # App-specific Config

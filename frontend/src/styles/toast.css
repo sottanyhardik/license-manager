@@ -1,0 +1,18 @@
+.toast-container {
+  z-index: 1060;
+}
+
+.toast.bg-success {
+  background-color: var(--color-accent) !important;
+  color: var(--color-white) !important;
+}
+
+.toast.bg-info {
+  background-color: var(--color-dark) !important;
+  color: var(--color-white) !important;
+}
+
+.toast-header {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-bottom: none !important;
+}

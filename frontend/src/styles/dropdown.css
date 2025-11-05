@@ -1,0 +1,21 @@
+.dropdown-menu {
+  border: none !important;
+  border-radius: var(--radius) !important;
+  background-color: var(--color-white) !important;
+}
+
+.dropdown-item {
+  color: var(--color-accent) !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease;
+}
+
+.dropdown-item i {
+  color: var(--color-accent) !important;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: rgba(245, 124, 0, 0.1) !important;
+  color: var(--color-accent) !important;
+}

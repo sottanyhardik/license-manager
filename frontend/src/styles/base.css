@@ -1,0 +1,11 @@
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-light);
+  margin: 0;
+}
+
+.card {
+  border: none;
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius);
+}

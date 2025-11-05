@@ -243,17 +243,6 @@ class TransferLetterModel(AuditModel):
         return self.name
 
 
-class MEISMODEL(AuditModel):
-    exporter = models.CharField(max_length=255)
-    importer = models.CharField(max_length=255)
-    cif_inr = models.CharField(max_length=255)
-    dfia_date = models.CharField(max_length=255)
-    dfia_no = models.CharField(max_length=255)
-    file_no = models.CharField(null=True, blank=True, max_length=255)
-
-    def __str__(self):
-        return self.dfia_no
-
 
 class UnitPriceModel(AuditModel):
     name = models.CharField(max_length=255)

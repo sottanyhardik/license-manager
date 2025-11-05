@@ -1,0 +1,6 @@
+.pagination {
+  --bs-pagination-color: var(--color-accent);
+  --bs-pagination-hover-color: var(--color-accent);
+  --bs-pagination-active-bg: var(--color-accent);
+  --bs-pagination-active-border-color: var(--color-accent);
+}

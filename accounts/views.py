@@ -1,4 +1,4 @@
-# FILE: accounts/views.py
+# FILE: accounts/old_views.py
 from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response

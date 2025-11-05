@@ -1,17 +1,19 @@
 # core/urls.py
-from django.urls import path
-from .views import (
-    CompanyOptionsView,
-    ItemOptionsView,
-    HSCodeOptionsView,
-    PortOptionsView,
-    NormClassOptionsView,
-)
+from rest_framework.routers import DefaultRouter
+from .views import *
+from .views.views import CompanyViewSet, PortViewSet, HSCodeViewSet, HeadSIONNormsViewSet, SionNormClassViewSet, \
+    SIONExportViewSet, SIONImportViewSet, HSCodeDutyViewSet, ProductDescriptionViewSet, UnitPriceViewSet
 
-urlpatterns = [
-    path("companymodels/", CompanyOptionsView.as_view(), name="options-companies"),
-    path("items/", ItemOptionsView.as_view(), name="options-items"),
-    path("hscodes/", HSCodeOptionsView.as_view(), name="options-hscodes"),
-    path("portmodels/", PortOptionsView.as_view(), name="options-ports"),
-    path("norm-classes/", NormClassOptionsView.as_view(), name="options-norm-classes"),
-]
+router = DefaultRouter()
+router.register("companies", CompanyViewSet)
+router.register("ports", PortViewSet)
+router.register("hs-codes", HSCodeViewSet)
+router.register("head-sion-norms", HeadSIONNormsViewSet)
+router.register("sion-classes", SionNormClassViewSet)
+router.register("sion-exports", SIONExportViewSet)
+router.register("sion-imports", SIONImportViewSet)
+router.register("hs-code-duties", HSCodeDutyViewSet)
+router.register("product-descriptions", ProductDescriptionViewSet)
+router.register("unit-prices", UnitPriceViewSet)
+
+urlpatterns = router.urls

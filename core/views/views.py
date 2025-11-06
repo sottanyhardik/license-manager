@@ -59,7 +59,7 @@ SionNormClassViewSet = MasterViewSet.create(
     config={
         "search": ["norm_class", "description"],
         "filter": [],
-        "list_display": ["norm_class", "description", "head_norm"],
+        "list_display": ["norm_class", "description", "head_norm_name"],
         "form_fields": ["norm_class", "description", "head_norm"],
     },
 )

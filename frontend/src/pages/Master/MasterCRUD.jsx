@@ -51,11 +51,16 @@ const MasterCRUD = ({ endpoint, title }) => {
         actionsPost.filter_fields ||
         (searchFields.length ? searchFields : listDisplay).slice(0, 6);
 
+      // Read nested_field_defs (backend may expose 'nested_field_defs' or 'nestedFieldDefs')
+      const nestedFieldDefs =
+        d.nested_field_defs || d.nestedFieldDefs || cfg.nested_field_defs || cfg.nestedFieldDefs || {};
+
       const metaInfo = {
         listDisplay,
         formFields,
         searchFields,
         filterFields,
+        nestedFieldDefs, // expose to forms
       };
 
       const schemaObj = Object.keys(actionsPost || {}).length
@@ -73,6 +78,7 @@ const MasterCRUD = ({ endpoint, title }) => {
         formFields: [],
         searchFields: [],
         filterFields: [],
+        nestedFieldDefs: {},
       });
     }
   }, [endpoint]);
@@ -137,7 +143,7 @@ const MasterCRUD = ({ endpoint, title }) => {
     setFilters(f || {});
   };
 
-  const handleSave = async (formData, isEdit) => {
+  const handleSave = async (formData, isEdit, nestedPayload = {}, fileFields = []) => {
     const form = new FormData();
     for (const key in formData) {
       const val = formData[key];
@@ -147,6 +153,20 @@ const MasterCRUD = ({ endpoint, title }) => {
       } else {
         form.append(key, val);
       }
+    }
+
+    // append nested payload: flatten object keys (arrays) into form fields
+    for (const nKey in nestedPayload) {
+      const arr = nestedPayload[nKey] || [];
+      arr.forEach((item, idx) => {
+        // bracket notation commonly parsed by backends: nestedKey[index][field]
+        for (const k in item) {
+          const keyName = `${nKey}[${idx}][${k}]`;
+          const v = item[k];
+          if (v === undefined || v === null) continue;
+          form.append(keyName, v);
+        }
+      });
     }
 
     try {

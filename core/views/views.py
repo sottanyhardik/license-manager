@@ -1,5 +1,5 @@
 # core/views.py
-from .mater_view import MasterViewSet
+from .master_view import MasterViewSet
 from ..models import CompanyModel, PortModel, HSCodeModel, HeadSIONNormsModel, SionNormClassModel, SIONExportModel, \
     SIONImportModel, HSCodeDutyModel, ProductDescriptionModel, UnitPriceModel
 from ..serializers import CompanySerializer, PortSerializer, HSCodeSerializer, HeadSIONNormsSerializer, \
@@ -53,6 +53,68 @@ HeadSIONNormsViewSet = MasterViewSet.create(
     },
 )
 
+
+example_nested_field_defs = {
+    "export_norm": [
+        {
+            "name": "id",
+            "type": "integer",
+            "label": "ID",
+            "required": False
+        },
+        {
+            "name": "description",
+            "type": "string",
+            "label": "Description",
+            "required": True
+        },
+        {
+            "name": "quantity",
+            "type": "number",
+            "label": "Quantity",
+            "required": True
+        },
+        {
+            "name": "unit",
+            "type": "string",
+            "label": "Unit",
+            "required": True
+        }
+    ],
+    "import_norm": [
+        {
+            "name": "id",
+            "type": "integer",
+            "label": "ID",
+            "required": False
+        },
+        {
+            "name": "description",
+            "type": "string",
+            "label": "Description",
+            "required": True
+        },
+        {
+            "name": "quantity",
+            "type": "number",
+            "label": "Quantity",
+            "required": True
+        },
+        {
+            "name": "unit",
+            "type": "string",
+            "label": "Unit",
+            "required": True
+        },
+        {
+            "name": "hsn_code",
+            "type": "string",
+            "label": "HSN Code",
+            "required": False
+        }
+    ]
+}
+
 SionNormClassViewSet = MasterViewSet.create(
     SionNormClassModel,
     SionNormClassNestedSerializer,
@@ -61,8 +123,10 @@ SionNormClassViewSet = MasterViewSet.create(
         "filter": [],
         "list_display": ["norm_class", "description", "head_norm_name"],
         "form_fields": ["norm_class", "description", "head_norm"],
+        "nested_field_defs": example_nested_field_defs,
     },
 )
+
 
 HSCodeDutyViewSet = MasterViewSet.create(HSCodeDutyModel, HSCodeDutySerializer, ["hs_code"])
 ProductDescriptionViewSet = MasterViewSet.create(ProductDescriptionModel, ProductDescriptionSerializer, ["product_description"])

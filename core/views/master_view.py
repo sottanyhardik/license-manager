@@ -25,6 +25,7 @@ class MasterViewSet(viewsets.ModelViewSet):
         - Search, Filter, Ordering, Pagination
         - list_display / form_fields driven from backend config
         - Annotated FK display support (e.g., head_norm__name)
+        - Optional nested_field_defs support for nested structures (export/import)
     """
 
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -38,6 +39,7 @@ class MasterViewSet(viewsets.ModelViewSet):
     filterset_fields = []
     list_display = []
     form_fields = []
+    nested_field_defs = {}  # <-- default empty
 
     def perform_create(self, serializer):
         if self.request.user.is_authenticated:
@@ -63,6 +65,7 @@ class MasterViewSet(viewsets.ModelViewSet):
             - list_display: visible table columns (can include __ lookups)
             - form_fields: editable fields in form
             - ordering: list of sortable fields
+            - nested_field_defs: dict describing nested export/import fields (optional)
         """
 
         # Backward-compatible shorthand
@@ -88,18 +91,29 @@ class MasterViewSet(viewsets.ModelViewSet):
             "form_fields": config.get("form_fields", safe_fields),
             "ordering_fields": config.get("ordering", safe_fields),
             "model_name": model.__name__,
+            "nested_field_defs": config.get("nested_field_defs", {}),
         }
 
         # --- Define subclass ---
         class _ViewSet(cls):
             queryset = model.objects.all()
 
+            # copy attrs to class so getattr works inside methods
+            search_fields = attrs["search_fields"]
+            filterset_fields = attrs["filterset_fields"]
+            list_display = attrs["list_display"]
+            form_fields = attrs["form_fields"]
+            ordering_fields = attrs["ordering_fields"]
+            nested_field_defs = attrs["nested_field_defs"]
+            model_name = attrs["model_name"]
+            serializer_class = attrs["serializer_class"]
+
             def get_queryset(self):
                 qs = super().get_queryset()
                 annotations = {}
 
                 # Auto-annotate FK lookups in list_display (like head_norm__name)
-                for field in attrs["list_display"]:
+                for field in getattr(self, "list_display", []):
                     if "__" in field:
                         alias = field.replace("__", "_")
                         annotations[alias] = F(field)
@@ -109,19 +123,42 @@ class MasterViewSet(viewsets.ModelViewSet):
 
             def list(self, request, *args, **kwargs):
                 """
-                Include list_display and form_fields in API response for frontend
+                Include list_display, form_fields, and nested_field_defs in API response for frontend
                 """
                 response = super().list(request, *args, **kwargs)
                 # Ensure structure always includes metadata keys
+                results = response.data.get("results", response.data) if isinstance(response.data, dict) else response.data
                 data = {
-                    "results": response.data.get("results", response.data),
+                    "results": results,
                     "list_display": getattr(self, "list_display", attrs["list_display"]),
                     "form_fields": getattr(self, "form_fields", attrs["form_fields"]),
                     "search_fields": getattr(self, "search_fields", attrs["search_fields"]),
                     "filter_fields": getattr(self, "filterset_fields", attrs["filterset_fields"]),
                     "ordering_fields": getattr(self, "ordering_fields", attrs["ordering_fields"]),
+                    "nested_field_defs": getattr(self, "nested_field_defs", attrs["nested_field_defs"]),
                 }
                 response.data = data
+                return response
+
+            def options(self, request: Request, *args, **kwargs) -> Response:
+                """
+                Extend OPTIONS response with extra metadata including nested_field_defs
+                """
+                response = super().options(request, *args, **kwargs)
+                try:
+                    if isinstance(response.data, dict):
+                        extra = {
+                            "list_display": getattr(self, "list_display", []),
+                            "form_fields": getattr(self, "form_fields", []),
+                            "search_fields": getattr(self, "search_fields", []),
+                            "filter_fields": getattr(self, "filterset_fields", []),
+                            "ordering_fields": getattr(self, "ordering_fields", []),
+                            "model_name": getattr(self, "model_name", None),
+                            "nested_field_defs": getattr(self, "nested_field_defs", {}),
+                        }
+                        response.data.update(extra)
+                except Exception:
+                    pass
                 return response
 
         _ViewSet.__name__ = f"{model.__name__}ViewSet"
@@ -130,23 +167,6 @@ class MasterViewSet(viewsets.ModelViewSet):
 
         return _ViewSet
 
-    # --- OPTIONS / Metadata ---
-    def options(self, request: Request, *args, **kwargs) -> Response:
-        """
-        Extend OPTIONS response with extra metadata
-        """
-        response = super().options(request, *args, **kwargs)
-        try:
-            if isinstance(response.data, dict):
-                extra = {
-                    "list_display": getattr(self, "list_display", []),
-                    "form_fields": getattr(self, "form_fields", []),
-                    "search_fields": getattr(self, "search_fields", []),
-                    "filter_fields": getattr(self, "filterset_fields", []),
-                    "ordering_fields": getattr(self, "ordering_fields", []),
-                    "model_name": getattr(self, "model_name", None),
-                }
-                response.data.update(extra)
-        except Exception:
-            pass
-        return response
+
+
+

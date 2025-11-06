@@ -65,89 +65,44 @@ class SIONImportSerializer(serializers.ModelSerializer):
 
 
 # ---- SION Norm Class (Nested) ----
-# Purpose: Patch to replace the SionNormClassNestedSerializer in your serializers.py
-# Instructions: Copy the SionNormClassNestedSerializer class below and replace the
-# existing class definition in your project's serializers.py.
-class SionNormClassNestedSerializer(serializers.ModelSerializer):
-    """
-    Updated serializer for SionNormClassModel.
+class SionNormClassNestedSerializer(AuditSerializerMixin):
+    export_norm = SIONExportSerializer(many=True)
+    import_norm = SIONImportSerializer(many=True)
+    head_norm_name = serializers.CharField(source="head_norm.name", read_only=True)
 
-    Key behaviour change: on update(), nested fields (export_norm / import_norm)
-    are only modified when the frontend actually includes them in the payload.
-    This prevents accidental deletion of nested rows when the frontend omits
-    those fields during partial updates.
-
-    Usage:
-    - Replace the existing SionNormClassNestedSerializer in your serializers.py
-      with this class.
-    - Keep the rest of your serializers.py unchanged.
-
-    Notes on semantics:
-    - create(): unchanged — will create nested children if provided.
-    - update(): detects absence vs explicit empty array by using None as default
-      for the nested fields (pop(..., None)). If payload contains [] then the
-      nested set will be cleared; if payload omits the key, existing children
-      are preserved.
-    """
-
-    export_norm = serializers.PrimaryKeyRelatedField(
-        many=True, read_only=False, required=False
-    )
-    import_norm = serializers.PrimaryKeyRelatedField(
-        many=True, read_only=False, required=False
-    )
-
-    class Meta:
+    class Meta(AuditSerializerMixin.Meta):
         model = SionNormClassModel
         fields = "__all__"
 
     def create(self, validated_data):
-        # preserve existing behaviour: pop nested payloads as empty list
         export_data = validated_data.pop("export_norm", [])
         import_data = validated_data.pop("import_norm", [])
-
         instance = SionNormClassModel.objects.create(**validated_data)
 
         for e in export_data:
-            # assumes e is dict with export fields
             SIONExportModel.objects.create(norm_class=instance, **e)
-
         for i in import_data:
             SIONImportModel.objects.create(norm_class=instance, **i)
 
         return instance
 
     def update(self, instance, validated_data):
-        """Update parent fields and only touch nested sets when provided.
+        export_data = validated_data.pop("export_norm", [])
+        import_data = validated_data.pop("import_norm", [])
 
-        - If `export_norm` or `import_norm` is absent in the incoming data,
-          do not modify existing related rows.
-        - If the incoming value is an empty list `[]`, clear the related rows.
-        """
-        # Detect whether nested payloads are present
-        export_data = validated_data.pop("export_norm", None)
-        import_data = validated_data.pop("import_norm", None)
-
-        # Update non-related fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # Only modify export children if the payload was provided (including [])
-        if export_data is not None:
-            instance.export_norm.all().delete()
-            for e in export_data:
-                SIONExportModel.objects.create(norm_class=instance, **e)
+        instance.export_norm.all().delete()
+        instance.import_norm.all().delete()
 
-        # Only modify import children if the payload was provided (including [])
-        if import_data is not None:
-            instance.import_norm.all().delete()
-            for i in import_data:
-                SIONImportModel.objects.create(norm_class=instance, **i)
+        for e in export_data:
+            SIONExportModel.objects.create(norm_class=instance, **e)
+        for i in import_data:
+            SIONImportModel.objects.create(norm_class=instance, **i)
 
         return instance
-
-# End of patch file
 
 
 

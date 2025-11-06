@@ -44,6 +44,16 @@ const MasterForm = ({ schema = {}, meta = {}, record, onSave, onCancel }) => {
         }
       });
     }
+
+    // initialize nestedData keys from meta.nestedFieldDefs (even if empty)
+    const defs = meta?.nestedFieldDefs || {};
+    Object.keys(defs).forEach((k) => {
+      if (!(k in nd)) {
+        // initialize as empty array so nested UI shows the section
+        nd[k] = [];
+      }
+    });
+
     setFormData(normalized);
     setNestedData(nd);
 
@@ -57,7 +67,7 @@ const MasterForm = ({ schema = {}, meta = {}, record, onSave, onCancel }) => {
       });
       setSearchTerm((prev) => ({ ...prev, ...st }));
     }
-  }, [record]);
+  }, [record, meta]);
 
   // debounce FK search
   const searchForeignKey = useRef(
@@ -262,9 +272,14 @@ const MasterForm = ({ schema = {}, meta = {}, record, onSave, onCancel }) => {
         })}
       </div>
 
-      {Array.from(nestedCandidates).length > 0 && (
+      { ( (meta?.nestedFieldDefs && Object.keys(meta.nestedFieldDefs).length > 0) || (Object.keys(nestedData).length > 0) ) && (
         <div className="mt-4">
-          <MasterNestedForm nestedData={nestedData} setNestedData={setNestedData} fkEndpoints={fkEndpoints} />
+          <MasterNestedForm
+            nestedData={nestedData}
+            setNestedData={setNestedData}
+            fkEndpoints={fkEndpoints}
+            nestedFieldDefs={meta?.nestedFieldDefs || {}}
+          />
         </div>
       )}
 

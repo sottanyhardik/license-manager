@@ -1,4 +1,4 @@
-from .mater_view import MasterViewSet
+from .master_view import MasterViewSet
 from .views import (
     CompanyViewSet, PortViewSet, HSCodeViewSet,
     HeadSIONNormsViewSet, SionNormClassViewSet,

@@ -38,7 +38,7 @@ const Sidebar = () => {
       <NavLink to="/master/hsn-code" className="nav-link">
         <i className="bi bi-upc-scan me-2"></i>HSN Code
       </NavLink>
-      <NavLink to="/master/sion-norms" className="nav-link">
+      <NavLink to="/master/sion-classes" className="nav-link">
         <i className="bi bi-list-check me-2"></i>SION Norms
       </NavLink>
     </div>

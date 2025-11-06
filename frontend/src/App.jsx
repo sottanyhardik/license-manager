@@ -94,7 +94,7 @@ const App = () => {
   }
 />
 <Route
-  path="/master/sion-norms"
+  path="/master/sion-classes"
   element={
     <MasterCRUD
       key="sion"

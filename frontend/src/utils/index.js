@@ -21,7 +21,7 @@ export function getDisplayLabel(obj) {
 const KNOWN_FK_MAP = {
   hsn_code: "/masters/hs-codes/",
   head_norm: "/masters/head-norms/",
-  norm_class: "/masters/sion-norms/",
+  norm_class: "/masters/sion-classes/",
   company: "/masters/companies/",
   port: "/masters/ports/",
 };

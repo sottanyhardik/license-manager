@@ -4,7 +4,7 @@ import MasterCRUD from "./MasterCRUD";
 const SionNorms = () => {
   return (
     <MasterCRUD
-      endpoint="/api/masters/sion-norms/"
+      endpoint="/api/masters/sion-classes/"
       title="SION Norms Management"
     />
   );

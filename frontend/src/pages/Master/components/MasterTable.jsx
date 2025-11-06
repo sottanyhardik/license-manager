@@ -95,34 +95,59 @@ const MasterTable = ({
     return (
       <div className="mt-3">
         {nestedKeys.map((key) => (
-          <div key={key} className="mt-2">
+          <div key={key} className="mt-2 border rounded bg-light p-2">
+            {/* ✅ Label */}
             <h6 className="fw-bold text-orange text-uppercase mb-2">
-              {key.replace(/_/g, " ").replace("norm", "Norm")}
+              {key
+                .replace(/_/g, " ")
+                .replace("norm", "Norm")
+                .replace("export", "Export Norms")
+                .replace("import", "Import Norms")}
             </h6>
+
+            {/* ✅ Table */}
             <div className="table-responsive">
               <table className="table table-sm table-bordered mb-0">
                 <thead>
                   <tr>
-                    {Object.keys(record[key][0] || {}).map((col) => (
-                      <th key={col} className="small text-secondary">
-                        {col.replace(/_/g, " ")}
-                      </th>
-                    ))}
+                    {Object.keys(record[key][0] || {})
+                      .filter(
+                        (col) =>
+                          col !== "id" &&
+                          col !== "created_on" &&
+                          col !== "modified_on" &&
+                          col !== "created_by" &&
+                          col !== "modified_by"
+                      )
+                      .map((col) => (
+                        <th key={col} className="small text-secondary">
+                          {col.replace(/_/g, " ")}
+                        </th>
+                      ))}
                   </tr>
                 </thead>
                 <tbody>
                   {record[key].map((row, i) => (
                     <tr key={i}>
-                      {Object.keys(row).map((col) => (
-                        <td key={col} className="small">
-                          {typeof row[col] === "object"
-                            ? row[col]?.name ||
-                              row[col]?.description ||
-                              row[col]?.code ||
-                              row[col]?.id
-                            : String(row[col] ?? "")}
-                        </td>
-                      ))}
+                      {Object.keys(row)
+                        .filter(
+                          (col) =>
+                            col !== "id" &&
+                            col !== "created_on" &&
+                            col !== "modified_on" &&
+                            col !== "created_by" &&
+                            col !== "modified_by"
+                        )
+                        .map((col) => (
+                          <td key={col} className="small">
+                            {typeof row[col] === "object"
+                              ? row[col]?.name ||
+                                row[col]?.description ||
+                                row[col]?.code ||
+                                row[col]?.id
+                              : String(row[col] ?? "")}
+                          </td>
+                        ))}
                     </tr>
                   ))}
                 </tbody>

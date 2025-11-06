@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from .helpers import _sync_nested
 from .models import (
     CompanyModel, PortModel, HSCodeModel,
     HeadSIONNormsModel, SionNormClassModel,
@@ -44,19 +46,21 @@ class HeadSIONNormsSerializer(AuditSerializerMixin):
 
 # ---- SION Export / Import ----
 class SIONExportSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(required=False, allow_null=True)
+
     class Meta:
         model = SIONExportModel
         fields = ("id", "description", "quantity", "unit")
-        extra_kwargs = {"id": {"read_only": True}}
 
 
 class SIONImportSerializer(serializers.ModelSerializer):
+    hsn_code = HSCodeSerializer()
     hsn_code_label = serializers.SerializerMethodField()
+    id = serializers.CharField(required=False, allow_null=True)
 
     class Meta:
         model = SIONImportModel
         fields = ("id", "description", "quantity", "unit", "hsn_code", "hsn_code_label")
-        extra_kwargs = {"id": {"read_only": True}}
 
     def get_hsn_code_label(self, obj):
         if obj.hsn_code:
@@ -89,18 +93,25 @@ class SionNormClassNestedSerializer(AuditSerializerMixin):
     def update(self, instance, validated_data):
         export_data = validated_data.pop("export_norm", [])
         import_data = validated_data.pop("import_norm", [])
-
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        # Decide deletion semantics:
+        # If the client included the nested key in the request body (even if empty list),
+        # we will treat that as an explicit intent. Otherwise, don't touch that nested relation.
+        # Use treat_empty_list_as_delete=True if you want an empty list to mean "delete all".
+        provided_export = "export_norm" in (self.initial_data or {})
+        provided_import = "import_norm" in (self.initial_data or {})
 
-        instance.export_norm.all().delete()
-        instance.import_norm.all().delete()
+        if provided_export:
+            # If you want an empty array [] to delete all existing export_norm rows,
+            # pass treat_empty_list_as_delete=True. Default below is False for safety.
+            _sync_nested(instance, SIONExportModel, export_data, fk_field="norm_class",
+                         treat_empty_list_as_delete=False)
 
-        for e in export_data:
-            SIONExportModel.objects.create(norm_class=instance, **e)
-        for i in import_data:
-            SIONImportModel.objects.create(norm_class=instance, **i)
+        if provided_import:
+            _sync_nested(instance, SIONImportModel, import_data, fk_field="norm_class",
+                         treat_empty_list_as_delete=False)
 
         return instance
 

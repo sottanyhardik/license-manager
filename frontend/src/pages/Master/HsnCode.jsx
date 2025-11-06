@@ -1,5 +1,5 @@
 import React from "react";
-import MasterCRUD from "../../components/MasterCRUD";
+import MasterCRUD from "./MasterCRUD.jsx";
 
 const HsnCode = () => (
   <MasterCRUD

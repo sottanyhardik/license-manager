@@ -1,13 +1,8 @@
-/**
- * Simple debounce utility (no dependencies)
- * Usage:
- *   import { debounce } from "../utils/debounce";
- *   const debouncedSearch = debounce((val) => { ... }, 400);
- */
-export const debounce = (fn, delay = 400) => {
-  let timeout;
+// Simple reusable debounce helper
+export function debounce(fn, delay = 300) {
+  let timer;
   return (...args) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => fn(...args), delay);
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
   };
-};
+}

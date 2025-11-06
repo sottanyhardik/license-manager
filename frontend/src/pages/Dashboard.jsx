@@ -10,6 +10,7 @@ import {
   PointElement,
   Tooltip,
   Legend,
+    Filler
 } from "chart.js";
 import { Bar, Pie, Line } from "react-chartjs-2";
 
@@ -21,7 +22,8 @@ ChartJS.register(
   LineElement,
   PointElement,
   Tooltip,
-  Legend
+  Legend,
+    Filler
 );
 
 const Dashboard = () => {

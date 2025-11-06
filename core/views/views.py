@@ -7,13 +7,63 @@ from ..serializers import CompanySerializer, PortSerializer, HSCodeSerializer, H
     ProductDescriptionSerializer, UnitPriceSerializer
 
 # Auto-generated viewsets (1 line each)
-CompanyViewSet = MasterViewSet.create(CompanyModel, CompanySerializer, ["iec", "name", "gst_number"])
-PortViewSet = MasterViewSet.create(PortModel, PortSerializer, ["code", "name"])
-HSCodeViewSet = MasterViewSet.create(HSCodeModel, HSCodeSerializer, ["hs_code", "product_description"])
-HeadSIONNormsViewSet = MasterViewSet.create(HeadSIONNormsModel, HeadSIONNormsSerializer, ["name"])
-SionNormClassViewSet = MasterViewSet.create(SionNormClassModel, SionNormClassNestedSerializer, ["norm_class", "description"])
-SIONExportViewSet = MasterViewSet.create(SIONExportModel, SIONExportSerializer, ["description", "unit"])
-SIONImportViewSet = MasterViewSet.create(SIONImportModel, SIONImportSerializer, ["description", "unit", "hsn_code__hs_code"])
+
+CompanyViewSet = MasterViewSet.create(
+    CompanyModel,
+    CompanySerializer,
+    config={
+        "search": ["iec", "name"],
+        "filter": ["iec", "gst_number"],
+        "list_display": ["iec", "name", "gst_number"],
+        "form_fields": ["iec", "name", "gst_number", "email"],
+    }
+
+)
+
+# Port
+PortViewSet = MasterViewSet.create(
+    PortModel,
+    PortSerializer,
+    config={
+        "search": ["code", "name"],
+        "filter": [],
+        "list_display": ["code", "name"],
+        "form_fields": ["code", "name"],
+    },
+)
+
+HSCodeViewSet = MasterViewSet.create(
+    HSCodeModel,
+    HSCodeSerializer,
+    config={
+        "search": ["hs_code", "product_description"],
+        "filter": [],
+        "list_display": ["hs_code", "product_description", "unit_price", "unit"],
+        "form_fields": ["hs_code", "product_description", "unit_price", "basic_duty", "unit", "policy"],
+    },
+)
+
+HeadSIONNormsViewSet = MasterViewSet.create(
+    HeadSIONNormsModel,
+    HeadSIONNormsSerializer,
+    config={
+        "search": ["name"],
+        "list_display": ["id", "name"],
+        "form_fields": ["name"],
+    },
+)
+
+SionNormClassViewSet = MasterViewSet.create(
+    SionNormClassModel,
+    SionNormClassNestedSerializer,
+    config={
+        "search": ["norm_class", "description"],
+        "filter": [],
+        "list_display": ["norm_class", "description", "head_norm"],
+        "form_fields": ["norm_class", "description", "head_norm"],
+    },
+)
+
 HSCodeDutyViewSet = MasterViewSet.create(HSCodeDutyModel, HSCodeDutySerializer, ["hs_code"])
 ProductDescriptionViewSet = MasterViewSet.create(ProductDescriptionModel, ProductDescriptionSerializer, ["product_description"])
 UnitPriceViewSet = MasterViewSet.create(UnitPriceModel, UnitPriceSerializer, ["name", "label"])

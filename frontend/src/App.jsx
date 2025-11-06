@@ -15,37 +15,38 @@ import Allotment from "./pages/Allotment";
 import BillOfEntry from "./pages/BillOfEntry";
 import Trade from "./pages/Trade";
 import Profile from "./pages/Profile";
-
-import Company from "./pages/Master/Company";
-import Port from "./pages/Master/Port";
-import HsnCode from "./pages/Master/HsnCode";
-import SionNorms from "./pages/Master/SionNorms";
-
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
+import MasterCRUD from "./pages/Master/MasterCRUD";
 import { AuthContext } from "./context/AuthContext";
 
+/* ---------------- Protected Route Wrapper ---------------- */
 const ProtectedRoute = ({ children }) => {
   const { user } = useContext(AuthContext);
   return user ? children : <Navigate to="/login" replace />;
 };
 
+/* ---------------- Main App Component ---------------- */
 const App = () => {
   const { user } = useContext(AuthContext);
 
   return (
     <Router>
+      {/* Show Navbar only when logged in */}
       {user && <TopNavbar />}
 
       <Routes>
-        {/* Public Routes */}
-    <Route path="/login" element={<Login />} />
-    <Route path="/forgot-password" element={<ForgotPassword />} />
-    <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
+        {/* -------- Public Routes -------- */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route
+          path="/reset-password/:uid/:token"
+          element={<ResetPassword />}
+        />
 
-        {/* Protected Routes */}
+        {/* -------- Protected Routes -------- */}
         <Route
           path="/*"
           element={
@@ -60,11 +61,53 @@ const App = () => {
                     <Route path="/bill-of-entry" element={<BillOfEntry />} />
                     <Route path="/trade" element={<Trade />} />
                     <Route path="/profile" element={<Profile />} />
-                    <Route path="/master/company" element={<Company />} />
-                    <Route path="/master/port" element={<Port />} />
-                    <Route path="/master/hsn-code" element={<HsnCode />} />
-                    <Route path="/master/sion-norms" element={<SionNorms />} />
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
+                    {/* -------- Dynamic Master CRUD Routes -------- */}
+<Route
+  path="/master/company"
+  element={
+    <MasterCRUD
+      key="company" // 👈 this forces re-render
+      endpoint="masters/companies/"
+      title="Companies"
+    />
+  }
+/>
+<Route
+  path="/master/port"
+  element={
+    <MasterCRUD
+      key="port" // 👈 unique key for each master page
+      endpoint="masters/ports/"
+      title="Ports"
+    />
+  }
+/>
+<Route
+  path="/master/hsn-code"
+  element={
+    <MasterCRUD
+      key="hsn" // 👈 ensures schema/data reload
+      endpoint="masters/hs-codes/"
+      title="HSN Codes"
+    />
+  }
+/>
+<Route
+  path="/master/sion-norms"
+  element={
+    <MasterCRUD
+      key="sion"
+      endpoint="masters/sion-classes/"
+      title="SION Norms"
+    />
+  }
+/>
+                    {/* Default redirect */}
+                    <Route
+                      path="*"
+                      element={<Navigate to="/dashboard" replace />}
+                    />
                   </Routes>
                 </div>
               </div>

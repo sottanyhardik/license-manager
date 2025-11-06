@@ -5,6 +5,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.request import Request
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 
 class StandardPagination(PageNumberPagination):
@@ -26,6 +27,7 @@ class MasterViewSet(viewsets.ModelViewSet):
         - Annotated FK display support (e.g., head_norm__name)
     """
 
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [permissions.AllowAny]
     pagination_class = StandardPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]

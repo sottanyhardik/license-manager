@@ -1,5 +1,9 @@
+// File: src/components/master/components/MasterNestedForm.jsx
+// (Full file — drop in replacing existing implementation)
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Form } from "react-bootstrap";
+import api from "../../../api/axios"; // use same api helper as MasterCRUD
 
 /**
  * MasterNestedForm
@@ -32,8 +36,10 @@ const MasterNestedForm = ({ nestedData = {}, setNestedData, fkEndpoints = {}, ne
     };
   }, []);
 
+  // initialize display map: if nestedData contains object or id, create display values.
   useEffect(() => {
     const displays = {};
+    const toFetch = []; // [{mapKey, endpoint, id}]
     Object.keys(nestedData || {}).forEach((section) => {
       (nestedData[section] || []).forEach((row, idx) => {
         Object.entries(row || {}).forEach(([fld, val]) => {
@@ -43,19 +49,42 @@ const MasterNestedForm = ({ nestedData = {}, setNestedData, fkEndpoints = {}, ne
           const mapKey = `${section}__${fld}__${idx}`;
           if (val && typeof val === "object") {
             displays[mapKey] = val.name || val.title || val.label || val.display || "";
+          } else if (val || val === 0) {
+            // primitive id — resolve label if possible later
+            displays[mapKey] = "";
+            const endpoint = resolveFkEndpoint(section, def);
+            if (endpoint) {
+              toFetch.push({ mapKey, endpoint, id: val, label_field: def.label_field || def.labelField || def.labelFieldName });
+            }
           } else {
-            // if the row property is an id (number/string), don't assume display available
             displays[mapKey] = "";
           }
         });
       });
     });
     setFkDisplayMap((prev) => ({ ...displays, ...prev }));
+
+    // fetch single objects for primitive ids to resolve labels
+    toFetch.forEach(({ mapKey, endpoint, id }) => {
+      // make sure endpoint ends with '/'
+      const url = `${String(endpoint).endsWith("/") ? endpoint : `${endpoint}`}${String(id)}/`;
+      (async () => {
+        try {
+          const res = await api.get(url);
+          const obj = res.data;
+          setFkDisplayMap((p) => ({ ...p, [mapKey]: displayLabel(obj) || String(id) }));
+        } catch (err) {
+          // ignore fetch errors
+        }
+      })();
+    });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nestedData, nestedFieldDefs]);
 
   const displayLabel = (obj) => {
     if (!obj) return "";
-    return obj.name ?? obj.title ?? obj.label ?? obj.display ?? (obj.id !== undefined ? String(obj.id) : "");
+    return obj.name ?? obj.title ?? obj.label ?? obj.display ?? (obj.hs_code ? `${obj.hs_code}` : (obj.id !== undefined ? String(obj.id) : ""));
   };
 
   const resolveFkEndpoint = (section, fieldDef) => {
@@ -71,14 +100,13 @@ const MasterNestedForm = ({ nestedData = {}, setNestedData, fkEndpoints = {}, ne
     );
   };
 
+  // fetch fk options (search)
   const fetchFkOptions = async (mapKey, endpoint, query) => {
     if (!endpoint) return;
     setLoadingFk((s) => ({ ...s, [mapKey]: true }));
     try {
-      // this component does not call network by default — provide your api call here
-      // const res = await api.get(`${endpoint}?search=${encodeURIComponent(query)}`);
-      // const results = res.data?.results ?? res.data ?? [];
-      const results = []; // placeholder if you don't do network here
+      const res = await api.get(`${endpoint}?search=${encodeURIComponent(query || "")}`);
+      const results = res.data?.results ?? res.data ?? [];
       setFkOptionsMap((prev) => ({ ...prev, [mapKey]: results }));
       setFkActiveIdx((p) => ({ ...p, [mapKey]: results.length ? 0 : -1 }));
     } catch (err) {
@@ -93,7 +121,7 @@ const MasterNestedForm = ({ nestedData = {}, setNestedData, fkEndpoints = {}, ne
   const makeEmptyRow = (section) => {
     const defs = nestedFieldDefs[section] || [];
     if (!Array.isArray(defs) || defs.length === 0) return { id: null };
-    const row = { id: null }; // ensure every new row has an explicit id property (null for new)
+    const row = { id: null };
     defs.forEach((d) => {
       row[d.name] = d.default ?? (d.type === "boolean" ? false : "");
     });
@@ -122,7 +150,7 @@ const MasterNestedForm = ({ nestedData = {}, setNestedData, fkEndpoints = {}, ne
       next[section] = (next[section] || []).filter((_, i) => i !== index);
       return next;
     });
-    // Clean up any transient FK UI state keyed by index for UX; this doesn't affect IDs stored in nestedData.
+    // cleanup transient UI state
     setFkDisplayMap((prev) => {
       const copy = { ...prev };
       Object.keys(copy).forEach((k) => {
@@ -155,6 +183,7 @@ const MasterNestedForm = ({ nestedData = {}, setNestedData, fkEndpoints = {}, ne
       return next;
     });
 
+  // typed FK input: debounced search
   const handleFkInput = (section, index, fieldDef, text) => {
     const mapKey = `${section}__${fieldDef.name}__${index}`;
     const endpoint = resolveFkEndpoint(section, fieldDef);
@@ -167,7 +196,7 @@ const MasterNestedForm = ({ nestedData = {}, setNestedData, fkEndpoints = {}, ne
   };
 
   const handlePickFk = (section, index, fieldDef, option) => {
-    // store FK as id in nestedData for submission
+    // store FK as id for submission
     handleChange(section, index, fieldDef.name, option.id);
     const mapKey = `${section}__${fieldDef.name}__${index}`;
     setFkDisplayMap((p) => ({ ...p, [mapKey]: displayLabel(option) }));

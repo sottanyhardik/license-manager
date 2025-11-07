@@ -54,7 +54,6 @@ class SIONExportSerializer(serializers.ModelSerializer):
 
 
 class SIONImportSerializer(serializers.ModelSerializer):
-    hsn_code = HSCodeSerializer()
     hsn_code_label = serializers.SerializerMethodField()
     id = serializers.CharField(required=False, allow_null=True)
 

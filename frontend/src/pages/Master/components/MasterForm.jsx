@@ -1,7 +1,11 @@
+// File: src/components/master/components/MasterForm.jsx
+// (Full file — drop in replacing existing implementation)
+
 import React, { useEffect, useRef, useState } from "react";
 import MasterNestedForm from "./MasterNestedForm";
-import { getDisplayLabel } from "../../../utils"; // replace with your util
-import { debounce } from "../../../utils/debounce"; // replace with your util
+import { getDisplayLabel } from "../../../utils"; // your util
+import { debounce } from "../../../utils/debounce"; // your util
+import api from "../../../api/axios"; // use same api helper as MasterCRUD
 
 const hiddenFields = ["id", "created_on", "modified_on", "created_by", "modified_by"];
 
@@ -9,17 +13,8 @@ const hiddenFields = ["id", "created_on", "modified_on", "created_by", "modified
  * MasterForm
  * - Prepares payload (preserves nested ids, converts FK objects to ids)
  * - Delegates actual HTTP to onSave(formData, isEdit, nestedPayload, fileFields)
- *
- * Props:
- *  - schema: field schema object
- *  - meta: meta config (may include nested_field_defs, field_meta, formFields, etc.)
- *  - record: record to edit (or null for create)
- *  - onSave: function(formData, isEdit, nestedPayload, fileFields)
- *  - onCancel: cancel callback
- *  - endpoint: optional (not used for submission here)
  */
 const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) => {
-  // file fields (for parent's FormData logic)
   const fileFields = Object.entries(schema || {})
     .filter(([, cfg]) => cfg && (cfg.type === "file" || cfg.type === "image"))
     .map(([k]) => k);
@@ -40,7 +35,6 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
   const [searchTerm, setSearchTerm] = useState({});
   const [loadingField, setLoadingField] = useState(null);
 
-  // keep original record for any edge-case debugging (not used for index-based id recovery)
   const originalRecordRef = useRef(record);
   useEffect(() => {
     originalRecordRef.current = record;
@@ -60,7 +54,6 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
     if (record) {
       Object.keys(record).forEach((k) => {
         if (Array.isArray(record[k])) {
-          // preserve each item as-is (keep ids if present)
           nd[k] = (record[k] || []).map((item) => (item && typeof item === "object" ? { ...item } : item));
           if (k in normalized) delete normalized[k];
         }
@@ -88,25 +81,54 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [record, meta]);
 
-  // expose top-level FK search (optional helper) using fkEndpoints
+  // --- API-backed FK search for top-level fields ---
   const searchForeignKey = debounce(async (field, query) => {
     const metaEntry = fkMeta[field];
     const endpointForField = (metaEntry && (metaEntry.endpoint || metaEntry.fk_endpoint)) || fkEndpoints[field];
     if (!endpointForField) return;
     setLoadingField(field);
     try {
-      // NOTE: this component does not perform HTTP by default; if you want to use
-      // top-level FK search you must provide an `api` util and uncomment below.
-      // Example (if you have api/axios):
-      // const res = await api.get(`${endpointForField}?search=${encodeURIComponent(query)}`);
-      // setFkOptions(prev => ({ ...prev, [field]: res.data?.results ?? res.data ?? [] }));
+      const res = await api.get(`${endpointForField}?search=${encodeURIComponent(query)}`);
+      const results = res.data?.results ?? res.data ?? [];
+      setFkOptions((prev) => ({ ...prev, [field]: results }));
+      // if user typed something keep it in searchTerm for display
     } catch (err) {
       console.warn(`Search failed for ${field}:`, err);
       setFkOptions((prev) => ({ ...prev, [field]: [] }));
     } finally {
       setLoadingField(null);
     }
-  }, 350);
+  }, 300);
+
+  // fetch single object to resolve label when formData[field] is an id
+  const fetchSingle_fk = async (field, id) => {
+    if (id === undefined || id === null || id === "") return;
+    const metaEntry = fkMeta[field];
+    const endpointForField = (metaEntry && (metaEntry.endpoint || metaEntry.fk_endpoint)) || fkEndpoints[field];
+    if (!endpointForField) return;
+    try {
+      const res = await api.get(`${endpointForField}${id}/`);
+      const obj = res.data;
+      setFkOptions((prev) => ({ ...prev, [field]: [obj] }));
+      setSearchTerm((prev) => ({ ...prev, [field]: getDisplayLabel(obj) || String(obj.id) }));
+    } catch (err) {
+      // silent fail
+    }
+  };
+
+  // whenever formData loaded that contains FK ids, fetch labels
+  useEffect(() => {
+    Object.entries(formData || {}).forEach(([k, v]) => {
+      const metaEntry = fkMeta[k];
+      const endpointForField = (metaEntry && (metaEntry.endpoint || metaEntry.fk_endpoint)) || fkEndpoints[k];
+      if (!endpointForField) return;
+      if (v && typeof v !== "object") {
+        // primitive id, fetch single object for label
+        fetchSingle_fk(k, v);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData, fkMeta]);
 
   const handleChange = (e) => {
     const { name, type, files, value, checked } = e.target;
@@ -116,9 +138,7 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
     }));
   };
 
-  // Normalize nested data for submission:
-  // - convert FK object values to ids
-  // - preserve `id` field if present on each item (do NOT rely on array index)
+  // Normalize nested data for submission (convert FK object => id)
   const prepareNestedNormalized = (nestedDataObj) => {
     const out = {};
     Object.entries(nestedDataObj || {}).forEach(([k, arr]) => {
@@ -130,7 +150,6 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
             copy[f] = val.id ?? val.pk;
           }
         });
-        // keep id if present (null/undefined means new record)
         if (copy.id === undefined && item && (item.id || item.pk)) {
           copy.id = item.id ?? item.pk;
         }
@@ -145,7 +164,6 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
 
     const preparedNested = prepareNestedNormalized(nestedData);
 
-    // Optionally map nested keys or add suffix if backend expects
     const mapping = meta?.nestedFieldMapping || null;
     const suffix = typeof meta?.nestedFieldSuffix === "string" ? meta.nestedFieldSuffix : null;
     const normalizedNested = {};
@@ -155,7 +173,6 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
       else normalizedNested[k] = v;
     });
 
-    // Call parent onSave which will perform the actual HTTP (MasterCRUD)
     if (typeof onSave === "function") {
       onSave(formData, !!formData.id, normalizedNested, fileFields);
     }
@@ -178,7 +195,7 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
   const renderField = (field, config = {}) => {
     if (nestedCandidates.has(field)) return null;
 
-    // support select from meta.field_meta (frontend search UI left as optional)
+    // top-level FK support
     const metaEntry = fkMeta[field];
     const endpointForField = (metaEntry && (metaEntry.endpoint || metaEntry.fk_endpoint)) || fkEndpoints[field];
 
@@ -208,11 +225,32 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
             }}
             autoComplete="off"
           />
+          {loadingField === field && <div className="small text-muted mt-1">Searching...</div>}
+          {Array.isArray(options) && options.length > 0 && (
+            <div className="dropdown-menu show w-100 mt-1" style={{ zIndex: 2000 }}>
+              {options.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className="dropdown-item text-start"
+                  onMouseDown={(ev) => {
+                    ev.preventDefault();
+                    // store id, and set readable display
+                    setFormData((prev) => ({ ...prev, [field]: opt.id }));
+                    setSearchTerm((prev) => ({ ...prev, [field]: getDisplayLabel(opt) || String(opt.id) }));
+                    setFkOptions((prev) => ({ ...prev, [field]: [] }));
+                  }}
+                >
+                  {getDisplayLabel(opt) || String(opt.id)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
 
-    // fallback by type
+    // fallback by type (existing logic)
     if (config.type === "file" || config.type === "image") {
       const current = formData[field];
       const previewUrl =

@@ -1,13 +1,113 @@
+/* ============================================================
+   UNIVERSAL BUTTON STYLES
+============================================================ */
+
+.btn {
+    font-weight: 500;
+    border-radius: var(--radius);
+    transition: all 0.2s ease-in-out;
+    border-width: 1px;
+}
+
+/* ============================================================
+   PRIMARY BUTTON
+============================================================ */
 .btn-primary {
-  background-color: var(--color-primary) !important;
-  border: none !important;
+    background-color: var(--color-primary) !important;
+    color: var(--color-white) !important;
+    border: 1px solid var(--color-primary) !important;
 }
 
-.btn-primary:hover {
-  background-color: darken(var(--color-primary), 5%) !important;
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: var(--color-white) !important;
+    color: var(--color-primary) !important;
+    border: 1px solid var(--color-primary) !important;
 }
 
+/* ============================================================
+   SECONDARY BUTTON
+============================================================ */
 .btn-secondary {
-  background-color: var(--color-muted) !important;
-  border: none !important;
+    background-color: var(--color-muted) !important;
+    color: var(--color-white) !important;
+    border: 1px solid var(--color-muted) !important;
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+    background-color: var(--color-white) !important;
+    color: var(--color-muted) !important;
+    border: 1px solid var(--color-muted) !important;
+}
+
+/* ============================================================
+   ACCENT / ORANGE BUTTON
+============================================================ */
+.btn-orange {
+    background-color: var(--color-accent) !important;
+    color: var(--color-white) !important;
+    border: 1px solid var(--color-accent) !important;
+}
+
+.btn-orange:hover,
+.btn-orange:focus {
+    background-color: var(--color-white) !important;
+    color: var(--color-accent) !important;
+    border: 1px solid var(--color-accent) !important;
+}
+
+/* ============================================================
+   SUCCESS, DANGER, WARNING, INFO (Optional Bootstrap Colors)
+============================================================ */
+.btn-success {
+    background-color: var(--success) !important;
+    color: var(--color-white) !important;
+    border: 1px solid var(--success) !important;
+}
+
+.btn-success:hover,
+.btn-success:focus {
+    background-color: var(--color-white) !important;
+    color: var(--success) !important;
+    border: 1px solid var(--success) !important;
+}
+
+.btn-danger {
+    background-color: var(--danger) !important;
+    color: var(--color-white) !important;
+    border: 1px solid var(--danger) !important;
+}
+
+.btn-danger:hover,
+.btn-danger:focus {
+    background-color: var(--color-white) !important;
+    color: var(--danger) !important;
+    border: 1px solid var(--danger) !important;
+}
+
+.btn-warning {
+    background-color: var(--warning) !important;
+    color: var(--text-dark) !important;
+    border: 1px solid var(--warning) !important;
+}
+
+.btn-warning:hover,
+.btn-warning:focus {
+    background-color: var(--color-white) !important;
+    color: var(--warning) !important;
+    border: 1px solid var(--warning) !important;
+}
+
+.btn-info {
+    background-color: var(--info) !important;
+    color: var(--color-white) !important;
+    border: 1px solid var(--info) !important;
+}
+
+.btn-info:hover,
+.btn-info:focus {
+    background-color: var(--color-white) !important;
+    color: var(--info) !important;
+    border: 1px solid var(--info) !important;
 }

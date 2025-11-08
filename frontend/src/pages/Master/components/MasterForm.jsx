@@ -189,7 +189,7 @@ const MasterForm = ({ schema = {}, meta = {}, record = {}, onSave, onCancel }) =
     if (cfg && (cfg.type === "nested" || cfg.type === "array" || cfg.widget === "nested")) nestedCandidates.add(k);
   });
   (meta.formFields || []).forEach((f) => {
-    if (/(export|import|_set|_list|norms?)$/i.test(f)) nestedCandidates.add(f);
+    if (/(export|import|_set|_list?)$/i.test(f)) nestedCandidates.add(f);
   });
 
   const renderField = (field, config = {}) => {

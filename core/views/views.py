@@ -1,4 +1,8 @@
 # core/views.py
+from typing import List
+
+from django.db import models as dj_models
+
 from .master_view import MasterViewSet
 from ..models import (
     CompanyModel,
@@ -24,8 +28,6 @@ from ..serializers import (
     ProductDescriptionSerializer,
     UnitPriceSerializer,
 )
-from django.db import models as dj_models
-from typing import List
 
 # Base API prefix used to construct select endpoints (adjust if needed).
 API_PREFIX = "/masters/"
@@ -56,7 +58,8 @@ def build_endpoint_candidates(rel_model) -> List[str]:
     Return a list of plausible endpoints (strings ending with '/')
     for a related model, ordered by preference.
     """
-    raw_name = getattr(rel_model._meta, "model_name", None) or getattr(rel_model._meta, "object_name", None) or rel_model.__name__
+    raw_name = getattr(rel_model._meta, "model_name", None) or getattr(rel_model._meta, "object_name",
+                                                                       None) or rel_model.__name__
     raw_name = str(raw_name).lower()
     plural = raw_name if raw_name.endswith("s") else f"{raw_name}s"
     kebab = to_kebab(raw_name)
@@ -79,11 +82,17 @@ def build_endpoint_candidates(rel_model) -> List[str]:
     return out
 
 
-def enhance_config_with_fk(model_cls, config):
+def enhance_config_with_fk(model_cls, config=None):
     """
     Inspect model_cls for ForeignKey fields and populate config['field_meta']
     with select metadata for each FK. Also annotate nested_field_defs entries
     with fk_endpoint(s) & label_field when field names match.
+
+    Accepts (via `config` dict) optional keys:
+      - api_prefix: string override for base API prefix (defaults to module-level API_PREFIX)
+      - fk_endpoint_overrides: { fk_name: endpoint_string | [endpoint_strings] }
+      - label_field_overrides: { fk_name: label_field_string }
+      - ignore_fk_names: iterable of fk names to ignore (defaults to {'created_by','modified_by'})
 
     Returns a shallow-copied config dict with 'field_meta' added/updated.
     """
@@ -91,15 +100,64 @@ def enhance_config_with_fk(model_cls, config):
     field_meta = dict(cfg.get("field_meta", {}))
     nested_defs = dict(cfg.get("nested_field_defs", {}))
 
+    # customizable options
+    api_prefix = cfg.get("api_prefix", API_PREFIX)
+    fk_overrides = cfg.get("fk_endpoint_overrides", {}) or {}
+    label_overrides = cfg.get("label_field_overrides", {}) or {}
+    ignore_fk_names = set(cfg.get("ignore_fk_names", {"created_by", "modified_by"}))
+
+    def build_candidates_for_rel(rel_model):
+        """
+        Local wrapper so api_prefix in config is honored.
+        """
+        raw_name = getattr(rel_model._meta, "model_name", None) or getattr(rel_model._meta, "object_name",
+                                                                           None) or rel_model.__name__
+        raw_name = str(raw_name).lower()
+        plural = raw_name if raw_name.endswith("s") else f"{raw_name}s"
+        kebab = raw_name.replace("_", "-")
+        kebab_plural = kebab if kebab.endswith("s") else f"{kebab}s"
+
+        candidates = [
+            f"{api_prefix}{raw_name}/",
+            f"{api_prefix}{plural}/",
+            f"{api_prefix}{kebab}/",
+            f"{api_prefix}{kebab_plural}/",
+        ]
+
+        seen = set()
+        out = []
+        for c in candidates:
+            if c not in seen:
+                seen.add(c)
+                out.append(c)
+        return out
+
     for f in model_cls._meta.get_fields():
         if not isinstance(f, dj_models.ForeignKey):
             continue
 
         fk_name = f.name
+
+        # Skip any explicitly ignored audit (or other) fields
+        if fk_name in ignore_fk_names:
+            continue
+
         rel_model = f.remote_field.model
-        label_field = choose_label_field(rel_model)
-        endpoints = build_endpoint_candidates(rel_model)
-        preferred = endpoints[0] if endpoints else None
+
+        # label field override or auto-choose
+        label_field = label_overrides.get(fk_name) or choose_label_field(rel_model)
+
+        # endpoint override handling (string or list)
+        if fk_name in fk_overrides:
+            override = fk_overrides[fk_name]
+            if isinstance(override, (list, tuple)):
+                endpoints = list(override)
+            else:
+                endpoints = [str(override)]
+            preferred = endpoints[0] if endpoints else None
+        else:
+            endpoints = build_candidates_for_rel(rel_model)
+            preferred = endpoints[0] if endpoints else None
 
         # Provide both a preferred 'endpoint' and an 'endpoints' list for robustness
         field_meta[fk_name] = {
@@ -118,7 +176,7 @@ def enhance_config_with_fk(model_cls, config):
             for entry in nd_list:
                 entry_copy = dict(entry)
                 if entry_copy.get("name") == fk_name:
-                    # Use setdefault so explicit nested defs in config (like our hsn_code override) are preserved
+                    # Use setdefault so explicit nested defs in config are preserved
                     entry_copy.setdefault("fk_endpoint", preferred)
                     entry_copy.setdefault("endpoints", endpoints)
                     entry_copy.setdefault("label_field", label_field)
@@ -192,7 +250,6 @@ HeadSIONNormsViewSet = MasterViewSet.create(
     ),
 )
 
-
 # Example nested defs — we explicitly mark hsn_code as a select and point it at /api/head-norms/
 example_nested_field_defs = {
     "export_norm": [
@@ -212,8 +269,8 @@ example_nested_field_defs = {
             "type": "string",
             "label": "HSN Code",
             "required": False,
-            "fk_endpoint": f"{API_PREFIX}hs-codes/",               # preferred single endpoint
-            "endpoints": [f"{API_PREFIX}hs-codes/"],               # alternatives (here only one)
+            "fk_endpoint": f"{API_PREFIX}hs-codes/",  # preferred single endpoint
+            "endpoints": [f"{API_PREFIX}hs-codes/"],  # alternatives (here only one)
             "label_field": "hsn_code",
         },
     ],
@@ -229,11 +286,13 @@ SionNormClassViewSet = MasterViewSet.create(
             "filter": [],
             "list_display": ["norm_class", "description", "head_norm_name"],
             "form_fields": ["norm_class", "description", "head_norm"],
+            "fk_endpoint_overrides": {
+                "head_norm": "/masters/head-norms/"
+            },
             "nested_field_defs": example_nested_field_defs,
         },
     ),
 )
-
 
 SIONExportViewSet = MasterViewSet.create(
     SIONExportModel,
@@ -249,7 +308,6 @@ SIONExportViewSet = MasterViewSet.create(
     ),
 )
 
-
 SIONImportViewSet = MasterViewSet.create(
     SIONImportModel,
     SIONImportSerializer,
@@ -263,7 +321,6 @@ SIONImportViewSet = MasterViewSet.create(
         },
     ),
 )
-
 
 HSCodeDutyViewSet = MasterViewSet.create(
     HSCodeDutyModel,

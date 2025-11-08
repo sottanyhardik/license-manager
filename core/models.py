@@ -11,11 +11,14 @@ Features:
 Drop this file into your app (e.g. core/models.py), run `makemigrations` and `migrate`,
 then run tests and review admin displays.
 """
+
+from threading import local
+
 from django.conf import settings
-from django.urls import reverse
-from django.utils.functional import cached_property
 from django.core.validators import RegexValidator
 from django.db import models
+from django.urls import reverse
+from django.utils.functional import cached_property
 
 alpha = RegexValidator(r'^[a-zA-Z ]*$', 'Only alpha characters are allowed.')
 
@@ -25,20 +28,63 @@ def company_upload_path(instance, filename):
     return f"companies/{instance.id}/{filename}"
 
 
+# Thread-local storage to hold the current user during a request
+_user = local()
+
+
+def set_current_user(user):
+    """Store the current user in thread-local context for model save hooks."""
+    _user.value = user
+
+
+def get_current_user():
+    """Safely get the current user from thread-local context."""
+    return getattr(_user, "value", None)
+
+
 class AuditModel(models.Model):
+    """
+    Abstract base with automatic created/modified auditing.
+    - created_on / modified_on timestamps
+    - created_by / modified_by FK auto-filled from current user
+    """
+
     created_on = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
-        related_name="%(class)s_created"
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="%(class)s_created",
     )
     modified_on = models.DateTimeField(auto_now=True)
     modified_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
-        related_name="%(class)s_updated"
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="%(class)s_updated",
     )
 
     class Meta:
         abstract = True
+
+    def save(self, *args, **kwargs):
+        """
+        Automatically set created_by and modified_by
+        from the thread-local current user (if available).
+        """
+        user = get_current_user()
+        if user and getattr(user, "is_authenticated", False):
+            if not self.pk and not self.created_by_id:
+                # New object — set both created_by and modified_by
+                self.created_by = user
+                self.modified_by = user
+            else:
+                # Existing object — update only modified_by
+                self.modified_by = user
+
+        super().save(*args, **kwargs)
 
 
 class CompanyModel(AuditModel):
@@ -129,7 +175,8 @@ class ItemHeadModel(AuditModel):
 
 
 class ItemNameModel(AuditModel):
-    head = models.ForeignKey('core.ItemHeadModel', on_delete=models.CASCADE, related_name='items', null=True, blank=True)
+    head = models.ForeignKey('core.ItemHeadModel', on_delete=models.CASCADE, related_name='items', null=True,
+                             blank=True)
     name = models.CharField(max_length=255, unique=True)
     unit_price = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     is_active = models.BooleanField(default=False)
@@ -190,7 +237,8 @@ class SIONExportModel(models.Model):
 class SIONImportModel(models.Model):
     sr_no = models.IntegerField(default=0)
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='import_norm')
-    hsn_code = models.ForeignKey(HSCodeModel, on_delete=models.SET_NULL, related_name='sion_imports', null=True, blank=True)
+    hsn_code = models.ForeignKey(HSCodeModel, on_delete=models.SET_NULL, related_name='sion_imports', null=True,
+                                 blank=True)
     description = models.CharField(max_length=255, null=True, blank=True)
     quantity = models.FloatField(default=0.0)
     unit = models.CharField(max_length=255, null=True, blank=True)
@@ -224,7 +272,8 @@ class HSCodeDutyModel(AuditModel):
 
     @cached_property
     def product_description(self):
-        return '\n'.join([pd['product_description'] for pd in self.product_descriptions.all().values('product_description')])
+        return '\n'.join(
+            [pd['product_description'] for pd in self.product_descriptions.all().values('product_description')])
 
 
 class ProductDescriptionModel(AuditModel):
@@ -241,7 +290,6 @@ class TransferLetterModel(AuditModel):
 
     def __str__(self):
         return self.name
-
 
 
 class UnitPriceModel(AuditModel):

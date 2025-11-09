@@ -1,21 +1,57 @@
 .dropdown-menu {
-  border: none !important;
-  border-radius: var(--radius) !important;
-  background-color: var(--color-white) !important;
+    border: none !important;
+    border-radius: var(--radius) !important;
+    background-color: var(--color-white) !important;
 }
 
 .dropdown-item {
-  color: var(--color-accent) !important;
-  font-weight: 500 !important;
-  transition: all 0.2s ease;
+    color: var(--color-accent) !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease;
 }
 
 .dropdown-item i {
-  color: var(--color-accent) !important;
+    color: var(--color-accent) !important;
 }
 
 .dropdown-item:hover,
 .dropdown-item:focus {
-  background-color: rgba(245, 124, 0, 0.1) !important;
-  color: var(--color-accent) !important;
+    background-color: rgba(245, 124, 0, 0.1) !important;
+    color: var(--color-accent) !important;
 }
+
+
+/* ============================================================
+   FORCE LIGHT THEME FOR SELECT DROPDOWNS (macOS Safari fix)
+============================================================ */
+
+/* Ensure select background stays white even in dark mode */
+.form-select {
+    background-color: var(--color-white) !important;
+    color: var(--text-dark) !important;
+    -webkit-appearance: none; /* Safari */
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* Force options to have light background (for Safari/macOS dark mode) */
+.form-select option {
+    background-color: var(--color-white) !important;
+    color: var(--text-dark) !important;
+}
+
+/* Hover/focus border with orange accent */
+.form-select:hover,
+.form-select:focus {
+    border-color: var(--color-accent) !important;
+    box-shadow: 0 0 0 2px rgba(245, 124, 0, 0.25);
+    outline: none;
+}
+
+/* Optional: unify border + padding */
+.form-select {
+    border: 1px solid #ddd !important;
+    border-radius: var(--radius);
+    padding: 0.5rem 0.75rem;
+}
+

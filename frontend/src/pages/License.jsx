@@ -1,3 +1,11 @@
 import React from "react";
-const License = () => <h1>License Page</h1>;
+import MasterCRUD from "../pages/master/MasterCRUD";
+
+const License = () => (
+    <MasterCRUD
+        endpoint="/masters/license-details/"  // <-- adjust to your API route
+        title="License Details"
+    />
+);
+
 export default License;

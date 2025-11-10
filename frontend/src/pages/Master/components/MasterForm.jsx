@@ -1,6 +1,7 @@
 // File: src/components/master/components/MasterForm.jsx
 import React, {useEffect, useRef, useState} from "react";
 import MasterNestedForm from "./MasterNestedForm";
+import FieldRenderer from "./FieldRenderer";
 import {getDisplayLabel} from "../../../utils";
 import {debounce} from "../../../utils/debounce";
 import api from "../../../api/axios";
@@ -85,17 +86,19 @@ const MasterForm = ({schema = {}, meta = {}, record = {}, onSave, onCancel}) => 
         debounce(async (field, query) => {
             const metaEntry = fkMeta[field];
             const endpointForField = (metaEntry && (metaEntry.endpoint || metaEntry.fk_endpoint)) || fkEndpoints[field];
-            if (!endpointForField) return;
+            if (!endpointForField) return [];
             setLoadingField(field);
             try {
                 const res = await api.get(`${endpointForField}?search=${encodeURIComponent(query)}`);
                 const results = res.data?.results ?? res.data ?? [];
                 setFkOptions((prev) => ({...prev, [field]: results}));
+                setLoadingField(null);
+                return results;
             } catch (err) {
                 console.warn(`Search failed for ${field}:`, err);
                 setFkOptions((prev) => ({...prev, [field]: []}));
-            } finally {
                 setLoadingField(null);
+                return [];
             }
         }, 300)
     ).current;
@@ -199,254 +202,122 @@ const MasterForm = ({schema = {}, meta = {}, record = {}, onSave, onCancel}) => 
         } : typeof c === "object" ? {value: c.value, label: c.label} : {value: c, label: c}));
     };
 
-    // Autocomplete select renderer (for both static choices & remote FK)
-    const renderAutocompleteOrFk = (field, config = {}) => {
-        // detect fk endpoint
-        const metaEntry = fkMeta[field];
-        const endpointForField = (metaEntry && (metaEntry.endpoint || metaEntry.fk_endpoint)) || fkEndpoints[field];
-
-        // FK remote search
-        if (endpointForField) {
-            const options = fkOptions[field] || [];
-            const displayValue = (() => {
-                const st = searchTerm[field];
-                if (st && st.length > 0) return st;
-                const found = options.find((o) => String(o.id) === String(formData[field]));
-                return found ? getDisplayLabel(found) : formData[field] ?? "";
-            })();
-
-            const activeIdx = (options || []).findIndex((o) => String(o.id) === String(searchTerm[field])); // not critical
-            return (
-                <div className="position-relative">
-                    <input
-                        type="text"
-                        className="form-control"
-                        placeholder={`Search ${config.label || field}`}
-                        value={displayValue}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setSearchTerm((prev) => ({...prev, [field]: val}));
-                            setActiveField(field);
-                            if (val && val.length >= 1) searchForeignKey(field, val);
-                            else setFkOptions((prev) => ({...prev, [field]: []}));
-                        }}
-                        onFocus={() => {
-                            if (blurTimeoutRef.current) {
-                                clearTimeout(blurTimeoutRef.current);
-                                blurTimeoutRef.current = null;
-                            }
-                            setActiveField(field);
-                            if (!options || options.length === 0) searchForeignKey(field, "");
-                        }}
-                        onBlur={() => {
-                            if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
-                            blurTimeoutRef.current = setTimeout(() => {
-                                setActiveField(null);
-                                blurTimeoutRef.current = null;
-                            }, 150);
-                        }}
-                        onKeyDown={(e) => {
-                            const opts = fkOptions[field] || [];
-                            const active = opts.findIndex((o) => String(o.id) === String(formData[field]));
-                            if (e.key === "ArrowDown") {
-                                e.preventDefault();
-                                // move highlight by index in options: toggled by storing a special active index map? for simplicity, do nothing here.
-                            } else if (e.key === "Enter") {
-                                // nothing
-                            } else if (e.key === "Escape") {
-                                setFkOptions((prev) => ({...prev, [field]: []}));
-                                setActiveField(null);
-                            }
-                        }}
-                        autoComplete="off"
-                    />
-                    {loadingField === field && <div className="small text-muted mt-1">Searching...</div>}
-                    {Array.isArray(options) && options.length > 0 && activeField === field && (
-                        <div className="dropdown-menu show w-100 mt-1"
-                             style={{zIndex: 2000, maxHeight: 300, overflowY: "auto"}}>
-                            {options.map((opt) => (
-                                <button
-                                    key={opt.id}
-                                    type="button"
-                                    className="dropdown-item text-start"
-                                    onMouseDown={(ev) => {
-                                        ev.preventDefault();
-                                        setFormData((prev) => ({...prev, [field]: opt.id}));
-                                        setSearchTerm((prev) => ({
-                                            ...prev,
-                                            [field]: getDisplayLabel(opt) || String(opt.id)
-                                        }));
-                                        setFkOptions((prev) => ({...prev, [field]: []}));
-                                        setActiveField(null);
-                                        if (blurTimeoutRef.current) {
-                                            clearTimeout(blurTimeoutRef.current);
-                                            blurTimeoutRef.current = null;
-                                        }
-                                    }}
-                                >
-                                    {getDisplayLabel(opt) || String(opt.id)}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            );
+    /**
+     * getFieldChoices
+     * - Look for choices in several places:
+     *   1. explicit config.choices (schema[field].choices)
+     *   2. meta.rawOptions.actions.POST[field].choices (DRF OPTIONS actions POST metadata)
+     *   3. meta.field_meta choices entry
+     *
+     * Returns normalized array: [{ value, label }, ...]
+     */
+    const getFieldChoices = (field, config = {}) => {
+        // explicit config choices first
+        if (config && Array.isArray(config.choices) && config.choices.length) {
+            return normalizeChoices(config.choices);
         }
 
-        // static choices: client-side autocomplete
-        if (config.choices && Array.isArray(config.choices)) {
-            const options = normalizeChoices(config.choices);
-            const display = searchTerm[field] ?? options.find((o) => String(o.value) === String(formData[field]))?.label ?? "";
-
-            return (
-                <div className="position-relative">
-                    <input
-                        type="text"
-                        className="form-control"
-                        placeholder={`Search ${config.label || field}`}
-                        value={display}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setSearchTerm((prev) => ({...prev, [field]: val}));
-                            setFkOptions((prev) => ({
-                                ...prev,
-                                [field]: options.filter((opt) => opt.label.toLowerCase().includes(val.toLowerCase()))
-                            }));
-                            setActiveField(field);
-                        }}
-                        onFocus={() => {
-                            if (blurTimeoutRef.current) {
-                                clearTimeout(blurTimeoutRef.current);
-                                blurTimeoutRef.current = null;
-                            }
-                            setActiveField(field);
-                            setFkOptions((prev) => ({...prev, [field]: options}));
-                        }}
-                        onBlur={() => {
-                            if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
-                            blurTimeoutRef.current = setTimeout(() => {
-                                setActiveField(null);
-                                blurTimeoutRef.current = null;
-                            }, 150);
-                        }}
-                        autoComplete="off"
-                    />
-                    {Array.isArray(fkOptions[field]) && fkOptions[field].length > 0 && activeField === field && (
-                        <div className="dropdown-menu show w-100 mt-1" style={{zIndex: 2000}}>
-                            {fkOptions[field].map((opt) => (
-                                <button
-                                    key={opt.value}
-                                    type="button"
-                                    className="dropdown-item text-start"
-                                    onMouseDown={(ev) => {
-                                        ev.preventDefault();
-                                        setFormData((prev) => ({...prev, [field]: opt.value}));
-                                        setSearchTerm((prev) => ({...prev, [field]: opt.label}));
-                                        setFkOptions((prev) => ({...prev, [field]: []}));
-                                        setActiveField(null);
-                                        if (blurTimeoutRef.current) {
-                                            clearTimeout(blurTimeoutRef.current);
-                                            blurTimeoutRef.current = null;
-                                        }
-                                    }}
-                                >
-                                    {opt.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            );
+        // schema-level choices
+        if (schema[field] && Array.isArray(schema[field].choices) && schema[field].choices.length) {
+            return normalizeChoices(schema[field].choices);
         }
 
-        return null;
+        // DRF OPTIONS actions -> POST -> field -> choices
+        const raw = meta?.rawOptions || meta?.raw_options || meta?.raw || meta?.options || {};
+        const actionsPost =
+            (raw.actions && (raw.actions.POST || raw.actions.post)) || raw.actions || raw;
+        if (actionsPost && actionsPost[field] && Array.isArray(actionsPost[field].choices)) {
+            return normalizeChoices(actionsPost[field].choices);
+        }
+
+        // fields.<field>.choices
+        if (raw.fields && raw.fields[field] && Array.isArray(raw.fields[field].choices)) {
+            return normalizeChoices(raw.fields[field].choices);
+        }
+
+        // raw[field].choices fallback
+        if (raw[field] && Array.isArray(raw[field].choices)) {
+            return normalizeChoices(raw[field].choices);
+        }
+
+        // fallback to meta.field_meta config
+        const fm = meta?.field_meta || meta?.fieldMeta || {};
+        if (fm[field] && Array.isArray(fm[field].choices) && fm[field].choices.length) {
+            return normalizeChoices(fm[field].choices);
+        }
+
+        return [];
     };
 
+    // render helper using FieldRenderer
     const renderField = (field) => {
         const config = schema[field] || {label: field, type: "text"};
         if (hiddenFields.includes(field)) return null;
-        if (Array.isArray(nestedData[field]) || (config && (config.type === "nested" || config.type === "array" || config.widget === "nested"))) return null;
+        if (
+            Array.isArray(nestedData[field]) ||
+            (config && (config.type === "nested" || config.type === "array"))
+        )
+            return null;
 
-        // FK or choices -> autocomplete
         const metaEntry = fkMeta[field];
-        const endpointForField = (metaEntry && (metaEntry.endpoint || metaEntry.fk_endpoint)) || fkEndpoints[field];
-        if (endpointForField || (config.choices && Array.isArray(config.choices))) return renderAutocompleteOrFk(field, config);
+        const endpointForField =
+            (metaEntry && (metaEntry.endpoint || metaEntry.fk_endpoint)) || fkEndpoints[field];
 
-        // file/image
-        if (config.type === "file" || config.type === "image") {
-            const current = formData[field];
-            const previewUrl =
-                current instanceof File
-                    ? URL.createObjectURL(current)
-                    : typeof current === "string" && current.length > 0
-                        ? current
-                        : null;
-
-            return (
-                <div>
-                    <input
-                        type="file"
-                        name={field}
-                        className="form-control"
-                        accept={config.type === "image" ? "image/*" : undefined}
-                        onChange={handleChange}
-                    />
-                    {previewUrl && (
-                        <div style={{marginTop: 6}}>
-                            <img src={previewUrl} alt="preview"
-                                 style={{maxWidth: "120px", maxHeight: "120px", objectFit: "cover"}}/>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // boolean
-        if (config.type === "boolean") {
-            return (
-                <div className="form-check">
-                    <input className="form-check-input" type="checkbox" id={field} name={field}
-                           checked={!!formData[field]} onChange={handleChange}/>
-                    <label className="form-check-label" htmlFor={field}>{config.label || field}</label>
-                </div>
-            );
-        }
-
-        // textarea
-        if (config.type === "text" || config.widget === "textarea") {
-            return <textarea name={field} className="form-control" value={formData[field] ?? ""} onChange={handleChange}
-                             placeholder={config.label || field}/>;
-        }
-
-        const inputType = config.type === "integer" || config.type === "number" ? "number" : "text";
-        return <input type={inputType} name={field} value={formData[field] ?? ""} onChange={handleChange}
-                      className="form-control" placeholder={config.label || field}/>;
+        return (
+            <FieldRenderer
+                fieldName={field}
+                config={config}
+                value={formData[field]}
+                onChange={(v) => setFormData((prev) => ({...prev, [field]: v}))}
+                getFieldChoices={(f, cfg) => getFieldChoices(f, cfg)}
+                resolveFkEndpoint={() => endpointForField}
+                searchFn={async (f, q) => {
+                    // use searchForeignKey and also return the results
+                    const res = await searchForeignKey(f, q);
+                    return res || fkOptions[f] || [];
+                }}
+                fkOptions={fkOptions[field] || []}
+                setFkOptions={(arr) => setFkOptions((prev) => ({...prev, [field]: arr}))}
+                searchTerm={searchTerm[field] ?? ""}
+                setSearchTerm={(s) => setSearchTerm((prev) => ({...prev, [field]: s}))}
+                loading={loadingField === field}
+                active={activeField === field}
+                setActive={(b) => (b ? setActiveField(field) : setActiveField(null))}
+                placeholder={`Search ${config.label || field}`}
+            />
+        );
     };
 
     return (
-        <form onSubmit={handleSubmit} className="border rounded p-3 bg-light" encType="multipart/form-data">
+        <form
+            onSubmit={handleSubmit}
+            className="border rounded p-3 bg-light master-form"
+            encType="multipart/form-data"
+        >
             <div className="row g-3">
                 {fieldsToRender.map((field) => (
                     <div key={field} className="col-md-4">
-                        <label
-                            className="form-label fw-medium">{(schema[field] && schema[field].label) || field}</label>
+                        <label className="form-label fw-medium">
+                            {(schema[field] && schema[field].label) || field}
+                        </label>
                         {renderField(field)}
                     </div>
                 ))}
             </div>
 
-            {((meta?.nested_field_defs && Object.keys(meta.nested_field_defs).length > 0) ||
-                (meta?.nestedFieldDefs && Object.keys(meta.nestedFieldDefs).length > 0) ||
-                (Object.keys(nestedData).length > 0)) && (
+            {(meta?.nested_field_defs && Object.keys(meta.nested_field_defs).length > 0) ||
+            (meta?.nestedFieldDefs && Object.keys(meta.nestedFieldDefs).length > 0) ||
+            Object.keys(nestedData).length > 0 ? (
                 <div className="mt-4">
                     <MasterNestedForm
                         nestedData={nestedData}
                         setNestedData={setNestedData}
                         fkEndpoints={fkEndpoints}
                         nestedFieldDefs={meta?.nested_field_defs || meta?.nestedFieldDefs || {}}
+                        rawOptions={meta?.rawOptions || meta?.raw_options || meta?.raw || {}}
                     />
                 </div>
-            )}
+            ) : null}
 
             <div className="mt-3 d-flex gap-2">
                 <button type="submit" className="btn btn-primary">{formData.id ? "Update" : "Save"}</button>

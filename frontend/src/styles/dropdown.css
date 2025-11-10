@@ -55,3 +55,66 @@
     padding: 0.5rem 0.75rem;
 }
 
+/* Scoped styling for the Master form UI */
+.master-form .form-select,
+.master-form input.form-control,
+.master-form textarea.form-control {
+    background: #fff !important;
+    color: #222 !important;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    box-shadow: none !important;
+}
+
+/* Standardize native <option> appearance */
+.master-form .form-select option {
+    color: #222;
+    background: #fff;
+}
+
+/* Dropdown menu (autocomplete results from FieldRenderer) */
+.master-form .dropdown-menu.show {
+    background: #fff !important; /* white background */
+    color: #222 !important;
+    border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12) !important;
+    border-radius: 8px !important;
+    padding: 6px 0 !important;
+    backdrop-filter: none !important; /* remove blur/dark overlay */
+    -webkit-backdrop-filter: none !important;
+    max-height: 260px;
+    overflow-y: auto;
+    z-index: 3000; /* ensure above other overlays */
+}
+
+/* Items inside the menu */
+.master-form .dropdown-menu.show .dropdown-item {
+    color: #333;
+    background: transparent;
+    padding: 10px 14px;
+    font-weight: 500;
+}
+
+/* Hover / active states */
+.master-form .dropdown-menu.show .dropdown-item:hover {
+    background: rgba(43, 123, 228, 0.08);
+    color: #1b4fa8;
+}
+
+.master-form .dropdown-menu.show .dropdown-item.active,
+.master-form .dropdown-menu.show .dropdown-item:active {
+    background: #2b7be4 !important;
+    color: #fff !important;
+}
+
+/* Fix select caret / appearance for different browsers */
+.master-form .form-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* optional: slightly larger option text */
+.master-form .dropdown-menu.show .dropdown-item {
+    font-size: 15px;
+}
+

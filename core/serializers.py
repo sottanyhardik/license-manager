@@ -5,13 +5,14 @@ from .models import (
     CompanyModel, PortModel, HSCodeModel,
     HeadSIONNormsModel, SionNormClassModel,
     SIONExportModel, SIONImportModel,
-    HSCodeDutyModel, ProductDescriptionModel, UnitPriceModel
+    HSCodeDutyModel, ProductDescriptionModel, UnitPriceModel, ItemNameModel
 )
 
 
 # ---- Base Audit Serializer ----
 class AuditSerializerMixin(serializers.ModelSerializer):
     """Mixin to make audit fields read-only automatically."""
+
     class Meta:
         read_only_fields = ("created_by", "modified_by", "created_on", "modified_on")
 
@@ -115,7 +116,6 @@ class SionNormClassNestedSerializer(AuditSerializerMixin):
         return instance
 
 
-
 # ---- HS Code Duty ----
 class HSCodeDutySerializer(AuditSerializerMixin):
     class Meta(AuditSerializerMixin.Meta):
@@ -136,4 +136,11 @@ class ProductDescriptionSerializer(AuditSerializerMixin):
 class UnitPriceSerializer(AuditSerializerMixin):
     class Meta(AuditSerializerMixin.Meta):
         model = UnitPriceModel
+        fields = "__all__"
+
+
+# ---- Item Name ----
+class ItemNameSerializer(AuditSerializerMixin):
+    class Meta(AuditSerializerMixin.Meta):
+        model = ItemNameModel
         fields = "__all__"

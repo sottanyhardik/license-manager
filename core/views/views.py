@@ -14,7 +14,7 @@ from ..models import (
     SIONImportModel,
     HSCodeDutyModel,
     ProductDescriptionModel,
-    UnitPriceModel,
+    UnitPriceModel, ItemNameModel,
 )
 from ..serializers import (
     CompanySerializer,
@@ -26,7 +26,7 @@ from ..serializers import (
     SIONImportSerializer,
     HSCodeDutySerializer,
     ProductDescriptionSerializer,
-    UnitPriceSerializer,
+    UnitPriceSerializer, ItemNameSerializer,
 )
 
 # Base API prefix used to construct select endpoints (adjust if needed).
@@ -357,4 +357,10 @@ UnitPriceViewSet = MasterViewSet.create(
     UnitPriceModel,
     UnitPriceSerializer,
     config=enhance_config_with_fk(UnitPriceModel, {"form_fields": ["name", "label"]}),
+)
+
+ItemNameViewSet = MasterViewSet.create(
+    ItemNameModel,
+    ItemNameSerializer,
+    config=enhance_config_with_fk(ItemNameModel, {"form_fields": ["name", "label"]}),
 )

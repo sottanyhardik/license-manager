@@ -1,0 +1,12 @@
+./setup/update_db_from_server.sh
+psql -U lmanagement -d lmanagement -c "DROP TABLE django_migrations;"
+python manage.py migrate contenttypes --fake
+python manage.py migrate admin --fake
+python manage.py migrate accounts 0001 --fake
+python manage.py migrate bill_of_entry 0002 --fake
+python manage.py migrate core 0002 --fake
+python manage.py migrate license 0002 --fake
+python manage.py migrate sessions --fake
+python manage.py makemigrations trade
+python manage.py migrate trade --fake
+python manage.py migrate

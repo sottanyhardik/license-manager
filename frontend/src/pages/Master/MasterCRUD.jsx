@@ -91,6 +91,7 @@ const MasterCRUD = ({endpoint, title}) => {
                 searchFields: [],
                 filterFields: [],
                 nestedFieldDefs: {},
+                field_meta: {},
             });
         }
     }, [endpoint]);
@@ -158,6 +159,7 @@ const MasterCRUD = ({endpoint, title}) => {
      * - Always append an `id` key for nested rows (even if id === null/""), so backend sees the key.
      * - For id values that are null/undefined/empty -> append empty string ("") (so key exists).
      * - For other keys: skip undefined/null to avoid sending noise.
+     * - Coerces primitives to proper strings for FormData append.
      */
     const appendNestedToFormData = (fd, nestedPayload) => {
         Object.entries(nestedPayload || {}).forEach(([section, arr]) => {
@@ -167,11 +169,9 @@ const MasterCRUD = ({endpoint, title}) => {
                     // Always include id keys (even if null/empty)
                     if (k === "id") {
                         if (v === undefined || v === null || v === "") {
-                            // append empty string so server receives the key explicitly
                             fd.append(keyName, "");
                         } else {
-                            // primitive or numeric id
-                            fd.append(keyName, v);
+                            fd.append(keyName, String(v));
                         }
                         return;
                     }
@@ -179,10 +179,17 @@ const MasterCRUD = ({endpoint, title}) => {
                     // For other fields: skip undefined/null
                     if (v === undefined || v === null) return;
 
-                    if (typeof v === "object" && !(v instanceof File) && !(v instanceof Blob)) {
+                    // Files
+                    if (v instanceof File || v instanceof Blob) {
+                        fd.append(keyName, v);
+                        return;
+                    }
+
+                    // primitives -> string
+                    if (typeof v === "object") {
                         fd.append(keyName, JSON.stringify(v));
                     } else {
-                        fd.append(keyName, v);
+                        fd.append(keyName, String(v));
                     }
                 });
             });
@@ -190,32 +197,102 @@ const MasterCRUD = ({endpoint, title}) => {
     };
 
     /**
+     * coerceValue
+     * - Try to coerce a value according to meta.field_meta or nestedFieldDefs.
+     * - Returns the coerced value (number, boolean, null, or original).
+     */
+    const coerceValue = (fieldName, value, section = null) => {
+        // undefined or null -> return as-is (caller may later drop)
+        if (value === undefined || value === null) return value;
+
+        // first check nested field defs if section provided
+        if (section && meta?.nestedFieldDefs && meta.nestedFieldDefs[section]) {
+            const defs = meta.nestedFieldDefs[section] || [];
+            const def = defs.find((d) => d.name === fieldName);
+            if (def && def.type) {
+                const t = String(def.type).toLowerCase();
+                if ((t === "number" || t === "integer") && typeof value === "string") {
+                    const n = Number(value);
+                    if (!Number.isNaN(n)) return n;
+                }
+                if (t === "boolean" && typeof value === "string") {
+                    const lower = value.trim().toLowerCase();
+                    if (lower === "true") return true;
+                    if (lower === "false") return false;
+                }
+                return value;
+            }
+        }
+
+        // fallback to meta.field_meta for top-level
+        const fm = meta?.field_meta || meta?.fieldMeta || {};
+        const entry = fm[fieldName] || fm[fieldName.replace(/_date$/, "")] || null;
+        if (entry && entry.type) {
+            const t = String(entry.type).toLowerCase();
+            if ((t === "number" || t === "integer") && typeof value === "string") {
+                const n = Number(value);
+                if (!Number.isNaN(n)) return n;
+            }
+            if (t === "boolean" && typeof value === "string") {
+                const lower = value.trim().toLowerCase();
+                if (lower === "true") return true;
+                if (lower === "false") return false;
+            }
+        }
+
+        // numeric-looking strings for id fields: leave to caller to normalize
+        return value;
+    };
+
+    /**
      * buildJsonPayload
      * - Merge top-level and nested payload for JSON path.
      * - Normalize nested item ids: convert empty-string ids ("") to null explicitly.
      * - Preserve numeric ids as-is.
+     * - Coerce types for numeric/boolean fields using meta.
      */
     const buildJsonPayload = (formDataObj, nestedPayload) => {
         // shallow copy top-level fields
         const out = {...formDataObj};
 
-        // deep-ish clone nested payload and normalize ids
+        // coerce top-level fields according to meta.field_meta when possible
+        Object.keys(out).forEach((k) => {
+            // skip files or complex objects handled separately
+            const v = out[k];
+            if (v === undefined) return;
+            if (v === null) {
+                out[k] = null;
+                return;
+            }
+            // don't convert objects (except primitive wrappers)
+            if (typeof v === "object" && !(v instanceof Date) && !(v instanceof String)) return;
+
+            out[k] = coerceValue(k, v, null);
+        });
+
+        // deep-ish clone nested payload and normalize ids and coerce nested field types
         Object.entries(nestedPayload || {}).forEach(([section, arr]) => {
             out[section] = (arr || []).map((item) => {
                 if (!item || typeof item !== "object") return item;
                 const copy = {...item};
-                // normalize id: "" -> null
+                // normalize id: "" -> null; numeric string -> number
                 if ("id" in copy) {
-                    if (copy.id === "" || copy.id === undefined) copy.id = null;
-                    // if id is string numeric, try to convert to number
-                    if (typeof copy.id === "string" && copy.id.trim() !== "") {
+                    if (copy.id === "" || copy.id === undefined) {
+                        copy.id = null;
+                    } else if (typeof copy.id === "string") {
                         const num = Number(copy.id);
-                        if (!Number.isNaN(num)) copy.id = num;
+                        copy.id = !Number.isNaN(num) ? num : copy.id;
                     }
-                } else {
-                    // ensure id field exists explicitly (null) if you want - optional:
-                    // copy.id = null;
                 }
+                // coerce other fields using nestedFieldDefs or field_meta when available
+                Object.keys(copy).forEach((fld) => {
+                    if (fld === "id") return;
+                    const val = copy[fld];
+                    if (val === undefined || val === null) return;
+                    // Files / objects remain as-is (server may expect id or nested objects)
+                    if (val instanceof File || typeof val === "object") return;
+                    copy[fld] = coerceValue(fld, val, section);
+                });
                 return copy;
             });
         });
@@ -256,10 +333,14 @@ const MasterCRUD = ({endpoint, title}) => {
                 Object.entries(formDataObj || {}).forEach(([k, v]) => {
                     if (v === undefined || v === null) return;
                     if (fileFieldsFromForm.includes(k)) return; // handled below
-                    if (typeof v === "object" && !(v instanceof File) && !(v instanceof Blob)) {
+                    if (v instanceof File || v instanceof Blob) {
+                        fd.append(k, v);
+                        return;
+                    }
+                    if (typeof v === "object") {
                         fd.append(k, JSON.stringify(v));
                     } else {
-                        fd.append(k, v);
+                        fd.append(k, String(v));
                     }
                 });
 

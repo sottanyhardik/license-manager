@@ -3,9 +3,10 @@ Django settings for lmanagement project (cleaned + modernized).
 For Django 5.x with DRF + JWT + Celery + Redis + Vite/React frontend.
 """
 
-from pathlib import Path
-from datetime import timedelta
 import os
+from datetime import timedelta
+from pathlib import Path
+
 from django.urls import reverse_lazy
 
 # ---------------------------------------------------------------------
@@ -34,6 +35,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
 
     # Third-party
+    "django_extensions",
     "rest_framework",
     "rest_framework.authtoken",
     "django_filters",
@@ -46,6 +48,7 @@ INSTALLED_APPS = [
     "bill_of_entry",
     "allotment",
     "accounts",
+    "trade",
 ]
 
 # ---------------------------------------------------------------------
@@ -205,6 +208,7 @@ CORS_ALLOW_CREDENTIALS = True
 try:
     # import default headers from corsheaders if available
     from corsheaders.defaults import default_headers
+
     CORS_ALLOW_HEADERS = list(default_headers) + [
         "X-CSRFToken",
         "x-csrftoken",

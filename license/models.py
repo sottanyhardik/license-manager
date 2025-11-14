@@ -8,8 +8,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Dict, Any, Optional
 
-from django.conf import settings
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, MinValueValidator
 from django.db import models
 from django.db.models import IntegerField, Count, Sum
 from django.db.models.functions import Coalesce
@@ -115,7 +114,12 @@ class LicenseDetailsModel(AuditModel):
     is_au = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
-    balance_cif = models.FloatField(default=0.0)  # stored field; the computed source of truth is get_balance_cif
+    balance_cif = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
 
     export_item = models.CharField(max_length=255, null=True, blank=True)
     is_incomplete = models.BooleanField(default=False)
@@ -126,8 +130,18 @@ class LicenseDetailsModel(AuditModel):
 
     fob = models.IntegerField(default=0, null=True, blank=True)
 
-    billing_rate = models.FloatField(default=0)
-    billing_amount = models.FloatField(default=0)
+    billing_rate = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    billing_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
 
     admin_search_fields = ("license_number",)
 
@@ -748,17 +762,57 @@ class LicenseExportItemModel(models.Model):
     )
 
     duty_type = models.CharField(max_length=255, default="Basic")
-    net_quantity = models.FloatField(default=0)
-    old_quantity = models.FloatField(default=0)
+    net_quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    old_quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default=KG)
 
-    fob_fc = models.FloatField(default=0)
-    fob_inr = models.FloatField(default=0)
-    fob_exchange_rate = models.FloatField(default=0)
+    fob_fc = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    fob_inr = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    fob_exchange_rate = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     currency = models.CharField(choices=CURRENCY_CHOICES, default=USD, max_length=5)
-    value_addition = models.FloatField(default=15)
-    cif_fc = models.FloatField(default=0)
-    cif_inr = models.FloatField(default=0)
+    value_addition = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    cif_fc = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    cif_inr = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
 
     def __str__(self) -> str:
         return getattr(self.item, "name", "") or ""
@@ -1193,19 +1247,59 @@ class LicensePurchase(AuditModel):
 
     # amount-based fields
     amount_source = models.CharField(max_length=10, choices=AMOUNT_SOURCE_CHOICES, default=SRC_FOB_INR)
-    fob_inr = models.FloatField(default=0)  # optional
-    cif_inr = models.FloatField(default=0)  # optional
-    cif_usd = models.FloatField(default=0)  # optional
-    exchange_rate = models.FloatField(default=0)  # used with CIF_USD
-    markup_pct = models.FloatField(default=0)  # ❌ no discounts, only markup %
+    fob_inr = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )  # optional
+    cif_inr = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )  # optional
+    cif_usd = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )  # optional
+    exchange_rate = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )  # used with CIF_USD
+    markup_pct = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )  # ❌ no discounts, only markup %
 
     # quantity-based (single product)
     product_name = models.CharField(max_length=255, null=True, blank=True)
-    quantity_kg = models.FloatField(default=0)
-    rate_inr = models.FloatField(default=0)
+    quantity_kg = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    rate_inr = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
 
     # result
-    amount_inr = models.FloatField(default=0)
+    amount_inr = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
 
     class Meta:
         ordering = ["-created_on"]

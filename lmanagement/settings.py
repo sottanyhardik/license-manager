@@ -43,11 +43,11 @@ INSTALLED_APPS = [
     "whitenoise.runserver_nostatic",
 
     # Local apps
+    "accounts",
     "core",
     "license",
     "bill_of_entry",
     "allotment",
-    "accounts",
     "trade",
 ]
 

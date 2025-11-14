@@ -1,10 +1,12 @@
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Sum
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
-
 
 # -----------------------------
 # Constants
@@ -36,8 +38,18 @@ class AllotmentModel(models.Model):
         on_delete=models.CASCADE
     )
     type = models.CharField(max_length=2, choices=ROW_TYPE, default=ALLOTMENT)
-    required_quantity = models.FloatField(default=0)
-    unit_value_per_unit = models.FloatField(default=0)
+    required_quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    unit_value_per_unit = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     item_name = models.CharField(max_length=255)
     contact_person = models.CharField(max_length=255, null=True, blank=True)
     contact_number = models.CharField(max_length=255, null=True, blank=True)
@@ -113,9 +125,24 @@ class AllotmentItems(models.Model):
         null=True,
         blank=True
     )
-    cif_inr = models.FloatField(default=0.0)
-    cif_fc = models.FloatField(default=0.0)
-    qty = models.FloatField(default=0.0)
+    cif_inr = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    cif_fc = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    qty = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     is_boe = models.BooleanField(default=False)
 
     class Meta:

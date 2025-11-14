@@ -11,11 +11,11 @@ Features:
 Drop this file into your app (e.g. core/models.py), run `makemigrations` and `migrate`,
 then run tests and review admin displays.
 """
-
+from decimal import Decimal
 from threading import local
 
 from django.conf import settings
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils.functional import cached_property
@@ -166,7 +166,12 @@ class PortModel(AuditModel):
 
 class ItemHeadModel(AuditModel):
     name = models.CharField(max_length=255, unique=True)
-    unit_rate = models.FloatField(default=0)
+    unit_rate = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     is_restricted = models.BooleanField(default=False)
     dict_key = models.CharField(max_length=255, null=True, blank=True)
 
@@ -191,7 +196,12 @@ class ItemNameModel(AuditModel):
 class HSCodeModel(AuditModel):
     hs_code = models.CharField(max_length=8, unique=True)
     product_description = models.TextField(null=True, blank=True)
-    unit_price = models.FloatField(default=0)
+    unit_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     basic_duty = models.CharField(max_length=225, null=True, blank=True)
     unit = models.CharField(max_length=255, null=True, blank=True)
     policy = models.CharField(max_length=255, null=True, blank=True)
@@ -227,7 +237,12 @@ class SionNormClassModel(AuditModel):
 class SIONExportModel(models.Model):
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='export_norm')
     description = models.CharField(max_length=255, null=True, blank=True)
-    quantity = models.FloatField(default=0.0)
+    quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     unit = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
@@ -240,7 +255,12 @@ class SIONImportModel(models.Model):
     hsn_code = models.ForeignKey(HSCodeModel, on_delete=models.SET_NULL, related_name='sion_imports', null=True,
                                  blank=True)
     description = models.CharField(max_length=255, null=True, blank=True)
-    quantity = models.FloatField(default=0.0)
+    quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     unit = models.CharField(max_length=255, null=True, blank=True)
     condition = models.CharField(max_length=255, null=True, blank=True)
 
@@ -253,15 +273,60 @@ class SIONImportModel(models.Model):
 
 class HSCodeDutyModel(AuditModel):
     hs_code = models.CharField(max_length=8, unique=True)
-    basic_custom_duty = models.FloatField(default=0)
-    additional_duty_of_customs = models.FloatField(default=0)
-    custom_health_CESS = models.FloatField(default=0)
-    social_welfare_surcharge = models.FloatField(default=0)
-    additional_CVD = models.FloatField(default=0)
-    IGST_levy = models.FloatField(default=0)
-    compensation_cess = models.FloatField(default=0)
-    total_duty = models.FloatField(default=0)
-    sample_on_lakh = models.FloatField(default=0)
+    basic_custom_duty = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    additional_duty_of_customs = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    custom_health_CESS = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    social_welfare_surcharge = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    additional_CVD = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    IGST_levy = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    compensation_cess = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    total_duty = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    sample_on_lakh = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     is_fetch = models.BooleanField(default=False)
     is_fetch_xls = models.BooleanField(default=False)
     list_filter = ('is_fetch', 'is_fetch_xls')
@@ -294,7 +359,12 @@ class TransferLetterModel(AuditModel):
 
 class UnitPriceModel(AuditModel):
     name = models.CharField(max_length=255)
-    unit_price = models.FloatField(default=0)
+    unit_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
     label = models.CharField(max_length=255, default='')
 
     def __str__(self):

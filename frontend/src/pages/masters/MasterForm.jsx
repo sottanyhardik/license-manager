@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react";
-import {useNavigate, useParams} from "react-router-dom";
+import {useNavigate, useParams, useLocation} from "react-router-dom";
 import api from "../../api/axios";
 import NestedFieldArray from "./NestedFieldArray";
 import HybridSelect from "../../components/HybridSelect";
@@ -8,12 +8,16 @@ import HybridSelect from "../../components/HybridSelect";
  * Generic Master Form for Create/Edit
  *
  * URL Pattern:
- * - Create: /masters/:entity/create
- * - Edit: /masters/:entity/:id/edit
+ * - Create: /masters/:entity/create OR /licenses/create
+ * - Edit: /masters/:entity/:id/edit OR /licenses/:id/edit
  */
 export default function MasterForm() {
     const {entity, id} = useParams();
+    const location = useLocation();
     const navigate = useNavigate();
+
+    // Determine the actual entity name - either from params or from path
+    const entityName = entity || (location.pathname.includes('/licenses') ? 'licenses' : null);
     const isEdit = Boolean(id);
 
     const [formData, setFormData] = useState({});
@@ -24,15 +28,18 @@ export default function MasterForm() {
 
     // Fetch metadata and existing data
     useEffect(() => {
+        if (!entityName) return;
         fetchMetadata();
         if (isEdit) {
             fetchRecord();
         }
-    }, [entity, id]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [entityName, id]);
 
     const fetchMetadata = async () => {
         try {
-            const {data} = await api.options(`/masters/${entity}/`);
+            const apiPath = entityName === 'licenses' ? '/licenses/' : `/masters/${entityName}/`;
+            const {data} = await api.options(apiPath);
             setMetadata({
                 form_fields: data.form_fields || [],
                 nested_field_defs: data.nested_field_defs || {},
@@ -46,7 +53,8 @@ export default function MasterForm() {
     const fetchRecord = async () => {
         setLoading(true);
         try {
-            const {data} = await api.get(`/masters/${entity}/${id}/`);
+            const apiPath = entityName === 'licenses' ? `/licenses/${id}/` : `/masters/${entityName}/${id}/`;
+            const {data} = await api.get(apiPath);
             setFormData(data);
         } catch (err) {
             setError(err.response?.data?.detail || "Failed to load record");
@@ -68,12 +76,14 @@ export default function MasterForm() {
         setError("");
 
         try {
+            const apiPath = entityName === 'licenses' ? `/licenses/` : `/masters/${entityName}/`;
             if (isEdit) {
-                await api.patch(`/masters/${entity}/${id}/`, formData);
+                await api.patch(`${apiPath}${id}/`, formData);
             } else {
-                await api.post(`/masters/${entity}/`, formData);
+                await api.post(apiPath, formData);
             }
-            navigate(`/masters/${entity}`);
+            const redirectPath = entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`;
+            navigate(redirectPath);
         } catch (err) {
             setError(
                 err.response?.data?.detail ||
@@ -166,7 +176,7 @@ export default function MasterForm() {
         );
     };
 
-    const entityTitle = entity
+    const entityTitle = entityName
         ?.split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
@@ -201,22 +211,31 @@ export default function MasterForm() {
                             )}
 
                             <form onSubmit={handleSubmit}>
-                                {/* Regular Fields */}
-                                {metadata.form_fields?.map((field) => {
-                                    // Skip nested fields (they're rendered separately below)
-                                    if (metadata.nested_field_defs?.[field]) {
-                                        return null;
-                                    }
+                                {/* Regular Fields - 3 columns layout */}
+                                <div className="row">
+                                    {metadata.form_fields?.map((field) => {
+                                        // Skip nested fields (they're rendered separately below)
+                                        if (metadata.nested_field_defs?.[field]) {
+                                            return null;
+                                        }
 
-                                    return (
-                                        <div key={field} className="mb-3">
-                                            <label className="form-label text-capitalize">
-                                                {field.replace(/_/g, " ")}
-                                            </label>
-                                            {renderField(field)}
-                                        </div>
-                                    );
-                                })}
+                                        // Full width for textarea fields
+                                        const isTextarea = field.includes("address") || field.includes("description") ||
+                                                          field.includes("note") || field.includes("comment") ||
+                                                          field.includes("condition") || field.includes("restriction");
+
+                                        const colClass = isTextarea ? "col-12" : "col-md-4";
+
+                                        return (
+                                            <div key={field} className={`${colClass} mb-3`}>
+                                                <label className="form-label text-capitalize">
+                                                    {field.replace(/_/g, " ")}
+                                                </label>
+                                                {renderField(field)}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
 
                                 {/* Nested Fields */}
                                 {Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
@@ -251,7 +270,7 @@ export default function MasterForm() {
                                     <button
                                         type="button"
                                         className="btn btn-secondary"
-                                        onClick={() => navigate(`/masters/${entity}`)}
+                                        onClick={() => navigate(entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`)}
                                         disabled={saving}
                                     >
                                         Cancel

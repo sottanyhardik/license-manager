@@ -51,13 +51,40 @@ export default function App() {
                             }
                         />
 
+                        {/* License CRUD Routes */}
                         <Route
                             path="/licenses"
                             element={
                                 <ProtectedRoute>
                                     <RoleRoute roles={["admin", "manager"]}>
                                         <AdminLayout>
-                                            <LicensePage/>
+                                            <MasterList/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/licenses/create"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterForm/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/licenses/:id/edit"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterForm/>
                                         </AdminLayout>
                                     </RoleRoute>
                                 </ProtectedRoute>

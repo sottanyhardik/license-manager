@@ -43,6 +43,7 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
         if (field.fk_endpoint || field.endpoint) {
             const endpoint = field.fk_endpoint || field.endpoint;
             const labelField = field.label_field || "name";
+            const isMulti = field.type === "fk_multi";
 
             // Custom label formatter
             const formatLabel = (opt) => {
@@ -69,6 +70,7 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                     formatLabel={formatLabel}
                     placeholder={`Select ${field.label || field.name}`}
                     className="react-select-sm"
+                    isMulti={isMulti}
                 />
             );
         }
@@ -117,7 +119,7 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
 
     return (
         <div className="mb-4">
-            <div className="d-flex justify-content-between align-items-center mb-2">
+            <div className="d-flex justify-content-between align-items-center mb-3">
                 <label className="form-label fw-bold text-capitalize mb-0">
                     {label}
                 </label>
@@ -127,58 +129,57 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                     onClick={handleAdd}
                 >
                     <i className="bi bi-plus-circle me-1"></i>
-                    Add Row
+                    Add Item
                 </button>
             </div>
 
             {value.length === 0 ? (
                 <div className="alert alert-info">
-                    No items added. Click "Add Row" to add a new item.
+                    No items added. Click "Add Item" to add a new item.
                 </div>
             ) : (
-                <div className="card">
-                    <div className="card-body p-0">
-                        <div className="table-responsive">
-                            <table className="table table-sm table-bordered mb-0">
-                                <thead className="table-light">
-                                    <tr>
-                                        {fields
-                                            .filter(f => f.name !== "id")
-                                            .map((field) => (
-                                                <th key={field.name}>
-                                                    {field.label || field.name}
-                                                    {field.required && <span className="text-danger">*</span>}
-                                                </th>
-                                            ))}
-                                        <th style={{width: "80px"}}>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {value.map((item, index) => (
-                                        <tr key={index}>
-                                            {fields
-                                                .filter(f => f.name !== "id")
-                                                .map((field) => (
-                                                    <td key={field.name}>
-                                                        {renderNestedField(field, item, index)}
-                                                    </td>
-                                                ))}
-                                            <td className="text-center">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm btn-outline-danger"
-                                                    onClick={() => handleRemove(index)}
-                                                    title="Remove"
-                                                >
-                                                    <i className="bi bi-trash"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                <div className="nested-items-container">
+                    {value.map((item, index) => (
+                        <div key={index} className="card mb-3">
+                            <div className="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                                <h6 className="mb-0">Item #{index + 1}</h6>
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-danger"
+                                    onClick={() => handleRemove(index)}
+                                    title="Remove this item"
+                                >
+                                    <i className="bi bi-trash me-1"></i>
+                                    Remove
+                                </button>
+                            </div>
+                            <div className="card-body">
+                                <div className="row">
+                                    {fields
+                                        .filter(f => f.name !== "id")
+                                        .map((field) => {
+                                            // Determine column width based on field type
+                                            const isTextarea = field.type === "textarea" ||
+                                                             field.name.includes("description") ||
+                                                             field.name.includes("note") ||
+                                                             field.name.includes("comment");
+
+                                            const colClass = isTextarea ? "col-12" : "col-md-4";
+
+                                            return (
+                                                <div key={field.name} className={`${colClass} mb-3`}>
+                                                    <label className="form-label small">
+                                                        {field.label || field.name}
+                                                        {field.required && <span className="text-danger">*</span>}
+                                                    </label>
+                                                    {renderNestedField(field, item, index)}
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    ))}
                 </div>
             )}
         </div>

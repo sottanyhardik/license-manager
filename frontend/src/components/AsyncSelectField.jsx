@@ -70,7 +70,13 @@ export default function AsyncSelectField({
 
         if (isMulti) {
             // For multi-select, val should be an array of IDs
-            const ids = Array.isArray(val) ? val : [val];
+            let ids = Array.isArray(val) ? val : [val];
+
+            // Handle comma-separated string values
+            if (ids.length === 1 && typeof ids[0] === 'string' && ids[0].includes(',')) {
+                ids = ids[0].split(',').map(id => id.trim()).filter(id => id);
+            }
+
             const options = [];
 
             for (const id of ids) {
@@ -88,12 +94,15 @@ export default function AsyncSelectField({
 
     const fetchOptionById = async (id) => {
         try {
+            // Parse ID if it's a number string
+            const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+
             // Check if option exists in defaultOptions first
-            const existing = defaultOptions.find(opt => opt.value === id);
+            const existing = defaultOptions.find(opt => opt.value === numId || opt.value === id);
             if (existing) return existing;
 
             // Otherwise fetch from API
-            const {data} = await api.get(`${endpoint}${id}/`);
+            const {data} = await api.get(`${endpoint}${numId}/`);
             return formatOption(data);
         } catch (err) {
             console.error(`Error fetching option ${id}:`, err);

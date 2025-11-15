@@ -1,5 +1,5 @@
 import {useEffect, useState, useCallback} from "react";
-import {Link, useParams} from "react-router-dom";
+import {Link, useParams, useLocation} from "react-router-dom";
 import api from "../../api/axios";
 import AdvancedFilter from "../../components/AdvancedFilter";
 import DataPagination from "../../components/DataPagination";
@@ -9,7 +9,7 @@ import AccordionTable from "../../components/AccordionTable";
 /**
  * Generic Master List Page
  *
- * URL Pattern: /masters/:entity (e.g., /masters/companies)
+ * URL Pattern: /masters/:entity (e.g., /masters/companies) OR /licenses
  *
  * Fetches metadata from backend and displays:
  * - Filters
@@ -18,6 +18,10 @@ import AccordionTable from "../../components/AccordionTable";
  */
 export default function MasterList() {
     const {entity} = useParams();
+    const location = useLocation();
+
+    // Determine the actual entity name - either from params or from path
+    const entityName = entity || (location.pathname.startsWith('/licenses') ? 'licenses' : null);
     const [data, setData] = useState([]);
     const [metadata, setMetadata] = useState({});
     const [loading, setLoading] = useState(true);
@@ -44,7 +48,9 @@ export default function MasterList() {
                 ...filters
             };
 
-            const {data: response} = await api.get(`/masters/${entity}/`, {params});
+            // Determine API endpoint - licenses go to /api/licenses, masters go to /api/masters/:entity
+            const apiPath = entityName === 'licenses' ? `/licenses/` : `/masters/${entityName}/`;
+            const {data: response} = await api.get(apiPath, {params});
 
             setData(response.results || []);
             setMetadata({
@@ -71,15 +77,16 @@ export default function MasterList() {
         } finally {
             setLoading(false);
         }
-    }, [entity]);
+    }, [entityName]);
 
-    // Load data only when entity changes
+    // Load data only when entityName changes
     useEffect(() => {
+        if (!entityName) return;
         setCurrentPage(1);
         setFilterParams({});
         fetchData(1, 25, {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [entity]);
+    }, [entityName]);
 
     const handleFilterChange = (filters) => {
         setFilterParams(filters);
@@ -104,7 +111,8 @@ export default function MasterList() {
         }
 
         try {
-            await api.delete(`/masters/${entity}/${item.id}/`);
+            const apiPath = entityName === 'licenses' ? `/licenses/${item.id}/` : `/masters/${entityName}/${item.id}/`;
+            await api.delete(apiPath);
             fetchData(currentPage, pageSize, filterParams);
         } catch (err) {
             alert(err.response?.data?.detail || "Failed to delete record");
@@ -118,7 +126,8 @@ export default function MasterList() {
                 export: format
             };
 
-            const response = await api.get(`/masters/${entity}/export/`, {
+            const apiPath = entityName === 'licenses' ? `/licenses/export/` : `/masters/${entityName}/export/`;
+            const response = await api.get(apiPath, {
                 params,
                 responseType: 'blob'
             });
@@ -127,7 +136,7 @@ export default function MasterList() {
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `${entity}_${new Date().toISOString().split('T')[0]}.${format}`);
+            link.setAttribute('download', `${entityName}_${new Date().toISOString().split('T')[0]}.${format}`);
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -136,7 +145,7 @@ export default function MasterList() {
         }
     };
 
-    const entityTitle = entity
+    const entityTitle = entityName
         ?.split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
@@ -164,7 +173,7 @@ export default function MasterList() {
                         PDF
                     </button>
                     <Link
-                        to={`/masters/${entity}/create`}
+                        to={entityName === 'licenses' ? '/licenses/create' : `/masters/${entityName}/create`}
                         className="btn btn-primary"
                     >
                         <i className="bi bi-plus-circle me-2"></i>
@@ -196,13 +205,13 @@ export default function MasterList() {
             <div className="card">
                 <div className="card-body">
                     {/* Use AccordionTable for SION classes, regular DataTable for others */}
-                    {entity === "sion-classes" ? (
+                    {entityName === "sion-classes" ? (
                         <AccordionTable
                             data={data}
                             columns={metadata.list_display || []}
                             loading={loading}
                             onDelete={handleDelete}
-                            basePath={`/masters/${entity}`}
+                            basePath={`/masters/${entityName}`}
                         />
                     ) : (
                         <DataTable
@@ -211,7 +220,7 @@ export default function MasterList() {
                             loading={loading}
                             onEdit={() => {}}
                             onDelete={handleDelete}
-                            basePath={`/masters/${entity}`}
+                            basePath={entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`}
                         />
                     )}
 

@@ -5,7 +5,7 @@ from .models import (
     CompanyModel, PortModel, HSCodeModel,
     HeadSIONNormsModel, SionNormClassModel,
     SIONExportModel, SIONImportModel,
-    HSCodeDutyModel, ProductDescriptionModel, UnitPriceModel, ItemNameModel
+    HSCodeDutyModel, ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel
 )
 
 
@@ -139,8 +139,17 @@ class UnitPriceSerializer(AuditSerializerMixin):
         fields = "__all__"
 
 
+# ---- Item Head ----
+class ItemHeadSerializer(AuditSerializerMixin):
+    class Meta(AuditSerializerMixin.Meta):
+        model = ItemHeadModel
+        fields = "__all__"
+
+
 # ---- Item Name ----
 class ItemNameSerializer(AuditSerializerMixin):
+    head_name = serializers.CharField(read_only=True, required=False)
+
     class Meta(AuditSerializerMixin.Meta):
         model = ItemNameModel
         fields = "__all__"

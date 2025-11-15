@@ -13,7 +13,9 @@ from ..models import (
     SIONImportModel,
     HSCodeDutyModel,
     ProductDescriptionModel,
-    UnitPriceModel, ItemNameModel,
+    UnitPriceModel,
+    ItemNameModel,
+    ItemHeadModel,
 )
 from ..serializers import (
     CompanySerializer,
@@ -25,7 +27,9 @@ from ..serializers import (
     SIONImportSerializer,
     HSCodeDutySerializer,
     ProductDescriptionSerializer,
-    UnitPriceSerializer, ItemNameSerializer,
+    UnitPriceSerializer,
+    ItemNameSerializer,
+    ItemHeadSerializer,
 )
 
 # Base API prefix used to construct select endpoints (adjust if needed).
@@ -377,8 +381,38 @@ UnitPriceViewSet = MasterViewSet.create(
     config=enhance_config_with_fk(UnitPriceModel, {"form_fields": ["name", "label"]}),
 )
 
+ItemHeadViewSet = MasterViewSet.create(
+    ItemHeadModel,
+    ItemHeadSerializer,
+    config=enhance_config_with_fk(
+        ItemHeadModel,
+        {
+            "search": ["name"],
+            "filter": {
+                "name": {"type": "icontains"},
+            },
+            "list_display": ["name", "unit_rate", "is_restricted"],
+            "form_fields": ["name", "unit_rate", "is_restricted", "dict_key"],
+        }
+    ),
+)
+
 ItemNameViewSet = MasterViewSet.create(
     ItemNameModel,
     ItemNameSerializer,
-    config=enhance_config_with_fk(ItemNameModel, {"form_fields": ["name", "label"]}),
+    config=enhance_config_with_fk(
+        ItemNameModel,
+        {
+            "search": ["name", "head__name"],
+            "filter": {
+                "name": {"type": "icontains"},
+                "head__name": {"type": "icontains"},
+            },
+            "list_display": ["head__name", "name", "unit_price"],
+            "form_fields": ["head", "name", "unit_price", "is_active"],
+            "fk_endpoint_overrides": {
+                "head": "/masters/item-heads/"
+            }
+        }
+    ),
 )

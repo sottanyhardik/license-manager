@@ -78,11 +78,15 @@ export default function DataTable({
                 <tbody>
                     {data.map((item, index) => (
                         <tr key={item.id || index}>
-                            {columns.map((column) => (
-                                <td key={column}>
-                                    {formatValue(item[column])}
-                                </td>
-                            ))}
+                            {columns.map((column) => {
+                                // Convert head__name to head_name for annotated fields
+                                const fieldKey = column.replace(/__/g, '_');
+                                return (
+                                    <td key={column}>
+                                        {formatValue(item[fieldKey] || item[column])}
+                                    </td>
+                                );
+                            })}
                             <td className="text-center">
                                 <div className="btn-group btn-group-sm">
                                     {onEdit && (

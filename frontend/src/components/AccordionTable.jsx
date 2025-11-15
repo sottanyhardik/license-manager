@@ -110,17 +110,23 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                         <i className={`bi bi-chevron-${isExpanded ? "down" : "right"} fs-6`}></i>
                                     </button>
                                 </td>
-                                {columns.map((col) => (
-                                    <td key={col}>
-                                        {col === "id" ? (
-                                            <Link to={`${basePath}/${item.id}/edit`}>
-                                                {item[col] || "-"}
-                                            </Link>
-                                        ) : (
-                                            item[col] || "-"
-                                        )}
-                                    </td>
-                                ))}
+                                {columns.map((col) => {
+                                    // Convert head__name to head_name for annotated fields
+                                    const fieldKey = col.replace(/__/g, '_');
+                                    const value = item[fieldKey] || item[col];
+
+                                    return (
+                                        <td key={col}>
+                                            {col === "id" ? (
+                                                <Link to={`${basePath}/${item.id}/edit`}>
+                                                    {value || "-"}
+                                                </Link>
+                                            ) : (
+                                                value || "-"
+                                            )}
+                                        </td>
+                                    );
+                                })}
                                 <td>
                                     <div className="btn-group btn-group-sm">
                                         <Link

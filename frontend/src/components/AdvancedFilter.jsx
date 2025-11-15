@@ -1,4 +1,4 @@
-import {useState, useEffect, useCallback} from "react";
+import {useState, useEffect} from "react";
 
 /**
  * Advanced DataFilter Component with support for:
@@ -17,6 +17,30 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
     const [searchTerm, setSearchTerm] = useState("");
     const [filterValues, setFilterValues] = useState({});
 
+    // Auto-apply filters with debounce
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            const params = {};
+
+            // Add search
+            if (searchTerm) {
+                params.search = searchTerm;
+            }
+
+            // Process filter values
+            Object.entries(filterValues).forEach(([key, value]) => {
+                if (value !== null && value !== undefined && value !== "") {
+                    params[key] = value;
+                }
+            });
+
+            onFilterChange(params);
+        }, 800); // 800ms debounce
+
+        return () => clearTimeout(timeoutId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchTerm, filterValues]);
+
     const handleSearchChange = (e) => {
         setSearchTerm(e.target.value);
     };
@@ -28,28 +52,9 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
         }));
     };
 
-    const handleApplyFilters = () => {
-        const params = {};
-
-        // Add search
-        if (searchTerm) {
-            params.search = searchTerm;
-        }
-
-        // Process filter values
-        Object.entries(filterValues).forEach(([key, value]) => {
-            if (value !== null && value !== undefined && value !== "") {
-                params[key] = value;
-            }
-        });
-
-        onFilterChange(params);
-    };
-
     const handleResetFilters = () => {
         setSearchTerm("");
         setFilterValues({});
-        onFilterChange({});
     };
 
     const renderFilterField = (fieldName, config) => {
@@ -217,14 +222,7 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                     )}
                 </div>
 
-                <div className="mt-3 d-flex gap-2">
-                    <button
-                        className="btn btn-primary"
-                        onClick={handleApplyFilters}
-                    >
-                        <i className="bi bi-funnel-fill me-1"></i>
-                        Apply Filters
-                    </button>
+                <div className="mt-3 d-flex justify-content-between align-items-center">
                     <button
                         className="btn btn-secondary"
                         onClick={handleResetFilters}
@@ -232,6 +230,10 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                         <i className="bi bi-x-circle me-1"></i>
                         Clear Filters
                     </button>
+                    <small className="text-muted">
+                        <i className="bi bi-lightning-charge me-1"></i>
+                        Filters apply automatically as you type
+                    </small>
                 </div>
             </div>
         </div>

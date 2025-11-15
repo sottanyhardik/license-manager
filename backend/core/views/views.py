@@ -301,6 +301,7 @@ example_nested_field_defs = {
     ],
     "import_norm": [
         {"name": "id", "type": "integer", "label": "ID", "required": True},
+        {"name": "serial_number", "type": "number", "label": "Serial Number", "required": True},
         {"name": "description", "type": "string", "label": "Description", "required": True},
         {"name": "quantity", "type": "number", "label": "Quantity", "required": True},
         {"name": "unit", "type": "string", "label": "Unit", "required": True},

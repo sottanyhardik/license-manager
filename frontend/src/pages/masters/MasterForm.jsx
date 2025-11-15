@@ -27,6 +27,7 @@ export default function MasterForm() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
+    const [updatedFields, setUpdatedFields] = useState({}); // Track updated fields for highlighting
 
     // Helper function to parse date from YYYY-MM-DD to Date object
     const parseDate = (dateString) => {
@@ -107,6 +108,108 @@ export default function MasterForm() {
             ...prev,
             ...updates
         }));
+    };
+
+    const handleFetchImports = async (exportIndex, exportItem) => {
+        // Validate required fields
+        if (!exportItem.norm_class) {
+            alert("Please select a Norm Class first");
+            return;
+        }
+
+        if (!exportItem.start_serial_number) {
+            alert("Please enter Start Serial Number first");
+            return;
+        }
+
+        try {
+            // Fetch the SION norm class with its import items
+            const {data: sionData} = await api.get(`/masters/sion-classes/${exportItem.norm_class}/`);
+
+            if (!sionData.import_norm || sionData.import_norm.length === 0) {
+                alert("No import items found for this SION norm class");
+                return;
+            }
+
+            // Get start serial number from export item (form field only, not saved)
+            const startSerial = parseInt(exportItem.start_serial_number) || 0;
+            const existingImports = formData.import_license || [];
+
+            // Track existing serial numbers to prevent duplicates
+            const existingSerialNumbers = new Set(existingImports.map(item => item.serial_number));
+
+            const updatedImports = [...existingImports];
+            const newlyUpdatedFields = {};
+            let addedCount = 0;
+            let updatedCount = 0;
+
+            // Process each SION import item
+            sionData.import_norm.forEach((sionImport) => {
+                const targetSerialNumber = startSerial + (sionImport.serial_number || 0);
+
+                // Check if this serial number already exists
+                const existingIndex = existingImports.findIndex(item => item.serial_number === targetSerialNumber);
+
+                if (existingIndex >= 0) {
+                    // Serial number exists - only update empty fields
+                    const existing = existingImports[existingIndex];
+                    let fieldsUpdated = false;
+
+                    // Update hs_code if empty
+                    if (!existing.hs_code && sionImport.hsn_code) {
+                        updatedImports[existingIndex].hs_code = sionImport.hsn_code;
+                        fieldsUpdated = true;
+                        newlyUpdatedFields[`import_license.${existingIndex}.hs_code`] = true;
+                    }
+
+                    // Update description if empty
+                    if (!existing.description && sionImport.description) {
+                        updatedImports[existingIndex].description = sionImport.description;
+                        fieldsUpdated = true;
+                        newlyUpdatedFields[`import_license.${existingIndex}.description`] = true;
+                    }
+
+                    if (fieldsUpdated) updatedCount++;
+                } else if (!existingSerialNumbers.has(targetSerialNumber)) {
+                    // Serial number doesn't exist - add new item
+                    const newIndex = updatedImports.length;
+                    const newItem = {
+                        serial_number: targetSerialNumber,
+                        hs_code: sionImport.hsn_code || null,
+                        description: sionImport.description || "",
+                        duty_type: sionImport.duty_type || "Basic",
+                        quantity: sionImport.quantity || 0,
+                        unit: sionImport.unit || "KG",
+                        cif_fc: 0,
+                        cif_inr: 0,
+                        items: []
+                    };
+
+                    updatedImports.push(newItem);
+                    existingSerialNumbers.add(targetSerialNumber);
+
+                    // Mark all fields as updated for new items
+                    Object.keys(newItem).forEach(key => {
+                        newlyUpdatedFields[`import_license.${newIndex}.${key}`] = true;
+                    });
+
+                    addedCount++;
+                }
+            });
+
+            // Update form data and highlighted fields
+            handleChange("import_license", updatedImports);
+            setUpdatedFields(prev => ({...prev, ...newlyUpdatedFields}));
+
+            let message = [];
+            if (addedCount > 0) message.push(`Added ${addedCount} new import items`);
+            if (updatedCount > 0) message.push(`Updated ${updatedCount} existing items`);
+            alert(message.join('. ') || "No changes made");
+
+        } catch (err) {
+            console.error("Error fetching SION imports:", err);
+            alert(err.response?.data?.detail || "Failed to fetch import items from SION");
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -307,6 +410,9 @@ export default function MasterForm() {
                                         fields={nestedDef}
                                         value={formData[nestedKey] || []}
                                         onChange={(value) => handleChange(nestedKey, value)}
+                                        fieldKey={nestedKey}
+                                        onFetchImports={entityName === "licenses" ? handleFetchImports : undefined}
+                                        updatedFields={updatedFields}
                                     />
                                 ))}
 

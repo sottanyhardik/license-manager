@@ -253,7 +253,7 @@ class SIONExportModel(models.Model):
 
 
 class SIONImportModel(models.Model):
-    sr_no = models.IntegerField(default=0)
+    serial_number = models.IntegerField(default=0)
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='import_norm')
     hsn_code = models.ForeignKey(HSCodeModel, on_delete=models.SET_NULL, related_name='sion_imports', null=True,
                                  blank=True)
@@ -268,7 +268,7 @@ class SIONImportModel(models.Model):
     condition = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
-        ordering = ['sr_no']
+        ordering = ['serial_number']
 
     def __str__(self):
         return f"{self.norm_class} | {self.description}" if self.description else f"{self.norm_class}"

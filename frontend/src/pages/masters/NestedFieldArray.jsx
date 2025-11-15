@@ -14,8 +14,11 @@ import "react-datepicker/dist/react-datepicker.css";
  * - fields: Array of field definitions from backend
  * - value: Current array of nested objects
  * - onChange: Callback function(newArray)
+ * - fieldKey: The key of this nested field (e.g., "export_license", "import_license")
+ * - onFetchImports: Optional callback to fetch import items from SION
+ * - updatedFields: Object tracking which fields were recently updated (for highlighting)
  */
-export default function NestedFieldArray({label, fields = [], value = [], onChange}) {
+export default function NestedFieldArray({label, fields = [], value = [], onChange, fieldKey = "", onFetchImports, updatedFields = {}}) {
 
     // Helper function to parse date from YYYY-MM-DD to Date object
     const parseDate = (dateString) => {
@@ -55,6 +58,11 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
     const renderNestedField = (field, item, index) => {
         const fieldValue = item[field.name] || "";
 
+        // Check if this field was recently updated
+        const fieldPath = `${fieldKey}.${index}.${field.name}`;
+        const isHighlighted = updatedFields[fieldPath];
+        const highlightClass = isHighlighted ? "border-warning border-2 bg-warning bg-opacity-10" : "";
+
         // Handle date fields with DatePicker
         if (field.type === "date" || field.name.includes("date") || field.name.includes("_at") || field.name.includes("_on")) {
             return (
@@ -62,7 +70,7 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                     selected={parseDate(fieldValue)}
                     onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}
                     dateFormat="dd-MM-yyyy"
-                    className="form-control form-control-sm"
+                    className={`form-control form-control-sm ${highlightClass}`}
                     placeholderText="Select date"
                     isClearable
                     showYearDropdown
@@ -95,16 +103,18 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
             };
 
             return (
-                <AsyncSelectField
-                    endpoint={endpoint}
-                    labelField={labelField}
-                    value={fieldValue}
-                    onChange={(val) => handleChange(index, field.name, val)}
-                    formatLabel={formatLabel}
-                    placeholder={`Select ${field.label || field.name}`}
-                    className="react-select-sm"
-                    isMulti={isMulti}
-                />
+                <div className={highlightClass ? `${highlightClass} rounded` : ""}>
+                    <AsyncSelectField
+                        endpoint={endpoint}
+                        labelField={labelField}
+                        value={fieldValue}
+                        onChange={(val) => handleChange(index, field.name, val)}
+                        formatLabel={formatLabel}
+                        placeholder={`Select ${field.label || field.name}`}
+                        className="react-select-sm"
+                        isMulti={isMulti}
+                    />
+                </div>
             );
         }
 
@@ -123,26 +133,28 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
             const selectedOption = options.find(opt => opt.value === fieldValue) || null;
 
             return (
-                <Select
-                    options={options}
-                    value={selectedOption}
-                    onChange={(selected) => handleChange(index, field.name, selected ? selected.value : null)}
-                    isClearable
-                    placeholder={`Select ${field.label || field.name}`}
-                    className="react-select-sm"
-                    classNamePrefix="react-select"
-                    styles={{
-                        control: (base) => ({
-                            ...base,
-                            minHeight: "34px",
-                            borderColor: "#dee2e6"
-                        }),
-                        menu: (base) => ({
-                            ...base,
-                            zIndex: 9999
-                        })
-                    }}
-                />
+                <div className={highlightClass ? `${highlightClass} rounded` : ""}>
+                    <Select
+                        options={options}
+                        value={selectedOption}
+                        onChange={(selected) => handleChange(index, field.name, selected ? selected.value : null)}
+                        isClearable
+                        placeholder={`Select ${field.label || field.name}`}
+                        className="react-select-sm"
+                        classNamePrefix="react-select"
+                        styles={{
+                            control: (base) => ({
+                                ...base,
+                                minHeight: "34px",
+                                borderColor: "#dee2e6"
+                            }),
+                            menu: (base) => ({
+                                ...base,
+                                zIndex: 9999
+                            })
+                        }}
+                    />
+                </div>
             );
         }
 
@@ -150,7 +162,7 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
         if (field.type === "boolean" || typeof fieldValue === "boolean" || field.name.startsWith("is_") || field.name.startsWith("has_")) {
             const boolValue = typeof fieldValue === "boolean" ? fieldValue : false;
             return (
-                <div className="form-check form-switch">
+                <div className={`form-check form-switch ${highlightClass ? `${highlightClass} rounded p-2` : ""}`}>
                     <input
                         type="checkbox"
                         className="form-check-input"
@@ -173,7 +185,7 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                     <input
                         type="number"
                         step="0.01"
-                        className="form-control form-control-sm"
+                        className={`form-control form-control-sm ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
                     />
@@ -182,7 +194,7 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                 return (
                     <input
                         type="number"
-                        className="form-control form-control-sm"
+                        className={`form-control form-control-sm ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
                     />
@@ -190,7 +202,7 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
             case "textarea":
                 return (
                     <textarea
-                        className="form-control form-control-sm"
+                        className={`form-control form-control-sm ${highlightClass}`}
                         rows="2"
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
@@ -200,7 +212,7 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                 return (
                     <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={`form-control form-control-sm ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
                     />
@@ -234,15 +246,34 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                         <div key={index} className="card mb-3">
                             <div className="card-header bg-light d-flex justify-content-between align-items-center py-2">
                                 <h6 className="mb-0">Item #{index + 1}</h6>
-                                <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline-danger"
-                                    onClick={() => handleRemove(index)}
-                                    title="Remove this item"
-                                >
-                                    <i className="bi bi-trash me-1"></i>
-                                    Remove
-                                </button>
+                                <div className="btn-group btn-group-sm">
+                                    {/* Show Fetch button only for export_license items and if callback is provided */}
+                                    {fieldKey === "export_license" && onFetchImports && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-primary"
+                                            onClick={() => onFetchImports(index, item)}
+                                            disabled={!item.norm_class || !item.start_serial_number}
+                                            title={
+                                                !item.norm_class || !item.start_serial_number
+                                                    ? "Please select Norm Class and enter Start Serial Number first"
+                                                    : "Fetch import items from SION norm class"
+                                            }
+                                        >
+                                            <i className="bi bi-download me-1"></i>
+                                            Fetch Imports
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-danger"
+                                        onClick={() => handleRemove(index)}
+                                        title="Remove this item"
+                                    >
+                                        <i className="bi bi-trash me-1"></i>
+                                        Remove
+                                    </button>
+                                </div>
                             </div>
                             <div className="card-body">
                                 <div className="row">

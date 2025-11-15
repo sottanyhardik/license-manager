@@ -12,6 +12,7 @@ license_nested_field_defs = {
         {"name": "description", "type": "text", "label": "Description"},
         {"name": "item", "type": "fk", "label": "Item", "fk_endpoint": "/masters/item-names/", "label_field": "name"},
         {"name": "norm_class", "type": "fk", "label": "Norm Class", "fk_endpoint": "/masters/sion-classes/", "label_field": "norm_class"},
+        {"name": "start_serial_number", "type": "number", "label": "Start Serial Number"},
         {"name": "duty_type", "type": "text", "label": "Duty Type"},
         {"name": "net_quantity", "type": "number", "label": "Net Quantity"},
         {"name": "unit", "type": "select", "label": "Unit", "choices": list(UNIT_CHOICES)},

@@ -104,7 +104,7 @@ def fetch_sion_data(cdata):
         import_table = tables[5]
         trs = import_table.findAll('tr')
         del trs[0]
-        sr_no = 1
+        serial_number = 1
         for tr in trs:
             if not '\n\n\n' == tr.text:
                 tds = tr.findAll('td')
@@ -118,8 +118,8 @@ def fetch_sion_data(cdata):
                         float(tds[3].text.split(' ')[0])
                         sion.quantity = tds[3].text.split(' ')[0]
                         sion.unit = ''.join(tds[3].text.split(' ')[1:])
-                        sion.sr_no = sr_no
-                        sr_no = sr_no + 1
+                        sion.serial_number = serial_number
+                        serial_number = serial_number + 1
                     except:
                         sion.condition = tds[3].text
                 else:

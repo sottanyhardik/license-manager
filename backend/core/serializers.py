@@ -60,7 +60,7 @@ class SIONImportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SIONImportModel
-        fields = ("id", "description", "quantity", "unit", "hsn_code", "hsn_code_label")
+        fields = ("id", "serial_number", "description", "quantity", "unit", "hsn_code", "hsn_code_label")
 
     def get_hsn_code_label(self, obj):
         if obj.hsn_code:

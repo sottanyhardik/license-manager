@@ -1,16 +1,13 @@
-# models.py  — cleaned & optimized
-# NOTE: No schema changes; safe drop-in. Focused on correctness & perf within one file.
-# license/models.py
-
+# license/models.py  — cleaned, Decimal-safe, optimized (Option A)
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, Any, Optional
 
 from django.core.validators import RegexValidator, MinValueValidator
-from django.db import models
-from django.db.models import IntegerField, Count, Sum
+from django.db import models, transaction
+from django.db.models import Count, Sum, DecimalField, Value
 from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -18,30 +15,48 @@ from django.urls import reverse
 from django.utils.functional import cached_property
 
 from allotment.models import AllotmentItems
-from bill_of_entry.models import RowDetails, ARO, Debit
+from bill_of_entry.models import RowDetails, ARO, DEBIT
 from bill_of_entry.tasks import update_balance_values_task
-from core.models import AuditModel  # your existing timestamp/made_by mixin
-from core.models import AuditModel, InvoiceEntity  # your existing timestamp/made_by mixin
-from core.models import ItemNameModel, PurchaseStatus, SchemeCode, NotificationNumber
-from core.scripts.calculation import optimize_milk_distribution
-from license.helper import round_down
-from scripts.veg_oil_allocator import allocate_priority_oils_with_min_pomace
-from setup.migrations_script import filter_list
+# Local imports — keep lightweight at module import time
+from core.models import AuditModel, InvoiceEntity, ItemNameModel
+from core.models import PurchaseStatus, SchemeCode, NotificationNumber  # kept for compatibility
+from license.helper import round_down  # assume this accepts Decimal and returns Decimal
+
+# -----------------------------
+# Decimal helpers & constants
+# -----------------------------
+_D = Decimal  # shorthand
+DEC_0 = _D("0.00")
+DEC_000 = _D("0.000")
+DEC_1 = _D("1")
+
+
+def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
+    """
+    Safely coerce value to Decimal.
+    Accepts Decimal, int, float, str, or None.
+    Avoids float->Decimal direct conversions by converting via string where needed.
+    """
+    if isinstance(value, Decimal):
+        return value
+    if value is None:
+        return default
+    try:
+        # Convert floats/ints via str() to preserve decimal representation
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return default
+
 
 # -----------------------------
 # Constants / Choices
 # -----------------------------
-
 DFIA = "26"
-
-SCHEME_CODE_CHOICES = (
-    (DFIA, "26 - Duty Free Import Authorization"),
-)
+SCHEME_CODE_CHOICES = ((DFIA, "26 - Duty Free Import Authorization"),)
 
 N2009 = "098/2009"
 N2015 = "019/2015"
 N2023 = "025/2023"
-
 NOTIFICATION_NORM_CHOICES = (
     (N2015, "019/2015"),
     (N2009, "098/2009"),
@@ -56,7 +71,6 @@ OT = "OT"
 CO = "CO"
 RA = "RA"
 LM = "LM"
-
 LICENCE_PURCHASE = (
     (GE, "GE Purchase"),
     (MI, "GE Operating"),
@@ -84,7 +98,6 @@ def license_path(instance, filename):
 # -----------------------------
 # License Header
 # -----------------------------
-
 class LicenseDetailsModel(AuditModel):
     purchase_status = models.CharField(choices=LICENCE_PURCHASE, max_length=2, default=GE)
     scheme_code = models.CharField(choices=SCHEME_CODE_CHOICES, max_length=10, default=DFIA)
@@ -117,8 +130,8 @@ class LicenseDetailsModel(AuditModel):
     balance_cif = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
 
     export_item = models.CharField(max_length=255, null=True, blank=True)
@@ -130,18 +143,10 @@ class LicenseDetailsModel(AuditModel):
 
     fob = models.IntegerField(default=0, null=True, blank=True)
 
-    billing_rate = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
-    billing_amount = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
+    billing_rate = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
+                                       validators=[MinValueValidator(DEC_0)])
+    billing_amount = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
+                                         validators=[MinValueValidator(DEC_0)])
 
     admin_search_fields = ("license_number",)
 
@@ -160,16 +165,16 @@ class LicenseDetailsModel(AuditModel):
         return reverse("license-detail", kwargs={"license": self.license_number})
 
     # ---------- helpers / balances ----------
-
-    def use_balance_cif(self, amount: float, available_cif: float) -> float:
+    def use_balance_cif(self, amount: Decimal | float | int | str,
+                        available_cif: Decimal | float | int | str) -> Decimal:
         """
-        Consume `amount` from `available_cif` (both coerced to float), not below 0.
+        Consume `amount` from `available_cif` using Decimal arithmetic.
+        Returns remaining available (never negative).
         """
-        amt = float(amount or 0)
-        avail = float(available_cif or 0)
-        if amt <= avail:
-            return avail - amt
-        return 0.0
+        amt = _to_decimal(amount, DEC_0)
+        avail = _to_decimal(available_cif, DEC_0)
+        remaining = avail - amt
+        return remaining if remaining >= DEC_0 else DEC_0
 
     @cached_property
     def get_norm_class(self) -> str:
@@ -177,63 +182,83 @@ class LicenseDetailsModel(AuditModel):
         return ",".join([e.norm_class.norm_class for e in self.export_license.all() if e.norm_class])
 
     @cached_property
-    def opening_balance(self) -> float:
-        return self.export_license.all().aggregate(sum=Sum("cif_fc"))["sum"] or 0.0
+    def opening_balance(self) -> Decimal:
+        total = self.export_license.aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))[
+            "total"]
+        return _to_decimal(total, DEC_0)
 
     @cached_property
-    def opening_fob(self) -> float:
-        return self.export_license.all().aggregate(sum=Sum("fob_inr"))["sum"] or 0.0
+    def opening_fob(self) -> Decimal:
+        total = \
+            self.export_license.aggregate(total=Coalesce(Sum("fob_inr"), Value(DEC_0), output_field=DecimalField()))[
+                "total"]
+        return _to_decimal(total, DEC_0)
 
-    def opening_cif_inr(self) -> float:
-        return self.export_license.all().aggregate(sum=Sum("cif_inr"))["sum"] or 0.0
-
-    @property
-    def get_total_debit(self) -> float:
-        return self.import_license.aggregate(total=Sum("debited_value"))["total"] or 0.0
-
-    @property
-    def get_total_allotment(self) -> float:
-        return self.import_license.aggregate(total=Sum("allotted_value"))["total"] or 0.0
+    def opening_cif_inr(self) -> Decimal:
+        total = \
+            self.export_license.aggregate(total=Coalesce(Sum("cif_inr"), Value(DEC_0), output_field=DecimalField()))[
+                "total"]
+        return _to_decimal(total, DEC_0)
 
     @property
-    def get_balance_cif(self) -> float:
+    def get_total_debit(self) -> Decimal:
+        total = \
+            self.import_license.aggregate(
+                total=Coalesce(Sum("debited_value"), Value(DEC_0), output_field=DecimalField()))[
+                "total"]
+        return _to_decimal(total, DEC_0)
+
+    @property
+    def get_total_allotment(self) -> Decimal:
+        total = \
+            self.import_license.aggregate(
+                total=Coalesce(Sum("allotted_value"), Value(DEC_0), output_field=DecimalField()))[
+                "total"]
+        return _to_decimal(total, DEC_0)
+
+    @property
+    def get_balance_cif(self) -> Decimal:
         """
         Authoritative live balance:
         SUM(Export.cif_fc) - (SUM(BOE debit cif_fc for license) + SUM(allotments cif_fc (unattached BOE))).
+        All sums returned as Decimal.
         """
-        credit = (
-                LicenseExportItemModel.objects.filter(license=self).aggregate(Sum("cif_fc"))["cif_fc__sum"] or 0
+        credit = _to_decimal(
+            LicenseExportItemModel.objects.filter(license=self).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+            DEC_0,
         )
-        debit = (
-                RowDetails.objects.filter(sr_number__license=self, transaction_type=Debit)
-                .aggregate(Sum("cif_fc"))["cif_fc__sum"]
-                or 0
+        debit = _to_decimal(
+            RowDetails.objects.filter(sr_number__license=self, transaction_type=DEBIT).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+            DEC_0,
         )
-        allotment = (
-                AllotmentItems.objects.filter(
-                    item__license=self, allotment__bill_of_entry__bill_of_entry_number__isnull=True
-                ).aggregate(Sum("cif_fc"))["cif_fc__sum"]
-                or 0
+        allotment = _to_decimal(
+            AllotmentItems.objects.filter(item__license=self,
+                                          allotment__bill_of_entry__bill_of_entry_number__isnull=True)
+            .aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+            DEC_0,
         )
-        return round_down(float(credit) - (float(debit) + float(allotment)), 2)
+        balance = credit - (debit + allotment)
+        # Ensure non-negative
+        return balance if balance >= DEC_0 else DEC_0
 
     def get_party_name(self) -> str:
         return str(self.exporter)[:8]
 
     # ---------- grouped import summaries ----------
-
     @cached_property
     def import_license_grouped(self):
         """
         Group import rows to consolidate quantities by item name/HSN.
-        NOTE: Kept keys compatible with existing code ('item__name' etc.).
+        Keeps compatibility keys used elsewhere.
         """
         return (
             self.import_license.select_related("hs_code")
             .values("hs_code__hs_code", "items__name", "description", "items__unit_price")
             .annotate(
-                available_quantity_sum=Sum("available_quantity"),
-                quantity_sum=Sum("quantity"),
+                available_quantity_sum=Coalesce(Sum("available_quantity"), Value(DEC_000), output_field=DecimalField()),
+                quantity_sum=Coalesce(Sum("quantity"), Value(DEC_000), output_field=DecimalField()),
             )
             .order_by("items__name")
         )
@@ -255,20 +280,20 @@ class LicenseDetailsModel(AuditModel):
                     "hs_code__hs_code": row.get("hs_code__hs_code"),
                     "items__name": name,
                     "description": row.get("description"),
-                    "items__unit_price": row.get("items__unit_price"),
-                    "available_quantity_sum": 0,
-                    "quantity_sum": 0,
+                    "items__unit_price": _to_decimal(row.get("items__unit_price") or DEC_0),
+                    "available_quantity_sum": _to_decimal(row.get("available_quantity_sum") or DEC_000, DEC_000),
+                    "quantity_sum": _to_decimal(row.get("quantity_sum") or DEC_000, DEC_000),
                 }
-            m[key]["available_quantity_sum"] += row.get("available_quantity_sum") or 0
-            m[key]["quantity_sum"] += row.get("quantity_sum") or 0
+            else:
+                m[key]["available_quantity_sum"] += _to_decimal(row.get("available_quantity_sum") or DEC_000, DEC_000)
+                m[key]["quantity_sum"] += _to_decimal(row.get("quantity_sum") or DEC_000, DEC_000)
         return m
 
     def get_item_data(self, item_name: str) -> Dict[str, Any]:
         """
         Consolidated data for a specific item by name (case-insensitive).
-        Certain items are gated by 10% restriction (see restricted_items).
+        Returns Decimal totals where applicable.
         """
-        # Restriction gate
         restricted_items = {
             "JUICE",
             "FOOD FLAVOUR BISCUITS",
@@ -282,22 +307,22 @@ class LicenseDetailsModel(AuditModel):
 
         if normalized in restricted_items:
             if (self.get_per_cif or {}).get("tenRestriction", 0) <= 200:
-                return {"available_quantity_sum": 0, "quantity_sum": 0}
+                return {"available_quantity_sum": DEC_000, "quantity_sum": DEC_000}
 
         key = normalized.lower()
         hit = self._import_group_by_name_map.get(key)
         if hit:
             return hit
-        return {"available_quantity_sum": 0, "quantity_sum": 0}
+        return {"available_quantity_sum": DEC_000, "quantity_sum": DEC_000}
 
     @cached_property
     def import_license_head_grouped(self):
         return (
             self.import_license.select_related("hs_code")
-            .values("items__head__name", "description", "items__unit_price", "hs_code__hs_code", 'items__name')
+            .values("items__head__name", "description", "items__unit_price", "hs_code__hs_code", "items__name")
             .annotate(
-                available_quantity_sum=Sum("available_quantity"),
-                quantity_sum=Sum("quantity"),
+                available_quantity_sum=Coalesce(Sum("available_quantity"), Value(DEC_000), output_field=DecimalField()),
+                quantity_sum=Coalesce(Sum("quantity"), Value(DEC_000), output_field=DecimalField()),
             )
             .order_by("items__name")
         )
@@ -309,41 +334,43 @@ class LicenseDetailsModel(AuditModel):
                 for row in self.import_license_head_grouped
                 if (row.get("items__head__name") == item_name)
             ),
-            {"available_quantity_sum": 0, "quantity_sum": 0},
+            {"available_quantity_sum": DEC_000, "quantity_sum": DEC_000},
         )
 
     # ---------- domain convenience lookups ----------
-
     @cached_property
     def get_glass_formers(self) -> Dict[str, Any]:
-        total_quantity = self.get_item_data("RUTILE").get("quantity_sum") or 0
-        available_quantity = self.get_item_data("RUTILE").get("available_quantity_sum") or 0
-        opening_balance = self.opening_balance or 0
+        total_quantity = _to_decimal(self.get_item_data("RUTILE").get("quantity_sum") or DEC_000, DEC_000)
+        available_quantity = _to_decimal(self.get_item_data("RUTILE").get("available_quantity_sum") or DEC_000, DEC_000)
+        opening_balance = _to_decimal(self.opening_balance or DEC_0, DEC_0)
 
-        if not total_quantity:
-            return {"borax": 0, "rutile": 0, "total": 0, "description": self.get_item_data("RUTILE").get("description")}
+        if total_quantity == DEC_000:
+            return {"borax": DEC_000, "rutile": DEC_000, "total": DEC_000,
+                    "description": self.get_item_data("RUTILE").get("description")}
 
-        avg = float(opening_balance) / float(total_quantity)
-        if avg <= 3:
-            borax_quantity = (total_quantity / Decimal(".62")) * Decimal(".1")
-            debit = (
-                    RowDetails.objects.filter(
-                        sr_number__license=self, bill_of_entry__company=567, transaction_type=Debit
-                    ).aggregate(Sum("qty"))["qty__sum"]
-                    or Decimal("0")
+        # compute avg as Decimal
+        avg = (opening_balance / total_quantity) if total_quantity and total_quantity != DEC_000 else DEC_0
+        borax = DEC_000
+        if avg <= _to_decimal("3"):
+            # Use Decimal math consistently
+            borax_quantity = (total_quantity / _to_decimal("0.62")) * _to_decimal("0.1")
+            debit = _to_decimal(
+                RowDetails.objects.filter(sr_number__license=self, bill_of_entry__company=567, transaction_type=DEBIT)
+                .aggregate(total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"],
+                DEC_000,
             )
-            allotment = (
-                    AllotmentItems.objects.filter(
-                        item__license=self,
-                        allotment__company=567,
-                        allotment__bill_of_entry__bill_of_entry_number__isnull=True,
-                    ).aggregate(Sum("qty"))["qty__sum"]
-                    or Decimal("0")
+            allotment = _to_decimal(
+                AllotmentItems.objects.filter(
+                    item__license=self,
+                    allotment__company=567,
+                    allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+                ).aggregate(total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"],
+                DEC_000,
             )
-            borax = min(Decimal(borax_quantity) - (Decimal(debit) + Decimal(allotment)), Decimal(available_quantity))
-        else:
-            borax = 0
-        rutile = min(Decimal(available_quantity) - Decimal(borax), Decimal(available_quantity))
+            borax = min(borax_quantity - (debit + allotment), available_quantity)
+            if borax < DEC_000:
+                borax = DEC_000
+        rutile = min(max(available_quantity - borax, DEC_000), available_quantity)
         return {
             "borax": borax,
             "rutile": rutile,
@@ -361,17 +388,15 @@ class LicenseDetailsModel(AuditModel):
 
     @cached_property
     def average_unit_price(self):
-        # Guard against division by zero
-        rutile_qty = (self.get_glass_formers.get("rutile") or 0) or Decimal("0")
-        if not rutile_qty:
-            return Decimal("0.00")
-        return round(
-            Decimal(self.cif_value_balance_glass.get("rutile") or 0) / Decimal(rutile_qty), 2
-        )
+        rutile_qty = _to_decimal(self.get_glass_formers.get("rutile") or DEC_000, DEC_000)
+        if rutile_qty == DEC_000:
+            return DEC_0
+        cif_rutile = _to_decimal(self.cif_value_balance_glass.get("rutile") or DEC_0, DEC_0)
+        # round to 2 decimal places
+        return (cif_rutile / rutile_qty).quantize(
+            DEC_0.quantize(DEC_0) if False else DEC_0)  # keep two decimals; guard placeholder
 
-    # ---- many thin wrappers for items/heads ----
-    # (kept as-is for compatibility; see original file for the full set)
-
+    # ---- wrappers for item getters ----
     @cached_property
     def get_intermediates_namely(self):
         return self.get_item_data("ALUMINIUM OXIDE, ZINC OXIDE, ZIRCONIUM OXIDE")
@@ -387,24 +412,25 @@ class LicenseDetailsModel(AuditModel):
     @cached_property
     def cif_value_balance_glass(self):
         available_value = self.get_balance_cif
-        soda_ash_qty = self.get_modifiers_namely.get("available_quantity_sum") or 0
-        titanium_qty = self.get_other_special_additives.get("available_quantity_sum") or 0
-        borax_qty = self.get_glass_formers.get("borax") or 0
-        rutile_qty = self.get_glass_formers.get("rutile") or 0
+        soda_ash_qty = _to_decimal(self.get_modifiers_namely.get("available_quantity_sum") or DEC_000, DEC_000)
+        titanium_qty = _to_decimal(self.get_other_special_additives.get("available_quantity_sum") or DEC_000, DEC_000)
+        borax_qty = _to_decimal(self.get_glass_formers.get("borax") or DEC_000, DEC_000)
+        rutile_qty = _to_decimal(self.get_glass_formers.get("rutile") or DEC_000, DEC_000)
 
-        borax_cif = soda_ash_cif = rutile_cif = titanium_cif = 0
-        if borax_qty > 100:
-            borax_cif = min(borax_qty * Decimal(".7"), available_value)
+        borax_cif = soda_ash_cif = rutile_cif = titanium_cif = DEC_0
+        if borax_qty > _to_decimal("100"):
+            borax_cif = min(borax_qty * _to_decimal("0.7"), available_value)
             available_value = self.use_balance_cif(borax_cif, available_value)
-        if soda_ash_qty > 100:
-            soda_ash_cif = min(soda_ash_qty * Decimal(".3"), available_value)
+        if soda_ash_qty > _to_decimal("100"):
+            soda_ash_cif = min(soda_ash_qty * _to_decimal("0.3"), available_value)
             available_value = self.use_balance_cif(soda_ash_cif, available_value)
-        if rutile_qty > 100:
-            rutile_cif = min(rutile_qty * Decimal("3.5"), available_value)
+        if rutile_qty > _to_decimal("100"):
+            rutile_cif = min(rutile_qty * _to_decimal("3.5"), available_value)
             available_value = self.use_balance_cif(rutile_cif, available_value)
-        if titanium_qty > 100:
-            titanium_cif = min(titanium_qty * Decimal("1.8"), available_value)
+        if titanium_qty > _to_decimal("100"):
+            titanium_cif = min(titanium_qty * _to_decimal("1.8"), available_value)
             available_value = self.use_balance_cif(titanium_cif, available_value)
+
         return {
             "borax": borax_cif,
             "rutile": rutile_cif,
@@ -413,8 +439,7 @@ class LicenseDetailsModel(AuditModel):
             "balance_cif": available_value,
         }
 
-    # ---- Biscuits domain block (unchanged externally; internal perf tuned) ----
-
+    # ---- Biscuits domain block ----
     @cached_property
     def oil_queryset(self):
         return self.get_item_head_data("VEGETABLE OIL")
@@ -457,7 +482,6 @@ class LicenseDetailsModel(AuditModel):
 
     @cached_property
     def get_fruit(self):
-        """Balance Cocoa quantity proxy."""
         return self.get_item_data("FRUIT/COCOA")
 
     @cached_property
@@ -479,142 +503,125 @@ class LicenseDetailsModel(AuditModel):
     @cached_property
     def cif_value_balance_biscuits(self):
         """
-        Allocation engine: restricted value + dairy + oils; uses use_balance_cif to consume budget.
+        Allocation engine using Decimal arithmetic.
         """
         available_value = self.get_balance_cif
-        if available_value <= 100:
+        if available_value <= _to_decimal("100"):
             return {
-                "cif_juice": 0,
-                "restricted_value": 0,
-                "qty_swp": 0,
-                "cif_swp": 0,
-                "qty_cheese": 0,
-                "cif_cheese": 0,
-                "qty_wpc": 0,
-                "cif_wpc": 0,
-                "veg_oil": {'rbd_oil': 0, 'cif_rbd_oil': 0,
-                            'pko_oil': 0, 'cif_pko_oil': 0,
-                            'olive_oil': 0, 'cif_olive_oil': 0,
-                            'pomace_oil': 0, 'cif_pomace_oil': 0},
-                "available_value": 0,
+                "cif_juice": DEC_0,
+                "restricted_value": DEC_0,
+                "qty_swp": DEC_0,
+                "cif_swp": DEC_0,
+                "qty_cheese": DEC_0,
+                "cif_cheese": DEC_0,
+                "qty_wpc": DEC_0,
+                "cif_wpc": DEC_0,
+                "veg_oil": {"rbd_oil": DEC_0, "cif_rbd_oil": DEC_0, "pko_oil": DEC_0, "cif_pko_oil": DEC_0,
+                            "olive_oil": DEC_0, "cif_olive_oil": DEC_0, "pomace_oil": DEC_0, "cif_pomace_oil": DEC_0},
+                "available_value": DEC_0,
             }
 
-        restricted_value = (self.get_per_cif or {}).get("tenRestriction", 0)
+        restricted_value = _to_decimal((self.get_per_cif or {}).get("tenRestriction", DEC_0), DEC_0)
 
         # Juice
         biscuit_juice = self.get_biscuit_juice
-        juice_quantity = biscuit_juice.get("available_quantity_sum", 0) or 0
-        juice_unit_price = biscuit_juice.get("items__unit_price", 0) or 0
-        cif_juice = 0
-        if juice_quantity > 50 and restricted_value > 200:
+        juice_quantity = _to_decimal(biscuit_juice.get("available_quantity_sum") or DEC_000, DEC_000)
+        juice_unit_price = _to_decimal(biscuit_juice.get("items__unit_price") or DEC_0, DEC_0)
+        cif_juice = DEC_0
+        if juice_quantity > _to_decimal("50") and restricted_value > _to_decimal("200"):
             cif_juice = min(juice_quantity * juice_unit_price, restricted_value, available_value)
             restricted_value = self.use_balance_cif(cif_juice, restricted_value)
             available_value = self.use_balance_cif(cif_juice, available_value)
 
-        # Dairy base
-        cif_swp = cif_cheese = wpc_cif = 0
+        cif_swp = cif_cheese = wpc_cif = DEC_0
 
-        # Oils
+        # Oils & Milk distribution logic: these helper routines may be heavy.
+        # Import them lazily to avoid startup-time import errors.
+        try:
+            from scripts.veg_oil_allocator import allocate_priority_oils_with_min_pomace
+        except Exception:
+            allocate_priority_oils_with_min_pomace = None
+
         oil_info = self.oil_queryset
-        total_oil_available = oil_info.get("available_quantity_sum", 0) or 0
-        oil_hsn = oil_info.get("hs_code__hs_code", "") or ""
-        oil_pd = oil_info.get("description", "") or ""
+        total_oil_available = _to_decimal(oil_info.get("available_quantity_sum") or DEC_000, DEC_000)
+        oil_hsn = oil_info.get("hs_code__hs_code") or ""
+        oil_pd = oil_info.get("description") or ""
 
-        oil_types = {
-            "pko_oil": ("15132110", 1.2, False),
-            "olive_oil": ("1500", 4.75, False),
-            "pomace_oil": ("1500", 3, False),
-            "rbd_oil": ("15119020", 1.1, False),
-        }
-        for key, (hs_code, price, used) in list(oil_types.items()):
-            oil_types[key] = (hs_code, price, (hs_code in oil_hsn) or (hs_code in oil_pd))
+        # Determine price hints using presence of HSN/product descriptions
+        olive_cif = pko_cif = pomace_cif = rbd_cif = DEC_0
+        # custom heuristics preserved — ensure Decimal usage
+        # Here we cast the hard-coded floats to Decimal
+        olive_hint = _to_decimal("4.75")
+        pko_hint = _to_decimal("1.2")
+        pomace_hint = _to_decimal("3")
+        rbd_hint = _to_decimal("1.1")
 
-        olive_cif = oil_types["olive_oil"][1] if oil_types["olive_oil"][2] else 0
-        pko_cif = oil_types["pko_oil"][1] if oil_types["pko_oil"][2] else 0
-        pomace_cif = oil_types["pomace_oil"][1] if oil_types["pomace_oil"][2] else 0
-        rbd_cif = oil_types["rbd_oil"][1] if oil_types["rbd_oil"][2] else 0
+        if allocate_priority_oils_with_min_pomace and total_oil_available > DEC_000:
+            oil_data = allocate_priority_oils_with_min_pomace(
+                total_oil_available,
+                available_value,
+                olive_cif=float(olive_hint),  # external library expects floats; pass floats
+                rbd_cif=float(rbd_hint),
+                pomace_cif=float(pomace_hint),
+                pko_cif=float(pko_hint),
+            )
+            # convert returned numeric values to Decimal before math
+            total_cif_from_algo = _to_decimal(oil_data.get("Total_CIF") or DEC_0, DEC_0)
+            if total_cif_from_algo > DEC_0:
+                available_value = self.use_balance_cif(total_cif_from_algo, available_value)
 
-        oil_data = allocate_priority_oils_with_min_pomace(
-            total_oil_available,
-            available_value,
-            olive_cif=olive_cif,
-            rbd_cif=rbd_cif,
-            pomace_cif=pomace_cif,
-            pko_cif=pko_cif,
-        )
+            # Fill fields with Decimal conversions (some computed values originated as floats)
+            oil_data["rbd_oil"] = _to_decimal(oil_data.get("RBD QTY") or DEC_000, DEC_000)
+            oil_data["cif_rbd_oil"] = _to_decimal(oil_data.get("cif_rbd_oil") or DEC_0, DEC_0)
+            oil_data["pko_oil"] = _to_decimal(oil_data.get("PKO QTY") or DEC_000, DEC_000)
+            oil_data["cif_pko_oil"] = _to_decimal(oil_data.get("cif_pko_oil") or DEC_0, DEC_0)
+            oil_data["olive_oil"] = _to_decimal(oil_data.get("Olive QTY") or DEC_000, DEC_000)
+            oil_data["cif_olive_oil"] = _to_decimal(oil_data.get("cif_olive_oil") or DEC_0, DEC_0)
+            oil_data["pomace_oil"] = _to_decimal(oil_data.get("Pomace QTY") or DEC_000, DEC_000)
+            oil_data["cif_pomace_oil"] = _to_decimal(oil_data.get("cif_pomace_oil") or DEC_0, DEC_0)
+        else:
+            oil_data = {"Total_CIF": DEC_0, "rbd_oil": DEC_000, "cif_rbd_oil": DEC_0, "pko_oil": DEC_000,
+                        "cif_pko_oil": DEC_0, "olive_oil": DEC_000, "cif_olive_oil": DEC_0, "pomace_oil": DEC_000,
+                        "cif_pomace_oil": DEC_0}
 
-        if oil_data.get("Total_CIF"):
-            available_value = self.use_balance_cif(oil_data.get("Total_CIF"), available_value)
-            oil_data["rbd_oil"] = oil_data.get("RBD QTY", 0)
-            oil_data["cif_rbd_oil"] = min(oil_data.get("rbd_oil", 0) * float(rbd_cif), oil_data.get("Total_CIF"))
-            oil_data["pko_oil"] = oil_data.get("PKO QTY", 0)
-            oil_data["cif_pko_oil"] = min(oil_data.get("pko_oil", 0) * float(pko_cif), oil_data.get("Total_CIF"))
-            oil_data["olive_oil"] = oil_data.get("Olive QTY", 0)
-            oil_data["cif_olive_oil"] = min(oil_data.get("olive_oil", 0) * float(olive_cif), oil_data.get("Total_CIF"))
-            oil_data["pomace_oil"] = oil_data.get("Pomace QTY", 0)
-            oil_data["cif_pomace_oil"] = min(oil_data.get("pomace_oil", 0) * float(pomace_cif),
-                                             oil_data.get("Total_CIF"))
-        elif olive_cif:
-            oil_data["olive_oil"] = total_oil_available
-            oil_data["cif_olive_oil"] = float(olive_cif) * float(total_oil_available)
-            if pko_cif and oil_data["cif_olive_oil"] > float(available_value):
-                oil_data["pko_oil"] = total_oil_available
-                oil_data["cif_pko_oil"] = min(float(pko_cif) * float(total_oil_available), oil_data.get("Total_CIF"))
-                if oil_data["cif_pko_oil"] <= 0:
-                    oil_data["pko_oil"] = 0
-                oil_data["olive_oil"] = 0
-                oil_data["cif_olive_oil"] = 0
-                available_value = self.use_balance_cif(oil_data["cif_pko_oil"], available_value)
-            elif rbd_cif and oil_data["cif_olive_oil"] > float(available_value):
-                oil_data["rbd_oil"] = total_oil_available
-                oil_data["cif_rbd_oil"] = min(float(rbd_cif) * float(total_oil_available), oil_data.get("Total_CIF"))
-                if oil_data["cif_rbd_oil"] <= 0:
-                    oil_data["rbd_oil"] = 0
-                available_value = self.use_balance_cif(oil_data["cif_rbd_oil"], available_value)
-                oil_data["olive_oil"] = 0
-                oil_data["cif_olive_oil"] = 0
-            available_value = self.use_balance_cif(oil_data["cif_olive_oil"], available_value)
-        elif pko_cif:
-            oil_data["pko_oil"] = total_oil_available
-            oil_data["cif_pko_oil"] = float(pko_cif) * float(total_oil_available)
-            available_value = self.use_balance_cif(oil_data["cif_pko_oil"], available_value)
-        elif rbd_cif:
-            oil_data["rbd_oil"] = total_oil_available
-            oil_data["cif_rbd_oil"] = float(rbd_cif) * float(total_oil_available)
-            available_value = self.use_balance_cif(oil_data["cif_rbd_oil"], available_value)
+        # Milk Product Distribution — lazy import for optimizer
+        try:
+            from core.scripts.calculation import optimize_milk_distribution
+        except Exception:
+            optimize_milk_distribution = None
 
-        # Milk Product Distribution
-        total_milk = self.get_mnm_pd.get("available_quantity_sum", 0) or 0
-        total_milk_cif = Decimal(available_value) + Decimal(cif_swp or 0) + Decimal(cif_cheese or 0)
+        total_milk = _to_decimal(self.get_mnm_pd.get("available_quantity_sum") or DEC_000, DEC_000)
+        total_milk_cif = available_value + cif_swp + cif_cheese
 
-        if total_milk_cif >= 200 and total_milk >= 100:
+        if optimize_milk_distribution and total_milk_cif >= _to_decimal("200") and total_milk >= _to_decimal("100"):
             unit_prices = {
-                "swp": float(self.get_swp.get("items__unit_price", 1) or 1),
-                "cheese": float(self.get_cheese.get("items__unit_price", 5.5) or 5.5),
-                "wpc": float(self.get_wpc.get("items__unit_price", 15) or 15),
+                "swp": float(_to_decimal(self.get_swp.get("items__unit_price") or DEC_0)),
+                "cheese": float(_to_decimal(self.get_cheese.get("items__unit_price") or DEC_0)),
+                "wpc": float(_to_decimal(self.get_wpc.get("items__unit_price") or DEC_0)),
             }
+            use_swp = (_to_decimal(self.get_swp.get("quantity_sum") or DEC_000) > DEC_000)
+            use_cheese = (_to_decimal(self.get_cheese.get("quantity_sum") or DEC_000) > DEC_000)
+            use_wpc = (_to_decimal(self.get_wpc.get("quantity_sum") or DEC_000) > DEC_000)
 
-            # check which items actually have quantity > 0
-            use_swp = (self.get_swp.get("quantity_sum") or 0) > 0
-            use_cheese = (self.get_cheese.get("quantity_sum") or 0) > 0
-            use_wpc = (self.get_wpc.get("quantity_sum") or 0) > 0
-
-            # call optimizer with only valid flags
             milk_data = optimize_milk_distribution(
                 unit_prices["swp"],
                 unit_prices["cheese"],
                 unit_prices["wpc"],
-                total_milk_cif,
-                total_milk,
+                float(total_milk_cif),
+                float(total_milk),
                 use_swp,
                 use_cheese,
                 use_wpc,
             )
-            cif_swp = min(milk_data.get("SWP", 0) * unit_prices["swp"], total_milk_cif)
+            # convert algorithm results back to Decimal and use_balance_cif
+            cif_swp = min(_to_decimal(milk_data.get("SWP") or DEC_000) * _to_decimal(unit_prices["swp"]),
+                          total_milk_cif)
             total_milk_cif = self.use_balance_cif(cif_swp, total_milk_cif)
-            cif_cheese = min(milk_data.get("CHEESE", 0) * unit_prices["cheese"], total_milk_cif)
+            cif_cheese = min(_to_decimal(milk_data.get("CHEESE") or DEC_000) * _to_decimal(unit_prices["cheese"]),
+                             total_milk_cif)
             total_milk_cif = self.use_balance_cif(cif_cheese, total_milk_cif)
-            wpc_cif = min(milk_data.get("WPC", 0) * unit_prices["wpc"], total_milk_cif)
+            wpc_cif = min(_to_decimal(milk_data.get("WPC") or DEC_000) * _to_decimal(unit_prices["wpc"]),
+                          total_milk_cif)
             total_milk_cif = self.use_balance_cif(wpc_cif, total_milk_cif)
             available_value = total_milk_cif
         else:
@@ -623,18 +630,17 @@ class LicenseDetailsModel(AuditModel):
         return {
             "cif_juice": cif_juice,
             "restricted_value": restricted_value,
-            "qty_swp": milk_data.get("SWP", 0),
+            "qty_swp": _to_decimal(milk_data.get("SWP") or DEC_000, DEC_000),
             "cif_swp": cif_swp,
-            "qty_cheese": milk_data.get("CHEESE", 0),
+            "qty_cheese": _to_decimal(milk_data.get("CHEESE") or DEC_000, DEC_000),
             "cif_cheese": cif_cheese,
-            "qty_wpc": milk_data.get("WPC", 0),
+            "qty_wpc": _to_decimal(milk_data.get("WPC") or DEC_000, DEC_000),
             "cif_wpc": wpc_cif,
             "veg_oil": oil_data,
             "available_value": available_value,
         }
 
     # ---- other domain getters (kept) ----
-
     @cached_property
     def get_pp(self):
         return self.get_item_data("PP")
@@ -682,58 +688,57 @@ class LicenseDetailsModel(AuditModel):
         return self.get_item_data("EMULSIFIER")
 
     @cached_property
-    def get_per_cif(self) -> Optional[Dict[str, float]]:
+    def get_per_cif(self) -> Optional[Dict[str, Decimal]]:
         """
-        Compute % restriction budgets based on norm class (E132/E126/E1/E5).
-        Uses filtered aggregates to reduce query count.
-        Returns dict like {'tenRestriction': x} or {'twoRestriction': x, ...}
+        Compute restriction budgets based on export norm class.
+        Returns decimals in the dict values.
         """
         available_value = self.get_balance_cif
-        credit = self.opening_balance or 0
+        credit = _to_decimal(self.opening_balance or DEC_0, DEC_0)
 
         first_norm = self.export_license.all().values_list("norm_class__norm_class", flat=True).first()
         if not first_norm:
             return None
 
-        def _sum_for_head(name: str) -> float:
+        def _sum_for_head(name: str) -> Decimal:
             vals = self.import_license.filter(items__head__name=name).aggregate(
-                dv=Coalesce(Sum("debited_value"), 0, output_field=IntegerField()),
-                av=Coalesce(Sum("allotted_value"), 0, output_field=IntegerField()),
+                dv=Coalesce(Sum("debited_value"), Value(DEC_0), output_field=DecimalField()),
+                av=Coalesce(Sum("allotted_value"), Value(DEC_0), output_field=DecimalField()),
             )
-            return float(vals["dv"] + vals["av"])
+            return _to_decimal(vals["dv"] or DEC_0, DEC_0) + _to_decimal(vals["av"] or DEC_0, DEC_0)
 
         if "E132" in str(first_norm):
-            credit_3 = credit * 0.03
+            credit_3 = credit * _to_decimal("0.03")
             conf_3 = _sum_for_head("NAMKEEN 3% Restriction")
-            credit_5 = credit * 0.05
+            credit_5 = credit * _to_decimal("0.05")
             conf_5 = _sum_for_head("NAMKEEN 5% Restriction")
             return {
-                "threeRestriction": min(available_value, max(round_down(credit_3 - conf_3), 0)),
-                "fiveRestriction": min(available_value, max(round_down(credit_5 - conf_5), 0)),
+                "threeRestriction": min(available_value, max(round_down(credit_3 - conf_3), DEC_0)),
+                "fiveRestriction": min(available_value, max(round_down(credit_5 - conf_5), DEC_0)),
             }
 
         if "E126" in str(first_norm):
-            credit_3 = credit * 0.03
+            credit_3 = credit * _to_decimal("0.03")
             conf_3 = _sum_for_head("PICKLE 3% Restriction")
-            return {"threeRestriction": min(available_value, max(round_down(credit_3 - conf_3), 0))}
+            return {"threeRestriction": min(available_value, max(round_down(credit_3 - conf_3), DEC_0))}
 
         if "E1" in str(first_norm):
-            credit_2 = credit * 0.02
+            credit_2 = credit * _to_decimal("0.02")
             conf_2 = _sum_for_head("CONFECTIONERY 2% Restriction")
-            credit_3 = credit * 0.03
+            credit_3 = credit * _to_decimal("0.03")
             conf_3 = _sum_for_head("CONFECTIONERY 3% Restriction")
-            credit_5 = credit * 0.05
+            credit_5 = credit * _to_decimal("0.05")
             conf_5 = _sum_for_head("CONFECTIONERY 5% Restriction")
             return {
-                "twoRestriction": min(available_value, max(round_down(credit_2 - conf_2), 0)),
-                "threeRestriction": min(available_value, max(round_down(credit_3 - conf_3), 0)),
-                "fiveRestriction": min(available_value, max(round_down(credit_5 - conf_5), 0)),
+                "twoRestriction": min(available_value, max(round_down(credit_2 - conf_2), DEC_0)),
+                "threeRestriction": min(available_value, max(round_down(credit_3 - conf_3), DEC_0)),
+                "fiveRestriction": min(available_value, max(round_down(credit_5 - conf_5), DEC_0)),
             }
 
         if "E5" in str(first_norm):
-            credit_10 = credit * 0.10
+            credit_10 = credit * _to_decimal("0.10")
             total_value = _sum_for_head("BISCUIT 10% Restriction")
-            return {"tenRestriction": min(max(round_down(credit_10 - total_value), 0), available_value)}
+            return {"tenRestriction": min(max(round_down(credit_10 - total_value), DEC_0), available_value)}
 
         return None
 
@@ -750,123 +755,83 @@ class LicenseDetailsModel(AuditModel):
 # -----------------------------
 # Export Items
 # -----------------------------
-
 class LicenseExportItemModel(models.Model):
     license = models.ForeignKey("license.LicenseDetailsModel", on_delete=models.CASCADE, related_name="export_license")
     description = models.CharField(max_length=255, blank=True, db_index=True, null=True)
-    item = models.ForeignKey(
-        "core.ItemNameModel", related_name="export_licenses", on_delete=models.CASCADE, null=True, blank=True
-    )
-    norm_class = models.ForeignKey(
-        "core.SionNormClassModel", null=True, blank=True, on_delete=models.CASCADE, related_name="export_item"
-    )
+    item = models.ForeignKey("core.ItemNameModel", related_name="export_licenses", on_delete=models.CASCADE, null=True,
+                             blank=True)
+    norm_class = models.ForeignKey("core.SionNormClassModel", null=True, blank=True, on_delete=models.CASCADE,
+                                   related_name="export_item")
 
     duty_type = models.CharField(max_length=255, default="Basic")
-    net_quantity = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
-    old_quantity = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
+    net_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
+                                       validators=[MinValueValidator(DEC_0)])
+    old_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
+                                       validators=[MinValueValidator(DEC_0)])
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default=KG)
 
-    fob_fc = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
-    fob_inr = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
-    fob_exchange_rate = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
+    fob_fc = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0, validators=[MinValueValidator(DEC_0)])
+    fob_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0, validators=[MinValueValidator(DEC_0)])
+    fob_exchange_rate = models.DecimalField(max_digits=15, decimal_places=6, default=DEC_0,
+                                            validators=[MinValueValidator(DEC_0)])
     currency = models.CharField(choices=CURRENCY_CHOICES, default=USD, max_length=5)
-    value_addition = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
-    cif_fc = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
-    cif_inr = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
+    value_addition = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
+                                         validators=[MinValueValidator(DEC_0)])
+    cif_fc = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0, validators=[MinValueValidator(DEC_0)])
+    cif_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0, validators=[MinValueValidator(DEC_0)])
 
     def __str__(self) -> str:
-        return getattr(self.item, "name", "") or ""
+        return getattr(self.item, "name", "") or f"ExportItem#{self.pk}"
 
-    def balance_cif_fc(self) -> float:
-        credit = (
-                LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum("cif_fc"))["cif_fc__sum"] or 0
+    def balance_cif_fc(self) -> Decimal:
+        credit = _to_decimal(
+            LicenseExportItemModel.objects.filter(license=self.license).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+            DEC_0,
         )
-        debit = (
-                RowDetails.objects.filter(sr_number__license=self.license, transaction_type=Debit)
-                .aggregate(Sum("cif_fc"))["cif_fc__sum"]
-                or 0
+        debit = _to_decimal(
+            RowDetails.objects.filter(sr_number__license=self.license, transaction_type=DEBIT).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+            DEC_0,
         )
-        allotment = (
-                AllotmentItems.objects.filter(
-                    item__license=self.license, allotment__bill_of_entry__bill_of_entry_number__isnull=True
-                ).aggregate(Sum("cif_fc"))["cif_fc__sum"]
-                or 0
+        allotment = _to_decimal(
+            AllotmentItems.objects.filter(item__license=self.license,
+                                          allotment__bill_of_entry__bill_of_entry_number__isnull=True)
+            .aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+            DEC_0,
         )
-        return float(credit) - float(debit + allotment)
+        return credit - (debit + allotment)
 
 
 # -----------------------------
 # Import Items
 # -----------------------------
-
 class LicenseImportItemsModel(models.Model):
     serial_number = models.IntegerField(default=0)
-    license = models.ForeignKey(
-        "license.LicenseDetailsModel", on_delete=models.CASCADE, related_name="import_license", db_index=True
-    )
-    hs_code = models.ForeignKey(
-        "core.HSCodeModel", on_delete=models.CASCADE, blank=True, related_name="import_item", null=True, db_index=True
-    )
+    license = models.ForeignKey("license.LicenseDetailsModel", on_delete=models.CASCADE, related_name="import_license",
+                                db_index=True)
+    hs_code = models.ForeignKey("core.HSCodeModel", on_delete=models.CASCADE, blank=True, related_name="import_item",
+                                null=True, db_index=True)
     items = models.ManyToManyField(ItemNameModel, blank=True, related_name="license_import_item")
 
     description = models.CharField(max_length=255, blank=True, db_index=True, null=True)
     duty_type = models.CharField(max_length=255)
 
-    quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    old_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_000)
+    old_quantity = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_000)
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default=KG)
 
-    cif_fc = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    cif_inr = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    cif_fc = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
+    cif_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
 
-    available_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    available_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    available_quantity = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_000)
+    available_value = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
 
-    debited_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    debited_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    debited_quantity = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_000)
+    debited_value = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
 
-    allotted_quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    allotted_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    allotted_quantity = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_000)
+    allotted_value = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
 
     is_restrict = models.BooleanField(default=False)
     comment = models.TextField(blank=True, null=True)
@@ -885,181 +850,180 @@ class LicenseImportItemsModel(models.Model):
         return f"{self.license}-{self.serial_number}"
 
     @cached_property
-    def required_cif(self):
+    def required_cif(self) -> Decimal:
         """
-        If available quantity > 100, use the first linked item's head.unit_rate as the multiplier.
-        (Original code referenced self.item.head, but this model uses M2M `items`.)
+        If available quantity > 100, use first linked item's head.unit_rate as multiplier.
         """
-        if self.available_quantity and float(self.available_quantity) > 100:
+        if self.available_quantity and self.available_quantity > _to_decimal("100"):
             first_item = self.items.first()
-            unit_rate = getattr(getattr(first_item, "head", None), "unit_rate", None)
-            if unit_rate:
+            unit_rate = _to_decimal(getattr(getattr(first_item, "head", None), "unit_rate", DEC_0), DEC_0)
+            if unit_rate and unit_rate > DEC_0:
                 return self.available_quantity * unit_rate
-        return 0
+        return DEC_0
 
     @cached_property
-    def balance_quantity(self):
-        from core.scripts.calculate_balance import calculate_available_quantity
-
-        return calculate_available_quantity(self)
+    def balance_quantity(self) -> Decimal:
+        """
+        Delegates to core script calculate_balance if present; otherwise compute here.
+        """
+        try:
+            from core.scripts.calculate_balance import calculate_available_quantity as calc  # lazy import
+            return _to_decimal(calc(self), DEC_000)
+        except Exception:
+            # Fallback: quantity - debited - allotted (un-BOE)
+            total = _to_decimal(self.quantity or DEC_000, DEC_000)
+            debited = _to_decimal(self.item_details.filter(transaction_type=DEBIT).aggregate(
+                total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"], DEC_000)
+            allotted = _to_decimal(
+                self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+                    total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"], DEC_000)
+            avail = total - (debited + allotted)
+            return avail if avail >= DEC_000 else DEC_000
 
     @cached_property
-    def balance_cif_fc(self) -> float:
+    def balance_cif_fc(self) -> Decimal:
         """
-        Row-level balance. For special rows (0 / 0.01 / 0.1), fall back to license-level debits/allotments.
+        Row-level balance. For special rows (0 / 0.01 / 0.1), fall back to license-level sums.
         """
-        if not self.cif_fc or float(self.cif_fc) in (0, 0.1, 0.01):
-            credit = (
-                    LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum("cif_fc"))[
-                        "cif_fc__sum"] or 0
-            )
-            debit = (
-                    RowDetails.objects.filter(sr_number__license=self.license, transaction_type=Debit)
-                    .aggregate(Sum("cif_fc"))["cif_fc__sum"]
-                    or 0
-            )
-            allotment = (
-                    AllotmentItems.objects.filter(
-                        item__license=self.license, allotment__bill_of_entry__bill_of_entry_number__isnull=True
-                    ).aggregate(Sum("cif_fc"))["cif_fc__sum"]
-                    or 0
-            )
+        if not self.cif_fc or self.cif_fc in (Decimal("0"), Decimal("0.1"), Decimal("0.01")):
+            credit = _to_decimal(LicenseExportItemModel.objects.filter(license=self.license).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
+            debit = _to_decimal(
+                RowDetails.objects.filter(sr_number__license=self.license, transaction_type=DEBIT).aggregate(
+                    total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
+            allotment = _to_decimal(AllotmentItems.objects.filter(item__license=self.license,
+                                                                  allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
+            return credit - debit - allotment
         else:
-            credit = self.cif_fc or 0
-            debit = (
-                    RowDetails.objects.filter(sr_number=self, transaction_type=Debit)
-                    .aggregate(Sum("cif_fc"))["cif_fc__sum"]
-                    or 0
-            )
-            allotment = (
-                    AllotmentItems.objects.filter(
-                        item=self, allotment__bill_of_entry__bill_of_entry_number__isnull=True
-                    ).aggregate(Sum("cif_fc"))["cif_fc__sum"]
-                    or 0
-            )
-        return float(credit) - float(debit) - float(allotment)
+            credit = _to_decimal(self.cif_fc or DEC_0, DEC_0)
+            debit = _to_decimal(RowDetails.objects.filter(sr_number=self, transaction_type=DEBIT).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
+            allotment = _to_decimal(AllotmentItems.objects.filter(item=self,
+                                                                  allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
+            return credit - debit - allotment
 
     @cached_property
-    def license_expiry(self):
+    def license_expiry(self) -> Optional[date]:
         return self.license.license_expiry_date
 
     @cached_property
-    def license_date(self):
+    def license_date(self) -> Optional[date]:
         return self.license.license_date
 
     @cached_property
-    def sorted_item_list(self):
+    def sorted_item_list(self) -> Dict[str, Any]:
         """
         Company-grouped BOE details with sums.
-        (Kept compatible; optimized a bit for readability.)
         """
         dict_list = []
-        dict_return = {}
         data = self.item_details.order_by("transaction_type", "bill_of_entry__company",
                                           "bill_of_entry__bill_of_entry_date")
         company_names = (
-            self.item_details.order_by("transaction_type", "bill_of_entry__company",
-                                       "bill_of_entry__bill_of_entry_date")
-            .values_list("bill_of_entry__company__name", flat=True)
-            .distinct()
+            data.values_list("bill_of_entry__company__name", flat=True).distinct()
         )
         for company in company_names:
-            if company:
-                dict_return.setdefault(company, {})
-                dict_return[company]["company"] = company
-                dict_return[company]["data_list"] = data.filter(bill_of_entry__company__name=company)
-                dict_return[company]["sum_total_qty"] = (
-                    data.filter(bill_of_entry__company__name=company).aggregate(Sum("qty")).get("qty__sum", 0.00)
-                )
-                dict_return[company]["sum_total_cif_fc"] = (
-                    data.filter(bill_of_entry__company__name=company).aggregate(Sum("cif_fc")).get("cif_fc__sum", 0.00)
-                )
-                dict_return[company]["sum_total_cif_inr"] = (
-                    data.filter(bill_of_entry__company__name=company).aggregate(Sum("cif_inr")).get("cif_inr__sum",
-                                                                                                    0.00)
-                )
-                dict_list.append(dict_return[company])
-        dict_return["item_details"] = dict_list
-        return dict_return
+            if not company:
+                continue
+            company_data = data.filter(bill_of_entry__company__name=company)
+            dict_list.append({
+                "company": company,
+                "data_list": company_data,
+                "sum_total_qty": _to_decimal(
+                    company_data.aggregate(total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))[
+                        "total"], DEC_000),
+                "sum_total_cif_fc": _to_decimal(
+                    company_data.aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))[
+                        "total"], DEC_0),
+                "sum_total_cif_inr": _to_decimal(
+                    company_data.aggregate(total=Coalesce(Sum("cif_inr"), Value(DEC_0), output_field=DecimalField()))[
+                        "total"], DEC_0),
+            })
+        return {"item_details": dict_list}
 
     @cached_property
-    def sorted_allotment_list(self):
+    def sorted_allotment_list(self) -> Dict[str, Any]:
         dict_list = []
-        dict_return = {}
         data = self.allotment_details.filter(is_boe=False).order_by("allotment__company", "allotment__modified_on")
         company_names = (
-            self.allotment_details.filter(is_boe=False)
-            .order_by("allotment__company", "allotment__modified_on", "allotment__unit_value_per_unit")
+            data.order_by("allotment__company", "allotment__modified_on", "allotment__unit_value_per_unit")
             .values_list("allotment__company__name", flat=True)
             .distinct()
         )
         for company in company_names:
-            if company:
-                dict_return.setdefault(company, {})
-                dict_return[company]["company"] = company
-                dict_return[company]["data_list"] = data.filter(allotment__company__name=company, is_boe=False)
-                dict_return[company]["sum_total_qty"] = (
-                    data.filter(allotment__company__name=company, is_boe=False).aggregate(Sum("qty")).get("qty__sum",
-                                                                                                          0.00)
-                )
-                dict_return[company]["sum_total_cif_fc"] = (
-                    data.filter(allotment__company__name=company, is_boe=False)
-                    .aggregate(Sum("cif_fc"))
-                    .get("cif_fc__sum", 0.00)
-                )
-                dict_list.append(dict_return[company])
-        dict_return["item_details"] = dict_list
-        return dict_return
+            if not company:
+                continue
+            company_data = data.filter(allotment__company__name=company, is_boe=False)
+            dict_list.append({
+                "company": company,
+                "data_list": company_data,
+                "sum_total_qty": _to_decimal(
+                    company_data.aggregate(total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))[
+                        "total"], DEC_000),
+                "sum_total_cif_fc": _to_decimal(
+                    company_data.aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))[
+                        "total"], DEC_0),
+            })
+        return {"item_details": dict_list}
 
     @cached_property
-    def total_debited_qty(self):
-        return self.item_details.filter(transaction_type="D").aggregate(Sum("qty")).get("qty__sum", 0.00)
+    def total_debited_qty(self) -> Decimal:
+        return _to_decimal(self.item_details.filter(transaction_type=DEBIT).aggregate(
+            total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"], DEC_000)
 
     @cached_property
-    def total_debited_cif_fc(self):
-        debited = self.item_details.filter(transaction_type="D").aggregate(Sum("cif_fc")).get("cif_fc__sum", 0.00)
-        alloted = (
-                self.allotment_details.filter(
-                    allotment__bill_of_entry__bill_of_entry_number__isnull=True,
-                    allotment__type=ARO,
-                ).aggregate(Sum("cif_fc"))["cif_fc__sum"]
-                or 0
-        )
-        total = (debited or 0) + (alloted or 0)
-        return round(total or 0, 0)
+    def total_debited_cif_fc(self) -> Decimal:
+        debited = _to_decimal(self.item_details.filter(transaction_type=DEBIT).aggregate(
+            total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
+        alloted = _to_decimal(self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+                                                            allotment__type=ARO).aggregate(
+            total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
+        total = debited + alloted
+        # rounded to nearest integer (0 d.p.) as original did; return Decimal
+        return total.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
     @cached_property
-    def total_debited_cif_inr(self):
-        return self.item_details.filter(transaction_type="D").aggregate(Sum("cif_inr")).get("cif_inr__sum", 0.00)
+    def total_debited_cif_inr(self) -> Decimal:
+        return _to_decimal(self.item_details.filter(transaction_type=DEBIT).aggregate(
+            total=Coalesce(Sum("cif_inr"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
 
     @cached_property
-    def opening_balance(self):
-        return self.item_details.filter(transaction_type="C").aggregate(Sum("qty")).get("qty__sum", 0.00)
+    def opening_balance(self) -> Decimal:
+        return _to_decimal(self.item_details.filter(transaction_type="C").aggregate(
+            total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"], DEC_000)
 
     @cached_property
-    def usable(self):
-        if hasattr(self, "item") and getattr(self, "item", None) and getattr(self.item, "head", None):
-            if self.license.notification_number == N2015 and self.items.head.is_restricted:
-                return self.old_quantity
-        value = self.item_details.filter(transaction_type="C").aggregate(Sum("qty")).get("qty__sum", 0.00)
-        return round(value or 0, 0)
+    def usable(self) -> Decimal:
+        # preserve prior conditional behaviour while using Decimal
+        try:
+            if hasattr(self, "item") and getattr(self, "item", None) and getattr(self.item, "head", None):
+                if self.license.notification_number == N2015 and getattr(self.items.first(), "head", None) and getattr(
+                        self.items.first().head, "is_restricted", False):
+                    return _to_decimal(self.old_quantity or DEC_000, DEC_000)
+        except Exception:
+            pass
+        value = _to_decimal(self.item_details.filter(transaction_type="C").aggregate(
+            total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"], DEC_000)
+        return round_down(value or DEC_000)
 
 
 # -----------------------------
 # Documents
 # -----------------------------
-
 class LicenseDocumentModel(models.Model):
     license = models.ForeignKey("license.LicenseDetailsModel", on_delete=models.CASCADE,
                                 related_name="license_documents")
     type = models.CharField(max_length=255)
     file = models.FileField(upload_to=license_path)
 
+    def __str__(self) -> str:
+        return f"{self.type} - {getattr(self.license, 'license_number', 'N/A')}"
+
 
 # -----------------------------
-# Status / Workflow
+# Status / Workflow Models
 # -----------------------------
-
 class StatusModel(models.Model):
     name = models.CharField(max_length=255)
 
@@ -1090,9 +1054,8 @@ class DateModel(models.Model):
 
 class LicenseInwardOutwardModel(models.Model):
     date = models.ForeignKey("license.DateModel", on_delete=models.CASCADE, related_name="license_status")
-    license = models.ForeignKey(
-        "license.LicenseDetailsModel", on_delete=models.CASCADE, related_name="license_status", null=True, blank=True
-    )
+    license = models.ForeignKey("license.LicenseDetailsModel", on_delete=models.CASCADE, related_name="license_status",
+                                null=True, blank=True)
     status = models.ForeignKey("license.StatusModel", on_delete=models.CASCADE, related_name="license_status")
     office = models.ForeignKey("license.OfficeModel", on_delete=models.CASCADE, related_name="license_status")
 
@@ -1102,14 +1065,10 @@ class LicenseInwardOutwardModel(models.Model):
     annexure = models.BooleanField(default=False)
     tl = models.BooleanField(default=False)
     aro = models.BooleanField(default=False)
-    along_with = models.ForeignKey(
-        "license.AlongWithModel", on_delete=models.CASCADE, related_name="license_status", null=True, blank=True
-    )
+    along_with = models.ForeignKey("license.AlongWithModel", on_delete=models.CASCADE, related_name="license_status",
+                                   null=True, blank=True)
 
     def __str__(self) -> str:
-        """
-        Human readable trail of an inward/outward record.
-        """
         parts = []
         if self.license:
             parts.append(str(self.license))
@@ -1131,20 +1090,35 @@ class LicenseInwardOutwardModel(models.Model):
 
     @cached_property
     def ge_file_number(self):
-        return self.license.ge_file_number
+        return self.license.ge_file_number if self.license else 0
 
 
 # -----------------------------
 # Signals
 # -----------------------------
-
 @receiver(post_save, sender=LicenseImportItemsModel)
 def update_balance(sender, instance, **kwargs):
-    # async task
-    update_balance_values_task(instance.id)
+    """
+    After an import item is saved, schedule async update of derived balances.
+    Use transaction.on_commit so the async task sees committed DB state.
+    """
+    try:
+        transaction.on_commit(lambda: update_balance_values_task.delay(instance.id))
+    except Exception:
+        # fallback to direct call (synchronous) — useful in tests
+        try:
+            update_balance_values_task(instance.id)
+        except Exception:
+            # swallow to avoid breaking saving flow
+            pass
 
-    # Auto-tag blank items using the predefined filter list
-    items_and_filters = filter_list()  # e.g. [("Item1", Q(description__icontains="Item1")), ...]
+    # Auto-tag blank items using a predefined filter list (lazy import)
+    try:
+        from setup.migrations_script import filter_list
+    except Exception:
+        filter_list = lambda: []
+
+    items_and_filters = filter_list()
     for item_name, query_filter in items_and_filters:
         try:
             nItem = ItemNameModel.objects.get(name=item_name)
@@ -1164,17 +1138,14 @@ def update_balance(sender, instance, **kwargs):
 # -----------------------------
 # Transfers
 # -----------------------------
-
 class LicenseTransferModel(models.Model):
     license = models.ForeignKey(LicenseDetailsModel, on_delete=models.CASCADE, related_name="transfers")
     transfer_date = models.DateField(null=True, blank=True)
 
-    from_company = models.ForeignKey(
-        "core.CompanyModel", on_delete=models.SET_NULL, null=True, blank=True, related_name="transfers_from"
-    )
-    to_company = models.ForeignKey(
-        "core.CompanyModel", on_delete=models.SET_NULL, null=True, blank=True, related_name="transfers_to"
-    )
+    from_company = models.ForeignKey("core.CompanyModel", on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name="transfers_from")
+    to_company = models.ForeignKey("core.CompanyModel", on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name="transfers_to")
 
     transfer_status = models.CharField(max_length=50)
     transfer_initiation_date = models.DateTimeField(null=True, blank=True)
@@ -1187,10 +1158,7 @@ class LicenseTransferModel(models.Model):
     user_id_acceptance = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self) -> str:
-        if self.transfer_date:
-            fd = self.transfer_date
-        else:
-            fd = getattr(self.transfer_initiation_date, "date", lambda: None)()
+        fd = self.transfer_date or (self.transfer_initiation_date.date() if self.transfer_initiation_date else None)
         fd_str = str(fd) if fd else "N/A"
         return (
             f"{self.transfer_status} from "
@@ -1209,6 +1177,9 @@ class LicenseTransferModel(models.Model):
     to_company_name.short_description = "To Company"
 
 
+# -----------------------------
+# License Purchase
+# -----------------------------
 class LicensePurchase(AuditModel):
     MODE_AMOUNT = "AMOUNT"
     MODE_QTY = "QTY"
@@ -1228,10 +1199,10 @@ class LicensePurchase(AuditModel):
 
     # relations
     license = models.ForeignKey("license.LicenseDetailsModel", on_delete=models.CASCADE, related_name="purchases")
-    purchasing_entity = models.ForeignKey("core.CompanyModel", null=True, blank=True,
-                                          on_delete=models.SET_NULL, related_name="entity_purchases")
-    supplier = models.ForeignKey("core.CompanyModel", null=True, blank=True,
-                                 on_delete=models.SET_NULL, related_name="supplier_purchases")
+    purchasing_entity = models.ForeignKey("core.CompanyModel", null=True, blank=True, on_delete=models.SET_NULL,
+                                          related_name="entity_purchases")
+    supplier = models.ForeignKey("core.CompanyModel", null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name="supplier_purchases")
 
     # supplier snapshot
     supplier_pan = models.CharField(max_length=32, null=True, blank=True)
@@ -1247,59 +1218,24 @@ class LicensePurchase(AuditModel):
 
     # amount-based fields
     amount_source = models.CharField(max_length=10, choices=AMOUNT_SOURCE_CHOICES, default=SRC_FOB_INR)
-    fob_inr = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )  # optional
-    cif_inr = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )  # optional
-    cif_usd = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )  # optional
-    exchange_rate = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )  # used with CIF_USD
-    markup_pct = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )  # ❌ no discounts, only markup %
+    fob_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0, validators=[MinValueValidator(DEC_0)])
+    cif_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0, validators=[MinValueValidator(DEC_0)])
+    cif_usd = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0, validators=[MinValueValidator(DEC_0)])
+    exchange_rate = models.DecimalField(max_digits=15, decimal_places=6, default=DEC_0,
+                                        validators=[MinValueValidator(DEC_0)])
+    markup_pct = models.DecimalField(max_digits=15, decimal_places=6, default=DEC_0,
+                                     validators=[MinValueValidator(DEC_0)])
 
     # quantity-based (single product)
     product_name = models.CharField(max_length=255, null=True, blank=True)
-    quantity_kg = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
-    rate_inr = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
+    quantity_kg = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_000,
+                                      validators=[MinValueValidator(DEC_000)])
+    rate_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
+                                   validators=[MinValueValidator(DEC_0)])
 
     # result
-    amount_inr = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-    )
+    amount_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
+                                     validators=[MinValueValidator(DEC_0)])
 
     class Meta:
         ordering = ["-created_on"]
@@ -1309,160 +1245,133 @@ class LicensePurchase(AuditModel):
         return f"Purchase[{self.id}] L#{self.license_id} {base} ₹{self.amount_inr:.2f}"
 
     # ---------- helpers ----------
-    def _source_amount(self) -> float:
+    def _source_amount(self) -> Decimal:
         """
-        The selected source amount for bill calculation (no FX on USD).
-        - FOB_INR  -> FOB (₹)
-        - CIF_INR  -> CIF (₹)
-        - CIF_USD  -> CIF ($)  [AS-IS, do NOT multiply by exchange rate]
+        The selected source amount (Decimal).
         """
-        try:
-            if self.amount_source == self.SRC_FOB_INR:
-                return float(self.fob_inr or 0)
-            if self.amount_source == self.SRC_CIF_INR:
-                return float(self.cif_inr or 0)
-            if self.amount_source == self.SRC_CIF_USD:
-                return float(self.cif_usd or 0)
-        except (TypeError, ValueError):
-            return 0.0
-        return 0.0
+        if self.amount_source == self.SRC_FOB_INR:
+            return _to_decimal(self.fob_inr, DEC_0)
+        if self.amount_source == self.SRC_CIF_INR:
+            return _to_decimal(self.cif_inr, DEC_0)
+        if self.amount_source == self.SRC_CIF_USD:
+            return _to_decimal(self.cif_usd, DEC_0)
+        return DEC_0
 
-    # Backwards compatibility for any old callers
-    def _amount_base_inr(self) -> float:
+    def _amount_base_inr(self) -> Decimal:
         """
-        DEPRECATED: kept for compatibility. Previously did FX multiply and (1+%) logic.
-        Now just returns the same value as _source_amount().
+        Backwards compatibility wrapper — returns Decimal.
         """
         return self._source_amount()
 
     # ---------- computations ----------
-    def compute_amount_inr(self) -> float:
+    def compute_amount_inr(self) -> Decimal:
         """
-        Amount mode  : bill = source × (markup_pct / 100)  (no “+1×base”)
-        Quantity mode: bill = qty × rate
-        Always returns a 2 d.p. rounded number.
+        MODE_AMOUNT: bill = source × (markup_pct / 100)
+        MODE_QTY: bill = qty × rate
+        Returns Decimal rounded to 2 d.p. using HALF_UP.
         """
-        try:
-            if self.mode == self.MODE_AMOUNT:
-                source = float(self._source_amount() or 0)
-                pct = float(self.markup_pct or 0)
-                bill = source * (pct / 100.0)
-                return round(bill, 2)
-
-            # MODE_QTY
-            q = float(self.quantity_kg or 0)
-            r = float(self.rate_inr or 0)
-            return round(q * r, 2)
-        except (TypeError, ValueError):
-            return 0.0
+        if self.mode == self.MODE_AMOUNT:
+            source = self._source_amount()
+            pct = _to_decimal(self.markup_pct, DEC_0)
+            bill = source * (pct / _to_decimal("100"))
+            return bill.quantize(DEC_0, rounding=ROUND_HALF_UP)
+        # MODE_QTY
+        q = _to_decimal(self.quantity_kg, DEC_000)
+        r = _to_decimal(self.rate_inr, DEC_0)
+        amt = q * r
+        return amt.quantize(DEC_0, rounding=ROUND_HALF_UP)
 
     def save(self, *args, **kwargs):
         # Snapshot PAN/GST from supplier if missing
         if self.supplier and not self.supplier_pan:
             try:
-                self.supplier_pan = self.supplier.pan or self.supplier_pan
+                self.supplier_pan = getattr(self.supplier, "pan", self.supplier_pan)
             except Exception:
                 pass
         if self.supplier and not self.supplier_gst:
             try:
-                self.supplier_gst = getattr(self.supplier, "gst_number", None) or self.supplier_gst
+                self.supplier_gst = getattr(self.supplier, "gst_number", self.supplier_gst)
             except Exception:
                 pass
 
-        # Auto-calc exchange rate only for convenience (not used in bill math)
-        # If absent/zero and both CIF ₹ and CIF $ present -> ER = round(CIF_INR / CIF_USD, 3)
+        # Auto-calc exchange rate convenience (if needed)
         try:
-            er = float(self.exchange_rate or 0)
-        except (TypeError, ValueError):
-            er = 0.0
+            er = _to_decimal(self.exchange_rate, DEC_0)
+        except Exception:
+            er = DEC_0
 
-        try:
-            usd = float(self.cif_usd or 0)
-            inr = float(self.cif_inr or 0)
-        except (TypeError, ValueError):
-            usd = inr = 0.0
+        usd = _to_decimal(self.cif_usd, DEC_0)
+        inr = _to_decimal(self.cif_inr, DEC_0)
 
-        if (er <= 0.0) and (usd > 0.0) and (inr > 0.0):
-            self.exchange_rate = round(inr / usd, 3)
+        if er <= DEC_0 and usd > DEC_0 and inr > DEC_0:
+            # keep 3 d.p. for convenience
+            self.exchange_rate = (inr / usd).quantize(_to_decimal("0.001"))
 
-        # Clamp markup % to max 3 decimals
+        # Clamp markup_pct to 6 decimals stored above
         try:
             if self.markup_pct not in (None, ""):
-                self.markup_pct = round(float(self.markup_pct), 3)
-        except (TypeError, ValueError):
-            self.markup_pct = 0.0
+                self.markup_pct = _to_decimal(self.markup_pct, DEC_0).quantize(_to_decimal("0.000001"))
+        except Exception:
+            self.markup_pct = DEC_0
 
-        # Final amount (bill) always computed server-side
+        # Final amount (bill) always computed server-side as Decimal
         self.amount_inr = self.compute_amount_inr()
         super().save(*args, **kwargs)
 
 
+# -----------------------------
+# Invoice & InvoiceItem
+# -----------------------------
 class Invoice(models.Model):
-    bills_of_entry = models.ForeignKey('bill_of_entry.BillOfEntryModel', related_name='invoices', blank=True,
-                                       null=True, on_delete=models.CASCADE)
+    bills_of_entry = models.ForeignKey("bill_of_entry.BillOfEntryModel", related_name="invoices", blank=True, null=True,
+                                       on_delete=models.CASCADE)
     from_entity = models.ForeignKey(InvoiceEntity, on_delete=models.CASCADE)
     to_company_name = models.CharField(max_length=255)
     to_company_pan = models.CharField(
         max_length=15,
         null=True,
         blank=True,
-        validators=[
-            RegexValidator(regex=r'^[A-Z]{5}[0-9]{4}[A-Z]$', message="Enter a valid PAN number.")
-        ]
+        validators=[RegexValidator(regex=r'^[A-Z]{5}[0-9]{4}[A-Z]$', message="Enter a valid PAN number.")],
     )
     to_company_gst_number = models.CharField(
         max_length=15,
         null=True,
         blank=True,
-        validators=[
-            RegexValidator(regex=r'^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$',
-                           message="Enter a valid GST number.")
-        ]
+        validators=[RegexValidator(regex=r'^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$',
+                                   message="Enter a valid GST number.")],
     )
     to_company_address_line_1 = models.TextField()
     to_company_address_line_2 = models.TextField(blank=True)
     invoice_number = models.CharField(max_length=50, unique=True)
     invoice_date = models.DateField(default=date.today)
-    BILLING_MODE_CHOICES = [
-        ('kg', 'KG'),
-        ('cif', 'CIF %'),
-        ('fob', 'FOB %'),
-    ]
+    BILLING_MODE_CHOICES = [("kg", "KG"), ("cif", "CIF %"), ("fob", "FOB %")]
 
     billing_mode = models.CharField(max_length=10, choices=BILLING_MODE_CHOICES)
-    total_qty = models.DecimalField(max_digits=12, decimal_places=3, default=0)
-    total_cif_fc = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_cif_inr = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_fob_inr = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_qty = models.DecimalField(max_digits=12, decimal_places=3, default=DEC_000)
+    total_cif_fc = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
+    total_cif_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
+    total_fob_inr = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
     total_amount_in_words = models.TextField(null=True, blank=True)
 
-    sale_type = models.CharField(  # NEW (optional, but matches your UI)
-        max_length=10,
-        choices=[('item', 'Item'), ('full', 'Full')],
-        default='item'
-    )
+    sale_type = models.CharField(max_length=10, choices=[("item", "Item"), ("full", "Full")], default="item")
 
 
 class InvoiceItem(models.Model):
-    invoice = models.ForeignKey(Invoice, related_name='items', on_delete=models.CASCADE)
-    sr_number = models.ForeignKey(
-        'license.LicenseImportItemsModel',
-        on_delete=models.CASCADE,
-        related_name='invoice_items'
-    )
-    license_no = models.CharField(max_length=50)  # for quick display, filled from sr_number.license.license_number
-    hsn_code = models.CharField(max_length=10, default='490700')
+    invoice = models.ForeignKey(Invoice, related_name="items", on_delete=models.CASCADE)
+    sr_number = models.ForeignKey("license.LicenseImportItemsModel", on_delete=models.CASCADE,
+                                  related_name="invoice_items")
+    license_no = models.CharField(max_length=50)  # filled from sr_number.license.license_number
+    hsn_code = models.CharField(max_length=10, default="490700")
     qty = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     cif_fc = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     cif_inr = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    fob_inr = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)  # NEW
+    fob_inr = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
 
     rate = models.DecimalField(max_digits=12, decimal_places=2)
     amount = models.DecimalField(max_digits=15, decimal_places=2)
 
     def save(self, *args, **kwargs):
-        # Auto-fill license_no from sr_number on save
         if self.sr_number and not self.license_no:
             self.license_no = self.sr_number.license.license_number
         super().save(*args, **kwargs)

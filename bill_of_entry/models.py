@@ -1,31 +1,51 @@
-from decimal import Decimal, DivisionByZero
+# bill_of_entry/models.py — Decimal-safe, Coalesce-hardened version
+
+from __future__ import annotations
+
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, DivisionByZero
+
 from django.core.validators import MinValueValidator
-from django.db import models
-from django.db.models import Sum
+from django.db import models, transaction
+from django.db.models import Sum, DecimalField, Value
+from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
 
-from core.models import AuditModel, InvoiceEntity, CompanyModel
+from core.models import AuditModel, CompanyModel
+
+# -----------------------------
+# Decimal helpers & constants
+# -----------------------------
+_D = Decimal
+DEC_0 = _D("0.00")
+DEC_000 = _D("0.000")
+DEC_EX_0 = _D("0.0000")
+
+
+def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
+    """Safely coerce value to Decimal."""
+    if isinstance(value, Decimal):
+        return value
+    if value is None:
+        return default
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return default
 
 
 # -----------------------------
 # Constants
 # -----------------------------
-Credit = 'C'
-Debit = 'D'
-TYPE_CHOICES = (
-    (Credit, 'Credit'),
-    (Debit, 'Debit'),
-)
+CREDIT = "C"
+DEBIT = "D"
+TYPE_CHOICES = ((CREDIT, "Credit"), (DEBIT, "Debit"))
 
-ARO = 'AR'
-ALLOTMENT = 'AT'
-ROW_TYPE = (
-    (ARO, 'ARO'),
-    (ALLOTMENT, 'Allotment'),
-)
+ARO = "AR"
+ALLOTMENT = "AT"
+ROW_TYPE = ((ARO, "ARO"), (ALLOTMENT, "Allotment"))
 
 
 # -----------------------------
@@ -42,21 +62,21 @@ class BillOfEntryModel(AuditModel):
     bill_of_entry_number = models.CharField(max_length=25)
     bill_of_entry_date = models.DateField(null=True, blank=True)
     port = models.ForeignKey(
-        'core.PortModel',
+        "core.PortModel",
         on_delete=models.CASCADE,
-        related_name='boe_port',
+        related_name="boe_port",
         null=True,
         blank=True,
     )
     exchange_rate = models.DecimalField(
         max_digits=12,
         decimal_places=4,
-        default=Decimal('0.0000'),
-        validators=[MinValueValidator(Decimal('0.0000'))],
+        default=DEC_EX_0,
+        validators=[MinValueValidator(DEC_EX_0)],
     )
-    product_name = models.CharField(max_length=255, default='')
+    product_name = models.CharField(max_length=255, default="")
     allotment = models.ManyToManyField(
-        'allotment.AllotmentModel',
+        "allotment.AllotmentModel",
         related_name="bill_of_entry",
         blank=True,
     )
@@ -69,11 +89,11 @@ class BillOfEntryModel(AuditModel):
     cha = models.CharField(max_length=255, null=True, blank=True)
     comments = models.TextField(null=True, blank=True)
 
-    admin_search_fields = ['bill_of_entry_number']
+    admin_search_fields = ["bill_of_entry_number"]
 
     class Meta:
-        unique_together = ('bill_of_entry_number', 'bill_of_entry_date', 'port')
-        ordering = ('-bill_of_entry_date',)
+        unique_together = ("bill_of_entry_number", "bill_of_entry_date", "port")
+        ordering = ("-bill_of_entry_date",)
         verbose_name = "Bill of Entry"
         verbose_name_plural = "Bills of Entry"
 
@@ -81,20 +101,22 @@ class BillOfEntryModel(AuditModel):
         return self.bill_of_entry_number
 
     def save(self, *args, **kwargs):
-        """Auto-calculate exchange rate if not explicitly set."""
-        if not self.exchange_rate or self.exchange_rate == Decimal('0.0000'):
+        """Auto-calculate exchange rate if not explicitly set (Decimal-safe)."""
+        if not self.exchange_rate or _to_decimal(self.exchange_rate, DEC_EX_0) == DEC_EX_0:
             try:
                 total_fc = self.get_total_fc
                 total_inr = self.get_total_inr
-                if total_fc > 0:
-                    self.exchange_rate = round(total_inr / total_fc, 4)
-            except (ZeroDivisionError, DivisionByZero, TypeError):
-                self.exchange_rate = Decimal('0.0000')
+                if total_fc > DEC_0:
+                    # compute precise division, quantize to 4 dp
+                    ex = (total_inr / total_fc).quantize(DEC_EX_0)
+                    self.exchange_rate = ex
+            except (DivisionByZero, ZeroDivisionError, TypeError, InvalidOperation):
+                self.exchange_rate = DEC_EX_0
         super().save(*args, **kwargs)
 
     @cached_property
-    def get_absolute_url(self):
-        return reverse('bill-of-entry-detail', kwargs={'pk': self.pk})
+    def get_absolute_url(self) -> str:
+        return reverse("bill-of-entry-detail", kwargs={"pk": self.pk})
 
     # --- Computed properties ---
     @cached_property
@@ -102,37 +124,56 @@ class BillOfEntryModel(AuditModel):
         return self.item_details.all()
 
     @cached_property
-    def get_total_inr(self):
-        total = self.item_details_cached.aggregate(Sum('cif_inr'))['cif_inr__sum']
-        return round(total or 0, 2)
+    def get_total_inr(self) -> Decimal:
+        total = self.item_details_cached.aggregate(
+            total=Coalesce(Sum("cif_inr"), Value(DEC_0), output_field=DecimalField())
+        )["total"]
+        return _to_decimal(total, DEC_0).quantize(DEC_0)
 
     @cached_property
-    def get_total_fc(self):
-        total = self.item_details_cached.aggregate(Sum('cif_fc'))['cif_fc__sum']
-        return round(total or 0, 2)
+    def get_total_fc(self) -> Decimal:
+        total = self.item_details_cached.aggregate(
+            total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+        )["total"]
+        return _to_decimal(total, DEC_0).quantize(DEC_0)
 
     @cached_property
-    def get_total_quantity(self):
-        total = self.item_details_cached.aggregate(Sum('qty'))['qty__sum']
-        return round(total or 0, 3)
+    def get_total_quantity(self) -> Decimal:
+        total = self.item_details_cached.aggregate(
+            total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField())
+        )["total"]
+        return _to_decimal(total, DEC_000).quantize(DEC_000)
 
     @cached_property
-    def get_licenses(self):
-        return ", ".join([
+    def get_licenses(self) -> str:
+        return ", ".join(
             item.sr_number.license.license_number
             for item in self.item_details_cached
-            if getattr(item.sr_number, 'license', None)
-        ])
+            if getattr(item.sr_number, "license", None)
+        )
 
     @cached_property
-    def get_unit_price(self):
+    def get_unit_price(self) -> Decimal:
         total_qty = self.get_total_quantity
-        return round(self.get_total_fc / total_qty, 3) if total_qty > 0 else 0
+        if total_qty > DEC_000:
+            # unit price = total_fc / total_qty (3 d.p.)
+            try:
+                up = (self.get_total_fc / total_qty).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+                return _to_decimal(up, DEC_000)
+            except (DivisionByZero, ZeroDivisionError, InvalidOperation):
+                return DEC_000
+        return DEC_000
 
     @cached_property
-    def get_exchange_rate(self):
+    def get_exchange_rate(self) -> Decimal:
         total_fc = self.get_total_fc
-        return round(self.get_total_inr / total_fc, 3) if total_fc > 0 else 0
+        if total_fc > DEC_0:
+            try:
+                ex = (self.get_total_inr / total_fc).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+                return _to_decimal(ex, DEC_0)
+            except (DivisionByZero, ZeroDivisionError, InvalidOperation):
+                return DEC_0
+        return DEC_0
 
 
 # -----------------------------
@@ -142,44 +183,44 @@ class RowDetails(AuditModel):
     bill_of_entry = models.ForeignKey(
         BillOfEntryModel,
         on_delete=models.CASCADE,
-        related_name='item_details',
+        related_name="item_details",
         null=True,
         blank=True,
     )
     row_type = models.CharField(max_length=2, choices=ROW_TYPE, default=ALLOTMENT)
     sr_number = models.ForeignKey(
-        'license.LicenseImportItemsModel',
+        "license.LicenseImportItemsModel",
         on_delete=models.CASCADE,
-        related_name='item_details',
+        related_name="item_details",
     )
-    transaction_type = models.CharField(max_length=2, choices=TYPE_CHOICES, default=Debit)
+    transaction_type = models.CharField(max_length=2, choices=TYPE_CHOICES, default=DEBIT)
     cif_inr = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     cif_fc = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     qty = models.DecimalField(
         max_digits=15,
         decimal_places=3,
-        default=Decimal('0.000'),
-        validators=[MinValueValidator(Decimal('0.000'))],
+        default=DEC_000,
+        validators=[MinValueValidator(DEC_000)],
     )
 
     admin_search_fields = (
-        'sr_number__license__license_number',
-        'bill_of_entry__bill_of_entry_number',
+        "sr_number__license__license_number",
+        "bill_of_entry__bill_of_entry_number",
     )
 
     class Meta:
-        ordering = ['transaction_type', 'bill_of_entry__bill_of_entry_date']
-        unique_together = ('bill_of_entry', 'sr_number', 'transaction_type')
+        ordering = ["transaction_type", "bill_of_entry__bill_of_entry_date"]
+        unique_together = ("bill_of_entry", "sr_number", "transaction_type")
         verbose_name = "Item Detail"
         verbose_name_plural = "Item Details"
 
@@ -190,23 +231,40 @@ class RowDetails(AuditModel):
 # -----------------------------
 # Signals for stock updates
 # -----------------------------
+def _schedule_update_balance(item_id: int) -> None:
+    """Schedule update_balance_values_task after transaction commit (safe for tests)."""
+
+    def _job():
+        try:
+            from bill_of_entry.tasks import update_balance_values_task
+            try:
+                update_balance_values_task.delay(item_id)
+            except Exception:
+                update_balance_values_task(item_id)
+        except Exception:
+            # swallow exceptions to avoid failing DB writes
+            pass
+
+    try:
+        transaction.on_commit(_job)
+    except Exception:
+        # fallback immediate invocation in environments without on_commit
+        _job()
+
+
 @receiver(post_save, sender=RowDetails, dispatch_uid="update_stock_on_save")
 def update_stock(sender, instance, **kwargs):
     """Trigger stock update task after save."""
     item = instance.sr_number
-    from bill_of_entry.tasks import update_balance_values_task
-    try:
-        update_balance_values_task.delay(item.id)
-    except Exception:
-        update_balance_values_task(item.id)
+    if not item:
+        return
+    _schedule_update_balance(item.id)
 
 
 @receiver(post_delete, sender=RowDetails)
 def delete_stock(sender, instance, **kwargs):
     """Trigger stock update task after delete."""
     item = instance.sr_number
-    from bill_of_entry.tasks import update_balance_values_task
-    try:
-        update_balance_values_task.delay(item.id)
-    except Exception:
-        update_balance_values_task(item.id)
+    if not item:
+        return
+    _schedule_update_balance(item.id)

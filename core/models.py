@@ -1,15 +1,11 @@
 """
-Refactored `models.py` for YOUR_APP — merged, cleaned, and improved version as requested.
+Refactored `models.py` for YOUR_APP — final cleaned version.
 Features:
  - AuditModel abstract base for created/modified tracking
  - company file upload path helper
  - PAN/GST/IFSC validators
- - more explicit/typed fields and sensible defaults
+ - consistent Decimal defaults and MinValueValidator usage
  - consistent related_name usage
- - kept behavior compatible with your provided snippets
-
-Drop this file into your app (e.g. core/models.py), run `makemigrations` and `migrate`,
-then run tests and review admin displays.
 """
 from decimal import Decimal
 from threading import local
@@ -183,7 +179,13 @@ class ItemNameModel(AuditModel):
     head = models.ForeignKey('core.ItemHeadModel', on_delete=models.CASCADE, related_name='items', null=True,
                              blank=True)
     name = models.CharField(max_length=255, unique=True)
-    unit_price = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    # unit_price: use Decimal default, 3 decimal places for unit price precision
+    unit_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        default=Decimal('0.000'),
+        validators=[MinValueValidator(Decimal('0.000'))],
+    )
     is_active = models.BooleanField(default=False)
 
     def __str__(self):
@@ -381,13 +383,23 @@ class InvoiceEntity(models.Model):
     name = models.CharField(max_length=255)
     address_line_1 = models.TextField()
     address_line_2 = models.TextField(blank=True)
-    pan_number = models.CharField(max_length=10)
-    gst_number = models.CharField(max_length=15)
+    pan_number = models.CharField(
+        max_length=10,
+        validators=[RegexValidator(regex=r'^[A-Z]{5}[0-9]{4}[A-Z]$', message="Enter a valid PAN number.")]
+    )
+    gst_number = models.CharField(
+        max_length=15,
+        validators=[RegexValidator(regex=r'^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$',
+                                   message="Enter a valid GST number.")]
+    )
     logo = models.ImageField(upload_to='entity_logos/', null=True, blank=True)
 
     bank_account_number = models.CharField(max_length=30)
     bank_name = models.CharField(max_length=100)
-    ifsc_code = models.CharField(max_length=11)
+    ifsc_code = models.CharField(
+        max_length=11,
+        validators=[RegexValidator(regex=r'^[A-Z]{4}0[A-Z0-9]{6}$', message="Enter a valid IFSC code.")]
+    )
     account_type = models.CharField(max_length=10, choices=ACCOUNT_TYPES)
     bill_colour = models.CharField(max_length=10, null=True, blank=True)
     signature = models.ImageField(upload_to='entity_signature/', null=True, blank=True)

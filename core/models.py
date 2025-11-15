@@ -1,13 +1,9 @@
+# core/models.py
 """
-Refactored `models.py` for YOUR_APP — final cleaned version.
-Features:
- - AuditModel abstract base for created/modified tracking
- - company file upload path helper
- - PAN/GST/IFSC validators
- - consistent Decimal defaults and MinValueValidator usage
- - consistent related_name usage
+Core models (clean, Decimal-safe) that import shared choices from core/constants.py.
+Replace your existing core/models.py with this file (backup first).
 """
-from decimal import Decimal
+
 from threading import local
 
 from django.conf import settings
@@ -15,6 +11,11 @@ from django.core.validators import RegexValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils.functional import cached_property
+
+from .constants import (
+    DEC_0,
+    DEC_000,
+)
 
 alpha = RegexValidator(r'^[a-zA-Z ]*$', 'Only alpha characters are allowed.')
 
@@ -165,8 +166,8 @@ class ItemHeadModel(AuditModel):
     unit_rate = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     is_restricted = models.BooleanField(default=False)
     dict_key = models.CharField(max_length=255, null=True, blank=True)
@@ -183,8 +184,8 @@ class ItemNameModel(AuditModel):
     unit_price = models.DecimalField(
         max_digits=10,
         decimal_places=3,
-        default=Decimal('0.000'),
-        validators=[MinValueValidator(Decimal('0.000'))],
+        default=DEC_000,
+        validators=[MinValueValidator(DEC_000)],
     )
     is_active = models.BooleanField(default=False)
 
@@ -201,8 +202,8 @@ class HSCodeModel(AuditModel):
     unit_price = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     basic_duty = models.CharField(max_length=225, null=True, blank=True)
     unit = models.CharField(max_length=255, null=True, blank=True)
@@ -242,8 +243,8 @@ class SIONExportModel(models.Model):
     quantity = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     unit = models.CharField(max_length=255, null=True, blank=True)
 
@@ -260,8 +261,8 @@ class SIONImportModel(models.Model):
     quantity = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     unit = models.CharField(max_length=255, null=True, blank=True)
     condition = models.CharField(max_length=255, null=True, blank=True)
@@ -278,56 +279,56 @@ class HSCodeDutyModel(AuditModel):
     basic_custom_duty = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     additional_duty_of_customs = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     custom_health_CESS = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     social_welfare_surcharge = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     additional_CVD = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     IGST_levy = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     compensation_cess = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     total_duty = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     sample_on_lakh = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     is_fetch = models.BooleanField(default=False)
     is_fetch_xls = models.BooleanField(default=False)
@@ -364,8 +365,8 @@ class UnitPriceModel(AuditModel):
     unit_price = models.DecimalField(
         max_digits=15,
         decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
     )
     label = models.CharField(max_length=255, default='')
 

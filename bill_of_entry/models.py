@@ -1,5 +1,4 @@
-# bill_of_entry/models.py — Decimal-safe, Coalesce-hardened version
-
+# bill_of_entry/models.py
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, DivisionByZero
@@ -13,15 +12,16 @@ from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
 
+from core.constants import (
+    TYPE_CHOICES,
+    ROW_TYPE_CHOICES,
+    DEC_0,
+    DEC_000,
+)
 from core.models import AuditModel, CompanyModel
 
-# -----------------------------
-# Decimal helpers & constants
-# -----------------------------
-_D = Decimal
-DEC_0 = _D("0.00")
-DEC_000 = _D("0.000")
-DEC_EX_0 = _D("0.0000")
+# Locally-used decimal for 4 dp exchange rates
+DEC_EX_0 = Decimal("0.0000")
 
 
 def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
@@ -34,18 +34,6 @@ def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         return default
-
-
-# -----------------------------
-# Constants
-# -----------------------------
-CREDIT = "C"
-DEBIT = "D"
-TYPE_CHOICES = ((CREDIT, "Credit"), (DEBIT, "Debit"))
-
-ARO = "AR"
-ALLOTMENT = "AT"
-ROW_TYPE = ((ARO, "ARO"), (ALLOTMENT, "Allotment"))
 
 
 # -----------------------------
@@ -156,7 +144,6 @@ class BillOfEntryModel(AuditModel):
     def get_unit_price(self) -> Decimal:
         total_qty = self.get_total_quantity
         if total_qty > DEC_000:
-            # unit price = total_fc / total_qty (3 d.p.)
             try:
                 up = (self.get_total_fc / total_qty).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
                 return _to_decimal(up, DEC_000)
@@ -187,13 +174,13 @@ class RowDetails(AuditModel):
         null=True,
         blank=True,
     )
-    row_type = models.CharField(max_length=2, choices=ROW_TYPE, default=ALLOTMENT)
+    row_type = models.CharField(max_length=2, choices=ROW_TYPE_CHOICES, default=ROW_TYPE_CHOICES[1][0])
     sr_number = models.ForeignKey(
         "license.LicenseImportItemsModel",
         on_delete=models.CASCADE,
         related_name="item_details",
     )
-    transaction_type = models.CharField(max_length=2, choices=TYPE_CHOICES, default=DEBIT)
+    transaction_type = models.CharField(max_length=2, choices=TYPE_CHOICES, default=TYPE_CHOICES[1][0])
     cif_inr = models.DecimalField(
         max_digits=15,
         decimal_places=2,
@@ -237,6 +224,7 @@ def _schedule_update_balance(item_id: int) -> None:
     def _job():
         try:
             from bill_of_entry.tasks import update_balance_values_task
+
             try:
                 update_balance_values_task.delay(item_id)
             except Exception:

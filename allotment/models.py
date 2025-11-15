@@ -1,5 +1,4 @@
-# allotment/models.py — cleaned Decimal-safe version
-
+# allotment/models.py
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -14,10 +13,16 @@ from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.functional import cached_property
 
-# Decimal helpers
+from core.constants import (
+    ROW_TYPE_CHOICES,
+    DEC_0,
+    DEC_000,
+)
+
+# Note: TYPE_CHOICES imported in case you want to use it in forms/serializers here
+
+# Decimal helper
 _D = Decimal
-DEC_0 = _D("0.00")
-DEC_000 = _D("0.000")
 
 
 def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
@@ -33,21 +38,7 @@ def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
 
 
 # -----------------------------
-# Constants
-# -----------------------------
-CREDIT = "C"
-DEBIT = "D"
-
-TYPE_CHOICES = ((CREDIT, "Credit"), (DEBIT, "Debit"))
-
-ARO = "AR"
-ALLOTMENT = "AT"
-
-ROW_TYPE = ((ARO, "ARO"), (ALLOTMENT, "Allotment"))
-
-
-# -----------------------------
-# Allotment Models
+# Allotment models
 # -----------------------------
 class AllotmentModel(models.Model):
     company = models.ForeignKey(
@@ -55,7 +46,7 @@ class AllotmentModel(models.Model):
         related_name="company_allotments",
         on_delete=models.CASCADE,
     )
-    type = models.CharField(max_length=2, choices=ROW_TYPE, default=ALLOTMENT)
+    type = models.CharField(max_length=2, choices=ROW_TYPE_CHOICES, default=ROW_TYPE_CHOICES[1][0])
     required_quantity = models.DecimalField(
         max_digits=15,
         decimal_places=2,
@@ -102,7 +93,7 @@ class AllotmentModel(models.Model):
 
     @cached_property
     def required_value(self) -> Decimal:
-        """Required value = required_quantity * unit_value_per_unit (rounded to 0 d.p.)."""
+        """Required value = required_quantity * unit_value_per_unit (rounded to nearest integer)."""
         val = _to_decimal(self.required_quantity) * _to_decimal(self.unit_value_per_unit)
         return val.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
@@ -119,8 +110,9 @@ class AllotmentModel(models.Model):
         Returns Decimal (never negative).
         """
         total_allocated = _to_decimal(
-            self.allotment_details.aggregate(total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))[
-                "total"],
+            self.allotment_details.aggregate(
+                total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField())
+            )["total"],
             DEC_000,
         )
         remaining = _to_decimal(self.required_quantity, DEC_000) - total_allocated
@@ -130,8 +122,9 @@ class AllotmentModel(models.Model):
     def alloted_quantity(self) -> Decimal:
         """Total quantity allocated to this allotment (Decimal)."""
         total = _to_decimal(
-            self.allotment_details.aggregate(total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))[
-                "total"],
+            self.allotment_details.aggregate(
+                total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField())
+            )["total"],
             DEC_000,
         )
         return total
@@ -140,8 +133,9 @@ class AllotmentModel(models.Model):
     def allotted_value(self) -> Decimal:
         """Total CIF (fc) value allocated to this allotment (Decimal)."""
         total = _to_decimal(
-            self.allotment_details.aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))[
-                "total"],
+            self.allotment_details.aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+            )["total"],
             DEC_0,
         )
         return total
@@ -245,50 +239,40 @@ class AllotmentItems(models.Model):
 # -----------------------------
 # Signals — Stock Update
 # -----------------------------
-@receiver(post_save, sender=AllotmentItems, dispatch_uid="update_stock")
-def update_stock(sender, instance, **kwargs):
-    """Schedule background balance update after save (runs after DB commit)."""
-    item = instance.item
-    if not item:
-        return
+def _schedule_update_balance(item_id: int) -> None:
+    """Schedule update_balance_values_task after transaction commit (safe for tests)."""
 
     def _job():
         try:
             from bill_of_entry.tasks import update_balance_values_task
-            # prefer Celery async delay if available
             try:
-                update_balance_values_task.delay(item.id)
+                update_balance_values_task.delay(item_id)
             except Exception:
-                update_balance_values_task(item.id)
+                update_balance_values_task(item_id)
         except Exception:
-            # swallow so saving isn't blocked by task issues
+            # swallow exceptions to avoid failing DB writes
             pass
 
     try:
         transaction.on_commit(_job)
     except Exception:
-        # fallback immediate call if on_commit unavailable
+        # fallback immediate invocation in environments without on_commit
         _job()
+
+
+@receiver(post_save, sender=AllotmentItems, dispatch_uid="update_stock")
+def update_stock(sender, instance, **kwargs):
+    """Schedule background balance update after save."""
+    item = instance.item
+    if not item:
+        return
+    _schedule_update_balance(item.id)
 
 
 @receiver(post_delete, sender=AllotmentItems)
 def delete_stock(sender, instance, **kwargs):
-    """Schedule background balance update after delete (runs after DB commit)."""
+    """Schedule background balance update after delete."""
     item = instance.item
     if not item:
         return
-
-    def _job():
-        try:
-            from bill_of_entry.tasks import update_balance_values_task
-            try:
-                update_balance_values_task.delay(item.id)
-            except Exception:
-                update_balance_values_task(item.id)
-        except Exception:
-            pass
-
-    try:
-        transaction.on_commit(_job)
-    except Exception:
-        _job()
+    _schedule_update_balance(item.id)

@@ -1,18 +1,20 @@
 from django.db.models import Sum
 
+from core.constants import DEBIT
+
+
 def calculate(self):
     from license.models import LicenseExportItemModel
     from bill_of_entry.models import RowDetails
     from django.db.models import Sum
-    from allotment.models import Debit
     if not self.cif_fc or self.cif_fc == 0:
         credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=Debit).aggregate(
+        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=DEBIT).aggregate(
             Sum('cif_fc'))[
             'cif_fc__sum']
     else:
         credit = self.cif_fc
-        debit = RowDetails.objects.filter(sr_number=self).filter(transaction_type=Debit).aggregate(Sum('cif_fc'))[
+        debit = RowDetails.objects.filter(sr_number=self).filter(transaction_type=DEBIT).aggregate(Sum('cif_fc'))[
             'cif_fc__sum']
     from allotment.models import AllotmentItems
     allotment = \
@@ -104,11 +106,12 @@ def item_wise_allotment(dfia, item_head, item_name=None):
     total_qty = 0
     total_cif = 0
     if item_name:
-        data = AllotmentItems.objects.filter(allotment__item_name__icontains=item_name,allotment__bill_of_entry=None, item__item__head=item_head,
+        data = AllotmentItems.objects.filter(allotment__item_name__icontains=item_name, allotment__bill_of_entry=None,
+                                             item__item__head=item_head,
                                              item__license=dfia, is_boe=False).order_by('item__item__head',
                                                                                         'allotment__company')
     else:
-        data = AllotmentItems.objects.filter(item__item__head=item_head,allotment__bill_of_entry=None,
+        data = AllotmentItems.objects.filter(item__item__head=item_head, allotment__bill_of_entry=None,
                                              item__license=dfia, is_boe=False).order_by('item__item__head',
                                                                                         'allotment__company')
     company_data = list(set([c['allotment__company__name'] for c in
@@ -137,7 +140,6 @@ def item_wise_allotment(dfia, item_head, item_name=None):
 
 
 def fetch_item_details(import_item, hs_code, dfia, item_name=None):
-    from core.management.commands.report_fetch import fetch_total
     if item_name:
         debiting, total_qty_debits, total_cif_debits = item_wise_debiting(dfia, import_item.head, item_name)
         allotment, total_qty_alloted, total_cif_alloted = item_wise_allotment(dfia, import_item.head, item_name)
@@ -145,6 +147,7 @@ def fetch_item_details(import_item, hs_code, dfia, item_name=None):
         debiting, total_qty_debits, total_cif_debits = item_wise_debiting(dfia, import_item.head)
         allotment, total_qty_alloted, total_cif_alloted = item_wise_allotment(dfia, import_item.head)
     from license.models import LicenseImportItemsModel
+    import_description = ''
     dict_data = {'name': import_description, 'hs_code': hs_code, 'debiting': debiting,
                  'allotment': allotment,
                  'total_debited_qty': total_qty_debits + total_qty_alloted,

@@ -1,4 +1,3 @@
-# in core/views.py (or wherever your other MasterViewSet registrations are)
 from core.views import MasterViewSet
 from core.views.views import enhance_config_with_fk, API_PREFIX
 from license.models import LicenseDetailsModel

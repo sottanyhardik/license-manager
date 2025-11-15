@@ -1,4 +1,3 @@
-# core/views.py
 from typing import List
 
 from django.db import models as dj_models

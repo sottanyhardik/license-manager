@@ -84,7 +84,7 @@ class Command(BaseCommand):
                 # Debits from BOE
                 d_agg = (
                         RowDetails.objects.filter(
-                            sr_number=row, transaction_type=Debit
+                            sr_number=row, transaction_type=DEBIT
                         ).aggregate(qty=Sum("qty"), cif=Sum("cif_fc"))
                         or {}
                 )

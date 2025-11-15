@@ -1,51 +1,69 @@
-import React, { createContext, useEffect, useState } from "react";
+import {createContext, useEffect, useState} from "react";
+import api from "../api/axios";
 
 export const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(0);
+export const AuthProvider = ({children}) => {
+    const [user, setUser] = useState(
+        localStorage.getItem("user")
+            ? JSON.parse(localStorage.getItem("user"))
+            : null
+    );
+    const [loading, setLoading] = useState(true);
 
-  // Load user from localStorage
-  useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
-
-  // Auto logout after 15 minutes
-  useEffect(() => {
-    if (!user) return;
-    setTimeLeft(900); // 15 minutes
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          logout();
-          return 0;
+    const loadUser = async () => {
+        // Don't attempt to load user if no access token exists
+        const token = localStorage.getItem("access");
+        if (!token) {
+            setLoading(false);
+            return;
         }
-        return prev - 1;
-      });
-    }, 1000);
 
-    return () => clearInterval(timer);
-  }, [user]);
+        try {
+            const {data} = await api.get("/auth/me/");
+            setUser(data);
+            localStorage.setItem("user", JSON.stringify(data));
+        } catch (err) {
+            console.log("ME ENDPOINT FAILED:", err.response);
+            localStorage.clear();
+            setUser(null);
+        }
+        setLoading(false);
+    };
 
-  const login = (userData) => {
-    setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
-  };
+    useEffect(() => {
+        loadUser();
+    }, []);
 
-  const logout = () => {
-    setUser(null);
-    localStorage.clear();
-    window.location.href = "/login";
-  };
+    const loginSuccess = (data) => {
+        console.log("SAVING TOKENS:", data);
+        localStorage.setItem("access", data.access);
+        localStorage.setItem("refresh", data.refresh);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        setUser(data.user);
+        setLoading(false); // Ensure loading is false after login
+    };
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout, timeLeft }}>
-      {children}
-    </AuthContext.Provider>
-  );
+    const logout = async () => {
+        try {
+            await api.post("/auth/logout/", {
+                refresh: localStorage.getItem("refresh")
+            });
+        } catch {
+        }
+        localStorage.clear();
+        setUser(null);
+        window.location.href = "/login";
+    };
+
+    const hasRole = (roles) => {
+        if (!user || !roles || roles.length === 0) return true;
+        return roles.includes(user.role);
+    };
+
+    return (
+        <AuthContext.Provider value={{user, loading, loginSuccess, logout, hasRole}}>
+            {children}
+        </AuthContext.Provider>
+    );
 };

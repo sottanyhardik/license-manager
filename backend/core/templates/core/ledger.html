@@ -1,0 +1,32 @@
+{% extends '../base.html' %}
+{% load render_table from django_tables2 %}
+{% load querystring from django_tables2 %}
+{% load django_tables2 %}
+{% load core_tag %}
+{% load i18n %}
+{% block content %}
+
+    <div class="row">
+        <div class="col-xs-12 col-lg-12 grid-margin stretch-card">
+            <div class="card">
+                <div class="card-header">
+                    Upload Ledger
+                </div>
+                <div class="card-body">
+                    <form action="{% url 'ledger-upload' %}" method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <div class="span2">
+                                <input type="file" class="form-control" name="ledger" multiple></div>
+                        </div>
+                        <div class="form-group">
+                            <div class="span12">
+                                <button class="successButton" type="submit">Fetch</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

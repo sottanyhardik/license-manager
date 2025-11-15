@@ -1,122 +1,138 @@
-import React, { useContext } from "react";
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+import {BrowserRouter, Navigate, Route, Routes} from "react-router-dom";
+import {lazy, Suspense} from "react";
 
-import Sidebar from "./components/Sidebar";
-import TopNavbar from "./components/Navbar";
+import {AuthProvider} from "./context/AuthContext";
+import ProtectedRoute from "./routes/ProtectedRoute";
+import RoleRoute from "./routes/RoleRoute";
+import AdminLayout from "./layout/AdminLayout";
 
-import Dashboard from "./pages/Dashboard";
-import License from "./pages/License";
-import Allotment from "./pages/Allotment";
-import BillOfEntry from "./pages/BillOfEntry";
-import Trade from "./pages/Trade";
-import Profile from "./pages/Profile";
 import Login from "./pages/Login";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
+import Unauthorized from "./pages/errors/Unauthorized";
+import NotFound from "./pages/errors/NotFound";
 
-import MasterCRUD from "./pages/Master/MasterCRUD";
-import { AuthContext } from "./context/AuthContext";
+// Lazy load pages
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const LicensePage = lazy(() => import("./pages/LicensePage"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Profile = lazy(() => import("./pages/Profile"));
+const MasterList = lazy(() => import("./pages/masters/MasterList"));
+const MasterForm = lazy(() => import("./pages/masters/MasterForm"));
 
-/* ---------------- Protected Route Wrapper ---------------- */
-const ProtectedRoute = ({ children }) => {
-  const { user } = useContext(AuthContext);
-  return user ? children : <Navigate to="/login" replace />;
-};
+export default function App() {
+    return (
+        <AuthProvider>
+            <BrowserRouter>
+                <Suspense fallback={<div className="p-4">Loading...</div>}>
+                    <Routes>
 
-/* ---------------- Main App Component ---------------- */
-const App = () => {
-  const { user } = useContext(AuthContext);
+                        {/* Public */}
+                        <Route path="/login" element={<Login/>}/>
+                        <Route path="/401" element={<Unauthorized/>}/>
 
-  return (
-    <Router>
-      {/* Show Navbar only when logged in */}
-      {user && <TopNavbar />}
+                        {/* Root redirect */}
+                        <Route
+                            path="/"
+                            element={
+                                <ProtectedRoute>
+                                    <Navigate to="/dashboard"/>
+                                </ProtectedRoute>
+                            }
+                        />
 
-      <Routes>
-        {/* -------- Public Routes -------- */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route
-          path="/reset-password/:uid/:token"
-          element={<ResetPassword />}
-        />
+                        {/* Protected */}
+                        <Route
+                            path="/dashboard"
+                            element={
+                                <ProtectedRoute>
+                                    <AdminLayout>
+                                        <Dashboard/>
+                                    </AdminLayout>
+                                </ProtectedRoute>
+                            }
+                        />
 
-        {/* -------- Protected Routes -------- */}
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <div className="d-flex">
-                <Sidebar />
-                <div className="main-content flex-grow-1 p-3">
-                  <Routes>
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/license" element={<License />} />
-                    <Route path="/allotment" element={<Allotment />} />
-                    <Route path="/bill-of-entry" element={<BillOfEntry />} />
-                    <Route path="/trade" element={<Trade />} />
-                    <Route path="/profile" element={<Profile />} />
+                        <Route
+                            path="/licenses"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <LicensePage/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
 
-                    {/* -------- Dynamic Master CRUD Routes -------- */}
-<Route
-  path="/master/company"
-  element={
-    <MasterCRUD
-      key="company" // 👈 this forces re-render
-      endpoint="masters/companies/"
-      title="Companies"
-    />
-  }
-/>
-<Route
-  path="/master/port"
-  element={
-    <MasterCRUD
-      key="port" // 👈 unique key for each master page
-      endpoint="masters/ports/"
-      title="Ports"
-    />
-  }
-/>
-<Route
-  path="/master/hsn-code"
-  element={
-    <MasterCRUD
-      key="hsn" // 👈 ensures schema/data reload
-      endpoint="masters/hs-codes/"
-      title="HSN Codes"
-    />
-  }
-/>
-<Route
-  path="/master/sion-classes"
-  element={
-    <MasterCRUD
-      key="sion"
-      endpoint="masters/sion-classes/"
-      title="SION Norms"
-    />
-  }
-/>
-                    {/* Default redirect */}
-                    <Route
-                      path="*"
-                      element={<Navigate to="/dashboard" replace />}
-                    />
-                  </Routes>
-                </div>
-              </div>
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </Router>
-  );
-};
+                        <Route
+                            path="/settings"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin"]}>
+                                        <AdminLayout>
+                                            <Settings/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
 
-export default App;
+                        <Route
+                            path="/profile"
+                            element={
+                                <ProtectedRoute>
+                                    <AdminLayout>
+                                        <Profile/>
+                                    </AdminLayout>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        {/* Master CRUD Routes */}
+                        <Route
+                            path="/masters/:entity"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterList/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/masters/:entity/create"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterForm/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/masters/:entity/:id/edit"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterForm/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        {/* 404 */}
+                        <Route path="*" element={<NotFound/>}/>
+                    </Routes>
+                </Suspense>
+            </BrowserRouter>
+        </AuthProvider>
+    );
+}

@@ -1,82 +1,83 @@
-import React, { useState, useContext } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { Card, Button, Form } from "react-bootstrap";
-import { ToastContext } from "../context/ToastContext";
-import { AuthContext } from "../context/AuthContext";
+import {useContext, useEffect, useState} from "react";
+import {useNavigate} from "react-router-dom";
 import api from "../api/axios";
-import "../styles/login.css";
+import {AuthContext} from "../context/AuthContext";
 
-const Login = () => {
-  const { showToast } = useContext(ToastContext);
-  const { login } = useContext(AuthContext);
-  const navigate = useNavigate();
-  const [credentials, setCredentials] = useState({ username: "", password: "" });
+export default function Login() {
+    const {user, loading: authLoading, loginSuccess} = useContext(AuthContext);
+    const navigate = useNavigate();
+    const [form, setForm] = useState({username: "", password: ""});
+    const [error, setError] = useState("");
+    const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const { data } = await api.post("accounts/auth/login/", credentials);
+    // Redirect if already logged in
+    useEffect(() => {
+        if (!authLoading && user) {
+            navigate("/dashboard");
+        }
+    }, [user, authLoading, navigate]);
 
-      localStorage.setItem("access", data.access);
-      localStorage.setItem("refresh", data.refresh);
-      localStorage.setItem("user", JSON.stringify(data.user));
+    const submit = async (e) => {
+        e.preventDefault();
+        setError("");
+        setSubmitting(true);
 
-      login(data.user);
-      showToast("Login successful!", "success");
-      navigate("/dashboard", { replace: true });
-    } catch (error) {
-      const msg = error.response?.data?.detail || "Invalid credentials.";
-      showToast(msg, "danger");
-    }
-  };
+        try {
+            const {data} = await api.post("/auth/login/", form);
 
-  return (
-    <div className="login-page d-flex align-items-center justify-content-center vh-100 bg-light">
-      <Card className="shadow-sm border-0 login-card">
-        <Card.Body>
-          <h4 className="text-center mb-4 fw-bold text-secondary">🔐 Login</h4>
+            // IMPORTANT: Save access + refresh + user
+            loginSuccess({
+                access: data.access,
+                refresh: data.refresh,
+                user: data.user
+            });
 
-          <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3">
-              <Form.Label>Username</Form.Label>
-              <Form.Control
-                type="text"
-                name="username"
-                value={credentials.username}
-                onChange={(e) =>
-                  setCredentials({ ...credentials, username: e.target.value })
-                }
-                required
-              />
-            </Form.Group>
+            // Use React Router navigation instead of page reload
+            navigate("/dashboard");
+        } catch (e) {
+            setError(e.response?.data?.detail || "Invalid username or password");
+            setSubmitting(false);
+        }
+    };
 
-            <Form.Group className="mb-4">
-              <Form.Label>Password</Form.Label>
-              <Form.Control
-                type="password"
-                name="password"
-                value={credentials.password}
-                onChange={(e) =>
-                  setCredentials({ ...credentials, password: e.target.value })
-                }
-                required
-              />
-            </Form.Group>
+    return (
+        <div className="container mt-5" style={{maxWidth: "400px"}}>
+            <div className="card p-4 shadow">
+                <h3 className="mb-3 text-center">Login</h3>
 
-            <Button type="submit" className="w-100 btn-orange mb-3">
-              Login
-            </Button>
+                {error && (
+                    <div className="alert alert-danger" role="alert">
+                        {error}
+                    </div>
+                )}
 
-            <div className="text-center">
-              <Link to="/forgot-password" className="text-orange">
-                Forgot Password?
-              </Link>
+                <form onSubmit={submit}>
+                    <input
+                        className="form-control mb-3"
+                        placeholder="Username"
+                        value={form.username}
+                        onChange={(e) =>
+                            setForm({...form, username: e.target.value})
+                        }
+                        required
+                    />
+
+                    <input
+                        type="password"
+                        className="form-control mb-3"
+                        placeholder="Password"
+                        value={form.password}
+                        onChange={(e) =>
+                            setForm({...form, password: e.target.value})
+                        }
+                        required
+                    />
+
+                    <button className="btn btn-primary w-100" disabled={submitting}>
+                        {submitting ? "Logging in..." : "Login"}
+                    </button>
+                </form>
             </div>
-          </Form>
-        </Card.Body>
-      </Card>
-    </div>
-  );
-};
-
-export default Login;
+        </div>
+    );
+}

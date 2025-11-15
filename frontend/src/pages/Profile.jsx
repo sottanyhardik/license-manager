@@ -1,70 +1,238 @@
-import React, { useEffect, useState, useContext } from "react";
-import { Form, Button, Card } from "react-bootstrap";
-import { ToastContext } from "../context/ToastContext";
+import {useContext, useState} from "react";
+import {AuthContext} from "../context/AuthContext";
 import api from "../api/axios";
 
-const Profile = () => {
-  const { showToast } = useContext(ToastContext);
-  const [user, setUser] = useState({});
-  const [isEditing, setIsEditing] = useState(false);
-  const [loading, setLoading] = useState(true);
+export default function Profile() {
+    const {user, loginSuccess} = useContext(AuthContext);
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
 
-  useEffect(() => {
-    api.get("accounts/auth/me/")
-      .then((res) => setUser(res.data))
-      .catch(() => showToast("Failed to load profile", "info"))
-      .finally(() => setLoading(false));
-  }, [showToast]);
+    const [formData, setFormData] = useState({
+        first_name: user?.first_name || "",
+        last_name: user?.last_name || "",
+        email: user?.email || "",
+    });
 
-  const handleSave = async () => {
-    try {
-      await api.put("accounts/auth/me/", user);
-      showToast("Profile updated successfully!", "success");
-      setIsEditing(false);
-    } catch {
-      showToast("Error saving profile", "danger");
-    }
-  };
+    const handleEdit = () => {
+        setEditing(true);
+        setError("");
+        setSuccess("");
+    };
 
-  if (loading) {
-    return (
-      <div className="text-center py-5 text-muted">
-        <div className="spinner-border text-warning mb-3"></div>
-        <p>Loading profile...</p>
-      </div>
-    );
-  }
+    const handleCancel = () => {
+        setEditing(false);
+        setFormData({
+            first_name: user?.first_name || "",
+            last_name: user?.last_name || "",
+            email: user?.email || "",
+        });
+        setError("");
+        setSuccess("");
+    };
 
-  return (
-    <Card className="shadow-sm border-0">
-      <Card.Body>
-        <Card.Title className="fw-bold text-secondary mb-4">👤 My Profile</Card.Title>
-        <Form>
-          {["first_name", "last_name", "email"].map((field) => (
-            <Form.Group className="mb-3" key={field}>
-              <Form.Label>{field.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}</Form.Label>
-              <Form.Control
-                type={field === "email" ? "email" : "text"}
-                value={user[field] || ""}
-                disabled={!isEditing}
-                onChange={(e) => setUser({ ...user, [field]: e.target.value })}
-              />
-            </Form.Group>
-          ))}
-          {!isEditing ? (
-            <Button className="btn-orange" onClick={() => setIsEditing(true)}>
-              Edit Profile
-            </Button>
-          ) : (
-            <div className="d-flex gap-2">
-              <Button variant="success" onClick={handleSave}>Save Changes</Button>
-              <Button variant="secondary" onClick={() => setIsEditing(false)}>Cancel</Button>
+    const handleChange = (e) => {
+        setFormData({
+            ...formData,
+            [e.target.name]: e.target.value,
+        });
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        setError("");
+        setSuccess("");
+
+        try {
+            const {data} = await api.patch("/auth/me/", formData);
+
+            // Update user in context and localStorage
+            loginSuccess({
+                access: localStorage.getItem("access"),
+                refresh: localStorage.getItem("refresh"),
+                user: data,
+            });
+
+            setSuccess("Profile updated successfully!");
+            setEditing(false);
+        } catch (err) {
+            setError(
+                err.response?.data?.detail ||
+                err.response?.data?.email?.[0] ||
+                "Failed to update profile"
+            );
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (!user) {
+        return (
+            <div className="container mt-4">
+                <div className="alert alert-warning">Loading user data...</div>
             </div>
-          )}
-        </Form>
-      </Card.Body>
-    </Card>
-  );
-};
+        );
+    }
 
-export default Profile;
+    return (
+        <div className="container mt-4">
+            <div className="row">
+                <div className="col-lg-8 mx-auto">
+                    <div className="card shadow-sm">
+                        <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h4 className="mb-0">My Profile</h4>
+                            {!editing && (
+                                <button
+                                    className="btn btn-sm btn-light"
+                                    onClick={handleEdit}
+                                >
+                                    <i className="bi bi-pencil me-2"></i>
+                                    Edit
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="card-body">
+                            {error && (
+                                <div className="alert alert-danger alert-dismissible fade show">
+                                    {error}
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        onClick={() => setError("")}
+                                    ></button>
+                                </div>
+                            )}
+
+                            {success && (
+                                <div className="alert alert-success alert-dismissible fade show">
+                                    {success}
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        onClick={() => setSuccess("")}
+                                    ></button>
+                                </div>
+                            )}
+
+                            <div className="row mb-3">
+                                <div className="col-md-4">
+                                    <strong>Username:</strong>
+                                </div>
+                                <div className="col-md-8">
+                                    <span className="text-muted">{user.username}</span>
+                                    <small className="text-muted d-block">
+                                        (Username cannot be changed)
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div className="row mb-3">
+                                <div className="col-md-4">
+                                    <strong>First Name:</strong>
+                                </div>
+                                <div className="col-md-8">
+                                    {editing ? (
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            name="first_name"
+                                            value={formData.first_name}
+                                            onChange={handleChange}
+                                            placeholder="Enter first name"
+                                        />
+                                    ) : (
+                                        <span>{user.first_name || <em className="text-muted">Not set</em>}</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="row mb-3">
+                                <div className="col-md-4">
+                                    <strong>Last Name:</strong>
+                                </div>
+                                <div className="col-md-8">
+                                    {editing ? (
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            name="last_name"
+                                            value={formData.last_name}
+                                            onChange={handleChange}
+                                            placeholder="Enter last name"
+                                        />
+                                    ) : (
+                                        <span>{user.last_name || <em className="text-muted">Not set</em>}</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="row mb-3">
+                                <div className="col-md-4">
+                                    <strong>Email:</strong>
+                                </div>
+                                <div className="col-md-8">
+                                    {editing ? (
+                                        <input
+                                            type="email"
+                                            className="form-control"
+                                            name="email"
+                                            value={formData.email}
+                                            onChange={handleChange}
+                                            placeholder="Enter email"
+                                        />
+                                    ) : (
+                                        <span>{user.email || <em className="text-muted">Not set</em>}</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="row mb-3">
+                                <div className="col-md-4">
+                                    <strong>Role:</strong>
+                                </div>
+                                <div className="col-md-8">
+                                    <span className="badge bg-info text-capitalize">
+                                        {user.role || "viewer"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {editing && (
+                                <div className="row mt-4">
+                                    <div className="col-md-8 offset-md-4">
+                                        <button
+                                            className="btn btn-primary me-2"
+                                            onClick={handleSave}
+                                            disabled={saving}
+                                        >
+                                            {saving ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2"></span>
+                                                    Saving...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="bi bi-check-circle me-2"></i>
+                                                    Save Changes
+                                                </>
+                                            )}
+                                        </button>
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={handleCancel}
+                                            disabled={saving}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

@@ -1,4 +1,6 @@
 import {useState, useEffect} from "react";
+import AsyncSelectField from "./AsyncSelectField";
+import Select from "react-select";
 
 /**
  * Advanced DataFilter Component with support for:
@@ -7,6 +9,8 @@ import {useState, useEffect} from "react";
  * - range (min/max numeric)
  * - exact (exact match)
  * - in (multiple values)
+ * - fk (foreign key select)
+ * - choice (choice field select)
  *
  * Props:
  * - filterConfig: object mapping field names to filter configs from backend
@@ -140,6 +144,52 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                 );
 
             case "exact":
+                // Check if this is a boolean field (starts with is_ or has_)
+                if (fieldName.startsWith("is_") || fieldName.startsWith("has_")) {
+                    return (
+                        <div key={fieldName} className="col-md-4">
+                            <label className="form-label d-block">{label}</label>
+                            <div className="btn-group" role="group">
+                                <input
+                                    type="radio"
+                                    className="btn-check"
+                                    name={`${fieldName}-options`}
+                                    id={`${fieldName}-all`}
+                                    checked={!filterValues[fieldName] && filterValues[fieldName] !== false}
+                                    onChange={() => handleFilterChange(fieldName, "")}
+                                />
+                                <label className="btn btn-outline-secondary" htmlFor={`${fieldName}-all`}>
+                                    All
+                                </label>
+
+                                <input
+                                    type="radio"
+                                    className="btn-check"
+                                    name={`${fieldName}-options`}
+                                    id={`${fieldName}-yes`}
+                                    checked={filterValues[fieldName] === "True" || filterValues[fieldName] === true}
+                                    onChange={() => handleFilterChange(fieldName, "True")}
+                                />
+                                <label className="btn btn-outline-success" htmlFor={`${fieldName}-yes`}>
+                                    Yes
+                                </label>
+
+                                <input
+                                    type="radio"
+                                    className="btn-check"
+                                    name={`${fieldName}-options`}
+                                    id={`${fieldName}-no`}
+                                    checked={filterValues[fieldName] === "False" || filterValues[fieldName] === false}
+                                    onChange={() => handleFilterChange(fieldName, "False")}
+                                />
+                                <label className="btn btn-outline-danger" htmlFor={`${fieldName}-no`}>
+                                    No
+                                </label>
+                            </div>
+                        </div>
+                    );
+                }
+
                 return (
                     <div key={fieldName} className="col-md-4">
                         <label className="form-label">{label}</label>
@@ -165,6 +215,60 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                             onChange={(e) => handleFilterChange(fieldName, e.target.value)}
                         />
                         <small className="text-muted">Enter values separated by commas</small>
+                    </div>
+                );
+
+            case "fk":
+                // Foreign Key filter with async select
+                return (
+                    <div key={fieldName} className="col-md-4">
+                        <label className="form-label">{label}</label>
+                        <AsyncSelectField
+                            endpoint={config.fk_endpoint || config.endpoint}
+                            labelField={config.label_field || "name"}
+                            value={filterValues[fieldName] || ""}
+                            onChange={(val) => handleFilterChange(fieldName, val)}
+                            placeholder={`Select ${label.toLowerCase()}`}
+                            isClearable
+                        />
+                    </div>
+                );
+
+            case "choice":
+                // Choice field filter with static select
+                const choiceOptions = config.choices?.map(choice => {
+                    if (Array.isArray(choice)) {
+                        return {value: choice[0], label: choice[1]};
+                    }
+                    if (typeof choice === "object") {
+                        return {value: choice.value, label: choice.label};
+                    }
+                    return {value: choice, label: choice};
+                }) || [];
+
+                const selectedChoice = choiceOptions.find(opt => opt.value === filterValues[fieldName]) || null;
+
+                return (
+                    <div key={fieldName} className="col-md-4">
+                        <label className="form-label">{label}</label>
+                        <Select
+                            options={choiceOptions}
+                            value={selectedChoice}
+                            onChange={(selected) => handleFilterChange(fieldName, selected ? selected.value : "")}
+                            isClearable
+                            placeholder={`Select ${label.toLowerCase()}`}
+                            styles={{
+                                control: (base) => ({
+                                    ...base,
+                                    minHeight: "38px",
+                                    borderColor: "#dee2e6"
+                                }),
+                                menu: (base) => ({
+                                    ...base,
+                                    zIndex: 9999
+                                })
+                            }}
+                        />
                     </div>
                 );
 

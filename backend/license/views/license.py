@@ -2,6 +2,7 @@
 from core.views.master_view import MasterViewSet
 from license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 from license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer
+from core.constants import LICENCE_PURCHASE_CHOICES, SCHEME_CODE_CHOICES, NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, CURRENCY_CHOICES
 
 
 # Nested field definitions for LicenseDetails
@@ -13,11 +14,11 @@ license_nested_field_defs = {
         {"name": "norm_class", "type": "fk", "label": "Norm Class", "fk_endpoint": "/masters/sion-classes/", "label_field": "norm_class"},
         {"name": "duty_type", "type": "text", "label": "Duty Type"},
         {"name": "net_quantity", "type": "number", "label": "Net Quantity"},
-        {"name": "unit", "type": "select", "label": "Unit", "choices": []},
+        {"name": "unit", "type": "select", "label": "Unit", "choices": list(UNIT_CHOICES)},
         {"name": "fob_fc", "type": "number", "label": "FOB (FC)"},
         {"name": "fob_inr", "type": "number", "label": "FOB (INR)"},
         {"name": "fob_exchange_rate", "type": "number", "label": "FOB Exchange Rate"},
-        {"name": "currency", "type": "select", "label": "Currency", "choices": []},
+        {"name": "currency", "type": "select", "label": "Currency", "choices": list(CURRENCY_CHOICES)},
         {"name": "value_addition", "type": "number", "label": "Value Addition"},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)"},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
@@ -30,7 +31,7 @@ license_nested_field_defs = {
         {"name": "description", "type": "text", "label": "Description"},
         {"name": "duty_type", "type": "text", "label": "Duty Type"},
         {"name": "quantity", "type": "number", "label": "Quantity"},
-        {"name": "unit", "type": "select", "label": "Unit", "choices": []},
+        {"name": "unit", "type": "select", "label": "Unit", "choices": list(UNIT_CHOICES)},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)"},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
         {"name": "available_quantity", "type": "number", "label": "Available Quantity"},
@@ -47,10 +48,13 @@ LicenseDetailsViewSet = MasterViewSet.create(
         "filter": {
             "license_number": {"type": "icontains"},
             "file_number": {"type": "icontains"},
-            "exporter__name": {"type": "icontains"},
+            "exporter": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
+            "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
             "license_date": {"type": "date_range"},
             "license_expiry_date": {"type": "date_range"},
-            "purchase_status": {"type": "exact"},
+            "purchase_status": {"type": "choice", "choices": list(LICENCE_PURCHASE_CHOICES)},
+            "scheme_code": {"type": "choice", "choices": list(SCHEME_CODE_CHOICES)},
+            "notification_number": {"type": "choice", "choices": list(NOTIFICATION_NORM_CHOICES)},
             "is_active": {"type": "exact"},
         },
         "list_display": [
@@ -117,15 +121,15 @@ LicenseDetailsViewSet = MasterViewSet.create(
             },
             "purchase_status": {
                 "type": "select",
-                "choices": []  # Will be populated from model choices
+                "choices": list(LICENCE_PURCHASE_CHOICES)
             },
             "scheme_code": {
                 "type": "select",
-                "choices": []
+                "choices": list(SCHEME_CODE_CHOICES)
             },
             "notification_number": {
                 "type": "select",
-                "choices": []
+                "choices": list(NOTIFICATION_NORM_CHOICES)
             },
         }
     }

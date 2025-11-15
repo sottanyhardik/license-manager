@@ -1,5 +1,8 @@
 import {useState} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
+import Select from "react-select";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 /**
  * NestedFieldArray Component
@@ -13,6 +16,19 @@ import AsyncSelectField from "../../components/AsyncSelectField";
  * - onChange: Callback function(newArray)
  */
 export default function NestedFieldArray({label, fields = [], value = [], onChange}) {
+
+    // Helper function to parse date from YYYY-MM-DD to Date object
+    const parseDate = (dateString) => {
+        if (!dateString) return null;
+        const date = new Date(dateString);
+        return isNaN(date.getTime()) ? null : date;
+    };
+
+    // Helper function to format Date object to YYYY-MM-DD for API
+    const formatDateForAPI = (date) => {
+        if (!date) return null;
+        return date.toISOString().split('T')[0];
+    };
 
     const handleAdd = () => {
         const newItem = {};
@@ -38,6 +54,23 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
 
     const renderNestedField = (field, item, index) => {
         const fieldValue = item[field.name] || "";
+
+        // Handle date fields with DatePicker
+        if (field.type === "date" || field.name.includes("date") || field.name.includes("_at") || field.name.includes("_on")) {
+            return (
+                <DatePicker
+                    selected={parseDate(fieldValue)}
+                    onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}
+                    dateFormat="dd-MM-yyyy"
+                    className="form-control form-control-sm"
+                    placeholderText="Select date"
+                    isClearable
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                />
+            );
+        }
 
         // Handle FK select fields using AsyncSelectField
         if (field.fk_endpoint || field.endpoint) {
@@ -72,6 +105,64 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                     className="react-select-sm"
                     isMulti={isMulti}
                 />
+            );
+        }
+
+        // Handle select fields with choices (like unit, currency, etc.)
+        if (field.type === "select" && field.choices && Array.isArray(field.choices)) {
+            const options = field.choices.map(choice => {
+                if (Array.isArray(choice)) {
+                    return {value: choice[0], label: choice[1]};
+                }
+                if (typeof choice === "object") {
+                    return {value: choice.value, label: choice.label};
+                }
+                return {value: choice, label: choice};
+            });
+
+            const selectedOption = options.find(opt => opt.value === fieldValue) || null;
+
+            return (
+                <Select
+                    options={options}
+                    value={selectedOption}
+                    onChange={(selected) => handleChange(index, field.name, selected ? selected.value : null)}
+                    isClearable
+                    placeholder={`Select ${field.label || field.name}`}
+                    className="react-select-sm"
+                    classNamePrefix="react-select"
+                    styles={{
+                        control: (base) => ({
+                            ...base,
+                            minHeight: "34px",
+                            borderColor: "#dee2e6"
+                        }),
+                        menu: (base) => ({
+                            ...base,
+                            zIndex: 9999
+                        })
+                    }}
+                />
+            );
+        }
+
+        // Handle boolean fields as switch
+        if (field.type === "boolean" || typeof fieldValue === "boolean" || field.name.startsWith("is_") || field.name.startsWith("has_")) {
+            const boolValue = typeof fieldValue === "boolean" ? fieldValue : false;
+            return (
+                <div className="form-check form-switch">
+                    <input
+                        type="checkbox"
+                        className="form-check-input"
+                        role="switch"
+                        id={`switch-${field.name}-${index}`}
+                        checked={boolValue}
+                        onChange={(e) => handleChange(index, field.name, e.target.checked)}
+                    />
+                    <label className="form-check-label" htmlFor={`switch-${field.name}-${index}`}>
+                        {boolValue ? "Yes" : "No"}
+                    </label>
+                </div>
             );
         }
 

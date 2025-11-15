@@ -19,7 +19,7 @@ export default function DataTable({
     loading = false,
     basePath = ""
 }) {
-    const formatValue = (value) => {
+    const formatValue = (value, columnName) => {
         if (value === null || value === undefined) {
             return <span className="text-muted">-</span>;
         }
@@ -29,6 +29,20 @@ export default function DataTable({
             ) : (
                 <span className="badge bg-secondary">No</span>
             );
+        }
+        // Format date fields as dd-mm-yyyy
+        if (columnName && (columnName.includes("date") || columnName.includes("_at") || columnName.includes("_on"))) {
+            try {
+                const date = new Date(value);
+                if (!isNaN(date.getTime())) {
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const year = date.getFullYear();
+                    return `${day}-${month}-${year}`;
+                }
+            } catch (e) {
+                // If date parsing fails, fall through to default string conversion
+            }
         }
         if (typeof value === "object") {
             return JSON.stringify(value);
@@ -83,7 +97,7 @@ export default function DataTable({
                                 const fieldKey = column.replace(/__/g, '_');
                                 return (
                                     <td key={column}>
-                                        {formatValue(item[fieldKey] || item[column])}
+                                        {formatValue(item[fieldKey] || item[column], column)}
                                     </td>
                                 );
                             })}

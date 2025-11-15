@@ -324,7 +324,11 @@ SionNormClassViewSet = MasterViewSet.create(
         SionNormClassModel,
         {
             "search": ["norm_class", "description"],
-            "filter": [],
+            "filter": {
+                "norm_class": {"type": "icontains"},
+                "description": {"type": "icontains"},
+                "head_norm": {"type": "fk", "fk_endpoint": "/masters/head-norms/", "label_field": "name"},
+            },
             "list_display": ["norm_class", "description", "head_norm_name"],
             "form_fields": ["norm_class", "description", "head_norm"],
             "fk_endpoint_overrides": {
@@ -390,6 +394,7 @@ ItemHeadViewSet = MasterViewSet.create(
             "search": ["name"],
             "filter": {
                 "name": {"type": "icontains"},
+                "is_restricted": {"type": "exact"},
             },
             "list_display": ["name", "unit_rate", "is_restricted"],
             "form_fields": ["name", "unit_rate", "is_restricted", "dict_key"],
@@ -406,7 +411,8 @@ ItemNameViewSet = MasterViewSet.create(
             "search": ["name", "head__name"],
             "filter": {
                 "name": {"type": "icontains"},
-                "head__name": {"type": "icontains"},
+                "head": {"type": "fk", "fk_endpoint": "/masters/item-heads/", "label_field": "name"},
+                "is_active": {"type": "exact"},
             },
             "list_display": ["head__name", "name", "unit_price"],
             "form_fields": ["head", "name", "unit_price", "is_active"],

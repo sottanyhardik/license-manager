@@ -40,3 +40,45 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Custom styles for form switches */
+.form-switch .form-check-input {
+  width: 3em;
+  height: 1.5em;
+  cursor: pointer;
+  border: 1px solid #dee2e6;
+  background-color: #e9ecef;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+.form-switch .form-check-input:checked {
+  background-color: #198754;
+  border-color: #198754;
+}
+
+.form-switch .form-check-input:focus {
+  box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
+  border-color: #86b7fe;
+}
+
+.form-switch .form-check-label {
+  margin-left: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* Ensure switches align properly in nested forms */
+.nested-items-container .form-switch {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+}
+
+/* Better spacing for switch groups in filters */
+.btn-group .btn-check + .btn {
+  border-width: 1px;
+}
+
+.btn-group .btn-check:checked + .btn {
+  font-weight: 600;
+}

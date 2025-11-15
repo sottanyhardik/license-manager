@@ -204,14 +204,15 @@ export default function MasterList() {
             {/* Table */}
             <div className="card">
                 <div className="card-body">
-                    {/* Use AccordionTable for SION classes, regular DataTable for others */}
-                    {entityName === "sion-classes" ? (
+                    {/* Use AccordionTable for entities with nested fields, regular DataTable for others */}
+                    {metadata.nested_field_defs && Object.keys(metadata.nested_field_defs).length > 0 ? (
                         <AccordionTable
                             data={data}
                             columns={metadata.list_display || []}
                             loading={loading}
                             onDelete={handleDelete}
-                            basePath={`/masters/${entityName}`}
+                            basePath={entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`}
+                            nestedFieldDefs={metadata.nested_field_defs}
                         />
                     ) : (
                         <DataTable

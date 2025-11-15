@@ -98,6 +98,10 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                                               input_formats=["%Y-%m-%d"])
     ledger_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d", input_formats=["%Y-%m-%d"])
 
+    # Annotated fields for FK display
+    exporter_name = serializers.CharField(read_only=True, required=False)
+    port_name = serializers.CharField(read_only=True, required=False)
+
     export_license = LicenseExportItemSerializer(many=True, required=False)
     import_license = LicenseImportItemSerializer(many=True, required=False)
 

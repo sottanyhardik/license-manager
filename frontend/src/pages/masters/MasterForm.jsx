@@ -3,6 +3,8 @@ import {useNavigate, useParams, useLocation} from "react-router-dom";
 import api from "../../api/axios";
 import NestedFieldArray from "./NestedFieldArray";
 import HybridSelect from "../../components/HybridSelect";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 /**
  * Generic Master Form for Create/Edit
@@ -25,6 +27,19 @@ export default function MasterForm() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
+
+    // Helper function to parse date from YYYY-MM-DD to Date object
+    const parseDate = (dateString) => {
+        if (!dateString) return null;
+        const date = new Date(dateString);
+        return isNaN(date.getTime()) ? null : date;
+    };
+
+    // Helper function to format Date object to YYYY-MM-DD for API
+    const formatDateForAPI = (date) => {
+        if (!date) return null;
+        return date.toISOString().split('T')[0];
+    };
 
     // Fetch metadata and existing data
     useEffect(() => {
@@ -64,9 +79,33 @@ export default function MasterForm() {
     };
 
     const handleChange = (field, value) => {
+        const updates = {[field]: value};
+
+        // Auto-calculate registration_number when license_number changes
+        if (field === "license_number" && value && entityName === "licenses") {
+            // Remove first character if it's a zero
+            const regNumber = value.startsWith("0") ? value.substring(1) : value;
+            updates.registration_number = regNumber;
+        }
+
+        // Auto-calculate registration_date when license_date changes
+        if (field === "license_date" && value && entityName === "licenses") {
+            updates.registration_date = value;
+
+            // Also calculate license_expiry_date (license_date + 1 year)
+            try {
+                const licenseDate = new Date(value);
+                licenseDate.setFullYear(licenseDate.getFullYear() + 1);
+                const expiryDate = licenseDate.toISOString().split('T')[0];
+                updates.license_expiry_date = expiryDate;
+            } catch (err) {
+                console.error("Error calculating expiry date:", err);
+            }
+        }
+
         setFormData(prev => ({
             ...prev,
-            [field]: value
+            ...updates
         }));
     };
 
@@ -99,6 +138,23 @@ export default function MasterForm() {
         const fieldMeta = metadata.field_meta?.[fieldName] || {};
         const value = formData[fieldName] || "";
 
+        // Handle date fields with DatePicker
+        if (fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
+            return (
+                <DatePicker
+                    selected={parseDate(value)}
+                    onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
+                    dateFormat="dd-MM-yyyy"
+                    className="form-control"
+                    placeholderText="Select date"
+                    isClearable
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                />
+            );
+        }
+
         // Handle FK Select fields or fields with choices using HybridSelect
         if (fieldMeta.type === "select" || fieldMeta.endpoint || fieldMeta.fk_endpoint || fieldMeta.choices) {
             // Check if it's a many-to-many field (value is array)
@@ -126,16 +182,22 @@ export default function MasterForm() {
             );
         }
 
-        // Handle boolean fields
-        if (typeof value === "boolean") {
+        // Handle boolean fields as switch
+        if (typeof value === "boolean" || fieldName.startsWith("is_") || fieldName.startsWith("has_")) {
+            const boolValue = typeof value === "boolean" ? value : false;
             return (
-                <div className="form-check">
+                <div className="form-check form-switch">
                     <input
                         type="checkbox"
                         className="form-check-input"
-                        checked={value}
+                        role="switch"
+                        id={`switch-${fieldName}`}
+                        checked={boolValue}
                         onChange={(e) => handleChange(fieldName, e.target.checked)}
                     />
+                    <label className="form-check-label" htmlFor={`switch-${fieldName}`}>
+                        {boolValue ? "Yes" : "No"}
+                    </label>
                 </div>
             );
         }

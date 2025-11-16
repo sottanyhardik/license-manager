@@ -8,7 +8,7 @@ export default function AdminLayout({children}) {
 
             <div className="flex-grow-1">
                 <TopNav/>
-                <div className="container-fluid p-4">
+                <div className="container-fluid">
                     {children}
                 </div>
             </div>

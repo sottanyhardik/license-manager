@@ -6,15 +6,6 @@ from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, Any, Optional
 
-from django.core.validators import RegexValidator, MinValueValidator
-from django.db import models, transaction
-from django.db.models import Count, Sum, DecimalField, Value
-from django.db.models.functions import Coalesce
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from django.urls import reverse
-from django.utils.functional import cached_property
-
 from allotment.models import AllotmentItems
 from bill_of_entry.models import RowDetails
 from bill_of_entry.tasks import update_balance_values_task
@@ -35,6 +26,14 @@ from core.constants import (
 # Local imports — keep lightweight at module import time
 from core.models import AuditModel, InvoiceEntity, ItemNameModel
 from core.models import PurchaseStatus, SchemeCode, NotificationNumber  # kept for compatibility
+from django.core.validators import RegexValidator, MinValueValidator
+from django.db import models, transaction
+from django.db.models import Count, Sum, DecimalField, Value
+from django.db.models.functions import Coalesce
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.urls import reverse
+from django.utils.functional import cached_property
 from license.helper import round_down  # assume this accepts Decimal and returns Decimal
 
 # -----------------------------
@@ -744,8 +743,6 @@ class LicenseImportItemsModel(models.Model):
     items = models.ManyToManyField(ItemNameModel, blank=True, related_name="license_import_item")
 
     description = models.CharField(max_length=255, blank=True, db_index=True, null=True)
-    duty_type = models.CharField(max_length=255)
-
     quantity = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_000)
     old_quantity = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_000)
     unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default=KG)

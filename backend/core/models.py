@@ -274,78 +274,10 @@ class SIONImportModel(models.Model):
         return f"{self.norm_class} | {self.description}" if self.description else f"{self.norm_class}"
 
 
-class HSCodeDutyModel(AuditModel):
-    hs_code = models.CharField(max_length=8, unique=True)
-    basic_custom_duty = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
-    )
-    additional_duty_of_customs = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
-    )
-    custom_health_CESS = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
-    )
-    social_welfare_surcharge = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
-    )
-    additional_CVD = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
-    )
-    IGST_levy = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
-    )
-    compensation_cess = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
-    )
-    total_duty = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
-    )
-    sample_on_lakh = models.DecimalField(
-        max_digits=15,
-        decimal_places=2,
-        default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
-    )
-    is_fetch = models.BooleanField(default=False)
-    is_fetch_xls = models.BooleanField(default=False)
-    list_filter = ('is_fetch', 'is_fetch_xls')
-    admin_search_fields = ('hs_code',)
-
-    def __str__(self):
-        return self.hs_code
-
-    @cached_property
-    def product_description(self):
-        return '\n'.join(
-            [pd['product_description'] for pd in self.product_descriptions.all().values('product_description')])
 
 
 class ProductDescriptionModel(AuditModel):
-    hs_code = models.ForeignKey('core.HSCodeDutyModel', on_delete=models.PROTECT, related_name='product_descriptions')
+    hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.PROTECT, related_name='product_descriptions')
     product_description = models.TextField()
 
     def __str__(self):

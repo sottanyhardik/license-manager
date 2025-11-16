@@ -4,7 +4,7 @@ from typing import Any, Dict, Iterable
 
 from rest_framework import serializers
 
-from core.models import ItemNameModel
+from core.models import ItemNameModel, ProductDescriptionModel
 from license.models import (
     LicenseDetailsModel,
     LicenseExportItemModel,
@@ -149,9 +149,20 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     # helper for M2M items in import rows
     def _create_import_item(self, license_inst, payload):
         items = payload.pop("items", [])
+        description = payload.get("description")
+        hs_code = payload.get("hs_code")
+
         obj = LicenseImportItemsModel.objects.create(license=license_inst, **payload)
         if isinstance(items, Iterable):
             obj.items.set(items)
+
+        # Save description to ProductDescriptionModel if both description and hs_code exist
+        if description and hs_code:
+            ProductDescriptionModel.objects.get_or_create(
+                hs_code=hs_code,
+                product_description=description
+            )
+
         return obj
 
     def create(self, validated_data):
@@ -193,9 +204,51 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 LicenseExportItemModel.objects.create(license=instance, **e)
 
         if imports is not None:
-            instance.import_license.all().delete()
-            for i in imports:
-                self._create_import_item(instance, i)
+            from django.db import transaction
+
+            # Use transaction to ensure atomicity
+            with transaction.atomic():
+                # Build mapping of serial_number to existing items
+                existing_items = {item.serial_number: item for item in instance.import_license.all()}
+                processed_serial_numbers = set()
+
+                # Update or create import items
+                for i in imports:
+                    i.pop('id', None)  # Remove ID from payload
+                    serial_number = i.get('serial_number')
+                    items_list = i.pop('items', [])
+                    description = i.get('description')
+                    hs_code = i.get('hs_code')
+
+                    if serial_number in existing_items:
+                        # Update existing item
+                        obj = existing_items[serial_number]
+                        for key, value in i.items():
+                            setattr(obj, key, value)
+                        obj.save()
+
+                        # Update M2M relationship
+                        if isinstance(items_list, list):
+                            obj.items.set(items_list)
+
+                        processed_serial_numbers.add(serial_number)
+                    else:
+                        # Create new item
+                        i['items'] = items_list
+                        obj = self._create_import_item(instance, i)
+                        processed_serial_numbers.add(serial_number)
+
+                    # Save description to ProductDescriptionModel
+                    if description and hs_code:
+                        ProductDescriptionModel.objects.get_or_create(
+                            hs_code_id=hs_code if isinstance(hs_code, int) else hs_code,
+                            product_description=description
+                        )
+
+                # Delete items that are no longer in the payload
+                for serial_number, item in existing_items.items():
+                    if serial_number not in processed_serial_numbers:
+                        item.delete()
 
         if docs is not None:
             instance.license_documents.all().delete()

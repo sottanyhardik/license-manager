@@ -1,8 +1,10 @@
 import {useState} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import Select from "react-select";
+import AsyncCreatableSelect from "react-select/async-creatable";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import api from "../../api/axios";
 
 /**
  * NestedFieldArray Component
@@ -17,8 +19,18 @@ import "react-datepicker/dist/react-datepicker.css";
  * - fieldKey: The key of this nested field (e.g., "export_license", "import_license")
  * - onFetchImports: Optional callback to fetch import items from SION
  * - updatedFields: Object tracking which fields were recently updated (for highlighting)
+ * - errors: Array of error objects for nested items
  */
-export default function NestedFieldArray({label, fields = [], value = [], onChange, fieldKey = "", onFetchImports, updatedFields = {}}) {
+export default function NestedFieldArray({
+                                             label,
+                                             fields = [],
+                                             value = [],
+                                             onChange,
+                                             fieldKey = "",
+                                             onFetchImports,
+                                             updatedFields = {},
+                                             errors = []
+                                         }) {
 
     // Helper function to parse date from YYYY-MM-DD to Date object
     const parseDate = (dateString) => {
@@ -56,27 +68,112 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
     };
 
     const renderNestedField = (field, item, index) => {
-        const fieldValue = item[field.name] || "";
+        // Use nullish coalescing to preserve 0 values
+        const fieldValue = item[field.name] ?? "";
 
         // Check if this field was recently updated
         const fieldPath = `${fieldKey}.${index}.${field.name}`;
         const isHighlighted = updatedFields[fieldPath];
         const highlightClass = isHighlighted ? "border-warning border-2 bg-warning bg-opacity-10" : "";
 
+        // Special handling for description field in import_license - show autocomplete and auto-fill hs_code
+        if (fieldKey === "import_license" && field.name === "description") {
+            const loadDescriptionOptions = async (inputValue) => {
+                if (!inputValue || inputValue.length < 2) return [];
+
+                try {
+                    const params = {
+                        search: inputValue
+                    };
+                    const response = await api.get("/masters/product-descriptions/", {params});
+                    console.log("Product descriptions response:", response.data);
+
+                    if (!response.data.results || response.data.results.length === 0) {
+                        console.log("No results found for:", inputValue);
+                        return [];
+                    }
+
+                    return response.data.results.map(desc => {
+                        console.log("Description item:", desc);
+                        return {
+                            value: desc.product_description,
+                            label: desc.product_description,
+                            hsCode: desc.hs_code // Store hs_code ID for auto-fill
+                        };
+                    });
+                } catch (error) {
+                    console.error("Error loading descriptions:", error);
+                    return [];
+                }
+            };
+
+            const currentOption = fieldValue ? {value: fieldValue, label: fieldValue} : null;
+
+            const handleDescriptionChange = (selected) => {
+                if (selected) {
+                    // Update description
+                    handleChange(index, field.name, selected.value);
+
+                    // Auto-fill hs_code if available and current hs_code is empty
+                    if (selected.hsCode && !item.hs_code) {
+                        handleChange(index, "hs_code", selected.hsCode);
+                    }
+                } else {
+                    handleChange(index, field.name, "");
+                }
+            };
+
+            return (
+                <div className={highlightClass ? `${highlightClass} rounded` : ""}>
+                    <AsyncCreatableSelect
+                        cacheOptions={false}
+                        defaultOptions={false}
+                        value={currentOption}
+                        loadOptions={loadDescriptionOptions}
+                        onChange={handleDescriptionChange}
+                        onCreateOption={(inputValue) => handleChange(index, field.name, inputValue)}
+                        placeholder="Type at least 2 characters to search..."
+                        isClearable
+                        className="react-select-sm"
+                        classNamePrefix="react-select"
+                        styles={{
+                            control: (base) => ({
+                                ...base,
+                                minHeight: "34px",
+                                borderColor: "#dee2e6"
+                            }),
+                            menu: (base) => ({
+                                ...base,
+                                zIndex: 9999
+                            })
+                        }}
+                        noOptionsMessage={({inputValue}) =>
+                            !inputValue || inputValue.length < 2
+                                ? "Type at least 2 characters..."
+                                : "No matches found. Press Enter to create."
+                        }
+                    />
+                </div>
+            );
+        }
+
         // Handle date fields with DatePicker
         if (field.type === "date" || field.name.includes("date") || field.name.includes("_at") || field.name.includes("_on")) {
             return (
-                <DatePicker
-                    selected={parseDate(fieldValue)}
-                    onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}
-                    dateFormat="dd-MM-yyyy"
-                    className={`form-control form-control-sm ${highlightClass}`}
-                    placeholderText="Select date"
-                    isClearable
-                    showYearDropdown
-                    showMonthDropdown
-                    dropdownMode="select"
-                />
+                <div className="w-100">
+                    <DatePicker
+                        selected={parseDate(fieldValue)}
+                        onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}
+                        dateFormat="dd-MM-yyyy"
+                        className={`form-control form-control-sm ${highlightClass}`}
+                        wrapperClassName="w-100 d-block"
+                        placeholderText="Select date"
+                        isClearable
+                        showYearDropdown
+                        showMonthDropdown
+                        dropdownMode="select"
+                    />
+                </div>
             );
         }
 
@@ -244,7 +341,8 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                 <div className="nested-items-container">
                     {value.map((item, index) => (
                         <div key={index} className="card mb-3">
-                            <div className="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                            <div
+                                className="card-header bg-light d-flex justify-content-between align-items-center py-2">
                                 <h6 className="mb-0">Item #{index + 1}</h6>
                                 <div className="btn-group btn-group-sm">
                                     {/* Show Fetch button only for export_license items and if callback is provided */}
@@ -276,25 +374,44 @@ export default function NestedFieldArray({label, fields = [], value = [], onChan
                                 </div>
                             </div>
                             <div className="card-body">
+                                {/* Display errors for this item */}
+                                {errors[index] && errors[index].non_field_errors && (
+                                    <div className="alert alert-danger alert-sm mb-3">
+                                        {errors[index].non_field_errors.map((error, errIdx) => (
+                                            <div key={errIdx}>{error}</div>
+                                        ))}
+                                    </div>
+                                )}
+
                                 <div className="row">
                                     {fields
                                         .filter(f => f.name !== "id")
                                         .map((field) => {
                                             // Determine column width based on field type
                                             const isTextarea = field.type === "textarea" ||
-                                                             field.name.includes("description") ||
-                                                             field.name.includes("note") ||
-                                                             field.name.includes("comment");
+                                                field.name.includes("description") ||
+                                                field.name.includes("note") ||
+                                                field.name.includes("comment");
 
                                             const colClass = isTextarea ? "col-12" : "col-md-4";
 
                                             return (
-                                                <div key={field.name} className={`${colClass} mb-3`}>
-                                                    <label className="form-label small">
-                                                        {field.label || field.name}
-                                                        {field.required && <span className="text-danger">*</span>}
-                                                    </label>
-                                                    {renderNestedField(field, item, index)}
+                                                <div key={field.name} className={`${colClass}`}>
+                                                    <div className="form-group-material">
+                                                        <label className="form-label">
+                                                            {field.label || field.name}
+                                                            {field.required && <span className="text-danger ms-1">*</span>}
+                                                        </label>
+                                                        {renderNestedField(field, item, index)}
+                                                        {/* Display field-level errors */}
+                                                        {errors[index] && errors[index][field.name] && (
+                                                            <div className="invalid-feedback d-block">
+                                                                {Array.isArray(errors[index][field.name])
+                                                                    ? errors[index][field.name].join(', ')
+                                                                    : errors[index][field.name]}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             );
                                         })}

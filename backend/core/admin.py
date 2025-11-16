@@ -4,12 +4,12 @@ from django.contrib import admin
 from django.contrib import admin
 from django.apps import apps
 
-from core.models import HSCodeDutyModel
+from core.models import HSCodeModel
 
 app = apps.get_app_config('core')
 for model_name, model in app.models.items():
     try:
-        if not model_name == 'hscodedutymodel':
+        if not model_name == 'hscodemodel':
             model_admin = type(model_name + "Admin", (admin.ModelAdmin,), {})
             model_admin.list_display = model.admin_list_display if hasattr(model, 'admin_list_display') else tuple(
                 [field.name for field in model._meta.fields])
@@ -23,13 +23,11 @@ for model_name, model in app.models.items():
         pass
 
 
-@admin.register(HSCodeDutyModel)
+@admin.register(HSCodeModel)
 class HSCodeDutyAdmin(admin.ModelAdmin):
     actions = ['download_csv']
     list_display = (
-        'id', 'hs_code', 'product_description', 'basic_custom_duty', 'additional_duty_of_customs', 'custom_health_CESS',
-        'social_welfare_surcharge', 'additional_CVD', 'IGST_levy', 'compensation_cess', 'total_duty', 'sample_on_lakh')
-    list_filter = ('is_fetch','is_fetch_xls')
+        'id', 'hs_code', 'product_description', 'basic_duty', 'unit_price')
     search_fields = ('hs_code',)
 
     @admin.action(
@@ -41,14 +39,10 @@ class HSCodeDutyAdmin(admin.ModelAdmin):
         from io import StringIO
         f = StringIO()
         writer = csv.writer(f)
-        writer.writerow(['id', 'hs_code', 'product_description', 'basic_custom_duty', 'additional_duty_of_customs',
-                         'custom_health_CESS', 'social_welfare_surcharge', 'additional_CVD', 'IGST_levy',
-                         'compensation_cess', 'total_duty', 'sample_on_lakh'])
+        writer.writerow(['id', 'hs_code', 'product_description', 'basic_duty', 'unit_price', 'unit'])
         for s in queryset:
             writer.writerow(
-                [s.id, "'" + s.hs_code, s.product_description, s.basic_custom_duty, s.additional_duty_of_customs,
-                 s.custom_health_CESS, s.social_welfare_surcharge, s.additional_CVD, s.IGST_levy,
-                 s.compensation_cess, s.total_duty, s.sample_on_lakh])
+                [s.id, "'" + s.hs_code, s.product_description, s.basic_duty, s.unit_price, s.unit])
         f.seek(0)
         response = HttpResponse(f, content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename=stat-info.csv'

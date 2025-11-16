@@ -11,7 +11,6 @@ from ..models import (
     SionNormClassModel,
     SIONExportModel,
     SIONImportModel,
-    HSCodeDutyModel,
     ProductDescriptionModel,
     UnitPriceModel,
     ItemNameModel,
@@ -368,16 +367,20 @@ SIONImportViewSet = MasterViewSet.create(
     ),
 )
 
-HSCodeDutyViewSet = MasterViewSet.create(
-    HSCodeDutyModel,
-    HSCodeDutySerializer,
-    config=enhance_config_with_fk(HSCodeDutyModel, {"form_fields": ["hs_code"]}),
-)
-
 ProductDescriptionViewSet = MasterViewSet.create(
     ProductDescriptionModel,
     ProductDescriptionSerializer,
-    config=enhance_config_with_fk(ProductDescriptionModel, {"form_fields": ["product_description"]}),
+    config=enhance_config_with_fk(
+        ProductDescriptionModel,
+        {
+            "form_fields": ["product_description"],
+            "search": ["product_description"],
+            "filter": {
+                "hs_code": {"type": "exact"},
+                "product_description": {"type": "icontains"},
+            }
+        }
+    ),
 )
 
 UnitPriceViewSet = MasterViewSet.create(

@@ -5,7 +5,7 @@ from .models import (
     CompanyModel, PortModel, HSCodeModel,
     HeadSIONNormsModel, SionNormClassModel,
     SIONExportModel, SIONImportModel,
-    HSCodeDutyModel, ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel
+    ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel
 )
 
 
@@ -119,7 +119,7 @@ class SionNormClassNestedSerializer(AuditSerializerMixin):
 # ---- HS Code Duty ----
 class HSCodeDutySerializer(AuditSerializerMixin):
     class Meta(AuditSerializerMixin.Meta):
-        model = HSCodeDutyModel
+        model = HSCodeModel
         fields = "__all__"
 
 

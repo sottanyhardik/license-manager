@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react";
-import {useNavigate, useParams, useLocation} from "react-router-dom";
+import {useLocation, useNavigate, useParams} from "react-router-dom";
 import api from "../../api/axios";
 import NestedFieldArray from "./NestedFieldArray";
 import HybridSelect from "../../components/HybridSelect";
@@ -27,6 +27,7 @@ export default function MasterForm() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({}); // Track field-level errors
     const [updatedFields, setUpdatedFields] = useState({}); // Track updated fields for highlighting
 
     // Helper function to parse date from YYYY-MM-DD to Date object
@@ -169,6 +170,13 @@ export default function MasterForm() {
                         newlyUpdatedFields[`import_license.${existingIndex}.description`] = true;
                     }
 
+                    // Update unit if empty
+                    if (!existing.unit && sionImport.unit) {
+                        updatedImports[existingIndex].unit = sionImport.unit;
+                        fieldsUpdated = true;
+                        newlyUpdatedFields[`import_license.${existingIndex}.unit`] = true;
+                    }
+
                     if (fieldsUpdated) updatedCount++;
                 } else if (!existingSerialNumbers.has(targetSerialNumber)) {
                     // Serial number doesn't exist - add new item
@@ -216,6 +224,7 @@ export default function MasterForm() {
         e.preventDefault();
         setSaving(true);
         setError("");
+        setFieldErrors({});
 
         try {
             const apiPath = entityName === 'licenses' ? `/licenses/` : `/masters/${entityName}/`;
@@ -227,11 +236,33 @@ export default function MasterForm() {
             const redirectPath = entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`;
             navigate(redirectPath);
         } catch (err) {
-            setError(
-                err.response?.data?.detail ||
-                JSON.stringify(err.response?.data) ||
-                "Failed to save record"
-            );
+            console.error("Save error:", err.response?.data);
+
+            // Handle field-level errors
+            if (err.response?.data && typeof err.response.data === 'object') {
+                setFieldErrors(err.response.data);
+
+                // Create a user-friendly error message
+                const errorMessages = [];
+                Object.entries(err.response.data).forEach(([field, errors]) => {
+                    if (Array.isArray(errors)) {
+                        errors.forEach(error => {
+                            if (typeof error === 'object' && error.non_field_errors) {
+                                errorMessages.push(`${field}: ${error.non_field_errors.join(', ')}`);
+                            } else {
+                                errorMessages.push(`${field}: ${error}`);
+                            }
+                        });
+                    }
+                });
+
+                setError(errorMessages.length > 0 ? errorMessages.join('\n') : "Validation errors occurred. Please check the form.");
+            } else {
+                setError(
+                    err.response?.data?.detail ||
+                    "Failed to save record"
+                );
+            }
         } finally {
             setSaving(false);
         }
@@ -244,17 +275,20 @@ export default function MasterForm() {
         // Handle date fields with DatePicker
         if (fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
             return (
-                <DatePicker
-                    selected={parseDate(value)}
-                    onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
-                    dateFormat="dd-MM-yyyy"
-                    className="form-control"
-                    placeholderText="Select date"
-                    isClearable
-                    showYearDropdown
-                    showMonthDropdown
-                    dropdownMode="select"
-                />
+                <div className="w-100">
+                    <DatePicker
+                        selected={parseDate(value)}
+                        onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
+                        dateFormat="dd-MM-yyyy"
+                        className="form-control"
+                        wrapperClassName="w-100 d-block"
+                        placeholderText="Select date"
+                        isClearable
+                        showYearDropdown
+                        showMonthDropdown
+                        dropdownMode="select"
+                    />
+                </div>
             );
         }
 
@@ -360,7 +394,7 @@ export default function MasterForm() {
     return (
         <div className="container mt-4">
             <div className="row">
-                <div className="col-lg-10 mx-auto">
+                <div className="col-lg-12 mx-auto">
                     <div className="card">
                         <div className="card-header bg-primary text-white">
                             <h4 className="mb-0">
@@ -386,22 +420,24 @@ export default function MasterForm() {
 
                                         // Full width for textarea fields
                                         const isTextarea = field.includes("address") || field.includes("description") ||
-                                                          field.includes("note") || field.includes("comment") ||
-                                                          field.includes("condition") || field.includes("restriction");
+                                            field.includes("note") || field.includes("comment") ||
+                                            field.includes("condition") || field.includes("restriction");
 
                                         const colClass = isTextarea ? "col-12" : "col-md-4";
 
                                         return (
-                                            <div key={field} className={`${colClass} mb-3`}>
-                                                <label className="form-label text-capitalize">
-                                                    {field.replace(/_/g, " ")}
-                                                </label>
-                                                {renderField(field)}
+                                            <div key={field} className={`${colClass}`}>
+                                                <div className="form-group-material">
+                                                    <label className="form-label">
+                                                        {field.replace(/_/g, " ")}
+                                                    </label>
+                                                    {renderField(field)}
+                                                </div>
                                             </div>
                                         );
                                     })}
                                 </div>
-
+                                <hr/>
                                 {/* Nested Fields */}
                                 {Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
                                     <NestedFieldArray
@@ -413,9 +449,9 @@ export default function MasterForm() {
                                         fieldKey={nestedKey}
                                         onFetchImports={entityName === "licenses" ? handleFetchImports : undefined}
                                         updatedFields={updatedFields}
+                                        errors={fieldErrors[nestedKey] || []}
                                     />
                                 ))}
-
                                 {/* Action Buttons */}
                                 <div className="mt-4">
                                     <button

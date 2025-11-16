@@ -39,7 +39,7 @@ export default function TopNav() {
                 {user && (
                     <div className="dropdown">
                         <button
-                            className="btn btn-secondary dropdown-toggle"
+                            className="btn btn-primary dropdown-toggle"
                             type="button"
                             data-bs-toggle="dropdown"
                         >

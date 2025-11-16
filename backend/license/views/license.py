@@ -2,16 +2,14 @@
 from core.constants import LICENCE_PURCHASE_CHOICES, SCHEME_CODE_CHOICES, NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
 from core.views.master_view import MasterViewSet
-from license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
-from license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer
+from license.models import LicenseDetailsModel
+from license.serializers import LicenseDetailsSerializer
 
 # Nested field definitions for LicenseDetails
 license_nested_field_defs = {
     "export_license": [
         {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
         {"name": "description", "type": "text", "label": "Description"},
-        {"name": "item", "type": "fk", "label": "Item", "fk_endpoint": "/masters/item-names/",
-         "label_field": "name", "display_field": "item_label"},
         {"name": "norm_class", "type": "fk", "label": "Norm Class", "fk_endpoint": "/masters/sion-classes/",
          "label_field": "norm_class", "display_field": "norm_class_label"},
         {"name": "start_serial_number", "type": "number", "label": "Start Serial Number"},
@@ -39,35 +37,6 @@ license_nested_field_defs = {
         {"name": "type", "type": "text", "label": "Document Type"},
         {"name": "file", "type": "file", "label": "File"},
     ],
-    "transfers": [
-        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
-        {"name": "transfer_date", "type": "date", "label": "Transfer Date"},
-        {"name": "from_company", "type": "fk", "label": "From Company", "fk_endpoint": "/masters/companies/",
-         "label_field": "name"},
-        {"name": "to_company", "type": "fk", "label": "To Company", "fk_endpoint": "/masters/companies/",
-         "label_field": "name"},
-        {"name": "transfer_status", "type": "text", "label": "Transfer Status"},
-        {"name": "transfer_initiation_date", "type": "datetime", "label": "Initiation Date"},
-        {"name": "transfer_acceptance_date", "type": "datetime", "label": "Acceptance Date"},
-        {"name": "cbic_status", "type": "text", "label": "CBIC Status"},
-        {"name": "cbic_response_date", "type": "datetime", "label": "CBIC Response Date"},
-    ],
-    "purchases": [
-        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
-        {"name": "purchasing_entity", "type": "fk", "label": "Purchasing Entity", "fk_endpoint": "/masters/companies/",
-         "label_field": "name"},
-        {"name": "supplier", "type": "fk", "label": "Supplier", "fk_endpoint": "/masters/companies/",
-         "label_field": "name"},
-        {"name": "invoice_number", "type": "text", "label": "Invoice Number"},
-        {"name": "invoice_date", "type": "date", "label": "Invoice Date"},
-        {"name": "invoice_copy", "type": "file", "label": "Invoice Copy"},
-        {"name": "mode", "type": "text", "label": "Mode"},
-        {"name": "amount_source", "type": "text", "label": "Amount Source"},
-        {"name": "fob_inr", "type": "number", "label": "FOB (INR)"},
-        {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
-        {"name": "cif_usd", "type": "number", "label": "CIF (USD)"},
-        {"name": "exchange_rate", "type": "number", "label": "Exchange Rate"},
-    ],
 }
 
 LicenseDetailsViewSet = MasterViewSet.create(
@@ -80,12 +49,16 @@ LicenseDetailsViewSet = MasterViewSet.create(
             "file_number": {"type": "icontains"},
             "exporter": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
-            "license_date": {"type": "date_range"},
-            "license_expiry_date": {"type": "date_range"},
-            "purchase_status": {"type": "choice", "choices": list(LICENCE_PURCHASE_CHOICES)},
             "scheme_code": {"type": "choice", "choices": list(SCHEME_CODE_CHOICES)},
             "notification_number": {"type": "choice", "choices": list(NOTIFICATION_NORM_CHOICES)},
-            "is_active": {"type": "exact"},
+            "is_expired": {"type": "exact"},
+            "is_null": {"type": "exact"},
+            "purchase_status": {"type": "choice", "choices": list(LICENCE_PURCHASE_CHOICES)},
+            "license_date": {"type": "date_range"},
+            "license_expiry_date": {"type": "date_range"},
+
+            "export_license__norm_class": {"type": "fk", "fk_endpoint": "/masters/sion-classes/",
+                                           "label_field": "norm_class"},
         },
         "list_display": [
             "license_number",
@@ -95,43 +68,24 @@ LicenseDetailsViewSet = MasterViewSet.create(
             "port__name",
             "purchase_status",
             "balance_cif",
-            "is_active",
+            "latest_transfer",
+            "get_norm_class"
         ],
         "form_fields": [
+            "scheme_code",
+            "notification_number",
             "license_number",
             "license_date",
             "license_expiry_date",
-            "file_number",
-            "exporter",
             "port",
-            "purchase_status",
-            "scheme_code",
-            "notification_number",
             "registration_number",
             "registration_date",
-            "user_comment",
+            "file_number",
+            "exporter",
+            "purchase_status",
             "condition_sheet",
-            "user_restrictions",
-            "ledger_date",
-            "is_audit",
-            "is_mnm",
-            "is_not_registered",
-            "is_null",
-            "is_au",
-            "is_active",
-            "balance_cif",
-            "export_item",
-            "is_incomplete",
-            "is_expired",
-            "is_individual",
-            "ge_file_number",
-            "fob",
-            "billing_rate",
-            "billing_amount",
-            "current_owner",
-            "file_transfer_status",
         ],
-        "ordering": ["-license_date", "license_number"],
+        "ordering": ["-license_expiry_date", "license_number"],
         "nested_field_defs": license_nested_field_defs,
         "nested_list_display": {
             "export_license": ["norm_class_label", "fob_inr", "cif_fc", "cif_inr"],
@@ -139,8 +93,6 @@ LicenseDetailsViewSet = MasterViewSet.create(
                                "cif_inr", "allotted_quantity", "allotted_value", "debited_quantity", "debited_value",
                                "available_quantity", "available_value"],
             "license_documents": ["type", "file"],
-            "transfers": ["transfer_date", "from_company", "to_company", "transfer_status", "cbic_status"],
-            "purchases": ["purchasing_entity", "supplier", "invoice_number", "invoice_date", "fob_inr", "cif_inr"],
         },
         "field_meta": {
             "exporter": {

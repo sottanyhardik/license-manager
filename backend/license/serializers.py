@@ -2,6 +2,8 @@
 from datetime import date, datetime, time
 from typing import Any, Dict, Iterable
 
+from rest_framework import serializers
+
 from core.models import ItemNameModel, ProductDescriptionModel
 from core.serializers import HSCodeSerializer, SionNormClassNestedSerializer
 from license.models import (
@@ -12,7 +14,6 @@ from license.models import (
     LicenseTransferModel,
     LicensePurchase,
 )
-from rest_framework import serializers
 
 
 def _safe_iso(val: Any) -> Any:
@@ -157,6 +158,10 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     exporter_name = serializers.CharField(read_only=True, required=False)
     port_name = serializers.CharField(read_only=True, required=False)
 
+    # Property fields
+    latest_transfer = serializers.CharField(read_only=True, required=False)
+    get_norm_class = serializers.CharField(read_only=True, required=False)
+
     # Nested serializers - separate for read/write to avoid validation issues
     export_license_read = LicenseExportItemSerializer(source='export_license', many=True, read_only=True)
     import_license_read = LicenseImportItemSerializer(source='import_license', many=True, read_only=True)
@@ -165,8 +170,6 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     import_license = serializers.ListField(child=serializers.DictField(), required=False, write_only=True)
 
     license_documents = LicenseDocumentSerializer(many=True, required=False)
-    transfers = LicenseTransferSerializer(many=True, required=False)
-    purchases = LicensePurchaseSerializer(many=True, required=False)
 
     class Meta:
         model = LicenseDetailsModel

@@ -275,6 +275,38 @@ export default function NestedFieldArray({
             );
         }
 
+        // Handle file fields
+        if (field.type === "file") {
+            return (
+                <div>
+                    <input
+                        type="file"
+                        className={`form-control form-control-sm ${highlightClass}`}
+                        onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                                handleChange(index, field.name, file);
+                            }
+                        }}
+                    />
+                    {fieldValue && typeof fieldValue === 'string' && (
+                        <div className="mt-1">
+                            <small className="text-muted">
+                                Current: <a href={fieldValue} target="_blank" rel="noopener noreferrer">View file</a>
+                            </small>
+                        </div>
+                    )}
+                    {fieldValue && typeof fieldValue === 'object' && fieldValue.name && (
+                        <div className="mt-1">
+                            <small className="text-success">
+                                Selected: {fieldValue.name}
+                            </small>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
         // Handle different field types
         switch (field.type) {
             case "number":

@@ -164,9 +164,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     export_license = serializers.ListField(child=serializers.DictField(), required=False, write_only=True)
     import_license = serializers.ListField(child=serializers.DictField(), required=False, write_only=True)
 
-    # license_documents = LicenseDocumentSerializer(many=True, required=False)
-    # transfers = LicenseTransferSerializer(many=True, required=False)
-    # purchases = LicensePurchaseSerializer(many=True, required=False)
+    license_documents = LicenseDocumentSerializer(many=True, required=False)
+    transfers = LicenseTransferSerializer(many=True, required=False)
+    purchases = LicensePurchaseSerializer(many=True, required=False)
 
     class Meta:
         model = LicenseDetailsModel

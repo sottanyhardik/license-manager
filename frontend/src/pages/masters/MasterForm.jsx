@@ -228,11 +228,76 @@ export default function MasterForm() {
 
         try {
             const apiPath = entityName === 'licenses' ? `/licenses/` : `/masters/${entityName}/`;
-            if (isEdit) {
-                await api.patch(`${apiPath}${id}/`, formData);
+
+            // Check if formData contains any File objects (including nested)
+            const hasFiles = () => {
+                const checkForFiles = (obj) => {
+                    if (obj instanceof File) return true;
+                    if (Array.isArray(obj)) {
+                        return obj.some(item => checkForFiles(item));
+                    }
+                    if (obj && typeof obj === 'object') {
+                        return Object.values(obj).some(val => checkForFiles(val));
+                    }
+                    return false;
+                };
+                return checkForFiles(formData);
+            };
+
+            let response;
+            if (hasFiles()) {
+                // Use FormData for file uploads
+                const formDataObj = new FormData();
+
+                // Helper function to append data to FormData
+                const appendToFormData = (key, value, parentKey = '') => {
+                    const fullKey = parentKey ? `${parentKey}.${key}` : key;
+
+                    if (value instanceof File) {
+                        formDataObj.append(fullKey, value);
+                    } else if (Array.isArray(value)) {
+                        value.forEach((item, index) => {
+                            if (item instanceof File) {
+                                formDataObj.append(`${fullKey}[${index}]`, item);
+                            } else if (typeof item === 'object' && item !== null) {
+                                Object.entries(item).forEach(([subKey, subValue]) => {
+                                    appendToFormData(subKey, subValue, `${fullKey}[${index}]`);
+                                });
+                            } else {
+                                formDataObj.append(`${fullKey}[${index}]`, item);
+                            }
+                        });
+                    } else if (value && typeof value === 'object' && !(value instanceof Date)) {
+                        Object.entries(value).forEach(([subKey, subValue]) => {
+                            appendToFormData(subKey, subValue, fullKey);
+                        });
+                    } else if (value !== null && value !== undefined && value !== '') {
+                        formDataObj.append(fullKey, value);
+                    }
+                };
+
+                Object.entries(formData).forEach(([key, value]) => {
+                    appendToFormData(key, value);
+                });
+
+                if (isEdit) {
+                    response = await api.patch(`${apiPath}${id}/`, formDataObj, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                } else {
+                    response = await api.post(apiPath, formDataObj, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                }
             } else {
-                await api.post(apiPath, formData);
+                // Use regular JSON for non-file data
+                if (isEdit) {
+                    response = await api.patch(`${apiPath}${id}/`, formData);
+                } else {
+                    response = await api.post(apiPath, formData);
+                }
             }
+
             const redirectPath = entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`;
             navigate(redirectPath);
         } catch (err) {

@@ -34,6 +34,40 @@ license_nested_field_defs = {
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)"},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
     ],
+    "license_documents": [
+        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
+        {"name": "type", "type": "text", "label": "Document Type"},
+        {"name": "file", "type": "file", "label": "File"},
+    ],
+    "transfers": [
+        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
+        {"name": "transfer_date", "type": "date", "label": "Transfer Date"},
+        {"name": "from_company", "type": "fk", "label": "From Company", "fk_endpoint": "/masters/companies/",
+         "label_field": "name"},
+        {"name": "to_company", "type": "fk", "label": "To Company", "fk_endpoint": "/masters/companies/",
+         "label_field": "name"},
+        {"name": "transfer_status", "type": "text", "label": "Transfer Status"},
+        {"name": "transfer_initiation_date", "type": "datetime", "label": "Initiation Date"},
+        {"name": "transfer_acceptance_date", "type": "datetime", "label": "Acceptance Date"},
+        {"name": "cbic_status", "type": "text", "label": "CBIC Status"},
+        {"name": "cbic_response_date", "type": "datetime", "label": "CBIC Response Date"},
+    ],
+    "purchases": [
+        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
+        {"name": "purchasing_entity", "type": "fk", "label": "Purchasing Entity", "fk_endpoint": "/masters/companies/",
+         "label_field": "name"},
+        {"name": "supplier", "type": "fk", "label": "Supplier", "fk_endpoint": "/masters/companies/",
+         "label_field": "name"},
+        {"name": "invoice_number", "type": "text", "label": "Invoice Number"},
+        {"name": "invoice_date", "type": "date", "label": "Invoice Date"},
+        {"name": "invoice_copy", "type": "file", "label": "Invoice Copy"},
+        {"name": "mode", "type": "text", "label": "Mode"},
+        {"name": "amount_source", "type": "text", "label": "Amount Source"},
+        {"name": "fob_inr", "type": "number", "label": "FOB (INR)"},
+        {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
+        {"name": "cif_usd", "type": "number", "label": "CIF (USD)"},
+        {"name": "exchange_rate", "type": "number", "label": "Exchange Rate"},
+    ],
 }
 
 LicenseDetailsViewSet = MasterViewSet.create(
@@ -104,6 +138,9 @@ LicenseDetailsViewSet = MasterViewSet.create(
             "import_license": ["serial_number", "hs_code_label", "description", "quantity", "unit", "cif_fc",
                                "cif_inr", "allotted_quantity", "allotted_value", "debited_quantity", "debited_value",
                                "available_quantity", "available_value"],
+            "license_documents": ["type", "file"],
+            "transfers": ["transfer_date", "from_company", "to_company", "transfer_status", "cbic_status"],
+            "purchases": ["purchasing_entity", "supplier", "invoice_number", "invoice_date", "fob_inr", "cif_inr"],
         },
         "field_meta": {
             "exporter": {

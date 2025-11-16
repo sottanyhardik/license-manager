@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from allotment.models import AllotmentItems
+from bill_of_entry.models import RowDetails
+from core.constants import DEBIT
 from django.core.management.base import BaseCommand
 from django.db.models import Sum
-
-from allotment.models import AllotmentItems, Debit
-from bill_of_entry.models import RowDetails
 from license.models import LicenseDetailsModel, LicenseImportItemsModel
 
 

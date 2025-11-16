@@ -810,7 +810,26 @@ class LicenseImportItemsModel(models.Model):
     def balance_cif_fc(self) -> Decimal:
         """
         Row-level balance. For special rows (0 / 0.01 / 0.1), fall back to license-level sums.
+        Business Logic: If all items OTHER THAN serial_number = 1 have CIF = 0,
+        then serial_number 1's balance should be license.balance_cif.
         """
+        # Check if business logic applies: all other items have zero CIF and this is serial_number 1
+        if self.license and self.serial_number == 1:
+            all_items = LicenseImportItemsModel.objects.filter(license=self.license)
+            other_items = [item for item in all_items if item.serial_number != 1]
+
+            # Check if all other items have zero CIF
+            all_others_zero_cif = all(
+                _to_decimal(item.cif_fc or DEC_0, DEC_0) == DEC_0 and
+                _to_decimal(item.cif_inr or DEC_0, DEC_0) == DEC_0
+                for item in other_items
+            ) if other_items else False
+
+            if all_others_zero_cif:
+                # Return the license's balance_cif directly
+                return _to_decimal(self.license.balance_cif or DEC_0, DEC_0)
+
+        # Original logic
         if not self.cif_fc or self.cif_fc in (Decimal("0"), Decimal("0.1"), Decimal("0.01")):
             credit = _to_decimal(LicenseExportItemModel.objects.filter(license=self.license).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)

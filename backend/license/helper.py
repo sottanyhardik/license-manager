@@ -35,8 +35,8 @@ def round_down(n, decimals=0):
 
 
 def check_license():
+    from core.constants import GE
     from license.models import LicenseDetailsModel
-    from license.models import GE
     for license in LicenseDetailsModel.objects.all():
         if license.get_balance_cif < 500:
             license.is_null = True

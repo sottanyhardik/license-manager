@@ -5,9 +5,10 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.db.models import Q, Sum
 
+from core.constants import N2009, N2015, N2023, GE, MI
 from core.models import ItemNameModel
 from license import models as license
-from license.models import N2009, N2015, LicenseDetailsModel, N2023, GE, MI, LicenseImportItemsModel
+from license.models import LicenseDetailsModel, LicenseImportItemsModel
 from license.tables import LicenseItemReportTable, LicenseConfectioneryReportTable, RutileLicenseItemReportTable
 
 

@@ -1,9 +1,11 @@
 import {useContext, useState} from "react";
+import {useNavigate} from "react-router-dom";
 import {AuthContext} from "../context/AuthContext";
 import api from "../api/axios";
 
 export default function Profile() {
     const {user, loginSuccess} = useContext(AuthContext);
+    const navigate = useNavigate();
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
@@ -77,6 +79,16 @@ export default function Profile() {
 
     return (
         <div className="container mt-4">
+            {/* Breadcrumb */}
+            <nav aria-label="breadcrumb" className="mb-3">
+                <ol className="breadcrumb">
+                    <li className="breadcrumb-item">
+                        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }}>Home</a>
+                    </li>
+                    <li className="breadcrumb-item active" aria-current="page">Profile</li>
+                </ol>
+            </nav>
+
             <div className="row">
                 <div className="col-lg-8 mx-auto">
                     <div className="card shadow-sm">

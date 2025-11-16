@@ -7,7 +7,7 @@ import {Link} from "react-router-dom";
  * Used for displaying records with nested arrays (like SION Norm Classes, Licenses)
  * that expand/collapse on click.
  */
-export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}}) {
+export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}}) {
     const [expandedRows, setExpandedRows] = useState(new Set());
 
     const toggleRow = (id) => {
@@ -47,12 +47,50 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
             );
         }
 
-        // Get visible columns from field config (exclude id and read-only fields)
-        const visibleFields = fieldConfig.filter(f =>
-            f.name !== "id" &&
-            !f.read_only &&
-            f.name !== "license"
-        );
+        // Get fields to display - use nestedListDisplay if available, otherwise use field config
+        const listDisplayFields = nestedListDisplay[fieldKey] || [];
+        let visibleFields;
+
+        console.log(`Rendering nested table for ${fieldKey}:`, {
+            listDisplayFields,
+            nestedListDisplay,
+            fieldKey,
+            hasConfig: listDisplayFields.length > 0
+        });
+
+        if (listDisplayFields.length > 0) {
+            // Use the configured list display fields
+            visibleFields = listDisplayFields.map(fieldName => {
+                // Try to find the field config
+                const fieldDef = fieldConfig.find(f => f.name === fieldName);
+                if (fieldDef) {
+                    return fieldDef;
+                }
+
+                // If not found, try without _label suffix
+                const baseFieldName = fieldName.replace('_label', '');
+                const baseField = fieldConfig.find(f => f.name === baseFieldName);
+                if (baseField) {
+                    return {...baseField, name: fieldName, actualFieldName: fieldName};
+                }
+
+                // Create a basic field definition
+                return {
+                    name: fieldName,
+                    label: fieldName.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+                    type: "text"
+                };
+            });
+        } else {
+            // Fallback to showing all visible fields from config
+            visibleFields = fieldConfig.filter(f =>
+                f.name !== "id" &&
+                !f.read_only &&
+                f.name !== "license"
+            );
+        }
+
+        console.log(`Visible fields for ${fieldKey}:`, visibleFields.map(f => f.name));
 
         // Determine icon based on field name
         const getIcon = () => {
@@ -84,13 +122,38 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                 {visibleFields.map(field => {
                                     let value = item[field.name];
 
+                                    // Determine if this is a decimal or integer field
+                                    const isDecimalField = field.name.includes('quantity') ||
+                                                          field.name.includes('cif') ||
+                                                          field.name.includes('fob') ||
+                                                          field.name.includes('value') ||
+                                                          field.name.includes('balance') ||
+                                                          field.name.includes('amount');
+
+                                    const isIntegerField = field.name === 'serial_number' ||
+                                                          field.type === 'integer';
+
                                     // Format based on field type
-                                    if (value === null || value === undefined) {
+                                    if (value === null || value === undefined || value === "") {
                                         value = "-";
                                     } else if (typeof value === "boolean") {
                                         value = value ? "Yes" : "No";
                                     } else if (Array.isArray(value)) {
                                         value = value.length > 0 ? value.join(", ") : "-";
+                                    } else if ((typeof value === "number" || !isNaN(parseFloat(value))) && (isDecimalField || isIntegerField)) {
+                                        // Parse the value as a number
+                                        const numValue = parseFloat(value);
+
+                                        if (isIntegerField) {
+                                            // Integer fields: no decimals, with comma separator
+                                            value = Math.round(numValue).toLocaleString('en-US');
+                                        } else if (isDecimalField) {
+                                            // Decimal fields: 2 decimals, with comma separator
+                                            value = numValue.toLocaleString('en-US', {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2
+                                            });
+                                        }
                                     } else if (field.name.includes("date") && value) {
                                         // Format date as dd-mm-yyyy
                                         try {
@@ -107,7 +170,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                     }
 
                                     return (
-                                        <td key={field.name} className={field.type === "number" ? "text-end" : ""}>
+                                        <td key={field.name} className={(isDecimalField || isIntegerField) ? "text-end" : ""}>
                                             {value}
                                         </td>
                                     );

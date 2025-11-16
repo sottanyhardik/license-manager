@@ -1,6 +1,13 @@
 export default function Dashboard() {
     return (
         <div className="container mt-4">
+            {/* Breadcrumb */}
+            <nav aria-label="breadcrumb" className="mb-3">
+                <ol className="breadcrumb">
+                    <li className="breadcrumb-item active" aria-current="page">Dashboard</li>
+                </ol>
+            </nav>
+
             <h2>Dashboard</h2>
 
             <div className="row mt-4">

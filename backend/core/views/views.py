@@ -24,7 +24,6 @@ from ..serializers import (
     SionNormClassNestedSerializer,
     SIONExportSerializer,
     SIONImportSerializer,
-    HSCodeDutySerializer,
     ProductDescriptionSerializer,
     UnitPriceSerializer,
     ItemNameSerializer,
@@ -290,7 +289,7 @@ HeadSIONNormsViewSet = MasterViewSet.create(
     ),
 )
 
-# Example nested defs — we explicitly mark hsn_code as a select and point it at /api/head-norms/
+# Example nested defs — we explicitly mark hs_code as a select and point it at /api/head-norms/
 example_nested_field_defs = {
     "export_norm": [
         {"name": "id", "type": "integer", "label": "ID", "required": True},
@@ -304,7 +303,7 @@ example_nested_field_defs = {
         {"name": "description", "type": "string", "label": "Description", "required": True},
         {"name": "quantity", "type": "number", "label": "Quantity", "required": True},
         {"name": "unit", "type": "string", "label": "Unit", "required": True},
-        # <-- explicit override: treat hsn_code as FK select pointing to head-norms router
+        # <-- explicit override: treat hsn_code as FK select pointing to hs-codes router
         {
             "name": "hsn_code",
             "type": "string",

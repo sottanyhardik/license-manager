@@ -295,51 +295,66 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
     }
 
     return (
-        <div className="card mb-3">
-            <div className="card-body">
-                <h6 className="card-title mb-3">
-                    <i className="bi bi-funnel me-2"></i>
-                    Filters
-                </h6>
+        <div className="mb-3">
+            {/* Search Bar on Top */}
+            {searchFields.length > 0 && (
+                <div className="mb-3">
+                    <div className="input-group input-group-lg">
+                        <span className="input-group-text bg-white">
+                            <i className="bi bi-search"></i>
+                        </span>
+                        <input
+                            type="text"
+                            className="form-control form-control-lg"
+                            placeholder={`Search by ${searchFields.join(", ")}`}
+                            value={searchTerm}
+                            onChange={handleSearchChange}
+                        />
+                        {searchTerm && (
+                            <button
+                                className="btn btn-outline-secondary"
+                                type="button"
+                                onClick={() => setSearchTerm("")}
+                            >
+                                <i className="bi bi-x-lg"></i>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
-                <div className="row g-3">
-                    {/* Search Field */}
-                    {searchFields.length > 0 && (
-                        <div className="col-md-6">
-                            <label className="form-label">
-                                <i className="bi bi-search me-1"></i>
-                                Search
-                            </label>
-                            <input
-                                type="text"
-                                className="form-control"
-                                placeholder={`Search by ${searchFields.join(", ")}`}
-                                value={searchTerm}
-                                onChange={handleSearchChange}
-                            />
+            {/* Filter Card */}
+            {Object.keys(filterConfig).length > 0 && (
+                <div className="card">
+                    <div className="card-body">
+                        <h6 className="card-title mb-3">
+                            <i className="bi bi-funnel me-2"></i>
+                            Filters
+                        </h6>
+
+                        <div className="row g-3">
+                            {/* Dynamic Filter Fields */}
+                            {Object.entries(filterConfig).map(([fieldName, config]) =>
+                                renderFilterField(fieldName, config)
+                            )}
                         </div>
-                    )}
 
-                    {/* Dynamic Filter Fields */}
-                    {Object.entries(filterConfig).map(([fieldName, config]) =>
-                        renderFilterField(fieldName, config)
-                    )}
+                        <div className="mt-3 d-flex justify-content-between align-items-center">
+                            <button
+                                className="btn btn-secondary"
+                                onClick={handleResetFilters}
+                            >
+                                <i className="bi bi-x-circle me-1"></i>
+                                Clear Filters
+                            </button>
+                            <small className="text-muted">
+                                <i className="bi bi-lightning-charge me-1"></i>
+                                Filters apply automatically as you type
+                            </small>
+                        </div>
+                    </div>
                 </div>
-
-                <div className="mt-3 d-flex justify-content-between align-items-center">
-                    <button
-                        className="btn btn-secondary"
-                        onClick={handleResetFilters}
-                    >
-                        <i className="bi bi-x-circle me-1"></i>
-                        Clear Filters
-                    </button>
-                    <small className="text-muted">
-                        <i className="bi bi-lightning-charge me-1"></i>
-                        Filters apply automatically as you type
-                    </small>
-                </div>
-            </div>
+            )}
         </div>
     );
 }

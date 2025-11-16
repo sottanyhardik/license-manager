@@ -65,6 +65,7 @@ class MasterViewSet(viewsets.ModelViewSet):
     list_display: list[str] = []
     form_fields: list[str] = []
     nested_field_defs: Dict[str, Any] = {}
+    nested_list_display: Dict[str, Any] = {}
     field_meta: Dict[str, Any] = {}
     model_name: Optional[str] = None
     serializer_class = None
@@ -145,6 +146,7 @@ class MasterViewSet(viewsets.ModelViewSet):
             "ordering_fields": config.get("ordering", safe_fields),
             "model_name": model.__name__,
             "nested_field_defs": config.get("nested_field_defs", {}),
+            "nested_list_display": config.get("nested_list_display", {}),
             "field_meta": config.get("field_meta", {}),
         }
 
@@ -160,6 +162,7 @@ class MasterViewSet(viewsets.ModelViewSet):
             form_fields = attrs["form_fields"]
             ordering_fields = attrs["ordering_fields"]
             nested_field_defs = attrs["nested_field_defs"]
+            nested_list_display = attrs["nested_list_display"]
             field_meta = attrs["field_meta"]
             model_name = attrs["model_name"]
 
@@ -310,6 +313,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                     "filter_config": getattr(self, "filter_config", {}),
                     "ordering_fields": getattr(self, "ordering_fields", []),
                     "nested_field_defs": getattr(self, "nested_field_defs", {}),
+                    "nested_list_display": getattr(self, "nested_list_display", {}),
                     "field_meta": getattr(self, "field_meta", {}),
 
                     # Pagination metadata
@@ -346,6 +350,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                             "ordering_fields": getattr(self, "ordering_fields", []),
                             "model_name": getattr(self, "model_name", None),
                             "nested_field_defs": getattr(self, "nested_field_defs", {}),
+                            "nested_list_display": getattr(self, "nested_list_display", {}),
                             "field_meta": getattr(self, "field_meta", {}),
                         }
                         response.data.update(extra)

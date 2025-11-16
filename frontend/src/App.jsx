@@ -3,6 +3,7 @@ import {BrowserRouter, Navigate, Route, Routes} from "react-router-dom";
 import {lazy, Suspense} from "react";
 
 import {AuthProvider} from "./context/AuthContext";
+import {ToastProvider} from "./components/ToastContext";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleRoute from "./routes/RoleRoute";
 import AdminLayout from "./layout/AdminLayout";
@@ -22,9 +23,10 @@ const MasterForm = lazy(() => import("./pages/masters/MasterForm"));
 export default function App() {
     return (
         <AuthProvider>
-            <BrowserRouter>
-                <Suspense fallback={<div className="p-4">Loading...</div>}>
-                    <Routes>
+            <ToastProvider>
+                <BrowserRouter>
+                    <Suspense fallback={<div className="p-4">Loading...</div>}>
+                        <Routes>
 
                         {/* Public */}
                         <Route path="/login" element={<Login/>}/>
@@ -161,6 +163,7 @@ export default function App() {
                     </Routes>
                 </Suspense>
             </BrowserRouter>
-        </AuthProvider>
+        </ToastProvider>
+    </AuthProvider>
     );
 }

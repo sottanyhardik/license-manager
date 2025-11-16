@@ -1250,7 +1250,7 @@ class InvoiceItem(models.Model):
     sr_number = models.ForeignKey("license.LicenseImportItemsModel", on_delete=models.CASCADE,
                                   related_name="invoice_items")
     license_no = models.CharField(max_length=50)  # filled from sr_number.license.license_number
-    hsn_code = models.CharField(max_length=10, default="490700")
+    hs_code = models.CharField(max_length=10, default="490700")
     qty = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     cif_fc = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     cif_inr = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)

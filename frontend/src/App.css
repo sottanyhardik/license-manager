@@ -1,5 +1,48 @@
+/* Orange Professional Color Variables */
+:root {
+    --primary-color: #ff6f00;
+    --primary-light: #ff8f00;
+    --primary-dark: #e65100;
+    --secondary-color: #64748b;
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+    --warning-color: #f59e0b;
+    --info-color: #3b82f6;
+    --surface-color: #ffffff;
+    --background-color: #f8fafc;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-tertiary: #94a3b8;
+    --divider-color: #e2e8f0;
+    --border-light: #cbd5e1;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+    /* Bootstrap color overrides */
+    --bs-primary: #ff6f00;
+    --bs-primary-rgb: 255, 111, 0;
+    --bs-link-color: #ff6f00;
+    --bs-link-hover-color: #e65100;
+}
+
+* {
+    box-sizing: border-box;
+}
+
 #root {
     margin: 0 auto;
+    background-color: var(--background-color);
+    min-height: 100vh;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    color: var(--text-primary);
+    background-color: var(--background-color);
+    line-height: 1.6;
+    font-size: 14px;
 }
 
 .logo {
@@ -102,146 +145,195 @@
 /* Material Design Form Styles */
 .form-group-material {
     position: relative;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.75rem;
 }
 
 .form-group-material .form-control,
 .form-group-material .form-select,
 .form-group-material textarea.form-control {
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 12px 12px;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-    background-color: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    background-color: var(--surface-color);
     width: 100%;
+    box-shadow: none;
 }
 
 .form-group-material .form-control:focus,
 .form-group-material .form-select:focus,
 .form-group-material textarea.form-control:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.15);
     outline: 0;
+    background-color: #fff;
 }
 
-.form-group-material .form-control:hover:not(:focus),
-.form-group-material .form-select:hover:not(:focus),
-.form-group-material textarea.form-control:hover:not(:focus) {
-    border-color: #999;
+.form-group-material .form-control:hover:not(:focus):not(:disabled),
+.form-group-material .form-select:hover:not(:focus):not(:disabled),
+.form-group-material textarea.form-control:hover:not(:focus):not(:disabled) {
+    border-color: var(--text-secondary);
 }
 
 .form-group-material label.form-label {
     font-weight: 500;
     margin-bottom: 0.5rem;
-    color: #495057;
-    font-size: 0.875rem;
+    color: var(--text-primary);
+    font-size: 0.8125rem;
     text-transform: capitalize !important;
     display: block;
+    letter-spacing: 0.3px;
 }
 
-/* Enhanced card styling for forms */
+/* Enhanced card styling for forms - Material Design */
 .card {
-    border: none;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--divider-color);
+    box-shadow: var(--shadow-sm);
     border-radius: 8px;
-    transition: box-shadow 0.3s ease;
+    transition: all 0.2s ease;
+    background-color: var(--surface-color);
 }
 
 .card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-md);
 }
 
 .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
-    padding: 1rem 1.25rem;
+    background-color: var(--surface-color);
+    border-bottom: 1px solid var(--divider-color);
+    padding: 1rem 1.5rem;
     border-radius: 8px 8px 0 0 !important;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9375rem;
 }
 
 /* Nested field array styling */
 .nested-items-container .card {
     margin-bottom: 1rem;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--divider-color);
 }
 
 .nested-items-container .card-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    font-weight: 500;
+    background-color: #fff5f0;
+    color: var(--primary-dark);
+    font-weight: 600;
+    border-bottom: 2px solid var(--primary-color);
 }
 
 .nested-items-container .card-body {
-    padding: 1.25rem;
-    background-color: #f8f9fa;
+    padding: 1.5rem;
+    background-color: var(--surface-color);
 }
 
-/* Button enhancements */
+/* Material Design Button Styles */
 .btn {
     font-weight: 500;
-    padding: 0.5rem 1.25rem;
-    border-radius: 4px;
+    padding: 8px 20px;
+    border-radius: 6px;
     transition: all 0.2s ease;
-    border: none;
+    border: 1px solid transparent;
+    text-transform: none;
+    letter-spacing: 0.3px;
+    font-size: 0.875rem;
+    box-shadow: none;
 }
 
 .btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-sm);
 }
 
 .btn:active {
     transform: translateY(0);
+    box-shadow: none;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #5568d3 0%, #63408a 100%);
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: white;
 }
 
 .btn-success {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    background-color: var(--success-color);
+    color: white;
+    border-color: var(--success-color);
 }
 
 .btn-success:hover {
-    background: linear-gradient(135deg, #0e8275 0%, #2dd368 100%);
+    background-color: #0ea472;
+    border-color: #0ea472;
+    color: white;
 }
 
 .btn-danger {
-    background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+    background-color: var(--danger-color);
+    color: white;
+    border-color: var(--danger-color);
 }
 
 .btn-danger:hover {
-    background: linear-gradient(135deg, #d42a3e 0%, #dc4d39 100%);
+    background-color: #dc2626;
+    border-color: #dc2626;
+    color: white;
 }
 
-/* React Select enhancements */
+.btn-outline-danger {
+    border: 1px solid var(--danger-color);
+    color: var(--danger-color);
+    background: transparent;
+}
+
+.btn-outline-danger:hover {
+    background: var(--danger-color);
+    border-color: var(--danger-color);
+    color: white;
+}
+
+/* React Select enhancements - Material Design */
 .react-select__control {
-    border-radius: 4px !important;
-    border-color: #dee2e6 !important;
+    border-radius: 6px !important;
+    border-color: var(--border-light) !important;
     min-height: 38px !important;
-    transition: all 0.3s ease !important;
+    transition: all 0.2s ease !important;
+    box-shadow: none !important;
+    background-color: var(--surface-color) !important;
 }
 
 .react-select__control:hover {
-    border-color: #999 !important;
+    border-color: var(--text-secondary) !important;
 }
 
 .react-select__control--is-focused {
-    border-color: #0d6efd !important;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15) !important;
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.15) !important;
 }
 
 .react-select__menu {
-    border-radius: 4px !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 6px !important;
+    box-shadow: var(--shadow-lg) !important;
     z-index: 9999 !important;
+    border: 1px solid var(--divider-color) !important;
 }
 
-/* Date picker styling */
+.react-select__option--is-selected {
+    background-color: var(--primary-color) !important;
+}
+
+.react-select__option--is-focused {
+    background-color: #fff5f0 !important;
+    color: var(--text-primary) !important;
+}
+
+/* Date picker styling - Material Design */
 .react-datepicker-wrapper {
     width: 100%;
     display: block;
@@ -253,24 +345,25 @@
 }
 
 .react-datepicker__input-container input {
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 12px;
-    font-size: 1rem;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.875rem;
     width: 100%;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     display: block;
-    background-color: #fff;
+    background-color: var(--surface-color);
+    box-shadow: none;
 }
 
 .react-datepicker__input-container input:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.15);
     outline: 0;
 }
 
 .react-datepicker__input-container input:hover:not(:focus) {
-    border-color: #999;
+    border-color: var(--text-secondary);
 }
 
 /* Ensure DatePicker in forms looks consistent */
@@ -278,6 +371,35 @@
 .form-group-material .react-datepicker__input-container {
     width: 100%;
     display: block;
+}
+
+/* DatePicker calendar styling */
+.react-datepicker__header {
+    background-color: var(--primary-color) !important;
+    border-bottom: none !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker__day-name {
+    color: white !important;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+    background-color: var(--primary-color) !important;
+}
+
+.react-datepicker__day:hover {
+    background-color: var(--primary-light) !important;
+}
+
+.react-datepicker__close-icon::after {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+.react-datepicker__close-icon:hover::after {
+    background-color: var(--primary-dark) !important;
 }
 
 /* Ensure all form labels are capitalized */
@@ -306,4 +428,431 @@ label.form-label,
 div label {
     text-transform: capitalize !important;
     font-weight: 500 !important;
+}
+
+/* ========================================
+   Bootstrap Component Color Overrides
+   ======================================== */
+
+/* Bootstrap Buttons */
+.btn-primary {
+    background-color: #ff6f00 !important;
+    border-color: #ff6f00 !important;
+}
+
+.btn-primary:hover {
+    background-color: #e65100 !important;
+    border-color: #e65100 !important;
+}
+
+.btn-primary:focus,
+.btn-primary:active,
+.btn-primary.active,
+.btn-primary:first-child:active {
+    background-color: #e65100 !important;
+    border-color: #e65100 !important;
+    box-shadow: 0 0 0 0.25rem rgba(255, 111, 0, 0.25) !important;
+}
+
+.btn-primary:disabled,
+.btn-primary.disabled {
+    background-color: #ff6f00 !important;
+    border-color: #ff6f00 !important;
+    opacity: 0.65;
+}
+
+.btn-outline-primary {
+    color: #ff6f00 !important;
+    border-color: #ff6f00 !important;
+}
+
+.btn-outline-primary:hover {
+    background-color: #ff6f00 !important;
+    border-color: #ff6f00 !important;
+    color: white !important;
+}
+
+.btn-outline-primary:focus,
+.btn-outline-primary:active {
+    background-color: #ff6f00 !important;
+    border-color: #ff6f00 !important;
+    box-shadow: 0 0 0 0.25rem rgba(255, 111, 0, 0.25) !important;
+}
+
+/* Bootstrap Form Controls */
+.form-control:focus,
+.form-select:focus {
+    border-color: #ff8f00 !important;
+    box-shadow: 0 0 0 0.25rem rgba(255, 111, 0, 0.15) !important;
+}
+
+.form-check-input:checked {
+    background-color: #ff6f00 !important;
+    border-color: #ff6f00 !important;
+}
+
+.form-check-input:focus {
+    border-color: #ff8f00 !important;
+    box-shadow: 0 0 0 0.25rem rgba(255, 111, 0, 0.15) !important;
+}
+
+.form-switch .form-check-input:checked {
+    background-color: #ff6f00 !important;
+}
+
+/* Bootstrap Links */
+a {
+    color: #ff6f00;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #e65100;
+}
+
+/* Bootstrap Badges */
+.badge.bg-primary,
+.badge.text-bg-primary {
+    background-color: #ff6f00 !important;
+}
+
+/* Bootstrap Alerts */
+.alert-primary {
+    color: #8a3c00;
+    background-color: #ffe4cc;
+    border-color: #ffd6b3;
+}
+
+.alert-primary .alert-link {
+    color: #6e3000;
+}
+
+/* Bootstrap Pagination */
+.pagination .page-link {
+    color: #ff6f00;
+}
+
+.pagination .page-link:hover {
+    color: #e65100;
+    background-color: #fff5f0;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: #ff6f00 !important;
+    border-color: #ff6f00 !important;
+}
+
+.pagination .page-link:focus {
+    box-shadow: 0 0 0 0.25rem rgba(255, 111, 0, 0.15);
+}
+
+/* Bootstrap Progress Bar */
+.progress-bar,
+.progress-bar.bg-primary {
+    background-color: #ff6f00 !important;
+}
+
+/* Bootstrap Spinners */
+.spinner-border.text-primary {
+    color: #ff6f00 !important;
+}
+
+.spinner-grow.text-primary {
+    color: #ff6f00 !important;
+}
+
+/* Bootstrap Nav Pills */
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+    background-color: #ff6f00 !important;
+    color: white !important;
+}
+
+.nav-pills .nav-link:hover {
+    background-color: #fff5f0 !important;
+    color: #e65100 !important;
+}
+
+.nav-pills .nav-link {
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+/* Bootstrap Nav Tabs */
+.nav-tabs .nav-link.active {
+    color: #ff6f00;
+    border-color: var(--divider-color) var(--divider-color) #fff;
+}
+
+.nav-tabs .nav-link:hover {
+    color: #e65100;
+}
+
+/* Bootstrap Accordion */
+.accordion-button:not(.collapsed) {
+    background-color: #fff5f0;
+    color: #e65100;
+}
+
+.accordion-button:focus {
+    border-color: #ff8f00;
+    box-shadow: 0 0 0 0.25rem rgba(255, 111, 0, 0.15);
+}
+
+/* Bootstrap List Group */
+.list-group-item.active {
+    background-color: #ff6f00 !important;
+    border-color: #ff6f00 !important;
+}
+
+.list-group-item-primary {
+    color: #8a3c00;
+    background-color: #ffe4cc;
+}
+
+.list-group-item-primary.list-group-item-action:hover,
+.list-group-item-primary.list-group-item-action:focus {
+    color: #8a3c00;
+    background-color: #ffd6b3;
+}
+
+/* Bootstrap Dropdown */
+.dropdown-item.active,
+.dropdown-item:active {
+    background-color: #ff6f00 !important;
+    color: white;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background-color: #fff5f0;
+    color: #e65100;
+}
+
+/* Bootstrap Breadcrumb */
+.breadcrumb-item.active {
+    color: #ff6f00;
+}
+
+.breadcrumb-item a {
+    color: #ff6f00;
+}
+
+.breadcrumb-item a:hover {
+    color: #e65100;
+}
+
+/* Bootstrap Tables */
+.table-primary {
+    --bs-table-bg: #fff5f0;
+    --bs-table-border-color: #ffd6b3;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #fff5f0;
+}
+
+/* Bootstrap Text Colors */
+.text-primary {
+    color: #ff6f00 !important;
+}
+
+.text-bg-primary {
+    background-color: #ff6f00 !important;
+}
+
+/* Bootstrap Border Colors */
+.border-primary {
+    border-color: #ff6f00 !important;
+}
+
+/* Bootstrap Background Colors */
+.bg-primary,
+.bg-primary.bg-gradient,
+div.bg-primary,
+span.bg-primary,
+td.bg-primary,
+th.bg-primary {
+    background-color: #ff6f00 !important;
+}
+
+.bg-primary-subtle {
+    background-color: #fff5f0 !important;
+}
+
+/* Bootstrap Toast */
+.toast-header {
+    background-color: #fff5f0;
+    color: #e65100;
+}
+
+/* Bootstrap Input Group */
+.input-group-text {
+    border-color: var(--border-light);
+}
+
+.input-group:focus-within .input-group-text {
+    border-color: #ff8f00;
+}
+
+/* Additional Bootstrap Primary Overrides */
+.btn-check:checked + .btn-primary,
+.btn-check:active + .btn-primary {
+    background-color: #e65100 !important;
+    border-color: #e65100 !important;
+}
+
+.btn-close:focus {
+    box-shadow: 0 0 0 0.25rem rgba(255, 111, 0, 0.15);
+}
+
+/* Bootstrap Card with primary header */
+.card-header.bg-primary,
+.card-header.text-bg-primary {
+    background-color: #ff6f00 !important;
+    color: white;
+}
+
+/* Bootstrap Placeholder */
+.placeholder.bg-primary {
+    background-color: #ff6f00 !important;
+}
+
+/* Bootstrap Offcanvas */
+.offcanvas-header .btn-close:focus {
+    box-shadow: 0 0 0 0.25rem rgba(255, 111, 0, 0.15);
+}
+
+/* Bootstrap Form Validation with Primary */
+.was-validated .form-control:valid:focus,
+.form-control.is-valid:focus {
+    border-color: #ff8f00;
+    box-shadow: 0 0 0 0.25rem rgba(255, 111, 0, 0.15);
+}
+
+/* Bootstrap Range Slider */
+.form-range:focus::-webkit-slider-thumb {
+    box-shadow: 0 0 0 1px #fff, 0 0 0 0.25rem rgba(255, 111, 0, 0.15);
+}
+
+.form-range::-webkit-slider-thumb:active {
+    background-color: #ffd6b3;
+}
+
+.form-range::-moz-range-thumb:active {
+    background-color: #ffd6b3;
+}
+
+/* Bootstrap Floating Labels */
+.form-floating > .form-control:focus ~ label,
+.form-floating > .form-control:not(:placeholder-shown) ~ label,
+.form-floating > .form-select ~ label {
+    color: rgba(255, 111, 0, 0.65);
+}
+
+.form-floating > .form-control:focus ~ label {
+    color: #ff8f00;
+}
+
+/* Bootstrap Modal Header with Primary */
+.modal-header.bg-primary {
+    background-color: #ff6f00 !important;
+}
+
+/* Bootstrap Popover */
+.popover-header {
+    background-color: #fff5f0;
+}
+
+/* Bootstrap Tooltip */
+.tooltip-inner {
+    background-color: #1e293b;
+}
+
+/* Bootstrap Button Group */
+.btn-group > .btn-primary:not(:last-child):not(.dropdown-toggle),
+.btn-group > .btn-group:not(:last-child) > .btn-primary {
+    border-right-color: #e65100;
+}
+
+.btn-group > .btn-primary:not(:first-child),
+.btn-group > .btn-group:not(:first-child) > .btn-primary {
+    border-left-color: #e65100;
+}
+
+/* Bootstrap Focus Ring */
+.focus-ring-primary {
+    --bs-focus-ring-color: rgba(255, 111, 0, 0.25);
+}
+
+/* ========================================
+   Toast Notifications
+   ======================================== */
+
+/* Toast Animation */
+@keyframes fadeInSlide {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.fade-in-slide {
+    animation: fadeInSlide 0.3s ease-out;
+}
+
+/* Toast Container */
+.toast-container {
+    z-index: 10000 !important;
+}
+
+/* Toast Styling */
+.toast {
+    min-width: 300px;
+    box-shadow: var(--shadow-lg);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.toast.text-bg-success {
+    background-color: var(--success-color) !important;
+}
+
+.toast.text-bg-danger {
+    background-color: var(--danger-color) !important;
+}
+
+.toast.text-bg-warning {
+    background-color: var(--warning-color) !important;
+    color: #1e293b !important;
+}
+
+.toast.text-bg-info {
+    background-color: var(--info-color) !important;
+}
+
+.toast.text-bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+.toast .toast-body {
+    padding: 1rem;
+    font-size: 0.9375rem;
+}
+
+.toast .btn-close {
+    opacity: 0.8;
+}
+
+.toast .btn-close:hover {
+    opacity: 1;
+}
+
+/* Warning toast specific - use dark text */
+.toast.text-bg-warning .btn-close {
+    filter: invert(1);
 }

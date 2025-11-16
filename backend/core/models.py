@@ -10,7 +10,6 @@ from django.conf import settings
 from django.core.validators import RegexValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
-from django.utils.functional import cached_property
 
 from .constants import (
     DEC_0,
@@ -256,7 +255,7 @@ class SIONImportModel(models.Model):
     serial_number = models.IntegerField(default=0)
     norm_class = models.ForeignKey('core.SionNormClassModel', on_delete=models.CASCADE, related_name='import_norm')
     hsn_code = models.ForeignKey(HSCodeModel, on_delete=models.SET_NULL, related_name='sion_imports', null=True,
-                                 blank=True)
+                                 blank=True, db_column='hsn_code_id')
     description = models.CharField(max_length=255, null=True, blank=True)
     quantity = models.DecimalField(
         max_digits=15,
@@ -272,8 +271,6 @@ class SIONImportModel(models.Model):
 
     def __str__(self):
         return f"{self.norm_class} | {self.description}" if self.description else f"{self.norm_class}"
-
-
 
 
 class ProductDescriptionModel(AuditModel):

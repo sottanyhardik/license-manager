@@ -9,7 +9,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('core', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -29,7 +28,8 @@ class Migration(migrations.Migration):
                 ('bank_account_number', models.CharField(max_length=30)),
                 ('bank_name', models.CharField(max_length=100)),
                 ('ifsc_code', models.CharField(max_length=11)),
-                ('account_type', models.CharField(choices=[('current', 'Current'), ('saving', 'Saving')], max_length=10)),
+                ('account_type',
+                 models.CharField(choices=[('current', 'Current'), ('saving', 'Saving')], max_length=10)),
                 ('bill_colour', models.CharField(blank=True, max_length=10, null=True)),
                 ('signature', models.ImageField(blank=True, null=True, upload_to='entity_signature/')),
                 ('stamp', models.ImageField(blank=True, null=True, upload_to='entity_stamp/')),
@@ -126,7 +126,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='companymodel',
             name='account_type',
-            field=models.CharField(blank=True, choices=[('SAVINGS', 'Savings'), ('CURRENT', 'Current'), ('OD', 'Overdraft')], max_length=20, null=True),
+            field=models.CharField(blank=True,
+                                   choices=[('SAVINGS', 'Savings'), ('CURRENT', 'Current'), ('OD', 'Overdraft')],
+                                   max_length=20, null=True),
         ),
         migrations.AddField(
             model_name='companymodel',
@@ -146,7 +148,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='companymodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='companymodel',
@@ -157,12 +160,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='companymodel',
             name='gst_number',
-            field=models.CharField(blank=True, max_length=50, null=True, validators=[django.core.validators.RegexValidator(message='Enter a valid GST number.', regex='^\\d{2}[A-Z]{5}\\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$')]),
+            field=models.CharField(blank=True, max_length=50, null=True, validators=[
+                django.core.validators.RegexValidator(message='Enter a valid GST number.',
+                                                      regex='^\\d{2}[A-Z]{5}\\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$')]),
         ),
         migrations.AddField(
             model_name='companymodel',
             name='ifsc_code',
-            field=models.CharField(blank=True, max_length=11, null=True, validators=[django.core.validators.RegexValidator(message='Enter a valid IFSC code.', regex='^[A-Z]{4}0[A-Z0-9]{6}$')]),
+            field=models.CharField(blank=True, max_length=11, null=True, validators=[
+                django.core.validators.RegexValidator(message='Enter a valid IFSC code.',
+                                                      regex='^[A-Z]{4}0[A-Z0-9]{6}$')]),
         ),
         migrations.AddField(
             model_name='companymodel',
@@ -172,7 +179,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='companymodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='companymodel',
@@ -192,7 +200,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='hscodedutymodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='hscodedutymodel',
@@ -203,7 +212,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='hscodedutymodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='hscodedutymodel',
@@ -213,7 +223,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='hscodemodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='hscodemodel',
@@ -224,7 +235,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='hscodemodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='hscodemodel',
@@ -234,7 +246,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='itemheadmodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='itemheadmodel',
@@ -245,7 +258,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='itemheadmodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='itemheadmodel',
@@ -255,7 +269,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='itemnamemodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='itemnamemodel',
@@ -266,7 +281,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='itemnamemodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='itemnamemodel',
@@ -276,7 +292,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='meismodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='meismodel',
@@ -287,7 +304,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='meismodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='meismodel',
@@ -297,7 +315,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='portmodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='portmodel',
@@ -308,7 +327,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='portmodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='portmodel',
@@ -318,7 +338,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='productdescriptionmodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='productdescriptionmodel',
@@ -329,7 +350,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='productdescriptionmodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='productdescriptionmodel',
@@ -348,13 +370,15 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='sionimportmodel',
-            name='hsn_code',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='sion_imports', to='core.hscodemodel'),
+            name='hs_code',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='sion_imports', to='core.hscodemodel'),
         ),
         migrations.AddField(
             model_name='sionnormclassmodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='sionnormclassmodel',
@@ -370,7 +394,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='sionnormclassmodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='sionnormclassmodel',
@@ -380,7 +405,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='transferlettermodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='transferlettermodel',
@@ -391,7 +417,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='transferlettermodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='transferlettermodel',
@@ -401,7 +428,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='unitpricemodel',
             name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_created', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='unitpricemodel',
@@ -412,7 +440,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='unitpricemodel',
             name='modified_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                                    related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='unitpricemodel',
@@ -427,7 +456,9 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='companymodel',
             name='pan',
-            field=models.CharField(blank=True, max_length=50, null=True, validators=[django.core.validators.RegexValidator(message='Enter a valid PAN number.', regex='^[A-Z]{5}[0-9]{4}[A-Z]$')]),
+            field=models.CharField(blank=True, max_length=50, null=True, validators=[
+                django.core.validators.RegexValidator(message='Enter a valid PAN number.',
+                                                      regex='^[A-Z]{5}[0-9]{4}[A-Z]$')]),
         ),
         migrations.AlterField(
             model_name='headsionnormsmodel',
@@ -477,7 +508,8 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='sionexportmodel',
             name='norm_class',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='export_norm', to='core.sionnormclassmodel'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='export_norm',
+                                    to='core.sionnormclassmodel'),
         ),
         migrations.AlterField(
             model_name='sionimportmodel',

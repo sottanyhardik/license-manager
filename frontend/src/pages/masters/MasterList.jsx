@@ -1,5 +1,5 @@
 import {useEffect, useState, useCallback} from "react";
-import {Link, useParams, useLocation} from "react-router-dom";
+import {Link, useParams, useLocation, useNavigate} from "react-router-dom";
 import api from "../../api/axios";
 import AdvancedFilter from "../../components/AdvancedFilter";
 import DataPagination from "../../components/DataPagination";
@@ -19,6 +19,7 @@ import AccordionTable from "../../components/AccordionTable";
 export default function MasterList() {
     const {entity} = useParams();
     const location = useLocation();
+    const navigate = useNavigate();
 
     // Determine the actual entity name - either from params or from path
     const entityName = entity || (location.pathname.startsWith('/licenses') ? 'licenses' : null);
@@ -61,6 +62,7 @@ export default function MasterList() {
                 filter_config: response.filter_config || {},
                 ordering_fields: response.ordering_fields || [],
                 nested_field_defs: response.nested_field_defs || {},
+                nested_list_display: response.nested_list_display || {},
                 field_meta: response.field_meta || {}
             });
 
@@ -152,6 +154,18 @@ export default function MasterList() {
 
     return (
         <div className="container-fluid mt-4">
+            {/* Breadcrumb */}
+            <nav aria-label="breadcrumb" className="mb-3">
+                <ol className="breadcrumb">
+                    <li className="breadcrumb-item">
+                        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }}>Home</a>
+                    </li>
+                    <li className="breadcrumb-item active" aria-current="page">
+                        {entityTitle}
+                    </li>
+                </ol>
+            </nav>
+
             {/* Header */}
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2>{entityTitle}</h2>
@@ -213,6 +227,7 @@ export default function MasterList() {
                             onDelete={handleDelete}
                             basePath={entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`}
                             nestedFieldDefs={metadata.nested_field_defs}
+                            nestedListDisplay={metadata.nested_list_display || {}}
                         />
                     ) : (
                         <DataTable

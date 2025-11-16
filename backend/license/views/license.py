@@ -8,11 +8,12 @@ from license.serializers import LicenseDetailsSerializer, LicenseExportItemSeria
 # Nested field definitions for LicenseDetails
 license_nested_field_defs = {
     "export_license": [
-        {"name": "id", "type": "text", "label": "ID", "read_only": True},
+        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
         {"name": "description", "type": "text", "label": "Description"},
-        {"name": "item", "type": "fk", "label": "Item", "fk_endpoint": "/masters/item-names/", "label_field": "name"},
+        {"name": "item", "type": "fk", "label": "Item", "fk_endpoint": "/masters/item-names/",
+         "label_field": "name", "display_field": "item_label"},
         {"name": "norm_class", "type": "fk", "label": "Norm Class", "fk_endpoint": "/masters/sion-classes/",
-         "label_field": "norm_class"},
+         "label_field": "norm_class", "display_field": "norm_class_label"},
         {"name": "start_serial_number", "type": "number", "label": "Start Serial Number"},
         {"name": "net_quantity", "type": "number", "label": "Net Quantity"},
         {"name": "fob_inr", "type": "number", "label": "FOB (INR)"},
@@ -21,13 +22,13 @@ license_nested_field_defs = {
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
     ],
     "import_license": [
-        {"name": "id", "type": "text", "label": "ID", "read_only": True},
+        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
         {"name": "serial_number", "type": "number", "label": "Serial Number"},
         {"name": "hs_code", "type": "fk", "label": "HS Code", "fk_endpoint": "/masters/hs-codes/",
-         "label_field": "hs_code"},
-        {"name": "items", "type": "fk_multi", "label": "Items", "fk_endpoint": "/masters/item-names/",
-         "label_field": "name"},
+         "label_field": "hs_code", "display_field": "hs_code_label"},
         {"name": "description", "type": "text", "label": "Description"},
+        {"name": "items", "type": "fk_multi", "label": "Items", "fk_endpoint": "/masters/item-names/",
+         "label_field": "name", "show_in_list": False},
         {"name": "quantity", "type": "number", "label": "Quantity"},
         {"name": "unit", "type": "select", "label": "Unit", "choices": list(UNIT_CHOICES)},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)"},
@@ -98,6 +99,12 @@ LicenseDetailsViewSet = MasterViewSet.create(
         ],
         "ordering": ["-license_date", "license_number"],
         "nested_field_defs": license_nested_field_defs,
+        "nested_list_display": {
+            "export_license": ["norm_class_label", "fob_inr", "cif_fc", "cif_inr"],
+            "import_license": ["serial_number", "hs_code_label", "description", "quantity", "unit", "cif_fc",
+                               "cif_inr", "allotted_quantity", "allotted_value", "debited_quantity", "debited_value",
+                               "available_quantity", "available_value"],
+        },
         "field_meta": {
             "exporter": {
                 "type": "fk",

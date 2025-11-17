@@ -1,6 +1,7 @@
 import {useEffect, useState} from "react";
 import {useParams, useNavigate} from "react-router-dom";
 import api from "../api/axios";
+import HybridSelect from "../components/HybridSelect";
 
 export default function AllotmentAction() {
     const {id} = useParams();
@@ -15,6 +16,7 @@ export default function AllotmentAction() {
     const [search, setSearch] = useState("");
     const [filters, setFilters] = useState({
         description: "",
+        exporter: "",
         available_quantity_gte: "50",
         available_quantity_lte: "",
         available_value_gte: "100",
@@ -508,6 +510,16 @@ export default function AllotmentAction() {
                                     />
                                 </div>
                                 <div className="col-md-3">
+                                    <label className="form-label">Exporter</label>
+                                    <HybridSelect
+                                        fieldMeta={{endpoint: "/masters/companies/", label_field: "name"}}
+                                        value={filters.exporter}
+                                        onChange={(value) => setFilters({...filters, exporter: value})}
+                                        placeholder="All Exporters"
+                                        isClearable={true}
+                                    />
+                                </div>
+                                <div className="col-md-3">
                                     <label className="form-label">Notification Number</label>
                                     <select
                                         className="form-control form-control-sm"
@@ -522,6 +534,16 @@ export default function AllotmentAction() {
                                         ))}
                                     </select>
                                 </div>
+                                    <div className="col-md-3">
+                                        <label className="form-label">Norm Class</label>
+                                        <HybridSelect
+                                            fieldMeta={{endpoint: "/masters/sion-classes/", label_field: "norm_class"}}
+                                            value={filters.norm_class}
+                                            onChange={(value) => setFilters({...filters, norm_class: value})}
+                                            placeholder="All Norm Classes"
+                                            isClearable={true}
+                                        />
+                                    </div>
                                     <div className="col-md-3">
                                         <label className="form-label">HS Code</label>
                                         <input
@@ -584,6 +606,7 @@ export default function AllotmentAction() {
                                             className="btn btn-sm btn-secondary"
                                             onClick={() => setFilters({
                                                 description: "",
+                                                exporter: "",
                                                 available_quantity_gte: "",
                                                 available_quantity_lte: "",
                                                 available_value_gte: "",
@@ -607,8 +630,10 @@ export default function AllotmentAction() {
                             <tr>
                                 <th>License</th>
                                 <th>Serial</th>
+                                <th>HS Code</th>
                                 <th>Description</th>
                                 <th>Exporter</th>
+                                <th>Notification</th>
                                 <th>Available Qty</th>
                                 <th>Available CIF FC</th>
                                 <th>Expiry</th>
@@ -626,8 +651,10 @@ export default function AllotmentAction() {
                                     <tr key={item.id}>
                                         <td>{item.license_number}</td>
                                         <td>{item.serial_number}</td>
+                                        <td>{item.hs_code_label || '-'}</td>
                                         <td>{item.description}</td>
                                         <td>{item.exporter_name}</td>
+                                        <td>{item.notification_number || '-'}</td>
                                         <td>{parseFloat(item.available_quantity || 0).toFixed(3)}</td>
                                         <td>{parseFloat(item.balance_cif_fc || 0).toFixed(2)}</td>
                                         <td>{item.license_expiry_date}</td>

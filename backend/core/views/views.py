@@ -384,12 +384,19 @@ ItemHeadViewSet = MasterViewSet.create(
     config=enhance_config_with_fk(
         ItemHeadModel,
         {
+
             "search": ["name"],
             "filter": {
                 "is_restricted": {"type": "exact"},
             },
-            "list_display": ["name", "unit_rate", "is_restricted"],
-            "form_fields": ["name", "unit_rate", "is_restricted", "dict_key"],
+            "list_display": ["name", "unit_rate", "is_restricted", "restriction_norm", "restriction_percentage"],
+            "form_fields": ["name", "unit_rate", "is_restricted", "restriction_norm", "restriction_percentage", "dict_key"],
+            "fk_endpoint_overrides": {
+                "restriction_norm": "/masters/sion-classes/"
+            },
+            "label_field_overrides": {
+                "restriction_norm": "norm_class"
+            },
         }
     ),
 )
@@ -409,7 +416,8 @@ ItemNameViewSet = MasterViewSet.create(
             "form_fields": ["head", "name", "unit_price", "is_active"],
             "fk_endpoint_overrides": {
                 "head": "/masters/item-heads/"
-            }
+            },
+            "ordering": ["head__name", "name"]
         }
     ),
 )

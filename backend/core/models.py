@@ -169,6 +169,21 @@ class ItemHeadModel(AuditModel):
         validators=[MinValueValidator(DEC_0)],
     )
     is_restricted = models.BooleanField(default=False)
+    restriction_norm = models.ForeignKey(
+        'core.SionNormClassModel',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='restricted_heads',
+        help_text="Norm class for restriction (e.g., E132)"
+    )
+    restriction_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+        help_text="Restriction percentage (e.g., 3.00 for 3%)"
+    )
     dict_key = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
@@ -187,6 +202,9 @@ class ItemNameModel(AuditModel):
         validators=[MinValueValidator(DEC_000)],
     )
     is_active = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['head__name', 'name']
 
     def __str__(self):
         return self.name

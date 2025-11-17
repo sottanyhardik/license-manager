@@ -184,29 +184,42 @@ class LicenseDetailsModel(AuditModel):
                 "total"]
         return _to_decimal(total, DEC_0)
 
-    @property
-    def get_balance_cif(self) -> Decimal:
-        """
-        Authoritative live balance:
-        SUM(Export.cif_fc) - (SUM(BOE debit cif_fc for license) + SUM(allotments cif_fc (unattached BOE))).
-        All sums returned as Decimal.
-        """
-        credit = _to_decimal(
+    def _calculate_license_credit(self) -> Decimal:
+        """Calculate total credit (export CIF) for this license"""
+        return _to_decimal(
             LicenseExportItemModel.objects.filter(license=self).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
             DEC_0,
         )
-        debit = _to_decimal(
+
+    def _calculate_license_debit(self) -> Decimal:
+        """Calculate total debit (BOE debits) for this license"""
+        return _to_decimal(
             RowDetails.objects.filter(sr_number__license=self, transaction_type=DEBIT).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
             DEC_0,
         )
-        allotment = _to_decimal(
-            AllotmentItems.objects.filter(item__license=self,
-                                          allotment__bill_of_entry__bill_of_entry_number__isnull=True)
-            .aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+
+    def _calculate_license_allotment(self) -> Decimal:
+        """Calculate total allotment (non-BOE allotments) for this license"""
+        return _to_decimal(
+            AllotmentItems.objects.filter(
+                item__license=self,
+                allotment__bill_of_entry__bill_of_entry_number__isnull=True
+            ).aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
             DEC_0,
         )
+
+    @property
+    def get_balance_cif(self) -> Decimal:
+        """
+        Authoritative live balance at license level:
+        SUM(Export.cif_fc) - (SUM(BOE debit cif_fc for license) + SUM(allotments cif_fc (unattached BOE))).
+        All sums returned as Decimal.
+        """
+        credit = self._calculate_license_credit()
+        debit = self._calculate_license_debit()
+        allotment = self._calculate_license_allotment()
         balance = credit - (debit + allotment)
         return balance if balance >= DEC_0 else DEC_0
 
@@ -711,23 +724,13 @@ class LicenseExportItemModel(models.Model):
         return getattr(self.item, "name", "") or f"ExportItem#{self.pk}"
 
     def balance_cif_fc(self) -> Decimal:
-        credit = _to_decimal(
-            LicenseExportItemModel.objects.filter(license=self.license).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
-            DEC_0,
-        )
-        debit = _to_decimal(
-            RowDetails.objects.filter(sr_number__license=self.license, transaction_type=DEBIT).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
-            DEC_0,
-        )
-        allotment = _to_decimal(
-            AllotmentItems.objects.filter(item__license=self.license,
-                                          allotment__bill_of_entry__bill_of_entry_number__isnull=True)
-            .aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
-            DEC_0,
-        )
-        return credit - (debit + allotment)
+        """
+        Export item balance - delegates to license's centralized calculation.
+        Returns the same as license.get_balance_cif for consistency.
+        """
+        if self.license:
+            return self.license.get_balance_cif
+        return DEC_0
 
 
 # -----------------------------
@@ -806,16 +809,127 @@ class LicenseImportItemsModel(models.Model):
             avail = total - (debited + allotted)
             return avail if avail >= DEC_000 else DEC_000
 
+    def _calculate_item_debit(self) -> Decimal:
+        """Calculate total debit for this specific import item"""
+        return _to_decimal(
+            RowDetails.objects.filter(sr_number=self, transaction_type=DEBIT).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+            DEC_0,
+        )
+
+    def _calculate_item_allotment(self) -> Decimal:
+        """Calculate total allotment for this specific import item"""
+        return _to_decimal(
+            AllotmentItems.objects.filter(
+                item=self,
+                allotment__bill_of_entry__bill_of_entry_number__isnull=True
+            ).aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+            DEC_0,
+        )
+
+    def _calculate_head_restriction_balance(self) -> Decimal:
+        """
+        Calculate balance for items with head-based restrictions.
+        Formula: (license CIF × restriction_percentage) - (allotted + debited for same head in license)
+        Exception 1: Don't subtract allotments that already have BOE
+        Exception 2: Restrictions do NOT apply for notification 098/2009 OR Purchase Status = Conversion
+        """
+        from core.models import ItemNameModel
+        from core.constants import N2009, CO
+
+        # Check exception: 098/2009 OR Conversion - restrictions do not apply
+        if self.license and (self.license.notification_number == N2009 or self.license.purchase_status == CO):
+            return DEC_0  # No restriction applies
+
+        # Get all item names linked to this import item
+        item_names = self.items.all()
+        if not item_names:
+            return DEC_0
+
+        # Get heads with restrictions from linked item names
+        restricted_heads = []
+
+        # Get license export norm classes
+        license_norm_classes = []
+        if self.license:
+            license_norm_classes = list(
+                self.license.export_license.all()
+                .values_list("norm_class__norm_class", flat=True)
+            )
+
+        for item_name in item_names:
+            if (item_name.head and item_name.head.is_restricted and
+                item_name.head.restriction_norm and item_name.head.restriction_percentage > DEC_0):
+
+                # Check if license export norm class matches head restriction norm
+                restriction_norm_class = item_name.head.restriction_norm.norm_class if item_name.head.restriction_norm else None
+                if restriction_norm_class and restriction_norm_class in license_norm_classes:
+                    restricted_heads.append(item_name.head)
+
+        if not restricted_heads:
+            return DEC_0  # No restriction applies
+
+        # Use the first restricted head found
+        head = restricted_heads[0]
+
+        # Calculate license CIF value × restriction percentage
+        license_cif = self.license._calculate_license_credit()
+        allowed_value = license_cif * (head.restriction_percentage / Decimal("100"))
+
+        # Calculate total debited + allotted for all items with same head in this license
+        # Get all import items in this license that have the same head
+        same_head_items = LicenseImportItemsModel.objects.filter(
+            license=self.license,
+            items__head=head
+        ).distinct()
+
+        total_debited = DEC_0
+        total_allotted = DEC_0
+
+        for item in same_head_items:
+            total_debited += item._calculate_item_debit()
+            # Only count allotments that don't have BOE (is_boe=False)
+            allotted_no_boe = _to_decimal(
+                AllotmentItems.objects.filter(
+                    item=item,
+                    is_boe=False
+                ).aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
+                DEC_0,
+            )
+            total_allotted += allotted_no_boe
+
+        balance = allowed_value - total_debited - total_allotted
+        return balance if balance >= DEC_0 else DEC_0
+
     @property
     def balance_cif_fc(self) -> Decimal:
         """
         Row-level balance. For special rows (0 / 0.01 / 0.1), fall back to license-level sums.
-        Business Logic: If all items OTHER THAN serial_number = 1 have CIF = 0,
-        then serial_number 1's balance should be license.balance_cif.
+
+        Business Logic (Priority Order):
+        1. If item has head with restriction: use restriction-based calculation
+        2. If all items OTHER THAN serial_number = 1 have CIF = 0: use license balance
+        3. If item CIF is 0/0.01/0.1: use license-level calculation
+        4. Otherwise: use item-level calculation
+
         Always calculated fresh from database without caching.
+        Uses centralized license calculation methods for consistency.
         """
-        # Check if business logic applies: all other items have zero CIF and this is serial_number 1
-        if self.license and self.serial_number == 1:
+        if not self.license:
+            return DEC_0
+
+        # PRIORITY 1: Check if item has head-based restrictions
+        restriction_balance = self._calculate_head_restriction_balance()
+        if restriction_balance > DEC_0 or self.items.filter(
+            head__is_restricted=True,
+            head__restriction_norm__isnull=False,
+            head__restriction_percentage__gt=DEC_0
+        ).exists():
+            # This item has a restricted head, use restriction calculation
+            return restriction_balance
+
+        # PRIORITY 2: Check if business logic applies: all other items have zero CIF and this is serial_number 1
+        if self.serial_number == 1:
             all_items = LicenseImportItemsModel.objects.filter(license=self.license)
             other_items = [item for item in all_items if item.serial_number != 1]
 
@@ -827,27 +941,21 @@ class LicenseImportItemsModel(models.Model):
             ) if other_items else False
 
             if all_others_zero_cif:
-                # Return the license's balance_cif directly
-                return _to_decimal(self.license.balance_cif or DEC_0, DEC_0)
+                # Return the license's balance directly - use centralized calculation
+                return self.license.get_balance_cif
 
-        # Original logic
+        # PRIORITY 3 & 4: Original logic - use centralized methods where possible
         if not self.cif_fc or self.cif_fc in (Decimal("0"), Decimal("0.1"), Decimal("0.01")):
-            credit = _to_decimal(LicenseExportItemModel.objects.filter(license=self.license).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
-            debit = _to_decimal(
-                RowDetails.objects.filter(sr_number__license=self.license, transaction_type=DEBIT).aggregate(
-                    total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
-            allotment = _to_decimal(AllotmentItems.objects.filter(item__license=self.license,
-                                                                  allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
+            # License-level calculation - use centralized methods
+            credit = self.license._calculate_license_credit()
+            debit = self.license._calculate_license_debit()
+            allotment = self.license._calculate_license_allotment()
             return credit - debit - allotment
         else:
+            # Item-level calculation
             credit = _to_decimal(self.cif_fc or DEC_0, DEC_0)
-            debit = _to_decimal(RowDetails.objects.filter(sr_number=self, transaction_type=DEBIT).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
-            allotment = _to_decimal(AllotmentItems.objects.filter(item=self,
-                                                                  allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
+            debit = self._calculate_item_debit()
+            allotment = self._calculate_item_allotment()
             return credit - debit - allotment
 
     @cached_property

@@ -141,9 +141,18 @@ class UnitPriceSerializer(AuditSerializerMixin):
 
 # ---- Item Head ----
 class ItemHeadSerializer(AuditSerializerMixin):
+    restriction_norm_display = serializers.CharField(source='restriction_norm.norm_class', read_only=True, required=False)
+
     class Meta(AuditSerializerMixin.Meta):
         model = ItemHeadModel
         fields = "__all__"
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        # Replace restriction_norm ID with the norm_class value for display
+        if instance.restriction_norm:
+            rep['restriction_norm'] = instance.restriction_norm.norm_class
+        return rep
 
 
 # ---- Item Name ----

@@ -35,6 +35,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
+        from datetime import date, timedelta
+
         license_number = opts.get("license_number")
         skip_rows = bool(opts.get("no_rows"))
         dry_run = bool(opts.get("dry_run"))
@@ -55,14 +57,42 @@ class Command(BaseCommand):
             want = Decimal(str(round(float(actual_balance), 2)))
             have = Decimal(str(round(float(current_balance), 2)))
 
+            fields_to_update = []
+
             if want != have:
                 self.stdout.write(
                     f"License {lic.license_number}: balance_cif {have} → {want}"
                 )
                 if not dry_run:
                     lic.balance_cif = float(want)
-                    lic.save(update_fields=["balance_cif"])
+                    fields_to_update.append("balance_cif")
                 lic_updates += 1
+
+            # --- Check and update is_null if balance_cif < 100
+            should_be_null = want < Decimal("100")
+            if should_be_null != lic.is_null:
+                self.stdout.write(
+                    f"License {lic.license_number}: is_null {lic.is_null} → {should_be_null}"
+                )
+                if not dry_run:
+                    lic.is_null = should_be_null
+                    fields_to_update.append("is_null")
+
+            # --- Check and update is_expired if expiry date <= today - 30 days
+            if lic.license_expiry_date:
+                thirty_days_ago = date.today() - timedelta(days=30)
+                should_be_expired = lic.license_expiry_date <= thirty_days_ago
+                if should_be_expired != lic.is_expired:
+                    self.stdout.write(
+                        f"License {lic.license_number}: is_expired {lic.is_expired} → {should_be_expired}"
+                    )
+                    if not dry_run:
+                        lic.is_expired = should_be_expired
+                        fields_to_update.append("is_expired")
+
+            # Save all updates at once
+            if fields_to_update and not dry_run:
+                lic.save(update_fields=fields_to_update)
 
             # --- Optionally recompute related import rows
             if skip_rows:
@@ -108,7 +138,10 @@ class Command(BaseCommand):
                 if new_avl_qty < 0:
                     new_avl_qty = Decimal("0")
 
-                # Available value → use your proven row-level property
+                # Available value → use row-level property (includes restriction logic)
+                # This automatically applies:
+                # - Head-based restrictions (with 098/2009 OR Conversion exception)
+                # - License-level vs item-level calculation priority
                 new_avl_val = Decimal(str(row.balance_cif_fc or 0))
 
                 # Only write if something actually changed

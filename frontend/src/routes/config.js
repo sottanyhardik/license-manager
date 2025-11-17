@@ -66,6 +66,12 @@ export const masterEntities = [
         icon: "diagram-3",
     },
     {
+        path: "/masters/item-heads",
+        label: "Item Heads",
+        entity: "item-heads",
+        icon: "folder",
+    },
+    {
         path: "/masters/item-names",
         label: "Item Names",
         entity: "item-names",

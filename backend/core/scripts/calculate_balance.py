@@ -79,6 +79,8 @@ def calculate_available_value(instance):
 
 
 def update_balance_values(item):
+    from decimal import Decimal
+
     values = {
         'available_quantity': calculate_available_quantity(item),
         'debited_quantity': calculate_debited_quantity(item),
@@ -101,3 +103,11 @@ def update_balance_values(item):
     # If any values have been changed, save the item
     if is_changed:
         item.save()
+
+    # Check and update license is_null if balance_cif < 100
+    if item.license:
+        license = item.license
+        balance_cif = license.get_balance_cif
+        if balance_cif < Decimal("100") and not license.is_null:
+            license.is_null = True
+            license.save(update_fields=['is_null'])

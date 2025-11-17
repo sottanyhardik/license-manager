@@ -37,6 +37,7 @@ class AllotmentActionViewSet(ViewSet):
         Query Parameters:
         - search: Search in license number, description, exporter name
         - license_number: Filter by license number (icontains)
+        - exporter: Filter by exporter ID
         - description: Filter by description (icontains)
         - available_quantity_gte: Minimum available quantity
         - available_quantity_lte: Maximum available quantity
@@ -53,6 +54,7 @@ class AllotmentActionViewSet(ViewSet):
         # Get query parameters for filtering
         search = request.query_params.get('search', '')
         license_number = request.query_params.get('license_number', '')
+        exporter = request.query_params.get('exporter', '')
         description = request.query_params.get('description', '')
         available_quantity_gte = request.query_params.get('available_quantity_gte', '')
         available_quantity_lte = request.query_params.get('available_quantity_lte', '')
@@ -82,9 +84,18 @@ class AllotmentActionViewSet(ViewSet):
         if license_number:
             queryset = queryset.filter(license__license_number__icontains=license_number)
 
-        # Apply description filter
+        # Apply description filter - search in description, item names, and HS code
         if description:
-            queryset = queryset.filter(description__icontains=description)
+            queryset = queryset.filter(
+                Q(description__icontains=description) |
+                Q(items__name__icontains=description) |
+                Q(hs_code__hs_code__icontains=description) |
+                Q(hs_code__product_description__icontains=description)
+            ).distinct()
+
+        # Apply exporter filter (after description to ensure AND logic)
+        if exporter:
+            queryset = queryset.filter(license__exporter_id=exporter)
 
         # Apply available quantity filters
         if available_quantity_gte:

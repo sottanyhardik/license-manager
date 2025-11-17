@@ -238,9 +238,14 @@ class MasterViewSet(viewsets.ModelViewSet):
                             qs = qs.filter(**{f"{field_name}__lte": max_value})
 
                     elif filter_type == "exact":
-                        # Exact match
+                        # Exact match (with boolean conversion)
                         value = params.get(field_name)
-                        if value:
+                        if value is not None and value != "":
+                            # Convert string boolean values to actual boolean
+                            if value in ("True", "true", "1"):
+                                value = True
+                            elif value in ("False", "false", "0"):
+                                value = False
                             qs = qs.filter(**{field_name: value})
 
                     elif filter_type == "in":

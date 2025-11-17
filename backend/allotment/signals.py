@@ -13,7 +13,8 @@ DEC_000 = Decimal("0.000")
 def update_license_balance(license_item):
     """
     Update the available_quantity and available_value for a license item
-    based on allotments that are not yet BOE
+    based on allotments that are not yet BOE.
+    Also updates license is_null flag if balance_cif < 100.
     """
     if not license_item:
         return
@@ -42,6 +43,14 @@ def update_license_balance(license_item):
     license_item.available_value = available_val if available_val >= DEC_0 else DEC_0
 
     license_item.save(update_fields=['allotted_quantity', 'allotted_value', 'available_quantity', 'available_value'])
+
+    # Check and update license is_null if balance_cif < 100
+    if license_item.license:
+        license = license_item.license
+        balance_cif = license.get_balance_cif
+        if balance_cif < Decimal("100") and not license.is_null:
+            license.is_null = True
+            license.save(update_fields=['is_null'])
 
 
 @receiver(post_save, sender=AllotmentItems)

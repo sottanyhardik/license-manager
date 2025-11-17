@@ -16,6 +16,14 @@ export const routes = [
         icon: "file-earmark-text",
     },
     {
+        path: "/allotments",
+        label: "Allotments",
+        component: "AllotmentPage",
+        protected: true,
+        roles: ["admin", "manager"],
+        icon: "box-seam",
+    },
+    {
         path: "/settings",
         label: "Settings",
         component: "Settings",

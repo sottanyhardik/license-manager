@@ -19,7 +19,9 @@ export default function MasterForm() {
     const navigate = useNavigate();
 
     // Determine the actual entity name - either from params or from path
-    const entityName = entity || (location.pathname.includes('/licenses') ? 'licenses' : null);
+    const entityName = entity ||
+        (location.pathname.includes('/licenses') ? 'licenses' : null) ||
+        (location.pathname.includes('/allotments') ? 'allotments' : null);
     const isEdit = Boolean(id);
 
     const [formData, setFormData] = useState({});
@@ -55,7 +57,9 @@ export default function MasterForm() {
 
     const fetchMetadata = async () => {
         try {
-            const apiPath = entityName === 'licenses' ? '/licenses/' : `/masters/${entityName}/`;
+            const apiPath = (entityName === 'licenses' || entityName === 'allotments')
+                ? `/${entityName}/`
+                : `/masters/${entityName}/`;
             const {data} = await api.options(apiPath);
             setMetadata({
                 form_fields: data.form_fields || [],
@@ -70,7 +74,9 @@ export default function MasterForm() {
     const fetchRecord = async () => {
         setLoading(true);
         try {
-            const apiPath = entityName === 'licenses' ? `/licenses/${id}/` : `/masters/${entityName}/${id}/`;
+            const apiPath = (entityName === 'licenses' || entityName === 'allotments')
+                ? `/${entityName}/${id}/`
+                : `/masters/${entityName}/${id}/`;
             const {data} = await api.get(apiPath);
             setFormData(data);
         } catch (err) {
@@ -102,6 +108,53 @@ export default function MasterForm() {
                 updates.license_expiry_date = expiryDate;
             } catch (err) {
                 console.error("Error calculating expiry date:", err);
+            }
+        }
+
+        // Allotment calculations
+        if (entityName === "allotments") {
+            // Get current form data with the new update applied
+            const currentData = {...formData, ...updates};
+
+            // Priority 1: Calculate cif_fc from cif_inr and exchange_rate
+            if ((field === "cif_inr" || field === "exchange_rate") && currentData.cif_inr && currentData.exchange_rate) {
+                const cifInr = parseFloat(currentData.cif_inr);
+                const exchangeRate = parseFloat(currentData.exchange_rate);
+                if (!isNaN(cifInr) && !isNaN(exchangeRate) && exchangeRate > 0) {
+                    updates.cif_fc = (cifInr / exchangeRate).toFixed(2);
+                    currentData.cif_fc = updates.cif_fc; // Update for next calculation
+                }
+            }
+            // Priority 2: Calculate cif_fc from unit_value_per_unit and required_quantity
+            else if (field === "unit_value_per_unit" && currentData.unit_value_per_unit && currentData.required_quantity) {
+                const unitValue = parseFloat(currentData.unit_value_per_unit);
+                const requiredQty = parseFloat(currentData.required_quantity);
+                if (!isNaN(unitValue) && !isNaN(requiredQty) && requiredQty > 0) {
+                    updates.cif_fc = (unitValue * requiredQty).toFixed(2);
+                    currentData.cif_fc = updates.cif_fc; // Update for next calculation
+                }
+            }
+
+            // Calculate unit_value_per_unit from cif_fc and required_quantity (but not when user is entering unit_value_per_unit)
+            // Use 3 decimal places and round up
+            if (field !== "unit_value_per_unit" && (field === "cif_fc" || field === "required_quantity" || field === "cif_inr" || field === "exchange_rate")
+                && currentData.cif_fc && currentData.required_quantity) {
+                const cifFc = parseFloat(currentData.cif_fc);
+                const requiredQty = parseFloat(currentData.required_quantity);
+                if (!isNaN(cifFc) && !isNaN(requiredQty) && requiredQty > 0) {
+                    // Round up to 3 decimal places
+                    updates.unit_value_per_unit = (Math.ceil((cifFc / requiredQty) * 1000) / 1000).toFixed(3);
+                }
+            }
+
+            // Calculate cif_inr from cif_fc and exchange_rate
+            if ((field === "cif_fc" || field === "exchange_rate" || field === "unit_value_per_unit")
+                && currentData.cif_fc && currentData.exchange_rate) {
+                const cifFc = parseFloat(currentData.cif_fc);
+                const exchangeRate = parseFloat(currentData.exchange_rate);
+                if (!isNaN(cifFc) && !isNaN(exchangeRate) && exchangeRate > 0) {
+                    updates.cif_inr = (cifFc * exchangeRate).toFixed(2);
+                }
             }
         }
 
@@ -227,7 +280,9 @@ export default function MasterForm() {
         setFieldErrors({});
 
         try {
-            const apiPath = entityName === 'licenses' ? `/licenses/` : `/masters/${entityName}/`;
+            const apiPath = (entityName === 'licenses' || entityName === 'allotments')
+                ? `/${entityName}/`
+                : `/masters/${entityName}/`;
 
             // Check if formData contains any File objects (including nested)
             const hasFiles = () => {

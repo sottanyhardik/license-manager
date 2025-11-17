@@ -84,8 +84,10 @@ class LicenseExportItemSerializer(serializers.ModelSerializer):
 
 class LicenseImportItemSerializer(serializers.ModelSerializer):
     items = serializers.PrimaryKeyRelatedField(many=True, queryset=ItemNameModel.objects.all(), required=False)
+    license_number = serializers.CharField(source="license.license_number", read_only=True)
     license_date = serializers.DateField(source="license.license_date", read_only=True, format="%Y-%m-%d")
-    license_expiry = serializers.DateField(source="license.license_expiry_date", read_only=True, format="%Y-%m-%d")
+    license_expiry_date = serializers.DateField(source="license.license_expiry_date", read_only=True, format="%Y-%m-%d")
+    exporter_name = serializers.CharField(source="license.exporter.name", read_only=True)
     hs_code_detail = HSCodeSerializer(source='hs_code', read_only=True)
     hs_code_label = serializers.SerializerMethodField()
 
@@ -93,8 +95,8 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         model = LicenseImportItemsModel
         fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'description', 'quantity',
                   'old_quantity', 'unit', 'cif_fc', 'cif_inr', 'available_quantity', 'available_value',
-                  'debited_quantity', 'debited_value', 'license_date', 'license_expiry',
-                  'hs_code_detail', 'hs_code_label']
+                  'debited_quantity', 'debited_value', 'license_number', 'license_date', 'license_expiry_date',
+                  'exporter_name', 'hs_code_detail', 'hs_code_label']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly
         extra_kwargs = {

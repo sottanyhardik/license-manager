@@ -1,22 +1,55 @@
 # allotment/serializers.py
 from rest_framework import serializers
 from allotment.models import AllotmentModel, AllotmentItems
+from datetime import datetime, date
 
 
 class AllotmentItemSerializer(serializers.ModelSerializer):
     # Read-only fields from cached properties
     serial_number = serializers.CharField(read_only=True, required=False)
-    ledger = serializers.DateField(read_only=True, required=False)
+    ledger = serializers.SerializerMethodField()
     product_description = serializers.CharField(read_only=True, required=False)
     license_number = serializers.CharField(read_only=True, required=False)
-    license_date = serializers.DateField(read_only=True, required=False)
+    license_date = serializers.SerializerMethodField()
     exporter = serializers.CharField(read_only=True, required=False, source='exporter.name')
-    license_expiry = serializers.DateField(read_only=True, required=False)
+    license_expiry = serializers.SerializerMethodField()
     registration_number = serializers.CharField(read_only=True, required=False)
-    registration_date = serializers.DateField(read_only=True, required=False)
+    registration_date = serializers.SerializerMethodField()
     notification_number = serializers.CharField(read_only=True, required=False)
     file_number = serializers.CharField(read_only=True, required=False)
     port_code = serializers.CharField(read_only=True, required=False, source='port_code.name')
+
+    def get_ledger(self, obj):
+        ledger = obj.ledger
+        if isinstance(ledger, datetime):
+            return ledger.date().isoformat()
+        elif isinstance(ledger, date):
+            return ledger.isoformat()
+        return ledger
+
+    def get_license_date(self, obj):
+        license_date = obj.license_date
+        if isinstance(license_date, datetime):
+            return license_date.date().isoformat()
+        elif isinstance(license_date, date):
+            return license_date.isoformat()
+        return license_date
+
+    def get_license_expiry(self, obj):
+        license_expiry = obj.license_expiry
+        if isinstance(license_expiry, datetime):
+            return license_expiry.date().isoformat()
+        elif isinstance(license_expiry, date):
+            return license_expiry.isoformat()
+        return license_expiry
+
+    def get_registration_date(self, obj):
+        registration_date = obj.registration_date
+        if isinstance(registration_date, datetime):
+            return registration_date.date().isoformat()
+        elif isinstance(registration_date, date):
+            return registration_date.isoformat()
+        return registration_date
 
     class Meta:
         model = AllotmentItems
@@ -32,6 +65,11 @@ class AllotmentSerializer(serializers.ModelSerializer):
     # Nested serializer for read operations
     allotment_details_read = AllotmentItemSerializer(source='allotment_details', many=True, read_only=True)
 
+    # Date field handling with SerializerMethodField
+    estimated_arrival_date = serializers.SerializerMethodField()
+    created_on = serializers.SerializerMethodField()
+    modified_on = serializers.SerializerMethodField()
+
     # Cached property fields
     required_value = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     dfia_list = serializers.CharField(read_only=True, required=False)
@@ -44,9 +82,45 @@ class AllotmentSerializer(serializers.ModelSerializer):
     port_name = serializers.CharField(source='port.name', read_only=True, required=False)
     related_company_name = serializers.CharField(source='related_company.name', read_only=True, required=False)
 
+    def get_estimated_arrival_date(self, obj):
+        if obj.estimated_arrival_date:
+            value = obj.estimated_arrival_date
+            if isinstance(value, datetime):
+                return value.date().isoformat()
+            elif isinstance(value, date):
+                return value.isoformat()
+        return None
+
+    def get_created_on(self, obj):
+        if obj.created_on:
+            value = obj.created_on
+            if isinstance(value, datetime):
+                return value.date().isoformat()
+            elif isinstance(value, date):
+                return value.isoformat()
+        return None
+
+    def get_modified_on(self, obj):
+        if obj.modified_on:
+            value = obj.modified_on
+            if isinstance(value, datetime):
+                return value.date().isoformat()
+            elif isinstance(value, date):
+                return value.isoformat()
+        return None
+
     class Meta:
         model = AllotmentModel
-        fields = '__all__'
+        fields = [
+            'id', 'company', 'type', 'required_quantity', 'unit_value_per_unit',
+            'cif_fc', 'cif_inr', 'exchange_rate',
+            'item_name', 'contact_person', 'contact_number', 'invoice',
+            'estimated_arrival_date', 'bl_detail', 'port', 'related_company',
+            'is_boe', 'created_on', 'modified_on', 'created_by', 'modified_by',
+            'required_value', 'dfia_list', 'balanced_quantity',
+            'alloted_quantity', 'allotted_value', 'company_name', 'port_name',
+            'related_company_name', 'allotment_details_read'
+        ]
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

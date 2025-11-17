@@ -19,6 +19,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const MasterList = lazy(() => import("./pages/masters/MasterList"));
 const MasterForm = lazy(() => import("./pages/masters/MasterForm"));
+const AllotmentAction = lazy(() => import("./pages/AllotmentAction"));
 
 export default function App() {
     return (
@@ -88,6 +89,59 @@ export default function App() {
                                     <RoleRoute roles={["admin", "manager"]}>
                                         <AdminLayout>
                                             <MasterForm/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        {/* Allotment CRUD Routes */}
+                        <Route
+                            path="/allotments"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterList/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/allotments/create"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterForm/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/allotments/:id/edit"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterForm/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/allotments/:id/allocate"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <AllotmentAction/>
                                         </AdminLayout>
                                     </RoleRoute>
                                 </ProtectedRoute>

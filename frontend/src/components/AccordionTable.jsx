@@ -7,7 +7,7 @@ import {Link} from "react-router-dom";
  * Used for displaying records with nested arrays (like SION Norm Classes, Licenses)
  * that expand/collapse on click.
  */
-export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}}) {
+export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}, customActions = []}) {
     const [expandedRows, setExpandedRows] = useState(new Set());
 
     const toggleRow = (id) => {
@@ -249,6 +249,21 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                 })}
                                 <td>
                                     <div className="btn-group btn-group-sm">
+                                        {customActions.map((action, idx) => {
+                                            if (action.showIf && !action.showIf(item)) {
+                                                return null;
+                                            }
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    className={action.className || "btn btn-outline-info"}
+                                                    onClick={() => action.onClick(item)}
+                                                    title={action.label}
+                                                >
+                                                    {action.icon && <i className={action.icon}></i>}
+                                                </button>
+                                            );
+                                        })}
                                         <Link
                                             to={`${basePath}/${item.id}/edit`}
                                             className="btn btn-outline-primary"

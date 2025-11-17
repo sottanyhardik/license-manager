@@ -8,6 +8,7 @@ import {Link} from "react-router-dom";
  * - columns: array of column field names to display
  * - onEdit: callback function(item)
  * - onDelete: callback function(item)
+ * - customActions: array of custom action objects {label, icon, onClick, className, showIf}
  * - loading: boolean
  * - basePath: base URL path for edit links (e.g., "/masters/companies")
  */
@@ -16,6 +17,7 @@ export default function DataTable({
     columns = [],
     onEdit,
     onDelete,
+    customActions = [],
     loading = false,
     basePath = ""
 }) {
@@ -103,6 +105,21 @@ export default function DataTable({
                             })}
                             <td className="text-center">
                                 <div className="btn-group btn-group-sm">
+                                    {customActions.map((action, idx) => {
+                                        if (action.showIf && !action.showIf(item)) {
+                                            return null;
+                                        }
+                                        return (
+                                            <button
+                                                key={idx}
+                                                className={action.className || "btn btn-outline-info"}
+                                                onClick={() => action.onClick(item)}
+                                                title={action.label}
+                                            >
+                                                {action.icon && <i className={action.icon}></i>}
+                                            </button>
+                                        );
+                                    })}
                                     {onEdit && (
                                         <Link
                                             to={`${basePath}/${item.id}/edit`}

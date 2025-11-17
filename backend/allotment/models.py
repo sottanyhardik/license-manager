@@ -1,7 +1,7 @@
 # allotment/models.py
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_UP
 from typing import Optional
 
 from django.core.validators import MinValueValidator
@@ -40,7 +40,10 @@ def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
 # -----------------------------
 # Allotment models
 # -----------------------------
-class AllotmentModel(models.Model):
+from core.models import AuditModel
+
+
+class AllotmentModel(AuditModel):
     company = models.ForeignKey(
         "core.CompanyModel",
         related_name="company_allotments",
@@ -55,9 +58,33 @@ class AllotmentModel(models.Model):
     )
     unit_value_per_unit = models.DecimalField(
         max_digits=15,
+        decimal_places=3,
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+    )
+    cif_fc = models.DecimalField(
+        max_digits=15,
         decimal_places=2,
         default=DEC_0,
         validators=[MinValueValidator(DEC_0)],
+        null=True,
+        blank=True,
+    )
+    cif_inr = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+        null=True,
+        blank=True,
+    )
+    exchange_rate = models.DecimalField(
+        max_digits=15,
+        decimal_places=6,
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+        null=True,
+        blank=True,
     )
     item_name = models.CharField(max_length=255)
     contact_person = models.CharField(max_length=255, null=True, blank=True)
@@ -79,7 +106,7 @@ class AllotmentModel(models.Model):
         null=True,
         blank=True,
     )
-    modified_on = models.DateField(auto_now=True)
+    is_boe = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["estimated_arrival_date"]
@@ -91,11 +118,46 @@ class AllotmentModel(models.Model):
             f"{self.estimated_arrival_date or ''}".strip()
         )
 
+    def save(self, *args, **kwargs):
+        """
+        Auto-calculate fields before saving:
+        1. If cif_inr and exchange_rate provided, calculate cif_fc = cif_inr / exchange_rate
+        2. If cif_fc and required_quantity provided, calculate unit_value_per_unit = cif_fc / required_quantity
+        3. If unit_value_per_unit and required_quantity provided, calculate cif_fc = unit_value_per_unit * required_quantity
+        4. If cif_fc and exchange_rate provided, calculate cif_inr = cif_fc * exchange_rate
+        """
+        unit_value = _to_decimal(self.unit_value_per_unit, DEC_0)
+        required_qty = _to_decimal(self.required_quantity, DEC_0)
+        cif_inr_val = _to_decimal(self.cif_inr, DEC_0)
+        cif_fc_val = _to_decimal(self.cif_fc, DEC_0)
+        exchange_rate_val = _to_decimal(self.exchange_rate, DEC_0)
+
+        # Priority 1: Calculate cif_fc from cif_inr and exchange_rate
+        if cif_inr_val > DEC_0 and exchange_rate_val > DEC_0:
+            self.cif_fc = (cif_inr_val / exchange_rate_val).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            cif_fc_val = self.cif_fc  # Update for next calculations
+
+        # Priority 2: Calculate cif_fc from unit_value_per_unit and required_quantity (if cif_fc not already set)
+        elif unit_value > DEC_0 and required_qty > DEC_0 and cif_fc_val == DEC_0:
+            self.cif_fc = (unit_value * required_qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            cif_fc_val = self.cif_fc  # Update for next calculations
+
+        # Calculate unit_value_per_unit from cif_fc and required_quantity (with 3 decimal places, rounded up)
+        cif_fc_val = _to_decimal(self.cif_fc, DEC_0)
+        if cif_fc_val > DEC_0 and required_qty > DEC_0:
+            self.unit_value_per_unit = (cif_fc_val / required_qty).quantize(Decimal("0.001"), rounding=ROUND_UP)
+
+        # Calculate cif_inr from cif_fc and exchange_rate (if cif_inr not already set)
+        if cif_fc_val > DEC_0 and exchange_rate_val > DEC_0 and cif_inr_val == DEC_0:
+            self.cif_inr = (cif_fc_val * exchange_rate_val).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        super().save(*args, **kwargs)
+
     @cached_property
     def required_value(self) -> Decimal:
-        """Required value = required_quantity * unit_value_per_unit (rounded to nearest integer)."""
+        """Required value = required_quantity * unit_value_per_unit (with 2 decimal places)."""
         val = _to_decimal(self.required_quantity) * _to_decimal(self.unit_value_per_unit)
-        return val.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        return val.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     @cached_property
     def dfia_list(self) -> str:
@@ -141,7 +203,7 @@ class AllotmentModel(models.Model):
         return total
 
 
-class AllotmentItems(models.Model):
+class AllotmentItems(AuditModel):
     item = models.ForeignKey(
         "license.LicenseImportItemsModel",
         on_delete=models.CASCADE,
@@ -170,7 +232,7 @@ class AllotmentItems(models.Model):
     )
     qty = models.DecimalField(
         max_digits=15,
-        decimal_places=2,
+        decimal_places=0,
         default=DEC_0,
         validators=[MinValueValidator(DEC_0)],
     )

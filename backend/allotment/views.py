@@ -1,8 +1,8 @@
 # allotment/views.py
-from core.constants import ROW_TYPE_CHOICES
-from core.views.master_view import MasterViewSet
 from allotment.models import AllotmentModel
 from allotment.serializers import AllotmentSerializer
+from core.constants import ROW_TYPE_CHOICES
+from core.views.master_view import MasterViewSet
 
 # Nested field definitions for AllotmentDetails (for list display only, not form)
 allotment_nested_field_defs = {
@@ -31,38 +31,39 @@ AllotmentViewSet = MasterViewSet.create(
             "related_company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "type": {"type": "choice", "choices": list(ROW_TYPE_CHOICES)},
             "estimated_arrival_date": {"type": "date_range"},
+            "created_on": {"type": "date_range"},
             "item_name": {"type": "icontains"},
+            "is_boe": {"type": "exact"},
         },
         "list_display": [
+            "modified_on",
             "company__name",
             "item_name",
             "required_quantity",
-            "alloted_quantity",
-            "balanced_quantity",
             "unit_value_per_unit",
             "required_value",
-            "allotted_value",
-            "type",
             "estimated_arrival_date",
             "invoice",
+            "is_boe",
             "dfia_list"
         ],
         "form_fields": [
             "company",
             "type",
+            "port",
             "item_name",
             "required_quantity",
+            "cif_inr",
+            "exchange_rate",
+            "cif_fc",
             "unit_value_per_unit",
-            "contact_person",
-            "contact_number",
             "invoice",
             "estimated_arrival_date",
             "bl_detail",
-            "port",
-            "related_company",
+            "is_boe",
         ],
         "ordering": ["estimated_arrival_date"],
-        "nested_field_defs": allotment_nested_field_defs,
+        # "nested_field_defs": allotment_nested_field_defs,
         "nested_list_display": {
             "allotment_details": [
                 "license_number",
@@ -73,7 +74,7 @@ AllotmentViewSet = MasterViewSet.create(
                 "cif_inr",
                 "exporter",
                 "license_date",
-                "license_expiry"
+                "license_expiry",
             ]
         },
         "field_meta": {

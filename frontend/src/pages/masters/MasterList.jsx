@@ -22,7 +22,9 @@ export default function MasterList() {
     const navigate = useNavigate();
 
     // Determine the actual entity name - either from params or from path
-    const entityName = entity || (location.pathname.startsWith('/licenses') ? 'licenses' : null);
+    const entityName = entity ||
+        (location.pathname.startsWith('/licenses') ? 'licenses' : null) ||
+        (location.pathname.startsWith('/allotments') ? 'allotments' : null);
     const [data, setData] = useState([]);
     const [metadata, setMetadata] = useState({});
     const [loading, setLoading] = useState(true);
@@ -49,8 +51,10 @@ export default function MasterList() {
                 ...filters
             };
 
-            // Determine API endpoint - licenses go to /api/licenses, masters go to /api/masters/:entity
-            const apiPath = entityName === 'licenses' ? `/licenses/` : `/masters/${entityName}/`;
+            // Determine API endpoint - licenses/allotments go directly, masters go to /api/masters/:entity
+            const apiPath = (entityName === 'licenses' || entityName === 'allotments')
+                ? `/${entityName}/`
+                : `/masters/${entityName}/`;
             const {data: response} = await api.get(apiPath, {params});
 
             setData(response.results || []);
@@ -225,14 +229,26 @@ export default function MasterList() {
                             columns={metadata.list_display || []}
                             loading={loading}
                             onDelete={handleDelete}
-                            basePath={entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`}
+                            basePath={entityName === 'licenses' ? '/licenses' : (entityName === 'allotments' ? '/allotments' : `/masters/${entityName}`)}
                             nestedFieldDefs={metadata.nested_field_defs}
                             nestedListDisplay={metadata.nested_list_display || {}}
+                            customActions={entityName === 'allotments' ? [{
+                                label: 'Allocate',
+                                icon: 'bi bi-box-arrow-in-down',
+                                className: 'btn btn-outline-success',
+                                onClick: (item) => navigate(`/allotments/${item.id}/allocate`)
+                            }] : []}
                         />
                     ) : (
                         <DataTable
                             data={data}
                             columns={metadata.list_display || []}
+                            customActions={entityName === 'allotments' ? [{
+                                label: 'Allocate',
+                                icon: 'bi bi-box-arrow-in-down',
+                                className: 'btn btn-outline-success',
+                                onClick: (item) => navigate(`/allotments/${item.id}/allocate`)
+                            }] : []}
                             loading={loading}
                             onEdit={() => {}}
                             onDelete={handleDelete}

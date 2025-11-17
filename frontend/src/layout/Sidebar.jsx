@@ -1,7 +1,7 @@
 import {Link, useLocation} from "react-router-dom";
 import {useContext, useState} from "react";
 import {AuthContext} from "../context/AuthContext";
-import {routes, masterEntities} from "../routes/config";
+import {masterEntities, routes} from "../routes/config";
 
 export default function Sidebar() {
     const {hasRole} = useContext(AuthContext);
@@ -13,7 +13,7 @@ export default function Sidebar() {
     };
 
     return (
-        <div className="bg-dark text-white sidebar p-3" style={{width: "240px", minHeight: "100vh"}}>
+        <div className="bg-dark text-white sidebar p-12" style={{width: "240px", minHeight: "100vh"}}>
             <h4 className="text-center mb-4">Admin Panel</h4>
 
             <ul className="nav nav-pills flex-column">

@@ -8,5 +8,5 @@ python manage.py migrate core 0002 --fake
 python manage.py migrate license 0002 --fake
 python manage.py migrate sessions --fake
 python manage.py makemigrations trade
-python manage.py migrate trade --fake
+python manage.py migrate trade
 python manage.py migrate

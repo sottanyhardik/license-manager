@@ -314,7 +314,7 @@ class AllotmentActionViewSet(ViewSet):
             response = HttpResponse(content_type='application/pdf')
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'Allotment_{allotment.company.name}_{timestamp}.pdf'
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
 
             # Create the PDF object using BytesIO buffer
             buffer = BytesIO()

@@ -138,7 +138,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 # ---------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------
-AUTH_USER_MODEL = "accounts.User"
+# AUTH_USER_MODEL = "accounts.User"
 
 LOGIN_URL = reverse_lazy("login")
 LOGIN_REDIRECT_URL = reverse_lazy("dashboard")

@@ -129,23 +129,41 @@ export default function MasterList() {
         try {
             const params = {
                 ...filterParams,
-                export: format
+                _export: format
             };
 
-            const apiPath = entityName === 'licenses' ? `/licenses/export/` : `/masters/${entityName}/export/`;
+            let apiPath;
+            if (entityName === 'licenses') {
+                apiPath = `/licenses/export/`;
+            } else if (entityName === 'allotments') {
+                apiPath = `/allotments/download/`;
+            } else {
+                apiPath = `/masters/${entityName}/export/`;
+            }
+
             const response = await api.get(apiPath, {
                 params,
                 responseType: 'blob'
             });
 
-            // Create download link
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `${entityName}_${new Date().toISOString().split('T')[0]}.${format}`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            // For PDF, open in new tab; for Excel, download
+            const blob = new Blob([response.data], {
+                type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            const url = window.URL.createObjectURL(blob);
+
+            if (format === 'pdf') {
+                // Open PDF in new tab
+                window.open(url, '_blank');
+            } else {
+                // Download Excel file
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `${entityName}_${new Date().toISOString().split('T')[0]}.${format}`);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            }
         } catch (err) {
             alert(err.response?.data?.detail || `Failed to export as ${format.toUpperCase()}`);
         }
@@ -248,13 +266,9 @@ export default function MasterList() {
                                             const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
                                                 responseType: 'blob'
                                             });
-                                            const url = window.URL.createObjectURL(new Blob([response.data]));
-                                            const link = document.createElement('a');
-                                            link.href = url;
-                                            link.setAttribute('download', `Allotment_${item.id}_${new Date().toISOString().split('T')[0]}.pdf`);
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            link.remove();
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            window.open(url, '_blank');
                                         } catch (err) {
                                             alert(err.response?.data?.error || 'Failed to generate PDF');
                                         }
@@ -282,13 +296,9 @@ export default function MasterList() {
                                             const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
                                                 responseType: 'blob'
                                             });
-                                            const url = window.URL.createObjectURL(new Blob([response.data]));
-                                            const link = document.createElement('a');
-                                            link.href = url;
-                                            link.setAttribute('download', `Allotment_${item.id}_${new Date().toISOString().split('T')[0]}.pdf`);
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            link.remove();
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            window.open(url, '_blank');
                                         } catch (err) {
                                             alert(err.response?.data?.error || 'Failed to generate PDF');
                                         }

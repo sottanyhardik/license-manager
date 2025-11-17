@@ -1,6 +1,7 @@
 # allotment/views.py
 from allotment.models import AllotmentModel
 from allotment.serializers import AllotmentSerializer
+from allotment.views_export import add_grouped_export_action
 from core.constants import ROW_TYPE_CHOICES
 from core.views.master_view import MasterViewSet
 
@@ -33,6 +34,7 @@ AllotmentViewSet = MasterViewSet.create(
             "estimated_arrival_date": {"type": "date_range"},
             "created_on": {"type": "date_range"},
             "is_boe": {"type": "exact"},
+            "is_allotted": {"type": "exact"},
         },
         "list_display": [
             "modified_on",
@@ -44,6 +46,7 @@ AllotmentViewSet = MasterViewSet.create(
             "estimated_arrival_date",
             "invoice",
             "is_boe",
+            "is_allotted",
             "dfia_list"
         ],
         "form_fields": [
@@ -98,3 +101,6 @@ AllotmentViewSet = MasterViewSet.create(
         }
     }
 )
+
+# Add grouped export functionality
+AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)

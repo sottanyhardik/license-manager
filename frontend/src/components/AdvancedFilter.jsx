@@ -1,4 +1,4 @@
-import {useState, useEffect} from "react";
+import {useState, useEffect, useRef} from "react";
 import AsyncSelectField from "./AsyncSelectField";
 import Select from "react-select";
 
@@ -17,9 +17,18 @@ import Select from "react-select";
  * - searchFields: array of searchable fields
  * - onFilterChange: callback function(filterParams)
  */
-export default function AdvancedFilter({filterConfig = {}, searchFields = [], onFilterChange}) {
+export default function AdvancedFilter({filterConfig = {}, searchFields = [], onFilterChange, initialFilters = {}}) {
     const [searchTerm, setSearchTerm] = useState("");
-    const [filterValues, setFilterValues] = useState({});
+    const [filterValues, setFilterValues] = useState(initialFilters);
+    const isInitialMount = useRef(true);
+
+    // Update filterValues when initialFilters change (only on mount)
+    useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            setFilterValues(initialFilters);
+        }
+    }, [initialFilters]);
 
     // Auto-apply filters with debounce
     useEffect(() => {

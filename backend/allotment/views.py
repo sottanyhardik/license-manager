@@ -104,3 +104,26 @@ AllotmentViewSet = MasterViewSet.create(
 
 # Add grouped export functionality
 AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)
+
+# Add default filters
+original_get_queryset = AllotmentViewSet.get_queryset
+
+def custom_get_queryset_with_defaults(self):
+    """Override to apply default filters if no filters are specified"""
+    qs = original_get_queryset(self)
+
+    params = self.request.query_params
+
+    # Apply default filters only if the user hasn't specified these filters
+    if 'type' not in params:
+        qs = qs.filter(type='AT')  # Default: Allotment type
+
+    if 'is_boe' not in params:
+        qs = qs.filter(is_boe=False)  # Default: Not BOE
+
+    if 'is_allotted' not in params:
+        qs = qs.filter(is_allotted=True)  # Default: Allotted
+
+    return qs
+
+AllotmentViewSet.get_queryset = custom_get_queryset_with_defaults

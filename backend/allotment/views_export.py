@@ -150,6 +150,14 @@ def add_grouped_export_action(viewset_class):
                     for allot in allotments:
                         # Add rows for each license detail
                         for idx, detail in enumerate(allot['details']):
+                            # Create Paragraph objects for long text fields to enable wrapping
+                            item_name_text = allot.get('item_name', display_item_name)
+                            invoice_text = allot['invoice']
+
+                            # Wrap long text in Paragraph for word wrapping
+                            item_name_para = Paragraph(item_name_text, ParagraphStyle('cell', parent=styles['Normal'], fontSize=7, leading=8))
+                            invoice_para = Paragraph(invoice_text, ParagraphStyle('cell', parent=styles['Normal'], fontSize=7, leading=8))
+
                             if idx == 0:
                                 # First license row: show allotment data + license data
                                 table_data.append([
@@ -159,8 +167,8 @@ def add_grouped_export_action(viewset_class):
                                     f"{int(allot['quantity']):,}",
                                     f"{allot['unit_price']:.2f}",
                                     f"{allot['value']:,.2f}",
-                                    allot.get('item_name', display_item_name),
-                                    allot['invoice'],
+                                    item_name_para,
+                                    invoice_para,
                                     allot['eta'],
                                     'Yes' if allot.get('is_boe') else 'No',
                                     detail['dfia_no'],

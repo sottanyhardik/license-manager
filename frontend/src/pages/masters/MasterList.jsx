@@ -37,8 +37,19 @@ export default function MasterList() {
     const [hasNext, setHasNext] = useState(false);
     const [hasPrevious, setHasPrevious] = useState(false);
 
-    // Filter state
-    const [filterParams, setFilterParams] = useState({});
+    // Filter state with default filters for allotments
+    const getDefaultFilters = () => {
+        if (entityName === 'allotments') {
+            return {
+                type: 'AT',
+                is_boe: 'False',
+                is_allotted: 'True'
+            };
+        }
+        return {};
+    };
+
+    const [filterParams, setFilterParams] = useState(getDefaultFilters());
 
     const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
         setLoading(true);
@@ -89,8 +100,9 @@ export default function MasterList() {
     useEffect(() => {
         if (!entityName) return;
         setCurrentPage(1);
-        setFilterParams({});
-        fetchData(1, 25, {});
+        const defaultFilters = getDefaultFilters();
+        setFilterParams(defaultFilters);
+        fetchData(1, 25, defaultFilters);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entityName]);
 
@@ -235,6 +247,7 @@ export default function MasterList() {
                 filterConfig={metadata.filter_config || {}}
                 searchFields={metadata.search_fields || []}
                 onFilterChange={handleFilterChange}
+                initialFilters={filterParams}
             />
 
             {/* Table */}

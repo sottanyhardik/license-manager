@@ -50,6 +50,10 @@ def update_is_allotted_on_save(sender, instance, created, **kwargs):
     Update is_allotted to True when an AllotmentItems is created or updated
     Also update the license item's available balance
     """
+    # Prevent recursive signal calls
+    if kwargs.get('raw', False):
+        return
+
     if instance.allotment:
         instance.allotment.is_allotted = True
         instance.allotment.save(update_fields=['is_allotted'])

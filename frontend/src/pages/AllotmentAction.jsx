@@ -124,7 +124,7 @@ export default function AllotmentAction() {
         const allottedValue = parseFloat(allotment.allotted_value || 0);
         const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
         const availableQty = parseInt(item.available_quantity);
-        const availableCifFc = parseFloat(item.cif_fc);
+        const availableCifFc = parseFloat(item.balance_cif_fc || 0);
 
         // Max quantity is the minimum of balanced quantity and available quantity
         let maxQty = Math.min(balancedQty, availableQty);
@@ -132,7 +132,7 @@ export default function AllotmentAction() {
         // Calculate value for this quantity
         let maxValue = maxQty * unitPrice;
 
-        // Check if value exceeds available CIF FC
+        // Check if value exceeds available CIF FC (using balance_cif_fc)
         if (maxValue > availableCifFc) {
             // Adjust quantity based on available CIF FC
             maxQty = Math.floor(availableCifFc / unitPrice);
@@ -165,7 +165,7 @@ export default function AllotmentAction() {
         const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
         const allottedValue = parseFloat(allotment.allotted_value || 0);
         const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableCifFc = parseFloat(item.cif_fc || 0);
+        const availableCifFc = parseFloat(item.balance_cif_fc || 0);
         const availableQty = parseInt(item.available_quantity || 0);
 
         // Constrain to minimum of balanced quantity and available quantity
@@ -229,7 +229,7 @@ export default function AllotmentAction() {
         const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
         const allottedValue = parseFloat(allotment.allotted_value || 0);
         const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableCifFc = parseFloat(item.cif_fc || 0);
+        const availableCifFc = parseFloat(item.balance_cif_fc || 0);
 
         // Constrain to balanced value with buffer
         if (inputValue > balancedValueWithBuffer) {
@@ -629,7 +629,7 @@ export default function AllotmentAction() {
                                         <td>{item.description}</td>
                                         <td>{item.exporter_name}</td>
                                         <td>{parseFloat(item.available_quantity || 0).toFixed(3)}</td>
-                                        <td>{parseFloat(item.cif_fc || 0).toFixed(2)}</td>
+                                        <td>{parseFloat(item.balance_cif_fc || 0).toFixed(2)}</td>
                                         <td>{item.license_expiry_date}</td>
                                         <td>
                                             <div className="input-group input-group-sm">

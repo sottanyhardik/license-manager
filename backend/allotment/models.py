@@ -123,8 +123,8 @@ class AllotmentModel(AuditModel):
         """
         Auto-calculate fields before saving:
         1. If cif_inr and exchange_rate provided, calculate cif_fc = cif_inr / exchange_rate
-        2. If cif_fc and required_quantity provided, calculate unit_value_per_unit = cif_fc / required_quantity
-        3. If unit_value_per_unit and required_quantity provided, calculate cif_fc = unit_value_per_unit * required_quantity
+        2. If unit_value_per_unit and required_quantity provided, calculate cif_fc = unit_value_per_unit * required_quantity
+        3. If cif_fc and required_quantity provided, calculate unit_value_per_unit = cif_fc / required_quantity
         4. If cif_fc and exchange_rate provided, calculate cif_inr = cif_fc * exchange_rate
         """
         unit_value = _to_decimal(self.unit_value_per_unit, DEC_0)
@@ -138,8 +138,9 @@ class AllotmentModel(AuditModel):
             self.cif_fc = (cif_inr_val / exchange_rate_val).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             cif_fc_val = self.cif_fc  # Update for next calculations
 
-        # Priority 2: Calculate cif_fc from unit_value_per_unit and required_quantity (if cif_fc not already set)
-        elif unit_value > DEC_0 and required_qty > DEC_0 and cif_fc_val == DEC_0:
+        # Priority 2: Calculate cif_fc from unit_value_per_unit and required_quantity
+        # Always recalculate when both are available (removed the cif_fc_val == DEC_0 check)
+        elif unit_value > DEC_0 and required_qty > DEC_0:
             self.cif_fc = (unit_value * required_qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             cif_fc_val = self.cif_fc  # Update for next calculations
 

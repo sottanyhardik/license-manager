@@ -36,6 +36,7 @@ class AllotmentActionViewSet(ViewSet):
 
         Query Parameters:
         - search: Search in license number, description, exporter name
+        - license_number: Filter by license number (icontains)
         - description: Filter by description (icontains)
         - available_quantity_gte: Minimum available quantity
         - available_quantity_lte: Maximum available quantity
@@ -51,6 +52,7 @@ class AllotmentActionViewSet(ViewSet):
 
         # Get query parameters for filtering
         search = request.query_params.get('search', '')
+        license_number = request.query_params.get('license_number', '')
         description = request.query_params.get('description', '')
         available_quantity_gte = request.query_params.get('available_quantity_gte', '')
         available_quantity_lte = request.query_params.get('available_quantity_lte', '')
@@ -75,6 +77,10 @@ class AllotmentActionViewSet(ViewSet):
                 Q(description__icontains=search) |
                 Q(license__exporter__name__icontains=search)
             )
+
+        # Apply license number filter
+        if license_number:
+            queryset = queryset.filter(license__license_number__icontains=license_number)
 
         # Apply description filter
         if description:
@@ -202,6 +208,15 @@ class AllotmentActionViewSet(ViewSet):
                     errors.append({
                         'item_id': item_id,
                         'error': f'Insufficient available quantity. Available: {license_item.available_quantity}, Requested: {qty}'
+                    })
+                    continue
+
+                # Check if available CIF FC (balance_cif_fc) is sufficient
+                available_cif = license_item.balance_cif_fc
+                if available_cif < cif_fc:
+                    errors.append({
+                        'item_id': item_id,
+                        'error': f'Insufficient available CIF FC. Available: {available_cif}, Requested: {cif_fc}'
                     })
                     continue
 

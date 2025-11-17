@@ -90,13 +90,14 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     exporter_name = serializers.CharField(source="license.exporter.name", read_only=True)
     hs_code_detail = HSCodeSerializer(source='hs_code', read_only=True)
     hs_code_label = serializers.SerializerMethodField()
+    balance_cif_fc = serializers.SerializerMethodField()
 
     class Meta:
         model = LicenseImportItemsModel
         fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'description', 'quantity',
                   'old_quantity', 'unit', 'cif_fc', 'cif_inr', 'available_quantity', 'available_value',
                   'debited_quantity', 'debited_value', 'license_number', 'license_date', 'license_expiry_date',
-                  'exporter_name', 'hs_code_detail', 'hs_code_label']
+                  'exporter_name', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly
         extra_kwargs = {
@@ -108,6 +109,10 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         if obj.hs_code:
             return f"{obj.hs_code.hs_code}"
         return None
+
+    def get_balance_cif_fc(self, obj):
+        """Get fresh balance_cif_fc (now a regular property, always fresh)"""
+        return obj.balance_cif_fc
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -163,6 +168,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     # Property fields
     latest_transfer = serializers.CharField(read_only=True, required=False)
     get_norm_class = serializers.CharField(read_only=True, required=False)
+    get_balance_cif = serializers.SerializerMethodField()
 
     # Nested serializers - separate for read/write to avoid validation issues
     export_license_read = LicenseExportItemSerializer(source='export_license', many=True, read_only=True)
@@ -207,6 +213,10 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         if 'import_license_read' in rep:
             rep['import_license'] = rep.pop('import_license_read')
 
+        # Replace the stale balance_cif database field with fresh calculated value
+        if 'get_balance_cif' in rep:
+            rep['balance_cif'] = rep['get_balance_cif']
+
         def walk(obj):
             if isinstance(obj, dict):
                 return {k: walk(v) for k, v in obj.items()}
@@ -215,6 +225,10 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             return _safe_iso(obj)
 
         return walk(rep)
+
+    def get_get_balance_cif(self, obj):
+        """Get fresh balance_cif (always calculated from property, not cached field)"""
+        return obj.get_balance_cif
 
     # helper for M2M items in import rows
     def _create_import_item(self, license_inst, payload):

@@ -126,7 +126,9 @@ export default function MasterForm() {
                 }
             }
             // Priority 2: Calculate cif_fc from unit_value_per_unit and required_quantity
-            else if (field === "unit_value_per_unit" && currentData.unit_value_per_unit && currentData.required_quantity) {
+            // Recalculate when either unit_value_per_unit or required_quantity changes
+            else if ((field === "unit_value_per_unit" || field === "required_quantity")
+                && currentData.unit_value_per_unit && currentData.required_quantity) {
                 const unitValue = parseFloat(currentData.unit_value_per_unit);
                 const requiredQty = parseFloat(currentData.required_quantity);
                 if (!isNaN(unitValue) && !isNaN(requiredQty) && requiredQty > 0) {

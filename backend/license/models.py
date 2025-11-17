@@ -806,12 +806,13 @@ class LicenseImportItemsModel(models.Model):
             avail = total - (debited + allotted)
             return avail if avail >= DEC_000 else DEC_000
 
-    @cached_property
+    @property
     def balance_cif_fc(self) -> Decimal:
         """
         Row-level balance. For special rows (0 / 0.01 / 0.1), fall back to license-level sums.
         Business Logic: If all items OTHER THAN serial_number = 1 have CIF = 0,
         then serial_number 1's balance should be license.balance_cif.
+        Always calculated fresh from database without caching.
         """
         # Check if business logic applies: all other items have zero CIF and this is serial_number 1
         if self.license and self.serial_number == 1:

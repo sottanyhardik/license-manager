@@ -202,22 +202,16 @@ CompanyViewSet = MasterViewSet.create(
     config=enhance_config_with_fk(
         CompanyModel,
         {
-            "search": ["iec", "name"],
+            "search": ["iec", "name", "gst_number", "pan"],
             "filter": {
-                "iec": {"type": "icontains"},
-                "name": {"type": "icontains"},
-                "gst_number": {"type": "icontains"},
                 "created_on": {"type": "date_range"},
             },
-            "list_display": ["iec", "name", "gst_number", "created_on"],
+            "list_display": ["modified_on", "iec", "name", "pan", "gst_number", "address_line_1", "address_line_2"],
             "form_fields": [
+                "name",
                 "iec",
                 "pan",
                 "gst_number",
-                "name",
-                "contact_person",
-                "phone_number",
-                "email",
                 "address",
                 "address_line_1",
                 "address_line_2",
@@ -266,8 +260,6 @@ HSCodeViewSet = MasterViewSet.create(
         {
             "search": ["hs_code", "product_description"],
             "filter": {
-                "hs_code": {"type": "icontains"},
-                "product_description": {"type": "icontains"},
                 "unit_price": {"type": "range"},
             },
             "list_display": ["hs_code", "product_description", "unit_price", "unit"],
@@ -322,10 +314,8 @@ SionNormClassViewSet = MasterViewSet.create(
     config=enhance_config_with_fk(
         SionNormClassModel,
         {
-            "search": ["norm_class", "description"],
+            "search": ["norm_class", "description", "import_norm__description", "export_norm__description"],
             "filter": {
-                "norm_class": {"type": "icontains"},
-                "description": {"type": "icontains"},
                 "head_norm": {"type": "fk", "fk_endpoint": "/masters/head-norms/", "label_field": "name"},
             },
             "list_display": ["norm_class", "description", "head_norm_name"],
@@ -396,7 +386,6 @@ ItemHeadViewSet = MasterViewSet.create(
         {
             "search": ["name"],
             "filter": {
-                "name": {"type": "icontains"},
                 "is_restricted": {"type": "exact"},
             },
             "list_display": ["name", "unit_rate", "is_restricted"],
@@ -413,7 +402,6 @@ ItemNameViewSet = MasterViewSet.create(
         {
             "search": ["name", "head__name"],
             "filter": {
-                "name": {"type": "icontains"},
                 "head": {"type": "fk", "fk_endpoint": "/masters/item-heads/", "label_field": "name"},
                 "is_active": {"type": "exact"},
             },

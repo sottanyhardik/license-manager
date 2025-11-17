@@ -232,23 +232,69 @@ export default function MasterList() {
                             basePath={entityName === 'licenses' ? '/licenses' : (entityName === 'allotments' ? '/allotments' : `/masters/${entityName}`)}
                             nestedFieldDefs={metadata.nested_field_defs}
                             nestedListDisplay={metadata.nested_list_display || {}}
-                            customActions={entityName === 'allotments' ? [{
-                                label: 'Allocate',
-                                icon: 'bi bi-box-arrow-in-down',
-                                className: 'btn btn-outline-success',
-                                onClick: (item) => navigate(`/allotments/${item.id}/allocate`)
-                            }] : []}
+                            customActions={entityName === 'allotments' ? [
+                                {
+                                    label: 'Allocate',
+                                    icon: 'bi bi-box-arrow-in-down',
+                                    className: 'btn btn-outline-success',
+                                    onClick: (item) => navigate(`/allotments/${item.id}/allocate`)
+                                },
+                                {
+                                    label: 'PDF',
+                                    icon: 'bi bi-file-pdf',
+                                    className: 'btn btn-outline-danger',
+                                    onClick: async (item) => {
+                                        try {
+                                            const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
+                                                responseType: 'blob'
+                                            });
+                                            const url = window.URL.createObjectURL(new Blob([response.data]));
+                                            const link = document.createElement('a');
+                                            link.href = url;
+                                            link.setAttribute('download', `Allotment_${item.id}_${new Date().toISOString().split('T')[0]}.pdf`);
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            link.remove();
+                                        } catch (err) {
+                                            alert(err.response?.data?.error || 'Failed to generate PDF');
+                                        }
+                                    }
+                                }
+                            ] : []}
                         />
                     ) : (
                         <DataTable
                             data={data}
                             columns={metadata.list_display || []}
-                            customActions={entityName === 'allotments' ? [{
-                                label: 'Allocate',
-                                icon: 'bi bi-box-arrow-in-down',
-                                className: 'btn btn-outline-success',
-                                onClick: (item) => navigate(`/allotments/${item.id}/allocate`)
-                            }] : []}
+                            customActions={entityName === 'allotments' ? [
+                                {
+                                    label: 'Allocate',
+                                    icon: 'bi bi-box-arrow-in-down',
+                                    className: 'btn btn-outline-success',
+                                    onClick: (item) => navigate(`/allotments/${item.id}/allocate`)
+                                },
+                                {
+                                    label: 'PDF',
+                                    icon: 'bi bi-file-pdf',
+                                    className: 'btn btn-outline-danger',
+                                    onClick: async (item) => {
+                                        try {
+                                            const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
+                                                responseType: 'blob'
+                                            });
+                                            const url = window.URL.createObjectURL(new Blob([response.data]));
+                                            const link = document.createElement('a');
+                                            link.href = url;
+                                            link.setAttribute('download', `Allotment_${item.id}_${new Date().toISOString().split('T')[0]}.pdf`);
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            link.remove();
+                                        } catch (err) {
+                                            alert(err.response?.data?.error || 'Failed to generate PDF');
+                                        }
+                                    }
+                                }
+                            ] : []}
                             loading={loading}
                             onEdit={() => {}}
                             onDelete={handleDelete}

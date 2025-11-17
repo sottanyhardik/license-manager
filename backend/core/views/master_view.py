@@ -181,11 +181,11 @@ class MasterViewSet(viewsets.ModelViewSet):
                 if annotations:
                     qs = qs.annotate(**annotations)
 
-                # Apply advanced filters
+                # Apply advanced filters (always apply, even if filter_config is empty)
                 filter_config = getattr(self, "filter_config", {})
                 request = getattr(self, "request", None)
 
-                if request and filter_config:
+                if request:
                     qs = self.apply_advanced_filters(qs, request.query_params, filter_config)
 
                 return qs
@@ -193,9 +193,19 @@ class MasterViewSet(viewsets.ModelViewSet):
             def apply_advanced_filters(self, qs, params, filter_config):
                 """Apply advanced filters based on filter_config."""
                 from django.db.models import Q
+                from django.db import models as dj_models
 
+                # Get model fields
+                model = qs.model
+                model_fields = {f.name: f for f in model._meta.get_fields()}
+
+                # Track processed fields to avoid duplicates
+                processed_fields = set()
+
+                # First, process fields defined in filter_config
                 for field_name, config in filter_config.items():
-                    filter_type = config.get("type", "exact")
+                    processed_fields.add(field_name)
+                    filter_type = config.get("type", "icontains")  # Default to icontains for text fields
 
                     if filter_type == "icontains":
                         # Case-insensitive contains
@@ -205,6 +215,8 @@ class MasterViewSet(viewsets.ModelViewSet):
 
                     elif filter_type == "date_range":
                         # Date range filter
+                        processed_fields.add(f"{field_name}_from")
+                        processed_fields.add(f"{field_name}_to")
                         date_from = params.get(f"{field_name}_from")
                         date_to = params.get(f"{field_name}_to")
                         if date_from:
@@ -216,6 +228,8 @@ class MasterViewSet(viewsets.ModelViewSet):
                         # Numeric range filter
                         min_field = config.get("min_field", f"{field_name}_min")
                         max_field = config.get("max_field", f"{field_name}_max")
+                        processed_fields.add(min_field)
+                        processed_fields.add(max_field)
                         min_value = params.get(min_field)
                         max_value = params.get(max_field)
                         if min_value:
@@ -235,6 +249,44 @@ class MasterViewSet(viewsets.ModelViewSet):
                         if value:
                             values = [v.strip() for v in value.split(",")]
                             qs = qs.filter(**{f"{field_name}__in": values})
+
+                    elif filter_type == "fk":
+                        # Foreign key exact match (ID)
+                        value = params.get(field_name)
+                        if value:
+                            qs = qs.filter(**{field_name: value})
+
+                    elif filter_type == "choice":
+                        # Choice field exact match
+                        value = params.get(field_name)
+                        if value:
+                            qs = qs.filter(**{field_name: value})
+
+                # Now, process any remaining query parameters not in filter_config
+                # Apply icontains for text fields by default
+                ignore_params = {'page', 'page_size', 'ordering', 'search', 'export'}
+
+                for param_name, param_value in params.items():
+                    if param_name in processed_fields or param_name in ignore_params:
+                        continue
+
+                    if not param_value:
+                        continue
+
+                    # Check if this is a valid model field
+                    if param_name in model_fields:
+                        field = model_fields[param_name]
+
+                        # Apply icontains for CharField and TextField
+                        if isinstance(field, (dj_models.CharField, dj_models.TextField)):
+                            qs = qs.filter(**{f"{param_name}__icontains": param_value})
+                        # Apply exact match for other field types
+                        else:
+                            try:
+                                qs = qs.filter(**{param_name: param_value})
+                            except Exception:
+                                # Skip if filter fails
+                                pass
 
                 return qs
 

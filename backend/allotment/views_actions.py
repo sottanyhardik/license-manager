@@ -1,11 +1,21 @@
 # allotment/views_actions.py
+from datetime import datetime
 from decimal import Decimal
+from io import BytesIO
+
+from django.db.models import Q
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from django.shortcuts import get_object_or_404
-from django.db.models import Q, F
 
 from allotment.models import AllotmentModel, AllotmentItems
 from allotment.serializers import AllotmentSerializer
@@ -36,7 +46,8 @@ class AllotmentActionViewSet(ViewSet):
         - hs_code: Filter by HS code
         - is_expired: Filter expired licenses (true/false)
         """
-        allotment = get_object_or_404(AllotmentModel.objects.prefetch_related('allotment_details__item__license__exporter'), pk=pk)
+        allotment = get_object_or_404(
+            AllotmentModel.objects.prefetch_related('allotment_details__item__license__exporter'), pk=pk)
 
         # Get query parameters for filtering
         search = request.query_params.get('search', '')
@@ -54,7 +65,8 @@ class AllotmentActionViewSet(ViewSet):
         # Show all items with available quantity > 0 (including partially allocated ones)
         queryset = LicenseImportItemsModel.objects.filter(
             available_quantity__gt=0
-        ).select_related('license', 'license__exporter', 'hs_code').order_by('license__license_expiry_date', 'serial_number')
+        ).select_related('license', 'license__exporter', 'hs_code').order_by('license__license_expiry_date',
+                                                                             'serial_number')
 
         # Apply search filter if provided
         if search:
@@ -283,3 +295,172 @@ class AllotmentActionViewSet(ViewSet):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['get'], url_path='generate-pdf')
+    def generate_pdf(self, request, pk=None):
+        """
+        Generate allotment letter PDF with allotment details and license information.
+        """
+        try:
+            allotment = get_object_or_404(
+                AllotmentModel.objects.select_related('company', 'port').prefetch_related(
+                    'allotment_details__item__license__exporter',
+                    'allotment_details__item__hs_code'
+                ),
+                pk=pk
+            )
+
+            # Create the HttpResponse object with PDF headers
+            response = HttpResponse(content_type='application/pdf')
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'Allotment_{allotment.company.name}_{timestamp}.pdf'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            # Create the PDF object using BytesIO buffer
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5 * inch, bottomMargin=0.5 * inch)
+
+            # Container for the 'Flowable' objects
+            elements = []
+
+            # Define styles
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=14,
+                textColor=colors.black,
+                spaceAfter=12,
+                alignment=TA_CENTER
+            )
+
+            header_style = ParagraphStyle(
+                'CustomHeader',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.black,
+                spaceAfter=6,
+                alignment=TA_LEFT
+            )
+
+            # Header with timestamp
+            header_text = f"Allotment Time: {datetime.now().strftime('%d %B %Y %H:%M')}"
+            elements.append(Paragraph(header_text, header_style))
+            elements.append(Spacer(1, 12))
+
+            # Company details
+            company_name = allotment.company.name if allotment.company else "N/A"
+            company_address = getattr(allotment.company, 'address', '') or ''
+            elements.append(Paragraph(f"<b>To,</b>", header_style))
+            elements.append(Paragraph(f"<b>{company_name}</b>", header_style))
+            if company_address:
+                elements.append(Paragraph(company_address, header_style))
+            elements.append(Spacer(1, 12))
+
+            # Subject line
+            total_qty = int(allotment.required_quantity or 0)
+            invoice = allotment.invoice or "N/A"
+            item_name = allotment.item_name or "N/A"
+            subject = f"<b>Subject:</b> License Allotment for {item_name} Invoice No. {invoice} for {total_qty:,} Kg"
+            elements.append(Paragraph(subject, header_style))
+            elements.append(Spacer(1, 12))
+
+            # Summary table
+            summary_data = [
+                ['Date', 'Item', 'Port Of Discharge'],
+                [
+                    allotment.estimated_arrival_date.strftime(
+                        '%d/%m/%Y') if allotment.estimated_arrival_date else 'N/A',
+                    item_name,
+                    allotment.port.code if allotment.port else 'N/A'
+                ]
+            ]
+
+            summary_table = Table(summary_data, colWidths=[1.2 * inch, 1.5 * inch, 1.2 * inch, 1.5 * inch, 1.5 * inch])
+            summary_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('TOPPADDING', (0, 1), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            elements.append(summary_table)
+            elements.append(Spacer(1, 18))
+
+            # Detailed DFIA table
+            detail_data = [
+                ['DFIA No', 'Reg No', 'Port Code', 'Duty Type',
+                 'Item Sr.No', 'Qty', 'CIF $', 'NTF No']
+            ]
+
+            # Add allotment details
+            for detail in allotment.allotment_details.all():
+                license_obj = detail.item.license if detail.item else None
+                license_num_date = f"{license_obj.license_number}\n{license_obj.license_date.strftime('%d/%m/%Y')}" if license_obj and license_obj.license_date else (
+                    license_obj.license_number if license_obj else 'N/A')
+                reg_num_date = f"{license_obj.registration_number}\n{license_obj.registration_date.strftime('%d/%m/%Y')}" if license_obj and license_obj.registration_date else (
+                    license_obj.registration_number if license_obj else 'N/A')
+
+                row = [
+                    license_num_date,
+                    reg_num_date,
+                    license_obj.port if license_obj else 'N/A',
+                    'DFIA',  # Default duty type
+                    str(detail.item.serial_number) if detail.item else 'N/A',
+                    f"{int(detail.qty):,}",
+                    f"{float(detail.cif_fc):,.2f}",
+                    license_obj.notification_number if license_obj else 'N/A',
+                ]
+                detail_data.append(row)
+
+            # Add totals row
+            total_qty_allotted = sum(int(d.qty) for d in allotment.allotment_details.all())
+            total_cif = sum(float(d.cif_fc) for d in allotment.allotment_details.all())
+            detail_data.append([
+                'Total', '', '', '', '',
+                f"{total_qty_allotted:,}",
+                f"{total_cif:,.2f}",
+                ''
+            ])
+
+            detail_table = Table(detail_data,
+                                 colWidths=[1.2 * inch, 1.2 * inch, 0.8 * inch, 0.7 * inch, 0.8 * inch,
+                                            0.8 * inch, 0.9 * inch, 1.1 * inch])
+            detail_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('FONTSIZE', (0, 1), (-1, -1), 7),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('TOPPADDING', (0, 1), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                # Make totals row bold
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+            ]))
+            elements.append(detail_table)
+
+            # Build PDF
+            doc.build(elements)
+
+            # Get the value of the BytesIO buffer and write it to the response
+            pdf = buffer.getvalue()
+            buffer.close()
+            response.write(pdf)
+
+            return response
+
+        except Exception as e:
+            return Response({
+                'error': f'Failed to generate PDF: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

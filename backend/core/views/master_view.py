@@ -277,11 +277,22 @@ class MasterViewSet(viewsets.ModelViewSet):
                     if param_name in model_fields:
                         field = model_fields[param_name]
 
+                        # Skip reverse relations (ManyToOneRel, ManyToManyRel, etc.)
+                        if isinstance(field, (dj_models.ManyToOneRel, dj_models.ManyToManyRel,
+                                             dj_models.OneToOneRel)):
+                            continue
+
                         # Apply icontains for CharField and TextField
                         if isinstance(field, (dj_models.CharField, dj_models.TextField)):
-                            qs = qs.filter(**{f"{param_name}__icontains": param_value})
-                        # Apply exact match for other field types
-                        else:
+                            try:
+                                qs = qs.filter(**{f"{param_name}__icontains": param_value})
+                            except Exception:
+                                # Skip if filter fails
+                                pass
+                        # Apply exact match for other field types (ForeignKey, numbers, dates, etc.)
+                        elif isinstance(field, (dj_models.ForeignKey, dj_models.IntegerField,
+                                               dj_models.DecimalField, dj_models.BooleanField,
+                                               dj_models.DateField, dj_models.DateTimeField)):
                             try:
                                 qs = qs.filter(**{param_name: param_value})
                             except Exception:

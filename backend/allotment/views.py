@@ -24,7 +24,7 @@ AllotmentViewSet = MasterViewSet.create(
     AllotmentModel,
     AllotmentSerializer,
     config={
-        "search": ["item_name", "company__name", "invoice", "bl_detail"],
+        "search": ["item_name", "company__name", "invoice", "bl_detail", "allotment_details__license_number"],
         "filter": {
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
@@ -32,7 +32,6 @@ AllotmentViewSet = MasterViewSet.create(
             "type": {"type": "choice", "choices": list(ROW_TYPE_CHOICES)},
             "estimated_arrival_date": {"type": "date_range"},
             "created_on": {"type": "date_range"},
-            "item_name": {"type": "icontains"},
             "is_boe": {"type": "exact"},
         },
         "list_display": [

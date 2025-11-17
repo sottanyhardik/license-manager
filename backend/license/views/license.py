@@ -45,20 +45,16 @@ LicenseDetailsViewSet = MasterViewSet.create(
     config={
         "search": ["license_number", "file_number", "exporter__name"],
         "filter": {
-            "license_number": {"type": "icontains"},
-            "file_number": {"type": "icontains"},
             "exporter": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
-            "scheme_code": {"type": "choice", "choices": list(SCHEME_CODE_CHOICES)},
+            "export_license__norm_class": {"type": "fk", "fk_endpoint": "/masters/sion-classes/",
+                                           "label_field": "norm_class"},
             "notification_number": {"type": "choice", "choices": list(NOTIFICATION_NORM_CHOICES)},
-            "is_expired": {"type": "exact"},
-            "is_null": {"type": "exact"},
             "purchase_status": {"type": "choice", "choices": list(LICENCE_PURCHASE_CHOICES)},
             "license_date": {"type": "date_range"},
             "license_expiry_date": {"type": "date_range"},
-
-            "export_license__norm_class": {"type": "fk", "fk_endpoint": "/masters/sion-classes/",
-                                           "label_field": "norm_class"},
+            "is_expired": {"type": "exact"},
+            "is_null": {"type": "exact"},
         },
         "list_display": [
             "license_number",

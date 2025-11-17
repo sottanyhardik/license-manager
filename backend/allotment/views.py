@@ -63,7 +63,7 @@ AllotmentViewSet = MasterViewSet.create(
             "is_boe",
         ],
         "ordering": ["estimated_arrival_date"],
-        # "nested_field_defs": allotment_nested_field_defs,
+        "nested_field_defs": allotment_nested_field_defs,
         "nested_list_display": {
             "allotment_details": [
                 "license_number",
@@ -72,7 +72,6 @@ AllotmentViewSet = MasterViewSet.create(
                 "qty",
                 "cif_fc",
                 "cif_inr",
-                "exporter",
                 "license_date",
                 "license_expiry",
             ]

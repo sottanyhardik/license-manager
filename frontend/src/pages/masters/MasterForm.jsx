@@ -353,7 +353,17 @@ export default function MasterForm() {
                 }
             }
 
-            const redirectPath = entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`;
+            // Redirect based on entity type
+            let redirectPath;
+            if (entityName === 'licenses') {
+                redirectPath = '/licenses';
+            } else if (entityName === 'allotments') {
+                // For allotments, redirect to action page after save
+                const savedId = response.data.id || id;
+                redirectPath = `/allotments/${savedId}/allocate`;
+            } else {
+                redirectPath = `/masters/${entityName}`;
+            }
             navigate(redirectPath);
         } catch (err) {
             console.error("Save error:", err.response?.data);
@@ -559,7 +569,8 @@ export default function MasterForm() {
                                 </div>
                                 <hr/>
                                 {/* Nested Fields */}
-                                {Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
+                                {/* Don't show nested fields for allotments in form - use action page instead */}
+                                {entityName !== 'allotments' && Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
                                     <NestedFieldArray
                                         key={nestedKey}
                                         label={nestedKey.replace(/_/g, " ")}

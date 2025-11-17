@@ -468,7 +468,7 @@ export default function AllotmentAction() {
                                 </tbody>
                                 <tfoot className="table-secondary">
                                 <tr>
-                                    <th colspan="6" className="text-end">Total:</th>
+                                    <th colSpan="6" className="text-end">Total:</th>
                                     <th className="text-end">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
                                     <th className="text-end">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
                                     <th></th>

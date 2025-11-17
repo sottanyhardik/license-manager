@@ -65,8 +65,8 @@ class AllotmentSerializer(serializers.ModelSerializer):
     # Nested serializer for read operations
     allotment_details_read = AllotmentItemSerializer(source='allotment_details', many=True, read_only=True)
 
-    # Date field handling with SerializerMethodField
-    estimated_arrival_date = serializers.SerializerMethodField()
+    # Date field handling
+    estimated_arrival_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d")
     created_on = serializers.SerializerMethodField()
     modified_on = serializers.SerializerMethodField()
 
@@ -81,15 +81,6 @@ class AllotmentSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source='company.name', read_only=True, required=False)
     port_name = serializers.CharField(source='port.name', read_only=True, required=False)
     related_company_name = serializers.CharField(source='related_company.name', read_only=True, required=False)
-
-    def get_estimated_arrival_date(self, obj):
-        if obj.estimated_arrival_date:
-            value = obj.estimated_arrival_date
-            if isinstance(value, datetime):
-                return value.date().isoformat()
-            elif isinstance(value, date):
-                return value.isoformat()
-        return None
 
     def get_created_on(self, obj):
         if obj.created_on:

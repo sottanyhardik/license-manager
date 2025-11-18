@@ -86,6 +86,8 @@ def generate_license_ledger_pdf(license_obj):
                 break
 
     # License Information Header
+    license_header_style = ParagraphStyle('LicenseHeaderStyle', parent=styles['Normal'], fontSize=9, leading=11, fontName='Helvetica-Bold')
+
     license_info = [
         ['License Number:', license_obj.license_number, 'License Date:',
          license_obj.license_date.strftime('%d-%b-%Y') if license_obj.license_date else 'N/A'],
@@ -95,7 +97,12 @@ def generate_license_ledger_pdf(license_obj):
     ]
 
     if is_restricted:
-        license_info.append(['Balance CIF FC:', f"{license_balance_cif:.2f}", '10% Restriction Balance:', f"{restriction_balance:.2f}"])
+        license_info.append([
+            'Balance CIF FC:',
+            f"{license_balance_cif:.2f}",
+            Paragraph('10% Restriction<br/>Balance:', license_header_style),
+            f"{restriction_balance:.2f}"
+        ])
     else:
         license_info.append(['Balance CIF FC:', f"{license_balance_cif:.2f}", '', ''])
 
@@ -106,6 +113,7 @@ def generate_license_ledger_pdf(license_obj):
         ('BACKGROUND', (2, 0), (2, -1), colors.HexColor('#ecf0f1')),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
         ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
@@ -155,12 +163,14 @@ def generate_license_ledger_pdf(license_obj):
             total_import_qty += Decimal(str(item.quantity or 0))
             total_available_qty += Decimal(str(item.available_quantity or 0))
 
-        # Item header with quantities
+        # Item header with quantities - use Paragraph for description to allow wrapping
+        desc_style = ParagraphStyle('ItemDescStyle', parent=styles['Normal'], fontSize=9, leading=11, alignment=TA_LEFT)
+
         item_info = [
             ['Sr No', 'Product Description', 'HS Code', 'Total Import Qty', 'Available Qty'],
             [
                 serial_numbers_str,
-                description[:60] if description else '-',
+                Paragraph(description if description else '-', desc_style),
                 hs_code,
                 f"{total_import_qty:.2f}",
                 f"{total_available_qty:.2f}"
@@ -173,6 +183,7 @@ def generate_license_ledger_pdf(license_obj):
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('ALIGN', (1, 1), (1, 1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
@@ -217,11 +228,16 @@ def generate_license_ledger_pdf(license_obj):
 
         allotment_data = [['Company / Date', 'Quantity', 'CIF FC', 'CIF INR']]
         company_total_rows = []  # Track which rows are company totals
+
+        # Style for wrapping text
+        wrap_style = ParagraphStyle('WrapStyle', parent=styles['Normal'], fontSize=8, leading=10)
+        bold_wrap_style = ParagraphStyle('BoldWrapStyle', parent=styles['Normal'], fontSize=8, leading=10, fontName='Helvetica-Bold')
+
         for company, data in sorted(allotment_by_company.items()):
             # Add individual row details
             for row in data['rows']:
                 allotment_data.append([
-                    f"  {row['date']}",
+                    Paragraph(f"  {row['date']}", wrap_style),
                     f"{row['qty']:.1f}",
                     f"{row['cif_fc']:.2f}",
                     f"{row['cif_inr']:.2f}"
@@ -229,7 +245,7 @@ def generate_license_ledger_pdf(license_obj):
             # Add company total
             company_total_rows.append(len(allotment_data))  # Mark this row as company total
             allotment_data.append([
-                company[:40],
+                Paragraph(company, bold_wrap_style),
                 f"{data['qty']:.1f}",
                 f"{data['cif_fc']:.2f}",
                 f"{data['cif_inr']:.2f}"
@@ -250,6 +266,7 @@ def generate_license_ledger_pdf(license_obj):
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, -1), 8),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
@@ -310,7 +327,7 @@ def generate_license_ledger_pdf(license_obj):
             # Add individual row details
             for row in data['rows']:
                 boe_data.append([
-                    f"  {row['number']} / {row['date']}",
+                    Paragraph(f"  {row['number']} / {row['date']}", wrap_style),
                     f"{row['qty']:.1f}",
                     f"{row['cif_fc']:.2f}",
                     f"{row['cif_inr']:.2f}"
@@ -318,7 +335,7 @@ def generate_license_ledger_pdf(license_obj):
             # Add company total
             boe_company_total_rows.append(len(boe_data))  # Mark this row as company total
             boe_data.append([
-                company[:40],
+                Paragraph(company, bold_wrap_style),
                 f"{data['qty']:.1f}",
                 f"{data['cif_fc']:.2f}",
                 f"{data['cif_inr']:.2f}"
@@ -339,6 +356,7 @@ def generate_license_ledger_pdf(license_obj):
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, -1), 8),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),

@@ -263,7 +263,25 @@ export default function MasterList() {
                             basePath={entityName === 'licenses' ? '/licenses' : (entityName === 'allotments' ? '/allotments' : `/masters/${entityName}`)}
                             nestedFieldDefs={metadata.nested_field_defs}
                             nestedListDisplay={metadata.nested_list_display || {}}
-                            customActions={entityName === 'allotments' ? [
+                            customActions={entityName === 'licenses' ? [
+                                {
+                                    label: 'Ledger',
+                                    icon: 'bi bi-file-pdf',
+                                    className: 'btn btn-outline-primary',
+                                    onClick: async (item) => {
+                                        try {
+                                            const response = await api.get(`/license-actions/${item.id}/download-ledger/`, {
+                                                responseType: 'blob'
+                                            });
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            window.open(url, '_blank');
+                                        } catch (err) {
+                                            alert(err.response?.data?.error || 'Failed to generate ledger PDF');
+                                        }
+                                    }
+                                }
+                            ] : entityName === 'allotments' ? [
                                 {
                                     label: 'Allocate',
                                     icon: 'bi bi-box-arrow-in-down',

@@ -100,6 +100,13 @@ def update_balance_values(item):
             setattr(item, attr, value)
             is_changed = True
 
+    # CRITICAL: Ensure available_value never exceeds balance_cif_fc
+    balance_cif_fc = Decimal(str(item.balance_cif_fc or 0))
+    current_available = Decimal(str(item.available_value or 0))
+    if current_available > balance_cif_fc:
+        item.available_value = balance_cif_fc
+        is_changed = True
+
     # If any values have been changed, save the item
     if is_changed:
         item.save()

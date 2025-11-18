@@ -142,7 +142,22 @@ class Command(BaseCommand):
                 # This automatically applies:
                 # - Head-based restrictions (with 098/2009 OR Conversion exception)
                 # - License-level vs item-level calculation priority
-                new_avl_val = Decimal(str(row.balance_cif_fc or 0))
+                calculated_avl_val = Decimal(str(row.balance_cif_fc or 0))
+
+                # CRITICAL: For restricted items, prefer stored available_value
+                # (maintained by update_restriction_balances command) over calculated value
+                has_restriction = row.items.filter(
+                    head__is_restricted=True,
+                    head__restriction_norm__isnull=False,
+                    head__restriction_percentage__gt=Decimal("0")
+                ).exists()
+
+                if has_restriction and row.available_value is not None and row.available_value > 0:
+                    # Use stored available_value for restricted items (source of truth)
+                    new_avl_val = Decimal(str(row.available_value))
+                else:
+                    # Use calculated value for non-restricted items
+                    new_avl_val = calculated_avl_val
 
                 # Only write if something actually changed
                 will_change = any(

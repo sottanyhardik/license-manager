@@ -112,7 +112,44 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         return None
 
     def get_balance_cif_fc(self, obj):
-        """Get fresh balance_cif_fc (now a regular property, always fresh)"""
+        """
+        Return available_value which is maintained by update_restriction_balances command.
+        This ensures available_value never exceeds actual balance and respects restrictions.
+
+        For licenses with restrictions: available_value is the source of truth (set by management command)
+        For exception licenses (098/2009, Conversion): use calculated balance_cif_fc
+        For licenses without restrictions or not yet processed: use calculated balance_cif_fc property
+        """
+        # Check if license is exception (098/2009 or Conversion)
+        is_exception = (
+            obj.license and (
+                obj.license.notification_number == "098/2009" or
+                obj.license.purchase_status == "CO"
+            )
+        )
+
+        # If exception license, always use calculated balance (no restrictions apply)
+        if is_exception:
+            return obj.balance_cif_fc
+
+        # Check if this item has restrictions applied
+        has_restriction = obj.items.filter(
+            head__is_restricted=True,
+            head__restriction_norm__isnull=False,
+            head__restriction_percentage__gt=0
+        ).exists()
+
+        # If item has restrictions, use available_value (it's the source of truth)
+        # available_value is maintained by update_restriction_balances command
+        if has_restriction:
+            # If available_value is set, use it; otherwise fall back to calculated
+            if obj.available_value is not None and obj.available_value > 0:
+                return obj.available_value
+            else:
+                # Not yet processed, use calculated
+                return obj.balance_cif_fc
+
+        # For non-restricted items, use the calculated property
         return obj.balance_cif_fc
 
     def to_representation(self, instance):

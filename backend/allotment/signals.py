@@ -15,6 +15,9 @@ def update_license_balance(license_item):
     Update the available_quantity and available_value for a license item
     based on allotments that are not yet BOE.
     Also updates license is_null flag if balance_cif < 100.
+
+    CRITICAL: For restricted items, available_value must respect restriction limits
+    and NEVER exceed balance_cif_fc.
     """
     if not license_item:
         return
@@ -40,7 +43,29 @@ def update_license_balance(license_item):
 
     # Ensure non-negative
     license_item.available_quantity = available_qty if available_qty >= DEC_000 else DEC_000
-    license_item.available_value = available_val if available_val >= DEC_0 else DEC_0
+    calculated_available_value = available_val if available_val >= DEC_0 else DEC_0
+
+    # CRITICAL: Check if item has restrictions
+    has_restriction = license_item.items.filter(
+        head__is_restricted=True,
+        head__restriction_norm__isnull=False,
+        head__restriction_percentage__gt=DEC_0
+    ).exists()
+
+    if has_restriction:
+        # For restricted items, use balance_cif_fc which includes restriction logic
+        # This ensures we never exceed the restriction limit
+        restriction_balance = Decimal(str(license_item.balance_cif_fc or 0))
+        # Use minimum of calculated and restriction balance
+        license_item.available_value = min(calculated_available_value, restriction_balance)
+    else:
+        # For non-restricted items, use the calculated value
+        license_item.available_value = calculated_available_value
+
+    # CRITICAL: available_value should NEVER exceed balance_cif_fc under any circumstance
+    balance_cif_fc = Decimal(str(license_item.balance_cif_fc or 0))
+    if license_item.available_value > balance_cif_fc:
+        license_item.available_value = balance_cif_fc
 
     license_item.save(update_fields=['allotted_quantity', 'allotted_value', 'available_quantity', 'available_value'])
 

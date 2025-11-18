@@ -222,12 +222,50 @@ class AllotmentActionViewSet(ViewSet):
                     })
                     continue
 
-                # Check if available CIF FC (balance_cif_fc) is sufficient
-                available_cif = license_item.balance_cif_fc
+                # Check if available CIF FC is sufficient
+                # CRITICAL: For restricted items, use available_value (maintained by update_restriction_balances)
+                # For non-restricted items OR exception licenses (098/2009, Conversion), use calculated balance_cif_fc
+
+                # Get calculated balance
+                balance_cif_fc = Decimal(str(license_item.balance_cif_fc or 0))
+
+                # Check if license is exception (098/2009 or Conversion)
+                is_exception = (
+                    license_item.license and (
+                        license_item.license.notification_number == "098/2009" or
+                        license_item.license.purchase_status == "CO"
+                    )
+                )
+
+                # Check if item has restrictions
+                has_restriction = license_item.items.filter(
+                    head__is_restricted=True,
+                    head__restriction_norm__isnull=False,
+                    head__restriction_percentage__gt=0
+                ).exists()
+
+                # Determine which value to use
+                if has_restriction and not is_exception:
+                    # Restricted item, non-exception license: use stored available_value
+                    stored_available = Decimal(str(license_item.available_value or 0))
+                    # If available_value is not set (0 or NULL), fall back to balance_cif_fc
+                    if stored_available > 0:
+                        available_cif = stored_available
+                    else:
+                        # Not yet processed by update_restriction_balances, use calculated
+                        available_cif = balance_cif_fc
+                else:
+                    # Non-restricted item OR exception license: use calculated balance_cif_fc
+                    available_cif = balance_cif_fc
+
+                # CRITICAL: available_cif can NEVER exceed balance_cif_fc
+                if available_cif > balance_cif_fc:
+                    available_cif = balance_cif_fc
+
                 if available_cif < cif_fc:
                     errors.append({
                         'item_id': item_id,
-                        'error': f'Insufficient available CIF FC. Available: {available_cif}, Requested: {cif_fc}'
+                        'error': f'Insufficient available CIF FC. Available: {available_cif:.2f}, Requested: {cif_fc}'
                     })
                     continue
 

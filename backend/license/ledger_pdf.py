@@ -56,34 +56,36 @@ def generate_license_ledger_pdf(license_obj):
     # Calculate license-level balance (use centralized method)
     license_balance_cif = Decimal(str(license_obj.get_balance_cif or 0))
 
-    # Check if license has 10% restriction and calculate remaining restriction balance
-    is_restricted = False
-    restriction_balance = Decimal('0')
+    # Check if license has restrictions and calculate remaining restriction balance for each percentage
+    restriction_balances = {}  # {percentage: balance}
+    total_export_cif = license_obj._calculate_license_credit()
 
-    # Check if any import items have restricted heads
+    # Get all unique restriction percentages from import items
     for item in license_obj.import_license.all():
-        if item.items.filter(head__is_restricted=True, head__restriction_percentage__gt=0).exists():
-            is_restricted = True
-            # Get the restriction percentage from the first restricted head
-            first_restricted = item.items.filter(head__is_restricted=True, head__restriction_percentage__gt=0).first()
-            if first_restricted and first_restricted.head:
-                restriction_pct = Decimal(str(first_restricted.head.restriction_percentage or 0))
-                # Calculate total restricted CIF (total export CIF × restriction percentage)
-                total_export_cif = license_obj._calculate_license_credit()
-                total_restricted_cif = (total_export_cif * restriction_pct / Decimal('100'))
+        restricted_items = item.items.filter(head__is_restricted=True, head__restriction_percentage__gt=0)
+        for restricted_item in restricted_items:
+            if restricted_item.head:
+                restriction_pct = Decimal(str(restricted_item.head.restriction_percentage or 0))
 
-                # Calculate debits and allotments for restricted items
-                restricted_debits = Decimal('0')
-                restricted_allotments = Decimal('0')
-                for imp_item in license_obj.import_license.all():
-                    if imp_item.items.filter(head__is_restricted=True, head__restriction_percentage__gt=0).exists():
-                        restricted_debits += imp_item._calculate_item_debit()
-                        restricted_allotments += imp_item._calculate_item_allotment()
+                if restriction_pct not in restriction_balances:
+                    # Calculate total restricted CIF (total export CIF × restriction percentage)
+                    total_restricted_cif = (total_export_cif * restriction_pct / Decimal('100'))
 
-                # Remaining restriction balance after debits and allotments
-                restriction_balance = total_restricted_cif - restricted_debits - restricted_allotments
-                restriction_balance = restriction_balance if restriction_balance >= Decimal('0') else Decimal('0')
-                break
+                    # Calculate debits and allotments for items with this restriction percentage
+                    restricted_debits = Decimal('0')
+                    restricted_allotments = Decimal('0')
+                    for imp_item in license_obj.import_license.all():
+                        item_has_this_restriction = imp_item.items.filter(
+                            head__is_restricted=True,
+                            head__restriction_percentage=restriction_pct
+                        ).exists()
+                        if item_has_this_restriction:
+                            restricted_debits += imp_item._calculate_item_debit()
+                            restricted_allotments += imp_item._calculate_item_allotment()
+
+                    # Remaining restriction balance after debits and allotments
+                    restriction_balance = total_restricted_cif - restricted_debits - restricted_allotments
+                    restriction_balances[restriction_pct] = restriction_balance if restriction_balance >= Decimal('0') else Decimal('0')
 
     # License Information Header
     license_header_style = ParagraphStyle('LicenseHeaderStyle', parent=styles['Normal'], fontSize=9, leading=11, fontName='Helvetica-Bold')
@@ -94,14 +96,34 @@ def generate_license_ledger_pdf(license_obj):
         ['Exporter:', license_obj.exporter.name if license_obj.exporter else 'N/A', 'Expiry Date:',
          license_obj.license_expiry_date.strftime('%d-%b-%Y') if license_obj.license_expiry_date else 'N/A'],
         ['Notification:', license_obj.notification_number, 'Purchase Status:', license_obj.purchase_status],
+        ['Total CIF FC:', f"{total_export_cif:.2f}", '', ''],
     ]
 
-    if is_restricted:
+    # Add balance row with restriction balances if any
+    if restriction_balances:
+        # Sort restriction percentages for consistent display (2%, 3%, 5%, etc.)
+        sorted_restrictions = sorted(restriction_balances.items())
+
+        # Build label with all restriction percentages
+        restriction_labels = []
+        restriction_values_list = []
+        for pct, balance in sorted_restrictions:
+            pct_int = int(pct) if pct == int(pct) else pct
+            restriction_labels.append(f"{pct_int}% Restriction Balance:")
+            restriction_values_list.append(f"{balance:.2f}")
+
+        # Use Paragraph to show all restrictions in multiple lines
+        restriction_label_text = '<br/>'.join(restriction_labels)
+        restriction_value_text = '<br/>'.join(restriction_values_list)
+
+        # Create style for values as well
+        value_style = ParagraphStyle('ValueStyle', parent=styles['Normal'], fontSize=9, leading=11)
+
         license_info.append([
             'Balance CIF FC:',
             f"{license_balance_cif:.2f}",
-            Paragraph('10% Restriction<br/>Balance:', license_header_style),
-            f"{restriction_balance:.2f}"
+            Paragraph(restriction_label_text, license_header_style),
+            Paragraph(restriction_value_text, value_style)
         ])
     else:
         license_info.append(['Balance CIF FC:', f"{license_balance_cif:.2f}", '', ''])

@@ -1,4 +1,4 @@
-import {useEffect, useState, useCallback} from "react";
+import {useEffect, useState, useCallback, useRef} from "react";
 import {Link, useParams, useLocation, useNavigate} from "react-router-dom";
 import api from "../../api/axios";
 import AdvancedFilter from "../../components/AdvancedFilter";
@@ -56,6 +56,7 @@ export default function MasterList() {
     };
 
     const [filterParams, setFilterParams] = useState(getDefaultFilters());
+    const backendDefaultsApplied = useRef(false);
 
     const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
         setLoading(true);
@@ -84,7 +85,8 @@ export default function MasterList() {
                 ordering_fields: response.ordering_fields || [],
                 nested_field_defs: response.nested_field_defs || {},
                 nested_list_display: response.nested_list_display || {},
-                field_meta: response.field_meta || {}
+                field_meta: response.field_meta || {},
+                default_filters: response.default_filters || {}
             });
 
             // Pagination
@@ -105,18 +107,52 @@ export default function MasterList() {
     // Load data only when entityName changes
     useEffect(() => {
         if (!entityName) return;
+
+        // Reset the backend defaults flag when entity changes
+        backendDefaultsApplied.current = false;
+
         setCurrentPage(1);
         const defaultFilters = getDefaultFilters();
         setFilterParams(defaultFilters);
-        fetchData(1, 25, defaultFilters);
+
+        // For entities with hardcoded defaults (allotments, BOE), fetch immediately
+        // For others (licenses), we'll wait for backend defaults
+        if (Object.keys(defaultFilters).length > 0) {
+            backendDefaultsApplied.current = true; // Mark as applied for hardcoded defaults
+            fetchData(1, 25, defaultFilters);
+        } else {
+            // Fetch without filters first to get metadata
+            fetchData(1, 25, {});
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entityName]);
 
-    const handleFilterChange = (filters) => {
+    // Apply backend default filters when metadata is loaded (for licenses)
+    useEffect(() => {
+        // Skip if we've already applied backend defaults for this entity
+        if (backendDefaultsApplied.current) return;
+
+        const backendDefaults = metadata.default_filters || {};
+        const hardcodedDefaults = getDefaultFilters();
+
+        // Only apply backend defaults if we have them and no hardcoded defaults
+        if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
+            // Mark as applied to prevent re-application
+            backendDefaultsApplied.current = true;
+
+            // Apply backend defaults and refetch data
+            setFilterParams(backendDefaults);
+            setCurrentPage(1);
+            fetchData(1, pageSize, backendDefaults);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [metadata.default_filters]);
+
+    const handleFilterChange = useCallback((filters) => {
         setFilterParams(filters);
         setCurrentPage(1);
         fetchData(1, pageSize, filters);
-    };
+    }, [fetchData, pageSize]);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
@@ -259,6 +295,7 @@ export default function MasterList() {
                 searchFields={metadata.search_fields || []}
                 onFilterChange={handleFilterChange}
                 initialFilters={filterParams}
+                defaultFilters={metadata.default_filters || {}}
             />
 
             {/* Table */}

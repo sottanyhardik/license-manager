@@ -148,6 +148,7 @@ class MasterViewSet(viewsets.ModelViewSet):
             "nested_field_defs": config.get("nested_field_defs", {}),
             "nested_list_display": config.get("nested_list_display", {}),
             "field_meta": config.get("field_meta", {}),
+            "default_filters": config.get("default_filters", {}),
         }
 
         # --- Dynamically create the subclass ---
@@ -165,6 +166,7 @@ class MasterViewSet(viewsets.ModelViewSet):
             nested_list_display = attrs["nested_list_display"]
             field_meta = attrs["field_meta"]
             model_name = attrs["model_name"]
+            default_filters = attrs["default_filters"]
 
             def get_queryset(self):
                 """
@@ -383,6 +385,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                     "nested_field_defs": getattr(self, "nested_field_defs", {}),
                     "nested_list_display": getattr(self, "nested_list_display", {}),
                     "field_meta": getattr(self, "field_meta", {}),
+                    "default_filters": getattr(self, "default_filters", {}),
 
                     # Pagination metadata
                     "total_pages": total_pages,

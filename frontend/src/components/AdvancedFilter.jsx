@@ -17,18 +17,28 @@ import Select from "react-select";
  * - searchFields: array of searchable fields
  * - onFilterChange: callback function(filterParams)
  */
-export default function AdvancedFilter({filterConfig = {}, searchFields = [], onFilterChange, initialFilters = {}}) {
+export default function AdvancedFilter({filterConfig = {}, searchFields = [], onFilterChange, initialFilters = {}, defaultFilters = {}}) {
     const [searchTerm, setSearchTerm] = useState("");
-    const [filterValues, setFilterValues] = useState(initialFilters);
+    // Merge default filters with initial filters - defaultFilters are fallback values
+    const [filterValues, setFilterValues] = useState({...defaultFilters, ...initialFilters});
     const isInitialMount = useRef(true);
+    const prevInitialFilters = useRef(initialFilters);
 
-    // Update filterValues when initialFilters change (only on mount)
+    // Update filterValues when initialFilters change - but only if they actually changed
     useEffect(() => {
+        // On initial mount, don't update (already set in useState)
         if (isInitialMount.current) {
             isInitialMount.current = false;
-            setFilterValues(initialFilters);
+            prevInitialFilters.current = initialFilters;
+            return;
         }
-    }, [initialFilters]);
+
+        // Only update if initialFilters actually changed (not just a re-render)
+        if (JSON.stringify(prevInitialFilters.current) !== JSON.stringify(initialFilters)) {
+            prevInitialFilters.current = initialFilters;
+            setFilterValues({...defaultFilters, ...initialFilters});
+        }
+    }, [initialFilters, defaultFilters]);
 
     // Auto-apply filters with debounce
     useEffect(() => {
@@ -48,11 +58,10 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
             });
 
             onFilterChange(params);
-        }, 800); // 800ms debounce
+        }, 500); // Reduced from 800ms to 500ms for better responsiveness
 
         return () => clearTimeout(timeoutId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchTerm, filterValues]);
+    }, [searchTerm, filterValues, onFilterChange]);
 
     const handleSearchChange = (e) => {
         setSearchTerm(e.target.value);
@@ -304,7 +313,8 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
     }
 
     return (
-        <div className="mb-3">
+        <div className="mb-4">
+
             {/* Search Bar on Top */}
             {searchFields.length > 0 && (
                 <div className="mb-3">

@@ -40,7 +40,8 @@ license_nested_field_defs = {
     ],
 }
 
-LicenseDetailsViewSet = MasterViewSet.create(
+# Create base viewset
+_LicenseDetailsViewSetBase = MasterViewSet.create(
     LicenseDetailsModel,
     LicenseDetailsSerializer,
     config={
@@ -56,6 +57,10 @@ LicenseDetailsViewSet = MasterViewSet.create(
             "license_expiry_date": {"type": "date_range"},
             "is_expired": {"type": "exact"},
             "is_null": {"type": "exact"},
+        },
+        "default_filters": {
+            "is_expired": "False",
+            "is_null": "False"
         },
         "list_display": [
             "license_number",
@@ -122,3 +127,56 @@ LicenseDetailsViewSet = MasterViewSet.create(
         }
     }
 )
+
+
+# Extend the base viewset to add custom filter logic for is_expired and is_null
+class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
+    """
+    Custom license viewset with special handling for is_expired and is_null filters.
+
+    Filter Logic:
+    - is_expired: True when license_expiry_date < today, False when license_expiry_date >= today
+    - is_null: True when balance_cif < 200, False when balance_cif >= 200
+    """
+
+    def apply_advanced_filters(self, qs, params, filter_config):
+        """Override to add custom logic for is_expired and is_null."""
+        from datetime import date
+        from django.db.models import Q
+
+        # Handle is_expired filter
+        is_expired_value = params.get('is_expired')
+        if is_expired_value is not None and is_expired_value != "":
+            today = date.today()
+            if is_expired_value in ("True", "true", "1", True):
+                # Show expired licenses: expiry_date < today
+                qs = qs.filter(license_expiry_date__lt=today)
+            elif is_expired_value in ("False", "false", "0", False):
+                # Show non-expired licenses: expiry_date >= today OR null
+                qs = qs.filter(Q(license_expiry_date__gte=today) | Q(license_expiry_date__isnull=True))
+
+        # Handle is_null filter
+        is_null_value = params.get('is_null')
+        if is_null_value is not None and is_null_value != "":
+            if is_null_value in ("True", "true", "1", True):
+                # Show null licenses: balance_cif < 200
+                qs = qs.filter(balance_cif__lt=200)
+            elif is_null_value in ("False", "false", "0", False):
+                # Show non-null licenses: balance_cif >= 200
+                qs = qs.filter(balance_cif__gte=200)
+
+        # Call parent method for remaining filters (exclude is_expired and is_null from parent processing)
+        # Create a new QueryDict-like object without is_expired and is_null
+        from django.http import QueryDict
+        filtered_params = QueryDict(mutable=True)
+        for key, value in params.items():
+            if key not in ('is_expired', 'is_null'):
+                filtered_params[key] = value
+
+        # Create a copy of filter_config without is_expired and is_null
+        filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null')}
+
+        # Call parent method with filtered params and config
+        qs = super().apply_advanced_filters(qs, filtered_params, filtered_config)
+
+        return qs

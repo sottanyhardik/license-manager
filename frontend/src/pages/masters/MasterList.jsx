@@ -161,28 +161,31 @@ export default function MasterList() {
                 apiPath = `/masters/${entityName}/export/`;
             }
 
-            const response = await api.get(apiPath, {
-                params,
-                responseType: 'blob'
-            });
-
-            // For PDF, open in new tab; for Excel, download
-            const blob = new Blob([response.data], {
-                type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            });
-            const url = window.URL.createObjectURL(blob);
-
             if (format === 'pdf') {
-                // Open PDF in new tab
-                window.open(url, '_blank');
+                // For PDF, open direct API URL in new tab (allows refresh)
+                const queryString = new URLSearchParams(params).toString();
+                const baseURL = (api.defaults.baseURL || 'http://127.0.0.1:8000/api').replace(/\/$/, '');
+                const cleanApiPath = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+                const fullUrl = `${baseURL}${cleanApiPath}?${queryString}`;
+                window.open(fullUrl, '_blank');
             } else {
-                // Download Excel file
+                // For Excel, download as before
+                const response = await api.get(apiPath, {
+                    params,
+                    responseType: 'blob'
+                });
+
+                const blob = new Blob([response.data], {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                });
+                const url = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
                 link.setAttribute('download', `${entityName}_${new Date().toISOString().split('T')[0]}.${format}`);
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
+                window.URL.revokeObjectURL(url);
             }
         } catch (err) {
             alert(err.response?.data?.detail || `Failed to export as ${format.toUpperCase()}`);

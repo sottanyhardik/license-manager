@@ -6,6 +6,8 @@ from io import BytesIO
 from django.http import HttpResponse
 from rest_framework.decorators import action
 
+from core.utils.pdf_utils import create_pdf_exporter
+
 try:
     import openpyxl
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -13,18 +15,6 @@ try:
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
-
-try:
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-
-    REPORTLAB_AVAILABLE = True
-except ImportError:
-    REPORTLAB_AVAILABLE = False
 
 
 def add_grouped_export_action(viewset_class):
@@ -69,38 +59,20 @@ def add_grouped_export_action(viewset_class):
             return HttpResponse("Invalid export format. Use 'pdf' or 'xlsx'.", status=400)
 
     def _export_grouped_pdf(self, queryset):
-        """Export grouped bill of entries to PDF"""
-        if not REPORTLAB_AVAILABLE:
+        """Export grouped bill of entries to PDF with business-level presentation"""
+        pdf_exporter = create_pdf_exporter(
+            title="Bill of Entry Report",
+            filename_prefix="Bill_of_Entries",
+            orientation='landscape'
+        )
+
+        if not pdf_exporter:
             return HttpResponse("PDF export not available", status=500)
 
         # Group data
         grouped_data = self._group_boe(queryset)
 
-        # Create PDF
-        response = HttpResponse(content_type='application/pdf')
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'Bill_of_Entries_{timestamp}.pdf'
-        response['Content-Disposition'] = f'inline; filename="{filename}"'
-
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                                topMargin=0.5 * inch, bottomMargin=0.5 * inch,
-                                leftMargin=0.3 * inch, rightMargin=0.3 * inch)
-
-        elements = []
-        styles = getSampleStyleSheet()
-
-        # Title
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=16,
-            textColor=colors.black,
-            spaceAfter=6,
-            alignment=TA_CENTER
-        )
-
-        # Calculate totals
+        # Calculate grand totals
         total_inr = sum(boe['total_inr']
                         for company in grouped_data.values()
                         for product in company.values()
@@ -112,18 +84,26 @@ def add_grouped_export_action(viewset_class):
                        for port in product.values()
                        for boe in port)
 
-        elements.append(Paragraph("Bill of Entry Report", title_style))
-        elements.append(Paragraph(
-            f"Total INR: ₹{total_inr:,.2f} &nbsp;&nbsp;&nbsp; Total FC: ${total_fc:,.2f} &nbsp;&nbsp;&nbsp; {datetime.now().strftime('%d-%m-%Y')}",
-            ParagraphStyle('subtitle', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER)))
-        elements.append(Spacer(1, 12))
+        # Create PDF response - inline display for new tab
+        response = HttpResponse(content_type='application/pdf')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'BOE_Report_{timestamp}.pdf'
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+
+        buffer = BytesIO()
+        doc = pdf_exporter.create_document(buffer)
+
+        elements = []
+
+        # Add title with totals
+        subtitle = (f"Total CIF (FC): ${pdf_exporter.format_number(total_fc)} | "
+                    f"Total CIF (INR): {pdf_exporter.format_number(total_inr)}")
+        pdf_exporter.add_title(elements, subtitle=subtitle)
 
         # Process each company
         for company_name, products_dict in grouped_data.items():
             # Company header
-            elements.append(Paragraph(f"<b>{company_name}</b>",
-                                      ParagraphStyle('company', parent=styles['Heading2'], fontSize=12)))
-            elements.append(Spacer(1, 6))
+            pdf_exporter.add_company_header(elements, company_name)
 
             # Track company totals
             company_total_qty = 0
@@ -133,123 +113,117 @@ def add_grouped_export_action(viewset_class):
             # Process each product (Item) within company
             for product_name, ports_dict in products_dict.items():
                 # Product/Item subheader
-                elements.append(Paragraph(f"Item: <b>{product_name}</b>",
-                                          ParagraphStyle('product', parent=styles['Normal'], fontSize=10,
-                                                         textColor=colors.blue)))
-                elements.append(Spacer(1, 3))
+                pdf_exporter.add_section_header(elements, f"Item: {product_name}")
 
-                # Table header - 15 columns (removed BOE column)
+                # Table header - 16 columns (added Total CIF INR)
                 table_data = [[
-                    'Sr No', 'BOE Date', 'Port', 'Quantity\n(KGS)', 'Unit Price ($)', 'Value ($)',
-                    'Item Name', 'Invoice', 'License No.', 'BOE Date', 'BOE Port',
-                    'Item Sr.', 'BOE Qty.', 'BOE $.', 'BOE CIF'
+                    'Sr\nNo', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
+                    'Unit\nPrice ($)', 'Value\n($)', 'Total CIF\nINR', 'Item\nName', 'Invoice',
+                    'License\nNo.', 'BOE\nDate', 'BOE\nPort', 'Item\nSr.',
+                    'BOE\nQty.', 'BOE\n$.', 'BOE\nCIF'
                 ]]
 
                 sr_no = 1
                 product_total_qty = 0
                 product_total_value = 0
+                product_total_inr = 0
 
                 # Process each port within product
                 for port_code, boe_list in ports_dict.items():
                     for boe in boe_list:
-                        # Main BOE row (first license detail or summary)
+                        # Main BOE row (first license detail)
                         if boe['license_details']:
                             first_detail = boe['license_details'][0]
 
                             table_data.append([
-                                sr_no,
+                                str(sr_no),
                                 boe['boe_date'],
                                 port_code,
-                                f"{int(boe['total_quantity']):,}",
-                                f"{(boe['total_fc'] / boe['total_quantity'] if boe['total_quantity'] > 0 else 0):.2f}",
-                                f"{boe['total_fc']:,.2f}",
+                                pdf_exporter.format_number(boe['total_quantity'], decimals=0),
+                                pdf_exporter.format_number(
+                                    boe['total_fc'] / boe['total_quantity'] if boe['total_quantity'] > 0 else 0
+                                ),
+                                pdf_exporter.format_number(boe['total_fc']),
+                                pdf_exporter.format_number(boe['total_inr']),  # Remove Rupee symbol
                                 product_name,
                                 boe['invoice_no'],
                                 first_detail['license_no'],
                                 boe['boe_date'],
                                 port_code,
                                 first_detail['item_sr_no'],
-                                f"{int(first_detail['qty']):,}",
-                                f"{first_detail['cif_fc']:,.2f}",
-                                f"{first_detail['cif_inr']:,.2f}"
+                                pdf_exporter.format_number(first_detail['qty'], decimals=0),
+                                pdf_exporter.format_number(first_detail['cif_fc']),
+                                pdf_exporter.format_number(first_detail['cif_inr'])
                             ])
 
                             # Additional license detail rows (if multiple licenses)
                             for detail in boe['license_details'][1:]:
                                 table_data.append([
-                                    '', '', '', '', '', '',  # Empty columns for main BOE info
-                                    '', '',  # Item Name, Invoice (removed BOE column)
+                                    '', '', '', '', '', '', '',  # Empty main BOE info columns
+                                    '', '',  # Item Name, Invoice
                                     detail['license_no'],
                                     boe['boe_date'],
                                     port_code,
                                     detail['item_sr_no'],
-                                    f"{int(detail['qty']):,}",
-                                    f"{detail['cif_fc']:,.2f}",
-                                    f"{detail['cif_inr']:,.2f}"
+                                    pdf_exporter.format_number(detail['qty'], decimals=0),
+                                    pdf_exporter.format_number(detail['cif_fc']),
+                                    pdf_exporter.format_number(detail['cif_inr'])
                                 ])
 
                         sr_no += 1
                         product_total_qty += boe['total_quantity']
                         product_total_value += boe['total_fc']
+                        product_total_inr += boe['total_inr']
                         company_total_qty += boe['total_quantity']
                         company_total_inr += boe['total_inr']
                         company_total_fc += boe['total_fc']
 
                 # Add product totals row
                 table_data.append([
-                    '', '', 'Total\nQuantity', f"{int(product_total_qty):,}",
-                    'Total USD $', f"{product_total_value:,.2f}",
+                    '', '', 'Total', pdf_exporter.format_number(product_total_qty, decimals=0),
+                    '', pdf_exporter.format_number(product_total_value),
+                    pdf_exporter.format_number(product_total_inr),
                     '', '', '', '', '', '', '', '', ''
                 ])
 
-                # Create table with column widths (15 columns - removed BOE column)
-                col_widths = [0.3 * inch, 0.6 * inch, 0.5 * inch, 0.6 * inch, 0.6 * inch, 0.6 * inch,
-                              0.8 * inch, 0.7 * inch, 0.7 * inch, 0.6 * inch, 0.5 * inch,
-                              0.4 * inch, 0.6 * inch, 0.6 * inch, 0.6 * inch]
+                # Create table with column widths (16 columns) - increased width for CIF INR column
+                from reportlab.lib.units import inch
+                col_widths = [0.35 * inch, 0.65 * inch, 0.55 * inch, 0.65 * inch, 0.65 * inch, 0.7 * inch,
+                              0.85 * inch, 1.0 * inch, 0.8 * inch, 0.75 * inch, 0.65 * inch, 0.55 * inch,
+                              0.45 * inch, 0.65 * inch, 0.65 * inch, 0.7 * inch]
 
-                # Enable table splitting across pages with repeatRows for header
-                table = Table(table_data, colWidths=col_widths, repeatRows=1, splitByRow=True)
+                table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1)
 
-                # Build table styles
-                table_styles = [
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 7),
-                    ('FONTSIZE', (0, 1), (-1, -1), 6),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
-                    ('TOPPADDING', (0, 1), (-1, -1), 2),
-                    ('BOTTOMPADDING', (0, 1), (-1, -1), 2),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-                    ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                ]
+                # Apply number column alignment for columns: 3, 4, 5, 6, 13, 14, 15 (0-indexed)
+                from reportlab.platypus import TableStyle
+                additional_styles = []
+                for col_idx in [3, 4, 5, 6, 13, 14, 15]:
+                    additional_styles.append(
+                        ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
+                    )
 
-                table.setStyle(TableStyle(table_styles))
+                # Bold the last row (totals)
+                additional_styles.append(('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'))
+                additional_styles.append(('BACKGROUND', (0, -1), (-1, -1), pdf_exporter.HEADER_BG))
+
+                # Apply additional styles
+                table.setStyle(TableStyle(additional_styles))
+
                 elements.append(table)
-                elements.append(Spacer(1, 12))
+                pdf_exporter.add_spacer(elements, 0.15)
 
-            # Add company total after all products
-            company_total_table = Table([[
-                'Company Total:', f"Quantity: {int(company_total_qty):,}",
-                f"FC (USD): ${company_total_fc:,.2f}", f"INR: ₹{company_total_inr:,.2f}"
-            ]], colWidths=[2 * inch, 2 * inch, 2 * inch, 2 * inch])
-            company_total_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), colors.lightblue),
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('TOPPADDING', (0, 0), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ]))
-            elements.append(company_total_table)
-            elements.append(Spacer(1, 20))
+            # Add company total summary
+            summary_data = [[
+                'Company Total:',
+                f"Qty: {pdf_exporter.format_number(company_total_qty, decimals=0)} KGS",
+                f"CIF (FC): ${pdf_exporter.format_number(company_total_fc)}",
+                f"CIF (INR): {pdf_exporter.format_number(company_total_inr)}"
+            ]]
+            summary_table = pdf_exporter.create_summary_table(summary_data)
+            elements.append(summary_table)
+            pdf_exporter.add_spacer(elements, 0.3)
 
+        # Build PDF
         doc.build(elements)
         pdf = buffer.getvalue()
         buffer.close()
@@ -272,7 +246,7 @@ def add_grouped_export_action(viewset_class):
 
         # Styles
         header_font = Font(bold=True, color="FFFFFF")
-        header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+        header_fill = PatternFill(start_color="1e3a8a", end_color="1e3a8a", fill_type="solid")
         border = Border(
             left=Side(style='thin'),
             right=Side(style='thin'),
@@ -283,10 +257,10 @@ def add_grouped_export_action(viewset_class):
         row = 1
 
         # Title
-        ws.merge_cells(f'A{row}:O{row}')
+        ws.merge_cells(f'A{row}:P{row}')
         cell = ws[f'A{row}']
         cell.value = "Bill of Entry Report"
-        cell.font = Font(bold=True, size=16)
+        cell.font = Font(bold=True, size=16, color="1e3a8a")
         cell.alignment = Alignment(horizontal='center')
         row += 1
 
@@ -301,7 +275,7 @@ def add_grouped_export_action(viewset_class):
                        for product in company.values()
                        for port in product.values()
                        for boe in port)
-        ws.merge_cells(f'A{row}:O{row}')
+        ws.merge_cells(f'A{row}:P{row}')
         cell = ws[f'A{row}']
         cell.value = f"Total INR: ₹{total_inr:,.2f}    Total FC: ${total_fc:,.2f}    {datetime.now().strftime('%d-%m-%Y')}"
         cell.alignment = Alignment(horizontal='center')
@@ -310,28 +284,31 @@ def add_grouped_export_action(viewset_class):
         # Process each company
         for company_name, products_dict in grouped_data.items():
             # Company header
-            ws.merge_cells(f'A{row}:O{row}')
+            ws.merge_cells(f'A{row}:P{row}')
             cell = ws[f'A{row}']
             cell.value = company_name
-            cell.font = Font(bold=True, size=14)
+            cell.font = Font(bold=True, size=14, color="FFFFFF")
+            cell.fill = PatternFill(start_color="1e3a8a", end_color="1e3a8a", fill_type="solid")
+            cell.alignment = Alignment(horizontal='center', vertical='center')
             row += 1
 
             # Track company totals
             company_total_qty = 0
-            company_total_value = 0
+            company_total_inr = 0
+            company_total_fc = 0
 
             # Process each product (Item) within company
             for product_name, ports_dict in products_dict.items():
                 # Product subheader
-                ws.merge_cells(f'A{row}:O{row}')
+                ws.merge_cells(f'A{row}:P{row}')
                 cell = ws[f'A{row}']
                 cell.value = f"Item: {product_name}"
-                cell.font = Font(bold=True, size=11, color="0000FF")
+                cell.font = Font(bold=True, size=11, color="3b82f6")
                 row += 1
 
-                # Table headers - 16 columns matching allotment structure
+                # Table headers (16 columns - added Total CIF INR)
                 headers = ['Sr No', 'BOE Date', 'Port', 'Quantity (KGS)', 'Unit Price ($)', 'Value ($)',
-                           'Item Name', 'Invoice', 'License No.', 'BOE Date', 'BOE Port',
+                           'Total CIF INR', 'Item Name', 'Invoice', 'License No.', 'BOE Date', 'BOE Port',
                            'Item Sr.', 'BOE Qty.', 'BOE $.', 'BOE CIF']
 
                 # Write headers
@@ -339,13 +316,14 @@ def add_grouped_export_action(viewset_class):
                     cell = ws.cell(row=row, column=col_idx, value=header)
                     cell.font = header_font
                     cell.fill = header_fill
-                    cell.alignment = Alignment(horizontal='center', wrap_text=True)
+                    cell.alignment = Alignment(horizontal='center', wrap_text=True, vertical='center')
                     cell.border = border
                 row += 1
 
                 sr_no = 1
                 product_total_qty = 0
                 product_total_value = 0
+                product_total_inr = 0
 
                 # Process each port within product
                 for port_code, boe_list in ports_dict.items():
@@ -354,14 +332,15 @@ def add_grouped_export_action(viewset_class):
                             first_detail = boe['license_details'][0]
                             unit_price = boe['total_fc'] / boe['total_quantity'] if boe['total_quantity'] > 0 else 0
 
-                            # Main BOE row
+                            # Main BOE row (16 columns)
                             data = [
                                 sr_no,
                                 boe['boe_date'],
                                 port_code,
                                 int(boe['total_quantity']),
-                                unit_price,
-                                boe['total_fc'],
+                                round(unit_price, 2),
+                                round(boe['total_fc'], 2),
+                                round(boe['total_inr'], 2),  # Total CIF INR
                                 product_name,
                                 boe['invoice_no'],
                                 first_detail['license_no'],
@@ -369,67 +348,86 @@ def add_grouped_export_action(viewset_class):
                                 port_code,
                                 first_detail['item_sr_no'],
                                 int(first_detail['qty']),
-                                first_detail['cif_fc'],
-                                first_detail['cif_inr']
+                                round(first_detail['cif_fc'], 2),
+                                round(first_detail['cif_inr'], 2)
                             ]
 
                             for col_idx, value in enumerate(data, 1):
                                 cell = ws.cell(row=row, column=col_idx, value=value)
                                 cell.border = border
                                 cell.alignment = Alignment(horizontal='center', vertical='center')
-                                if col_idx in [4, 5, 6, 13, 14, 15]:  # Number columns
+                                if col_idx in [4, 5, 6, 7, 14, 15, 16]:  # Number columns
                                     cell.alignment = Alignment(horizontal='right', vertical='center')
+                                    if col_idx in [5, 6, 15]:  # USD columns
+                                        cell.number_format = '#,##0.00'
+                                    elif col_idx in [7, 16]:  # INR columns
+                                        cell.number_format = '₹#,##0.00'
                             row += 1
 
                             # Additional license detail rows
                             for detail in boe['license_details'][1:]:
                                 data = [
-                                    '', '', '', '', '', '',  # Empty main BOE columns
-                                    '', '',  # Item Name, Invoice, BOE
+                                    '', '', '', '', '', '', '',  # Empty main BOE columns
+                                    '', '',  # Item Name, Invoice
                                     detail['license_no'],
                                     boe['boe_date'],
                                     port_code,
                                     detail['item_sr_no'],
                                     int(detail['qty']),
-                                    detail['cif_fc'],
-                                    detail['cif_inr']
+                                    round(detail['cif_fc'], 2),
+                                    round(detail['cif_inr'], 2)
                                 ]
 
                                 for col_idx, value in enumerate(data, 1):
                                     cell = ws.cell(row=row, column=col_idx, value=value)
                                     cell.border = border
                                     cell.alignment = Alignment(horizontal='center', vertical='center')
-                                    if col_idx in [13, 14, 15]:
+                                    if col_idx in [14, 15, 16]:
                                         cell.alignment = Alignment(horizontal='right', vertical='center')
+                                        if col_idx in [15, 16]:
+                                            cell.number_format = '#,##0.00'
                                 row += 1
 
                         sr_no += 1
                         product_total_qty += boe['total_quantity']
                         product_total_value += boe['total_fc']
+                        product_total_inr += boe['total_inr']
                         company_total_qty += boe['total_quantity']
-                        company_total_value += boe['total_fc']
+                        company_total_inr += boe['total_inr']
+                        company_total_fc += boe['total_fc']
 
                 # Product totals
-                ws.cell(row=row, column=3, value="Total Quantity").font = Font(bold=True)
+                ws.cell(row=row, column=3, value="Total").font = Font(bold=True)
                 ws.cell(row=row, column=4, value=int(product_total_qty)).font = Font(bold=True)
-                ws.cell(row=row, column=5, value="Total USD $").font = Font(bold=True)
-                ws.cell(row=row, column=6, value=product_total_value).font = Font(bold=True)
+                ws.cell(row=row, column=4).number_format = '#,##0'
+                ws.cell(row=row, column=6, value=round(product_total_value, 2)).font = Font(bold=True)
+                ws.cell(row=row, column=6).number_format = '#,##0.00'
+                ws.cell(row=row, column=7, value=round(product_total_inr, 2)).font = Font(bold=True)
+                ws.cell(row=row, column=7).number_format = '₹#,##0.00'
                 row += 2
 
             # Add company total after all products
             ws.merge_cells(f'A{row}:B{row}')
             cell = ws.cell(row=row, column=1, value="Company Total:")
-            cell.font = Font(bold=True, size=12)
-            cell.fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')
+            cell.font = Font(bold=True, size=12, color="1e3a8a")
+            cell.fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
-            ws.cell(row=row, column=4, value=int(company_total_qty)).font = Font(bold=True, size=12)
-            ws.cell(row=row, column=4).fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')
-            ws.cell(row=row, column=4).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=row, column=4, value=int(company_total_qty)).font = Font(bold=True, size=11)
+            ws.cell(row=row, column=4).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
+            ws.cell(row=row, column=4).alignment = Alignment(horizontal='right', vertical='center')
+            ws.cell(row=row, column=4).number_format = '#,##0'
 
-            ws.cell(row=row, column=6, value=company_total_value).font = Font(bold=True, size=12)
-            ws.cell(row=row, column=6).fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')
-            ws.cell(row=row, column=6).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=row, column=6, value=round(company_total_fc, 2)).font = Font(bold=True, size=11)
+            ws.cell(row=row, column=6).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
+            ws.cell(row=row, column=6).alignment = Alignment(horizontal='right', vertical='center')
+            ws.cell(row=row, column=6).number_format = '#,##0.00'
+
+            ws.merge_cells(f'H{row}:I{row}')
+            cell = ws.cell(row=row, column=8, value=f"CIF INR: ₹{company_total_inr:,.2f}")
+            cell.font = Font(bold=True, size=11, color="1e3a8a")
+            cell.fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
             row += 3
 
         # Auto-size columns

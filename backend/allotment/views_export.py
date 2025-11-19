@@ -21,6 +21,7 @@ try:
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from core.utils.pdf_utils import create_pdf_exporter
 
     REPORTLAB_AVAILABLE = True
 except ImportError:
@@ -77,29 +78,23 @@ def add_grouped_export_action(viewset_class):
         # Group data
         grouped_data = self._group_allotments(queryset)
 
-        # Create PDF
+        # Create PDF exporter
+        pdf_exporter = create_pdf_exporter(
+            title="Allotment Report",
+            filename_prefix="Pending_Allotments",
+            orientation='landscape'
+        )
+
+        # Create PDF response - inline display for new tab
         response = HttpResponse(content_type='application/pdf')
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'Pending_Allotments_{timestamp}.pdf'
+        filename = f'Allotment_Report_{timestamp}.pdf'
         response['Content-Disposition'] = f'inline; filename="{filename}"'
 
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                                topMargin=0.5 * inch, bottomMargin=0.5 * inch,
-                                leftMargin=0.3 * inch, rightMargin=0.3 * inch)
+        doc = pdf_exporter.create_document(buffer)
 
         elements = []
-        styles = getSampleStyleSheet()
-
-        # Title
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=16,
-            textColor=colors.black,
-            spaceAfter=6,
-            alignment=TA_CENTER
-        )
 
         # Calculate totals
         total_usd = sum(item['value'] for company in grouped_data.values()
@@ -107,22 +102,19 @@ def add_grouped_export_action(viewset_class):
                         for items in ports.values()
                         for item in items)
 
-        elements.append(Paragraph("Allotment Report", title_style))
-        elements.append(
-            Paragraph(f"Total USD $: {total_usd:,.2f} &nbsp;&nbsp;&nbsp; {datetime.now().strftime('%d-%m-%Y')}",
-                      ParagraphStyle('subtitle', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER)))
-        elements.append(Spacer(1, 12))
+        # Add title with subtitle
+        subtitle = f"Total USD $: {pdf_exporter.format_number(total_usd)}"
+        pdf_exporter.add_title(elements, subtitle=subtitle)
 
         # Process each company
         for company_name, items_dict in grouped_data.items():
             # Company header
-            elements.append(Paragraph(f"<b>{company_name}</b>",
-                                      ParagraphStyle('company', parent=styles['Heading2'], fontSize=12)))
-            elements.append(Spacer(1, 6))
+            pdf_exporter.add_company_header(elements, company_name)
 
             # Track company totals
             company_total_qty = 0
             company_total_value = 0
+            company_total_inr = 0
 
             # Process each item within company
             for item_name_key, ports_dict in items_dict.items():
@@ -133,142 +125,118 @@ def add_grouped_export_action(viewset_class):
 
                 # Item subheader (optional, can be styled differently)
                 if len(items_dict) > 1:  # Only show if multiple items
-                    elements.append(Paragraph(f"Item: {display_item_name}",
-                                              ParagraphStyle('item', parent=styles['Normal'], fontSize=12,
-                                                             textColor=colors.black)))
-                    elements.append(Spacer(1, 3))
+                    pdf_exporter.add_section_header(elements, f"Item: {display_item_name}")
 
                 # Process each port within item
                 for port_code, allotments in ports_dict.items():
-                    # Table header with DFIA columns
+                    # Table header with DFIA columns + Total CIF INR (removed BOE column)
                     table_data = [[
                         'Sr No', 'Allotment\nDate', 'Port', 'Quantity\n(KGS)',
-                        'Unit Price ($)', 'Value ($)', 'Item Name', 'Invoice', 'ETA', 'BOE',
+                        'Unit Price ($)', 'Value ($)', 'Total CIF\nINR', 'Item Name', 'Invoice', 'ETA',
                         'DFIA No.', 'DFIA Date', 'DFIA Port', 'Item Sr.', 'DFIA Qty.', 'DFIA $.', 'DFIA CIF'
                     ]]
 
                     sr_no = 1
+                    item_total_qty = 0
+                    item_total_value = 0
+                    item_total_inr = 0
+
                     for allot in allotments:
+                        allot_cif_inr = allot['value'] * allot.get('exchange_rate', 89.5)
+
                         # Add rows for each license detail
                         for idx, detail in enumerate(allot['details']):
-                            # Create Paragraph objects for long text fields to enable wrapping
                             item_name_text = allot.get('item_name', display_item_name)
                             invoice_text = allot['invoice']
 
-                            # Wrap long text in Paragraph for word wrapping
-                            item_name_para = Paragraph(item_name_text,
-                                                       ParagraphStyle('cell', parent=styles['Normal'], fontSize=7,
-                                                                      leading=8))
-                            invoice_para = Paragraph(invoice_text,
-                                                     ParagraphStyle('cell', parent=styles['Normal'], fontSize=7,
-                                                                    leading=8))
-
                             if idx == 0:
-                                # First license row: show allotment data + license data
+                                # First license row: show allotment data + license data (removed BOE column)
                                 table_data.append([
                                     sr_no,
                                     allot['date'],
                                     allot['port'],
-                                    f"{int(allot['quantity']):,}",
-                                    f"{allot['unit_price']:.2f}",
-                                    f"{allot['value']:,.2f}",
-                                    item_name_para,
-                                    invoice_para,
+                                    pdf_exporter.format_number(allot['quantity'], decimals=0),
+                                    pdf_exporter.format_number(allot['unit_price']),
+                                    pdf_exporter.format_number(allot['value']),
+                                    pdf_exporter.format_number(allot_cif_inr),
+                                    item_name_text,
+                                    invoice_text,
                                     allot['eta'],
-                                    'Yes' if allot.get('is_boe') else 'No',
                                     detail['dfia_no'],
                                     detail['dfia_date'],
                                     detail['dfia_port'],
                                     detail['item_sr_no'],
-                                    f"{int(detail['dfia_qty']):,}",
-                                    f"{detail['dfia_value']:,.2f}",
-                                    f"{detail['dfia_cif']:,.2f}"
+                                    pdf_exporter.format_number(detail['dfia_qty'], decimals=0),
+                                    pdf_exporter.format_number(detail['dfia_value']),
+                                    pdf_exporter.format_number(detail['dfia_cif'])
                                 ])
+                                item_total_qty += allot['quantity']
+                                item_total_value += allot['value']
+                                item_total_inr += allot_cif_inr
                             else:
-                                # Subsequent license rows: empty allotment columns + license data
+                                # Subsequent license rows: empty allotment columns + license data (10 empty cols instead of 11)
                                 table_data.append([
                                     '', '', '', '', '', '', '', '', '', '',
                                     detail['dfia_no'],
                                     detail['dfia_date'],
                                     detail['dfia_port'],
                                     detail['item_sr_no'],
-                                    f"{int(detail['dfia_qty']):,}",
-                                    f"{detail['dfia_value']:,.2f}",
-                                    f"{detail['dfia_cif']:,.2f}"
+                                    pdf_exporter.format_number(detail['dfia_qty'], decimals=0),
+                                    pdf_exporter.format_number(detail['dfia_value']),
+                                    pdf_exporter.format_number(detail['dfia_cif'])
                                 ])
                         sr_no += 1
-
-                    # Calculate item totals
-                    item_total_qty = sum(a['quantity'] for a in allotments)
-                    item_total_value = sum(a['value'] for a in allotments)
 
                     # Add to company totals
                     company_total_qty += item_total_qty
                     company_total_value += item_total_value
+                    company_total_inr += item_total_inr
 
+                    # Add totals row (17 columns total, removed BOE column)
                     table_data.append([
                         '', '', 'Total\nQuantity',
-                        f"{int(item_total_qty):,}", 'Total USD $', f"{item_total_value:,.2f}",
-                        '', '', '', '', '', '', '', '', '', '', ''
+                        pdf_exporter.format_number(item_total_qty, decimals=0),
+                        'Total USD $',
+                        pdf_exporter.format_number(item_total_value),
+                        pdf_exporter.format_number(item_total_inr),
+                        '', '', '', '', '', '', '', '', '', ''
                     ])
 
-                    # Create table with column widths for 17 columns
-                    col_widths = [0.35 * inch, 0.6 * inch, 0.5 * inch, 0.6 * inch, 0.65 * inch, 0.6 * inch,
-                                  0.8 * inch, 0.8 * inch, 0.6 * inch, 0.4 * inch,
-                                  0.8 * inch, 0.6 * inch, 0.6 * inch, 0.5 * inch, 0.6 * inch, 0.65 * inch, 0.65 * inch]
+                    # Create table with column widths for 17 columns (reduced Item Sr., increased DFIA CIF)
+                    col_widths = [0.35 * inch, 0.6 * inch, 0.5 * inch, 0.6 * inch, 0.65 * inch, 0.65 * inch,
+                                  0.85 * inch, 1.0 * inch, 0.8 * inch, 0.6 * inch,
+                                  0.75 * inch, 0.6 * inch, 0.6 * inch, 0.4 * inch, 0.6 * inch, 0.65 * inch, 0.75 * inch]
 
-                    # Enable table splitting across pages with repeatRows for header
-                    table = Table(table_data, colWidths=col_widths, repeatRows=1, splitByRow=True)
+                    # Use shared PDF exporter's create_table method
+                    table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1, wrap_text=True)
 
-                    # Build table styles with cell merging for multiple licenses
-                    table_styles = [
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),  # Dark black text for data rows
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 8),  # Increased header font size
-                        ('FONTSIZE', (0, 1), (-1, -1), 7),  # Increased data font size
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
-                        ('TOPPADDING', (0, 1), (-1, -1), 3),
-                        ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
-                        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-                        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                    ]
+                    # Apply additional number column alignment for columns: 3, 4, 5, 6, 13, 14, 15, 16 (0-indexed, removed BOE)
+                    additional_styles = []
+                    for col_idx in [3, 4, 5, 6, 13, 14, 15, 16]:
+                        additional_styles.append(
+                            ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
+                        )
 
-                    # Note: We cannot use SPAN with splitByRow=True as it causes layout errors
-                    # Vertical merging will be visual only (empty cells for subsequent licenses)
-                    # row_idx = 1  # Start after header
-                    # for allot in allotments:
-                    #     if len(allot['details']) > 1:
-                    #         # Merge allotment columns (0-9) vertically across license rows
-                    #         for col_idx in range(10):
-                    #             table_styles.append(('SPAN', (col_idx, row_idx), (col_idx, row_idx + len(allot['details']) - 1)))
-                    #     row_idx += len(allot['details'])
+                    # Bold the last row (totals)
+                    additional_styles.append(('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'))
+                    additional_styles.append(('BACKGROUND', (0, -1), (-1, -1), pdf_exporter.HEADER_BG))
 
-                    table.setStyle(TableStyle(table_styles))
+                    # Apply additional styles
+                    table.setStyle(TableStyle(additional_styles))
 
                     elements.append(table)
-                    elements.append(Spacer(1, 12))
+                    pdf_exporter.add_spacer(elements, 0.15)
 
             # Add company total after all items
-            company_total_table = Table([[
-                'Company Total:', f"Quantity: {int(company_total_qty):,}", f"Value (USD): ${company_total_value:,.2f}"
-            ]], colWidths=[2.5 * inch, 2.5 * inch, 2.5 * inch])
-            company_total_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), colors.lightblue),
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('TOPPADDING', (0, 0), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ]))
+            summary_data = [[
+                'Company Total:',
+                f"Qty: {pdf_exporter.format_number(company_total_qty, decimals=0)} KGS",
+                f"Value (USD): ${pdf_exporter.format_number(company_total_value)}",
+                f"Total CIF INR: {pdf_exporter.format_number(company_total_inr)}"
+            ]]
+            company_total_table = pdf_exporter.create_summary_table(summary_data)
             elements.append(company_total_table)
-            elements.append(Spacer(1, 20))
+            pdf_exporter.add_spacer(elements, 0.2)
 
         doc.build(elements)
         pdf = buffer.getvalue()
@@ -315,7 +283,7 @@ def add_grouped_export_action(viewset_class):
                         for ports in company.values()
                         for items in ports.values()
                         for item in items)
-        ws.merge_cells(f'A{row}:O{row}')
+        ws.merge_cells(f'A{row}:Q{row}')
         cell = ws[f'A{row}']
         cell.value = f"Total USD $: {total_usd:,.2f}    {datetime.now().strftime('%d-%m-%Y')}"
         cell.alignment = Alignment(horizontal='center')
@@ -324,7 +292,7 @@ def add_grouped_export_action(viewset_class):
         # Process each company
         for company_name, items_dict in grouped_data.items():
             # Company header
-            ws.merge_cells(f'A{row}:O{row}')
+            ws.merge_cells(f'A{row}:Q{row}')
             cell = ws[f'A{row}']
             cell.value = company_name
             cell.font = Font(bold=True, size=14)
@@ -333,6 +301,7 @@ def add_grouped_export_action(viewset_class):
             # Track company totals
             company_total_qty = 0
             company_total_value = 0
+            company_total_inr = 0
 
             # Process each item within company
             for item_name_key, ports_dict in items_dict.items():
@@ -343,7 +312,7 @@ def add_grouped_export_action(viewset_class):
 
                 # Item subheader (optional)
                 if len(items_dict) > 1:  # Only show if multiple items
-                    ws.merge_cells(f'A{row}:O{row}')
+                    ws.merge_cells(f'A{row}:Q{row}')
                     cell = ws[f'A{row}']
                     cell.value = f"Item: {display_item_name}"
                     cell.font = Font(bold=True, size=12, italic=True)
@@ -351,9 +320,9 @@ def add_grouped_export_action(viewset_class):
 
                 # Process each port within item
                 for port_code, allotments in ports_dict.items():
-                    # Table headers - allotment info + license subheader
+                    # Table headers - allotment info + license subheader (removed BOE column)
                     main_headers = ['Sr No', 'Allotment Date', 'Port', 'Quantity (KGS)',
-                                    'Unit Price ($)', 'Value ($)', 'Item Name', 'Invoice', 'ETA', 'BOE']
+                                    'Unit Price ($)', 'Value ($)', 'Total CIF INR', 'Item Name', 'Invoice', 'ETA']
                     license_headers = ['DFIA No.', 'DFIA Date', 'DFIA Port', 'Item Sr. NO.', 'DFIA Qty.', 'DFIA $.',
                                        'DFIA CIF']
 
@@ -386,10 +355,15 @@ def add_grouped_export_action(viewset_class):
                     row += 1
 
                     sr_no = 1
+                    item_total_qty = 0
+                    item_total_value = 0
+                    item_total_inr = 0
+
                     for allot in allotments:
                         start_row_for_allot = row
+                        allot_cif_inr = allot['value'] * allot.get('exchange_rate', 89.5)
 
-                        # Write allotment data (will be merged vertically if multiple licenses)
+                        # Write allotment data (will be merged vertically if multiple licenses) - removed BOE
                         allot_data = [
                             sr_no,
                             allot['date'],
@@ -397,10 +371,10 @@ def add_grouped_export_action(viewset_class):
                             int(allot['quantity']),
                             allot['unit_price'],
                             allot['value'],
+                            allot_cif_inr,
                             allot.get('item_name', display_item_name),
                             allot['invoice'],
-                            allot['eta'],
-                            'Yes' if allot.get('is_boe') else 'No'
+                            allot['eta']
                         ]
 
                         # Write license details (one row per license)
@@ -411,8 +385,17 @@ def add_grouped_export_action(viewset_class):
                                     cell = ws.cell(row=row, column=col_idx, value=value)
                                     cell.border = border
                                     cell.alignment = Alignment(horizontal='center', vertical='center')
-                                    if col_idx in [4, 5, 6]:  # Number columns
+                                    if col_idx in [4, 5, 6, 7]:  # Number columns (added 7 for Total CIF INR)
                                         cell.alignment = Alignment(horizontal='right', vertical='center')
+                                        if col_idx in [5, 6]:  # USD columns
+                                            cell.number_format = '#,##0.00'
+                                        elif col_idx == 7:  # INR column
+                                            cell.number_format = '₹#,##0.00'
+
+                                # Track totals only once per allotment
+                                item_total_qty += allot['quantity']
+                                item_total_value += allot['value']
+                                item_total_inr += allot_cif_inr
 
                             # Write license details
                             license_data = [
@@ -442,39 +425,45 @@ def add_grouped_export_action(viewset_class):
 
                         sr_no += 1
 
-                    # Grand total for item
-                    item_total_qty = sum(a['quantity'] for a in allotments)
-                    item_total_value = sum(a['value'] for a in allotments)
-
                     # Add to company totals
                     company_total_qty += item_total_qty
                     company_total_value += item_total_value
+                    company_total_inr += item_total_inr
 
                     ws.cell(row=row, column=3, value="Total Quantity").font = Font(bold=True)
                     ws.cell(row=row, column=4, value=int(item_total_qty)).font = Font(bold=True)
+                    ws.cell(row=row, column=4).number_format = '#,##0'
                     ws.cell(row=row, column=5, value="Total USD $").font = Font(bold=True)
                     ws.cell(row=row, column=6, value=item_total_value).font = Font(bold=True)
+                    ws.cell(row=row, column=6).number_format = '#,##0.00'
+                    ws.cell(row=row, column=7, value=item_total_inr).font = Font(bold=True)
+                    ws.cell(row=row, column=7).number_format = '₹#,##0.00'
                     row += 2
 
             # Add company total after all items
             ws.merge_cells(f'A{row}:C{row}')
             cell = ws.cell(row=row, column=1, value="Company Total:")
             cell.font = Font(bold=True, size=12)
-            cell.fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')
+            cell.fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
             ws.cell(row=row, column=4, value=int(company_total_qty)).font = Font(bold=True, size=12)
-            ws.cell(row=row, column=4).fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')
+            ws.cell(row=row, column=4).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=4).alignment = Alignment(horizontal='center', vertical='center')
 
-            ws.merge_cells(f'E{row}:E{row}')
             ws.cell(row=row, column=5, value="Total USD $:").font = Font(bold=True, size=12)
-            ws.cell(row=row, column=5).fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')
+            ws.cell(row=row, column=5).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=5).alignment = Alignment(horizontal='center', vertical='center')
 
             ws.cell(row=row, column=6, value=company_total_value).font = Font(bold=True, size=12)
-            ws.cell(row=row, column=6).fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')
+            ws.cell(row=row, column=6).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=6).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=row, column=6).number_format = '#,##0.00'
+
+            ws.cell(row=row, column=7, value=company_total_inr).font = Font(bold=True, size=12)
+            ws.cell(row=row, column=7).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
+            ws.cell(row=row, column=7).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=row, column=7).number_format = '₹#,##0.00'
             row += 3
 
         # Auto-size columns
@@ -523,6 +512,7 @@ def add_grouped_export_action(viewset_class):
                 'quantity': float(allotment.required_quantity or 0),
                 'unit_price': float(allotment.unit_value_per_unit or 0),
                 'value': float(allotment.required_value or 0),
+                'exchange_rate': float(allotment.exchange_rate or 89.5),
                 'invoice': allotment.invoice or '--',
                 'eta': allotment.estimated_arrival_date.strftime(
                     '%d-%m-%Y') if allotment.estimated_arrival_date else '--',

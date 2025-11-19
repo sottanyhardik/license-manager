@@ -38,25 +38,11 @@ from core.models import PurchaseStatus, SchemeCode, NotificationNumber  # kept f
 from license.helper import round_down  # assume this accepts Decimal and returns Decimal
 
 # -----------------------------
-# Decimal helpers & local constants
+# Import centralized utilities
 # -----------------------------
+from core.utils.decimal_utils import to_decimal as _to_decimal
+
 _D = Decimal  # shorthand
-
-
-def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
-    """
-    Safely coerce value to Decimal.
-    Accepts Decimal, int, float, str, or None.
-    Avoids float->Decimal direct conversions by converting via string where needed.
-    """
-    if isinstance(value, Decimal):
-        return value
-    if value is None:
-        return default
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        return default
 
 
 def license_path(instance, filename):
@@ -186,118 +172,41 @@ class LicenseDetailsModel(AuditModel):
         return _to_decimal(total, DEC_0)
 
     def _calculate_license_credit(self) -> Decimal:
-        """Calculate total credit (export CIF) for this license"""
-        return _to_decimal(
-            LicenseExportItemModel.objects.filter(license=self).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
-            DEC_0,
-        )
+        """Calculate total credit using centralized service"""
+        from license.services.balance_calculator import LicenseBalanceCalculator
+        return LicenseBalanceCalculator.calculate_credit(self)
 
     def _calculate_license_debit(self) -> Decimal:
-        """Calculate total debit (BOE debits) for this license"""
-        return _to_decimal(
-            RowDetails.objects.filter(sr_number__license=self, transaction_type=DEBIT).aggregate(
-                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
-            DEC_0,
-        )
+        """Calculate total debit using centralized service"""
+        from license.services.balance_calculator import LicenseBalanceCalculator
+        return LicenseBalanceCalculator.calculate_debit(self)
 
     def _calculate_license_allotment(self) -> Decimal:
-        """Calculate total allotment (non-BOE allotments) for this license"""
-        return _to_decimal(
-            AllotmentItems.objects.filter(
-                item__license=self,
-                allotment__bill_of_entry__bill_of_entry_number__isnull=True
-            ).aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
-            DEC_0,
-        )
+        """Calculate total allotment using centralized service"""
+        from license.services.balance_calculator import LicenseBalanceCalculator
+        return LicenseBalanceCalculator.calculate_allotment(self)
 
     @property
     def get_balance_cif(self) -> Decimal:
         """
-        Authoritative live balance at license level:
+        Authoritative live balance at license level using centralized service.
         SUM(Export.cif_fc) - (SUM(BOE debit cif_fc for license) + SUM(allotments cif_fc (unattached BOE))).
         All sums returned as Decimal.
         """
-        credit = self._calculate_license_credit()
-        debit = self._calculate_license_debit()
-        allotment = self._calculate_license_allotment()
-        balance = credit - (debit + allotment)
-        return balance if balance >= DEC_0 else DEC_0
+        from license.services.balance_calculator import LicenseBalanceCalculator
+        return LicenseBalanceCalculator.calculate_balance(self)
 
     def get_restriction_balances(self) -> Dict[Decimal, Decimal]:
         """
-        Calculate restriction balances for all unique restriction percentages in this license.
+        Calculate restriction balances using centralized service.
         Returns a dictionary mapping restriction_percentage -> remaining balance.
-
-        Formula for each restriction percentage:
-        (Export CIF × restriction_percentage / 100) - (debits + allotments for items with that restriction)
 
         Returns:
             Dict[Decimal, Decimal]: {restriction_percentage: balance_remaining}
         """
-        restriction_balances = {}
+        from license.services.restriction_calculator import RestrictionCalculator
         total_export_cif = self._calculate_license_credit()
-
-        # Get all unique restriction percentages from import items
-        for import_item in self.import_license.all():
-            restricted_items = import_item.items.filter(
-                head__is_restricted=True,
-                head__restriction_percentage__gt=0
-            )
-
-            for item_name in restricted_items:
-                if not item_name.head:
-                    continue
-
-                restriction_pct = _to_decimal(item_name.head.restriction_percentage or 0, DEC_0)
-
-                if restriction_pct <= DEC_0:
-                    continue
-
-                # Calculate balance for this restriction percentage only once
-                if restriction_pct not in restriction_balances:
-                    # Calculate total restricted CIF (export CIF × restriction percentage)
-                    total_restricted_cif = (total_export_cif * restriction_pct / Decimal('100'))
-
-                    # Calculate debits and allotments for items with this restriction percentage
-                    restricted_debits = DEC_0
-                    restricted_allotments = DEC_0
-
-                    for imp_item in self.import_license.all():
-                        # Check if this import item has this specific restriction percentage
-                        has_this_restriction = imp_item.items.filter(
-                            head__is_restricted=True,
-                            head__restriction_percentage=restriction_pct
-                        ).exists()
-
-                        if has_this_restriction:
-                            # Sum debits for this item
-                            restricted_debits += _to_decimal(
-                                RowDetails.objects.filter(
-                                    sr_number=imp_item,
-                                    transaction_type=DEBIT
-                                ).aggregate(
-                                    total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
-                                )["total"],
-                                DEC_0
-                            )
-
-                            # Sum allotments for this item (exclude converted allotments)
-                            restricted_allotments += _to_decimal(
-                                AllotmentItems.objects.filter(
-                                    item=imp_item,
-                                    allotment__bill_of_entry__bill_of_entry_number__isnull=True
-                                ).aggregate(
-                                    total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
-                                )["total"],
-                                DEC_0
-                            )
-
-                    # Calculate remaining balance
-                    balance = total_restricted_cif - restricted_debits - restricted_allotments
-                    restriction_balances[restriction_pct] = balance if balance >= DEC_0 else DEC_0
-
-        return restriction_balances
+        return RestrictionCalculator.calculate_all_restriction_balances(self, total_export_cif)
 
     def get_party_name(self) -> str:
         return str(self.exporter)[:8]

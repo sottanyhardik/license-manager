@@ -4,58 +4,40 @@ from core.constants import DEBIT
 
 
 def calculate(self):
-    from license.models import LicenseExportItemModel
-    from bill_of_entry.models import RowDetails
-    from django.db.models import Sum
-    if not self.cif_fc or self.cif_fc == 0:
-        credit = LicenseExportItemModel.objects.filter(license=self.license).aggregate(Sum('cif_fc'))['cif_fc__sum']
-        debit = RowDetails.objects.filter(sr_number__license=self.license).filter(transaction_type=DEBIT).aggregate(
-            Sum('cif_fc'))[
-            'cif_fc__sum']
-    else:
-        credit = self.cif_fc
-        debit = RowDetails.objects.filter(sr_number=self).filter(transaction_type=DEBIT).aggregate(Sum('cif_fc'))[
-            'cif_fc__sum']
-    from allotment.models import AllotmentItems
-    allotment = \
-        AllotmentItems.objects.filter(item=self, allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
-            Sum('cif_fc'))['cif_fc__sum']
-    t_debit = 0
-    if debit:
-        t_debit = t_debit + debit
-    if allotment:
-        t_debit = t_debit + allotment
-    return credit, t_debit
+    """
+    DEPRECATED: Use ItemBalanceCalculator.calculate_item_credit_debit() instead.
+    This function is kept for backward compatibility.
+    """
+    from license.services.balance_calculator import ItemBalanceCalculator
+    return ItemBalanceCalculator.calculate_item_credit_debit(self)
 
 
 def round_down(n, decimals=0):
-    multiplier = 10 ** decimals
-    import math
-    return math.floor(n * multiplier) / multiplier
+    """
+    DEPRECATED: Use round_decimal_down() from core.utils.decimal_utils instead.
+    This function is kept for backward compatibility.
+    """
+    from core.utils.decimal_utils import round_decimal_down
+    return round_decimal_down(n, decimals)
 
 
 def check_license():
-    from core.constants import GE
+    """
+    DEPRECATED: Use LicenseValidationService.update_license_flags() instead.
+    This function is kept for backward compatibility but updated to use services.
+    """
     from license.models import LicenseDetailsModel
+    from license.services.validation_service import LicenseValidationService
+
     for license in LicenseDetailsModel.objects.all():
-        if license.get_balance_cif < 500:
-            license.is_null = True
-        if not license.purchase_status == GE:
-            license.is_active = False
-        elif license.is_expired or not license.purchase_status == GE or license.get_balance_cif < 500 or license.is_au:
-            license.is_active = False
-        else:
-            license.is_active = True
+        # Use service to update flags
+        flags = LicenseValidationService.update_license_flags(license)
+
+        # Apply flags to model
+        for flag_name, flag_value in flags.items():
+            setattr(license, flag_name, flag_value)
+
         license.save()
-    from django.db.models import Q
-    LicenseDetailsModel.objects.filter(purchase_status=GE).filter(
-        Q(license_expiry_date=None) | Q(file_number=None) | Q(notification_number=None) | Q(
-            export_license__norm_class=None)).update(is_incomplete=True)
-    from datetime import timedelta
-    from django.utils import timezone
-    expiry_date = (timezone.now() - timedelta(days=90)).date()
-    LicenseDetailsModel.objects.filter(license_expiry_date__lte=expiry_date).update(is_expired=True)
-    LicenseDetailsModel.objects.filter(import_license__item_details__cif_fc='.01').update(is_individual=True)
 
 
 def item_wise_debiting(dfia, item_head, item_name=None):

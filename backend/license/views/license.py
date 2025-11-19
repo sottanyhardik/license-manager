@@ -31,6 +31,7 @@ license_nested_field_defs = {
         {"name": "unit", "type": "select", "label": "Unit", "choices": list(UNIT_CHOICES)},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)"},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
+        {"name": "is_restricted", "type": "boolean", "label": "Is Restricted"},
     ],
     "license_documents": [
         {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},

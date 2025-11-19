@@ -6,6 +6,15 @@ from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, Any, Optional
 
+from django.core.validators import RegexValidator, MinValueValidator
+from django.db import models, transaction
+from django.db.models import Count, Sum, DecimalField, Value
+from django.db.models.functions import Coalesce
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.urls import reverse
+from django.utils.functional import cached_property
+
 from allotment.models import AllotmentItems
 from bill_of_entry.models import RowDetails
 from bill_of_entry.tasks import update_balance_values_task
@@ -26,14 +35,6 @@ from core.constants import (
 # Local imports — keep lightweight at module import time
 from core.models import AuditModel, InvoiceEntity, ItemNameModel
 from core.models import PurchaseStatus, SchemeCode, NotificationNumber  # kept for compatibility
-from django.core.validators import RegexValidator, MinValueValidator
-from django.db import models, transaction
-from django.db.models import Count, Sum, DecimalField, Value
-from django.db.models.functions import Coalesce
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from django.urls import reverse
-from django.utils.functional import cached_property
 from license.helper import round_down  # assume this accepts Decimal and returns Decimal
 
 # -----------------------------
@@ -222,6 +223,81 @@ class LicenseDetailsModel(AuditModel):
         allotment = self._calculate_license_allotment()
         balance = credit - (debit + allotment)
         return balance if balance >= DEC_0 else DEC_0
+
+    def get_restriction_balances(self) -> Dict[Decimal, Decimal]:
+        """
+        Calculate restriction balances for all unique restriction percentages in this license.
+        Returns a dictionary mapping restriction_percentage -> remaining balance.
+
+        Formula for each restriction percentage:
+        (Export CIF × restriction_percentage / 100) - (debits + allotments for items with that restriction)
+
+        Returns:
+            Dict[Decimal, Decimal]: {restriction_percentage: balance_remaining}
+        """
+        restriction_balances = {}
+        total_export_cif = self._calculate_license_credit()
+
+        # Get all unique restriction percentages from import items
+        for import_item in self.import_license.all():
+            restricted_items = import_item.items.filter(
+                head__is_restricted=True,
+                head__restriction_percentage__gt=0
+            )
+
+            for item_name in restricted_items:
+                if not item_name.head:
+                    continue
+
+                restriction_pct = _to_decimal(item_name.head.restriction_percentage or 0, DEC_0)
+
+                if restriction_pct <= DEC_0:
+                    continue
+
+                # Calculate balance for this restriction percentage only once
+                if restriction_pct not in restriction_balances:
+                    # Calculate total restricted CIF (export CIF × restriction percentage)
+                    total_restricted_cif = (total_export_cif * restriction_pct / Decimal('100'))
+
+                    # Calculate debits and allotments for items with this restriction percentage
+                    restricted_debits = DEC_0
+                    restricted_allotments = DEC_0
+
+                    for imp_item in self.import_license.all():
+                        # Check if this import item has this specific restriction percentage
+                        has_this_restriction = imp_item.items.filter(
+                            head__is_restricted=True,
+                            head__restriction_percentage=restriction_pct
+                        ).exists()
+
+                        if has_this_restriction:
+                            # Sum debits for this item
+                            restricted_debits += _to_decimal(
+                                RowDetails.objects.filter(
+                                    sr_number=imp_item,
+                                    transaction_type=DEBIT
+                                ).aggregate(
+                                    total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+                                )["total"],
+                                DEC_0
+                            )
+
+                            # Sum allotments for this item (exclude converted allotments)
+                            restricted_allotments += _to_decimal(
+                                AllotmentItems.objects.filter(
+                                    item=imp_item,
+                                    allotment__bill_of_entry__bill_of_entry_number__isnull=True
+                                ).aggregate(
+                                    total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+                                )["total"],
+                                DEC_0
+                            )
+
+                    # Calculate remaining balance
+                    balance = total_restricted_cif - restricted_debits - restricted_allotments
+                    restriction_balances[restriction_pct] = balance if balance >= DEC_0 else DEC_0
+
+        return restriction_balances
 
     def get_party_name(self) -> str:
         return str(self.exporter)[:8]
@@ -762,7 +838,8 @@ class LicenseImportItemsModel(models.Model):
     allotted_quantity = models.DecimalField(max_digits=15, decimal_places=3, default=DEC_000)
     allotted_value = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
 
-    is_restrict = models.BooleanField(default=False)
+    is_restricted = models.BooleanField(default=False,
+                                        help_text="If True, uses restriction-based calculation (2%, 3%, 5%, 10% etc.). If False, uses license balance.")
     comment = models.TextField(blank=True, null=True)
 
     admin_search_fields = ("license__license_number",)
@@ -859,7 +936,7 @@ class LicenseImportItemsModel(models.Model):
 
         for item_name in item_names:
             if (item_name.head and item_name.head.is_restricted and
-                item_name.head.restriction_norm and item_name.head.restriction_percentage > DEC_0):
+                    item_name.head.restriction_norm and item_name.head.restriction_percentage > DEC_0):
 
                 # Check if license export norm class matches head restriction norm
                 restriction_norm_class = item_name.head.restriction_norm.norm_class if item_name.head.restriction_norm else None
@@ -921,9 +998,9 @@ class LicenseImportItemsModel(models.Model):
         # PRIORITY 1: Check if item has head-based restrictions
         restriction_balance = self._calculate_head_restriction_balance()
         if restriction_balance > DEC_0 or self.items.filter(
-            head__is_restricted=True,
-            head__restriction_norm__isnull=False,
-            head__restriction_percentage__gt=DEC_0
+                head__is_restricted=True,
+                head__restriction_norm__isnull=False,
+                head__restriction_percentage__gt=DEC_0
         ).exists():
             # This item has a restricted head, use restriction calculation
             return restriction_balance
@@ -957,6 +1034,47 @@ class LicenseImportItemsModel(models.Model):
             debit = self._calculate_item_debit()
             allotment = self._calculate_item_allotment()
             return credit - debit - allotment
+
+    @property
+    def available_value_calculated(self) -> Decimal:
+        """
+        CENTRALIZED available_value calculation - SINGLE SOURCE OF TRUTH.
+
+        Business Logic:
+        1. If is_restricted = True: Calculate based on item's head restriction (2%, 3%, 5%, 10% etc.)
+           Formula: (License Export CIF × restriction_percentage / 100) - (debits + allotments for this restriction)
+        2. If is_restricted = False: Use license.get_balance_cif (shared across all non-restricted items)
+
+        This property should be used EVERYWHERE in the project:
+        - Frontend display
+        - Backend serializers
+        - PDF reports
+        - Management commands
+        - API responses
+
+        DO NOT calculate available_value anywhere else - always use this property.
+        """
+        if not self.license:
+            return DEC_0
+
+        if self.is_restricted:
+            # Use restriction-based calculation from item's head
+            # This delegates to the existing _calculate_head_restriction_balance method
+            restriction_balance = self._calculate_head_restriction_balance()
+
+            # If restriction balance exists, use it
+            if restriction_balance > DEC_0 or self.items.filter(
+                    head__is_restricted=True,
+                    head__restriction_norm__isnull=False,
+                    head__restriction_percentage__gt=DEC_0
+            ).exists():
+                return restriction_balance
+
+            # Fallback to license balance if no valid restriction found
+            return self.license.get_balance_cif
+        else:
+            # Use license-level balance (shared across all non-restricted items)
+            return self.license.get_balance_cif
 
     @cached_property
     def license_expiry(self) -> Optional[date]:

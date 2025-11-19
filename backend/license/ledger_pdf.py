@@ -1,15 +1,15 @@
 # license/ledger_pdf.py
 from collections import defaultdict
+from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
-from datetime import datetime
 
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 
 
 def generate_license_ledger_pdf(license_obj):
@@ -56,39 +56,15 @@ def generate_license_ledger_pdf(license_obj):
     # Calculate license-level balance (use centralized method)
     license_balance_cif = Decimal(str(license_obj.get_balance_cif or 0))
 
-    # Check if license has restrictions and calculate remaining restriction balance for each percentage
-    restriction_balances = {}  # {percentage: balance}
+    # Get restriction balances from centralized method
+    restriction_balances = license_obj.get_restriction_balances()
+
+    # Get total export CIF for displaying in header
     total_export_cif = license_obj._calculate_license_credit()
 
-    # Get all unique restriction percentages from import items
-    for item in license_obj.import_license.all():
-        restricted_items = item.items.filter(head__is_restricted=True, head__restriction_percentage__gt=0)
-        for restricted_item in restricted_items:
-            if restricted_item.head:
-                restriction_pct = Decimal(str(restricted_item.head.restriction_percentage or 0))
-
-                if restriction_pct not in restriction_balances:
-                    # Calculate total restricted CIF (total export CIF × restriction percentage)
-                    total_restricted_cif = (total_export_cif * restriction_pct / Decimal('100'))
-
-                    # Calculate debits and allotments for items with this restriction percentage
-                    restricted_debits = Decimal('0')
-                    restricted_allotments = Decimal('0')
-                    for imp_item in license_obj.import_license.all():
-                        item_has_this_restriction = imp_item.items.filter(
-                            head__is_restricted=True,
-                            head__restriction_percentage=restriction_pct
-                        ).exists()
-                        if item_has_this_restriction:
-                            restricted_debits += imp_item._calculate_item_debit()
-                            restricted_allotments += imp_item._calculate_item_allotment()
-
-                    # Remaining restriction balance after debits and allotments
-                    restriction_balance = total_restricted_cif - restricted_debits - restricted_allotments
-                    restriction_balances[restriction_pct] = restriction_balance if restriction_balance >= Decimal('0') else Decimal('0')
-
     # License Information Header
-    license_header_style = ParagraphStyle('LicenseHeaderStyle', parent=styles['Normal'], fontSize=9, leading=11, fontName='Helvetica-Bold')
+    license_header_style = ParagraphStyle('LicenseHeaderStyle', parent=styles['Normal'], fontSize=9, leading=11,
+                                          fontName='Helvetica-Bold')
 
     license_info = [
         ['License Number:', license_obj.license_number, 'License Date:',
@@ -128,7 +104,7 @@ def generate_license_ledger_pdf(license_obj):
     else:
         license_info.append(['Balance CIF FC:', f"{license_balance_cif:.2f}", '', ''])
 
-    license_table = Table(license_info, colWidths=[1.5*inch, 3*inch, 1.5*inch, 3*inch])
+    license_table = Table(license_info, colWidths=[1.5 * inch, 3 * inch, 1.5 * inch, 3 * inch])
 
     table_style = [
         ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#ecf0f1')),
@@ -156,21 +132,49 @@ def generate_license_ledger_pdf(license_obj):
     elements.append(license_table)
     elements.append(Spacer(1, 0.3 * inch))
 
-    # Get all import items and group by description
+    # Get all import items and group by ItemNameModel (items)
     import_items = license_obj.import_license.all().prefetch_related(
         'items',
         'hs_code',
         'allotment_details__allotment__company'
     ).order_by('serial_number')
 
-    # Group items by description
-    description_groups = defaultdict(list)
-    for item in import_items:
-        desc = item.description if item.description else "No Description"
-        description_groups[desc].append(item)
+    # Group items by ItemNameModel (items field) - multiple import items can share the same ItemName
+    item_groups = defaultdict(list)
+    item_description_map = {}  # Map item_name to description from first occurrence
 
-    # Process each description group, sorted by the first item's serial number
-    for description, items in sorted(description_groups.items(), key=lambda x: min(item.serial_number for item in x[1])):
+    for import_item in import_items:
+        # Get all ItemNameModel objects linked to this import item
+        item_names = import_item.items.all()
+
+        if item_names.exists():
+            # Use the first ItemNameModel's ID as the grouping key
+            # All import items with the same ItemName will be grouped together
+            first_item_name = item_names.first()
+            group_key = first_item_name.id
+
+            # Store description from first occurrence
+            if group_key not in item_description_map:
+                item_description_map[
+                    group_key] = import_item.description if import_item.description else first_item_name.name
+
+            item_groups[group_key].append(import_item)
+        else:
+            # Items with no ItemNameModel - group by description as fallback
+            desc = import_item.description if import_item.description else "No Item"
+            fallback_key = f"desc_{desc}"
+
+            if fallback_key not in item_description_map:
+                item_description_map[fallback_key] = desc
+
+            item_groups[fallback_key].append(import_item)
+
+    # Process each item group, sorted by the first item's serial number
+    for group_key, items in sorted(item_groups.items(), key=lambda x: min(item.serial_number for item in x[1])):
+        # Get the description from the first item in the group (sorted by serial number)
+        first_item = sorted(items, key=lambda x: x.serial_number)[0]
+        description = first_item.description if first_item.description else "No Description"
+
         # Collect all serial numbers for this description
         serial_numbers = [str(item.serial_number) for item in items]
         serial_numbers_str = ", ".join(serial_numbers)
@@ -199,7 +203,7 @@ def generate_license_ledger_pdf(license_obj):
             ]
         ]
 
-        item_table = Table(item_info, colWidths=[1*inch, 3.5*inch, 1*inch, 1.2*inch, 1.2*inch])
+        item_table = Table(item_info, colWidths=[1 * inch, 3.5 * inch, 1 * inch, 1.2 * inch, 1.2 * inch])
         item_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -217,7 +221,8 @@ def generate_license_ledger_pdf(license_obj):
         elements.append(Spacer(1, 0.15 * inch))
 
         # Allotment table - grouped by company with row details
-        allotment_by_company = defaultdict(lambda: {'qty': Decimal('0'), 'cif_fc': Decimal('0'), 'cif_inr': Decimal('0'), 'rows': []})
+        allotment_by_company = defaultdict(
+            lambda: {'qty': Decimal('0'), 'cif_fc': Decimal('0'), 'cif_inr': Decimal('0'), 'rows': []})
 
         allot_qty = Decimal('0')
         allot_cif_fc = Decimal('0')
@@ -253,7 +258,8 @@ def generate_license_ledger_pdf(license_obj):
 
         # Style for wrapping text
         wrap_style = ParagraphStyle('WrapStyle', parent=styles['Normal'], fontSize=8, leading=10)
-        bold_wrap_style = ParagraphStyle('BoldWrapStyle', parent=styles['Normal'], fontSize=8, leading=10, fontName='Helvetica-Bold')
+        bold_wrap_style = ParagraphStyle('BoldWrapStyle', parent=styles['Normal'], fontSize=8, leading=10,
+                                         fontName='Helvetica-Bold')
 
         for company, data in sorted(allotment_by_company.items()):
             # Add individual row details
@@ -282,7 +288,7 @@ def generate_license_ledger_pdf(license_obj):
                 f"{allot_cif_inr:.2f}"
             ])
 
-            allotment_table = Table(allotment_data, colWidths=[3*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+            allotment_table = Table(allotment_data, colWidths=[3 * inch, 1.5 * inch, 1.5 * inch, 1.5 * inch])
             table_style = [
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e67e22')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -309,7 +315,8 @@ def generate_license_ledger_pdf(license_obj):
             elements.append(Spacer(1, 0.15 * inch))
 
         # BOE table - grouped by company with row details
-        boe_by_company = defaultdict(lambda: {'qty': Decimal('0'), 'cif_fc': Decimal('0'), 'cif_inr': Decimal('0'), 'rows': []})
+        boe_by_company = defaultdict(
+            lambda: {'qty': Decimal('0'), 'cif_fc': Decimal('0'), 'cif_inr': Decimal('0'), 'rows': []})
 
         boe_qty = Decimal('0')
         boe_cif_fc = Decimal('0')
@@ -372,7 +379,7 @@ def generate_license_ledger_pdf(license_obj):
                 f"{boe_cif_inr:.2f}"
             ])
 
-            boe_table = Table(boe_data, colWidths=[3*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+            boe_table = Table(boe_data, colWidths=[3 * inch, 1.5 * inch, 1.5 * inch, 1.5 * inch])
             boe_table_style = [
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -409,16 +416,24 @@ def generate_license_ledger_pdf(license_obj):
     elements.append(summary_title)
     elements.append(Spacer(1, 0.1 * inch))
 
-    summary_data = [['Item Description', 'Total Import Qty', 'CIF FC', 'Allotted Qty', 'BOE Qty', 'Available Qty', 'Balance CIF FC', 'Status']]
+    summary_data = [
+        ['Item Description', 'Total Import Qty', 'CIF FC', 'Allotted Qty', 'BOE Qty', 'Available Qty',
+         'Balance CIF FC']]
 
-    # Calculate summary for each description group
-    for description, items in sorted(description_groups.items(), key=lambda x: min(item.serial_number for item in x[1])):
+    # Calculate summary for each item group
+    for group_key, items in sorted(item_groups.items(), key=lambda x: min(item.serial_number for item in x[1])):
+        # Get the description from the first item in the group (sorted by serial number)
+        first_item = sorted(items, key=lambda x: x.serial_number)[0]
+        description = first_item.description if first_item.description else "No Description"
         total_import_qty = Decimal('0')
         total_cif_fc = Decimal('0')
         total_available_qty = Decimal('0')
         allotted_qty = Decimal('0')
         boe_qty = Decimal('0')
         is_restricted_item = False
+
+        total_allotted_cif_fc = Decimal('0')
+        total_boe_cif_fc = Decimal('0')
 
         for item in items:
             total_import_qty += Decimal(str(item.quantity or 0))
@@ -429,37 +444,31 @@ def generate_license_ledger_pdf(license_obj):
             if item.items.filter(head__is_restricted=True, head__restriction_percentage__gt=0).exists():
                 is_restricted_item = True
 
-            # Calculate allotted quantity (exclude converted allotments)
+            # Calculate allotted quantity and CIF (exclude converted allotments)
             allotments = item.allotment_details.filter(
                 is_boe=False,
                 allotment__is_boe=False
             )
             for allot in allotments:
                 allotted_qty += Decimal(str(allot.qty or 0))
+                total_allotted_cif_fc += Decimal(str(allot.cif_fc or 0))
 
-            # Calculate BOE quantity
+            # Calculate BOE quantity and CIF
             boes = item.item_details.filter(bill_of_entry__isnull=False)
             for boe in boes:
                 boe_qty += Decimal(str(boe.qty or 0))
+                total_boe_cif_fc += Decimal(str(boe.cif_fc or 0))
 
-        # Balance CIF FC: Show license balance for all items, except use item-level balance for restricted items
-        if is_restricted_item:
-            # For restricted items, use item-level balance calculation
-            balance_cif_fc = sum(Decimal(str(item.balance_cif_fc or 0)) for item in items)
-        else:
-            # For non-restricted items, show license balance
-            balance_cif_fc = license_balance_cif
-
-        # Determine status
-        if total_available_qty <= 0:
-            status = 'DEBITED'
-        elif allotted_qty > 0:
-            status = 'ALLOTED'
-        else:
-            status = 'BALANCE'
+            # Balance CIF FC: Use centralized available_value_calculated property
+            # This property is the SINGLE SOURCE OF TRUTH for available value calculation
+            # It handles:
+            # - is_restricted = True: Uses restriction-based calculation (2%, 3%, 5%, 10%)
+            # - is_restricted = False: Uses license.get_balance_cif (shared balance)
+            balance_cif_fc = Decimal(str(item.available_value_calculated or 0))
 
         # Use Paragraph for description to allow text wrapping
-        desc_paragraph = Paragraph(description if description else '-', ParagraphStyle('DescStyle', parent=styles['Normal'], fontSize=8, leading=10))
+        desc_paragraph = Paragraph(description if description else '-',
+                                   ParagraphStyle('DescStyle', parent=styles['Normal'], fontSize=8, leading=10))
 
         summary_data.append([
             desc_paragraph,
@@ -469,10 +478,11 @@ def generate_license_ledger_pdf(license_obj):
             f"{boe_qty:.2f}" if boe_qty > 0 else '-',
             f"{total_available_qty:.2f}",
             f"{balance_cif_fc:.2f}",
-            status
         ])
 
-    summary_table = Table(summary_data, colWidths=[3*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.8*inch])
+    summary_table = Table(summary_data,
+                          colWidths=[3 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch,
+                                     0.8 * inch])
     summary_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),

@@ -91,19 +91,21 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     exporter_name = serializers.CharField(source="license.exporter.name", read_only=True)
     hs_code_detail = HSCodeSerializer(source='hs_code', read_only=True)
     hs_code_label = serializers.SerializerMethodField()
-    balance_cif_fc = serializers.SerializerMethodField()
+    balance_cif_fc = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = LicenseImportItemsModel
         fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'description', 'quantity',
                   'old_quantity', 'unit', 'cif_fc', 'cif_inr', 'available_quantity', 'available_value',
                   'debited_quantity', 'debited_value', 'license_number', 'license_date', 'license_expiry_date',
-                  'notification_number', 'exporter_name', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc']
+                  'notification_number', 'exporter_name', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
+                  'is_restricted']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly
         extra_kwargs = {
             'license': {'required': False},
-            'serial_number': {'required': False}
+            'serial_number': {'required': False},
+            'balance_cif_fc': {'read_only': True}
         }
 
     def get_hs_code_label(self, obj):
@@ -113,44 +115,16 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
     def get_balance_cif_fc(self, obj):
         """
-        Return available_value which is maintained by update_restriction_balances command.
-        This ensures available_value never exceeds actual balance and respects restrictions.
+        CENTRALIZED available_value calculation - uses available_value_calculated property.
 
-        For licenses with restrictions: available_value is the source of truth (set by management command)
-        For exception licenses (098/2009, Conversion): use calculated balance_cif_fc
-        For licenses without restrictions or not yet processed: use calculated balance_cif_fc property
+        This is the SINGLE SOURCE OF TRUTH for available value.
+        The property handles:
+        - is_restricted = True: Uses restriction-based calculation (2%, 3%, 5%, 10% from head)
+        - is_restricted = False: Uses license.get_balance_cif (shared across all non-restricted items)
+
+        DO NOT add custom calculation logic here - always delegate to the model property.
         """
-        # Check if license is exception (098/2009 or Conversion)
-        is_exception = (
-            obj.license and (
-                obj.license.notification_number == "098/2009" or
-                obj.license.purchase_status == "CO"
-            )
-        )
-
-        # If exception license, always use calculated balance (no restrictions apply)
-        if is_exception:
-            return obj.balance_cif_fc
-
-        # Check if this item has restrictions applied
-        has_restriction = obj.items.filter(
-            head__is_restricted=True,
-            head__restriction_norm__isnull=False,
-            head__restriction_percentage__gt=0
-        ).exists()
-
-        # If item has restrictions, use available_value (it's the source of truth)
-        # available_value is maintained by update_restriction_balances command
-        if has_restriction:
-            # If available_value is set, use it; otherwise fall back to calculated
-            if obj.available_value is not None and obj.available_value > 0:
-                return obj.available_value
-            else:
-                # Not yet processed, use calculated
-                return obj.balance_cif_fc
-
-        # For non-restricted items, use the calculated property
-        return obj.balance_cif_fc
+        return obj.available_value_calculated
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -399,7 +373,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         # Update existing item by ID
                         obj = existing_items_by_id[item_id]
                         for key, value in i.items():
-                            if key not in ('id', 'license', 'license_date', 'license_expiry'):
+                            if key not in ('id', 'license', 'license_date', 'license_expiry', 'balance_cif_fc',
+                                          'license_number', 'notification_number', 'exporter_name', 'hs_code_detail',
+                                          'hs_code_label', 'allotted_quantity', 'allotted_value'):
                                 # Handle foreign keys by using _id suffix
                                 if key == 'hs_code' and value is not None:
                                     setattr(obj, 'hs_code_id', value)
@@ -424,7 +400,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         # Update existing item by serial_number
                         obj = existing_items_by_serial[serial_number]
                         for key, value in i.items():
-                            if key not in ('id', 'license', 'license_date', 'license_expiry'):
+                            if key not in ('id', 'license', 'license_date', 'license_expiry', 'balance_cif_fc',
+                                          'license_number', 'notification_number', 'exporter_name', 'hs_code_detail',
+                                          'hs_code_label', 'allotted_quantity', 'allotted_value'):
                                 # Handle foreign keys by using _id suffix
                                 if key == 'hs_code' and value is not None:
                                     setattr(obj, 'hs_code_id', value)

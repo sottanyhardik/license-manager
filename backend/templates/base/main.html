@@ -187,7 +187,7 @@
                         <li>
                             <a href="{% url 'allotment-list' %}?type=AT&company=&item_name=&allotment_details__item__license__license_number=&is_be=false">
                                 <i class="fa fa-list"></i>
-                                <span>Pending Allotments</span>
+                                <span>Allotment Report</span>
                             </a>
                         </li>
                     </ul>
@@ -501,7 +501,7 @@
                             </div>
                             <div class="summary--item">
                                 {% if pending_allotments %}
-                                    <p class="summary--title">Pending Allotments</p>
+                                    <p class="summary--title">Allotment Report</p>
                                     <p class="summary--stats text-orange">{{ pending_allotments }}</p>
                                 {% endif %}
                             </div>

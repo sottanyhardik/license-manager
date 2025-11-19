@@ -38,13 +38,18 @@ export default function MasterList() {
     const [hasNext, setHasNext] = useState(false);
     const [hasPrevious, setHasPrevious] = useState(false);
 
-    // Filter state with default filters for allotments
+    // Filter state with default filters for allotments and bill-of-entries
     const getDefaultFilters = () => {
         if (entityName === 'allotments') {
             return {
                 type: 'AT',
                 is_boe: 'False',
                 is_allotted: 'True'
+            };
+        }
+        if (entityName === 'bill-of-entries') {
+            return {
+                is_invoice: 'False'
             };
         }
         return {};
@@ -150,6 +155,8 @@ export default function MasterList() {
                 apiPath = `/licenses/export/`;
             } else if (entityName === 'allotments') {
                 apiPath = `/allotments/download/`;
+            } else if (entityName === 'bill-of-entries') {
+                apiPath = `/bill-of-entries/export/`;
             } else {
                 apiPath = `/masters/${entityName}/export/`;
             }

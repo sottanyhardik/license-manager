@@ -1,16 +1,15 @@
 # allotment/views_export.py
+from collections import defaultdict
 from datetime import datetime
 from io import BytesIO
-from collections import defaultdict
-from decimal import Decimal
 
 from django.http import HttpResponse
-from django.db.models import Sum
 from rest_framework.decorators import action
 
 try:
     import openpyxl
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
@@ -22,11 +21,10 @@ try:
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
-
-from allotment.models import AllotmentModel
 
 
 def add_grouped_export_action(viewset_class):
@@ -87,8 +85,8 @@ def add_grouped_export_action(viewset_class):
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
-                               topMargin=0.5*inch, bottomMargin=0.5*inch,
-                               leftMargin=0.3*inch, rightMargin=0.3*inch)
+                                topMargin=0.5 * inch, bottomMargin=0.5 * inch,
+                                leftMargin=0.3 * inch, rightMargin=0.3 * inch)
 
         elements = []
         styles = getSampleStyleSheet()
@@ -105,20 +103,21 @@ def add_grouped_export_action(viewset_class):
 
         # Calculate totals
         total_usd = sum(item['value'] for company in grouped_data.values()
-                       for ports in company.values()
-                       for items in ports.values()
-                       for item in items)
+                        for ports in company.values()
+                        for items in ports.values()
+                        for item in items)
 
-        elements.append(Paragraph("Pending Allotments", title_style))
-        elements.append(Paragraph(f"Total USD $: {total_usd:,.2f} &nbsp;&nbsp;&nbsp; {datetime.now().strftime('%d-%m-%Y')}",
-                                 ParagraphStyle('subtitle', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER)))
+        elements.append(Paragraph("Allotment Report", title_style))
+        elements.append(
+            Paragraph(f"Total USD $: {total_usd:,.2f} &nbsp;&nbsp;&nbsp; {datetime.now().strftime('%d-%m-%Y')}",
+                      ParagraphStyle('subtitle', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER)))
         elements.append(Spacer(1, 12))
 
         # Process each company
         for company_name, items_dict in grouped_data.items():
             # Company header
             elements.append(Paragraph(f"<b>{company_name}</b>",
-                                    ParagraphStyle('company', parent=styles['Heading2'], fontSize=12)))
+                                      ParagraphStyle('company', parent=styles['Heading2'], fontSize=12)))
             elements.append(Spacer(1, 6))
 
             # Track company totals
@@ -129,12 +128,14 @@ def add_grouped_export_action(viewset_class):
             for item_name_key, ports_dict in items_dict.items():
                 # Get the actual item name from first allotment for display
                 first_allot = next(iter(next(iter(ports_dict.values())))) if ports_dict else None
-                display_item_name = first_allot['item_name'] if first_allot and 'item_name' in first_allot else item_name_key
+                display_item_name = first_allot[
+                    'item_name'] if first_allot and 'item_name' in first_allot else item_name_key
 
                 # Item subheader (optional, can be styled differently)
                 if len(items_dict) > 1:  # Only show if multiple items
                     elements.append(Paragraph(f"Item: {display_item_name}",
-                                            ParagraphStyle('item', parent=styles['Normal'], fontSize=12, textColor=colors.black)))
+                                              ParagraphStyle('item', parent=styles['Normal'], fontSize=12,
+                                                             textColor=colors.black)))
                     elements.append(Spacer(1, 3))
 
                 # Process each port within item
@@ -155,8 +156,12 @@ def add_grouped_export_action(viewset_class):
                             invoice_text = allot['invoice']
 
                             # Wrap long text in Paragraph for word wrapping
-                            item_name_para = Paragraph(item_name_text, ParagraphStyle('cell', parent=styles['Normal'], fontSize=7, leading=8))
-                            invoice_para = Paragraph(invoice_text, ParagraphStyle('cell', parent=styles['Normal'], fontSize=7, leading=8))
+                            item_name_para = Paragraph(item_name_text,
+                                                       ParagraphStyle('cell', parent=styles['Normal'], fontSize=7,
+                                                                      leading=8))
+                            invoice_para = Paragraph(invoice_text,
+                                                     ParagraphStyle('cell', parent=styles['Normal'], fontSize=7,
+                                                                    leading=8))
 
                             if idx == 0:
                                 # First license row: show allotment data + license data
@@ -208,9 +213,9 @@ def add_grouped_export_action(viewset_class):
                     ])
 
                     # Create table with column widths for 17 columns
-                    col_widths = [0.35*inch, 0.6*inch, 0.5*inch, 0.6*inch, 0.65*inch, 0.6*inch,
-                                 0.8*inch, 0.8*inch, 0.6*inch, 0.4*inch,
-                                 0.8*inch, 0.6*inch, 0.6*inch, 0.5*inch, 0.6*inch, 0.65*inch, 0.65*inch]
+                    col_widths = [0.35 * inch, 0.6 * inch, 0.5 * inch, 0.6 * inch, 0.65 * inch, 0.6 * inch,
+                                  0.8 * inch, 0.8 * inch, 0.6 * inch, 0.4 * inch,
+                                  0.8 * inch, 0.6 * inch, 0.6 * inch, 0.5 * inch, 0.6 * inch, 0.65 * inch, 0.65 * inch]
 
                     # Enable table splitting across pages with repeatRows for header
                     table = Table(table_data, colWidths=col_widths, repeatRows=1, splitByRow=True)
@@ -251,7 +256,7 @@ def add_grouped_export_action(viewset_class):
             # Add company total after all items
             company_total_table = Table([[
                 'Company Total:', f"Quantity: {int(company_total_qty):,}", f"Value (USD): ${company_total_value:,.2f}"
-            ]], colWidths=[2.5*inch, 2.5*inch, 2.5*inch])
+            ]], colWidths=[2.5 * inch, 2.5 * inch, 2.5 * inch])
             company_total_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, -1), colors.lightblue),
                 ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
@@ -283,7 +288,7 @@ def add_grouped_export_action(viewset_class):
         # Create workbook
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "Pending Allotments"
+        ws.title = "Allotment Report"
 
         # Styles
         header_font = Font(bold=True, color="FFFFFF")
@@ -300,16 +305,16 @@ def add_grouped_export_action(viewset_class):
         # Title
         ws.merge_cells(f'A{row}:O{row}')
         cell = ws[f'A{row}']
-        cell.value = "Pending Allotments"
+        cell.value = "Allotment Report"
         cell.font = Font(bold=True, size=16)
         cell.alignment = Alignment(horizontal='center')
         row += 1
 
         # Total and date
         total_usd = sum(item['value'] for company in grouped_data.values()
-                       for ports in company.values()
-                       for items in ports.values()
-                       for item in items)
+                        for ports in company.values()
+                        for items in ports.values()
+                        for item in items)
         ws.merge_cells(f'A{row}:O{row}')
         cell = ws[f'A{row}']
         cell.value = f"Total USD $: {total_usd:,.2f}    {datetime.now().strftime('%d-%m-%Y')}"
@@ -333,7 +338,8 @@ def add_grouped_export_action(viewset_class):
             for item_name_key, ports_dict in items_dict.items():
                 # Get the actual item name from first allotment for display
                 first_allot = next(iter(next(iter(ports_dict.values())))) if ports_dict else None
-                display_item_name = first_allot['item_name'] if first_allot and 'item_name' in first_allot else item_name_key
+                display_item_name = first_allot[
+                    'item_name'] if first_allot and 'item_name' in first_allot else item_name_key
 
                 # Item subheader (optional)
                 if len(items_dict) > 1:  # Only show if multiple items
@@ -347,8 +353,9 @@ def add_grouped_export_action(viewset_class):
                 for port_code, allotments in ports_dict.items():
                     # Table headers - allotment info + license subheader
                     main_headers = ['Sr No', 'Allotment Date', 'Port', 'Quantity (KGS)',
-                                   'Unit Price ($)', 'Value ($)', 'Item Name', 'Invoice', 'ETA', 'BOE']
-                    license_headers = ['DFIA No.', 'DFIA Date', 'DFIA Port', 'Item Sr. NO.', 'DFIA Qty.', 'DFIA $.', 'DFIA CIF']
+                                    'Unit Price ($)', 'Value ($)', 'Item Name', 'Invoice', 'ETA', 'BOE']
+                    license_headers = ['DFIA No.', 'DFIA Date', 'DFIA Port', 'Item Sr. NO.', 'DFIA Qty.', 'DFIA $.',
+                                       'DFIA CIF']
 
                     # Write main headers
                     for col_idx, header in enumerate(main_headers, 1):
@@ -422,7 +429,8 @@ def add_grouped_export_action(viewset_class):
                                 cell = ws.cell(row=row, column=col_idx, value=value)
                                 cell.border = border
                                 cell.alignment = Alignment(horizontal='center', vertical='center')
-                                if col_idx in [len(main_headers) + 5, len(main_headers) + 6, len(main_headers) + 7]:  # Qty, Value, and CIF columns
+                                if col_idx in [len(main_headers) + 5, len(main_headers) + 6,
+                                               len(main_headers) + 7]:  # Qty, Value, and CIF columns
                                     cell.alignment = Alignment(horizontal='right', vertical='center')
                             row += 1
 
@@ -430,7 +438,7 @@ def add_grouped_export_action(viewset_class):
                         if len(allot['details']) > 1:
                             for col_idx in range(1, len(main_headers) + 1):
                                 ws.merge_cells(start_row=start_row_for_allot, start_column=col_idx,
-                                             end_row=row - 1, end_column=col_idx)
+                                               end_row=row - 1, end_column=col_idx)
 
                         sr_no += 1
 
@@ -509,13 +517,15 @@ def add_grouped_export_action(viewset_class):
             item_name_key = item_name.upper()  # Case-insensitive grouping key
 
             allot_data = {
-                'date': allotment.estimated_arrival_date.strftime('%d-%m-%Y') if allotment.estimated_arrival_date else '--',
+                'date': allotment.estimated_arrival_date.strftime(
+                    '%d-%m-%Y') if allotment.estimated_arrival_date else '--',
                 'port': port_code,
                 'quantity': float(allotment.required_quantity or 0),
                 'unit_price': float(allotment.unit_value_per_unit or 0),
                 'value': float(allotment.required_value or 0),
                 'invoice': allotment.invoice or '--',
-                'eta': allotment.estimated_arrival_date.strftime('%d-%m-%Y') if allotment.estimated_arrival_date else '--',
+                'eta': allotment.estimated_arrival_date.strftime(
+                    '%d-%m-%Y') if allotment.estimated_arrival_date else '--',
                 'is_boe': allotment.is_boe,
                 'details': []
             }
@@ -525,7 +535,8 @@ def add_grouped_export_action(viewset_class):
                 license_obj = detail.item.license if detail.item else None
                 allot_data['details'].append({
                     'dfia_no': license_obj.license_number if license_obj else '--',
-                    'dfia_date': license_obj.license_date.strftime('%d-%m-%Y') if license_obj and license_obj.license_date else '--',
+                    'dfia_date': license_obj.license_date.strftime(
+                        '%d-%m-%Y') if license_obj and license_obj.license_date else '--',
                     'dfia_port': license_obj.port.code if license_obj and license_obj.port else '--',
                     'item_sr_no': str(detail.item.serial_number) if detail.item else '--',
                     'dfia_qty': float(detail.qty or 0),

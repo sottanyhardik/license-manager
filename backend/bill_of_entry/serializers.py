@@ -86,10 +86,12 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
             'total_quantity',
             'licenses',
             'unit_price',
-            'created_at',
-            'updated_at',
+            'created_on',
+            'modified_on',
+            'created_by',
+            'modified_by',
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_on', 'modified_on', 'created_by', 'modified_by']
 
     def create(self, validated_data):
         """Create BOE with nested item details"""
@@ -154,8 +156,11 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
             representation['allotments'] = [
                 {
                     'id': allot.id,
-                    'allotment_no': allot.allotment_no,
-                    'allotment_date': allot.allotment_date,
+                    'item_name': allot.item_name,
+                    'invoice': allot.invoice,
+                    'required_quantity': str(allot.required_quantity),
+                    'estimated_arrival_date': allot.estimated_arrival_date,
+                    'company': allot.company.name if allot.company else None,
                 }
                 for allot in allotments
             ]

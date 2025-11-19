@@ -116,18 +116,9 @@ export default function MasterForm() {
             // Get current form data with the new update applied
             const currentData = {...formData, ...updates};
 
-            // Priority 1: Calculate cif_fc from cif_inr and exchange_rate
-            if ((field === "cif_inr" || field === "exchange_rate") && currentData.cif_inr && currentData.exchange_rate) {
-                const cifInr = parseFloat(currentData.cif_inr);
-                const exchangeRate = parseFloat(currentData.exchange_rate);
-                if (!isNaN(cifInr) && !isNaN(exchangeRate) && exchangeRate > 0) {
-                    updates.cif_fc = (cifInr / exchangeRate).toFixed(2);
-                    currentData.cif_fc = updates.cif_fc; // Update for next calculation
-                }
-            }
-            // Priority 2: Calculate cif_fc from unit_value_per_unit and required_quantity
-            // Recalculate when either unit_value_per_unit or required_quantity changes
-            else if ((field === "unit_value_per_unit" || field === "required_quantity")
+            // Priority 1: Calculate cif_fc from unit_value_per_unit and required_quantity
+            // Calculate whenever unit_value, quantity, or exchange_rate changes
+            if ((field === "unit_value_per_unit" || field === "required_quantity" || field === "exchange_rate")
                 && currentData.unit_value_per_unit && currentData.required_quantity) {
                 const unitValue = parseFloat(currentData.unit_value_per_unit);
                 const requiredQty = parseFloat(currentData.required_quantity);
@@ -136,11 +127,8 @@ export default function MasterForm() {
                     currentData.cif_fc = updates.cif_fc; // Update for next calculation
                 }
             }
-
-            // Calculate unit_value_per_unit from cif_fc and required_quantity (but not when user is entering unit_value_per_unit)
-            // Use 3 decimal places and round up
-            if (field !== "unit_value_per_unit" && (field === "cif_fc" || field === "required_quantity" || field === "cif_inr" || field === "exchange_rate")
-                && currentData.cif_fc && currentData.required_quantity) {
+            // Priority 2: If cif_fc provided but unit_value not, calculate unit_value
+            else if (field === "cif_fc" && currentData.cif_fc && currentData.required_quantity && !currentData.unit_value_per_unit) {
                 const cifFc = parseFloat(currentData.cif_fc);
                 const requiredQty = parseFloat(currentData.required_quantity);
                 if (!isNaN(cifFc) && !isNaN(requiredQty) && requiredQty > 0) {
@@ -149,9 +137,8 @@ export default function MasterForm() {
                 }
             }
 
-            // Calculate cif_inr from cif_fc and exchange_rate
-            if ((field === "cif_fc" || field === "exchange_rate" || field === "unit_value_per_unit")
-                && currentData.cif_fc && currentData.exchange_rate) {
+            // Always recalculate cif_inr from cif_fc and exchange_rate when both are present and valid
+            if (currentData.cif_fc && currentData.exchange_rate) {
                 const cifFc = parseFloat(currentData.cif_fc);
                 const exchangeRate = parseFloat(currentData.exchange_rate);
                 if (!isNaN(cifFc) && !isNaN(exchangeRate) && exchangeRate > 0) {
@@ -339,11 +326,11 @@ export default function MasterForm() {
 
                 if (isEdit) {
                     response = await api.patch(`${apiPath}${id}/`, formDataObj, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
+                        headers: {'Content-Type': 'multipart/form-data'}
                     });
                 } else {
                     response = await api.post(apiPath, formDataObj, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
+                        headers: {'Content-Type': 'multipart/form-data'}
                     });
                 }
             } else {

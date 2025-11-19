@@ -148,6 +148,46 @@ export default function App() {
                             }
                         />
 
+                        {/* Bill of Entry CRUD Routes */}
+                        <Route
+                            path="/bill-of-entries"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterList/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/bill-of-entries/create"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterForm/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/bill-of-entries/:id/edit"
+                            element={
+                                <ProtectedRoute>
+                                    <RoleRoute roles={["admin", "manager"]}>
+                                        <AdminLayout>
+                                            <MasterForm/>
+                                        </AdminLayout>
+                                    </RoleRoute>
+                                </ProtectedRoute>
+                            }
+                        />
+
                         <Route
                             path="/settings"
                             element={

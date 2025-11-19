@@ -24,7 +24,8 @@ export default function MasterList() {
     // Determine the actual entity name - either from params or from path
     const entityName = entity ||
         (location.pathname.startsWith('/licenses') ? 'licenses' : null) ||
-        (location.pathname.startsWith('/allotments') ? 'allotments' : null);
+        (location.pathname.startsWith('/allotments') ? 'allotments' : null) ||
+        (location.pathname.startsWith('/bill-of-entries') ? 'bill-of-entries' : null);
     const [data, setData] = useState([]);
     const [metadata, setMetadata] = useState({});
     const [loading, setLoading] = useState(true);
@@ -62,8 +63,8 @@ export default function MasterList() {
                 ...filters
             };
 
-            // Determine API endpoint - licenses/allotments go directly, masters go to /api/masters/:entity
-            const apiPath = (entityName === 'licenses' || entityName === 'allotments')
+            // Determine API endpoint - licenses/allotments/bill-of-entries go directly, masters go to /api/masters/:entity
+            const apiPath = (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries')
                 ? `/${entityName}/`
                 : `/masters/${entityName}/`;
             const {data: response} = await api.get(apiPath, {params});

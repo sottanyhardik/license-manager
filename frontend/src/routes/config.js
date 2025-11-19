@@ -24,6 +24,14 @@ export const routes = [
         icon: "box-seam",
     },
     {
+        path: "/bill-of-entries",
+        label: "Bill of Entry",
+        component: "MasterList",
+        protected: true,
+        roles: ["admin", "manager"],
+        icon: "receipt",
+    },
+    {
         path: "/settings",
         label: "Settings",
         component: "Settings",

@@ -84,6 +84,15 @@ class BillOfEntryModel(AuditModel):
         ordering = ("-bill_of_entry_date",)
         verbose_name = "Bill of Entry"
         verbose_name_plural = "Bills of Entry"
+        indexes = [
+            models.Index(fields=['bill_of_entry_number']),
+            models.Index(fields=['company', 'bill_of_entry_date']),
+            models.Index(fields=['port', 'bill_of_entry_date']),
+            models.Index(fields=['bill_of_entry_date']),
+            models.Index(fields=['invoice_no', 'invoice_date']),
+            models.Index(fields=['is_fetch']),
+            models.Index(fields=['product_name']),
+        ]
 
     def __str__(self):
         return self.bill_of_entry_number

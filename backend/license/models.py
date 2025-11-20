@@ -112,6 +112,18 @@ class LicenseDetailsModel(AuditModel):
 
     class Meta:
         ordering = ("license_expiry_date",)
+        indexes = [
+            models.Index(fields=['license_number']),  # Already unique, but helps with lookups
+            models.Index(fields=['file_number']),
+            models.Index(fields=['exporter', 'license_date']),
+            models.Index(fields=['port', 'license_date']),
+            models.Index(fields=['purchase_status']),
+            models.Index(fields=['license_date']),
+            models.Index(fields=['license_expiry_date']),
+            models.Index(fields=['is_active', 'is_expired']),
+            models.Index(fields=['balance_cif']),
+            models.Index(fields=['current_owner']),
+        ]
 
     def __str__(self) -> str:
         return self.license_number

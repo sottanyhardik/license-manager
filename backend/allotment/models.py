@@ -111,6 +111,15 @@ class AllotmentModel(AuditModel):
 
     class Meta:
         ordering = ["estimated_arrival_date"]
+        indexes = [
+            models.Index(fields=['company', 'estimated_arrival_date']),
+            models.Index(fields=['port', 'estimated_arrival_date']),
+            models.Index(fields=['related_company']),
+            models.Index(fields=['estimated_arrival_date']),
+            models.Index(fields=['is_boe', 'is_allotted']),
+            models.Index(fields=['type']),
+            models.Index(fields=['invoice']),
+        ]
 
     def __str__(self):
         return (

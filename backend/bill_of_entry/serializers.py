@@ -13,9 +13,7 @@ class RowDetailsSerializer(serializers.ModelSerializer):
         model = RowDetails
         fields = [
             'id',
-            'row_type',
             'sr_number',
-            'transaction_type',
             'cif_inr',
             'cif_fc',
             'qty',

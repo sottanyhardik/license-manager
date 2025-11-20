@@ -81,16 +81,23 @@ CO = "CO"
 RA = "RA"
 LM = "LM"
 
-LICENCE_PURCHASE_CHOICES = (
-    (GE, "GE Purchase"),
-    (MI, "GE Operating"),
-    (IP, "GE Item Purchase"),
-    (SM, "SM Purchase"),
-    (OT, "OT Purchase"),
-    (CO, "Conversion"),
-    (RA, "Ravi Foods"),
-    (LM, "LM Purchase"),
+# Full choices with is_active status (value, label, is_active)
+LICENCE_PURCHASE_CHOICES_FULL = (
+    (GE, "GE Purchase", True),
+    (MI, "GE Operating", True),
+    (IP, "GE Item Purchase", True),
+    (SM, "SM Purchase", True),
+    (OT, "OT Purchase", True),
+    (CO, "Conversion", True),
+    (RA, "Ravi Foods", True),
+    (LM, "LM Purchase", False),  # Hidden/inactive
 )
+
+# Standard choices for model field (all options)
+LICENCE_PURCHASE_CHOICES = tuple((code, label) for code, label, _ in LICENCE_PURCHASE_CHOICES_FULL)
+
+# Active choices only (for display in UI)
+LICENCE_PURCHASE_CHOICES_ACTIVE = tuple((code, label) for code, label, active in LICENCE_PURCHASE_CHOICES_FULL if active)
 
 # ───────────────────────────────
 # Decimal Defaults

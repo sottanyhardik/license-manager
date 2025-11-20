@@ -18,14 +18,17 @@ import Select from "react-select";
  * - onFilterChange: callback function(filterParams)
  */
 export default function AdvancedFilter({filterConfig = {}, searchFields = [], onFilterChange, initialFilters = {}, defaultFilters = {}}) {
-    const [searchTerm, setSearchTerm] = useState("");
+    // Initialize search term from initialFilters if present
+    const [searchTerm, setSearchTerm] = useState(initialFilters.search || "");
     // Merge default filters with initial filters - defaultFilters are fallback values
-    const [filterValues, setFilterValues] = useState({...defaultFilters, ...initialFilters});
+    // Remove 'search' from filterValues as it's managed separately
+    const {search: _search, ...initialFiltersWithoutSearch} = initialFilters;
+    const [filterValues, setFilterValues] = useState({...defaultFilters, ...initialFiltersWithoutSearch});
     const isInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
     const skipNextAutoApply = useRef(false);
 
-    // Update filterValues when initialFilters change - but only if they actually changed
+    // Update filterValues and searchTerm when initialFilters change
     useEffect(() => {
         // On initial mount, don't update (already set in useState)
         if (isInitialMount.current) {
@@ -38,7 +41,15 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
         if (JSON.stringify(prevInitialFilters.current) !== JSON.stringify(initialFilters)) {
             prevInitialFilters.current = initialFilters;
             skipNextAutoApply.current = true; // Skip auto-apply since parent is updating
-            setFilterValues({...defaultFilters, ...initialFilters});
+
+            // Update search term if present
+            if (initialFilters.search !== undefined) {
+                setSearchTerm(initialFilters.search || "");
+            }
+
+            // Update filter values (excluding search)
+            const {search: _s, ...filtersWithoutSearch} = initialFilters;
+            setFilterValues({...defaultFilters, ...filtersWithoutSearch});
         }
     }, [initialFilters, defaultFilters]);
 
@@ -60,6 +71,7 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
 
             // Process filter values
             Object.entries(filterValues).forEach(([key, value]) => {
+                // Include all non-empty values, including "all" to explicitly disable defaults
                 if (value !== null && value !== undefined && value !== "") {
                     params[key] = value;
                 }
@@ -181,8 +193,8 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                                     className="btn-check"
                                     name={`${fieldName}-options`}
                                     id={`${fieldName}-all`}
-                                    checked={!filterValues[fieldName] && filterValues[fieldName] !== false}
-                                    onChange={() => handleFilterChange(fieldName, "")}
+                                    checked={filterValues[fieldName] === "all" || (!filterValues[fieldName] && filterValues[fieldName] !== "True" && filterValues[fieldName] !== "False")}
+                                    onChange={() => handleFilterChange(fieldName, "all")}
                                 />
                                 <label className="btn btn-outline-secondary" htmlFor={`${fieldName}-all`}>
                                     All

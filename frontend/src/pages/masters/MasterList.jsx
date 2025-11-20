@@ -1,6 +1,7 @@
 import {useEffect, useState, useCallback, useRef} from "react";
 import {Link, useParams, useLocation, useNavigate} from "react-router-dom";
 import api from "../../api/axios";
+import {boeApi} from "../../services/api";
 import AdvancedFilter from "../../components/AdvancedFilter";
 import DataPagination from "../../components/DataPagination";
 import DataTable from "../../components/DataTable";
@@ -83,14 +84,22 @@ export default function MasterList() {
                 ...filters
             };
 
-            // Determine API endpoint - licenses/allotments/bill-of-entries go directly, masters go to /api/masters/:entity
-            const apiPath = (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries')
-                ? `/${entityName}/`
-                : `/masters/${entityName}/`;
+            let response;
 
-            console.log("📡 API Call:", apiPath, params);
+            // Use dedicated API service for bill-of-entries
+            if (entityName === 'bill-of-entries') {
+                response = await boeApi.fetchBOEList(params);
+            } else {
+                // Determine API endpoint - licenses/allotments go directly, masters go to /api/masters/:entity
+                const apiPath = (entityName === 'licenses' || entityName === 'allotments')
+                    ? `/${entityName}/`
+                    : `/masters/${entityName}/`;
 
-            const {data: response} = await api.get(apiPath, {params});
+                console.log("📡 API Call:", apiPath, params);
+
+                const {data: apiResponse} = await api.get(apiPath, {params});
+                response = apiResponse;
+            }
 
             setData(response.results || []);
             setMetadata({
@@ -183,8 +192,12 @@ export default function MasterList() {
         }
 
         try {
-            const apiPath = entityName === 'licenses' ? `/licenses/${item.id}/` : `/masters/${entityName}/${item.id}/`;
-            await api.delete(apiPath);
+            if (entityName === 'bill-of-entries') {
+                await boeApi.deleteBOE(item.id);
+            } else {
+                const apiPath = entityName === 'licenses' ? `/licenses/${item.id}/` : `/masters/${entityName}/${item.id}/`;
+                await api.delete(apiPath);
+            }
             fetchData(currentPage, pageSize, filterParams);
         } catch (err) {
             alert(err.response?.data?.detail || "Failed to delete record");
@@ -193,40 +206,17 @@ export default function MasterList() {
 
     const handleExport = async (format) => {
         try {
-            const params = {
-                ...filterParams,
-                _export: format
-            };
+            if (entityName === 'bill-of-entries') {
+                // Use boeApi for exports with filters
+                const blob = format === 'pdf'
+                    ? await boeApi.exportBOEListPDF(filterParams)
+                    : await boeApi.exportBOEListExcel(filterParams);
 
-            let apiPath;
-            if (entityName === 'licenses') {
-                apiPath = `/licenses/export/`;
-            } else if (entityName === 'allotments') {
-                apiPath = `/allotments/download/`;
-            } else if (entityName === 'bill-of-entries') {
-                apiPath = `/bill-of-entries/export/`;
-            } else {
-                apiPath = `/masters/${entityName}/export/`;
-            }
-
-            if (format === 'pdf') {
-                // For PDF, open direct API URL in new tab (allows refresh)
-                const queryString = new URLSearchParams(params).toString();
-                const baseURL = (api.defaults.baseURL || 'http://127.0.0.1:8000/api').replace(/\/$/, '');
-                const cleanApiPath = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
-                const fullUrl = `${baseURL}${cleanApiPath}?${queryString}`;
-                window.open(fullUrl, '_blank');
-            } else {
-                // For Excel, download as before
-                const response = await api.get(apiPath, {
-                    params,
-                    responseType: 'blob'
+                // Download blob
+                const blobObj = new Blob([blob], {
+                    type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 });
-
-                const blob = new Blob([response.data], {
-                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                });
-                const url = window.URL.createObjectURL(blob);
+                const url = window.URL.createObjectURL(blobObj);
                 const link = document.createElement('a');
                 link.href = url;
                 link.setAttribute('download', `${entityName}_${new Date().toISOString().split('T')[0]}.${format}`);
@@ -234,6 +224,47 @@ export default function MasterList() {
                 link.click();
                 link.remove();
                 window.URL.revokeObjectURL(url);
+            } else {
+                const params = {
+                    ...filterParams,
+                    _export: format
+                };
+
+                let apiPath;
+                if (entityName === 'licenses') {
+                    apiPath = `/licenses/export/`;
+                } else if (entityName === 'allotments') {
+                    apiPath = `/allotments/download/`;
+                } else {
+                    apiPath = `/masters/${entityName}/export/`;
+                }
+
+                if (format === 'pdf') {
+                    // For PDF, open direct API URL in new tab (allows refresh)
+                    const queryString = new URLSearchParams(params).toString();
+                    const baseURL = (api.defaults.baseURL || 'http://127.0.0.1:8000/api').replace(/\/$/, '');
+                    const cleanApiPath = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+                    const fullUrl = `${baseURL}${cleanApiPath}?${queryString}`;
+                    window.open(fullUrl, '_blank');
+                } else {
+                    // For Excel, download as before
+                    const response = await api.get(apiPath, {
+                        params,
+                        responseType: 'blob'
+                    });
+
+                    const blob = new Blob([response.data], {
+                        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    });
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.setAttribute('download', `${entityName}_${new Date().toISOString().split('T')[0]}.${format}`);
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.URL.revokeObjectURL(url);
+                }
             }
         } catch (err) {
             alert(err.response?.data?.detail || `Failed to export as ${format.toUpperCase()}`);

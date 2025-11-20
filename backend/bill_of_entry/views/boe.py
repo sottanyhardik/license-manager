@@ -1,21 +1,20 @@
 # bill_of_entry/views/boe.py
 from django.db.models import Q
-from core.constants import TYPE_CHOICES, ROW_TYPE_CHOICES
-from core.views.master_view import MasterViewSet
+
 from bill_of_entry.models import BillOfEntryModel
 from bill_of_entry.serializers import BillOfEntrySerializer
 from bill_of_entry.views_export import add_grouped_export_action
+from core.constants import TYPE_CHOICES, ROW_TYPE_CHOICES
+from core.views.master_view import MasterViewSet
 
 # Nested field definitions for Bill of Entry
 boe_nested_field_defs = {
     "item_details": [
         {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
-        {"name": "row_type", "type": "select", "label": "Row Type", "choices": list(ROW_TYPE_CHOICES)},
         {"name": "sr_number", "type": "fk", "label": "License Item",
          "fk_endpoint": "/api/license-items/",
          "label_field": "description",
          "display_field": "item_description"},
-        {"name": "transaction_type", "type": "select", "label": "Transaction Type", "choices": list(TYPE_CHOICES)},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)"},
         {"name": "qty", "type": "number", "label": "Quantity"},
@@ -66,11 +65,9 @@ BillOfEntryViewSet = MasterViewSet.create(
         "nested_field_defs": boe_nested_field_defs,
         "nested_list_display": {
             "item_details": [
-                "row_type",
                 "license_number",
                 "item_description",
                 "hs_code",
-                "transaction_type",
                 "qty",
                 "cif_fc",
                 "cif_inr",
@@ -106,6 +103,7 @@ BillOfEntryViewSet = add_grouped_export_action(BillOfEntryViewSet)
 original_get_queryset = BillOfEntryViewSet.get_queryset
 original_apply_advanced_filters = BillOfEntryViewSet.apply_advanced_filters
 
+
 def custom_get_queryset_with_defaults(self):
     """Override to apply default is_invoice filter and handle custom logic with performance optimizations"""
     qs = original_get_queryset(self)
@@ -133,6 +131,7 @@ def custom_get_queryset_with_defaults(self):
 
     return qs
 
+
 def custom_apply_advanced_filters(self, qs, params, filter_config):
     """Override to exclude is_invoice from advanced filter processing"""
     # Remove is_invoice from params before calling parent method
@@ -143,11 +142,13 @@ def custom_apply_advanced_filters(self, qs, params, filter_config):
 
     return original_apply_advanced_filters(self, qs, params_copy, filter_config)
 
+
 BillOfEntryViewSet.get_queryset = custom_get_queryset_with_defaults
 BillOfEntryViewSet.apply_advanced_filters = custom_apply_advanced_filters
 
 # Override list method to inject is_invoice into filter_config
 original_list = BillOfEntryViewSet.list
+
 
 def custom_list(self, request, *args, **kwargs):
     """Override list to add is_invoice to filter_config for UI"""
@@ -161,5 +162,6 @@ def custom_list(self, request, *args, **kwargs):
         }
 
     return response
+
 
 BillOfEntryViewSet.list = custom_list

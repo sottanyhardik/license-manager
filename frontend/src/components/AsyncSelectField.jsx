@@ -97,11 +97,7 @@ export default function AsyncSelectField({
             // Parse ID if it's a number string
             const numId = typeof id === 'string' ? parseInt(id, 10) : id;
 
-            // Check if option exists in defaultOptions first
-            const existing = defaultOptions.find(opt => opt.value === numId || opt.value === id);
-            if (existing) return existing;
-
-            // Otherwise fetch from API
+            // Fetch from API
             const {data} = await api.get(`${endpoint}${numId}/`);
             return formatOption(data);
         } catch (err) {

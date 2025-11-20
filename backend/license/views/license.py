@@ -1,5 +1,5 @@
 # license/views/license.py
-from core.constants import LICENCE_PURCHASE_CHOICES, SCHEME_CODE_CHOICES, NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
+from core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
 from core.views.master_view import MasterViewSet
 from license.models import LicenseDetailsModel
@@ -52,7 +52,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create(
             "export_license__norm_class": {"type": "fk", "fk_endpoint": "/masters/sion-classes/",
                                            "label_field": "norm_class"},
             "notification_number": {"type": "choice", "choices": list(NOTIFICATION_NORM_CHOICES)},
-            "purchase_status": {"type": "choice", "choices": list(LICENCE_PURCHASE_CHOICES)},
+            "purchase_status": {"type": "choice", "choices": list(LICENCE_PURCHASE_CHOICES_ACTIVE)},
             "license_date": {"type": "date_range"},
             "license_expiry_date": {"type": "date_range"},
             "is_expired": {"type": "exact"},
@@ -162,7 +162,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         # Handle is_expired filter - apply default if not provided
         is_expired_value = params.get('is_expired')
-        if is_expired_value is None or is_expired_value == "":
+
+        # Special case: if user explicitly selects "all", don't apply any filter
+        if is_expired_value and is_expired_value.lower() == "all":
+            is_expired_value = None
+        elif is_expired_value is None or is_expired_value == "":
             # Apply default if no value provided
             is_expired_value = default_filters.get('is_expired')
 
@@ -177,7 +181,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         # Handle is_null filter - apply default if not provided
         is_null_value = params.get('is_null')
-        if is_null_value is None or is_null_value == "":
+
+        # Special case: if user explicitly selects "all", don't apply any filter
+        if is_null_value and is_null_value.lower() == "all":
+            is_null_value = None
+        elif is_null_value is None or is_null_value == "":
             # Apply default if no value provided
             is_null_value = default_filters.get('is_null')
 

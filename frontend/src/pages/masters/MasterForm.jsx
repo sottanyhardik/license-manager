@@ -21,7 +21,8 @@ export default function MasterForm() {
     // Determine the actual entity name - either from params or from path
     const entityName = entity ||
         (location.pathname.includes('/licenses') ? 'licenses' : null) ||
-        (location.pathname.includes('/allotments') ? 'allotments' : null);
+        (location.pathname.includes('/allotments') ? 'allotments' : null) ||
+        (location.pathname.includes('/bill-of-entries') ? 'bill-of-entries' : null);
     const isEdit = Boolean(id);
 
     const [formData, setFormData] = useState({});
@@ -57,7 +58,7 @@ export default function MasterForm() {
 
     const fetchMetadata = async () => {
         try {
-            const apiPath = (entityName === 'licenses' || entityName === 'allotments')
+            const apiPath = (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries')
                 ? `/${entityName}/`
                 : `/masters/${entityName}/`;
             const {data} = await api.options(apiPath);
@@ -74,7 +75,7 @@ export default function MasterForm() {
     const fetchRecord = async () => {
         setLoading(true);
         try {
-            const apiPath = (entityName === 'licenses' || entityName === 'allotments')
+            const apiPath = (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries')
                 ? `/${entityName}/${id}/`
                 : `/masters/${entityName}/${id}/`;
             const {data} = await api.get(apiPath);
@@ -269,7 +270,7 @@ export default function MasterForm() {
         setFieldErrors({});
 
         try {
-            const apiPath = (entityName === 'licenses' || entityName === 'allotments')
+            const apiPath = (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries')
                 ? `/${entityName}/`
                 : `/masters/${entityName}/`;
 
@@ -350,6 +351,8 @@ export default function MasterForm() {
                 // For allotments, redirect to action page after save
                 const savedId = response.data.id || id;
                 redirectPath = `/allotments/${savedId}/allocate`;
+            } else if (entityName === 'bill-of-entries') {
+                redirectPath = `/bill-of-entries`;
             } else {
                 redirectPath = `/masters/${entityName}`;
             }
@@ -594,7 +597,17 @@ export default function MasterForm() {
                                     <button
                                         type="button"
                                         className="btn btn-secondary"
-                                        onClick={() => navigate(entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`)}
+                                        onClick={() => {
+                                            if (entityName === 'licenses') {
+                                                navigate('/licenses');
+                                            } else if (entityName === 'allotments') {
+                                                navigate('/allotments');
+                                            } else if (entityName === 'bill-of-entries') {
+                                                navigate('/bill-of-entries');
+                                            } else {
+                                                navigate(`/masters/${entityName}`);
+                                            }
+                                        }}
                                         disabled={saving}
                                     >
                                         Cancel

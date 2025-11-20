@@ -105,12 +105,18 @@ AllotmentViewSet = MasterViewSet.create(
 # Add grouped export functionality
 AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)
 
-# Add default filters
+# Add default filters and performance optimizations
 original_get_queryset = AllotmentViewSet.get_queryset
 
 def custom_get_queryset_with_defaults(self):
-    """Override to apply default filters if no filters are specified"""
+    """Override to apply default filters and performance optimizations"""
     qs = original_get_queryset(self)
+
+    # Add select_related for FK fields to avoid N+1 queries
+    qs = qs.select_related('company', 'port', 'related_company')
+
+    # Prefetch related allotment_details for better performance
+    qs = qs.prefetch_related('allotment_details')
 
     params = self.request.query_params
 

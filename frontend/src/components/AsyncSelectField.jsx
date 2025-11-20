@@ -28,15 +28,10 @@ export default function AsyncSelectField({
     isClearable = true,
     isDisabled = false,
     formatLabel = null,
-    className = ""
+    className = "",
+    loadOnMount = false  // NEW: Control whether to load options on mount
 }) {
-    const [defaultOptions, setDefaultOptions] = useState([]);
     const [selectedOption, setSelectedOption] = useState(null);
-
-    // Load default options on mount
-    useEffect(() => {
-        loadDefaultOptions();
-    }, [endpoint]);
 
     // Sync internal state with external value
     useEffect(() => {
@@ -47,18 +42,23 @@ export default function AsyncSelectField({
         }
     }, [value]);
 
+    // Only load default options if explicitly requested (not used for filters)
     const loadDefaultOptions = async () => {
+        if (!loadOnMount) {
+            // For lazy loading (filters), return empty and let loadOptions handle it
+            return [];
+        }
+
         try {
             const {data} = await api.get(endpoint, {
                 params: {page_size: 50} // Load first 50 options
             });
 
             const results = data.results || data || [];
-            const options = results.map(item => formatOption(item));
-            setDefaultOptions(options);
+            return results.map(item => formatOption(item));
         } catch (err) {
             console.error("Error loading default options:", err);
-            setDefaultOptions([]);
+            return [];
         }
     };
 
@@ -159,7 +159,7 @@ export default function AsyncSelectField({
     return (
         <AsyncSelect
             cacheOptions
-            defaultOptions={defaultOptions}
+            defaultOptions={loadOnMount}  // If false, loads only when dropdown opens
             loadOptions={loadOptions}
             value={selectedOption}
             onChange={handleChange}

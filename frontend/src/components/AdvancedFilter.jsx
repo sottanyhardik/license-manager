@@ -23,6 +23,7 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
     const [filterValues, setFilterValues] = useState({...defaultFilters, ...initialFilters});
     const isInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
+    const skipNextAutoApply = useRef(false);
 
     // Update filterValues when initialFilters change - but only if they actually changed
     useEffect(() => {
@@ -36,12 +37,19 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
         // Only update if initialFilters actually changed (not just a re-render)
         if (JSON.stringify(prevInitialFilters.current) !== JSON.stringify(initialFilters)) {
             prevInitialFilters.current = initialFilters;
+            skipNextAutoApply.current = true; // Skip auto-apply since parent is updating
             setFilterValues({...defaultFilters, ...initialFilters});
         }
     }, [initialFilters, defaultFilters]);
 
     // Auto-apply filters with debounce
     useEffect(() => {
+        // Skip auto-apply if the change came from parent (initialFilters update)
+        if (skipNextAutoApply.current) {
+            skipNextAutoApply.current = false;
+            return;
+        }
+
         const timeoutId = setTimeout(() => {
             const params = {};
 

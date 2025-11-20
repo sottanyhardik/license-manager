@@ -57,8 +57,22 @@ export default function MasterList() {
 
     const [filterParams, setFilterParams] = useState(getDefaultFilters());
     const backendDefaultsApplied = useRef(false);
+    const pendingRequestRef = useRef(null);
 
     const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
+        // If there's already a pending request with same params, skip this one
+        const requestKey = JSON.stringify({page, size, filters, entity: entityName});
+
+        if (pendingRequestRef.current === requestKey) {
+            console.log("🚫 Skipping duplicate request - already in progress");
+            return;
+        }
+
+        // Mark this request as pending
+        pendingRequestRef.current = requestKey;
+
+        console.log("🔄 Fetching data:", {page, size, filters, entity: entityName});
+
         setLoading(true);
         setError("");
 
@@ -73,6 +87,9 @@ export default function MasterList() {
             const apiPath = (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries')
                 ? `/${entityName}/`
                 : `/masters/${entityName}/`;
+
+            console.log("📡 API Call:", apiPath, params);
+
             const {data: response} = await api.get(apiPath, {params});
 
             setData(response.results || []);
@@ -101,6 +118,8 @@ export default function MasterList() {
             setError(err.response?.data?.detail || "Failed to load data");
         } finally {
             setLoading(false);
+            // Clear the pending request marker
+            pendingRequestRef.current = null;
         }
     }, [entityName]);
 
@@ -108,42 +127,35 @@ export default function MasterList() {
     useEffect(() => {
         if (!entityName) return;
 
-        // Reset the backend defaults flag when entity changes
+        // Reset flags when entity changes
         backendDefaultsApplied.current = false;
+        pendingRequestRef.current = null;
 
         setCurrentPage(1);
         const defaultFilters = getDefaultFilters();
-        setFilterParams(defaultFilters);
 
-        // For entities with hardcoded defaults (allotments, BOE), fetch immediately
-        // For others (licenses), we'll wait for backend defaults
-        if (Object.keys(defaultFilters).length > 0) {
-            backendDefaultsApplied.current = true; // Mark as applied for hardcoded defaults
-            fetchData(1, 25, defaultFilters);
-        } else {
-            // Fetch without filters first to get metadata
-            fetchData(1, 25, {});
-        }
+        // For entities with hardcoded defaults (allotments, BOE), apply them
+        // For entities with backend defaults (licenses), the backend will apply them automatically
+        // So we can just fetch once with hardcoded defaults (or empty for backend defaults)
+        setFilterParams(defaultFilters);
+        backendDefaultsApplied.current = true; // Mark as applied
+        fetchData(1, 25, defaultFilters);
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entityName]);
 
-    // Apply backend default filters when metadata is loaded (for licenses)
+    // Update filterParams when backend default filters are received (for UI display only)
     useEffect(() => {
         // Skip if we've already applied backend defaults for this entity
-        if (backendDefaultsApplied.current) return;
+        if (backendDefaultsApplied.current && Object.keys(filterParams).length > 0) return;
 
         const backendDefaults = metadata.default_filters || {};
         const hardcodedDefaults = getDefaultFilters();
 
-        // Only apply backend defaults if we have them and no hardcoded defaults
+        // Only update UI state if we have backend defaults and no hardcoded defaults
+        // Don't refetch - backend already applied them
         if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
-            // Mark as applied to prevent re-application
-            backendDefaultsApplied.current = true;
-
-            // Apply backend defaults and refetch data
             setFilterParams(backendDefaults);
-            setCurrentPage(1);
-            fetchData(1, pageSize, backendDefaults);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [metadata.default_filters]);

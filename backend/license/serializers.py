@@ -196,6 +196,12 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("created_by", "modified_by", "created_on", "modified_on")
 
+    def get_get_balance_cif(self, obj):
+        """Return balance_cif field directly instead of computing it."""
+        # Use the model field directly, not the computed property
+        # The property runs expensive queries which causes performance issues in list views
+        return obj.balance_cif
+
     def __init__(self, *args, **kwargs):
         """
         Swap any DateTimeField in self.fields for SafeDateTimeField so that

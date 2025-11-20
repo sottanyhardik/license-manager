@@ -139,13 +139,33 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     - is_null: True when balance_cif < 200, False when balance_cif >= 200
     """
 
+    def get_queryset(self):
+        """
+        Override to add performance optimizations with select_related.
+        """
+        qs = super().get_queryset()
+
+        # Add select_related for ForeignKey fields to avoid N+1 queries
+        qs = qs.select_related('exporter', 'port', 'current_owner')
+
+        # For list view, don't prefetch nested items - they're only needed in detail view
+        # This dramatically improves list performance
+        return qs
+
     def apply_advanced_filters(self, qs, params, filter_config):
-        """Override to add custom logic for is_expired and is_null."""
+        """Override to add custom logic for is_expired and is_null with default values."""
         from datetime import date
         from django.db.models import Q
 
-        # Handle is_expired filter
+        # Get default filters
+        default_filters = getattr(self, "default_filters", {})
+
+        # Handle is_expired filter - apply default if not provided
         is_expired_value = params.get('is_expired')
+        if is_expired_value is None or is_expired_value == "":
+            # Apply default if no value provided
+            is_expired_value = default_filters.get('is_expired')
+
         if is_expired_value is not None and is_expired_value != "":
             today = date.today()
             if is_expired_value in ("True", "true", "1", True):
@@ -155,8 +175,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 # Show non-expired licenses: expiry_date >= today OR null
                 qs = qs.filter(Q(license_expiry_date__gte=today) | Q(license_expiry_date__isnull=True))
 
-        # Handle is_null filter
+        # Handle is_null filter - apply default if not provided
         is_null_value = params.get('is_null')
+        if is_null_value is None or is_null_value == "":
+            # Apply default if no value provided
+            is_null_value = default_filters.get('is_null')
+
         if is_null_value is not None and is_null_value != "":
             if is_null_value in ("True", "true", "1", True):
                 # Show null licenses: balance_cif < 200

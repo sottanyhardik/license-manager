@@ -107,8 +107,14 @@ original_get_queryset = BillOfEntryViewSet.get_queryset
 original_apply_advanced_filters = BillOfEntryViewSet.apply_advanced_filters
 
 def custom_get_queryset_with_defaults(self):
-    """Override to apply default is_invoice filter and handle custom logic"""
+    """Override to apply default is_invoice filter and handle custom logic with performance optimizations"""
     qs = original_get_queryset(self)
+
+    # Add select_related for FK fields to avoid N+1 queries
+    qs = qs.select_related('company', 'port')
+
+    # Prefetch related item_details for better performance
+    qs = qs.prefetch_related('item_details')
 
     params = self.request.query_params
 

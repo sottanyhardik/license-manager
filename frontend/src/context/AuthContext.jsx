@@ -1,4 +1,4 @@
-import {createContext, useEffect, useState} from "react";
+import {createContext, useEffect, useState, useRef} from "react";
 import api from "../api/axios";
 
 export const AuthContext = createContext();
@@ -10,8 +10,13 @@ export const AuthProvider = ({children}) => {
             : null
     );
     const [loading, setLoading] = useState(true);
+    const loadUserCalled = useRef(false);
 
     const loadUser = async () => {
+        // Prevent duplicate calls in StrictMode
+        if (loadUserCalled.current) return;
+        loadUserCalled.current = true;
+
         // Don't attempt to load user if no access token exists
         const token = localStorage.getItem("access");
         if (!token) {

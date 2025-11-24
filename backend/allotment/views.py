@@ -130,8 +130,11 @@ def custom_get_queryset_with_defaults(self):
         # For detail views, return all records without default filters
         return qs
 
-    # Handle special case for BOE edit: include current BOE's allotments
-    if params.get('is_boe') == 'false_or_current':
+    # Handle is_boe filter
+    is_boe_param = params.get('is_boe', '')
+
+    if is_boe_param == 'false_or_current':
+        # Special case for BOE edit: include current BOE's allotments
         current_boe_allotments = params.get('current_boe_allotments', '')
         if current_boe_allotments:
             allotment_ids = [int(id) for id in current_boe_allotments.split(',') if id.isdigit()]
@@ -139,9 +142,15 @@ def custom_get_queryset_with_defaults(self):
             qs = qs.filter(Q(is_boe=False) | Q(id__in=allotment_ids))
         else:
             qs = qs.filter(is_boe=False)
-    # Normal filtering
+    elif is_boe_param in ['false', 'False', '0']:
+        # Explicitly filter for is_boe=False
+        qs = qs.filter(is_boe=False)
+    elif is_boe_param in ['true', 'True', '1']:
+        # Explicitly filter for is_boe=True
+        qs = qs.filter(is_boe=True)
     elif 'is_boe' not in params:
-        qs = qs.filter(is_boe=False)  # Default: Not BOE
+        # Default: Not BOE (only if not specified)
+        qs = qs.filter(is_boe=False)
 
     # Apply default filters only if the user hasn't specified these filters
     if 'type' not in params:

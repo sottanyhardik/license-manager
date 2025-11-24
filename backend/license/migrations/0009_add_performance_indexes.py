@@ -5,10 +5,9 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('core', '0015_alter_invoiceentity_address_line_2'),
-        ('license', '0009_remove_licenseimportitemsmodel_is_restrict'),
+        ('license', '0008_cleanup_fields'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

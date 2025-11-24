@@ -4,6 +4,8 @@ from core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_AC
 from core.views.master_view import MasterViewSet
 from license.models import LicenseDetailsModel
 from license.serializers import LicenseDetailsSerializer
+from license.views.license_report import add_license_report_action
+from license.views.active_dfia_report import add_active_dfia_report_action
 
 # Nested field definitions for LicenseDetails
 license_nested_field_defs = {
@@ -41,7 +43,7 @@ license_nested_field_defs = {
 }
 
 # Create base viewset
-_LicenseDetailsViewSetBase = MasterViewSet.create(
+_LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
     LicenseDetailsModel,
     LicenseDetailsSerializer,
     config={
@@ -212,3 +214,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         qs = super().apply_advanced_filters(qs, filtered_params, filtered_config)
 
         return qs
+
+
+# Add license report actions to viewset
+LicenseDetailsViewSet = add_license_report_action(LicenseDetailsViewSet)
+LicenseDetailsViewSet = add_active_dfia_report_action(LicenseDetailsViewSet)

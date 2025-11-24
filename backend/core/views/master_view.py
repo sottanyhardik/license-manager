@@ -89,7 +89,7 @@ class MasterViewSet(viewsets.ModelViewSet):
 
     # --- Factory Method ---
     @classmethod
-    def create(cls, model: Type[models.Model], serializer, config: Optional[dict] | list = None):
+    def create_viewset(cls, model: Type[models.Model], serializer, config: Optional[dict] | list = None):
         """
         Factory to dynamically generate CRUD ViewSet classes.
 

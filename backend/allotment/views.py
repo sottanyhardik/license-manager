@@ -21,11 +21,11 @@ allotment_nested_field_defs = {
     ]
 }
 
-AllotmentViewSet = MasterViewSet.create(
+AllotmentViewSet = MasterViewSet.create_viewset(
     AllotmentModel,
     AllotmentSerializer,
     config={
-        "search": ["item_name", "company__name", "invoice", "bl_detail", "allotment_details__license_number"],
+        "search": ["item_name", "company__name", "invoice", "bl_detail", "allotment_details__item__license__license_number"],
         "filter": {
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
@@ -39,12 +39,12 @@ AllotmentViewSet = MasterViewSet.create(
         "list_display": [
             "modified_on",
             "company__name",
+            "invoice",
             "item_name",
             "required_quantity",
             "unit_value_per_unit",
             "required_value",
             "estimated_arrival_date",
-            "invoice",
             "is_boe",
             "is_allotted",
             "dfia_list"
@@ -108,8 +108,11 @@ AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)
 # Add default filters and performance optimizations
 original_get_queryset = AllotmentViewSet.get_queryset
 
+
 def custom_get_queryset_with_defaults(self):
     """Override to apply default filters and performance optimizations"""
+    from django.db.models import Q
+
     qs = original_get_queryset(self)
 
     # Add select_related for FK fields to avoid N+1 queries
@@ -120,16 +123,34 @@ def custom_get_queryset_with_defaults(self):
 
     params = self.request.query_params
 
+    # Don't apply default filters for retrieve/update/delete operations (detail views)
+    # Check if this is a detail operation by looking at the action
+    action = getattr(self, 'action', None)
+    if action in ['retrieve', 'update', 'partial_update', 'destroy']:
+        # For detail views, return all records without default filters
+        return qs
+
+    # Handle special case for BOE edit: include current BOE's allotments
+    if params.get('is_boe') == 'false_or_current':
+        current_boe_allotments = params.get('current_boe_allotments', '')
+        if current_boe_allotments:
+            allotment_ids = [int(id) for id in current_boe_allotments.split(',') if id.isdigit()]
+            # Show allotments that either don't have BOE OR are in the current BOE
+            qs = qs.filter(Q(is_boe=False) | Q(id__in=allotment_ids))
+        else:
+            qs = qs.filter(is_boe=False)
+    # Normal filtering
+    elif 'is_boe' not in params:
+        qs = qs.filter(is_boe=False)  # Default: Not BOE
+
     # Apply default filters only if the user hasn't specified these filters
     if 'type' not in params:
         qs = qs.filter(type='AT')  # Default: Allotment type
-
-    if 'is_boe' not in params:
-        qs = qs.filter(is_boe=False)  # Default: Not BOE
 
     if 'is_allotted' not in params:
         qs = qs.filter(is_allotted=True)  # Default: Allotted
 
     return qs
+
 
 AllotmentViewSet.get_queryset = custom_get_queryset_with_defaults

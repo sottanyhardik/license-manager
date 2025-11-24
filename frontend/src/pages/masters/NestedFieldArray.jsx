@@ -29,7 +29,9 @@ export default function NestedFieldArray({
                                              fieldKey = "",
                                              onFetchImports,
                                              updatedFields = {},
-                                             errors = []
+                                             errors = [],
+                                             entityName = "",
+                                             formData = {}
                                          }) {
 
     // Helper function to parse date from YYYY-MM-DD to Date object
@@ -60,9 +62,34 @@ export default function NestedFieldArray({
 
     const handleChange = (index, fieldName, fieldValue) => {
         const newArray = [...value];
+        const updates = {[fieldName]: fieldValue};
+
+        // Bill of Entry calculations for item_details
+        if (entityName === "bill-of-entries" && fieldKey === "item_details") {
+            const currentItem = {...newArray[index], ...updates};
+
+            // Calculate cif_fc from cif_inr when cif_inr changes
+            if (fieldName === "cif_inr" && fieldValue && formData.exchange_rate) {
+                const cifInr = parseFloat(fieldValue);
+                const exchangeRate = parseFloat(formData.exchange_rate);
+                if (!isNaN(cifInr) && !isNaN(exchangeRate) && exchangeRate > 0) {
+                    updates.cif_fc = (cifInr / exchangeRate).toFixed(2);
+                }
+            }
+
+            // Calculate cif_inr from cif_fc when cif_fc changes
+            if (fieldName === "cif_fc" && fieldValue && formData.exchange_rate) {
+                const cifFc = parseFloat(fieldValue);
+                const exchangeRate = parseFloat(formData.exchange_rate);
+                if (!isNaN(cifFc) && !isNaN(exchangeRate) && exchangeRate > 0) {
+                    updates.cif_inr = (cifFc * exchangeRate).toFixed(2);
+                }
+            }
+        }
+
         newArray[index] = {
             ...newArray[index],
-            [fieldName]: fieldValue
+            ...updates
         };
         onChange(newArray);
     };
@@ -185,6 +212,11 @@ export default function NestedFieldArray({
 
             // Custom label formatter
             const formatLabel = (opt) => {
+                // Special handling for license items - show license number, serial number, and description
+                if (endpoint.includes("license-items")) {
+                    return opt.label || `${opt.license_number || ''} - S.No.${opt.serial_number || ''} - ${opt.description || ''}`.trim();
+                }
+
                 // Special handling for hs_code - show hs_code field
                 if (endpoint.includes("hs-code")) {
                     return opt.hs_code || opt.name || opt.id;

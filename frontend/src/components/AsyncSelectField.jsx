@@ -31,34 +31,42 @@ export default function AsyncSelectField({
     className = "",
     loadOnMount = false  // NEW: Control whether to load options on mount
 }) {
+    // Strip /api/ prefix if it exists to avoid double /api/api/
+    let cleanEndpoint = endpoint?.startsWith('/api/') ? endpoint.substring(5) : endpoint;
+
+    // Parse endpoint to separate base URL and existing query params
+    const [baseEndpoint, queryString] = cleanEndpoint?.split('?') || [cleanEndpoint, ''];
+    const existingParams = new URLSearchParams(queryString);
+
     const [selectedOption, setSelectedOption] = useState(null);
 
-    // Sync internal state with external value
-    useEffect(() => {
-        if (value) {
-            loadSelectedOption(value);
+    const formatOption = (item) => {
+        let label;
+
+        if (formatLabel) {
+            label = formatLabel(item);
         } else {
-            setSelectedOption(null);
-        }
-    }, [value]);
-
-    // Only load default options if explicitly requested (not used for filters)
-    const loadDefaultOptions = async () => {
-        if (!loadOnMount) {
-            // For lazy loading (filters), return empty and let loadOptions handle it
-            return [];
+            label = item[labelField] || item[valueField] || String(item.id);
         }
 
+        return {
+            value: item[valueField],
+            label: label,
+            data: item
+        };
+    };
+
+    const fetchOptionById = async (id) => {
         try {
-            const {data} = await api.get(endpoint, {
-                params: {page_size: 50} // Load first 50 options
-            });
+            // Parse ID if it's a number string
+            const numId = typeof id === 'string' ? parseInt(id, 10) : id;
 
-            const results = data.results || data || [];
-            return results.map(item => formatOption(item));
+            // Fetch from API using base endpoint (without query params for detail view)
+            const {data} = await api.get(`${baseEndpoint}${numId}/`);
+            return formatOption(data);
         } catch (err) {
-            console.error("Error loading default options:", err);
-            return [];
+            console.error(`Error fetching option ${id}:`, err);
+            return null;
         }
     };
 
@@ -92,44 +100,24 @@ export default function AsyncSelectField({
         }
     };
 
-    const fetchOptionById = async (id) => {
-        try {
-            // Parse ID if it's a number string
-            const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-
-            // Fetch from API
-            const {data} = await api.get(`${endpoint}${numId}/`);
-            return formatOption(data);
-        } catch (err) {
-            console.error(`Error fetching option ${id}:`, err);
-            return null;
-        }
-    };
-
-    const formatOption = (item) => {
-        let label;
-
-        if (formatLabel) {
-            label = formatLabel(item);
+    // Sync internal state with external value
+    useEffect(() => {
+        if (value) {
+            loadSelectedOption(value);
         } else {
-            label = item[labelField] || item[valueField] || String(item.id);
+            setSelectedOption(null);
         }
-
-        return {
-            value: item[valueField],
-            label: label,
-            data: item
-        };
-    };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [value]);
 
     const loadOptions = async (inputValue) => {
         try {
-            const {data} = await api.get(endpoint, {
-                params: {
-                    search: inputValue,
-                    page_size: 50
-                }
-            });
+            // Merge existing params with new params
+            const params = new URLSearchParams(existingParams);
+            params.set('search', inputValue);
+            params.set('page_size', '50');
+
+            const {data} = await api.get(`${baseEndpoint}?${params.toString()}`);
 
             const results = data.results || data || [];
             return results.map(item => formatOption(item));

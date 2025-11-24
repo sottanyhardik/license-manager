@@ -29,6 +29,7 @@ export default function MasterForm() {
     const [metadata, setMetadata] = useState({});
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [fetchingAllotment, setFetchingAllotment] = useState(false);
     const [error, setError] = useState("");
     const [fieldErrors, setFieldErrors] = useState({}); // Track field-level errors
     const [updatedFields, setUpdatedFields] = useState({}); // Track updated fields for highlighting
@@ -36,6 +37,43 @@ export default function MasterForm() {
     // Helper function to parse date from YYYY-MM-DD to Date object
     const parseDate = (dateString) => {
         if (!dateString) return null;
+
+        // If it's already a Date object, return it
+        if (dateString instanceof Date) {
+            return isNaN(dateString.getTime()) ? null : dateString;
+        }
+
+        // Parse string date
+        if (typeof dateString === 'string') {
+            // Split the date string to avoid timezone issues
+            const parts = dateString.split('-');
+            if (parts.length === 3) {
+                let year, month, day;
+
+                // Check if it's YYYY-MM-DD format (year is 4 digits)
+                if (parts[0].length === 4) {
+                    year = parseInt(parts[0], 10);
+                    month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+                    day = parseInt(parts[2], 10);
+                }
+                // Check if it's dd-MM-yyyy format (first part is 1-2 digits)
+                else if (parts[2].length === 4) {
+                    day = parseInt(parts[0], 10);
+                    month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+                    year = parseInt(parts[2], 10);
+                }
+                // Unknown format, try default parsing
+                else {
+                    const date = new Date(dateString);
+                    return isNaN(date.getTime()) ? null : date;
+                }
+
+                // Create date at noon local time to avoid timezone boundary issues
+                const date = new Date(year, month, day, 12, 0, 0);
+                return isNaN(date.getTime()) ? null : date;
+            }
+        }
+
         const date = new Date(dateString);
         return isNaN(date.getTime()) ? null : date;
     };
@@ -43,7 +81,11 @@ export default function MasterForm() {
     // Helper function to format Date object to YYYY-MM-DD for API
     const formatDateForAPI = (date) => {
         if (!date) return null;
-        return date.toISOString().split('T')[0];
+        // Use local date components to avoid timezone conversion issues
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     };
 
     // Fetch metadata and existing data
@@ -87,7 +129,7 @@ export default function MasterForm() {
         }
     };
 
-    const handleChange = (field, value) => {
+    const handleChange = async (field, value) => {
         const updates = {[field]: value};
 
         // Auto-calculate registration_number when license_number changes
@@ -109,6 +151,82 @@ export default function MasterForm() {
                 updates.license_expiry_date = expiryDate;
             } catch (err) {
                 console.error("Error calculating expiry date:", err);
+            }
+        }
+
+        // Fetch allotment details when allotment is selected in bill-of-entries
+        if (field === "allotment" && entityName === "bill-of-entries") {
+            console.log("Allotment changed, value:", value);
+
+            // Handle both array and single value
+            let allotmentIds = [];
+            if (Array.isArray(value)) {
+                allotmentIds = value;
+            } else if (value) {
+                allotmentIds = [value];
+            }
+
+            console.log("Allotment IDs:", allotmentIds);
+
+            if (allotmentIds.length > 0) {
+                setFetchingAllotment(true);
+                try {
+                    // Fetch details from all selected allotments
+                    const allItemDetails = [];
+                    let firstExchangeRate = null;
+                    let firstProductName = null;
+                    let firstPort = null;
+                    let firstCompany = null;
+
+                    for (const allotmentId of allotmentIds) {
+                        console.log("Fetching details for allotment:", allotmentId);
+                        const {data} = await api.get(`/bill-of-entries/fetch-allotment-details/?allotment_id=${allotmentId}`);
+                        console.log("Fetched allotment details:", data);
+
+                        // Use exchange_rate, product_name, port, and company from first allotment
+                        if (!firstExchangeRate && data.exchange_rate) {
+                            firstExchangeRate = data.exchange_rate;
+                        }
+                        if (!firstProductName && data.product_name) {
+                            firstProductName = data.product_name;
+                        }
+                        if (!firstPort && data.port) {
+                            firstPort = data.port;
+                        }
+                        if (!firstCompany && data.company) {
+                            firstCompany = data.company;
+                        }
+
+                        // Merge all item details from all allotments
+                        if (data.item_details && data.item_details.length > 0) {
+                            allItemDetails.push(...data.item_details);
+                        }
+                    }
+
+                    // Update form fields with fetched data
+                    if (firstExchangeRate) {
+                        updates.exchange_rate = firstExchangeRate;
+                    }
+                    if (firstProductName) {
+                        updates.product_name = firstProductName;
+                    }
+                    if (firstPort) {
+                        updates.port = firstPort;
+                    }
+                    if (firstCompany) {
+                        updates.company = firstCompany;
+                    }
+                    if (allItemDetails.length > 0) {
+                        updates.item_details = allItemDetails;
+                    }
+
+                    console.log("Updates to apply:", updates);
+                } catch (err) {
+                    console.error("Error fetching allotment details:", err);
+                    alert("Failed to fetch allotment details: " + (err.response?.data?.error || err.message));
+                } finally {
+                    setFetchingAllotment(false);
+                }
             }
         }
 
@@ -336,10 +454,31 @@ export default function MasterForm() {
                 }
             } else {
                 // Use regular JSON for non-file data
+                // Clean up date fields
+                const cleanedFormData = {...formData};
+                Object.keys(cleanedFormData).forEach(key => {
+                    if (key.includes('date') || key.includes('_at') || key.includes('_on')) {
+                        const value = cleanedFormData[key];
+                        if (value === '' || value === undefined) {
+                            // Empty dates should be null
+                            cleanedFormData[key] = null;
+                        } else if (value instanceof Date) {
+                            // Convert Date objects to YYYY-MM-DD
+                            cleanedFormData[key] = formatDateForAPI(value);
+                        } else if (typeof value === 'string' && value.length > 0) {
+                            // Parse and reformat string dates (handles both YYYY-MM-DD and dd-MM-yyyy)
+                            const date = parseDate(value);
+                            if (date) {
+                                cleanedFormData[key] = formatDateForAPI(date);
+                            }
+                        }
+                    }
+                });
+
                 if (isEdit) {
-                    response = await api.patch(`${apiPath}${id}/`, formData);
+                    response = await api.patch(`${apiPath}${id}/`, cleanedFormData);
                 } else {
-                    response = await api.post(apiPath, formData);
+                    response = await api.post(apiPath, cleanedFormData);
                 }
             }
 
@@ -392,7 +531,12 @@ export default function MasterForm() {
 
     const renderField = (fieldName) => {
         const fieldMeta = metadata.field_meta?.[fieldName] || {};
-        const value = formData[fieldName] || "";
+
+        // For m2m fields, default to empty array instead of empty string
+        let value = formData[fieldName];
+        if (value === undefined || value === null) {
+            value = (fieldMeta.type === "m2m" || fieldMeta.type === "fk_multi") ? [] : "";
+        }
 
         // Handle date fields with DatePicker
         if (fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
@@ -416,8 +560,8 @@ export default function MasterForm() {
 
         // Handle FK Select fields or fields with choices using HybridSelect
         if (fieldMeta.type === "select" || fieldMeta.endpoint || fieldMeta.fk_endpoint || fieldMeta.choices) {
-            // Check if it's a many-to-many field (value is array)
-            const isMulti = Array.isArray(value);
+            // Check if it's a many-to-many field from metadata or if value is array
+            const isMulti = fieldMeta.type === "m2m" || fieldMeta.type === "fk_multi" || Array.isArray(value);
 
             return (
                 <HybridSelect
@@ -531,6 +675,13 @@ export default function MasterForm() {
                                 </div>
                             )}
 
+                            {fetchingAllotment && (
+                                <div className="alert alert-info">
+                                    <span className="spinner-border spinner-border-sm me-2"></span>
+                                    Fetching allotment details...
+                                </div>
+                            )}
+
                             <form onSubmit={handleSubmit}>
                                 {/* Regular Fields - 3 columns layout */}
                                 <div className="row">
@@ -573,6 +724,8 @@ export default function MasterForm() {
                                         onFetchImports={entityName === "licenses" ? handleFetchImports : undefined}
                                         updatedFields={updatedFields}
                                         errors={fieldErrors[nestedKey] || []}
+                                        entityName={entityName}
+                                        formData={formData}
                                     />
                                 ))}
                                 {/* Action Buttons */}

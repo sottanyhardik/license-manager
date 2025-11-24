@@ -1,10 +1,13 @@
 # bill_of_entry/serializers.py
 from rest_framework import serializers
+
 from bill_of_entry.models import BillOfEntryModel, RowDetails
 
 
 class RowDetailsSerializer(serializers.ModelSerializer):
     """Serializer for BOE row details (nested items)"""
+    # Make id writable so it can be passed during updates
+    id = serializers.IntegerField(required=False)
     license_number = serializers.CharField(source='sr_number.license.license_number', read_only=True)
     item_description = serializers.CharField(source='sr_number.description', read_only=True)
     hs_code = serializers.CharField(source='sr_number.hs_code.hs_code', read_only=True)
@@ -68,6 +71,7 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
             'bill_of_entry_date',
             'port',
             'port_name',
+            'allotment',
             'exchange_rate',
             'product_name',
             'invoice_no',
@@ -94,9 +98,19 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Create BOE with nested item details"""
         item_details_data = validated_data.pop('item_details', [])
+        allotment_data = validated_data.pop('allotment', [])
 
         # Create the BOE instance
         boe = BillOfEntryModel.objects.create(**validated_data)
+
+        # Set many-to-many allotment field
+        if allotment_data:
+            boe.allotment.set(allotment_data)
+
+            # Mark all associated allotments as having BOE
+            for allotment in allotment_data:
+                allotment.is_boe = True
+                allotment.save()
 
         # Create nested item details
         for item_data in item_details_data:
@@ -107,40 +121,94 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """Update BOE with nested item details"""
         item_details_data = validated_data.pop('item_details', None)
+        allotment_data = validated_data.pop('allotment', None)
 
         # Update BOE fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
+        # Update many-to-many allotment field only if explicitly provided with values
+        if allotment_data is not None and len(allotment_data) > 0:
+            # Get old allotments before updating
+            old_allotment_ids = set(instance.allotment.values_list('id', flat=True))
+
+            # Set new allotments
+            instance.allotment.set(allotment_data)
+
+            # Get new allotment IDs
+            new_allotment_ids = set([a.id for a in allotment_data])
+
+            # Mark new allotments as having BOE
+            for allotment in allotment_data:
+                if allotment.id not in old_allotment_ids:
+                    allotment.is_boe = True
+                    allotment.save()
+
+            # Find removed allotments
+            removed_allotment_ids = old_allotment_ids - new_allotment_ids
+            if removed_allotment_ids:
+                from allotment.models import AllotmentModel
+                for allotment_id in removed_allotment_ids:
+                    allotment = AllotmentModel.objects.get(id=allotment_id)
+                    # Check if this allotment is used in other BOEs (excluding current instance)
+                    if not allotment.bill_of_entry.exclude(id=instance.id).exists():
+                        allotment.is_boe = False
+                        allotment.save()
+
         # Update nested item details if provided
         if item_details_data is not None:
-            # Get existing items
-            existing_items = {item.id: item for item in instance.item_details.all()}
-
-            # Track which items were updated
-            updated_ids = set()
-
             for item_data in item_details_data:
+                # Get sr_number - handle both object and ID
+                sr_number = item_data.get('sr_number')
+                if isinstance(sr_number, dict):
+                    sr_number_id = sr_number.get('id')
+                elif hasattr(sr_number, 'id'):
+                    sr_number_id = sr_number.id
+                else:
+                    sr_number_id = sr_number
+
+                if not sr_number_id:
+                    continue
+
+                # Get transaction_type (default to 'D' for DFIA)
+                transaction_type = item_data.get('transaction_type', 'D')
+
+                # Check if item has an id - if yes, update it; if no, use update_or_create
                 item_id = item_data.get('id')
 
-                if item_id and item_id in existing_items:
-                    # Update existing item
-                    item_instance = existing_items[item_id]
-                    for attr, value in item_data.items():
-                        if attr != 'id':
-                            setattr(item_instance, attr, value)
-                    item_instance.save()
-                    updated_ids.add(item_id)
-                else:
-                    # Create new item
-                    new_item = RowDetails.objects.create(bill_of_entry=instance, **item_data)
-                    updated_ids.add(new_item.id)
+                # Prepare clean data
+                item_data_clean = {k: v for k, v in item_data.items()
+                                  if k not in ['id', 'sr_number', 'license_number', 'item_description', 'hs_code']}
 
-            # Delete items that weren't in the update
-            for item_id, item in existing_items.items():
-                if item_id not in updated_ids:
-                    item.delete()
+                if item_id:
+                    # Update existing item
+                    try:
+                        item_instance = RowDetails.objects.get(id=item_id, bill_of_entry=instance)
+                        # Update all fields
+                        for key, value in item_data_clean.items():
+                            setattr(item_instance, key, value)
+                        # Update sr_number separately
+                        item_instance.sr_number_id = sr_number_id
+                        item_instance.save()
+                    except RowDetails.DoesNotExist:
+                        # If item doesn't exist, use update_or_create to avoid duplicates
+                        item_data_clean['sr_number_id'] = sr_number_id
+                        RowDetails.objects.update_or_create(
+                            bill_of_entry=instance,
+                            sr_number_id=sr_number_id,
+                            transaction_type=transaction_type,
+                            defaults=item_data_clean
+                        )
+                else:
+                    # No ID provided - use update_or_create to handle duplicates
+                    item_data_clean['sr_number_id'] = sr_number_id
+                    RowDetails.objects.update_or_create(
+                        bill_of_entry=instance,
+                        sr_number_id=sr_number_id,
+                        transaction_type=transaction_type,
+                        defaults=item_data_clean
+                    )
 
         return instance
 

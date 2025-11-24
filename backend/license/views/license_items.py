@@ -1,8 +1,9 @@
 # license/views/license_items.py
-from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from license.models import LicenseImportItemsModel
 from rest_framework import serializers
+from rest_framework import viewsets, filters
+
+from license.models import LicenseImportItemsModel
 
 
 class LicenseItemSimpleSerializer(serializers.ModelSerializer):
@@ -17,7 +18,7 @@ class LicenseItemSimpleSerializer(serializers.ModelSerializer):
 
     def get_label(self, obj):
         """Format label for dropdown"""
-        return f"{obj.license.license_number} - S.No.{obj.serial_number} - {obj.description}"
+        return f"{obj.license.license_number} - S.No.{obj.serial_number}"
 
 
 class LicenseItemViewSet(viewsets.ReadOnlyModelViewSet):

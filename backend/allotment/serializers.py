@@ -82,6 +82,20 @@ class AllotmentSerializer(serializers.ModelSerializer):
     port_name = serializers.CharField(source='port.name', read_only=True, required=False)
     related_company_name = serializers.CharField(source='related_company.name', read_only=True, required=False)
 
+    # Custom label field for dropdown display
+    display_label = serializers.SerializerMethodField(read_only=True)
+
+    def get_display_label(self, obj):
+        """Generate display label: Company Name - Invoice - Required Qty"""
+        parts = []
+        if obj.company:
+            parts.append(obj.company.name)
+        if obj.invoice:
+            parts.append(f"Inv: {obj.invoice}")
+        if obj.required_quantity:
+            parts.append(f"Qty: {obj.required_quantity}")
+        return " | ".join(parts) if parts else obj.item_name
+
     def get_created_on(self, obj):
         if obj.created_on:
             value = obj.created_on
@@ -110,7 +124,7 @@ class AllotmentSerializer(serializers.ModelSerializer):
             'is_boe', 'created_on', 'modified_on', 'created_by', 'modified_by',
             'required_value', 'dfia_list', 'balanced_quantity',
             'alloted_quantity', 'allotted_value', 'company_name', 'port_name',
-            'related_company_name', 'allotment_details_read'
+            'related_company_name', 'display_label', 'allotment_details_read'
         ]
 
     def to_representation(self, instance):

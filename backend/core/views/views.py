@@ -196,7 +196,7 @@ def enhance_config_with_fk(model_cls, config=None):
 # ------------------------------
 # ViewSet registrations
 # ------------------------------
-CompanyViewSet = MasterViewSet.create(
+CompanyViewSet = MasterViewSet.create_viewset(
     CompanyModel,
     CompanySerializer,
     config=enhance_config_with_fk(
@@ -238,7 +238,7 @@ CompanyViewSet = MasterViewSet.create(
     ),
 )
 
-PortViewSet = MasterViewSet.create(
+PortViewSet = MasterViewSet.create_viewset(
     PortModel,
     PortSerializer,
     config=enhance_config_with_fk(
@@ -252,7 +252,7 @@ PortViewSet = MasterViewSet.create(
     ),
 )
 
-HSCodeViewSet = MasterViewSet.create(
+HSCodeViewSet = MasterViewSet.create_viewset(
     HSCodeModel,
     HSCodeSerializer,
     config=enhance_config_with_fk(
@@ -268,7 +268,7 @@ HSCodeViewSet = MasterViewSet.create(
     ),
 )
 
-HeadSIONNormsViewSet = MasterViewSet.create(
+HeadSIONNormsViewSet = MasterViewSet.create_viewset(
     HeadSIONNormsModel,
     HeadSIONNormsSerializer,
     config=enhance_config_with_fk(
@@ -308,7 +308,7 @@ example_nested_field_defs = {
     ],
 }
 
-SionNormClassViewSet = MasterViewSet.create(
+SionNormClassViewSet = MasterViewSet.create_viewset(
     SionNormClassModel,
     SionNormClassNestedSerializer,
     config=enhance_config_with_fk(
@@ -328,7 +328,7 @@ SionNormClassViewSet = MasterViewSet.create(
     ),
 )
 
-SIONExportViewSet = MasterViewSet.create(
+SIONExportViewSet = MasterViewSet.create_viewset(
     SIONExportModel,
     SIONExportSerializer,
     config=enhance_config_with_fk(
@@ -342,7 +342,7 @@ SIONExportViewSet = MasterViewSet.create(
     ),
 )
 
-SIONImportViewSet = MasterViewSet.create(
+SIONImportViewSet = MasterViewSet.create_viewset(
     SIONImportModel,
     SIONImportSerializer,
     config=enhance_config_with_fk(
@@ -356,7 +356,7 @@ SIONImportViewSet = MasterViewSet.create(
     ),
 )
 
-ProductDescriptionViewSet = MasterViewSet.create(
+ProductDescriptionViewSet = MasterViewSet.create_viewset(
     ProductDescriptionModel,
     ProductDescriptionSerializer,
     config=enhance_config_with_fk(
@@ -372,13 +372,13 @@ ProductDescriptionViewSet = MasterViewSet.create(
     ),
 )
 
-UnitPriceViewSet = MasterViewSet.create(
+UnitPriceViewSet = MasterViewSet.create_viewset(
     UnitPriceModel,
     UnitPriceSerializer,
     config=enhance_config_with_fk(UnitPriceModel, {"form_fields": ["name", "label"]}),
 )
 
-ItemHeadViewSet = MasterViewSet.create(
+ItemHeadViewSet = MasterViewSet.create_viewset(
     ItemHeadModel,
     ItemHeadSerializer,
     config=enhance_config_with_fk(
@@ -401,7 +401,7 @@ ItemHeadViewSet = MasterViewSet.create(
     ),
 )
 
-ItemNameViewSet = MasterViewSet.create(
+ItemNameViewSet = MasterViewSet.create_viewset(
     ItemNameModel,
     ItemNameSerializer,
     config=enhance_config_with_fk(

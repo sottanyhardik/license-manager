@@ -1,5 +1,7 @@
 # bill_of_entry/views/boe.py
 from django.db.models import Q
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from bill_of_entry.models import BillOfEntryModel
 from bill_of_entry.serializers import BillOfEntrySerializer
@@ -12,7 +14,7 @@ boe_nested_field_defs = {
     "item_details": [
         {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
         {"name": "sr_number", "type": "fk", "label": "License Item",
-         "fk_endpoint": "/api/license-items/",
+         "fk_endpoint": "/license-items/",
          "label_field": "description",
          "display_field": "item_description"},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
@@ -23,7 +25,7 @@ boe_nested_field_defs = {
     ],
 }
 
-BillOfEntryViewSet = MasterViewSet.create(
+BillOfEntryViewSet = MasterViewSet.create_viewset(
     BillOfEntryModel,
     BillOfEntrySerializer,
     config={
@@ -52,6 +54,7 @@ BillOfEntryViewSet = MasterViewSet.create(
             "bill_of_entry_number",
             "bill_of_entry_date",
             "port",
+            "allotment",
             "exchange_rate",
             "product_name",
             "invoice_no",
@@ -84,6 +87,11 @@ BillOfEntryViewSet = MasterViewSet.create(
                 "fk_endpoint": "/masters/ports/",
                 "label_field": "name"
             },
+            "allotment": {
+                "type": "m2m",
+                "fk_endpoint": "/allotments/?is_boe=false",
+                "label_field": "display_label"
+            },
             "row_type": {
                 "type": "select",
                 "choices": list(ROW_TYPE_CHOICES)
@@ -98,6 +106,96 @@ BillOfEntryViewSet = MasterViewSet.create(
 
 # Add grouped export functionality
 BillOfEntryViewSet = add_grouped_export_action(BillOfEntryViewSet)
+
+# Add custom action to fetch allotment details
+@action(detail=False, methods=['get'], url_path='fetch-allotment-details')
+def fetch_allotment_details(self, request):
+    """
+    Fetch allotment details by allotment ID
+    Returns: exchange_rate, product_name, port, and item_details
+    """
+    allotment_id = request.query_params.get('allotment_id')
+
+    if not allotment_id:
+        return Response({'error': 'allotment_id is required'}, status=400)
+
+    try:
+        from allotment.models import AllotmentModel
+        allotment = AllotmentModel.objects.select_related('company', 'port').prefetch_related(
+            'allotment_details__item__license__import_license',
+            'allotment_details__item__hs_code'
+        ).get(id=allotment_id)
+
+        # Get allotment items (license items linked to this allotment)
+        allotment_items = allotment.allotment_details.select_related(
+            'item__license', 'item__hs_code'
+        ).all()
+
+        # Build item details from allotment items
+        item_details = []
+        exchange_rate = float(allotment.exchange_rate) if allotment.exchange_rate else 0.0
+
+        for allot_item in allotment_items:
+            license_item = allot_item.item
+            if license_item:
+                # Use CIF values from allotment_items if available, else calculate
+                cif_fc = float(allot_item.cif_fc) if allot_item.cif_fc else 0.0
+                cif_inr = float(allot_item.cif_inr) if allot_item.cif_inr else (cif_fc * exchange_rate)
+
+                # If no CIF in allotment, calculate from license item
+                if cif_fc == 0.0 and license_item.unit_price and license_item.quantity:
+                    cif_fc = float(license_item.unit_price * license_item.quantity)
+                    cif_inr = cif_fc * exchange_rate
+
+                item_details.append({
+                    'sr_number': license_item.id,
+                    'license_number': license_item.license.license_number if license_item.license else '',
+                    'item_description': license_item.description or '',
+                    'hs_code': license_item.hs_code.hs_code if license_item.hs_code else '',
+                    'qty': float(allot_item.qty) if allot_item.qty else (float(license_item.quantity) if license_item.quantity else 0.0),
+                    'cif_fc': cif_fc,
+                    'cif_inr': cif_inr,
+                })
+
+        return Response({
+            'exchange_rate': exchange_rate,
+            'product_name': allotment.item_name or '',
+            'port': allotment.port.id if allotment.port else None,
+            'port_name': allotment.port.name if allotment.port else '',
+            'company': allotment.company.id if allotment.company else None,
+            'company_name': allotment.company.name if allotment.company else '',
+            'item_details': item_details,
+        })
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+BillOfEntryViewSet.fetch_allotment_details = fetch_allotment_details
+
+# Override retrieve to adjust allotment filter for edit mode
+original_retrieve = BillOfEntryViewSet.retrieve
+
+def custom_retrieve(self, request, *args, **kwargs):
+    """Override retrieve to include current BOE's allotments in the endpoint filter"""
+    response = original_retrieve(self, request, *args, **kwargs)
+
+    # Get the current BOE instance
+    instance = self.get_object()
+
+    # Get IDs of allotments assigned to this BOE
+    current_allotment_ids = list(instance.allotment.values_list('id', flat=True))
+
+    # Modify the metadata to include current allotments in the filter
+    if 'metadata' in response.data:
+        if 'allotment' in response.data['metadata'].get('fields', {}):
+            # Update the endpoint to include current allotments
+            if current_allotment_ids:
+                ids_str = ','.join(map(str, current_allotment_ids))
+                response.data['metadata']['fields']['allotment']['fk_endpoint'] = f"/allotments/?is_boe=false_or_current&current_boe_allotments={ids_str}"
+
+    return response
+
+BillOfEntryViewSet.retrieve = custom_retrieve
 
 # Add default filter for is_invoice
 original_get_queryset = BillOfEntryViewSet.get_queryset

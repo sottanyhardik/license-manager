@@ -20,8 +20,6 @@ boe_nested_field_defs = {
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)"},
         {"name": "qty", "type": "number", "label": "Quantity"},
-        {"name": "license_number", "type": "text", "label": "License Number", "read_only": True},
-        {"name": "hs_code", "type": "text", "label": "HS Code", "read_only": True},
     ],
 }
 
@@ -50,11 +48,11 @@ BillOfEntryViewSet = MasterViewSet.create_viewset(
             "licenses",
         ],
         "form_fields": [
-            "company",
             "bill_of_entry_number",
             "bill_of_entry_date",
             "port",
             "allotment",
+            "company",
             "exchange_rate",
             "product_name",
             "invoice_no",
@@ -107,6 +105,7 @@ BillOfEntryViewSet = MasterViewSet.create_viewset(
 # Add grouped export functionality
 BillOfEntryViewSet = add_grouped_export_action(BillOfEntryViewSet)
 
+
 # Add custom action to fetch allotment details
 @action(detail=False, methods=['get'], url_path='fetch-allotment-details')
 def fetch_allotment_details(self, request):
@@ -152,7 +151,8 @@ def fetch_allotment_details(self, request):
                     'license_number': license_item.license.license_number if license_item.license else '',
                     'item_description': license_item.description or '',
                     'hs_code': license_item.hs_code.hs_code if license_item.hs_code else '',
-                    'qty': float(allot_item.qty) if allot_item.qty else (float(license_item.quantity) if license_item.quantity else 0.0),
+                    'qty': float(allot_item.qty) if allot_item.qty else (
+                        float(license_item.quantity) if license_item.quantity else 0.0),
                     'cif_fc': cif_fc,
                     'cif_inr': cif_inr,
                 })
@@ -170,10 +170,12 @@ def fetch_allotment_details(self, request):
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 
+
 BillOfEntryViewSet.fetch_allotment_details = fetch_allotment_details
 
 # Override retrieve to adjust allotment filter for edit mode
 original_retrieve = BillOfEntryViewSet.retrieve
+
 
 def custom_retrieve(self, request, *args, **kwargs):
     """Override retrieve to include current BOE's allotments in the endpoint filter"""
@@ -191,9 +193,11 @@ def custom_retrieve(self, request, *args, **kwargs):
             # Update the endpoint to include current allotments
             if current_allotment_ids:
                 ids_str = ','.join(map(str, current_allotment_ids))
-                response.data['metadata']['fields']['allotment']['fk_endpoint'] = f"/allotments/?is_boe=false_or_current&current_boe_allotments={ids_str}"
+                response.data['metadata']['fields']['allotment'][
+                    'fk_endpoint'] = f"/allotments/?is_boe=false_or_current&current_boe_allotments={ids_str}"
 
     return response
+
 
 BillOfEntryViewSet.retrieve = custom_retrieve
 

@@ -127,9 +127,9 @@ def add_grouped_export_action(viewset_class):
 
                     # Table header - 16 columns (added Total CIF INR)
                     table_data = [[
-                        'Sr\nNo', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
+                        'Sr\nNo', 'BOE\nNumber', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
                         'Unit\nPrice ($)', 'Value\n($)', 'Total CIF\nINR', 'Item\nName', 'Invoice',
-                        'License\nNo.', 'BOE\nDate', 'BOE\nPort', 'Item\nSr.',
+                        'License\nNo.', 'License\nDate', 'License\nPort', 'Item\nSr.',
                         'BOE\nQty.', 'BOE\n$.', 'BOE\nCIF'
                     ]]
 
@@ -143,6 +143,7 @@ def add_grouped_export_action(viewset_class):
 
                             table_data.append([
                                 str(sr_no),
+                                boe['boe_number'],
                                 boe['boe_date'],
                                 port_code,
                                 pdf_exporter.format_number(boe['total_quantity'], decimals=0),
@@ -154,8 +155,8 @@ def add_grouped_export_action(viewset_class):
                                 product_name,
                                 boe['invoice_no'],
                                 first_detail['license_no'],
-                                boe['boe_date'],
-                                port_code,
+                                first_detail['license_date'],
+                                first_detail['license_port'],
                                 first_detail['item_sr_no'],
                                 pdf_exporter.format_number(first_detail['qty'], decimals=0),
                                 pdf_exporter.format_number(first_detail['cif_fc']),
@@ -165,11 +166,11 @@ def add_grouped_export_action(viewset_class):
                             # Additional license detail rows (if multiple licenses)
                             for detail in boe['license_details'][1:]:
                                 table_data.append([
-                                    '', '', '', '', '', '', '',  # Empty main BOE info columns
+                                    '', '', '', '', '', '', '', '',  # Empty main BOE info columns
                                     '', '',  # Item Name, Invoice
                                     detail['license_no'],
-                                    boe['boe_date'],
-                                    port_code,
+                                    detail['license_date'],
+                                    detail['license_port'],
                                     detail['item_sr_no'],
                                     pdf_exporter.format_number(detail['qty'], decimals=0),
                                     pdf_exporter.format_number(detail['cif_fc']),
@@ -327,7 +328,7 @@ def add_grouped_export_action(viewset_class):
                 row += 1
 
                 # Table headers (16 columns - added Total CIF INR)
-                headers = ['Sr No', 'BOE Date', 'Port', 'Quantity (KGS)', 'Unit Price ($)', 'Value ($)',
+                headers = ['Sr No', 'BOE Number', 'BOE Date', 'Port', 'Quantity (KGS)', 'Unit Price ($)', 'Value ($)',
                            'Total CIF INR', 'Item Name', 'Invoice', 'License No.', 'BOE Date', 'BOE Port',
                            'Item Sr.', 'BOE Qty.', 'BOE $.', 'BOE CIF']
 
@@ -355,6 +356,7 @@ def add_grouped_export_action(viewset_class):
                             # Main BOE row (16 columns)
                             data = [
                                 sr_no,
+                                boe['boe_number'],
                                 boe['boe_date'],
                                 port_code,
                                 int(boe['total_quantity']),
@@ -364,8 +366,8 @@ def add_grouped_export_action(viewset_class):
                                 product_name,
                                 boe['invoice_no'],
                                 first_detail['license_no'],
-                                boe['boe_date'],
-                                port_code,
+                                first_detail['license_date'],
+                                first_detail['license_port'],
                                 first_detail['item_sr_no'],
                                 int(first_detail['qty']),
                                 round(first_detail['cif_fc'], 2),
@@ -387,11 +389,11 @@ def add_grouped_export_action(viewset_class):
                             # Additional license detail rows
                             for detail in boe['license_details'][1:]:
                                 data = [
-                                    '', '', '', '', '', '', '',  # Empty main BOE columns
+                                    '', '', '', '', '', '', '', '',  # Empty main BOE columns
                                     '', '',  # Item Name, Invoice
                                     detail['license_no'],
-                                    boe['boe_date'],
-                                    port_code,
+                                    detail['license_date'],
+                                    detail['license_port'],
                                     detail['item_sr_no'],
                                     int(detail['qty']),
                                     round(detail['cif_fc'], 2),
@@ -493,6 +495,8 @@ def add_grouped_export_action(viewset_class):
                 license_obj = detail.sr_number.license if detail.sr_number else None
                 license_details.append({
                     'license_no': license_obj.license_number if license_obj else '--',
+                    'license_port': license_obj.port.code if license_obj else '--',
+                    'license_date': license_obj.license_date.strftime('%d-%m-%Y') if license_obj else '--',
                     'item_sr_no': str(detail.sr_number.serial_number) if detail.sr_number else '--',
                     'qty': float(detail.qty or 0),
                     'cif_fc': float(detail.cif_fc or 0),

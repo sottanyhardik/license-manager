@@ -305,14 +305,27 @@ class LicenseDetailsModel(AuditModel):
         )
 
     def get_item_head_data(self, item_name: str) -> Dict[str, Any]:
-        return next(
-            (
-                row
-                for row in self.import_license_head_grouped
-                if (row.get("items__head__name") == item_name)
-            ),
-            {"available_quantity_sum": DEC_000, "quantity_sum": DEC_000},
+        matching_rows = [
+            row
+            for row in self.import_license_head_grouped
+            if row.get("items__head__name") == item_name
+        ]
+        if not matching_rows:
+            return {"available_quantity_sum": DEC_000, "quantity_sum": DEC_000}
+
+        total_available = sum(
+            _to_decimal(row.get("available_quantity_sum") or DEC_000, DEC_000)
+            for row in matching_rows
         )
+        total_quantity = sum(
+            _to_decimal(row.get("quantity_sum") or DEC_000, DEC_000)
+            for row in matching_rows
+        )
+
+        return {
+            "available_quantity_sum": total_available,
+            "quantity_sum": total_quantity,
+        }
 
     # ---------- domain convenience lookups ----------
     @cached_property

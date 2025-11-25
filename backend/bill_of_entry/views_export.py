@@ -115,14 +115,6 @@ def add_grouped_export_action(viewset_class):
                 # Product/Item subheader
                 pdf_exporter.add_section_header(elements, f"Item: {product_name}")
 
-                # Table header - 16 columns (added Total CIF INR)
-                table_data = [[
-                    'Sr\nNo', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
-                    'Unit\nPrice ($)', 'Value\n($)', 'Total CIF\nINR', 'Item\nName', 'Invoice',
-                    'License\nNo.', 'BOE\nDate', 'BOE\nPort', 'Item\nSr.',
-                    'BOE\nQty.', 'BOE\n$.', 'BOE\nCIF'
-                ]]
-
                 sr_no = 1
                 product_total_qty = 0
                 product_total_value = 0
@@ -130,6 +122,20 @@ def add_grouped_export_action(viewset_class):
 
                 # Process each port within product
                 for port_code, boe_list in ports_dict.items():
+                    # Port subheader
+                    pdf_exporter.add_section_header(elements, f"Port: {port_code}")
+
+                    # Table header - 16 columns (added Total CIF INR)
+                    table_data = [[
+                        'Sr\nNo', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
+                        'Unit\nPrice ($)', 'Value\n($)', 'Total CIF\nINR', 'Item\nName', 'Invoice',
+                        'License\nNo.', 'BOE\nDate', 'BOE\nPort', 'Item\nSr.',
+                        'BOE\nQty.', 'BOE\n$.', 'BOE\nCIF'
+                    ]]
+
+                    port_total_qty = 0
+                    port_total_value = 0
+                    port_total_inr = 0
                     for boe in boe_list:
                         # Main BOE row (first license detail)
                         if boe['license_details']:
@@ -171,6 +177,9 @@ def add_grouped_export_action(viewset_class):
                                 ])
 
                         sr_no += 1
+                        port_total_qty += boe['total_quantity']
+                        port_total_value += boe['total_fc']
+                        port_total_inr += boe['total_inr']
                         product_total_qty += boe['total_quantity']
                         product_total_value += boe['total_fc']
                         product_total_inr += boe['total_inr']
@@ -178,39 +187,50 @@ def add_grouped_export_action(viewset_class):
                         company_total_inr += boe['total_inr']
                         company_total_fc += boe['total_fc']
 
-                # Add product totals row
-                table_data.append([
-                    '', '', 'Total', pdf_exporter.format_number(product_total_qty, decimals=0),
-                    '', pdf_exporter.format_number(product_total_value),
-                    pdf_exporter.format_number(product_total_inr),
-                    '', '', '', '', '', '', '', '', ''
-                ])
+                    # Add port totals row
+                    table_data.append([
+                        '', '', f'Port Total', pdf_exporter.format_number(port_total_qty, decimals=0),
+                        '', pdf_exporter.format_number(port_total_value),
+                        pdf_exporter.format_number(port_total_inr),
+                        '', '', '', '', '', '', '', '', ''
+                    ])
 
-                # Create table with column widths (16 columns) - increased width for CIF INR column
-                from reportlab.lib.units import inch
-                col_widths = [0.35 * inch, 0.65 * inch, 0.55 * inch, 0.65 * inch, 0.65 * inch, 0.7 * inch,
-                              0.85 * inch, 1.0 * inch, 0.8 * inch, 0.75 * inch, 0.65 * inch, 0.55 * inch,
-                              0.45 * inch, 0.65 * inch, 0.65 * inch, 0.7 * inch]
+                    # Create table with column widths (16 columns) - increased width for CIF INR column
+                    from reportlab.lib.units import inch
+                    col_widths = [0.35 * inch, 0.65 * inch, 0.55 * inch, 0.65 * inch, 0.65 * inch, 0.7 * inch,
+                                  0.85 * inch, 1.0 * inch, 0.8 * inch, 0.75 * inch, 0.65 * inch, 0.55 * inch,
+                                  0.45 * inch, 0.65 * inch, 0.65 * inch, 0.7 * inch]
 
-                table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1)
+                    table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1)
 
-                # Apply number column alignment for columns: 3, 4, 5, 6, 13, 14, 15 (0-indexed)
-                from reportlab.platypus import TableStyle
-                additional_styles = []
-                for col_idx in [3, 4, 5, 6, 13, 14, 15]:
-                    additional_styles.append(
-                        ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
-                    )
+                    # Apply number column alignment for columns: 3, 4, 5, 6, 13, 14, 15 (0-indexed)
+                    from reportlab.platypus import TableStyle
+                    additional_styles = []
+                    for col_idx in [3, 4, 5, 6, 13, 14, 15]:
+                        additional_styles.append(
+                            ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
+                        )
 
-                # Bold the last row (totals)
-                additional_styles.append(('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'))
-                additional_styles.append(('BACKGROUND', (0, -1), (-1, -1), pdf_exporter.HEADER_BG))
+                    # Bold the last row (port totals)
+                    additional_styles.append(('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'))
+                    additional_styles.append(('BACKGROUND', (0, -1), (-1, -1), pdf_exporter.HEADER_BG))
 
-                # Apply additional styles
-                table.setStyle(TableStyle(additional_styles))
+                    # Apply additional styles
+                    table.setStyle(TableStyle(additional_styles))
 
-                elements.append(table)
-                pdf_exporter.add_spacer(elements, 0.15)
+                    elements.append(table)
+                    pdf_exporter.add_spacer(elements, 0.1)
+
+                # Add product totals summary after all ports
+                product_summary_data = [[
+                    f'Item Total ({product_name}):',
+                    f"Qty: {pdf_exporter.format_number(product_total_qty, decimals=0)} KGS",
+                    f"CIF (FC): ${pdf_exporter.format_number(product_total_value)}",
+                    f"CIF (INR): {pdf_exporter.format_number(product_total_inr)}"
+                ]]
+                product_summary_table = pdf_exporter.create_summary_table(product_summary_data)
+                elements.append(product_summary_table)
+                pdf_exporter.add_spacer(elements, 0.2)
 
             # Add company total summary
             summary_data = [[

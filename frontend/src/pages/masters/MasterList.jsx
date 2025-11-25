@@ -206,15 +206,13 @@ export default function MasterList() {
 
     const handleExport = async (format) => {
         try {
-            if (entityName === 'bill-of-entries') {
-                // Use boeApi for exports with filters
-                const blob = format === 'pdf'
-                    ? await boeApi.exportBOEListPDF(filterParams)
-                    : await boeApi.exportBOEListExcel(filterParams);
+            if (entityName === 'bill-of-entries' && format === 'xlsx') {
+                // Use boeApi for Excel export only
+                const blob = await boeApi.exportBOEListExcel(filterParams);
 
                 // Download blob
                 const blobObj = new Blob([blob], {
-                    type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 });
                 const url = window.URL.createObjectURL(blobObj);
                 const link = document.createElement('a');
@@ -235,6 +233,8 @@ export default function MasterList() {
                     apiPath = `/licenses/export/`;
                 } else if (entityName === 'allotments') {
                     apiPath = `/allotments/download/`;
+                } else if (entityName === 'bill-of-entries') {
+                    apiPath = `/bill-of-entries/export/`;
                 } else {
                     apiPath = `/masters/${entityName}/export/`;
                 }

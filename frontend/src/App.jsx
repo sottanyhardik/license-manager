@@ -26,6 +26,7 @@ const SionE126 = lazy(() => import("./pages/reports/SionE126"));
 const SionE132 = lazy(() => import("./pages/reports/SionE132"));
 const ExpiringLicenses = lazy(() => import("./pages/reports/ExpiringLicenses"));
 const ActiveLicenses = lazy(() => import("./pages/reports/ActiveLicenses"));
+const ItemPivotReport = lazy(() => import("./pages/reports/ItemPivotReport"));
 
 export default function App() {
     return (
@@ -228,6 +229,19 @@ export default function App() {
                                         <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <ActiveLicenses/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/reports/item-pivot"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <ItemPivotReport/>
                                             </AdminLayout>
                                         </RoleRoute>
                                     </ProtectedRoute>

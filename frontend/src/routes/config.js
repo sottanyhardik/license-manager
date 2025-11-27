@@ -99,4 +99,9 @@ export const reportEntities = [
         label: "Active Licenses",
         icon: "calendar-check",
     },
+    {
+        path: "/reports/item-pivot",
+        label: "Item Pivot Report",
+        icon: "table",
+    },
 ];

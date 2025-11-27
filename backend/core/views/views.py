@@ -317,9 +317,10 @@ SionNormClassViewSet = MasterViewSet.create_viewset(
             "search": ["norm_class", "description", "import_norm__description", "export_norm__description"],
             "filter": {
                 "head_norm": {"type": "fk", "fk_endpoint": "/masters/head-norms/", "label_field": "name"},
+                "is_active": {"type": "boolean"},
             },
-            "list_display": ["norm_class", "description", "head_norm_name"],
-            "form_fields": ["norm_class", "description", "head_norm"],
+            "list_display": ["norm_class", "description", "head_norm_name", "is_active"],
+            "form_fields": ["norm_class", "description", "head_norm", "is_active"],
             "fk_endpoint_overrides": {
                 "head_norm": "/masters/head-norms/"
             },

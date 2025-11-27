@@ -94,4 +94,9 @@ export const reportEntities = [
         label: "Expiring Licenses",
         icon: "calendar-x",
     },
+    {
+        path: "/reports/active-licenses",
+        label: "Active Licenses",
+        icon: "calendar-check",
+    },
 ];

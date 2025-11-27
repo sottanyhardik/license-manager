@@ -317,7 +317,7 @@ SionNormClassViewSet = MasterViewSet.create_viewset(
             "search": ["norm_class", "description", "import_norm__description", "export_norm__description"],
             "filter": {
                 "head_norm": {"type": "fk", "fk_endpoint": "/masters/head-norms/", "label_field": "name"},
-                "is_active": {"type": "boolean"},
+                "is_active": {"type": "boolean", "default": True},
             },
             "list_display": ["norm_class", "description", "head_norm_name", "is_active"],
             "form_fields": ["norm_class", "description", "head_norm", "is_active"],
@@ -325,6 +325,7 @@ SionNormClassViewSet = MasterViewSet.create_viewset(
                 "head_norm": "/masters/head-norms/"
             },
             "nested_field_defs": example_nested_field_defs,
+            "default_filters": {"is_active": True},
         },
     ),
 )
@@ -408,15 +409,26 @@ ItemNameViewSet = MasterViewSet.create_viewset(
     config=enhance_config_with_fk(
         ItemNameModel,
         {
-            "search": ["name", "head__name"],
+            "search": ["name", "head__name", "sion_norm_class__norm_class"],
             "filter": {
                 "head": {"type": "fk", "fk_endpoint": "/masters/item-heads/", "label_field": "name"},
                 "is_active": {"type": "exact"},
+                "sion_norm_class": {
+                    "type": "fk",
+                    "fk_endpoint": "/masters/sion-classes/?is_active=true",
+                    "label_field": "norm_class",
+                    "display_field": "label",
+                    "async": True
+                },
             },
-            "list_display": ["head__name", "name", "unit_price"],
-            "form_fields": ["head", "name", "unit_price", "is_active"],
+            "list_display": ["head__name", "name", "unit_price", "sion_norm_class_label", "restriction_percentage"],
+            "form_fields": ["head", "name", "unit_price", "is_active", "sion_norm_class", "restriction_percentage"],
             "fk_endpoint_overrides": {
-                "head": "/masters/item-heads/"
+                "head": "/masters/item-heads/",
+                "sion_norm_class": "/masters/sion-classes/?is_active=true"
+            },
+            "label_field_overrides": {
+                "sion_norm_class": "norm_class"
             },
             "ordering": ["head__name", "name"]
         }

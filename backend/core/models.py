@@ -202,6 +202,21 @@ class ItemNameModel(AuditModel):
         validators=[MinValueValidator(DEC_000)],
     )
     is_active = models.BooleanField(default=False)
+    sion_norm_class = models.ForeignKey(
+        'core.SionNormClassModel',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='items',
+        help_text="SION norm class for restriction grouping (e.g., E1, E2)"
+    )
+    restriction_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+        help_text="Restriction percentage for this item (e.g., 2.00 for 2%, 10.00 for 10%)"
+    )
 
     class Meta:
         ordering = ['head__name', 'name']

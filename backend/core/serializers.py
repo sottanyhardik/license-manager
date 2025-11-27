@@ -73,10 +73,17 @@ class SionNormClassNestedSerializer(AuditSerializerMixin):
     export_norm = SIONExportSerializer(many=True)
     import_norm = SIONImportSerializer(many=True)
     head_norm_name = serializers.CharField(source="head_norm.name", read_only=True)
+    label = serializers.SerializerMethodField()
 
     class Meta(AuditSerializerMixin.Meta):
         model = SionNormClassModel
         fields = "__all__"
+
+    def get_label(self, obj):
+        """Return formatted label for async select display"""
+        if obj.description:
+            return f"{obj.norm_class} - {obj.description}"
+        return obj.norm_class
 
     def create(self, validated_data):
         export_data = validated_data.pop("export_norm", [])
@@ -158,7 +165,16 @@ class ItemHeadSerializer(AuditSerializerMixin):
 # ---- Item Name ----
 class ItemNameSerializer(AuditSerializerMixin):
     head_name = serializers.CharField(read_only=True, required=False)
+    sion_norm_class_label = serializers.SerializerMethodField()
 
     class Meta(AuditSerializerMixin.Meta):
         model = ItemNameModel
         fields = "__all__"
+
+    def get_sion_norm_class_label(self, obj):
+        """Return formatted label for SION norm class"""
+        if obj.sion_norm_class:
+            if obj.sion_norm_class.description:
+                return f"{obj.sion_norm_class.norm_class} - {obj.sion_norm_class.description}"
+            return obj.sion_norm_class.norm_class
+        return None

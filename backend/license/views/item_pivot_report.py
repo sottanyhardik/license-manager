@@ -147,20 +147,21 @@ class ItemPivotReportView(View):
             'quantity': Decimal('0.000'),
             'debited_quantity': Decimal('0.000'),
             'available_quantity': Decimal('0.000'),
+            'debited_value': Decimal('0.00'),
             'cif_value': Decimal('0.00'),
             'hs_code': '',
             'description': '',
+            'sion_norm_class': None,
             'restriction_percentage': None,
-            'restriction_norm': None,
-            'head_id': None,
         })
 
-        # Group items by restriction head to calculate shared restriction limits
+        # Group items by (sion_norm_class, restriction_percentage) to calculate shared restriction limits
         restriction_groups = defaultdict(lambda: {
             'total_cif': Decimal('0.00'),
             'debited_cif': Decimal('0.00'),
             'available_cif': Decimal('0.00'),
             'restriction_percentage': None,
+            'sion_norm_class': None,
             'item_ids': []
         })
 
@@ -169,6 +170,7 @@ class ItemPivotReportView(View):
                 item_quantities[item.id]['quantity'] += import_item.quantity or DEC_000
                 item_quantities[item.id]['debited_quantity'] += import_item.debited_quantity or DEC_000
                 item_quantities[item.id]['available_quantity'] += import_item.available_quantity or DEC_000
+                item_quantities[item.id]['debited_value'] += import_item.debited_value or DEC_0
                 item_quantities[item.id]['cif_value'] += import_item.cif_fc or DEC_0
                 
                 if import_item.hs_code and not item_quantities[item.id]['hs_code']:
@@ -176,25 +178,27 @@ class ItemPivotReportView(View):
                 
                 if import_item.description and not item_quantities[item.id]['description']:
                     item_quantities[item.id]['description'] = import_item.description
-                
-                # Get restriction from item head if available
-                if item and hasattr(item, 'head') and item.head:
-                    head = item.head
-                    item_quantities[item.id]['head_id'] = head.id
-                    
-                    if hasattr(head, 'restriction_percentage') and head.restriction_percentage:
-                        item_quantities[item.id]['restriction_percentage'] = head.restriction_percentage
-                        item_quantities[item.id]['restriction_norm'] = getattr(head, 'restriction_norm', None)
-                        
-                        # Group by head_id for shared restriction calculation
-                        restriction_groups[head.id]['restriction_percentage'] = head.restriction_percentage
-                        restriction_groups[head.id]['total_cif'] += import_item.cif_fc or DEC_0
-                        restriction_groups[head.id]['debited_cif'] += import_item.debited_value or DEC_0
-                        if item.id not in restriction_groups[head.id]['item_ids']:
-                            restriction_groups[head.id]['item_ids'].append(item.id)
+
+                # Get restriction from item's sion_norm_class and restriction_percentage
+                if item and hasattr(item, 'sion_norm_class') and item.sion_norm_class:
+                    sion_norm = item.sion_norm_class.norm_class
+                    restriction_pct = item.restriction_percentage
+
+                    item_quantities[item.id]['sion_norm_class'] = sion_norm
+                    item_quantities[item.id]['restriction_percentage'] = restriction_pct
+
+                    # Group by (sion_norm_class, restriction_percentage) for shared restriction calculation
+                    # Items in same SION norm with same restriction % share the restriction limit
+                    restriction_key = f"{sion_norm}_{restriction_pct}"
+                    restriction_groups[restriction_key]['sion_norm_class'] = sion_norm
+                    restriction_groups[restriction_key]['restriction_percentage'] = restriction_pct
+                    restriction_groups[restriction_key]['total_cif'] += import_item.cif_fc or DEC_0
+                    restriction_groups[restriction_key]['debited_cif'] += import_item.debited_value or DEC_0
+                    if item.id not in restriction_groups[restriction_key]['item_ids']:
+                        restriction_groups[restriction_key]['item_ids'].append(item.id)
         
         # Calculate available CIF within restriction for each group
-        for head_id, group_data in restriction_groups.items():
+        for group_name, group_data in restriction_groups.items():
             if group_data['restriction_percentage'] and total_cif > 0:
                 # Maximum allowed CIF for this restriction group
                 max_allowed_cif = (total_cif * group_data['restriction_percentage']) / Decimal('100')
@@ -219,18 +223,20 @@ class ItemPivotReportView(View):
         for item_id, item_name in all_items:
             if item_id in item_quantities:
                 item_data = item_quantities[item_id]
-                head_id = item_data['head_id']
-                
+                sion_norm = item_data['sion_norm_class']
+                restriction_pct = item_data['restriction_percentage']
+
                 # Get restriction display and available CIF
                 restriction_display = ''
                 available_cif = Decimal('0')
-                
-                if head_id and head_id in restriction_groups:
-                    group = restriction_groups[head_id]
-                    if group['restriction_percentage']:
-                        restriction_display = f"{group['restriction_percentage']}% (Avail CIF: {float(group['available_cif']):.2f})"
+
+                if sion_norm and restriction_pct:
+                    restriction_key = f"{sion_norm}_{restriction_pct}"
+                    if restriction_key in restriction_groups:
+                        group = restriction_groups[restriction_key]
+                        restriction_display = f"{sion_norm} - {restriction_pct}% (Avail CIF: {float(group['available_cif']):.2f})"
                         available_cif = group['available_cif']
-                
+
                 row_data['items'][item_name] = {
                     'hs_code': item_data['hs_code'],
                     'description': item_data['description'],

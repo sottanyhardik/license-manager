@@ -1,14 +1,13 @@
 import {Link, useLocation} from "react-router-dom";
 import {useContext, useState} from "react";
 import {AuthContext} from "../context/AuthContext";
-import {masterEntities, routes} from "../routes/config";
+import {masterEntities, routes, reportEntities} from "../routes/config";
 
 export default function Sidebar() {
     const {hasRole} = useContext(AuthContext);
     const location = useLocation();
     const [mastersOpen, setMastersOpen] = useState(false);
     const [reportsOpen, setReportsOpen] = useState(false);
-    const [parleOpen, setParleOpen] = useState(false);
 
     const isActive = (path) => {
         return location.pathname === path || location.pathname.startsWith(path);
@@ -47,109 +46,17 @@ export default function Sidebar() {
 
                         {reportsOpen && (
                             <ul className="nav flex-column ms-3 mt-2">
-                                {/* Parle Submenu */}
-                                <li className="nav-item mb-1">
-                                    <button
-                                        className={`nav-link text-white w-100 text-start py-1 ${isActive("/reports/parle") ? "active" : ""}`}
-                                        onClick={() => setParleOpen(!parleOpen)}
-                                        style={{fontSize: '0.9rem'}}
-                                    >
-                                        <i className="bi bi-building me-2"/>
-                                        Parle
-                                        <i className={`bi bi-chevron-${parleOpen ? "up" : "down"} float-end`}/>
-                                    </button>
-
-                                    {parleOpen && (
-                                        <ul className="nav flex-column ms-3 mt-1">
-                                            <li className="nav-item mb-1">
-                                                <Link
-                                                    className={`nav-link text-white py-1 ${isActive("/reports/parle/sion-e1") ? "active" : ""}`}
-                                                    to="/reports/parle/sion-e1"
-                                                    style={{fontSize: '0.85rem'}}
-                                                >
-                                                    <i className="bi bi-dot me-1"/>
-                                                    SION Norm E1
-                                                </Link>
-                                            </li>
-                                            <li className="nav-item mb-1">
-                                                <Link
-                                                    className={`nav-link text-white py-1 ${isActive("/reports/parle/sion-e5") ? "active" : ""}`}
-                                                    to="/reports/parle/sion-e5"
-                                                    style={{fontSize: '0.85rem'}}
-                                                >
-                                                    <i className="bi bi-dot me-1"/>
-                                                    SION Norm E5
-                                                </Link>
-                                            </li>
-                                            <li className="nav-item mb-1">
-                                                <Link
-                                                    className={`nav-link text-white py-1 ${isActive("/reports/parle/sion-e126") ? "active" : ""}`}
-                                                    to="/reports/parle/sion-e126"
-                                                    style={{fontSize: '0.85rem'}}
-                                                >
-                                                    <i className="bi bi-dot me-1"/>
-                                                    SION Norm E126
-                                                </Link>
-                                            </li>
-                                            <li className="nav-item mb-1">
-                                                <Link
-                                                    className={`nav-link text-white py-1 ${isActive("/reports/parle/sion-e132") ? "active" : ""}`}
-                                                    to="/reports/parle/sion-e132"
-                                                    style={{fontSize: '0.85rem'}}
-                                                >
-                                                    <i className="bi bi-dot me-1"/>
-                                                    SION Norm E132
-                                                </Link>
-                                            </li>
-                                        </ul>
-                                    )}
-                                </li>
-
-                                <li className="nav-item mb-1">
-                                    <Link
-                                        className={`nav-link text-white py-1 ${isActive("/reports/parle-licenses") ? "active" : ""}`}
-                                        to="/reports/parle-licenses"
-                                    >
-                                        <i className="bi bi-file-text me-2"/>
-                                        All Notifications
-                                    </Link>
-                                </li>
-                                <li className="nav-item mb-1">
-                                    <Link
-                                        className={`nav-link text-white py-1 ${isActive("/reports/notification/019-2015") ? "active" : ""}`}
-                                        to="/reports/notification/019-2015"
-                                    >
-                                        <i className="bi bi-file-text me-2"/>
-                                        019/2015
-                                    </Link>
-                                </li>
-                                <li className="nav-item mb-1">
-                                    <Link
-                                        className={`nav-link text-white py-1 ${isActive("/reports/notification/098-2009") ? "active" : ""}`}
-                                        to="/reports/notification/098-2009"
-                                    >
-                                        <i className="bi bi-file-text me-2"/>
-                                        098/2009
-                                    </Link>
-                                </li>
-                                <li className="nav-item mb-1">
-                                    <Link
-                                        className={`nav-link text-white py-1 ${isActive("/reports/notification/025-2023") ? "active" : ""}`}
-                                        to="/reports/notification/025-2023"
-                                    >
-                                        <i className="bi bi-file-text me-2"/>
-                                        025/2023
-                                    </Link>
-                                </li>
-                                <li className="nav-item mb-1">
-                                    <Link
-                                        className={`nav-link text-white py-1 ${isActive("/reports/active-dfia") ? "active" : ""}`}
-                                        to="/reports/active-dfia"
-                                    >
-                                        <i className="bi bi-file-earmark-spreadsheet me-2"/>
-                                        Active DFIA
-                                    </Link>
-                                </li>
+                                {reportEntities.map((report) => (
+                                    <li key={report.path} className="nav-item mb-1">
+                                        <Link
+                                            className={`nav-link text-white py-1 ${isActive(report.path) ? "active" : ""}`}
+                                            to={report.path}
+                                        >
+                                            <i className={`bi bi-${report.icon} me-2`}/>
+                                            {report.label}
+                                        </Link>
+                                    </li>
+                                ))}
                             </ul>
                         )}
                     </li>

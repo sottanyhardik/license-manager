@@ -86,3 +86,12 @@ export const masterEntities = [
         icon: "tags",
     },
 ];
+
+// Report entities configuration
+export const reportEntities = [
+    {
+        path: "/reports/expiring-licenses",
+        label: "Expiring Licenses",
+        icon: "calendar-x",
+    },
+];

@@ -24,6 +24,7 @@ const SionE1 = lazy(() => import("./pages/reports/SionE1"));
 const SionE5 = lazy(() => import("./pages/reports/SionE5"));
 const SionE126 = lazy(() => import("./pages/reports/SionE126"));
 const SionE132 = lazy(() => import("./pages/reports/SionE132"));
+const ExpiringLicenses = lazy(() => import("./pages/reports/ExpiringLicenses"));
 
 export default function App() {
     return (
@@ -200,6 +201,19 @@ export default function App() {
                                         <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <SionE132/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/reports/expiring-licenses"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <ExpiringLicenses/>
                                             </AdminLayout>
                                         </RoleRoute>
                                     </ProtectedRoute>

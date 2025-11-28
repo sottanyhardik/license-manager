@@ -80,8 +80,8 @@ class ItemPivotReportView(View):
 
         # Apply license status filter
         if license_status == 'active':
-            # Active: expiry date > today + 30 days (more than 1 month remaining)
-            licenses = licenses.filter(license_expiry_date__gt=today + timedelta(days=30))
+            # Active: expiry date > today - 30 days (not expired more than 30 days ago)
+            licenses = licenses.filter(license_expiry_date__gt=today - timedelta(days=30))
         elif license_status == 'expired':
             # Expired: expiry date < today
             licenses = licenses.filter(license_expiry_date__lt=today)
@@ -142,7 +142,11 @@ class ItemPivotReportView(View):
 
             license_row = self._build_license_row(license_obj, sorted_items)
             if license_row:
-                notification = license_obj.notification_number or 'Unknown'
+                # Handle blank/empty notification numbers
+                notification = (license_obj.notification_number or '').strip()
+                if not notification:
+                    notification = 'Unknown'
+
                 # Get norm class from license
                 norm_class = 'Unknown'
                 if license_obj.export_license.exists():
@@ -199,6 +203,7 @@ class ItemPivotReportView(View):
         # Aggregate quantities by item (sum across all serial numbers)
         item_quantities = defaultdict(lambda: {
             'quantity': Decimal('0.000'),
+            'allotted_quantity': Decimal('0.000'),
             'debited_quantity': Decimal('0.000'),
             'available_quantity': Decimal('0.000'),
             'debited_value': Decimal('0.00'),
@@ -222,6 +227,7 @@ class ItemPivotReportView(View):
         for import_item in license_obj.import_license.all():
             for item in import_item.items.all():
                 item_quantities[item.id]['quantity'] += import_item.quantity or DEC_000
+                item_quantities[item.id]['allotted_quantity'] += import_item.allotted_quantity or DEC_000
                 item_quantities[item.id]['debited_quantity'] += import_item.debited_quantity or DEC_000
                 item_quantities[item.id]['available_quantity'] += import_item.available_quantity or DEC_000
                 item_quantities[item.id]['debited_value'] += import_item.debited_value or DEC_0
@@ -261,13 +267,18 @@ class ItemPivotReportView(View):
                 group_data['available_cif'] = max(available_cif, Decimal('0'))
 
         # Build row data
+        # Handle blank/empty notification numbers
+        notification_display = (license_obj.notification_number or '').strip()
+        if not notification_display:
+            notification_display = 'Unknown'
+
         row_data = {
             'license_number': license_obj.license_number,
             'license_date': license_obj.license_date.isoformat() if license_obj.license_date else None,
             'license_expiry_date': license_obj.license_expiry_date.isoformat(),
             'exporter': str(license_obj.exporter) if license_obj.exporter else '',
             'port': str(license_obj.port) if license_obj.port else '',
-            'notification_number': license_obj.notification_number or 'Unknown',
+            'notification_number': notification_display,
             'total_cif': float(total_cif),
             'balance_cif': float(license_obj.balance_cif or Decimal('0')),
             'items': {}
@@ -295,6 +306,7 @@ class ItemPivotReportView(View):
                     'hs_code': item_data['hs_code'],
                     'description': item_data['description'],
                     'quantity': float(item_data['quantity']),
+                    'allotted_quantity': float(item_data['allotted_quantity']),
                     'debited_quantity': float(item_data['debited_quantity']),
                     'available_quantity': float(item_data['available_quantity']),
                     'restriction': restriction_value,
@@ -305,6 +317,7 @@ class ItemPivotReportView(View):
                     'hs_code': '',
                     'description': '',
                     'quantity': 0,
+                    'allotted_quantity': 0,
                     'debited_quantity': 0,
                     'available_quantity': 0,
                     'restriction': None,
@@ -367,8 +380,9 @@ class ItemPivotReportView(View):
                         f"{item_name} HSN Code",
                         f"{item_name} Product Description",
                         f"{item_name} Total QTY",
+                        f"{item_name} Allotted QTY",
                         f"{item_name} Debited QTY",
-                        f"{item_name} Available QTY",
+                        f"{item_name} Balance QTY",
                     ]
 
                     if has_restriction:
@@ -418,6 +432,7 @@ class ItemPivotReportView(View):
                             'hs_code': '',
                             'description': '',
                             'quantity': 0,
+                            'allotted_quantity': 0,
                             'debited_quantity': 0,
                             'available_quantity': 0,
                             'restriction': None,
@@ -429,6 +444,8 @@ class ItemPivotReportView(View):
                         worksheet.cell(row=current_row, column=col_num, value=item_data.get('description', ''))
                         col_num += 1
                         worksheet.cell(row=current_row, column=col_num, value=item_data.get('quantity', 0))
+                        col_num += 1
+                        worksheet.cell(row=current_row, column=col_num, value=item_data.get('allotted_quantity', 0))
                         col_num += 1
                         worksheet.cell(row=current_row, column=col_num, value=item_data.get('debited_quantity', 0))
                         col_num += 1
@@ -469,6 +486,10 @@ class ItemPivotReportView(View):
                         lic['items'].get(item_name, {}).get('quantity', 0)
                         for lic in licenses_list
                     )
+                    total_allotted = sum(
+                        lic['items'].get(item_name, {}).get('allotted_quantity', 0)
+                        for lic in licenses_list
+                    )
                     total_debited = sum(
                         lic['items'].get(item_name, {}).get('debited_quantity', 0)
                         for lic in licenses_list
@@ -477,9 +498,16 @@ class ItemPivotReportView(View):
                         lic['items'].get(item_name, {}).get('available_quantity', 0)
                         for lic in licenses_list
                     )
+                    total_restriction_val = sum(
+                        lic['items'].get(item_name, {}).get('restriction_value', 0)
+                        for lic in licenses_list
+                    )
 
                     col_num += 2  # Skip HSN and Description columns in totals
                     worksheet.cell(row=current_row, column=col_num, value=total_qty)
+                    worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
+                    col_num += 1
+                    worksheet.cell(row=current_row, column=col_num, value=total_allotted)
                     worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
                     col_num += 1
                     worksheet.cell(row=current_row, column=col_num, value=total_debited)
@@ -492,7 +520,9 @@ class ItemPivotReportView(View):
                     # Only skip restriction columns if item has restrictions
                     if has_restriction:
                         col_num += 1  # Skip Restriction % column in totals
-                        col_num += 1  # Skip Restriction Value column in totals
+                        worksheet.cell(row=current_row, column=col_num, value=total_restriction_val)
+                        worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
+                        col_num += 1
 
                 # Auto-adjust column widths
                 for col_idx in range(1, len(all_headers) + 1):

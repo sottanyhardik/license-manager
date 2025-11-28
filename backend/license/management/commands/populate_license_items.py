@@ -63,6 +63,15 @@ class Command(BaseCommand):
                 'norms': ['A3627'],
                 'filters': [Q(description__icontains='ALUMINIUM OXIDE')]
             },
+            {
+                'base_name': 'PP',
+                'norms': ['A3627'],
+                'filters': [
+                    Q(hs_code__hs_code__startswith='39021000') |
+                    Q(description__icontains='Polypropylene') |
+                    Q(description__icontains='pp granules')
+                ]
+            },
 
             # Automotive/Engineering items - C460
             {
@@ -516,10 +525,10 @@ class Command(BaseCommand):
                 ]
             },
 
-            # Packaging materials - COMMON (no norm restriction, shared across all)
+            # Packaging materials - COMMON and E1, E5, E132, E126
             {
                 'base_name': 'PAPER BOARD',
-                'norms': ['COMMON'],
+                'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
                     Q(description__icontains="Paper Board") |
                     Q(description__icontains="PAPPER BOARD")
@@ -527,7 +536,7 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'PAPER & PAPER',
-                'norms': ['COMMON'],
+                'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
                     Q(description__icontains="PAPER") &
                     ~Q(description__icontains="BOARD")
@@ -535,12 +544,12 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'BOPP',
-                'norms': ['COMMON'],
+                'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [Q(description__icontains="BOPP")]
             },
             {
                 'base_name': 'PP',
-                'norms': ['COMMON'],
+                'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
                     (Q(hs_code__hs_code__startswith='39021000') |
                      Q(description__icontains='Polypropylene') |
@@ -556,7 +565,7 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'HDPE',
-                'norms': ['COMMON'],
+                'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
                     Q(description__icontains="hdpe") |
                     Q(description__icontains="hdep")
@@ -564,7 +573,7 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'LDPE',
-                'norms': ['COMMON'],
+                'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
                     Q(description__icontains="LDPE") |
                     Q(description__icontains="LDEP")
@@ -572,7 +581,7 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'ALUMINIUM FOIL',
-                'norms': ['COMMON'],
+                'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
                     Q(description__icontains='7607') |
                     Q(description__icontains='ALUMINIUM FOIL') |
@@ -638,12 +647,8 @@ class Command(BaseCommand):
             norms = definition['norms']
 
             for norm in norms:
-                if norm == 'COMMON':
-                    # Packaging/common items don't get norm suffix
-                    item_name = base_name
-                else:
-                    # Create norm-specific item name
-                    item_name = f"{base_name} - {norm}"
+                # Always create norm-specific item name with suffix
+                item_name = f"{base_name} - {norm}"
 
                 items_to_create.append({
                     'name': item_name,
@@ -664,17 +669,16 @@ class Command(BaseCommand):
                 # Get or create the item
                 item, created = ItemNameModel.objects.get_or_create(name=item_name)
 
-                # Set sion_norm_class for norm-specific items
-                if norm != 'COMMON':
-                    try:
-                        norm_class_obj = SionNormClassModel.objects.get(norm_class=norm)
-                        if item.sion_norm_class != norm_class_obj:
-                            item.sion_norm_class = norm_class_obj
-                            item.save(update_fields=['sion_norm_class'])
-                            updated_count += 1
-                    except SionNormClassModel.DoesNotExist:
-                        self.stdout.write(
-                            self.style.WARNING(f"  ! Norm class '{norm}' not found in database for {item_name}"))
+                # Set sion_norm_class for all items
+                try:
+                    norm_class_obj = SionNormClassModel.objects.get(norm_class=norm)
+                    if item.sion_norm_class != norm_class_obj:
+                        item.sion_norm_class = norm_class_obj
+                        item.save(update_fields=['sion_norm_class'])
+                        updated_count += 1
+                except SionNormClassModel.DoesNotExist:
+                    self.stdout.write(
+                        self.style.WARNING(f"  ! Norm class '{norm}' not found in database for {item_name}"))
 
                 if created:
                     created_count += 1
@@ -710,16 +714,10 @@ class Command(BaseCommand):
                 item = ItemNameModel.objects.get(name=item_name)
 
                 # Build query: description/hs filters AND norm filter
-                if norm == 'COMMON':
-                    # Common items: only use description/hs filters (no norm restriction)
-                    combined_filter = Q()
-                    for f in filters:
-                        combined_filter &= f
-                else:
-                    # Norm-specific items: description/hs filters AND specific norm
-                    combined_filter = Q(license__export_license__norm_class__norm_class=norm)
-                    for f in filters:
-                        combined_filter &= f
+                # All items are norm-specific now
+                combined_filter = Q(license__export_license__norm_class__norm_class=norm)
+                for f in filters:
+                    combined_filter &= f
 
                 # Find matching import items
                 matching_imports = LicenseImportItemsModel.objects.filter(combined_filter)

@@ -100,15 +100,20 @@ class ItemPivotReportView(View):
                 for item in import_item.items.all():
                     # Only add items with valid names
                     if item and item.name:
-                        all_items.add((item.id, item.name))
+                        # If filtering by norm, only include items matching that norm
+                        if sion_norm:
+                            if item.sion_norm_class and item.sion_norm_class.norm_class == sion_norm:
+                                all_items.add((item.id, item.name))
+                        else:
+                            all_items.add((item.id, item.name))
 
         # Sort items by name for consistent column order
         sorted_items = sorted(all_items, key=lambda x: x[1] or '')
 
-        # Build license data with item columns, grouped by notification
+        # Build license data with item columns, grouped by norm first, then notification
         from collections import defaultdict
-        licenses_by_notification = defaultdict(list)
-        
+        licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
+
         for license_obj in licenses:
             # Skip licenses with balance < 100
             balance = license_obj.balance_cif or Decimal('0')
@@ -118,16 +123,29 @@ class ItemPivotReportView(View):
             license_row = self._build_license_row(license_obj, sorted_items)
             if license_row:
                 notification = license_obj.notification_number or 'Unknown'
-                licenses_by_notification[notification].append(license_row)
+                # Get norm class from license
+                norm_class = 'Unknown'
+                if license_obj.export_license.exists():
+                    first_export = license_obj.export_license.first()
+                    if first_export and first_export.norm_class:
+                        norm_class = first_export.norm_class.norm_class
+
+                licenses_by_norm_notification[norm_class][notification].append(license_row)
 
         # Determine which items have restrictions
         items_with_restrictions = set()
-        for notification, licenses_list in licenses_by_notification.items():
-            for license_row in licenses_list:
-                for item_id, item_name in sorted_items:
-                    item_data = license_row.get('items', {}).get(item_name, {})
-                    if item_data.get('restriction') is not None:
-                        items_with_restrictions.add(item_id)
+        for norm_dict in licenses_by_norm_notification.values():
+            for licenses_list in norm_dict.values():
+                for license_row in licenses_list:
+                    for item_id, item_name in sorted_items:
+                        item_data = license_row.get('items', {}).get(item_name, {})
+                        if item_data.get('restriction') is not None:
+                            items_with_restrictions.add(item_id)
+
+        # Convert nested defaultdict to regular dict
+        result_dict = {}
+        for norm, notification_dict in licenses_by_norm_notification.items():
+            result_dict[norm] = dict(notification_dict)
 
         return {
             'items': [
@@ -138,7 +156,7 @@ class ItemPivotReportView(View):
                 }
                 for item_id, item_name in sorted_items
             ],
-            'licenses_by_notification': dict(licenses_by_notification),
+            'licenses_by_norm_notification': result_dict,
             'report_date': today.isoformat(),
         }
 
@@ -277,7 +295,7 @@ class ItemPivotReportView(View):
 
     def export_to_excel(self, report_data: Dict[str, Any]) -> HttpResponse:
         """
-        Export report to Excel format with items as columns, split by notification.
+        Export report to Excel format with items as columns, split by norm then notification.
 
         Args:
             report_data: Report data dictionary
@@ -292,185 +310,187 @@ class ItemPivotReportView(View):
         # Remove default sheet
         workbook.remove(workbook.active)
 
-        licenses_by_notification = report_data.get('licenses_by_notification', {})
-        
-        # Create a sheet for each notification
-        for notification, licenses_list in sorted(licenses_by_notification.items()):
-            # Sanitize sheet name (Excel has 31 char limit and doesn't allow certain chars)
-            sheet_name = str(notification)[:31].replace('/', '-').replace('\\', '-').replace('*', '-').replace('[', '(').replace(']', ')')
-            worksheet = workbook.create_sheet(title=sheet_name)
+        licenses_by_norm_notification = report_data.get('licenses_by_norm_notification', {})
 
-            current_row = 1
+        # Create a sheet for each norm-notification combination
+        for norm_class in sorted(licenses_by_norm_notification.keys()):
+            notifications_dict = licenses_by_norm_notification[norm_class]
+            for notification, licenses_list in sorted(notifications_dict.items()):
+                # Sanitize sheet name (Excel has 31 char limit and doesn't allow certain chars)
+                sheet_name = f"{norm_class}_{notification}"[:31].replace('/', '-').replace('\\', '-').replace('*', '-').replace('[', '(').replace(']', ')')
+                worksheet = workbook.create_sheet(title=sheet_name)
 
-            # Title
-            title = f"Item Pivot Report - {notification}"
-            worksheet.merge_cells(f'A{current_row}:Z{current_row}')
-            title_cell = worksheet[f'A{current_row}']
-            title_cell.value = title
-            title_cell.font = Font(bold=True, size=14)
-            title_cell.alignment = Alignment(horizontal='center')
-            current_row += 2
+                current_row = 1
 
-            # Build headers
-            base_headers = [
-                'Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter',
-                'Total CIF', 'Balance CIF'
-            ]
+                # Title
+                title = f"Item Pivot Report - {norm_class} - {notification}"
+                worksheet.merge_cells(f'A{current_row}:Z{current_row}')
+                title_cell = worksheet[f'A{current_row}']
+                title_cell.value = title
+                title_cell.font = Font(bold=True, size=14)
+                title_cell.alignment = Alignment(horizontal='center')
+                current_row += 2
 
-            # Add item columns (HSN Code, Product Description, Total QTY, Debited QTY, Available QTY, Restriction %, Restriction Value)
-            item_headers = []
-            for item in report_data['items']:
-                item_name = item['name']
-                has_restriction = item.get('has_restriction', False)
-
-                headers = [
-                    f"{item_name} HSN Code",
-                    f"{item_name} Product Description",
-                    f"{item_name} Total QTY",
-                    f"{item_name} Debited QTY",
-                    f"{item_name} Available QTY",
+                # Build headers
+                base_headers = [
+                    'Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter',
+                    'Total CIF', 'Balance CIF'
                 ]
 
-                if has_restriction:
-                    headers.extend([
-                        f"{item_name} Restriction %",
-                        f"{item_name} Restriction Value"
-                    ])
-
-                item_headers.extend(headers)
-
-            all_headers = base_headers + item_headers
-
-            # Write headers
-            for col_num, header in enumerate(all_headers, 1):
-                cell = worksheet.cell(row=current_row, column=col_num)
-                cell.value = header
-                cell.font = Font(bold=True, color='FFFFFF')
-                cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
-                cell.alignment = Alignment(horizontal='center', wrap_text=True)
-            current_row += 1
-
-            # Write data rows for this notification
-            for idx, license_data in enumerate(licenses_list, 1):
-                col_num = 1
-
-                # Base columns
-                worksheet.cell(row=current_row, column=col_num, value=idx)
-                col_num += 1
-                worksheet.cell(row=current_row, column=col_num, value=license_data['license_number'])
-                col_num += 1
-                worksheet.cell(row=current_row, column=col_num, value=license_data['license_date'])
-                col_num += 1
-                worksheet.cell(row=current_row, column=col_num, value=license_data['license_expiry_date'])
-                col_num += 1
-                worksheet.cell(row=current_row, column=col_num, value=license_data['exporter'])
-                col_num += 1
-                worksheet.cell(row=current_row, column=col_num, value=license_data['total_cif'])
-                col_num += 1
-                worksheet.cell(row=current_row, column=col_num, value=license_data['balance_cif'])
-                col_num += 1
-
-                # Item columns
+                # Add item columns (HSN Code, Product Description, Total QTY, Debited QTY, Available QTY, Restriction %, Restriction Value)
+                item_headers = []
                 for item in report_data['items']:
                     item_name = item['name']
                     has_restriction = item.get('has_restriction', False)
-                    item_data = license_data['items'].get(item_name, {
-                        'hs_code': '',
-                        'description': '',
-                        'quantity': 0,
-                        'debited_quantity': 0,
-                        'available_quantity': 0,
-                        'restriction': None,
-                        'restriction_value': 0
-                    })
 
-                    worksheet.cell(row=current_row, column=col_num, value=item_data.get('hs_code', ''))
-                    col_num += 1
-                    worksheet.cell(row=current_row, column=col_num, value=item_data.get('description', ''))
-                    col_num += 1
-                    worksheet.cell(row=current_row, column=col_num, value=item_data.get('quantity', 0))
-                    col_num += 1
-                    worksheet.cell(row=current_row, column=col_num, value=item_data.get('debited_quantity', 0))
-                    col_num += 1
-                    worksheet.cell(row=current_row, column=col_num, value=item_data.get('available_quantity', 0))
-                    col_num += 1
+                    headers = [
+                        f"{item_name} HSN Code",
+                        f"{item_name} Product Description",
+                        f"{item_name} Total QTY",
+                        f"{item_name} Debited QTY",
+                        f"{item_name} Available QTY",
+                    ]
 
-                    # Only write restriction columns if item has restrictions
                     if has_restriction:
-                        # Write restriction as number only (percentage)
-                        restriction_val = item_data.get('restriction')
-                        worksheet.cell(row=current_row, column=col_num, value=restriction_val if restriction_val else '')
-                        col_num += 1
-                        # Write restriction value (available CIF)
-                        restriction_value = item_data.get('restriction_value', 0)
-                        worksheet.cell(row=current_row, column=col_num, value=restriction_value if restriction_value else '')
-                        col_num += 1
+                        headers.extend([
+                            f"{item_name} Restriction %",
+                            f"{item_name} Restriction Value"
+                        ])
 
+                    item_headers.extend(headers)
+
+                all_headers = base_headers + item_headers
+
+                # Write headers
+                for col_num, header in enumerate(all_headers, 1):
+                    cell = worksheet.cell(row=current_row, column=col_num)
+                    cell.value = header
+                    cell.font = Font(bold=True, color='FFFFFF')
+                    cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+                    cell.alignment = Alignment(horizontal='center', wrap_text=True)
                 current_row += 1
 
-            # Add totals row for this notification
-            worksheet.cell(row=current_row, column=1, value='TOTAL')
-            worksheet.cell(row=current_row, column=1).font = Font(bold=True)
+                # Write data rows for this norm-notification combination
+                for idx, license_data in enumerate(licenses_list, 1):
+                    col_num = 1
 
-            # Calculate totals for CIF columns
-            total_cif = sum(lic['total_cif'] for lic in licenses_list)
-            balance_cif = sum(lic['balance_cif'] for lic in licenses_list)
-            worksheet.cell(row=current_row, column=6, value=total_cif)
-            worksheet.cell(row=current_row, column=6).font = Font(bold=True)
-            worksheet.cell(row=current_row, column=7, value=balance_cif)
-            worksheet.cell(row=current_row, column=7).font = Font(bold=True)
+                    # Base columns
+                    worksheet.cell(row=current_row, column=col_num, value=idx)
+                    col_num += 1
+                    worksheet.cell(row=current_row, column=col_num, value=license_data['license_number'])
+                    col_num += 1
+                    worksheet.cell(row=current_row, column=col_num, value=license_data['license_date'])
+                    col_num += 1
+                    worksheet.cell(row=current_row, column=col_num, value=license_data['license_expiry_date'])
+                    col_num += 1
+                    worksheet.cell(row=current_row, column=col_num, value=license_data['exporter'])
+                    col_num += 1
+                    worksheet.cell(row=current_row, column=col_num, value=license_data['total_cif'])
+                    col_num += 1
+                    worksheet.cell(row=current_row, column=col_num, value=license_data['balance_cif'])
+                    col_num += 1
 
-            # Calculate totals for each item
-            col_num = 8
-            for item in report_data['items']:
-                item_name = item['name']
-                has_restriction = item.get('has_restriction', False)
-                total_qty = sum(
-                    lic['items'].get(item_name, {}).get('quantity', 0)
-                    for lic in licenses_list
-                )
-                total_debited = sum(
-                    lic['items'].get(item_name, {}).get('debited_quantity', 0)
-                    for lic in licenses_list
-                )
-                total_avail = sum(
-                    lic['items'].get(item_name, {}).get('available_quantity', 0)
-                    for lic in licenses_list
-                )
+                    # Item columns
+                    for item in report_data['items']:
+                        item_name = item['name']
+                        has_restriction = item.get('has_restriction', False)
+                        item_data = license_data['items'].get(item_name, {
+                            'hs_code': '',
+                            'description': '',
+                            'quantity': 0,
+                            'debited_quantity': 0,
+                            'available_quantity': 0,
+                            'restriction': None,
+                            'restriction_value': 0
+                        })
 
-                col_num += 2  # Skip HSN and Description columns in totals
-                worksheet.cell(row=current_row, column=col_num, value=total_qty)
-                worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
-                col_num += 1
-                worksheet.cell(row=current_row, column=col_num, value=total_debited)
-                worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
-                col_num += 1
-                worksheet.cell(row=current_row, column=col_num, value=total_avail)
-                worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
-                col_num += 1
+                        worksheet.cell(row=current_row, column=col_num, value=item_data.get('hs_code', ''))
+                        col_num += 1
+                        worksheet.cell(row=current_row, column=col_num, value=item_data.get('description', ''))
+                        col_num += 1
+                        worksheet.cell(row=current_row, column=col_num, value=item_data.get('quantity', 0))
+                        col_num += 1
+                        worksheet.cell(row=current_row, column=col_num, value=item_data.get('debited_quantity', 0))
+                        col_num += 1
+                        worksheet.cell(row=current_row, column=col_num, value=item_data.get('available_quantity', 0))
+                        col_num += 1
 
-                # Only skip restriction columns if item has restrictions
-                if has_restriction:
-                    col_num += 1  # Skip Restriction % column in totals
-                    col_num += 1  # Skip Restriction Value column in totals
+                        # Only write restriction columns if item has restrictions
+                        if has_restriction:
+                            # Write restriction as number only (percentage)
+                            restriction_val = item_data.get('restriction')
+                            worksheet.cell(row=current_row, column=col_num, value=restriction_val if restriction_val else '')
+                            col_num += 1
+                            # Write restriction value (available CIF)
+                            restriction_value = item_data.get('restriction_value', 0)
+                            worksheet.cell(row=current_row, column=col_num, value=restriction_value if restriction_value else '')
+                            col_num += 1
 
-            # Auto-adjust column widths
-            for col_idx in range(1, len(all_headers) + 1):
-                max_length = 0
-                column_letter = openpyxl.utils.get_column_letter(col_idx)
+                    current_row += 1
 
-                for row in worksheet.iter_rows(min_col=col_idx, max_col=col_idx):
-                    for cell in row:
-                        try:
-                            if cell.value:
-                                cell_length = len(str(cell.value))
-                                if cell_length > max_length:
-                                    max_length = cell_length
-                        except:
-                            pass
+                # Add totals row for this norm-notification
+                worksheet.cell(row=current_row, column=1, value='TOTAL')
+                worksheet.cell(row=current_row, column=1).font = Font(bold=True)
 
-                adjusted_width = min(max(max_length + 2, 10), 30)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
+                # Calculate totals for CIF columns
+                total_cif = sum(lic['total_cif'] for lic in licenses_list)
+                balance_cif = sum(lic['balance_cif'] for lic in licenses_list)
+                worksheet.cell(row=current_row, column=6, value=total_cif)
+                worksheet.cell(row=current_row, column=6).font = Font(bold=True)
+                worksheet.cell(row=current_row, column=7, value=balance_cif)
+                worksheet.cell(row=current_row, column=7).font = Font(bold=True)
+
+                # Calculate totals for each item
+                col_num = 8
+                for item in report_data['items']:
+                    item_name = item['name']
+                    has_restriction = item.get('has_restriction', False)
+                    total_qty = sum(
+                        lic['items'].get(item_name, {}).get('quantity', 0)
+                        for lic in licenses_list
+                    )
+                    total_debited = sum(
+                        lic['items'].get(item_name, {}).get('debited_quantity', 0)
+                        for lic in licenses_list
+                    )
+                    total_avail = sum(
+                        lic['items'].get(item_name, {}).get('available_quantity', 0)
+                        for lic in licenses_list
+                    )
+
+                    col_num += 2  # Skip HSN and Description columns in totals
+                    worksheet.cell(row=current_row, column=col_num, value=total_qty)
+                    worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
+                    col_num += 1
+                    worksheet.cell(row=current_row, column=col_num, value=total_debited)
+                    worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
+                    col_num += 1
+                    worksheet.cell(row=current_row, column=col_num, value=total_avail)
+                    worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
+                    col_num += 1
+
+                    # Only skip restriction columns if item has restrictions
+                    if has_restriction:
+                        col_num += 1  # Skip Restriction % column in totals
+                        col_num += 1  # Skip Restriction Value column in totals
+
+                # Auto-adjust column widths
+                for col_idx in range(1, len(all_headers) + 1):
+                    max_length = 0
+                    column_letter = openpyxl.utils.get_column_letter(col_idx)
+
+                    for row in worksheet.iter_rows(min_col=col_idx, max_col=col_idx):
+                        for cell in row:
+                            try:
+                                if cell.value:
+                                    cell_length = len(str(cell.value))
+                                    if cell_length > max_length:
+                                        max_length = cell_length
+                            except:
+                                pass
+
+                    adjusted_width = min(max(max_length + 2, 10), 30)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
 
         # Create response
         response = HttpResponse(

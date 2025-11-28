@@ -42,8 +42,10 @@ class Command(BaseCommand):
                 'base_name': 'RUTILE',
                 'norms': ['A3627'],
                 'filters': [
-                    Q(description__icontains='Glass Formers') |
-                    Q(description__icontains='Formers')
+                    (Q(description__icontains='Glass Formers') |
+                     Q(description__icontains='Rutile') |
+                     Q(description__icontains='Formers'))
+                    & ~Q(description__icontains='Titanium Dioxide')
                 ]
             },
             {
@@ -671,7 +673,8 @@ class Command(BaseCommand):
                             item.save(update_fields=['sion_norm_class'])
                             updated_count += 1
                     except SionNormClassModel.DoesNotExist:
-                        self.stdout.write(self.style.WARNING(f"  ! Norm class '{norm}' not found in database for {item_name}"))
+                        self.stdout.write(
+                            self.style.WARNING(f"  ! Norm class '{norm}' not found in database for {item_name}"))
 
                 if created:
                     created_count += 1

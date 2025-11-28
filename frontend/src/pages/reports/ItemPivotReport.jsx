@@ -14,18 +14,20 @@ export default function ItemPivotReport() {
     const [filtersCollapsed, setFiltersCollapsed] = useState(false);
     const [activeNormTab, setActiveNormTab] = useState(null);
     const [availableNorms, setAvailableNorms] = useState([]);
+    const [minBalance, setMinBalance] = useState(200);
+    const [licenseStatus, setLicenseStatus] = useState('active');
 
     useEffect(() => {
         loadFilterOptions();
         loadAvailableNorms();
     }, []);
 
-    // Load report when active norm tab changes
+    // Load report when active norm tab changes or filters change
     useEffect(() => {
         if (activeNormTab) {
             loadReport(activeNormTab);
         }
-    }, [activeNormTab, selectedCompanies, excludeCompanies]);
+    }, [activeNormTab, selectedCompanies, excludeCompanies, minBalance, licenseStatus]);
 
     const loadFilterOptions = async () => {
         try {
@@ -74,6 +76,8 @@ export default function ItemPivotReport() {
             if (excludeCompanies.length > 0) {
                 url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
             }
+            url += `&min_balance=${minBalance}`;
+            url += `&license_status=${licenseStatus}`;
 
             console.log('Fetching report for norm:', normClass, 'URL:', url);
             const response = await api.get(url);
@@ -102,6 +106,8 @@ export default function ItemPivotReport() {
             if (excludeCompanies.length > 0) {
                 url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
             }
+            url += `&min_balance=${minBalance}`;
+            url += `&license_status=${licenseStatus}`;
             
             const response = await api.get(url, {
                 responseType: 'blob',
@@ -134,9 +140,11 @@ export default function ItemPivotReport() {
     const handleClearFilters = () => {
         setSelectedCompanies([]);
         setExcludeCompanies([]);
+        setMinBalance(200);
+        setLicenseStatus('active');
     };
 
-    const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0;
+    const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active';
 
     const getTotalLicenseCount = () => {
         if (!reportData) return 0;
@@ -261,54 +269,107 @@ export default function ItemPivotReport() {
                 <div className="row mb-4">
                     <div className="col-12">
                         <div className="card shadow-sm border-0">
-                            <div className="card-header bg-white border-bottom">
+                            <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
                                 <h5 className="mb-0">
                                     <i className="bi bi-sliders me-2"></i>
                                     Filters
                                 </h5>
+                                {hasActiveFilters && (
+                                    <button className="btn btn-sm btn-outline-secondary" onClick={handleClearFilters}>
+                                        <i className="bi bi-x-circle me-1"></i>
+                                        Clear Filters
+                                    </button>
+                                )}
                             </div>
                             <div className="card-body">
                                 <div className="row g-3">
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">
+                                    <div className="col-lg-3 col-md-6">
+                                        <label className="form-label fw-bold mb-2">
+                                            <i className="bi bi-currency-dollar me-1"></i>
+                                            Minimum Balance (CIF)
+                                        </label>
+                                        <select
+                                            className="form-select"
+                                            value={minBalance}
+                                            onChange={(e) => setMinBalance(parseInt(e.target.value))}
+                                        >
+                                            <option value="100">₹ 100</option>
+                                            <option value="200">₹ 200</option>
+                                            <option value="500">₹ 500</option>
+                                            <option value="1000">₹ 1,000</option>
+                                            <option value="5000">₹ 5,000</option>
+                                            <option value="10000">₹ 10,000</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="col-lg-3 col-md-6">
+                                        <label className="form-label fw-bold mb-2">
+                                            <i className="bi bi-calendar-check me-1"></i>
+                                            License Status
+                                        </label>
+                                        <select
+                                            className="form-select"
+                                            value={licenseStatus}
+                                            onChange={(e) => setLicenseStatus(e.target.value)}
+                                        >
+                                            <option value="active">Active ({">"} 1 month)</option>
+                                            <option value="expiring_soon">Expiring Soon (≤ 30 days)</option>
+                                            <option value="expired">Expired</option>
+                                            <option value="all">All</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="col-lg-3 col-md-6">
+                                        <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-building me-1"></i>
                                             Include Companies
                                         </label>
-                                        <AsyncSelectField
-                                            endpoint="masters/companies/"
-                                            labelField="name"
-                                            valueField="id"
-                                            value={selectedCompanies}
-                                            onChange={handleCompanyChange}
-                                            isMulti={true}
-                                            placeholder="Select companies..."
-                                            loadOnMount={false}
-                                        />
+                                        <div style={{ minHeight: '38px' }}>
+                                            <AsyncSelectField
+                                                endpoint="masters/companies/"
+                                                labelField="name"
+                                                valueField="id"
+                                                value={selectedCompanies}
+                                                onChange={handleCompanyChange}
+                                                isMulti={true}
+                                                placeholder="All companies..."
+                                                loadOnMount={false}
+                                            />
+                                        </div>
                                     </div>
 
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">
+                                    <div className="col-lg-3 col-md-6">
+                                        <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-dash-circle me-1"></i>
                                             Exclude Companies
                                         </label>
-                                        <AsyncSelectField
-                                            endpoint="masters/companies/"
-                                            labelField="name"
-                                            valueField="id"
-                                            value={excludeCompanies}
-                                            onChange={handleExcludeCompanyChange}
-                                            isMulti={true}
-                                            placeholder="Select companies to exclude..."
-                                            loadOnMount={false}
-                                        />
+                                        <div style={{ minHeight: '38px' }}>
+                                            <AsyncSelectField
+                                                endpoint="masters/companies/"
+                                                labelField="name"
+                                                valueField="id"
+                                                value={excludeCompanies}
+                                                onChange={handleExcludeCompanyChange}
+                                                isMulti={true}
+                                                placeholder="None excluded..."
+                                                loadOnMount={false}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
+
                                 {hasActiveFilters && (
                                     <div className="mt-3">
-                                        <button className="btn btn-outline-secondary" onClick={handleClearFilters}>
-                                            <i className="bi bi-x-circle me-2"></i>
-                                            Clear All Filters
-                                        </button>
+                                        <div className="alert alert-info d-flex justify-content-between align-items-center py-2 mb-0">
+                                            <div>
+                                                <i className="bi bi-funnel-fill me-2"></i>
+                                                <strong>Active Filters:</strong>
+                                                {minBalance !== 200 && <span className="badge bg-primary ms-2">Min Balance: ₹{minBalance}</span>}
+                                                {licenseStatus !== 'active' && <span className="badge bg-primary ms-2">Status: {licenseStatus.replace('_', ' ')}</span>}
+                                                {selectedCompanies.length > 0 && <span className="badge bg-primary ms-2">Incl. Companies: {selectedCompanies.length}</span>}
+                                                {excludeCompanies.length > 0 && <span className="badge bg-primary ms-2">Excl. Companies: {excludeCompanies.length}</span>}
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -321,32 +382,30 @@ export default function ItemPivotReport() {
             <div className="row mb-4">
                 <div className="col-12">
                     <div className="card shadow-sm border-0">
-                        <div className="card-body p-0">
-                            <ul className="nav nav-tabs nav-fill" role="tablist" style={{ borderBottom: 'none' }}>
+                        <div className="card-body p-2">
+                            <div className="d-flex flex-wrap gap-2" style={{ justifyContent: 'flex-start' }}>
                                 {availableNorms.map((norm) => {
                                     return (
-                                        <li className="nav-item" key={norm} role="presentation">
-                                            <button
-                                                className={`nav-link ${activeNormTab === norm ? 'active' : ''}`}
-                                                onClick={() => setActiveNormTab(norm)}
-                                                type="button"
-                                                role="tab"
-                                                style={{
-                                                    fontWeight: activeNormTab === norm ? 'bold' : 'normal',
-                                                    borderBottom: activeNormTab === norm ? '3px solid #667eea' : 'none',
-                                                    background: activeNormTab === norm ? 'linear-gradient(135deg, #f093fb11 0%, #f5576c11 100%)' : 'transparent'
-                                                }}
-                                            >
-                                                <i className="bi bi-tag-fill me-2"></i>
-                                                {norm}
-                                                {loading && activeNormTab === norm && (
-                                                    <span className="spinner-border spinner-border-sm ms-2" role="status"></span>
-                                                )}
-                                            </button>
-                                        </li>
+                                        <button
+                                            key={norm}
+                                            className={`btn btn-sm ${activeNormTab === norm ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                            onClick={() => setActiveNormTab(norm)}
+                                            type="button"
+                                            style={{
+                                                width: '110px',
+                                                fontWeight: activeNormTab === norm ? 'bold' : 'normal',
+                                                transition: 'all 0.3s ease'
+                                            }}
+                                        >
+                                            <i className="bi bi-tag-fill me-1"></i>
+                                            {norm}
+                                            {loading && activeNormTab === norm && (
+                                                <span className="spinner-border spinner-border-sm ms-2" role="status" style={{ width: '0.8rem', height: '0.8rem' }}></span>
+                                            )}
+                                        </button>
                                     );
                                 })}
-                            </ul>
+                            </div>
                         </div>
                     </div>
                 </div>

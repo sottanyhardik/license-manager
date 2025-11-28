@@ -36,9 +36,11 @@ class ItemPivotReportView(View):
         sion_norm = request.GET.get('sion_norm')
         company_ids = request.GET.get('company_ids')  # Comma-separated company IDs
         exclude_company_ids = request.GET.get('exclude_company_ids')  # Comma-separated company IDs to exclude
+        min_balance = int(request.GET.get('min_balance', 200))
+        license_status = request.GET.get('license_status', 'active')
 
         try:
-            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids)
+            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status)
         except Exception as e:
             return JsonResponse({
                 'error': str(e)
@@ -49,8 +51,9 @@ class ItemPivotReportView(View):
         else:
             return JsonResponse(report_data, safe=False)
 
-    def generate_report(self, days: int = 30, sion_norm: str = None, 
-                       company_ids: str = None, exclude_company_ids: str = None) -> Dict[str, Any]:
+    def generate_report(self, days: int = 30, sion_norm: str = None,
+                       company_ids: str = None, exclude_company_ids: str = None,
+                       min_balance: int = 200, license_status: str = 'active') -> Dict[str, Any]:
         """
         Generate item-wise pivot report.
 
@@ -59,19 +62,36 @@ class ItemPivotReportView(View):
             sion_norm: Filter by specific SION norm class (optional)
             company_ids: Comma-separated company IDs to include (optional)
             exclude_company_ids: Comma-separated company IDs to exclude (optional)
+            min_balance: Minimum balance CIF to include (default 200)
+            license_status: Filter by status - 'active', 'expired', 'expiring_soon', 'all' (default 'active')
 
         Returns:
             Dictionary with report data
         """
+        from datetime import date, timedelta
         today = date.today()
         start_date = today - timedelta(days=days)
 
-        # Get active licenses with expiry >= start_date
+        # Base query - active licenses with required purchase status
         licenses = LicenseDetailsModel.objects.filter(
-            license_expiry_date__gte=start_date,
             is_active=True,
             purchase_status__in=[GE, MI, IP, SM]
         )
+
+        # Apply license status filter
+        if license_status == 'active':
+            # Active: expiry date > today + 30 days (more than 1 month remaining)
+            licenses = licenses.filter(license_expiry_date__gt=today + timedelta(days=30))
+        elif license_status == 'expired':
+            # Expired: expiry date < today
+            licenses = licenses.filter(license_expiry_date__lt=today)
+        elif license_status == 'expiring_soon':
+            # Expiring soon: expiry within next 30 days
+            licenses = licenses.filter(
+                license_expiry_date__gte=today,
+                license_expiry_date__lte=today + timedelta(days=30)
+            )
+        # If 'all', no date filter applied
 
         # Filter by SION norm if specified
         if sion_norm:
@@ -115,9 +135,9 @@ class ItemPivotReportView(View):
         licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
 
         for license_obj in licenses:
-            # Skip licenses with balance < 100
+            # Skip licenses with balance < min_balance
             balance = license_obj.balance_cif or Decimal('0')
-            if balance < Decimal('100.00'):
+            if balance < Decimal(str(min_balance)):
                 continue
 
             license_row = self._build_license_row(license_obj, sorted_items)

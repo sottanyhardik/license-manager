@@ -5,7 +5,7 @@ from .models import (
     CompanyModel, PortModel, HSCodeModel,
     HeadSIONNormsModel, SionNormClassModel,
     SIONExportModel, SIONImportModel,
-    ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel
+    ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel, ItemGroupModel
 )
 
 
@@ -146,9 +146,18 @@ class UnitPriceSerializer(AuditSerializerMixin):
         fields = "__all__"
 
 
-# ---- Item Head ----
+# ---- Group ----
+class GroupSerializer(AuditSerializerMixin):
+    class Meta(AuditSerializerMixin.Meta):
+        model = ItemGroupModel
+        fields = "__all__"
+
+
+# ---- Item Head (Deprecated) ----
 class ItemHeadSerializer(AuditSerializerMixin):
-    restriction_norm_display = serializers.CharField(source='restriction_norm.norm_class', read_only=True, required=False)
+    """Deprecated: Use GroupSerializer instead"""
+    restriction_norm_display = serializers.CharField(source='restriction_norm.norm_class', read_only=True,
+                                                     required=False)
 
     class Meta(AuditSerializerMixin.Meta):
         model = ItemHeadModel
@@ -164,7 +173,7 @@ class ItemHeadSerializer(AuditSerializerMixin):
 
 # ---- Item Name ----
 class ItemNameSerializer(AuditSerializerMixin):
-    head_name = serializers.CharField(read_only=True, required=False)
+    group_name = serializers.CharField(source='group.name', read_only=True, required=False)
     sion_norm_class_label = serializers.SerializerMethodField()
 
     class Meta(AuditSerializerMixin.Meta):

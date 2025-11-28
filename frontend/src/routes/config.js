@@ -74,9 +74,9 @@ export const masterEntities = [
         icon: "diagram-3",
     },
     {
-        path: "/masters/item-heads",
-        label: "Item Heads",
-        entity: "item-heads",
+        path: "/masters/groups",
+        label: "Groups",
+        entity: "groups",
         icon: "folder",
     },
     {
@@ -84,6 +84,13 @@ export const masterEntities = [
         label: "Item Names",
         entity: "item-names",
         icon: "tags",
+    },
+    {
+        path: "/masters/item-heads",
+        label: "Item Heads (Deprecated)",
+        entity: "item-heads",
+        icon: "folder",
+        deprecated: true,
     },
 ];
 

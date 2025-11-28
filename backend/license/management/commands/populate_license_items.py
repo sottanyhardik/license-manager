@@ -1,12 +1,13 @@
 # license/management/commands/populate_license_items.py
 from django.core.management.base import BaseCommand
 from django.db.models import Q
+
+from core.models import ItemNameModel, SionNormClassModel
 from license.models import LicenseImportItemsModel
-from core.models import ItemNameModel
 
 
 class Command(BaseCommand):
-    help = "Populate items (ManyToMany) in LicenseImportItemsModel based on description and HS code filters"
+    help = "Populate items (ManyToMany) in LicenseImportItemsModel based on description and HS code filters - with norm-specific items"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -20,214 +21,710 @@ class Command(BaseCommand):
             help="Clear all existing items before populating.",
         )
 
-    def get_items_and_filters(self):
-        """Returns list of (item_name, query_filter) tuples"""
+    def get_item_definitions(self):
+        """
+        Returns list of item definitions with base name, norms list, and description/hs filters
+        Each item will be created separately for each norm (e.g., 'SUGAR - E1', 'SUGAR - E5')
+        """
         return [
-            ('SODIUM NITRATE', Q(description__icontains="Sodium Nitrate")),
-            ('TITANIUM DIOXIDE', Q(description__icontains='Titanium Dioxide')),
-            ('RUTILE', Q(description__icontains='Glass Formers') | Q(description__icontains='Formers')),
-            ('SODA ASH', Q(description__icontains='Soda Ash')),
-            ('ALUMINIUM OXIDE, ZINC OXIDE, ZIRCONIUM OXIDE',
-             Q(description__icontains='ALUMINIUM OXIDE') & Q(license__export_license__norm_class__norm_class='A3627')),
-            ('WIRING HANRNESS', Q(description__icontains='wiring hanrness')),
-            ('WATER PUMP', Q(description__icontains='WATER PUMP')),
-            ("'O' Ring", Q(description__icontains="'O' Ring") | Q(hs_code__hs_code__startswith='40169320')),
-            ('BEARING', Q(description__icontains="BEARING") | Q(hs_code__hs_code__startswith='8482')),
-            ('TURBO CHARGER', Q(description__icontains="TURBO CHARGER")),
-            ('STARTER MOTOR', Q(description__icontains="starter motor")),
-            ('ALLOY STEEL', Q(description__icontains="alloy steel rod")),
-            ('AUTOMOTIVE BATTERY',
-             Q(description__icontains="AUTOMOTIVE BATTERY") | Q(description__icontains="AUTOMATIVE BATTERY") | Q(
-                 description__icontains="Automotive Battery") | Q(description__icontains="Battery Automotive")),
-            ('BRAKE ASSEMBLY', Q(description__icontains="Brake Assembly")),
-            ('SEAT ASSEMBLY', Q(description__icontains="SEAT ASSEMBLY")),
-            ('REARWHEEL TYRE', Q(description__icontains="REARWHEEL TYRE")),
-            ('RADIATOR', Q(description__icontains="RADIATOR")),
-            ('REAR WHEELRIM', Q(description__icontains="REAR WHEELRIM")),
-            ('SAFETY NEUTRAL SWITCH', Q(description__icontains="SAFETY NEUTRAL SWITCH")),
-            ('OIL SEPERATOR', Q(description__icontains="OIL SEPERATOR")),
-            ('CLUTCH ASSEMBLY', Q(description__icontains="CLUTCH ASSEMBLY")),
-            ('HOT ROLLED STEEL', Q(description__icontains="HOT ROLLED") | Q(description__icontains="NON ALLOY")),
-            ('COLD ROLLED STEEL', Q(description__icontains="COLD ROLLED")),
-            ('FRONT WHEELRIM', Q(description__icontains="FRONT WHEELRIM")),
-            ('ALTERNATOR', Q(description__icontains="ALTERNATOR")),
-            ('HYDROSTATIC TRANSMISSION', Q(description__icontains="HYDROSTATIC") & Q(description__icontains="TRANSMISSION")),
-            ('OIL PUMP', Q(description__icontains="OIL PUMP")),
-            ('OIL SEAL', Q(description__icontains="Oil Seal")),
-            ('HYDRAULIC VALVES', Q(description__icontains="HYDRAULIC VALVES")),
-            ('HYDRAULIC CYLINDER', Q(description__icontains="HYDRAULIC CYLINDER")),
-            ('HYDRAULIC PUMP', Q(description__icontains="HYDRAULIC PUMP")),
-            ('FRONT AXLE', Q(description__icontains="FRONT AXLE")),
-            ('FUEL FILTER', Q(description__icontains="FUEL FILTER")),
-            ('INTERNAL COMBUSTION ENGINE', Q(description__icontains="INTERNAL COMBUSTION ENGINE")),
-            ('AIR FILTER', Q(description__icontains="AIR FILTER")),
-            ('OIL SEALS', Q(description__icontains="OIL SEALS")),
-            ('AUXILIARY VALVES', Q(description__icontains="AUXILIARY VALVES")),
-            ('STABILIZING AGENT',
-             Q(description__icontains="Stabilizing Agent") & Q(license__export_license__norm_class__norm_class="E1")),
-            ('FUEL INJECTION PUMP', Q(description__icontains="FUEL INJECTION PUMP")),
-            ('FRONTWHEEL TYRE', Q(description__icontains="frontwheel tyre")),
-            ('BISCUITS ADDITIVES & INGREDIENTS',
-             Q(description__icontains="BISCUITS ADDITIVES & INGREDIENTS") & ~Q(description__icontains="Yeast")),
-            ('CERAMIC COLOUR', Q(description__icontains="CERAMIC COLOUR")),
-            ('SYNCHROPACKS', Q(description__icontains="synchropacks")),
-            ('SUGAR', Q(description__icontains='sugar')),
-            ('WHEAT GLUTEN', Q(description__icontains='GLUTEN') | Q(description__icontains='1109') |
-             Q(hs_code__hs_code__startswith='1109')),
-            ('WHEAT FLOUR', Q(description__icontains='WHEAT FLOUR') | Q(description__icontains='FLOUR')),
-            ('DIETARY FIBRE', Q(description__icontains='Dietary Fibre')),
-            ('WPC', Q(description__icontains="Milk & Milk") | Q(description__icontains="3502") | Q(
-                hs_code__hs_code__startswith='3502') &
-             ~(Q(description__icontains="0406") | Q(hs_code__hs_code__startswith='0406') |
-               Q(description__icontains="0404") | Q(hs_code__hs_code__startswith='0404'))),
-            ('CHEESE', Q(description__icontains="0406") | Q(hs_code__hs_code__startswith='0406')),
-            ('SWP', Q(description__icontains="0404") | Q(hs_code__hs_code__startswith='0404') &
-             ~Q(description__icontains="0406") & ~Q(hs_code__hs_code__startswith='0406')),
-            ('FRUIT/COCOA', Q(description__icontains="Coco Powder") | Q(description__icontains="Cocoa Powder") |
-             Q(description__icontains="18050000") | Q(description__icontains='COCO POWDER') | Q(
-                hs_code__hs_code__startswith='18050000') | Q(description__icontains="fruit/cocoa")),
-            ('ANTI OXIDANT', Q(description__icontains="Anti oxidant") | Q(description__icontains="Anti oxident")),
-            ('FOOD COLOUR', Q(description__icontains="FOOD COLOUR")),
-            ('STARCH 1108', Q(description__icontains="1108") | Q(hs_code__hs_code__startswith='1108')),
-            ('STARCH 3505', Q(description__icontains="3505") | Q(hs_code__hs_code__startswith='3505') |
-             (Q(description__icontains="starch") & (
-                     ~Q(hs_code__hs_code__startswith='1108') | ~Q(description__icontains="1108")))),
-            ('EMULSIFIER BISCUITS',
-             (Q(description__icontains="EMULSIFIER") & Q(license__export_license__norm_class__norm_class='E5'))),
-            ('FOOD FLAVOUR BISCUITS',
-             (Q(description__icontains="relevant food flavour") | Q(description__icontains="FOOD FLAVOUR") | Q(
-                 description__icontains="relevant (food flour") | Q(description__icontains="Flavouring Agent") | Q(
-                 description__icontains=" Flavour Improvers") | Q(
-                 description__icontains="FOOD FLAVOURS") | Q(description__icontains="Flavours")) &
-             Q(license__export_license__norm_class__norm_class='E5')),
-            ('JUICE', (Q(description__icontains="Relevant Fruit") | Q(description__icontains='FRUITS FLAVOUR') | Q(
-                description__icontains='Fruit Flavour') | Q(description__icontains='2009') | Q(
-                hs_code__hs_code__startswith='2009')) &
-             Q(license__export_license__norm_class__norm_class='E5')),
-            ('LEAVENING AGENT', Q(description__icontains="LEAVENING AGENT") | Q(description__icontains='leaving agent') | Q(
-                description__icontains='Yeast')),
-            ('EMULSIFIER',
-             (Q(description__icontains="emulsifier") | Q(description__icontains="EMULSIFIER")) & Q(
-                 license__export_license__norm_class__norm_class='E1')),
-            ('VEGETABLE SHORTENING',
-             Q(description__icontains="vegetable shortening") | Q(description__icontains="rbd palm oil")),
-            ('RBD PALMOLEIN OIL',
-             Q(description__icontains="vegetable shortening") | Q(description__icontains="rbd palmolein oil") | Q(
-                 hs_code__hs_code__startswith="15119020")),
-            ('EDIBLE VEGETABLE OIL',
-             (Q(description__icontains="EDIBLE VEGETABLE OIL") | Q(description__icontains="150000") | Q(
-                 description__icontains="1509") | Q(description__icontains="Relevant Fats and oils") | Q(
-                 hs_code__hs_code__startswith="150000") | Q(description__icontains="Relevant Fats & oils")) & ~Q(
-                 license__export_license__norm_class__norm_class='E132')),
-            ('PALM KERNEL OIL',
-             Q(hs_code__hs_code__startswith="1513") | Q(description__icontains="1513")),
-            ('OTHER CONFECTIONERY INGREDIENTS',
-             Q(description__icontains="other confectionery ingredients") | Q(
-                 description__icontains="nut & nut products") | Q(description__icontains="Fruits and Nuts Product")),
-            ('LIQUID GLUCOSE', Q(description__icontains="liquid glucose")),
-            ('FRUIT JUICE', (Q(description__icontains="Juice") | Q(description__icontains="Fruit Concentrate") | Q(
-                description__icontains='Relevant fruit')) & Q(
-                license__export_license__norm_class__norm_class='E1')),
-            ('WPC', (
-                    (Q(hs_code='3502') | Q(description__icontains='milk')) &
-                    Q(license__export_license__norm_class__norm_class='E1')
-            )),
-            ('FOOD FLAVOUR CONFECTIONERY',
-             (Q(description__icontains="relevant food flavour") | Q(description__icontains="FOOD FLAVOUR") | Q(
-                 description__icontains="relevant (food flour") | Q(description__icontains="Flavouring Agent") | Q(
-                 description__icontains="FOOD FLAVOURS") | Q(description__icontains="Flavours")) &
-             Q(license__export_license__norm_class__norm_class='E1')),
-            ('CITRIC ACID / TARTARIC ACID',
-             (Q(description__icontains="CITRIC ACID") | Q(description__icontains="TARTARIC ACID") | Q(
-                 description__icontains="TARTARIC AICD") & Q(
-                 license__export_license__norm_class__norm_class='E1'))),
-            ('ESSENTIAL OIL',
-             Q(description__icontains="relevant essential oils") | Q(description__icontains="ESSENTIAL OILS") | Q(
-                 description__icontains="Essential Oil")),
-            ('FOOD FLAVOUR NAMKEEN',
-             (Q(description__icontains="Relevant Food Additives") & (
-                     Q(hs_code__hs_code__startswith="0908") | Q(description__icontains="0908") | Q(
-                 description__icontains="Cardamom")) & Q(
-                 license__export_license__norm_class__norm_class='E132'))),
-            ('FOOD FLAVOUR NAMKEEN',
-             (Q(description__icontains="relevant food flavour") | Q(description__icontains="FOOD FLAVOUR") | Q(
-                 description__icontains="relevant (food flour") | Q(description__icontains="Flavouring Agent") | Q(
-                 description__icontains="FOOD FLAVOURS") | Q(description__icontains="Flavours")) &
-             Q(license__export_license__norm_class__norm_class='E132')),
-            ('CEREALS FLAKES',
-             Q(description__icontains='Chickpeas') | Q(description__icontains='lentils') |
-             Q(description__icontains='Cereal Flakes') | Q(description__icontains='Green Peas')),
-            ('FOOD FLAVOUR PICKLE',
-             (Q(description__icontains="relevant food flavour") | Q(description__icontains="FOOD FLAVOUR") | Q(
-                 description__icontains="relevant (food flour") | Q(description__icontains="Flavouring Agent") | Q(
-                 description__icontains="FOOD FLAVOURS") | Q(description__icontains="Flavours")) &
-             Q(license__export_license__norm_class__norm_class='E126')),
-            ('FOOD FLAVOUR PICKLE',
-             (Q(description__icontains="Relevant Food Additives") | (
-                     Q(hs_code__hs_code__startswith="0908") | Q(description__icontains="0908") | Q(
-                 description__icontains="Cardamom")) & Q(
-                 license__export_license__norm_class__norm_class='E126'))),
-            ('SANITATION AND CLEANING CHEMICALS', Q(description__icontains='SANITATION AND CLEANING CHEMICALS') &
-             Q(license__export_license__norm_class__norm_class='E126')),
-            ('PAPER BOARD', Q(description__icontains="Paper Board") | Q(description__icontains="PAPPER BOARD")),
-            ('PAPER & PAPER', Q(description__icontains="PAPER") & ~Q(description__icontains="BOARD")),
-            ('BOPP', Q(description__icontains="BOPP")),
-            ('PP', (Q(hs_code__hs_code__startswith='39021000') | Q(description__icontains='Polypropylene') | Q(
-                description__icontains='pp granules') | Q(
-                description__icontains='packing material') | (
-                            Q(description__icontains='PP ') & (
-                            Q(hs_code__hs_code__startswith='39') | Q(hs_code__hs_code__startswith='48'))) & (
-                            ~Q(description__icontains='7607') | ~Q(description__icontains='ALUMINIUM FOIL') | ~Q(
-                        hs_code__hs_code__startswith='7607')))),
-            ('HDPE', Q(description__icontains="hdpe") | Q(description__icontains="hdep")),
-            ('LDPE', Q(description__icontains="LDPE") | Q(description__icontains="LDEP")),
-            ('ALUMINIUM FOIL', Q(description__icontains='7607') | Q(description__icontains='ALUMINIUM FOIL') | Q(
-                hs_code__hs_code__startswith='7607')),
-            ('COKE', Q(description__icontains="COKE")),
-            ('BETEL NUT', Q(description__icontains="BETEL NUT")),
-            ('SUPARI WHOLE', Q(description__icontains="SUPARI WHOLE")),
-            ('COFFEE BEANS', Q(description__icontains="Coffee Beans")),
-            ('RELEVANT ADDITIVES DESCRIPTION',
-             Q(description__icontains="RELEVANT ADDITIVES DESCRIPTION") | Q(description__icontains="Methyl Cellulose")),
-            ('RELEVANT ADDITIVES DESCRIPTION',
-             (Q(description__icontains="Relevant Food Additives") & (Q(description__icontains="TBHQ")) & Q(
-                 license__export_license__norm_class__norm_class='E132'))),
+            # Glass/Ceramic items - A3627
+            {
+                'base_name': 'SODIUM NITRATE',
+                'norms': ['A3627'],
+                'filters': [Q(description__icontains="Sodium Nitrate")]
+            },
+            {
+                'base_name': 'TITANIUM DIOXIDE',
+                'norms': ['A3627'],
+                'filters': [Q(description__icontains='Titanium Dioxide')]
+            },
+            {
+                'base_name': 'RUTILE',
+                'norms': ['A3627'],
+                'filters': [
+                    Q(description__icontains='Glass Formers') |
+                    Q(description__icontains='Formers')
+                ]
+            },
+            {
+                'base_name': 'SODA ASH',
+                'norms': ['A3627'],
+                'filters': [Q(description__icontains='Soda Ash')]
+            },
+            {
+                'base_name': 'CERAMIC COLOUR',
+                'norms': ['A3627'],
+                'filters': [Q(description__icontains="CERAMIC COLOUR")]
+            },
+            {
+                'base_name': 'ALUMINIUM OXIDE, ZINC OXIDE, ZIRCONIUM OXIDE',
+                'norms': ['A3627'],
+                'filters': [Q(description__icontains='ALUMINIUM OXIDE')]
+            },
+
+            # Automotive/Engineering items - C460
+            {
+                'base_name': 'WIRING HANRNESS',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains='wiring hanrness')]
+            },
+            {
+                'base_name': 'WATER PUMP',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains='WATER PUMP')]
+            },
+            {
+                'base_name': "'O' Ring",
+                'norms': ['C460'],
+                'filters': [
+                    Q(description__icontains="'O' Ring") |
+                    Q(hs_code__hs_code__startswith='40169320')
+                ]
+            },
+            {
+                'base_name': 'BEARING',
+                'norms': ['C460'],
+                'filters': [
+                    Q(description__icontains="BEARING") |
+                    Q(hs_code__hs_code__startswith='8482')
+                ]
+            },
+            {
+                'base_name': 'TURBO CHARGER',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="TURBO CHARGER")]
+            },
+            {
+                'base_name': 'STARTER MOTOR',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="starter motor")]
+            },
+            {
+                'base_name': 'ALLOY STEEL',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="alloy steel rod")]
+            },
+            {
+                'base_name': 'AUTOMOTIVE BATTERY',
+                'norms': ['C460'],
+                'filters': [
+                    Q(description__icontains="AUTOMOTIVE BATTERY") |
+                    Q(description__icontains="AUTOMATIVE BATTERY") |
+                    Q(description__icontains="Automotive Battery") |
+                    Q(description__icontains="Battery Automotive")
+                ]
+            },
+            {
+                'base_name': 'BRAKE ASSEMBLY',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="Brake Assembly")]
+            },
+            {
+                'base_name': 'SEAT ASSEMBLY',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="SEAT ASSEMBLY")]
+            },
+            {
+                'base_name': 'REARWHEEL TYRE',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="REARWHEEL TYRE")]
+            },
+            {
+                'base_name': 'FRONTWHEEL TYRE',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="frontwheel tyre")]
+            },
+            {
+                'base_name': 'RADIATOR',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="RADIATOR")]
+            },
+            {
+                'base_name': 'REAR WHEELRIM',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="REAR WHEELRIM")]
+            },
+            {
+                'base_name': 'FRONT WHEELRIM',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="FRONT WHEELRIM")]
+            },
+            {
+                'base_name': 'SAFETY NEUTRAL SWITCH',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="SAFETY NEUTRAL SWITCH")]
+            },
+            {
+                'base_name': 'OIL SEPERATOR',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="OIL SEPERATOR")]
+            },
+            {
+                'base_name': 'OIL PUMP',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="OIL PUMP")]
+            },
+            {
+                'base_name': 'OIL SEAL',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="Oil Seal")]
+            },
+            {
+                'base_name': 'CLUTCH ASSEMBLY',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="CLUTCH ASSEMBLY")]
+            },
+            {
+                'base_name': 'ALTERNATOR',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="ALTERNATOR")]
+            },
+            {
+                'base_name': 'HYDROSTATIC TRANSMISSION',
+                'norms': ['C460'],
+                'filters': [
+                    Q(description__icontains="HYDROSTATIC") &
+                    Q(description__icontains="TRANSMISSION")
+                ]
+            },
+            {
+                'base_name': 'HYDRAULIC VALVES',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="HYDRAULIC VALVES")]
+            },
+            {
+                'base_name': 'HYDRAULIC CYLINDER',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="HYDRAULIC CYLINDER")]
+            },
+            {
+                'base_name': 'HYDRAULIC PUMP',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="HYDRAULIC PUMP")]
+            },
+            {
+                'base_name': 'FRONT AXLE',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="FRONT AXLE")]
+            },
+            {
+                'base_name': 'FUEL FILTER',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="FUEL FILTER")]
+            },
+            {
+                'base_name': 'FUEL INJECTION PUMP',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="FUEL INJECTION PUMP")]
+            },
+            {
+                'base_name': 'INTERNAL COMBUSTION ENGINE',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="INTERNAL COMBUSTION ENGINE")]
+            },
+            {
+                'base_name': 'AIR FILTER',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="AIR FILTER")]
+            },
+            {
+                'base_name': 'AUXILIARY VALVES',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="AUXILIARY VALVES")]
+            },
+            {
+                'base_name': 'SYNCHROPACKS',
+                'norms': ['C460'],
+                'filters': [Q(description__icontains="synchropacks")]
+            },
+
+            # Steel items - C473, C471
+            {
+                'base_name': 'HOT ROLLED STEEL',
+                'norms': ['C473', 'C471'],
+                'filters': [
+                    Q(description__icontains="HOT ROLLED") |
+                    Q(description__icontains="NON ALLOY")
+                ]
+            },
+            {
+                'base_name': 'COLD ROLLED STEEL',
+                'norms': ['C473', 'C471'],
+                'filters': [Q(description__icontains="COLD ROLLED")]
+            },
+
+            # Food ingredients - multiple norms
+            {
+                'base_name': 'SUGAR',
+                'norms': ['E1', 'E5'],
+                'filters': [Q(description__icontains='sugar')]
+            },
+            {
+                'base_name': 'WHEAT GLUTEN',
+                'norms': ['E5'],
+                'filters': [
+                    Q(description__icontains='GLUTEN') |
+                    Q(description__icontains='1109') |
+                    Q(hs_code__hs_code__startswith='1109')
+                ]
+            },
+            {
+                'base_name': 'WHEAT FLOUR',
+                'norms': ['E5'],
+                'filters': [
+                    Q(description__icontains='WHEAT FLOUR') |
+                    Q(description__icontains='FLOUR')
+                ]
+            },
+            {
+                'base_name': 'DIETARY FIBRE',
+                'norms': ['E5'],
+                'filters': [Q(description__icontains='Dietary Fibre')]
+            },
+            {
+                'base_name': 'CHEESE',
+                'norms': ['E1', 'E5', 'E132'],
+                'filters': [
+                    Q(description__icontains="0406") |
+                    Q(hs_code__hs_code__startswith='0406')
+                ]
+            },
+            {
+                'base_name': 'SWP',
+                'norms': ['E1', 'E5'],
+                'filters': [
+                    Q(description__icontains="0404") |
+                    Q(hs_code__hs_code__startswith='0404')
+                ]
+            },
+            {
+                'base_name': 'ANTI OXIDANT',
+                'norms': ['E1', 'E5'],
+                'filters': [
+                    Q(description__icontains="Anti oxidant") |
+                    Q(description__icontains="Anti oxident")
+                ]
+            },
+            {
+                'base_name': 'FOOD COLOUR',
+                'norms': ['E1', 'E5'],
+                'filters': [Q(description__icontains="FOOD COLOUR")]
+            },
+            {
+                'base_name': 'STARCH 1108',
+                'norms': ['E1', 'E5'],
+                'filters': [
+                    Q(description__icontains="1108") |
+                    Q(hs_code__hs_code__startswith='1108')
+                ]
+            },
+            {
+                'base_name': 'STARCH 3505',
+                'norms': ['E1', 'E5'],
+                'filters': [
+                    Q(description__icontains="3505") |
+                    Q(hs_code__hs_code__startswith='3505') |
+                    (Q(description__icontains="starch") &
+                     (~Q(hs_code__hs_code__startswith='1108') |
+                      ~Q(description__icontains="1108")))
+                ]
+            },
+            {
+                'base_name': 'LEAVENING AGENT',
+                'norms': ['E5'],
+                'filters': [
+                    Q(description__icontains="LEAVENING AGENT") |
+                    Q(description__icontains='leaving agent') |
+                    Q(description__icontains='Yeast')
+                ]
+            },
+            {
+                'base_name': 'VEGETABLE SHORTENING',
+                'norms': ['E5'],
+                'filters': [
+                    Q(description__icontains="vegetable shortening") |
+                    Q(description__icontains="rbd palm oil")
+                ]
+            },
+            {
+                'base_name': 'RBD PALMOLEIN OIL',
+                'norms': ['E1', 'E5', 'E126', 'E132'],
+                'filters': [
+                    Q(description__icontains="vegetable shortening") |
+                    Q(description__icontains="rbd palmolein oil") |
+                    Q(hs_code__hs_code__startswith="15119020")
+                ]
+            },
+            {
+                'base_name': 'PALM KERNEL OIL',
+                'norms': ['E1', 'E5', 'E126', 'E132'],
+                'filters': [
+                    Q(hs_code__hs_code__startswith="1513") |
+                    Q(description__icontains="1513")
+                ]
+            },
+            {
+                'base_name': 'LIQUID GLUCOSE',
+                'norms': ['E1'],
+                'filters': [Q(description__icontains="liquid glucose")]
+            },
+            {
+                'base_name': 'ESSENTIAL OIL',
+                'norms': ['E1'],
+                'filters': [
+                    Q(description__icontains="relevant essential oils") |
+                    Q(description__icontains="ESSENTIAL OILS") |
+                    Q(description__icontains="Essential Oil")
+                ]
+            },
+            {
+                'base_name': 'CEREALS FLAKES',
+                'norms': ['E132'],
+                'filters': [
+                    Q(description__icontains='Chickpeas') |
+                    Q(description__icontains='lentils') |
+                    Q(description__icontains='Cereal Flakes') |
+                    Q(description__icontains='Green Peas')
+                ]
+            },
+            {
+                'base_name': 'RELEVANT ADDITIVES DESCRIPTION',
+                'norms': ['E132'],
+                'filters': [
+                    Q(description__icontains="RELEVANT ADDITIVES DESCRIPTION") |
+                    Q(description__icontains="Methyl Cellulose")
+                ]
+            },
+            {
+                'base_name': 'STABILIZING AGENT',
+                'norms': ['E1'],
+                'filters': [Q(description__icontains="Stabilizing Agent")]
+            },
+            {
+                'base_name': 'WPC',
+                'norms': ['E1', 'E5'],
+                'filters': [
+                    Q(description__icontains="3502") |
+                    Q(hs_code__hs_code__startswith='3502') |
+                    Q(description__icontains='WPC')
+                ]
+            },
+            {
+                'base_name': 'EMULSIFIER',
+                'norms': ['E1'],
+                'filters': [
+                    Q(description__icontains="emulsifier") |
+                    Q(description__icontains="EMULSIFIER")
+                ]
+            },
+            {
+                'base_name': 'FRUIT/COCOA',
+                'norms': ['E1', 'E5'],
+                'filters': [
+                    Q(description__icontains="Coco Powder") |
+                    Q(description__icontains="Cocoa Powder") |
+                    Q(description__icontains="1802") |
+                    Q(description__icontains="1803") |
+                    Q(description__icontains="1804") |
+                    Q(description__icontains="18050000") |
+                    Q(description__icontains='COCO POWDER') |
+                    Q(hs_code__hs_code__startswith='18050000') |
+                    Q(description__icontains="fruit/cocoa")
+                ]
+            },
+            {
+                'base_name': 'FRUIT JUICE',
+                'norms': ['E1', 'E5'],
+                'filters': [
+                    Q(description__icontains="Juice") |
+                    Q(description__icontains="Fruit Concentrate") |
+                    Q(description__icontains='Relevant fruit') |
+                    Q(description__icontains='FRUITS FLAVOUR') |
+                    Q(description__icontains='Fruit Flavour') |
+                    Q(description__icontains="2009") |
+                    Q(hs_code__hs_code__startswith='2009')
+                ]
+            },
+            {
+                'base_name': 'FOOD FLAVOUR',
+                'norms': ['E1', 'E5', 'E126', 'E132'],
+                'filters': [
+                    Q(description__icontains="relevant food flavour") |
+                    Q(description__icontains="FOOD FLAVOUR") |
+                    Q(description__icontains="relevant (food flour") |
+                    Q(description__icontains="Flavouring Agent") |
+                    Q(description__icontains="FOOD FLAVOURS") |
+                    Q(description__icontains="Flavours") |
+                    Q(description__icontains="Cardamom") |
+                    Q(description__icontains="0802") |
+                    Q(description__icontains="0806") |
+                    Q(description__icontains="0908") |
+                    Q(description__icontains='0904') |
+                    Q(hs_code__hs_code__startswith='0802') |
+                    Q(hs_code__hs_code__startswith='0806') |
+                    Q(hs_code__hs_code__startswith='0904') |
+                    Q(hs_code__hs_code__startswith='0908')
+                ]
+            },
+            {
+                'base_name': 'CITRIC ACID / TARTARIC ACID',
+                'norms': ['E1', 'E5'],
+                'filters': [
+                    Q(description__icontains="CITRIC ACID") |
+                    Q(description__icontains="TARTARIC ACID") |
+                    Q(description__icontains="TARTARIC AICD")
+                ]
+            },
+            {
+                'base_name': 'OTHER CONFECTIONERY INGREDIENTS',
+                'norms': ['E1'],
+                'filters': [
+                    Q(description__icontains="other confectionery ingredients") |
+                    Q(description__icontains="nut & nut products") |
+                    Q(description__icontains="Fruits and Nuts Product") |
+                    Q(description__icontains="0908") |
+                    Q(description__icontains="0802") |
+                    Q(description__icontains="0806") |
+                    Q(hs_code__hs_code__startswith='0908') |
+                    Q(hs_code__hs_code__startswith='0802') |
+                    Q(hs_code__hs_code__startswith='0806')
+                ]
+            },
+            {
+                'base_name': 'BISCUITS ADDITIVES & INGREDIENTS',
+                'norms': ['E5'],
+                'filters': [
+                    Q(description__icontains="BISCUITS ADDITIVES & INGREDIENTS") &
+                    ~Q(description__icontains="Yeast")
+                ]
+            },
+            {
+                'base_name': 'SANITATION AND CLEANING CHEMICALS',
+                'norms': ['E126'],
+                'filters': [Q(description__icontains='SANITATION AND CLEANING CHEMICALS')]
+            },
+            {
+                'base_name': 'CMC',
+                'norms': ['E132'],
+                'filters': [
+                    Q(description__icontains="TBHQ") |
+                    Q(description__icontains="3912") |
+                    Q(hs_code__hs_code__startswith="3912") |
+                    Q(description__icontains="Cellulose")
+                ]
+            },
+
+            # Packaging materials - COMMON (no norm restriction, shared across all)
+            {
+                'base_name': 'PAPER BOARD',
+                'norms': ['COMMON'],
+                'filters': [
+                    Q(description__icontains="Paper Board") |
+                    Q(description__icontains="PAPPER BOARD")
+                ]
+            },
+            {
+                'base_name': 'PAPER & PAPER',
+                'norms': ['COMMON'],
+                'filters': [
+                    Q(description__icontains="PAPER") &
+                    ~Q(description__icontains="BOARD")
+                ]
+            },
+            {
+                'base_name': 'BOPP',
+                'norms': ['COMMON'],
+                'filters': [Q(description__icontains="BOPP")]
+            },
+            {
+                'base_name': 'PP',
+                'norms': ['COMMON'],
+                'filters': [
+                    (Q(hs_code__hs_code__startswith='39021000') |
+                     Q(description__icontains='Polypropylene') |
+                     Q(description__icontains='pp granules') |
+                     Q(description__icontains='packing material') |
+                     (Q(description__icontains='PP ') &
+                      (Q(hs_code__hs_code__startswith='39') |
+                       Q(hs_code__hs_code__startswith='48')))) &
+                    (~Q(description__icontains='7607') |
+                     ~Q(description__icontains='ALUMINIUM FOIL') |
+                     ~Q(hs_code__hs_code__startswith='7607'))
+                ]
+            },
+            {
+                'base_name': 'HDPE',
+                'norms': ['COMMON'],
+                'filters': [
+                    Q(description__icontains="hdpe") |
+                    Q(description__icontains="hdep")
+                ]
+            },
+            {
+                'base_name': 'LDPE',
+                'norms': ['COMMON'],
+                'filters': [
+                    Q(description__icontains="LDPE") |
+                    Q(description__icontains="LDEP")
+                ]
+            },
+            {
+                'base_name': 'ALUMINIUM FOIL',
+                'norms': ['COMMON'],
+                'filters': [
+                    Q(description__icontains='7607') |
+                    Q(description__icontains='ALUMINIUM FOIL') |
+                    Q(hs_code__hs_code__startswith='7607')
+                ]
+            },
+
+            # Miscellaneous - COMMON
+            {
+                'base_name': 'COKE',
+                'norms': ['COMMON'],
+                'filters': [Q(description__icontains="COKE")]
+            },
+            {
+                'base_name': 'BETEL NUT',
+                'norms': ['COMMON'],
+                'filters': [Q(description__icontains="BETEL NUT")]
+            },
+            {
+                'base_name': 'SUPARI WHOLE',
+                'norms': ['COMMON'],
+                'filters': [Q(description__icontains="SUPARI WHOLE")]
+            },
+            {
+                'base_name': 'COFFEE BEANS',
+                'norms': ['COMMON'],
+                'filters': [Q(description__icontains="Coffee Beans")]
+            },
         ]
 
     def handle(self, *args, **opts):
         dry_run = bool(opts.get("dry_run"))
         clear_existing = bool(opts.get("clear"))
 
-        self.stdout.write("Populating items in LicenseImportItemsModel...")
+        self.stdout.write("=" * 80)
+        self.stdout.write("Populating items in LicenseImportItemsModel (Norm-Specific)")
+        self.stdout.write("=" * 80)
         self.stdout.write(f"Dry run: {dry_run}")
+        self.stdout.write(f"Clear existing: {clear_existing}")
         self.stdout.write("")
 
-        # Clear existing items if requested
-        if clear_existing:
-            self.stdout.write("Clearing all existing item associations...")
-            if not dry_run:
-                for import_item in LicenseImportItemsModel.objects.all():
-                    import_item.items.clear()
-            self.stdout.write(self.style.SUCCESS("✓ Cleared all item associations"))
-            self.stdout.write("")
+        # Clear existing items
+        self.stdout.write("Step 1: Clearing all existing item associations...")
+        if not dry_run:
+            total_cleared = 0
+            for import_item in LicenseImportItemsModel.objects.all():
+                item_count = import_item.items.count()
+                import_item.items.clear()
+                total_cleared += item_count
+            self.stdout.write(self.style.SUCCESS(f"✓ Cleared {total_cleared} item associations"))
+        else:
+            total_items = sum(import_item.items.count() for import_item in LicenseImportItemsModel.objects.all())
+            self.stdout.write(self.style.WARNING(f"Would clear {total_items} item associations (dry-run)"))
+        self.stdout.write("")
 
-        items_and_filters = self.get_items_and_filters()
-        total_filters = len(items_and_filters)
+        # Generate norm-specific items
+        self.stdout.write("Step 2: Creating norm-specific item names...")
+        item_definitions = self.get_item_definitions()
+        items_to_create = []
+
+        for definition in item_definitions:
+            base_name = definition['base_name']
+            norms = definition['norms']
+
+            for norm in norms:
+                if norm == 'COMMON':
+                    # Packaging/common items don't get norm suffix
+                    item_name = base_name
+                else:
+                    # Create norm-specific item name
+                    item_name = f"{base_name} - {norm}"
+
+                items_to_create.append({
+                    'name': item_name,
+                    'base_name': base_name,
+                    'norm': norm,
+                    'filters': definition['filters']
+                })
+
+        created_count = 0
+        existing_count = 0
+        updated_count = 0
+
+        for item_data in items_to_create:
+            item_name = item_data['name']
+            norm = item_data['norm']
+
+            if not dry_run:
+                # Get or create the item
+                item, created = ItemNameModel.objects.get_or_create(name=item_name)
+
+                # Set sion_norm_class for norm-specific items
+                if norm != 'COMMON':
+                    try:
+                        norm_class_obj = SionNormClassModel.objects.get(norm_class=norm)
+                        if item.sion_norm_class != norm_class_obj:
+                            item.sion_norm_class = norm_class_obj
+                            item.save(update_fields=['sion_norm_class'])
+                            updated_count += 1
+                    except SionNormClassModel.DoesNotExist:
+                        self.stdout.write(self.style.WARNING(f"  ! Norm class '{norm}' not found in database for {item_name}"))
+
+                if created:
+                    created_count += 1
+                    self.stdout.write(f"  + Created: {item_name} (norm: {norm})")
+                else:
+                    existing_count += 1
+            else:
+                if ItemNameModel.objects.filter(name=item_name).exists():
+                    existing_count += 1
+                else:
+                    created_count += 1
+                    self.stdout.write(f"  + Would create: {item_name} (norm: {norm})")
+
+        self.stdout.write(self.style.SUCCESS(
+            f"✓ Created {created_count} new items, {existing_count} already exist, "
+            f"{updated_count} norm classes updated"
+        ))
+        self.stdout.write("")
+
+        # Populate item associations
+        self.stdout.write("Step 3: Populating norm-specific item associations...")
+        total_filters = len(items_to_create)
         total_matched = 0
         total_updated = 0
 
-        for idx, (item_name, query_filter) in enumerate(items_and_filters, 1):
+        for idx, item_data in enumerate(items_to_create, 1):
+            item_name = item_data['name']
+            norm = item_data['norm']
+            filters = item_data['filters']
+
             try:
                 # Get the item
                 item = ItemNameModel.objects.get(name=item_name)
 
+                # Build query: description/hs filters AND norm filter
+                if norm == 'COMMON':
+                    # Common items: only use description/hs filters (no norm restriction)
+                    combined_filter = Q()
+                    for f in filters:
+                        combined_filter &= f
+                else:
+                    # Norm-specific items: description/hs filters AND specific norm
+                    combined_filter = Q(license__export_license__norm_class__norm_class=norm)
+                    for f in filters:
+                        combined_filter &= f
+
                 # Find matching import items
-                matching_imports = LicenseImportItemsModel.objects.filter(query_filter)
+                matching_imports = LicenseImportItemsModel.objects.filter(combined_filter)
                 match_count = matching_imports.count()
 
                 if match_count > 0:
                     self.stdout.write(
-                        f"[{idx}/{total_filters}] {item_name}: {match_count} import items matched"
+                        f"  [{idx}/{total_filters}] {item_name}: {match_count} import items matched"
                     )
 
                     if not dry_run:
@@ -240,19 +737,22 @@ class Command(BaseCommand):
 
             except ItemNameModel.DoesNotExist:
                 self.stdout.write(
-                    self.style.WARNING(f"[{idx}/{total_filters}] Item '{item_name}' not found in database - skipping")
+                    self.style.WARNING(f"  [{idx}/{total_filters}] Item '{item_name}' not found in database - skipping")
                 )
             except Exception as e:
                 self.stdout.write(
-                    self.style.ERROR(f"[{idx}/{total_filters}] Error processing '{item_name}': {str(e)}")
+                    self.style.ERROR(f"  [{idx}/{total_filters}] Error processing '{item_name}': {str(e)}")
                 )
 
         self.stdout.write("")
+        self.stdout.write("=" * 80)
         self.stdout.write(
             self.style.SUCCESS(
-                f"✅ Done. Processed {total_filters} filters | "
-                f"Updated {total_updated} item types | "
-                f"Matched {total_matched} import items | "
-                f"dry_run={dry_run}"
+                f"✅ Norm-Specific Migration Complete!\n"
+                f"   - Processed {total_filters} norm-specific filter definitions\n"
+                f"   - Updated {total_updated} item types\n"
+                f"   - Matched {total_matched} import items\n"
+                f"   - Dry run: {dry_run}"
             )
         )
+        self.stdout.write("=" * 80)

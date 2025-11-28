@@ -120,8 +120,24 @@ class ItemPivotReportView(View):
                 notification = license_obj.notification_number or 'Unknown'
                 licenses_by_notification[notification].append(license_row)
 
+        # Determine which items have restrictions
+        items_with_restrictions = set()
+        for notification, licenses_list in licenses_by_notification.items():
+            for license_row in licenses_list:
+                for item_id, item_name in sorted_items:
+                    item_data = license_row.get('items', {}).get(item_name, {})
+                    if item_data.get('restriction') is not None:
+                        items_with_restrictions.add(item_id)
+
         return {
-            'items': [{'id': item_id, 'name': item_name} for item_id, item_name in sorted_items],
+            'items': [
+                {
+                    'id': item_id,
+                    'name': item_name,
+                    'has_restriction': item_id in items_with_restrictions
+                }
+                for item_id, item_name in sorted_items
+            ],
             'licenses_by_notification': dict(licenses_by_notification),
             'report_date': today.isoformat(),
         }
@@ -226,15 +242,15 @@ class ItemPivotReportView(View):
                 sion_norm = item_data['sion_norm_class']
                 restriction_pct = item_data['restriction_percentage']
 
-                # Get restriction display and available CIF
-                restriction_display = ''
+                # Get restriction percentage only (as number)
+                restriction_value = None
                 available_cif = Decimal('0')
 
                 if sion_norm and restriction_pct:
                     restriction_key = f"{sion_norm}_{restriction_pct}"
                     if restriction_key in restriction_groups:
                         group = restriction_groups[restriction_key]
-                        restriction_display = f"{sion_norm} - {restriction_pct}% (Avail CIF: {float(group['available_cif']):.2f})"
+                        restriction_value = float(restriction_pct)
                         available_cif = group['available_cif']
 
                 row_data['items'][item_name] = {
@@ -243,8 +259,8 @@ class ItemPivotReportView(View):
                     'quantity': float(item_data['quantity']),
                     'debited_quantity': float(item_data['debited_quantity']),
                     'available_quantity': float(item_data['available_quantity']),
-                    'restriction': restriction_display,
-                    'available_cif': float(available_cif),
+                    'restriction': restriction_value,
+                    'restriction_value': float(available_cif),
                 }
             else:
                 row_data['items'][item_name] = {
@@ -253,8 +269,8 @@ class ItemPivotReportView(View):
                     'quantity': 0,
                     'debited_quantity': 0,
                     'available_quantity': 0,
-                    'restriction': '',
-                    'available_cif': 0,
+                    'restriction': None,
+                    'restriction_value': 0,
                 }
 
         return row_data
@@ -301,18 +317,27 @@ class ItemPivotReportView(View):
                 'Total CIF', 'Balance CIF'
             ]
 
-            # Add item columns (HSN Code, Product Description, Total QTY, Debited QTY, Available QTY, Restriction)
+            # Add item columns (HSN Code, Product Description, Total QTY, Debited QTY, Available QTY, Restriction %, Restriction Value)
             item_headers = []
             for item in report_data['items']:
                 item_name = item['name']
-                item_headers.extend([
+                has_restriction = item.get('has_restriction', False)
+
+                headers = [
                     f"{item_name} HSN Code",
                     f"{item_name} Product Description",
                     f"{item_name} Total QTY",
                     f"{item_name} Debited QTY",
                     f"{item_name} Available QTY",
-                    f"{item_name} Restriction"
-                ])
+                ]
+
+                if has_restriction:
+                    headers.extend([
+                        f"{item_name} Restriction %",
+                        f"{item_name} Restriction Value"
+                    ])
+
+                item_headers.extend(headers)
 
             all_headers = base_headers + item_headers
 
@@ -348,14 +373,15 @@ class ItemPivotReportView(View):
                 # Item columns
                 for item in report_data['items']:
                     item_name = item['name']
+                    has_restriction = item.get('has_restriction', False)
                     item_data = license_data['items'].get(item_name, {
                         'hs_code': '',
                         'description': '',
                         'quantity': 0,
                         'debited_quantity': 0,
                         'available_quantity': 0,
-                        'restriction': '',
-                        'available_cif': 0
+                        'restriction': None,
+                        'restriction_value': 0
                     })
 
                     worksheet.cell(row=current_row, column=col_num, value=item_data.get('hs_code', ''))
@@ -368,8 +394,17 @@ class ItemPivotReportView(View):
                     col_num += 1
                     worksheet.cell(row=current_row, column=col_num, value=item_data.get('available_quantity', 0))
                     col_num += 1
-                    worksheet.cell(row=current_row, column=col_num, value=item_data.get('restriction', ''))
-                    col_num += 1
+
+                    # Only write restriction columns if item has restrictions
+                    if has_restriction:
+                        # Write restriction as number only (percentage)
+                        restriction_val = item_data.get('restriction')
+                        worksheet.cell(row=current_row, column=col_num, value=restriction_val if restriction_val else '')
+                        col_num += 1
+                        # Write restriction value (available CIF)
+                        restriction_value = item_data.get('restriction_value', 0)
+                        worksheet.cell(row=current_row, column=col_num, value=restriction_value if restriction_value else '')
+                        col_num += 1
 
                 current_row += 1
 
@@ -389,6 +424,7 @@ class ItemPivotReportView(View):
             col_num = 8
             for item in report_data['items']:
                 item_name = item['name']
+                has_restriction = item.get('has_restriction', False)
                 total_qty = sum(
                     lic['items'].get(item_name, {}).get('quantity', 0)
                     for lic in licenses_list
@@ -412,7 +448,11 @@ class ItemPivotReportView(View):
                 worksheet.cell(row=current_row, column=col_num, value=total_avail)
                 worksheet.cell(row=current_row, column=col_num).font = Font(bold=True)
                 col_num += 1
-                col_num += 1  # Skip Restriction column in totals
+
+                # Only skip restriction columns if item has restrictions
+                if has_restriction:
+                    col_num += 1  # Skip Restriction % column in totals
+                    col_num += 1  # Skip Restriction Value column in totals
 
             # Auto-adjust column widths
             for col_idx in range(1, len(all_headers) + 1):

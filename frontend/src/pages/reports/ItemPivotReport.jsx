@@ -235,11 +235,14 @@ export default function ItemPivotReport() {
                                         <th>Exporter</th>
                                         <th>Total CIF</th>
                                         <th>Balance CIF</th>
-                                        {reportData.items.filter(item => item.name).map(item => (
-                                            <th key={`${item.id}-qty`} colSpan="6" className="text-center">
-                                                {item.name}
-                                            </th>
-                                        ))}
+                                        {reportData.items.filter(item => item.name).map(item => {
+                                            const colSpan = item.has_restriction ? 7 : 5;
+                                            return (
+                                                <th key={`${item.id}-qty`} colSpan={colSpan} className="text-center">
+                                                    {item.name}
+                                                </th>
+                                            );
+                                        })}
                                     </tr>
                                     <tr>
                                         <th colSpan="7"></th>
@@ -250,7 +253,12 @@ export default function ItemPivotReport() {
                                                 <th>Total QTY</th>
                                                 <th>Debited QTY</th>
                                                 <th>Available QTY</th>
-                                                <th>Restriction</th>
+                                                {item.has_restriction && (
+                                                    <>
+                                                        <th>Restriction %</th>
+                                                        <th>Restriction Value</th>
+                                                    </>
+                                                )}
                                             </React.Fragment>
                                         ))}
                                     </tr>
@@ -284,9 +292,16 @@ export default function ItemPivotReport() {
                                                         <td className="text-end">
                                                             {itemData.available_quantity ? itemData.available_quantity.toFixed(3) : '-'}
                                                         </td>
-                                                        <td className="text-center" style={{fontSize: '0.85em'}}>
-                                                            {itemData.restriction || '-'}
-                                                        </td>
+                                                        {item.has_restriction && (
+                                                            <>
+                                                                <td className="text-center">
+                                                                    {itemData.restriction !== null && itemData.restriction !== undefined ? itemData.restriction : '-'}
+                                                                </td>
+                                                                <td className="text-end">
+                                                                    {itemData.restriction_value ? itemData.restriction_value.toFixed(2) : '-'}
+                                                                </td>
+                                                            </>
+                                                        )}
                                                     </React.Fragment>
                                                 );
                                             })}
@@ -323,7 +338,12 @@ export default function ItemPivotReport() {
                                                     <td className="text-end">
                                                         {totalAvail > 0 ? totalAvail.toFixed(3) : '-'}
                                                     </td>
-                                                    <td>-</td>
+                                                    {item.has_restriction && (
+                                                        <>
+                                                            <td>-</td>
+                                                            <td>-</td>
+                                                        </>
+                                                    )}
                                                 </React.Fragment>
                                             );
                                         })}

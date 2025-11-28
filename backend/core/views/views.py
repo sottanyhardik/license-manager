@@ -15,6 +15,7 @@ from ..models import (
     UnitPriceModel,
     ItemNameModel,
     ItemHeadModel,
+    ItemGroupModel,
 )
 from ..serializers import (
     CompanySerializer,
@@ -28,6 +29,7 @@ from ..serializers import (
     UnitPriceSerializer,
     ItemNameSerializer,
     ItemHeadSerializer,
+    GroupSerializer,
 )
 
 # Base API prefix used to construct select endpoints (adjust if needed).
@@ -380,19 +382,34 @@ UnitPriceViewSet = MasterViewSet.create_viewset(
     config=enhance_config_with_fk(UnitPriceModel, {"form_fields": ["name", "label"]}),
 )
 
+GroupViewSet = MasterViewSet.create_viewset(
+    ItemGroupModel,
+    GroupSerializer,
+    config=enhance_config_with_fk(
+        ItemGroupModel,
+        {
+            "search": ["name"],
+            "filter": {},
+            "list_display": ["name"],
+            "form_fields": ["name"],
+            "ordering": ["name"]
+        }
+    ),
+)
+
 ItemHeadViewSet = MasterViewSet.create_viewset(
     ItemHeadModel,
     ItemHeadSerializer,
     config=enhance_config_with_fk(
         ItemHeadModel,
         {
-
             "search": ["name"],
             "filter": {
                 "is_restricted": {"type": "exact"},
             },
             "list_display": ["name", "unit_rate", "is_restricted", "restriction_norm", "restriction_percentage"],
-            "form_fields": ["name", "unit_rate", "is_restricted", "restriction_norm", "restriction_percentage", "dict_key"],
+            "form_fields": ["name", "unit_rate", "is_restricted", "restriction_norm", "restriction_percentage",
+                            "dict_key"],
             "fk_endpoint_overrides": {
                 "restriction_norm": "/masters/sion-classes/"
             },
@@ -409,9 +426,9 @@ ItemNameViewSet = MasterViewSet.create_viewset(
     config=enhance_config_with_fk(
         ItemNameModel,
         {
-            "search": ["name", "head__name", "sion_norm_class__norm_class"],
+            "search": ["name", "group__name", "sion_norm_class__norm_class"],
             "filter": {
-                "head": {"type": "fk", "fk_endpoint": "/masters/item-heads/", "label_field": "name"},
+                "group": {"type": "fk", "fk_endpoint": "/masters/groups/", "label_field": "name"},
                 "is_active": {"type": "exact"},
                 "sion_norm_class": {
                     "type": "fk",
@@ -421,16 +438,16 @@ ItemNameViewSet = MasterViewSet.create_viewset(
                     "async": True
                 },
             },
-            "list_display": ["head__name", "name", "unit_price", "sion_norm_class_label", "restriction_percentage"],
-            "form_fields": ["head", "name", "unit_price", "is_active", "sion_norm_class", "restriction_percentage"],
+            "list_display": ["group__name", "name", "sion_norm_class_label", "restriction_percentage"],
+            "form_fields": ["group", "name", "is_active", "sion_norm_class", "restriction_percentage"],
             "fk_endpoint_overrides": {
-                "head": "/masters/item-heads/",
+                "group": "/masters/groups/",
                 "sion_norm_class": "/masters/sion-classes/?is_active=true"
             },
             "label_field_overrides": {
                 "sion_norm_class": "norm_class"
             },
-            "ordering": ["head__name", "name"]
+            "ordering": ["group__name", "name"]
         }
     ),
 )

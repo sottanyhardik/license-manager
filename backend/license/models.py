@@ -293,10 +293,10 @@ class LicenseDetailsModel(AuditModel):
         return {"available_quantity_sum": DEC_000, "quantity_sum": DEC_000}
 
     @cached_property
-    def import_license_head_grouped(self):
+    def import_license_group_grouped(self):
         return (
             self.import_license.select_related("hs_code")
-            .values("items__head__name", "description", "items__unit_price", "hs_code__hs_code", "items__name")
+            .values("items__group__name", "description", "hs_code__hs_code", "items__name")
             .annotate(
                 available_quantity_sum=Coalesce(Sum("available_quantity"), Value(DEC_000), output_field=DecimalField()),
                 quantity_sum=Coalesce(Sum("quantity"), Value(DEC_000), output_field=DecimalField()),
@@ -304,14 +304,23 @@ class LicenseDetailsModel(AuditModel):
             .order_by("items__name")
         )
 
-    def get_item_head_data(self, item_name: str) -> Dict[str, Any]:
+    # Deprecated: Use import_license_group_grouped instead
+    @property
+    def import_license_head_grouped(self):
+        return self.import_license_group_grouped
+
+    def get_item_group_data(self, item_name: str) -> Dict[str, Any]:
         matching_rows = [
             row
-            for row in self.import_license_head_grouped
-            if row.get("items__head__name") == item_name
+            for row in self.import_license_group_grouped
+            if row.get("items__group__name") == item_name
         ]
         if not matching_rows:
             return {"available_quantity_sum": DEC_000, "quantity_sum": DEC_000}
+
+    # Deprecated: Use get_item_group_data instead
+    def get_item_head_data(self, item_name: str) -> Dict[str, Any]:
+        return self.get_item_group_data(item_name)
 
         total_available = sum(
             _to_decimal(row.get("available_quantity_sum") or DEC_000, DEC_000)
@@ -649,12 +658,16 @@ class LicenseDetailsModel(AuditModel):
         if not first_norm:
             return None
 
-        def _sum_for_head(name: str) -> Decimal:
-            vals = self.import_license.filter(items__head__name=name).aggregate(
+        def _sum_for_group(name: str) -> Decimal:
+            vals = self.import_license.filter(items__group__name=name).aggregate(
                 dv=Coalesce(Sum("debited_value"), Value(DEC_0), output_field=DecimalField()),
                 av=Coalesce(Sum("allotted_value"), Value(DEC_0), output_field=DecimalField()),
             )
             return _to_decimal(vals["dv"] or DEC_0, DEC_0) + _to_decimal(vals["av"] or DEC_0, DEC_0)
+
+        # Deprecated alias
+        def _sum_for_head(name: str) -> Decimal:
+            return _sum_for_group(name)
 
         if "E132" in str(first_norm):
             credit_3 = credit * _to_decimal("0.03")
@@ -868,41 +881,43 @@ class LicenseImportItemsModel(models.Model):
                 .values_list("norm_class__norm_class", flat=True)
             )
 
+        # Check for restrictions on items based on sion_norm_class and restriction_percentage
+        restricted_items = []
+
         for item_name in item_names:
-            if (item_name.head and item_name.head.is_restricted and
-                    item_name.head.restriction_norm and item_name.head.restriction_percentage > DEC_0):
-
-                # Check if license export norm class matches head restriction norm
-                restriction_norm_class = item_name.head.restriction_norm.norm_class if item_name.head.restriction_norm else None
+            if (item_name.sion_norm_class and item_name.restriction_percentage > DEC_0):
+                # Check if license export norm class matches item restriction norm
+                restriction_norm_class = item_name.sion_norm_class.norm_class if item_name.sion_norm_class else None
                 if restriction_norm_class and restriction_norm_class in license_norm_classes:
-                    restricted_heads.append(item_name.head)
+                    restricted_items.append(item_name)
 
-        if not restricted_heads:
+        if not restricted_items:
             return DEC_0  # No restriction applies
 
-        # Use the first restricted head found
-        head = restricted_heads[0]
+        # Use the first restricted item found
+        item = restricted_items[0]
 
         # Calculate license CIF value × restriction percentage
         license_cif = self.license._calculate_license_credit()
-        allowed_value = license_cif * (head.restriction_percentage / Decimal("100"))
+        allowed_value = license_cif * (item.restriction_percentage / Decimal("100"))
 
-        # Calculate total debited + allotted for all items with same head in this license
-        # Get all import items in this license that have the same head
-        same_head_items = LicenseImportItemsModel.objects.filter(
+        # Calculate total debited + allotted for all items with same sion_norm_class and restriction_percentage
+        # Get all import items in this license that have items with matching restriction
+        same_restriction_items = LicenseImportItemsModel.objects.filter(
             license=self.license,
-            items__head=head
+            items__sion_norm_class=item.sion_norm_class,
+            items__restriction_percentage=item.restriction_percentage
         ).distinct()
 
         total_debited = DEC_0
         total_allotted = DEC_0
 
-        for item in same_head_items:
-            total_debited += item._calculate_item_debit()
+        for import_item in same_restriction_items:
+            total_debited += import_item._calculate_item_debit()
             # Only count allotments that don't have BOE (is_boe=False)
             allotted_no_boe = _to_decimal(
                 AllotmentItems.objects.filter(
-                    item=item,
+                    item=import_item,
                     is_boe=False
                 ).aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
                 DEC_0,

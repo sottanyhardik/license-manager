@@ -32,6 +32,14 @@ export const routes = [
         icon: "receipt",
     },
     {
+        path: "/trades",
+        label: "Trade In & Out",
+        component: "MasterList",
+        protected: true,
+        roles: ["admin", "manager"],
+        icon: "arrow-left-right",
+    },
+    {
         path: "/settings",
         label: "Settings",
         component: "Settings",

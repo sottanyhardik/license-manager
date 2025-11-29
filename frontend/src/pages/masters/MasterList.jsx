@@ -26,7 +26,8 @@ export default function MasterList() {
     const entityName = entity ||
         (location.pathname.startsWith('/licenses') ? 'licenses' : null) ||
         (location.pathname.startsWith('/allotments') ? 'allotments' : null) ||
-        (location.pathname.startsWith('/bill-of-entries') ? 'bill-of-entries' : null);
+        (location.pathname.startsWith('/bill-of-entries') ? 'bill-of-entries' : null) ||
+        (location.pathname.startsWith('/trades') ? 'trades' : null);
     const [data, setData] = useState([]);
     const [metadata, setMetadata] = useState({});
     const [loading, setLoading] = useState(true);
@@ -90,10 +91,13 @@ export default function MasterList() {
             if (entityName === 'bill-of-entries') {
                 response = await boeApi.fetchBOEList(params);
             } else {
-                // Determine API endpoint - licenses/allotments go directly, masters go to /api/masters/:entity
-                const apiPath = (entityName === 'licenses' || entityName === 'allotments')
-                    ? `/${entityName}/`
-                    : `/masters/${entityName}/`;
+                // Determine API endpoint
+                let apiPath;
+                if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
+                    apiPath = `/${entityName}/`;
+                } else {
+                    apiPath = `/masters/${entityName}/`;
+                }
 
                 console.log("📡 API Call:", apiPath, params);
 
@@ -195,7 +199,12 @@ export default function MasterList() {
             if (entityName === 'bill-of-entries') {
                 await boeApi.deleteBOE(item.id);
             } else {
-                const apiPath = entityName === 'licenses' ? `/licenses/${item.id}/` : `/masters/${entityName}/${item.id}/`;
+                let apiPath;
+                if (entityName === 'licenses' || entityName === 'trades') {
+                    apiPath = `/${entityName}/${item.id}/`;
+                } else {
+                    apiPath = `/masters/${entityName}/${item.id}/`;
+                }
                 await api.delete(apiPath);
             }
             fetchData(currentPage, pageSize, filterParams);
@@ -235,6 +244,8 @@ export default function MasterList() {
                     apiPath = `/allotments/download/`;
                 } else if (entityName === 'bill-of-entries') {
                     apiPath = `/bill-of-entries/export/`;
+                } else if (entityName === 'trades') {
+                    apiPath = `/trades/export/`;
                 } else {
                     apiPath = `/masters/${entityName}/export/`;
                 }
@@ -311,7 +322,9 @@ export default function MasterList() {
                         PDF
                     </button>
                     <Link
-                        to={entityName === 'licenses' ? '/licenses/create' : `/masters/${entityName}/create`}
+                        to={entityName === 'licenses' ? '/licenses/create' :
+                            entityName === 'trades' ? '/trades/create' :
+                            `/masters/${entityName}/create`}
                         className="btn btn-primary"
                     >
                         <i className="bi bi-plus-circle me-2"></i>
@@ -351,7 +364,10 @@ export default function MasterList() {
                             columns={metadata.list_display || []}
                             loading={loading}
                             onDelete={handleDelete}
-                            basePath={entityName === 'licenses' ? '/licenses' : (entityName === 'allotments' ? '/allotments' : `/masters/${entityName}`)}
+                            basePath={entityName === 'licenses' ? '/licenses' :
+                                     (entityName === 'allotments' ? '/allotments' :
+                                     (entityName === 'trades' ? '/trades' :
+                                     `/masters/${entityName}`))}
                             nestedFieldDefs={metadata.nested_field_defs}
                             nestedListDisplay={metadata.nested_list_display || {}}
                             customActions={entityName === 'licenses' ? [
@@ -430,7 +446,9 @@ export default function MasterList() {
                             loading={loading}
                             onEdit={() => {}}
                             onDelete={handleDelete}
-                            basePath={entityName === 'licenses' ? '/licenses' : `/masters/${entityName}`}
+                            basePath={entityName === 'licenses' ? '/licenses' :
+                                     (entityName === 'trades' ? '/trades' :
+                                     `/masters/${entityName}`)}
                         />
                     )}
 

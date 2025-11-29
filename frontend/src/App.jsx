@@ -27,6 +27,7 @@ const SionE132 = lazy(() => import("./pages/reports/SionE132"));
 const ExpiringLicenses = lazy(() => import("./pages/reports/ExpiringLicenses"));
 const ActiveLicenses = lazy(() => import("./pages/reports/ActiveLicenses"));
 const ItemPivotReport = lazy(() => import("./pages/reports/ItemPivotReport"));
+const TradeForm = lazy(() => import("./pages/TradeForm"));
 
 export default function App() {
     return (
@@ -282,6 +283,46 @@ export default function App() {
                                         <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            {/* Trade CRUD Routes */}
+                            <Route
+                                path="/trades"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <MasterList/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/trades/create"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <TradeForm/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/trades/:id/edit"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <TradeForm/>
                                             </AdminLayout>
                                         </RoleRoute>
                                     </ProtectedRoute>

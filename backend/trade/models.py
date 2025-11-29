@@ -2,6 +2,7 @@
 import re
 from decimal import Decimal, ROUND_HALF_UP
 
+from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Sum, Q, F
 from django.utils import timezone
@@ -117,6 +118,20 @@ class LicenseTrade(models.Model):
 
     created_on = models.DateTimeField(auto_now_add=True, db_index=True)
     modified_on = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='trades_created'
+    )
+    modified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='trades_modified'
+    )
 
     class Meta:
         ordering = ["-created_on"]
@@ -297,6 +312,7 @@ class LicenseTradeLine(models.Model):
     )
 
     description = models.TextField(blank=True, default="")
+    hsn_code = models.CharField(max_length=10, default="49070000", blank=True)
     mode = models.CharField(max_length=10, choices=MODE_CHOICES, default=MODE_QTY, db_index=True)
 
     # QTY mode fields

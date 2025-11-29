@@ -22,7 +22,8 @@ export default function MasterForm() {
     const entityName = entity ||
         (location.pathname.includes('/licenses') ? 'licenses' : null) ||
         (location.pathname.includes('/allotments') ? 'allotments' : null) ||
-        (location.pathname.includes('/bill-of-entries') ? 'bill-of-entries' : null);
+        (location.pathname.includes('/bill-of-entries') ? 'bill-of-entries' : null) ||
+        (location.pathname.includes('/trades') ? 'trades' : null);
     const isEdit = Boolean(id);
 
     const [formData, setFormData] = useState({});
@@ -100,9 +101,12 @@ export default function MasterForm() {
 
     const fetchMetadata = async () => {
         try {
-            const apiPath = (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries')
-                ? `/${entityName}/`
-                : `/masters/${entityName}/`;
+            let apiPath;
+            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
+                apiPath = `/${entityName}/`;
+            } else {
+                apiPath = `/masters/${entityName}/`;
+            }
             const {data} = await api.options(apiPath);
             setMetadata({
                 form_fields: data.form_fields || [],
@@ -117,9 +121,12 @@ export default function MasterForm() {
     const fetchRecord = async () => {
         setLoading(true);
         try {
-            const apiPath = (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries')
-                ? `/${entityName}/${id}/`
-                : `/masters/${entityName}/${id}/`;
+            let apiPath;
+            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
+                apiPath = `/${entityName}/${id}/`;
+            } else {
+                apiPath = `/masters/${entityName}/${id}/`;
+            }
             const {data} = await api.get(apiPath);
             setFormData(data);
         } catch (err) {
@@ -388,9 +395,12 @@ export default function MasterForm() {
         setFieldErrors({});
 
         try {
-            const apiPath = (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries')
-                ? `/${entityName}/`
-                : `/masters/${entityName}/`;
+            let apiPath;
+            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
+                apiPath = `/${entityName}/`;
+            } else {
+                apiPath = `/masters/${entityName}/`;
+            }
 
             // Check if formData contains any File objects (including nested)
             const hasFiles = () => {
@@ -492,6 +502,8 @@ export default function MasterForm() {
                 redirectPath = `/allotments/${savedId}/allocate`;
             } else if (entityName === 'bill-of-entries') {
                 redirectPath = `/bill-of-entries`;
+            } else if (entityName === 'trades') {
+                redirectPath = `/trades`;
             } else {
                 redirectPath = `/masters/${entityName}`;
             }
@@ -757,6 +769,8 @@ export default function MasterForm() {
                                                 navigate('/allotments');
                                             } else if (entityName === 'bill-of-entries') {
                                                 navigate('/bill-of-entries');
+                                            } else if (entityName === 'trades') {
+                                                navigate('/trades');
                                             } else {
                                                 navigate(`/masters/${entityName}`);
                                             }

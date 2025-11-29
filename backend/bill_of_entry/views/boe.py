@@ -23,7 +23,7 @@ boe_nested_field_defs = {
     ],
 }
 
-BillOfEntryViewSet = MasterViewSet.create_viewset(
+BaseBillOfEntryViewSet = MasterViewSet.create_viewset(
     BillOfEntryModel,
     BillOfEntrySerializer,
     config={
@@ -101,6 +101,36 @@ BillOfEntryViewSet = MasterViewSet.create_viewset(
         }
     }
 )
+
+# Create custom ViewSet with additional filtering
+class BillOfEntryViewSet(BaseBillOfEntryViewSet):
+    """Extended BOE ViewSet with custom filtering for trade form"""
+
+    def get_queryset(self):
+        """Override to add custom filtering for available_for_trade"""
+        queryset = super().get_queryset()
+
+        # Check if filtering for available BOEs for trade
+        available_for_trade = self.request.query_params.get('available_for_trade')
+        current_boe = self.request.query_params.get('current_boe')
+        current_invoice = self.request.query_params.get('current_invoice')
+
+        if available_for_trade == 'true':
+            # Build filter conditions
+            filter_conditions = Q(invoice_no__isnull=True) | Q(invoice_no='')
+
+            # Include current BOE if provided
+            if current_boe:
+                filter_conditions |= Q(id=current_boe)
+
+            # Include BOEs with current invoice number if provided
+            if current_invoice:
+                filter_conditions |= Q(invoice_no=current_invoice)
+
+            queryset = queryset.filter(filter_conditions)
+
+        return queryset
+
 
 # Add grouped export functionality
 BillOfEntryViewSet = add_grouped_export_action(BillOfEntryViewSet)
@@ -218,6 +248,11 @@ def custom_get_queryset_with_defaults(self):
 
     params = self.request.query_params
 
+    # Don't apply default invoice filter for retrieve action (fetching single BOE by ID)
+    # This allows HybridSelect to fetch BOEs even if they have an invoice assigned
+    if self.action == 'retrieve':
+        return qs
+
     # Handle is_invoice filter (custom logic, not a model field)
     if 'is_invoice' in params:
         is_invoice = params.get('is_invoice', '').lower()
@@ -229,6 +264,7 @@ def custom_get_queryset_with_defaults(self):
             qs = qs.filter(Q(invoice_no__isnull=True) | Q(invoice_no=''))
     else:
         # Default: is_invoice=False (invoice_no is null or empty)
+        # Only apply this default for list view, not retrieve
         qs = qs.filter(Q(invoice_no__isnull=True) | Q(invoice_no=''))
 
     return qs

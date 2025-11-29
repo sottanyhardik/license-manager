@@ -38,15 +38,14 @@ class RestrictionCalculator:
 
         for import_item in license_obj.import_license.all():
             restricted_items = import_item.items.filter(
-                head__is_restricted=True,
-                head__restriction_percentage__gt=0
+                sion_norm_class__isnull=False,
+                restriction_percentage__gt=0
             )
 
             for item_name in restricted_items:
-                if item_name.head:
-                    pct = to_decimal(item_name.head.restriction_percentage or 0, DEC_0)
-                    if pct > DEC_0:
-                        restriction_percentages.add(pct)
+                pct = to_decimal(item_name.restriction_percentage or 0, DEC_0)
+                if pct > DEC_0:
+                    restriction_percentages.add(pct)
 
         return restriction_percentages
 
@@ -90,8 +89,8 @@ class RestrictionCalculator:
         for import_item in license_obj.import_license.all():
             # Check if this import item has this specific restriction percentage
             has_this_restriction = import_item.items.filter(
-                head__is_restricted=True,
-                head__restriction_percentage=restriction_pct
+                sion_norm_class__isnull=False,
+                restriction_percentage=restriction_pct
             ).exists()
 
             if has_this_restriction:
@@ -197,8 +196,8 @@ class RestrictionCalculator:
             True if item has this restriction, False otherwise
         """
         return import_item.items.filter(
-            head__is_restricted=True,
-            head__restriction_percentage=restriction_pct
+            sion_norm_class__isnull=False,
+            restriction_percentage=restriction_pct
         ).exists()
 
     @staticmethod
@@ -215,12 +214,12 @@ class RestrictionCalculator:
             Restriction percentage as Decimal, or 0 if not restricted
         """
         restricted_item = import_item.items.filter(
-            head__is_restricted=True,
-            head__restriction_percentage__gt=0
+            sion_norm_class__isnull=False,
+            restriction_percentage__gt=0
         ).first()
 
-        if restricted_item and restricted_item.head:
-            return to_decimal(restricted_item.head.restriction_percentage, DEC_0)
+        if restricted_item:
+            return to_decimal(restricted_item.restriction_percentage, DEC_0)
 
         return DEC_0
 

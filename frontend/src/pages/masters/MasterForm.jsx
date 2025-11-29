@@ -5,6 +5,7 @@ import NestedFieldArray from "./NestedFieldArray";
 import HybridSelect from "../../components/HybridSelect";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import {markNewItemCreated} from "../../utils/filterPersistence";
 
 /**
  * Generic Master Form for Create/Edit
@@ -492,6 +493,17 @@ export default function MasterForm() {
                 }
             }
 
+            // Mark newly created items for highlighting in list
+            if (!isEdit && response.data?.id) {
+                markNewItemCreated(response.data.id);
+            }
+
+            // Set flag to restore filters when returning to list
+            sessionStorage.setItem('allotmentListFilters', JSON.stringify({
+                returnTo: 'list',
+                timestamp: new Date().getTime()
+            }));
+
             // Redirect based on entity type
             let redirectPath;
             if (entityName === 'licenses') {
@@ -763,6 +775,12 @@ export default function MasterForm() {
                                         type="button"
                                         className="btn btn-secondary"
                                         onClick={() => {
+                                            // Set flag to restore filters when canceling
+                                            sessionStorage.setItem('allotmentListFilters', JSON.stringify({
+                                                returnTo: 'list',
+                                                timestamp: new Date().getTime()
+                                            }));
+
                                             if (entityName === 'licenses') {
                                                 navigate('/licenses');
                                             } else if (entityName === 'allotments') {

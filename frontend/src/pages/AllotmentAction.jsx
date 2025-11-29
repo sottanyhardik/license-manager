@@ -350,9 +350,60 @@ export default function AllotmentAction() {
         <div className="container-fluid p-4">
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2>Allocate License Items</h2>
-                <button className="btn btn-secondary" onClick={() => navigate('/allotments')}>
-                    Back to Allotments
-                </button>
+                <div className="d-flex gap-2">
+                    <button
+                        className="btn btn-info"
+                        onClick={() => {
+                            // Store current filters before navigating to edit
+                            sessionStorage.setItem('allotmentListFilters', JSON.stringify({
+                                returnTo: 'edit',
+                                timestamp: new Date().getTime()
+                            }));
+                            navigate(`/allotments/${id}/edit`);
+                        }}
+                        title="Edit Allotment"
+                    >
+                        <i className="bi bi-pencil-square me-1"></i>
+                        Edit
+                    </button>
+                    <button
+                        className="btn btn-success"
+                        onClick={async () => {
+                            try {
+                                const response = await api.get(`/allotment-actions/${id}/generate-pdf/`, {
+                                    responseType: 'blob'
+                                });
+                                const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.setAttribute('download', `Allotment_${allotment?.company_name || id}_${new Date().toISOString().split('T')[0]}.pdf`);
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                                window.URL.revokeObjectURL(url);
+                            } catch (err) {
+                                setError('Failed to download PDF');
+                            }
+                        }}
+                        title="Download Allotment PDF"
+                    >
+                        <i className="bi bi-file-pdf me-1"></i>
+                        Download PDF
+                    </button>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                            // Store a flag to indicate we're returning to list
+                            sessionStorage.setItem('allotmentListFilters', JSON.stringify({
+                                returnTo: 'list',
+                                timestamp: new Date().getTime()
+                            }));
+                            navigate('/allotments');
+                        }}
+                    >
+                        Back to Allotments
+                    </button>
+                </div>
             </div>
 
             {error && <div className="alert alert-danger">{error}</div>}

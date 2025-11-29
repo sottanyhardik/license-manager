@@ -131,9 +131,9 @@ class AllotmentActionViewSet(ViewSet):
         if norm_class:
             queryset = queryset.filter(license__export_license__norm_class_id=norm_class)
 
-        # Apply HS code filter
+        # Apply HS code filter (starts with)
         if hs_code:
-            queryset = queryset.filter(hs_code_id=hs_code)
+            queryset = queryset.filter(hs_code__hs_code__startswith=hs_code)
 
         # Apply is_expired filter
         if is_expired:
@@ -239,9 +239,8 @@ class AllotmentActionViewSet(ViewSet):
 
                 # Check if item has restrictions
                 has_restriction = license_item.items.filter(
-                    head__is_restricted=True,
-                    head__restriction_norm__isnull=False,
-                    head__restriction_percentage__gt=0
+                    sion_norm_class__isnull=False,
+                    restriction_percentage__gt=0
                 ).exists()
 
                 # Determine which value to use
@@ -289,21 +288,22 @@ class AllotmentActionViewSet(ViewSet):
                 ).first()
 
                 if existing:
-                    errors.append({
-                        'item_id': item_id,
-                        'error': 'This item is already allocated to this allotment'
-                    })
-                    continue
-
-                # Create the allotment item
-                allotment_item = AllotmentItems.objects.create(
-                    allotment=allotment,
-                    item=license_item,
-                    qty=qty,
-                    cif_fc=cif_fc,
-                    cif_inr=cif_inr,
-                    is_boe=False
-                )
+                    # Item already exists - amend by adding to existing quantities
+                    existing.qty += qty
+                    existing.cif_fc += cif_fc
+                    existing.cif_inr += cif_inr
+                    existing.save()
+                    allotment_item = existing
+                else:
+                    # Create new allotment item
+                    allotment_item = AllotmentItems.objects.create(
+                        allotment=allotment,
+                        item=license_item,
+                        qty=qty,
+                        cif_fc=cif_fc,
+                        cif_inr=cif_inr,
+                        is_boe=False
+                    )
 
                 created_items.append({
                     'id': allotment_item.id,

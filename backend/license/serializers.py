@@ -84,6 +84,7 @@ class LicenseExportItemSerializer(serializers.ModelSerializer):
 
 class LicenseImportItemSerializer(serializers.ModelSerializer):
     items = serializers.PrimaryKeyRelatedField(many=True, queryset=ItemNameModel.objects.all(), required=False)
+    items_detail = serializers.SerializerMethodField(read_only=True)
     license_number = serializers.CharField(source="license.license_number", read_only=True)
     license_date = serializers.DateField(source="license.license_date", read_only=True, format="%Y-%m-%d")
     license_expiry_date = serializers.DateField(source="license.license_expiry_date", read_only=True, format="%Y-%m-%d")
@@ -91,13 +92,23 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     exporter_name = serializers.CharField(source="license.exporter.name", read_only=True)
     hs_code_detail = HSCodeSerializer(source='hs_code', read_only=True)
     hs_code_label = serializers.SerializerMethodField()
+
+    # Calculate at runtime instead of reading from database
+    available_quantity = serializers.SerializerMethodField(read_only=True)
+    available_value = serializers.SerializerMethodField(read_only=True)
+    debited_quantity = serializers.SerializerMethodField(read_only=True)
+    debited_value = serializers.SerializerMethodField(read_only=True)
+    allotted_quantity = serializers.SerializerMethodField(read_only=True)
+    allotted_value = serializers.SerializerMethodField(read_only=True)
+
     balance_cif_fc = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = LicenseImportItemsModel
-        fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'description', 'quantity',
+        fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'items_detail', 'description', 'quantity',
                   'old_quantity', 'unit', 'cif_fc', 'cif_inr', 'available_quantity', 'available_value',
-                  'debited_quantity', 'debited_value', 'license_number', 'license_date', 'license_expiry_date',
+                  'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value',
+                  'license_number', 'license_date', 'license_expiry_date',
                   'notification_number', 'exporter_name', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
                   'is_restricted']
         # Allow partial updates and skip unique validation during deserialization
@@ -108,10 +119,124 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
             'balance_cif_fc': {'read_only': True}
         }
 
+    def get_items_detail(self, obj):
+        """
+        Return detailed information about items including name, restriction percentage, and sion_norm_class.
+        Similar to item pivot report display.
+        """
+        items_data = []
+        for item in obj.items.all():
+            item_info = {
+                'id': item.id,
+                'name': item.name,
+                'is_active': item.is_active,
+            }
+
+            # Add restriction information if available
+            if item.restriction_percentage and item.restriction_percentage > 0:
+                item_info['restriction_percentage'] = float(item.restriction_percentage)
+            else:
+                item_info['restriction_percentage'] = None
+
+            # Add sion_norm_class information if available
+            if item.sion_norm_class:
+                item_info['sion_norm_class'] = {
+                    'id': item.sion_norm_class.id,
+                    'norm_class': item.sion_norm_class.norm_class,
+                    'description': item.sion_norm_class.description
+                }
+            else:
+                item_info['sion_norm_class'] = None
+
+            items_data.append(item_info)
+
+        return items_data
+
     def get_hs_code_label(self, obj):
         if obj.hs_code:
             return f"{obj.hs_code.hs_code}"
         return None
+
+    def get_available_quantity(self, obj):
+        """
+        Calculate available quantity at runtime.
+        Formula: quantity - debited_quantity - allotted_quantity
+        """
+        from core.scripts.calculate_balance import calculate_available_quantity
+        try:
+            result = calculate_available_quantity(obj)
+            return float(result) if result is not None else 0.0
+        except Exception as e:
+            # Fallback: Manual calculation if helper function fails
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"calculate_available_quantity failed for item {obj.id}: {str(e)}")
+
+            try:
+                quantity = float(obj.quantity or 0)
+                debited = self.get_debited_quantity(obj)
+                allotted = self.get_allotted_quantity(obj)
+                available = quantity - debited - allotted
+                return max(available, 0.0)
+            except Exception:
+                return 0.0
+
+    def get_available_value(self, obj):
+        """
+        Return calculated available value based on restriction logic.
+
+        This ensures available_value in the API response matches balance_cif_fc.
+        Both use the same underlying calculation (available_value_calculated).
+        """
+        return obj.available_value_calculated
+
+    def get_debited_quantity(self, obj):
+        """
+        Calculate debited quantity at runtime.
+        Includes BOE debits + ARO allotments (treated as debits).
+        """
+        from core.scripts.calculate_balance import calculate_debited_quantity
+        try:
+            result = calculate_debited_quantity(obj)
+            return float(result) if result is not None else 0.0
+        except Exception:
+            return 0.0
+
+    def get_debited_value(self, obj):
+        """
+        Calculate debited value at runtime.
+        Includes BOE debits + ARO allotments (treated as debits).
+        """
+        from core.scripts.calculate_balance import calculate_debited_value
+        try:
+            result = calculate_debited_value(obj)
+            return float(result) if result is not None else 0.0
+        except Exception:
+            return 0.0
+
+    def get_allotted_quantity(self, obj):
+        """
+        Calculate allotted quantity at runtime.
+        Only includes AT allotments without BOE.
+        """
+        from core.scripts.calculate_balance import calculate_allotted_quantity
+        try:
+            result = calculate_allotted_quantity(obj)
+            return float(result) if result is not None else 0.0
+        except Exception:
+            return 0.0
+
+    def get_allotted_value(self, obj):
+        """
+        Calculate allotted value at runtime.
+        Only includes AT allotments without BOE.
+        """
+        from core.scripts.calculate_balance import calculate_allotted_value
+        try:
+            result = calculate_allotted_value(obj)
+            return float(result) if result is not None else 0.0
+        except Exception:
+            return 0.0
 
     def get_balance_cif_fc(self, obj):
         """
@@ -119,8 +244,10 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
         This is the SINGLE SOURCE OF TRUTH for available value.
         The property handles:
-        - is_restricted = True: Uses restriction-based calculation (2%, 3%, 5%, 10% from head)
-        - is_restricted = False: Uses license.get_balance_cif (shared across all non-restricted items)
+        - is_restricted = True OR items have restriction_percentage > 0:
+          Uses restriction-based calculation (2%, 3%, 5%, 10% etc.)
+          Formula: (License Export CIF × restriction_percentage / 100) - (debits + allotments)
+        - Otherwise: Uses license.balance_cif (shared across all non-restricted items)
 
         DO NOT add custom calculation logic here - always delegate to the model property.
         """
@@ -207,8 +334,22 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         Swap any DateTimeField in self.fields for SafeDateTimeField so that
         if underlying value is a date() it won't crash when DRF calls .utcoffset().
         Preserve common field attributes (format/input_formats/allow_null/required).
+
+        Also optimize for list views by removing nested serializers.
         """
         super().__init__(*args, **kwargs)
+
+        # Check if this is a list view - if so, remove nested serializers for performance
+        request = self.context.get('request')
+        is_list_view = request and hasattr(request, 'parser_context') and \
+                       request.parser_context.get('view') and \
+                       request.parser_context['view'].action == 'list'
+
+        if is_list_view:
+            # Remove nested serializers for list view to improve performance
+            self.fields.pop('export_license_read', None)
+            self.fields.pop('import_license_read', None)
+            self.fields.pop('license_documents', None)
 
         for name, field in list(self.fields.items()):
             # only replace plain DateTimeField instances (not our SafeDateTimeField)
@@ -225,11 +366,23 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     def to_representation(self, instance) -> Dict[str, Any]:
         rep = super().to_representation(instance)
 
-        # Rename the read-only fields back to their original names for frontend compatibility
-        if 'export_license_read' in rep:
-            rep['export_license'] = rep.pop('export_license_read')
-        if 'import_license_read' in rep:
-            rep['import_license'] = rep.pop('import_license_read')
+        # Check if this is a list view
+        request = self.context.get('request')
+        is_list_view = request and hasattr(request, 'parser_context') and \
+                       request.parser_context.get('view') and \
+                       request.parser_context['view'].action == 'list'
+
+        if is_list_view:
+            # For list view, add empty arrays for nested items (fields were removed in __init__)
+            rep['export_license'] = []
+            rep['import_license'] = []
+            rep['license_documents'] = []
+        else:
+            # Detail view - rename the read-only fields back to their original names for frontend compatibility
+            if 'export_license_read' in rep:
+                rep['export_license'] = rep.pop('export_license_read')
+            if 'import_license_read' in rep:
+                rep['import_license'] = rep.pop('import_license_read')
 
         # Replace the stale balance_cif database field with fresh calculated value
         if 'get_balance_cif' in rep:

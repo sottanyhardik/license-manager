@@ -440,8 +440,8 @@ def generate_license_ledger_pdf(license_obj):
             total_cif_fc += Decimal(str(item.cif_fc or 0))
             total_available_qty += Decimal(str(item.available_quantity or 0))
 
-            # Check if this item has restricted head
-            if item.items.filter(head__is_restricted=True, head__restriction_percentage__gt=0).exists():
+            # Check if this item has restrictions
+            if item.items.filter(sion_norm_class__isnull=False, restriction_percentage__gt=0).exists():
                 is_restricted_item = True
 
             # Calculate allotted quantity and CIF (exclude converted allotments)

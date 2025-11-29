@@ -1,5 +1,6 @@
 import {useState, Fragment} from "react";
 import {Link} from "react-router-dom";
+import api from "../api/axios";
 
 /**
  * Accordion Table Component
@@ -7,15 +8,32 @@ import {Link} from "react-router-dom";
  * Used for displaying records with nested arrays (like SION Norm Classes, Licenses)
  * that expand/collapse on click.
  */
-export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}, customActions = []}) {
+export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}, customActions = [], lazyLoadNested = false}) {
     const [expandedRows, setExpandedRows] = useState(new Set());
+    const [nestedData, setNestedData] = useState({});
+    const [loadingNested, setLoadingNested] = useState({});
 
-    const toggleRow = (id) => {
+    const toggleRow = async (id) => {
+        const isCurrentlyExpanded = expandedRows.has(id);
         const newExpanded = new Set(expandedRows);
-        if (newExpanded.has(id)) {
+
+        if (isCurrentlyExpanded) {
             newExpanded.delete(id);
         } else {
             newExpanded.add(id);
+
+            // If lazyLoadNested is enabled and we haven't loaded data for this row yet
+            if (lazyLoadNested && !nestedData[id] && !loadingNested[id]) {
+                setLoadingNested({...loadingNested, [id]: true});
+                try {
+                    const response = await api.get(`${basePath}/${id}/nested_items/`);
+                    setNestedData({...nestedData, [id]: response.data});
+                } catch (err) {
+                    console.error('Failed to load nested items:', err);
+                } finally {
+                    setLoadingNested({...loadingNested, [id]: false});
+                }
+            }
         }
         setExpandedRows(newExpanded);
     };
@@ -286,14 +304,26 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                             {isExpanded && (
                                 <tr className="border-0">
                                     <td colSpan={columns.length + 2} className="bg-light border-0 p-4">
-                                        {Object.entries(nestedFieldDefs).map(([fieldKey, fieldConfig]) => {
-                                            const nestedItems = item[fieldKey];
-                                            return (
-                                                <div key={`${item.id}-${fieldKey}`}>
-                                                    {renderNestedTable(nestedItems, fieldKey, fieldConfig)}
+                                        {loadingNested[item.id] ? (
+                                            <div className="text-center py-3">
+                                                <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                                    <span className="visually-hidden">Loading...</span>
                                                 </div>
-                                            );
-                                        })}
+                                                <span className="ms-2">Loading nested items...</span>
+                                            </div>
+                                        ) : (
+                                            Object.entries(nestedFieldDefs).map(([fieldKey, fieldConfig]) => {
+                                                // Use lazy-loaded data if available, otherwise fall back to item data
+                                                const nestedItems = lazyLoadNested && nestedData[item.id]
+                                                    ? nestedData[item.id][fieldKey]
+                                                    : item[fieldKey];
+                                                return (
+                                                    <div key={`${item.id}-${fieldKey}`}>
+                                                        {renderNestedTable(nestedItems, fieldKey, fieldConfig)}
+                                                    </div>
+                                                );
+                                            })
+                                        )}
                                     </td>
                                 </tr>
                             )}

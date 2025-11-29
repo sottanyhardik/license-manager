@@ -5,19 +5,20 @@ from license.helper import round_down
 
 
 def calculate_available_quantity(instance):
-    credit = float(instance.quantity)
+    credit = float(instance.quantity or 0)
     first_item = instance.items.first() if instance.items.exists() else None
-    if first_item and first_item.head and first_item.head.is_restricted:
+    # Check if first item has restrictions (sion_norm_class and restriction_percentage)
+    if first_item and first_item.sion_norm_class and first_item.restriction_percentage > 0:
         if instance.old_quantity or instance.license.notification_number == N2015:
-            credit = instance.old_quantity or instance.quantity
-    value = round_down(float(credit) - calculate_debited_quantity(instance) - calculate_allotted_quantity(instance), 0)
+            credit = float(instance.old_quantity or instance.quantity or 0)
+    value = round_down(credit - calculate_debited_quantity(instance) - calculate_allotted_quantity(instance), 0)
     return max(round(value, 2), 0)
 
 
 def calculate_debited_quantity(instance):
     debited = instance.item_details.filter(transaction_type='D').aggregate(sum=Sum('qty'))['sum'] or 0
     allotted = instance.allotment_details.filter(allotment__type='ARO').aggregate(sum=Sum('qty'))['sum'] or 0
-    return round(debited + allotted, 2)
+    return round(float(debited) + float(allotted), 2)
 
 
 def calculate_allotted_quantity(instance):
@@ -25,20 +26,20 @@ def calculate_allotted_quantity(instance):
         allotment__bill_of_entry__bill_of_entry_number__isnull=True,
         allotment__type='AT'
     ).aggregate(Sum('qty'))['qty__sum'] or 0
-    return round(allotted, 2) or 0
+    return round(float(allotted), 2) or 0.0
 
 
 def calculate_debited_value(instance):
     debited = instance.item_details.filter(transaction_type='D').aggregate(sum=Sum('cif_fc'))['sum'] or 0
     allotted = instance.allotment_details.filter(allotment__type='ARO').aggregate(sum=Sum('cif_fc'))['sum'] or 0
-    return round(debited + allotted, 2)
+    return round(float(debited) + float(allotted), 2)
 
 
 def calculate_allotted_value(instance):
     value = instance.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
                                               allotment__type='AT').aggregate(
         Sum('cif_fc'))['cif_fc__sum'] or 0
-    return round(value, 2)
+    return round(float(value), 2)
 
 
 def calculate_available_value(instance):
@@ -66,15 +67,10 @@ def calculate_available_value(instance):
             # Return the license's balance_cif
             return round(float(instance.license.balance_cif or 0), 2)
 
-    # Get the first item from the ManyToMany field
-    first_item = instance.items.first() if instance.items.exists() else None
-    if first_item:
-        head = first_item.head
-    else:
-        head = None
-    if instance.license and instance.license.get_per_cif and head and head.is_restricted:
-        balance_value = instance.license.get_per_cif.get(head.dict_key, available_value)
-    value = min(available_value, balance_value)
+    # NOTE: This logic is now handled by available_value_calculated property in the model
+    # which uses restriction_percentage directly from ItemNameModel
+    # Keeping this for backward compatibility but it should delegate to the model property
+    value = available_value
     return round(value, 2)
 
 

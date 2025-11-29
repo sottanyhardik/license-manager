@@ -442,15 +442,17 @@ class Command(BaseCommand):
                 'base_name': 'FRUIT/COCOA',
                 'norms': ['E1', 'E5'],
                 'filters': [
-                    Q(description__icontains="Coco Powder") |
-                    Q(description__icontains="Cocoa Powder") |
-                    Q(description__icontains="1802") |
-                    Q(description__icontains="1803") |
-                    Q(description__icontains="1804") |
-                    Q(description__icontains="18050000") |
-                    Q(description__icontains='COCO POWDER') |
-                    Q(hs_code__hs_code__startswith='18050000') |
-                    Q(description__icontains="fruit/cocoa")
+                    Q(Q(description__icontains="Cocoa") |
+                      Q(description__icontains="Coco Powder") |
+                      Q(description__icontains="Cocoa Powder") |
+                      Q(description__icontains="1802") |
+                      Q(description__icontains="1803") |
+                      Q(description__icontains="1804") |
+                      Q(description__icontains="18050000") |
+                      Q(description__icontains='COCO POWDER') |
+                      Q(hs_code__hs_code__startswith='18050000') |
+                      Q(description__icontains="fruit/cocoa"))
+                    & ~Q(description__icontains="actual user")
                 ]
             },
             {

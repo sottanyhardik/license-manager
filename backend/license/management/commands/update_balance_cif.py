@@ -147,9 +147,8 @@ class Command(BaseCommand):
                 # CRITICAL: For restricted items, prefer stored available_value
                 # (maintained by update_restriction_balances command) over calculated value
                 has_restriction = row.items.filter(
-                    head__is_restricted=True,
-                    head__restriction_norm__isnull=False,
-                    head__restriction_percentage__gt=Decimal("0")
+                    sion_norm_class__isnull=False,
+                    restriction_percentage__gt=Decimal("0")
                 ).exists()
 
                 if has_restriction and row.available_value is not None and row.available_value > 0:

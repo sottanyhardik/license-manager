@@ -244,11 +244,23 @@ class MasterViewSet(viewsets.ModelViewSet):
                         value = params.get(field_name)
                         if value is not None and value != "":
                             # Convert string boolean values to actual boolean
-                            if value in ("True", "true", "1"):
-                                value = True
-                            elif value in ("False", "false", "0"):
-                                value = False
-                            qs = qs.filter(**{field_name: value})
+                            if isinstance(value, str):
+                                if value.lower() in ("true", "1", "yes"):
+                                    value = True
+                                elif value.lower() in ("false", "0", "no"):
+                                    value = False
+
+                            # Special handling for is_boe field - filter by bill_of_entry relationship instead of database field
+                            if field_name == "is_boe":
+                                if value:
+                                    # is_boe=True: has bill of entry
+                                    qs = qs.filter(bill_of_entry__isnull=False).distinct()
+                                else:
+                                    # is_boe=False: no bill of entry
+                                    qs = qs.filter(bill_of_entry__isnull=True)
+                            else:
+                                # Apply filter even if value is False (important for boolean fields)
+                                qs = qs.filter(**{field_name: value})
 
                     elif filter_type == "in":
                         # IN filter (comma-separated values)

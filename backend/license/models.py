@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, Optional
 
 from django.core.validators import RegexValidator, MinValueValidator
@@ -35,12 +35,11 @@ from core.constants import (
 # Local imports — keep lightweight at module import time
 from core.models import AuditModel, InvoiceEntity, ItemNameModel
 from core.models import PurchaseStatus, SchemeCode, NotificationNumber  # kept for compatibility
-from license.helper import round_down  # assume this accepts Decimal and returns Decimal
-
 # -----------------------------
 # Import centralized utilities
 # -----------------------------
 from core.utils.decimal_utils import to_decimal as _to_decimal
+from license.helper import round_down  # assume this accepts Decimal and returns Decimal
 
 _D = Decimal  # shorthand
 
@@ -944,14 +943,13 @@ class LicenseImportItemsModel(models.Model):
         if not self.license:
             return DEC_0
 
-        # PRIORITY 1: Check if item has head-based restrictions
+        # PRIORITY 1: Check if item has restrictions
         restriction_balance = self._calculate_head_restriction_balance()
         if restriction_balance > DEC_0 or self.items.filter(
-                head__is_restricted=True,
-                head__restriction_norm__isnull=False,
-                head__restriction_percentage__gt=DEC_0
+                sion_norm_class__isnull=False,
+                restriction_percentage__gt=DEC_0
         ).exists():
-            # This item has a restricted head, use restriction calculation
+            # This item has restrictions, use restriction calculation
             return restriction_balance
 
         # PRIORITY 2: Check if business logic applies: all other items have zero CIF and this is serial_number 1
@@ -990,9 +988,10 @@ class LicenseImportItemsModel(models.Model):
         CENTRALIZED available_value calculation - SINGLE SOURCE OF TRUTH.
 
         Business Logic:
-        1. If is_restricted = True: Calculate based on item's head restriction (2%, 3%, 5%, 10% etc.)
+        1. If cif_inr is 0.01: Return 0.01 directly (special marker value)
+        2. If is_restricted=True OR items have restriction_percentage > 0: Calculate based on item's restriction (2%, 3%, 5%, 10% etc.)
            Formula: (License Export CIF × restriction_percentage / 100) - (debits + allotments for this restriction)
-        2. If is_restricted = False: Use license.get_balance_cif (shared across all non-restricted items)
+        3. Otherwise: Use license.balance_cif (shared across all non-restricted items)
 
         This property should be used EVERYWHERE in the project:
         - Frontend display
@@ -1006,24 +1005,28 @@ class LicenseImportItemsModel(models.Model):
         if not self.license:
             return DEC_0
 
-        if self.is_restricted:
-            # Use restriction-based calculation from item's head
-            # This delegates to the existing _calculate_head_restriction_balance method
+        # Special case: If cif_inr is 0.01, return 0.01
+        if self.cif_inr == Decimal("0.01") or self.cif_fc == Decimal("0.01"):
+            return Decimal("0.01")
+
+        # Check if this import item has any linked items with restrictions
+        has_item_restrictions = self.items.filter(
+            sion_norm_class__isnull=False,
+            restriction_percentage__gt=DEC_0
+        ).exists()
+
+        # Use restriction calculation if is_restricted=True OR items have restrictions
+        if self.is_restricted or has_item_restrictions:
+            # Use restriction-based calculation
             restriction_balance = self._calculate_head_restriction_balance()
-
-            # If restriction balance exists, use it
-            if restriction_balance > DEC_0 or self.items.filter(
-                    head__is_restricted=True,
-                    head__restriction_norm__isnull=False,
-                    head__restriction_percentage__gt=DEC_0
-            ).exists():
+            # Only return restriction balance if it's valid (> 0 or has actual restrictions)
+            if restriction_balance >= DEC_0:
                 return restriction_balance
-
-            # Fallback to license balance if no valid restriction found
-            return self.license.get_balance_cif
+            # Fallback to license balance if restriction calculation returns invalid
+            return self.license.balance_cif
         else:
-            # Use license-level balance (shared across all non-restricted items)
-            return self.license.get_balance_cif
+            # Use license balance_cif directly
+            return self.license.balance_cif
 
     @cached_property
     def license_expiry(self) -> Optional[date]:
@@ -1113,10 +1116,9 @@ class LicenseImportItemsModel(models.Model):
     def usable(self) -> Decimal:
         try:
             if hasattr(self, "item") and getattr(self, "item", None) and getattr(self.item, "head", None):
-                if self.license.notification_number == NOTIFICATION_NORM_CHOICES[1][0] and getattr(self.items.first(),
-                                                                                                   "head",
-                                                                                                   None) and getattr(
-                    self.items.first().head, "is_restricted", False):
+                first_item = self.items.first()
+                if (self.license.notification_number == NOTIFICATION_NORM_CHOICES[1][0] and
+                        first_item and first_item.sion_norm_class and first_item.restriction_percentage > 0):
                     return _to_decimal(self.old_quantity or DEC_000, DEC_000)
         except Exception:
             pass

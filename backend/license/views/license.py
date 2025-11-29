@@ -1,9 +1,11 @@
 # license/views/license.py
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
 from core.views.master_view import MasterViewSet
 from license.models import LicenseDetailsModel
-from license.serializers import LicenseDetailsSerializer
+from license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, LicenseDocumentSerializer
 from license.views.license_report import add_license_report_action
 from license.views.active_dfia_report import add_active_dfia_report_action
 
@@ -143,15 +145,27 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
     def get_queryset(self):
         """
-        Override to add performance optimizations with select_related.
+        Override to add performance optimizations with select_related and prefetch_related.
         """
         qs = super().get_queryset()
 
         # Add select_related for ForeignKey fields to avoid N+1 queries
         qs = qs.select_related('exporter', 'port', 'current_owner')
 
-        # For list view, don't prefetch nested items - they're only needed in detail view
-        # This dramatically improves list performance
+        # Only prefetch nested items for detail view (single object)
+        # For list view, this causes massive performance issues
+        if self.action == 'retrieve':
+            # Prefetch nested relationships for detail view only
+            qs = qs.prefetch_related(
+                'export_license',
+                'export_license__norm_class',
+                'import_license',
+                'import_license__hs_code',
+                'import_license__items',
+                'import_license__items__sion_norm_class',
+                'license_documents'
+            )
+
         return qs
 
     def apply_advanced_filters(self, qs, params, filter_config):
@@ -214,6 +228,20 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         qs = super().apply_advanced_filters(qs, filtered_params, filtered_config)
 
         return qs
+
+    @action(detail=True, methods=['get'])
+    def nested_items(self, request, pk=None):
+        """
+        Fetch nested items for a specific license on demand.
+        This endpoint is called lazily when user expands a license row.
+        """
+        license_obj = self.get_object()
+
+        return Response({
+            'export_license': LicenseExportItemSerializer(license_obj.export_license.all(), many=True).data,
+            'import_license': LicenseImportItemSerializer(license_obj.import_license.all(), many=True, context={'request': request}).data,
+            'license_documents': LicenseDocumentSerializer(license_obj.license_documents.all(), many=True).data
+        })
 
 
 # Add license report actions to viewset

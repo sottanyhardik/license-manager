@@ -6,6 +6,7 @@ import AdvancedFilter from "../../components/AdvancedFilter";
 import DataPagination from "../../components/DataPagination";
 import DataTable from "../../components/DataTable";
 import AccordionTable from "../../components/AccordionTable";
+import {saveFilterState, restoreFilterState, shouldRestoreFilters, getNewlyCreatedItem} from "../../utils/filterPersistence";
 
 /**
  * Generic Master List Page
@@ -144,15 +145,33 @@ export default function MasterList() {
         backendDefaultsApplied.current = false;
         pendingRequestRef.current = null;
 
-        setCurrentPage(1);
-        const defaultFilters = getDefaultFilters();
+        // Check if we should restore filters from previous session
+        const shouldRestore = shouldRestoreFilters();
+        const restored = shouldRestore ? restoreFilterState(entityName) : null;
 
-        // For entities with hardcoded defaults (allotments, BOE), apply them
-        // For entities with backend defaults (licenses), the backend will apply them automatically
-        // So we can just fetch once with hardcoded defaults (or empty for backend defaults)
-        setFilterParams(defaultFilters);
-        backendDefaultsApplied.current = true; // Mark as applied
-        fetchData(1, 25, defaultFilters);
+        if (restored) {
+            // Restore previous filter state
+            setFilterParams(restored.filters);
+            setCurrentPage(restored.pagination?.currentPage || 1);
+            setPageSize(restored.pagination?.pageSize || 25);
+            backendDefaultsApplied.current = true;
+            fetchData(restored.pagination?.currentPage || 1, restored.pagination?.pageSize || 25, restored.filters);
+        } else {
+            // Use default filters
+            setCurrentPage(1);
+            const defaultFilters = getDefaultFilters();
+            setFilterParams(defaultFilters);
+            backendDefaultsApplied.current = true;
+            fetchData(1, 25, defaultFilters);
+        }
+
+        // Check if a new item was created and needs to be highlighted
+        const newItemId = getNewlyCreatedItem();
+        if (newItemId) {
+            console.log('New item created:', newItemId);
+            // You can add logic here to scroll to or highlight the new item
+            // For example, after data loads, find the item and scroll to it
+        }
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entityName]);
@@ -326,6 +345,14 @@ export default function MasterList() {
                             entityName === 'trades' ? '/trades/create' :
                             `/masters/${entityName}/create`}
                         className="btn btn-primary"
+                        onClick={() => {
+                            // Save current filter state before navigating to create
+                            saveFilterState(entityName, {
+                                filters: filterParams,
+                                pagination: { currentPage, pageSize },
+                                search: ''
+                            });
+                        }}
                     >
                         <i className="bi bi-plus-circle me-2"></i>
                         Add New
@@ -370,6 +397,7 @@ export default function MasterList() {
                                      `/masters/${entityName}`))}
                             nestedFieldDefs={metadata.nested_field_defs}
                             nestedListDisplay={metadata.nested_list_display || {}}
+                            lazyLoadNested={entityName === 'licenses'}
                             customActions={entityName === 'licenses' ? [
                                 {
                                     label: 'Ledger',
@@ -393,7 +421,14 @@ export default function MasterList() {
                                     label: 'Allocate',
                                     icon: 'bi bi-box-arrow-in-down',
                                     className: 'btn btn-outline-success',
-                                    onClick: (item) => navigate(`/allotments/${item.id}/allocate`)
+                                    onClick: (item) => {
+                                        saveFilterState(entityName, {
+                                            filters: filterParams,
+                                            pagination: { currentPage, pageSize },
+                                            search: ''
+                                        });
+                                        navigate(`/allotments/${item.id}/allocate`);
+                                    }
                                 },
                                 {
                                     label: 'PDF',

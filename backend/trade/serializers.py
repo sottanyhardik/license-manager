@@ -91,6 +91,11 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         trade.recompute_totals()
         trade.refresh_from_db()
 
+        # Update BOE invoice_no if BOE is linked
+        if trade.boe and trade.invoice_number:
+            trade.boe.invoice_no = trade.invoice_number
+            trade.boe.save(update_fields=['invoice_no'])
+
         return trade
 
     def update(self, instance, validated_data):
@@ -99,6 +104,9 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
 
         lines_data = validated_data.pop('lines', None)
         payments_data = validated_data.pop('payments', None)
+
+        # Track old BOE before update to clear invoice_no if BOE changes
+        old_boe = instance.boe
 
         # Update header fields
         for attr, value in validated_data.items():
@@ -131,6 +139,19 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         # Recompute totals
         instance.recompute_totals()
         instance.refresh_from_db()
+
+        # Handle BOE invoice_no updates
+        # If BOE changed, clear invoice_no from old BOE
+        if old_boe and old_boe != instance.boe:
+            # Only clear if this trade's invoice is still on the old BOE
+            if old_boe.invoice_no == instance.invoice_number:
+                old_boe.invoice_no = None
+                old_boe.save(update_fields=['invoice_no'])
+
+        # Update new BOE with invoice_no if BOE is linked
+        if instance.boe and instance.invoice_number:
+            instance.boe.invoice_no = instance.invoice_number
+            instance.boe.save(update_fields=['invoice_no'])
 
         return instance
 

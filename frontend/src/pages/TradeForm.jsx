@@ -215,10 +215,30 @@ export default function TradeForm() {
         const updatedLines = [...formData.lines];
         updatedLines[index][field] = value;
 
-        // Auto-calculate amount based on mode
+        // Auto-calculate derived fields
         const line = updatedLines[index];
         line.mode = billingMode; // Update mode to current billing mode
 
+        // Calculate CIF_INR from CIF_FC and Exchange Rate if available
+        if ((field === 'cif_fc' || field === 'exc_rate') && line.cif_fc && line.exc_rate) {
+            line.cif_inr = parseFloat((parseFloat(line.cif_fc) * parseFloat(line.exc_rate)).toFixed(2));
+        }
+
+        // Calculate FOB_INR from CIF_INR (FOB = CIF in this context, as we don't have separate FOB values from BOE)
+        // If you have a specific formula for FOB, update this logic
+        if (field === 'cif_inr' || (field === 'cif_fc' || field === 'exc_rate')) {
+            line.fob_inr = line.cif_inr;
+        }
+
+        // If license item (sr_number) is selected and we're in CIF/FOB mode, get quantity from license item
+        if (field === 'sr_number' && value && (line.mode === "CIF_INR" || line.mode === "FOB_INR")) {
+            // The sr_number is the license import item object with quantity
+            if (value.quantity) {
+                line.qty_kg = parseFloat(value.quantity);
+            }
+        }
+
+        // Auto-calculate amount based on mode
         if (line.mode === "QTY") {
             line.amount_inr = (parseFloat(line.qty_kg) || 0) * (parseFloat(line.rate_inr_per_kg) || 0);
         } else if (line.mode === "CIF_INR") {
@@ -671,7 +691,24 @@ export default function TradeForm() {
                         <label className="form-label">BOE (optional)</label>
                         <HybridSelect
                             fieldMeta={{
-                                endpoint: isEdit ? "/bill-of-entries/" : "/bill-of-entries/?invoice_no__isnull=true",
+                                endpoint: (() => {
+                                    // In create mode: only show BOEs without invoice
+                                    if (!isEdit) {
+                                        return "/bill-of-entries/?invoice_no__isnull=true";
+                                    }
+                                    // In edit mode: show BOEs without invoice OR current BOE OR BOEs with current invoice
+                                    const currentBoeId = formData.boe ? (typeof formData.boe === 'object' ? formData.boe.id : formData.boe) : null;
+                                    const currentInvoice = formData.invoice_number ? encodeURIComponent(formData.invoice_number) : null;
+
+                                    let endpoint = "/bill-of-entries/?available_for_trade=true";
+                                    if (currentBoeId) {
+                                        endpoint += `&current_boe=${currentBoeId}`;
+                                    }
+                                    if (currentInvoice) {
+                                        endpoint += `&current_invoice=${currentInvoice}`;
+                                    }
+                                    return endpoint;
+                                })(),
                                 label_field: "bill_of_entry_number"
                             }}
                             value={formData.boe}
@@ -767,12 +804,25 @@ export default function TradeForm() {
                                 <th style={{ width: "3%" }}>#</th>
                                 <th style={{ width: "20%" }}>License (SR)</th>
                                 <th style={{ width: "10%" }}>HSN</th>
-                                {billingMode !== "QTY" && <th style={{ width: "10%" }}>CIF $</th>}
-                                {billingMode !== "QTY" && <th style={{ width: "8%" }}>Exch Rate</th>}
-                                {billingMode !== "QTY" && <th style={{ width: "10%" }}>CIF INR</th>}
-                                {billingMode === "QTY" && <th style={{ width: "10%" }}>Qty (KG)</th>}
-                                {billingMode === "QTY" && <th style={{ width: "10%" }}>Rate (INR/KG)</th>}
-                                <th style={{ width: "8%" }}>Billing %</th>
+                                {billingMode === "CIF_INR" && (
+                                    <>
+                                        <th style={{ width: "10%" }}>CIF $</th>
+                                        <th style={{ width: "8%" }}>Exch Rate</th>
+                                        <th style={{ width: "10%" }}>CIF INR</th>
+                                    </>
+                                )}
+                                {billingMode === "FOB_INR" && (
+                                    <>
+                                        <th style={{ width: "10%" }}>FOB INR</th>
+                                    </>
+                                )}
+                                {billingMode === "QTY" && (
+                                    <>
+                                        <th style={{ width: "10%" }}>Qty (KG)</th>
+                                        <th style={{ width: "10%" }}>Rate (INR/KG)</th>
+                                    </>
+                                )}
+                                {billingMode !== "QTY" && <th style={{ width: "8%" }}>Billing %</th>}
                                 <th style={{ width: "12%" }}>Amount</th>
                                 <th style={{ width: "3%" }}></th>
                             </tr>
@@ -801,7 +851,7 @@ export default function TradeForm() {
                                             onChange={(e) => handleLineChange(index, 'hsn_code', e.target.value)}
                                         />
                                     </td>
-                                    {billingMode !== "QTY" && (
+                                    {billingMode === "CIF_INR" && (
                                         <>
                                             <td>
                                                 <input
@@ -832,6 +882,19 @@ export default function TradeForm() {
                                             </td>
                                         </>
                                     )}
+                                    {billingMode === "FOB_INR" && (
+                                        <>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    className="form-control form-control-sm text-end"
+                                                    value={line.fob_inr || ""}
+                                                    onChange={(e) => handleLineChange(index, 'fob_inr', parseFloat(e.target.value) || 0)}
+                                                    step="0.01"
+                                                />
+                                            </td>
+                                        </>
+                                    )}
                                     {billingMode === "QTY" && (
                                         <>
                                             <td>
@@ -854,15 +917,17 @@ export default function TradeForm() {
                                             </td>
                                         </>
                                     )}
-                                    <td>
-                                        <input
-                                            type="number"
-                                            className="form-control form-control-sm text-end"
-                                            value={line.pct || ""}
-                                            onChange={(e) => handleLineChange(index, 'pct', parseFloat(e.target.value) || 0)}
-                                            step="0.001"
-                                        />
-                                    </td>
+                                    {billingMode !== "QTY" && (
+                                        <td>
+                                            <input
+                                                type="number"
+                                                className="form-control form-control-sm text-end"
+                                                value={line.pct || ""}
+                                                onChange={(e) => handleLineChange(index, 'pct', parseFloat(e.target.value) || 0)}
+                                                step="0.001"
+                                            />
+                                        </td>
+                                    )}
                                     <td>
                                         <input
                                             type="text"
@@ -884,7 +949,7 @@ export default function TradeForm() {
                                 </tr>
                             ))}
                             <tr className="table-secondary fw-bold">
-                                <td colSpan={billingMode === "QTY" ? 5 : 7} className="text-end">Total</td>
+                                <td colSpan={billingMode === "QTY" ? 5 : (billingMode === "CIF_INR" ? 6 : 4)} className="text-end">Total</td>
                                 <td className="text-end">{calculateTotal().toFixed(2)}</td>
                                 <td></td>
                             </tr>

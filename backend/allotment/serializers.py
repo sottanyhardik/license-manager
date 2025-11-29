@@ -70,6 +70,9 @@ class AllotmentSerializer(serializers.ModelSerializer):
     created_on = serializers.SerializerMethodField()
     modified_on = serializers.SerializerMethodField()
 
+    # Calculated at runtime instead of reading from database
+    is_boe = serializers.SerializerMethodField(read_only=True)
+
     # Cached property fields
     required_value = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     dfia_list = serializers.CharField(read_only=True, required=False)
@@ -84,6 +87,16 @@ class AllotmentSerializer(serializers.ModelSerializer):
 
     # Custom label field for dropdown display
     display_label = serializers.SerializerMethodField(read_only=True)
+
+    def get_is_boe(self, obj):
+        """
+        Calculate is_boe at runtime based on whether the allotment has a bill of entry.
+        Returns True if allotment.bill_of_entry.exists(), else False.
+        """
+        try:
+            return obj.bill_of_entry.exists()
+        except Exception:
+            return False
 
     def get_display_label(self, obj):
         """Generate display label: Company Name - Invoice - Required Qty"""

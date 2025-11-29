@@ -47,9 +47,8 @@ def update_license_balance(license_item):
 
     # CRITICAL: Check if item has restrictions
     has_restriction = license_item.items.filter(
-        head__is_restricted=True,
-        head__restriction_norm__isnull=False,
-        head__restriction_percentage__gt=DEC_0
+        sion_norm_class__isnull=False,
+        restriction_percentage__gt=DEC_0
     ).exists()
 
     if has_restriction:

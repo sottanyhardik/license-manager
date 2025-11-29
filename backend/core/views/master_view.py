@@ -481,9 +481,18 @@ class MasterViewSet(viewsets.ModelViewSet):
                     row = []
                     for col in columns:
                         if "__" in col:
-                            # Annotated field
+                            # Try annotated field first
                             alias = col.replace("__", "_")
                             value = getattr(obj, alias, None)
+
+                            # If annotated field doesn't exist, traverse the relation
+                            if value is None:
+                                parts = col.split("__")
+                                value = obj
+                                for part in parts:
+                                    if value is None:
+                                        break
+                                    value = getattr(value, part, None)
                         else:
                             value = getattr(obj, col, None)
 

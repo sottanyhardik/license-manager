@@ -252,7 +252,7 @@ class Command(BaseCommand):
             # Steel items - C473, C471
             {
                 'base_name': 'HOT ROLLED STEEL',
-                'norms': ['C473', 'C471'],
+                'norms': ['C473', 'C471', 'C460'],
                 'filters': [
                     Q(description__icontains="HOT ROLLED") |
                     Q(description__icontains="NON ALLOY")
@@ -260,7 +260,7 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'COLD ROLLED STEEL',
-                'norms': ['C473', 'C471'],
+                'norms': ['C473', 'C471', 'C460'],
                 'filters': [Q(description__icontains="COLD ROLLED")]
             },
 
@@ -355,6 +355,16 @@ class Command(BaseCommand):
                 'filters': [
                     Q(description__icontains="vegetable shortening") |
                     Q(description__icontains="rbd palm oil")
+                ]
+            },
+            {
+                'base_name': 'OLIVE OIL',
+                'norms': ['E5', 'E126'],
+                'filters': [
+                    Q(description__icontains="1500") |
+                    Q(description__icontains="1509") |
+                    Q(description__icontains="1510") |
+                    Q(hs_code__hs_code__startswith="1509")
                 ]
             },
             {

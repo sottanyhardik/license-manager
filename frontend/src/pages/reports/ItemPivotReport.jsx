@@ -268,7 +268,7 @@ export default function ItemPivotReport() {
             {!filtersCollapsed && (
                 <div className="row mb-4">
                     <div className="col-12">
-                        <div className="card shadow-sm border-0">
+                        <div className="card shadow-sm border-0" style={{maxWidth: '1400px'}}>
                             <div
                                 className="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
                                 <h5 className="mb-0">
@@ -447,9 +447,9 @@ export default function ItemPivotReport() {
                                             <span className="badge bg-white text-dark">{licenses.length}</span>
                                         </div>
                                         <div className="card-body p-0">
-                                            <div className="table-responsive" style={{overflowX: 'auto'}}>
+                                            <div className="table-responsive" style={{overflowX: 'auto', maxWidth: '100vw'}}>
                                                 <table className="table table-hover table-sm mb-0"
-                                                       style={{tableLayout: 'auto'}}>
+                                                       style={{tableLayout: 'auto', minWidth: '860px'}}>
                                                     <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                                                     <tr className="table-light">
                                                         <th className="text-center" style={{
@@ -514,7 +514,8 @@ export default function ItemPivotReport() {
                                                             zIndex: 11,
                                                             backgroundColor: '#f8f9fa',
                                                             minWidth: '110px',
-                                                            boxShadow: '2px 0 5px rgba(0,0,0,0.1)'
+                                                            boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
+                                                            borderRight: '2px solid #dee2e6'
                                                         }}>Balance CIF
                                                         </th>
                                                         {reportData.items.filter(item => item.name).map(item => {
@@ -577,7 +578,8 @@ export default function ItemPivotReport() {
                                                             left: '750px',
                                                             zIndex: 11,
                                                             backgroundColor: '#e2e3e5',
-                                                            boxShadow: '2px 0 5px rgba(0,0,0,0.1)'
+                                                            boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
+                                                            borderRight: '2px solid #dee2e6'
                                                         }}></th>
                                                         {reportData.items.filter(item => item.name).map(item => (
                                                             <React.Fragment key={`${item.id}-headers`}>
@@ -686,7 +688,8 @@ export default function ItemPivotReport() {
                                                                 left: '750px',
                                                                 zIndex: 1,
                                                                 backgroundColor: '#fff',
-                                                                boxShadow: '2px 0 5px rgba(0,0,0,0.1)'
+                                                                boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
+                                                                borderRight: '2px solid #dee2e6'
                                                             }}>{license.balance_cif.toFixed(2)}</td>
                                                             {reportData.items.filter(item => item.name).map(item => {
                                                                 const itemData = license.items[item.name] || {};
@@ -765,7 +768,8 @@ export default function ItemPivotReport() {
                                                             left: '750px',
                                                             zIndex: 1,
                                                             backgroundColor: '#fff3cd',
-                                                            boxShadow: '2px 0 5px rgba(0,0,0,0.1)'
+                                                            boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
+                                                            borderRight: '2px solid #dee2e6'
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + lic.balance_cif, 0).toFixed(2)}
                                                         </td>

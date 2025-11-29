@@ -114,21 +114,24 @@ class ItemPivotReportView(View):
         ).order_by('license_number')
 
         # Collect all unique items across all licenses
-        all_items = set()
+        all_items = {}  # Changed to dict to store item object for sorting
         for license_obj in licenses:
             for import_item in license_obj.import_license.all():
                 for item in import_item.items.all():
-                    # Only add items with valid names
-                    if item and item.name:
+                    # Only add items with valid names and that are active
+                    if item and item.name and item.is_active:
                         # If filtering by norm, only include items matching that norm
                         if sion_norm:
                             if item.sion_norm_class and item.sion_norm_class.norm_class == sion_norm:
-                                all_items.add((item.id, item.name))
+                                all_items[item.id] = item
                         else:
-                            all_items.add((item.id, item.name))
+                            all_items[item.id] = item
 
-        # Sort items by name for consistent column order
-        sorted_items = sorted(all_items, key=lambda x: x[1] or '')
+        # Sort items by display_order first, then by name for consistent column order
+        sorted_items = sorted(
+            [(item.id, item.name) for item in all_items.values()],
+            key=lambda x: (all_items[x[0]].display_order, x[1] or '')
+        )
 
         # Build license data with item columns, grouped by norm first, then notification
         from collections import defaultdict

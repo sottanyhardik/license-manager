@@ -209,7 +209,7 @@ class ItemNameModel(AuditModel):
     group = models.ForeignKey('core.ItemGroupModel', on_delete=models.CASCADE, related_name='items', null=True,
                               blank=True)
     name = models.CharField(max_length=255, unique=True)
-    is_active = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
     sion_norm_class = models.ForeignKey(
         'core.SionNormClassModel',
         on_delete=models.SET_NULL,
@@ -225,9 +225,14 @@ class ItemNameModel(AuditModel):
         validators=[MinValueValidator(DEC_0)],
         help_text="Restriction percentage for this item (e.g., 2.00 for 2%, 10.00 for 10%)"
     )
+    display_order = models.IntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+        help_text="Display order in reports (lower numbers appear first). Must be unique per norm class."
+    )
 
     class Meta:
-        ordering = ['group__name', 'name']
+        ordering = ['display_order', 'group__name', 'name']
 
     def __str__(self):
         return self.name

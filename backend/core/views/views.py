@@ -438,8 +438,8 @@ ItemNameViewSet = MasterViewSet.create_viewset(
                     "async": True
                 },
             },
-            "list_display": ["group__name", "name", "sion_norm_class_label", "restriction_percentage"],
-            "form_fields": ["group", "name", "is_active", "sion_norm_class", "restriction_percentage"],
+            "list_display": ["group__name", "name", "sion_norm_class_label", 'display_order', "restriction_percentage"],
+            "form_fields": ["group", "name", "is_active", "sion_norm_class", 'display_order', "restriction_percentage"],
             "fk_endpoint_overrides": {
                 "group": "/masters/groups/",
                 "sion_norm_class": "/masters/sion-classes/?is_active=true"

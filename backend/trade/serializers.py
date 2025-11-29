@@ -1,7 +1,6 @@
 # trade/serializers.py
 
 from rest_framework import serializers
-from decimal import Decimal
 
 from .models import LicenseTrade, LicenseTradeLine, LicenseTradePayment
 
@@ -30,8 +29,11 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         )
 
     def get_sr_number_label(self, obj):
-        """Return SR number with description or item names"""
+        """Return license number, SR number, and description"""
         if obj.sr_number:
+            # Get license number
+            license_number = obj.sr_number.license.license_number if obj.sr_number.license else 'Unknown'
+
             # Use description if available, otherwise get first item name from ManyToMany
             if obj.sr_number.description:
                 item_desc = obj.sr_number.description
@@ -39,7 +41,8 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
                 # Get first item from ManyToMany items field
                 first_item = obj.sr_number.items.first()
                 item_desc = first_item.name if first_item else 'Unknown'
-            return f"SR {obj.sr_number.serial_number} - {item_desc}"
+
+            return f"{license_number} - SR {obj.sr_number.serial_number}"
         return None
 
     def get_computed_amount(self, obj):

@@ -65,6 +65,22 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
             );
         }
 
+        // Handle both array and object with fields property
+        let actualFieldConfig = fieldConfig;
+        if (!Array.isArray(fieldConfig)) {
+            // Check if it's an object with fields property (e.g., {label: "Trade Lines", fields: [...]})
+            if (fieldConfig && typeof fieldConfig === 'object' && Array.isArray(fieldConfig.fields)) {
+                actualFieldConfig = fieldConfig.fields;
+            } else {
+                console.error(`fieldConfig for ${fieldKey} is not an array or valid object:`, fieldConfig);
+                return (
+                    <div className="alert alert-warning mb-0">
+                        <small>Invalid configuration for {fieldKey.replace(/_/g, " ")}.</small>
+                    </div>
+                );
+            }
+        }
+
         // Get fields to display - use nestedListDisplay if available, otherwise use field config
         const listDisplayFields = nestedListDisplay[fieldKey] || [];
         let visibleFields;
@@ -80,14 +96,14 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
             // Use the configured list display fields
             visibleFields = listDisplayFields.map(fieldName => {
                 // Try to find the field config
-                const fieldDef = fieldConfig.find(f => f.name === fieldName);
+                const fieldDef = actualFieldConfig.find(f => f.name === fieldName);
                 if (fieldDef) {
                     return fieldDef;
                 }
 
                 // If not found, try without _label suffix
                 const baseFieldName = fieldName.replace('_label', '');
-                const baseField = fieldConfig.find(f => f.name === baseFieldName);
+                const baseField = actualFieldConfig.find(f => f.name === baseFieldName);
                 if (baseField) {
                     return {...baseField, name: fieldName, actualFieldName: fieldName};
                 }
@@ -101,7 +117,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
             });
         } else {
             // Fallback to showing all visible fields from config
-            visibleFields = fieldConfig.filter(f =>
+            visibleFields = actualFieldConfig.filter(f =>
                 f.name !== "id" &&
                 !f.read_only &&
                 f.name !== "license"
@@ -127,17 +143,53 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                     <table className="table table-sm table-bordered mb-0">
                         <thead className="table-light">
                         <tr>
-                            {visibleFields.map(field => (
-                                <th key={field.name}>
-                                    {field.label || field.name.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
-                                </th>
-                            ))}
+                            {visibleFields.map(field => {
+                                // Hide headers based on billing mode for trade lines
+                                if (fieldKey === 'lines' && items.length > 0 && items[0].mode) {
+                                    const mode = items[0].mode; // All lines have same mode
+                                    // For CIF_INR mode: hide qty_kg, fob_inr, rate_inr_per_kg headers
+                                    if (mode === 'CIF_INR' && ['qty_kg', 'fob_inr', 'rate_inr_per_kg'].includes(field.name)) {
+                                        return null;
+                                    }
+                                    // For FOB_INR mode: hide qty_kg, cif_fc, exc_rate, cif_inr, rate_inr_per_kg headers
+                                    if (mode === 'FOB_INR' && ['qty_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'rate_inr_per_kg'].includes(field.name)) {
+                                        return null;
+                                    }
+                                    // For QTY mode: hide cif_fc, exc_rate, cif_inr, fob_inr, pct headers
+                                    if (mode === 'QTY' && ['cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct'].includes(field.name)) {
+                                        return null;
+                                    }
+                                }
+
+                                return (
+                                    <th key={field.name}>
+                                        {field.label || field.name.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+                                    </th>
+                                );
+                            })}
                         </tr>
                         </thead>
                         <tbody>
                         {items.map((item, idx) => (
                             <tr key={item.id || idx}>
                                 {visibleFields.map(field => {
+                                    // Skip fields based on billing mode for trade lines
+                                    if (fieldKey === 'lines' && item.mode) {
+                                        const mode = item.mode;
+                                        // For CIF_INR mode: show only cif_fc, exc_rate, cif_inr (hide qty_kg, fob_inr)
+                                        if (mode === 'CIF_INR' && ['qty_kg', 'fob_inr', 'rate_inr_per_kg'].includes(field.name)) {
+                                            return null;
+                                        }
+                                        // For FOB_INR mode: show only fob_inr (hide qty_kg, cif_fc, exc_rate, cif_inr, rate_inr_per_kg)
+                                        if (mode === 'FOB_INR' && ['qty_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'rate_inr_per_kg'].includes(field.name)) {
+                                            return null;
+                                        }
+                                        // For QTY mode: show only qty_kg, rate_inr_per_kg (hide cif_fc, exc_rate, cif_inr, fob_inr)
+                                        if (mode === 'QTY' && ['cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct'].includes(field.name)) {
+                                            return null;
+                                        }
+                                    }
+
                                     let value = item[field.name];
 
                                     // Determine if this is a decimal or integer field

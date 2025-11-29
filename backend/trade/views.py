@@ -52,8 +52,8 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
             "direction",
             "invoice_number",
             "invoice_date",
-            "from_company__name",
-            "to_company__name",
+            "from_company_label",
+            "to_company_label",
             "total_amount",
             "paid_or_received",
             "due_amount"
@@ -73,6 +73,10 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
             "to_company": "/masters/companies/",
             "boe": "/bill-of-entries/"
         },
+        "nested_list_display": {
+            "lines": ["sr_number_label", "mode", "qty_kg", "rate_inr_per_kg", "cif_fc", "exc_rate", "cif_inr", "fob_inr", "pct", "amount_inr"],
+            "payments": ["date", "amount", "note"]
+        },
         "nested_field_defs": {
             "lines": {
                 "label": "Trade Lines",
@@ -84,6 +88,12 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
                         "fk_endpoint": "/license-items/",
                         "label_field": "label",
                         "required": True
+                    },
+                    {
+                        "name": "sr_number_label",
+                        "type": "text",
+                        "label": "SR Number",
+                        "read_only": True
                     },
                     {
                         "name": "description",

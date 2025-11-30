@@ -270,12 +270,17 @@ export default function MasterList() {
                 }
 
                 if (format === 'pdf') {
-                    // For PDF, open direct API URL in new tab (allows refresh)
-                    const queryString = new URLSearchParams(params).toString();
-                    const baseURL = (api.defaults.baseURL || 'http://127.0.0.1:8000/api').replace(/\/$/, '');
-                    const cleanApiPath = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
-                    const fullUrl = `${baseURL}${cleanApiPath}?${queryString}`;
-                    window.open(fullUrl, '_blank');
+                    // For PDF, fetch with credentials and open in new tab
+                    const response = await api.get(apiPath, {
+                        params,
+                        responseType: 'blob'
+                    });
+
+                    const blob = new Blob([response.data], {type: 'application/pdf'});
+                    const url = window.URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                    // Clean up after a delay to allow the browser to open the PDF
+                    setTimeout(() => window.URL.revokeObjectURL(url), 100);
                 } else {
                     // For Excel, download as before
                     const response = await api.get(apiPath, {
@@ -398,7 +403,38 @@ export default function MasterList() {
                             nestedFieldDefs={metadata.nested_field_defs}
                             nestedListDisplay={metadata.nested_list_display || {}}
                             lazyLoadNested={entityName === 'licenses'}
-                            customActions={entityName === 'licenses' ? [
+                            customActions={entityName === 'trades' ? [
+                                {
+                                    label: 'Invoice PDF',
+                                    icon: 'bi bi-file-pdf',
+                                    className: 'btn btn-outline-danger',
+                                    onClick: async (item) => {
+                                        // Only allow for SALE transactions
+                                        if (item.direction !== 'SALE') {
+                                            alert('Bill of Supply can only be generated for SALE transactions');
+                                            return;
+                                        }
+                                        try {
+                                            const response = await api.get(`/trades/${item.id}/generate-bill-of-supply/`, {
+                                                responseType: 'blob'
+                                            });
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            const link = document.createElement('a');
+                                            link.href = url;
+                                            link.download = `Bill_of_Supply_${item.invoice_number}_${new Date().toISOString().split('T')[0]}.pdf`;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            link.remove();
+                                            window.URL.revokeObjectURL(url);
+                                        } catch (err) {
+                                            alert(err.response?.data?.error || 'Failed to generate Bill of Supply PDF');
+                                        }
+                                    },
+                                    // Only show for SALE transactions
+                                    showIf: (item) => item.direction === 'SALE'
+                                }
+                            ] : entityName === 'licenses' ? [
                                 {
                                     label: 'Ledger',
                                     icon: 'bi bi-file-pdf',

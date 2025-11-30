@@ -195,17 +195,62 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
 
 # Add custom actions to TradeViewSet
 class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
+    @action(detail=True, methods=['get'], url_path='generate-bill-of-supply')
+    def generate_bill_of_supply(self, request, pk=None):
+        """
+        Generate Bill of Supply PDF for SALE transactions.
+        """
+        from django.http import HttpResponse
+        from trade.bill_of_supply_pdf import generate_bill_of_supply_pdf
+
+        trade = self.get_object()
+
+        # Validate that this is a SALE transaction
+        if trade.direction != 'SALE':
+            return Response(
+                {"error": "Bill of Supply can only be generated for SALE transactions"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            pdf = generate_bill_of_supply_pdf(trade)
+
+            # Create response
+            response = HttpResponse(pdf, content_type='application/pdf')
+            filename = f"Bill_of_Supply_{trade.invoice_number}_{trade.invoice_date.strftime('%Y%m%d') if trade.invoice_date else 'NA'}.pdf"
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            return response
+
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to generate PDF: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=False, methods=['get'])
     def generate_invoice_number(self, request):
         """Generate next invoice number for SALE"""
+        from datetime import datetime
         seller_company_id = request.query_params.get('seller_company_id')
-        invoice_date = request.query_params.get('invoice_date')
+        invoice_date_str = request.query_params.get('invoice_date')
 
         if not seller_company_id:
             return Response(
                 {"error": "seller_company_id is required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Parse invoice_date string to date object
+        invoice_date = None
+        if invoice_date_str:
+            try:
+                invoice_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response(
+                    {"error": "Invalid date format. Use YYYY-MM-DD"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         from core.models import CompanyModel
         try:

@@ -11,3 +11,4 @@ redis==5.0.3
 python-dotenv==1.0.1
 openpyxl==3.1.5
 reportlab==4.4.4
+num2words==0.5.14

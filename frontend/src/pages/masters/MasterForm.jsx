@@ -261,15 +261,44 @@ export default function MasterForm() {
                 if (!isNaN(cifFc) && !isNaN(requiredQty) && requiredQty > 0) {
                     // Round up to 3 decimal places
                     updates.unit_value_per_unit = (Math.ceil((cifFc / requiredQty) * 1000) / 1000).toFixed(3);
+                    currentData.unit_value_per_unit = updates.unit_value_per_unit; // Update for reference
                 }
             }
 
-            // Always recalculate cif_inr from cif_fc and exchange_rate when both are present and valid
-            if (currentData.cif_fc && currentData.exchange_rate) {
+            // Calculate cif_fc from cif_inr and exchange_rate (if cif_inr and exchange_rate present)
+            if ((field === "cif_inr" || field === "exchange_rate") && currentData.cif_inr && currentData.exchange_rate) {
+                const cifInr = parseFloat(currentData.cif_inr);
+                const exchangeRate = parseFloat(currentData.exchange_rate);
+                if (!isNaN(cifInr) && !isNaN(exchangeRate) && exchangeRate > 0) {
+                    updates.cif_fc = (cifInr / exchangeRate).toFixed(2);
+                    currentData.cif_fc = updates.cif_fc; // Update for next calculation
+
+                    // Also calculate unit_value_per_unit if we have required_quantity
+                    if (currentData.required_quantity) {
+                        const requiredQty = parseFloat(currentData.required_quantity);
+                        if (!isNaN(requiredQty) && requiredQty > 0) {
+                            updates.unit_value_per_unit = (Math.ceil((parseFloat(updates.cif_fc) / requiredQty) * 1000) / 1000).toFixed(3);
+                        }
+                    }
+                }
+            }
+            // Calculate cif_inr from cif_fc and exchange_rate (if cif_fc and exchange_rate present)
+            else if ((field === "cif_fc" || field === "exchange_rate") && currentData.cif_fc && currentData.exchange_rate) {
                 const cifFc = parseFloat(currentData.cif_fc);
                 const exchangeRate = parseFloat(currentData.exchange_rate);
                 if (!isNaN(cifFc) && !isNaN(exchangeRate) && exchangeRate > 0) {
                     updates.cif_inr = (cifFc * exchangeRate).toFixed(2);
+                }
+            }
+
+            // Calculate unit_value_per_unit from cif_fc and required_quantity
+            if ((field === "cif_fc" || field === "required_quantity") && currentData.cif_fc && currentData.required_quantity) {
+                const cifFc = parseFloat(currentData.cif_fc);
+                const requiredQty = parseFloat(currentData.required_quantity);
+                // Only auto-calculate unit price if it's not already set or if user is changing cif_fc/quantity
+                if (!isNaN(cifFc) && !isNaN(requiredQty) && requiredQty > 0 &&
+                    (field === "cif_fc" || field === "required_quantity")) {
+                    updates.unit_value_per_unit = (Math.ceil((cifFc / requiredQty) * 1000) / 1000).toFixed(3);
                 }
             }
         }

@@ -411,8 +411,32 @@ export default function TradeForm() {
             alert("Please save the trade first");
             return;
         }
-        // TODO: Implement PDF download
-        alert("PDF download coming soon");
+
+        // Check if this is a SALE transaction
+        if (formData.direction !== 'SALE') {
+            alert("Bill of Supply can only be generated for SALE transactions");
+            return;
+        }
+
+        try {
+            const response = await api.get(`/trades/${id}/generate-bill-of-supply/`, {
+                responseType: 'blob'
+            });
+
+            // Create blob link to download
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            const filename = `Bill_of_Supply_${formData.invoice_number || id}_${new Date().toISOString().split('T')[0]}.pdf`;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Failed to download Bill of Supply:', err);
+            alert('Failed to download Bill of Supply. Please try again.');
+        }
     };
 
     return (
@@ -986,8 +1010,11 @@ export default function TradeForm() {
                             type="button"
                             className="btn btn-warning"
                             onClick={handleDownloadPDF}
+                            disabled={formData.direction !== 'SALE'}
+                            title={formData.direction !== 'SALE' ? 'Bill of Supply only available for SALE transactions' : 'Download Bill of Supply PDF'}
                         >
-                            Download PDF
+                            <i className="bi bi-file-pdf me-1"></i>
+                            Download Bill of Supply
                         </button>
                     )}
                 </div>

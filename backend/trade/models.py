@@ -5,6 +5,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Sum, Q, F
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.utils import timezone
 
 from bill_of_entry.models import BillOfEntryModel
@@ -374,3 +376,20 @@ class LicenseTradePayment(models.Model):
 
     def __str__(self) -> str:
         return f"Payment[{self.id}] Trade#{self.trade_id} ₹{q2(self.amount)} on {self.date}"
+
+
+# -----------------------------------------------------------------------------
+# Signals
+# -----------------------------------------------------------------------------
+@receiver(pre_delete, sender=LicenseTrade)
+def clear_boe_invoice_on_trade_delete(sender, instance, **kwargs):
+    """
+    When a trade is deleted, clear the invoice_no from the associated BOE.
+    This allows the BOE to be reused for other trades.
+    """
+    if instance.boe and instance.invoice_number:
+        # Only clear if the BOE's invoice_no matches this trade's invoice_number
+        if instance.boe.invoice_no == instance.invoice_number:
+            instance.boe.invoice_no = None
+            instance.boe.invoice_date = None
+            instance.boe.save(update_fields=['invoice_no', 'invoice_date'])

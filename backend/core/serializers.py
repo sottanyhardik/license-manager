@@ -5,7 +5,8 @@ from .models import (
     CompanyModel, PortModel, HSCodeModel,
     HeadSIONNormsModel, SionNormClassModel,
     SIONExportModel, SIONImportModel,
-    ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel, ItemGroupModel
+    ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel, ItemGroupModel,
+    TransferLetterModel
 )
 
 
@@ -187,3 +188,10 @@ class ItemNameSerializer(AuditSerializerMixin):
                 return f"{obj.sion_norm_class.norm_class} - {obj.sion_norm_class.description}"
             return obj.sion_norm_class.norm_class
         return None
+
+
+# ---- Transfer Letter ----
+class TransferLetterSerializer(AuditSerializerMixin):
+    class Meta(AuditSerializerMixin.Meta):
+        model = TransferLetterModel
+        fields = "__all__"

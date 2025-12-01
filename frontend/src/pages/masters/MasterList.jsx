@@ -482,6 +482,33 @@ export default function MasterList() {
                                             alert(err.response?.data?.error || 'Failed to generate PDF');
                                         }
                                     }
+                                },
+                                {
+                                    label: 'Transfer Letter',
+                                    icon: 'bi bi-file-earmark-text',
+                                    className: 'btn btn-outline-warning',
+                                    onClick: (item) => {
+                                        saveFilterState(entityName, {
+                                            filters: filterParams,
+                                            pagination: { currentPage, pageSize },
+                                            search: ''
+                                        });
+                                        navigate(`/allotments/${item.id}/allocate`, { state: { scrollToTransferLetter: true } });
+                                    }
+                                }
+                            ] : entityName === 'bill-of-entries' ? [
+                                {
+                                    label: 'Transfer Letter',
+                                    icon: 'bi bi-file-earmark-text',
+                                    className: 'btn btn-outline-warning',
+                                    onClick: (item) => {
+                                        saveFilterState(entityName, {
+                                            filters: filterParams,
+                                            pagination: { currentPage, pageSize },
+                                            search: ''
+                                        });
+                                        navigate(`/bill-of-entries/${item.id}/generate-transfer-letter`);
+                                    }
                                 }
                             ] : []}
                         />
@@ -511,6 +538,24 @@ export default function MasterList() {
                                         } catch (err) {
                                             alert(err.response?.data?.error || 'Failed to generate PDF');
                                         }
+                                    }
+                                },
+                                {
+                                    label: 'Transfer Letter',
+                                    icon: 'bi bi-file-earmark-text',
+                                    className: 'btn btn-outline-warning',
+                                    onClick: (item) => {
+                                        // Navigate to allocate page and scroll to transfer letter section
+                                        navigate(`/allotments/${item.id}/allocate`, { state: { scrollToTransferLetter: true } })
+                                    }
+                                }
+                            ] : entityName === 'bill-of-entries' ? [
+                                {
+                                    label: 'Transfer Letter',
+                                    icon: 'bi bi-file-earmark-text',
+                                    className: 'btn btn-outline-warning',
+                                    onClick: (item) => {
+                                        navigate(`/bill-of-entries/${item.id}/generate-transfer-letter`);
                                     }
                                 }
                             ] : []}

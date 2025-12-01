@@ -70,42 +70,42 @@ def update_items(apps, schema_editor):
         ('SUGAR - E5', 28, 0.00, False),
     ]
 
-    # C460 items configuration
-    c460_items_config = [
-        ('AUTOMOTIVE BATTERY - C460', 1, 0.00, True),
-        ('ALLOY STEEL - C460', 2, 0.00, True),
-        ('HOT ROLLED STEEL - C460', 3, 0.00, True),
-        ('COLD ROLLED STEEL - C460', 4, 0.00, True),
-        ('BEARING - C460', 5, 0.00, True),
-        ('RADIATOR - C460', 6, 0.00, True),
-        ('CLUTCH ASSEMBLY - C460', 7, 0.00, True),
-        ('WIRING HARNNESS - C460', 8, 0.00, True),
-        ('BRAKE ASSEMBLY - C460', 9, 0.00, True),
-        ('ALTERNATOR - C460', 10, 0.00, True),
-        ('FUEL FILTER - C460', 11, 0.00, True),
-        ("'O' Ring - C460", 12, 0.00, False),
-        ('AIR FILTER - C460', 13, 0.00, False),
-        ('AUXILIARY VALVES - C460', 14, 0.00, False),
-        ('FRONT AXLE - C460', 15, 0.00, False),
-        ('FRONT WHEELRIM - C460', 16, 0.00, False),
-        ('FRONTWHEEL TYRE - C460', 17, 0.00, False),
-        ('FUEL INJECTION PUMP - C460', 18, 0.00, False),
-        ('HYDRAULIC CYLINDER - C460', 19, 0.00, False),
-        ('HYDRAULIC PUMP - C460', 20, 0.00, False),
-        ('HYDRAULIC VALVES - C460', 21, 0.00, False),
-        ('HYDROSTATIC TRANSMISSION - C460', 22, 0.00, False),
-        ('INTERNAL COMBUSTION ENGINE - C460', 23, 0.00, False),
-        ('OIL PUMP - C460', 24, 0.00, False),
-        ('OIL SEAL - C460', 25, 0.00, False),
-        ('OIL SEPERATOR - C460', 26, 0.00, False),
-        ('REAR WHEELRIM - C460', 27, 0.00, False),
-        ('REARWHEEL TYRE - C460', 28, 0.00, False),
-        ('SAFETY NEUTRAL SWITCH - C460', 29, 0.00, False),
-        ('SEAT ASSEMBLY - C460', 30, 0.00, False),
-        ('STARTER MOTOR - C460', 31, 0.00, False),
-        ('SYNCHROPACKS - C460', 32, 0.00, False),
-        ('TURBO CHARGER - C460', 33, 0.00, False),
-        ('WATER PUMP - C460', 34, 0.00, False),
+    # C696 items configuration
+    C696_items_config = [
+        ('AUTOMOTIVE BATTERY - C696', 1, 0.00, True),
+        ('ALLOY STEEL - C696', 2, 0.00, True),
+        ('HOT ROLLED STEEL - C696', 3, 0.00, True),
+        ('COLD ROLLED STEEL - C696', 4, 0.00, True),
+        ('BEARING - C696', 5, 0.00, True),
+        ('RADIATOR - C696', 6, 0.00, True),
+        ('CLUTCH ASSEMBLY - C696', 7, 0.00, True),
+        ('WIRING HARNNESS - C696', 8, 0.00, True),
+        ('BRAKE ASSEMBLY - C696', 9, 0.00, True),
+        ('ALTERNATOR - C696', 10, 0.00, True),
+        ('FUEL FILTER - C696', 11, 0.00, True),
+        ("'O' Ring - C696", 12, 0.00, False),
+        ('AIR FILTER - C696', 13, 0.00, False),
+        ('AUXILIARY VALVES - C696', 14, 0.00, False),
+        ('FRONT AXLE - C696', 15, 0.00, False),
+        ('FRONT WHEELRIM - C696', 16, 0.00, False),
+        ('FRONTWHEEL TYRE - C696', 17, 0.00, False),
+        ('FUEL INJECTION PUMP - C696', 18, 0.00, False),
+        ('HYDRAULIC CYLINDER - C696', 19, 0.00, False),
+        ('HYDRAULIC PUMP - C696', 20, 0.00, False),
+        ('HYDRAULIC VALVES - C696', 21, 0.00, False),
+        ('HYDROSTATIC TRANSMISSION - C696', 22, 0.00, False),
+        ('INTERNAL COMBUSTION ENGINE - C696', 23, 0.00, False),
+        ('OIL PUMP - C696', 24, 0.00, False),
+        ('OIL SEAL - C696', 25, 0.00, False),
+        ('OIL SEPERATOR - C696', 26, 0.00, False),
+        ('REAR WHEELRIM - C696', 27, 0.00, False),
+        ('REARWHEEL TYRE - C696', 28, 0.00, False),
+        ('SAFETY NEUTRAL SWITCH - C696', 29, 0.00, False),
+        ('SEAT ASSEMBLY - C696', 30, 0.00, False),
+        ('STARTER MOTOR - C696', 31, 0.00, False),
+        ('SYNCHROPACKS - C696', 32, 0.00, False),
+        ('TURBO CHARGER - C696', 33, 0.00, False),
+        ('WATER PUMP - C696', 34, 0.00, False),
     ]
 
     # A3627 items configuration
@@ -197,27 +197,27 @@ def update_items(apps, schema_editor):
     except SionNormClassModel.DoesNotExist:
         print("E5 norm class not found, skipping E5 items")
 
-    # Update C460 items
+    # Update C696 items
     try:
-        c460_norm = SionNormClassModel.objects.get(norm_class='C460')
-        c460_updated_count = 0
-        for item_name, display_order, restriction_pct, is_active in c460_items_config:
+        C696_norm = SionNormClassModel.objects.get(norm_class='C696')
+        C696_updated_count = 0
+        for item_name, display_order, restriction_pct, is_active in C696_items_config:
             try:
-                item = ItemNameModel.objects.get(name=item_name, sion_norm_class=c460_norm)
+                item = ItemNameModel.objects.get(name=item_name, sion_norm_class=C696_norm)
                 item.display_order = display_order
                 item.restriction_percentage = restriction_pct
                 item.is_active = is_active
                 item.save()
-                c460_updated_count += 1
+                C696_updated_count += 1
                 print(
-                    f"Updated C460: {item_name} (order={display_order}, restriction={restriction_pct}%, active={is_active})")
+                    f"Updated C696: {item_name} (order={display_order}, restriction={restriction_pct}%, active={is_active})")
             except ItemNameModel.DoesNotExist:
-                print(f"C460 item not found: {item_name}")
+                print(f"C696 item not found: {item_name}")
             except ItemNameModel.MultipleObjectsReturned:
-                print(f"Multiple C460 items found for: {item_name}, skipping")
-        print(f"\nTotal C460 items updated: {c460_updated_count}")
+                print(f"Multiple C696 items found for: {item_name}, skipping")
+        print(f"\nTotal C696 items updated: {C696_updated_count}")
     except SionNormClassModel.DoesNotExist:
-        print("C460 norm class not found, skipping C460 items")
+        print("C696 norm class not found, skipping C696 items")
 
     # Update A3627 items
     try:
@@ -310,8 +310,8 @@ def reverse_update(apps, schema_editor):
         pass
 
     try:
-        c460_norm = SionNormClassModel.objects.get(norm_class='C460')
-        ItemNameModel.objects.filter(sion_norm_class=c460_norm).update(
+        C696_norm = SionNormClassModel.objects.get(norm_class='C696')
+        ItemNameModel.objects.filter(sion_norm_class=C696_norm).update(
             display_order=1,
             is_active=True
         )

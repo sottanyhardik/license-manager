@@ -20,6 +20,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const MasterList = lazy(() => import("./pages/masters/MasterList"));
 const MasterForm = lazy(() => import("./pages/masters/MasterForm"));
 const AllotmentAction = lazy(() => import("./pages/AllotmentAction"));
+const BOETransferLetter = lazy(() => import("./pages/BOETransferLetter"));
 const SionE1 = lazy(() => import("./pages/reports/SionE1"));
 const SionE5 = lazy(() => import("./pages/reports/SionE5"));
 const SionE126 = lazy(() => import("./pages/reports/SionE126"));
@@ -283,6 +284,19 @@ export default function App() {
                                         <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/bill-of-entries/:id/generate-transfer-letter"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <BOETransferLetter/>
                                             </AdminLayout>
                                         </RoleRoute>
                                     </ProtectedRoute>

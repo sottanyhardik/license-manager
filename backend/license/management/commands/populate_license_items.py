@@ -73,20 +73,20 @@ class Command(BaseCommand):
                 ]
             },
 
-            # Automotive/Engineering items - C460
+            # Automotive/Engineering items - C969
             {
                 'base_name': 'WIRING HANRNESS',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains='wiring hanrness')]
             },
             {
                 'base_name': 'WATER PUMP',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains='WATER PUMP')]
             },
             {
                 'base_name': "'O' Ring",
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [
                     Q(description__icontains="'O' Ring") |
                     Q(hs_code__hs_code__startswith='40169320')
@@ -94,7 +94,7 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'BEARING',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [
                     Q(description__icontains="BEARING") |
                     Q(hs_code__hs_code__startswith='8482')
@@ -102,22 +102,22 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'TURBO CHARGER',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="TURBO CHARGER")]
             },
             {
                 'base_name': 'STARTER MOTOR',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="starter motor")]
             },
             {
                 'base_name': 'ALLOY STEEL',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="alloy steel rod")]
             },
             {
                 'base_name': 'AUTOMOTIVE BATTERY',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [
                     Q(description__icontains="AUTOMOTIVE BATTERY") |
                     Q(description__icontains="AUTOMATIVE BATTERY") |
@@ -127,72 +127,72 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'BRAKE ASSEMBLY',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="Brake Assembly")]
             },
             {
                 'base_name': 'SEAT ASSEMBLY',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="SEAT ASSEMBLY")]
             },
             {
                 'base_name': 'REARWHEEL TYRE',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="REARWHEEL TYRE")]
             },
             {
                 'base_name': 'FRONTWHEEL TYRE',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="frontwheel tyre")]
             },
             {
                 'base_name': 'RADIATOR',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="RADIATOR")]
             },
             {
                 'base_name': 'REAR WHEELRIM',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="REAR WHEELRIM")]
             },
             {
                 'base_name': 'FRONT WHEELRIM',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="FRONT WHEELRIM")]
             },
             {
                 'base_name': 'SAFETY NEUTRAL SWITCH',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="SAFETY NEUTRAL SWITCH")]
             },
             {
                 'base_name': 'OIL SEPERATOR',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="OIL SEPERATOR")]
             },
             {
                 'base_name': 'OIL PUMP',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="OIL PUMP")]
             },
             {
                 'base_name': 'OIL SEAL',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="Oil Seal")]
             },
             {
                 'base_name': 'CLUTCH ASSEMBLY',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="CLUTCH ASSEMBLY")]
             },
             {
                 'base_name': 'ALTERNATOR',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="ALTERNATOR")]
             },
             {
                 'base_name': 'HYDROSTATIC TRANSMISSION',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [
                     Q(description__icontains="HYDROSTATIC") &
                     Q(description__icontains="TRANSMISSION")
@@ -200,59 +200,59 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'HYDRAULIC VALVES',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="HYDRAULIC VALVES")]
             },
             {
                 'base_name': 'HYDRAULIC CYLINDER',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="HYDRAULIC CYLINDER")]
             },
             {
                 'base_name': 'HYDRAULIC PUMP',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="HYDRAULIC PUMP")]
             },
             {
                 'base_name': 'FRONT AXLE',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="FRONT AXLE")]
             },
             {
                 'base_name': 'FUEL FILTER',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="FUEL FILTER")]
             },
             {
                 'base_name': 'FUEL INJECTION PUMP',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="FUEL INJECTION PUMP")]
             },
             {
                 'base_name': 'INTERNAL COMBUSTION ENGINE',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="INTERNAL COMBUSTION ENGINE")]
             },
             {
                 'base_name': 'AIR FILTER',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="AIR FILTER")]
             },
             {
                 'base_name': 'AUXILIARY VALVES',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="AUXILIARY VALVES")]
             },
             {
                 'base_name': 'SYNCHROPACKS',
-                'norms': ['C460'],
+                'norms': ['C969'],
                 'filters': [Q(description__icontains="synchropacks")]
             },
 
             # Steel items - C473, C471
             {
                 'base_name': 'HOT ROLLED STEEL',
-                'norms': ['C473', 'C471', 'C460'],
+                'norms': ['C473', 'C471', 'C969'],
                 'filters': [
                     Q(description__icontains="HOT ROLLED") |
                     Q(description__icontains="NON ALLOY")
@@ -260,7 +260,7 @@ class Command(BaseCommand):
             },
             {
                 'base_name': 'COLD ROLLED STEEL',
-                'norms': ['C473', 'C471', 'C460'],
+                'norms': ['C473', 'C471', 'C969'],
                 'filters': [Q(description__icontains="COLD ROLLED")]
             },
 

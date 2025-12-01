@@ -16,6 +16,7 @@ from ..models import (
     ItemNameModel,
     ItemHeadModel,
     ItemGroupModel,
+    TransferLetterModel,
 )
 from ..serializers import (
     CompanySerializer,
@@ -30,6 +31,7 @@ from ..serializers import (
     ItemNameSerializer,
     ItemHeadSerializer,
     GroupSerializer,
+    TransferLetterSerializer,
 )
 
 # Base API prefix used to construct select endpoints (adjust if needed).
@@ -450,4 +452,16 @@ ItemNameViewSet = MasterViewSet.create_viewset(
             "ordering": ["group__name", "name"]
         }
     ),
+)
+
+TransferLetterViewSet = MasterViewSet.create_viewset(
+    TransferLetterModel,
+    TransferLetterSerializer,
+    config={
+        "search": ["name"],
+        "filter": {},
+        "list_display": ["name"],
+        "form_fields": ["name", "tl"],
+        "ordering": ["name"]
+    },
 )

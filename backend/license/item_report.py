@@ -5,11 +5,11 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.db.models import Q, Sum
 
-from core.constants import N2009, N2015, N2023, GE, MI
+from core.constants import N2023, GE, MI
 from core.models import ItemNameModel
 from license import models as license
 from license.models import LicenseDetailsModel, LicenseImportItemsModel
-from license.tables import LicenseItemReportTable, LicenseConfectioneryReportTable, RutileLicenseItemReportTable
+from license.tables import LicenseItemReportTable, RutileLicenseItemReportTable
 
 
 def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filters=None, and_or_filter=None,
@@ -352,7 +352,7 @@ def tractor_query(date_range=None, party=None, exclude_party=None, is_expired=Fa
 def steel_query(date_range=None, party=None, exclude_party=None, is_expired=False, notification_number=N2023):
     tables = []
     query_dict = {
-        'export_license__norm_class__norm_class__in': ['C471', 'C460', 'C473'],
+        'export_license__norm_class__norm_class__in': ['C471', 'C969', 'C473'],
         'notification_number': notification_number
     }
     if party:

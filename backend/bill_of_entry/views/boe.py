@@ -303,3 +303,134 @@ def custom_list(self, request, *args, **kwargs):
 
 
 BillOfEntryViewSet.list = custom_list
+
+
+# Add generate transfer letter action
+@action(detail=True, methods=['post'], url_path='generate-transfer-letter')
+def generate_transfer_letter(self, request, pk=None):
+    """
+    Generate transfer letter for BOE similar to allotment transfer letter generation.
+
+    Request body:
+    - address_line1: Address line 1
+    - address_line2: Address line 2
+    - template_id: ID of the transfer letter template
+    - cif_edits: Dict of boe_item_id -> edited CIF FC value
+    """
+    from decimal import Decimal
+    from datetime import datetime
+    from shutil import make_archive
+    import os
+    from django.http import HttpResponse
+    from django.shortcuts import get_object_or_404
+    from core.models import TransferLetterModel
+
+    try:
+        boe = get_object_or_404(BillOfEntryModel.objects.select_related('company'), id=pk)
+
+        company_name = request.data.get('company_name', '').strip()
+        address_line1 = request.data.get('address_line1', '').strip()
+        address_line2 = request.data.get('address_line2', '').strip()
+        template_id = request.data.get('template_id')
+        cif_edits = request.data.get('cif_edits', {})
+
+        # Debug logging
+        print(f"BOE Transfer Letter Request Data:")
+        print(f"  company_name: '{company_name}'")
+        print(f"  address_line1: '{address_line1}'")
+        print(f"  address_line2: '{address_line2}'")
+
+        if not template_id:
+            return Response({
+                'error': 'Template ID is required'
+            }, status=400)
+
+        # Get transfer letter template
+        transfer_letter = get_object_or_404(TransferLetterModel, pk=template_id)
+
+        # Get the template file path
+        if not transfer_letter.tl:
+            return Response({
+                'error': 'Transfer letter template file not found'
+            }, status=400)
+
+        tl_path = transfer_letter.tl.path
+
+        # Check if the template file exists
+        if not os.path.exists(tl_path):
+            return Response({
+                'error': f'Transfer letter template file does not exist at: {tl_path}'
+            }, status=400)
+
+        # Only accept DOCX templates
+        if not tl_path.lower().endswith('.docx'):
+            return Response({
+                'error': 'Only DOCX templates are supported. Please upload a .docx file.'
+            }, status=400)
+
+        # Prepare data for each BOE item
+        data = []
+        for item in boe.item_details.all():
+            license = item.sr_number.license
+
+            # Get edited CIF value or use original
+            cif_fc = Decimal(cif_edits.get(str(item.id), item.cif_fc))
+            cif_inr = item.cif_inr  # Use existing CIF INR
+
+            # Use POST data if provided, otherwise fallback to BOE company
+            final_company = company_name if company_name else (boe.company.name if boe.company else '')
+            final_address1 = address_line1 if address_line1 else ''
+            final_address2 = address_line2 if address_line2 else ''
+
+            data.append({
+                'status': license.purchase_status,
+                'company': final_company,
+                'company_address_1': final_address1,
+                'company_address_2': final_address2,
+                'today': datetime.now().date().strftime("%d/%m/%Y"),
+                'license': license.license_number,
+                'license_date': license.license_date.strftime("%d/%m/%Y") if license.license_date else '',
+                'file_number': license.file_number or '',
+                'quantity': item.qty,
+                'v_allotment_inr': round(float(cif_inr), 2),
+                'exporter_name': license.exporter.name if license.exporter else '',
+                'v_allotment_usd': float(cif_fc),
+                'boe': f"BE NUMBER :- {boe.bill_of_entry_number}"
+            })
+
+        # Create output directory
+        file_path = f'media/TL_BOE_{boe.bill_of_entry_number}_{transfer_letter.name.replace(" ", "_")}/'
+        os.makedirs(file_path, exist_ok=True)
+
+        # Generate transfer letters
+        from allotment.scripts.aro import generate_tl_software
+        generate_tl_software(
+            data=data,
+            tl_path=tl_path,
+            path=file_path,
+            transfer_letter_name=transfer_letter.name.replace(' ', '_')
+        )
+
+        # Create zip file
+        file_name = f'TL_BOE_{boe.bill_of_entry_number}_{transfer_letter.name.replace(" ", "_")}.zip'
+        path_to_zip = make_archive(file_path.rstrip('/'), 'zip', file_path.rstrip('/'))
+
+        # Return zip file
+        with open(path_to_zip, 'rb') as zip_file:
+            response = HttpResponse(zip_file.read(), content_type='application/zip')
+            response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+            return response
+
+    except TransferLetterModel.DoesNotExist:
+        return Response({
+            'error': 'Transfer letter template not found'
+        }, status=404)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': f'Failed to generate transfer letter: {str(e)}'
+        }, status=500)
+
+
+BillOfEntryViewSet.generate_transfer_letter = generate_transfer_letter

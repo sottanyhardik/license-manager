@@ -310,6 +310,16 @@ example_nested_field_defs = {
             "label_field": "hs_code",  # Use hs_code field as label, not id
         },
     ],
+    "notes": [
+        {"name": "id", "type": "integer", "label": "ID", "required": False},
+        {"name": "note_text", "type": "textarea", "label": "Note", "required": True},
+        {"name": "display_order", "type": "number", "label": "Display Order", "required": False, "default": 0},
+    ],
+    "conditions": [
+        {"name": "id", "type": "integer", "label": "ID", "required": False},
+        {"name": "condition_text", "type": "textarea", "label": "Condition", "required": True},
+        {"name": "display_order", "type": "number", "label": "Display Order", "required": False, "default": 0},
+    ],
 }
 
 SionNormClassViewSet = MasterViewSet.create_viewset(

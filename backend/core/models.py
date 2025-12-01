@@ -320,6 +320,36 @@ class SIONImportModel(models.Model):
         return f"{self.norm_class} | {self.description}" if self.description else f"{self.norm_class}"
 
 
+class SionNormNote(AuditModel):
+    """Multiple notes per SION norm"""
+    sion_norm = models.ForeignKey('SionNormClassModel', on_delete=models.CASCADE, related_name='notes')
+    note_text = models.TextField()
+    display_order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'id']
+        verbose_name = "SION Norm Note"
+        verbose_name_plural = "SION Norm Notes"
+
+    def __str__(self):
+        return f"{self.sion_norm.norm_class} - Note {self.display_order}"
+
+
+class SionNormCondition(AuditModel):
+    """Multiple conditions per SION norm"""
+    sion_norm = models.ForeignKey('SionNormClassModel', on_delete=models.CASCADE, related_name='conditions')
+    condition_text = models.TextField()
+    display_order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'id']
+        verbose_name = "SION Norm Condition"
+        verbose_name_plural = "SION Norm Conditions"
+
+    def __str__(self):
+        return f"{self.sion_norm.norm_class} - Condition {self.display_order}"
+
+
 class ProductDescriptionModel(AuditModel):
     hs_code = models.ForeignKey('core.HSCodeModel', on_delete=models.PROTECT, related_name='product_descriptions')
     product_description = models.TextField()

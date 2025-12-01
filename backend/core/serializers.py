@@ -6,7 +6,7 @@ from .models import (
     HeadSIONNormsModel, SionNormClassModel,
     SIONExportModel, SIONImportModel,
     ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel, ItemGroupModel,
-    TransferLetterModel
+    TransferLetterModel, SionNormNote, SionNormCondition
 )
 
 
@@ -69,10 +69,29 @@ class SIONImportSerializer(serializers.ModelSerializer):
         return None
 
 
+# ---- SION Norm Notes and Conditions ----
+class SionNormNoteSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+    class Meta:
+        model = SionNormNote
+        fields = ("id", "note_text", "display_order")
+
+
+class SionNormConditionSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+    class Meta:
+        model = SionNormCondition
+        fields = ("id", "condition_text", "display_order")
+
+
 # ---- SION Norm Class (Nested) ----
 class SionNormClassNestedSerializer(AuditSerializerMixin):
     export_norm = SIONExportSerializer(many=True)
     import_norm = SIONImportSerializer(many=True)
+    notes = SionNormNoteSerializer(many=True, required=False)
+    conditions = SionNormConditionSerializer(many=True, required=False)
     head_norm_name = serializers.CharField(source="head_norm.name", read_only=True)
     label = serializers.SerializerMethodField()
 
@@ -89,36 +108,54 @@ class SionNormClassNestedSerializer(AuditSerializerMixin):
     def create(self, validated_data):
         export_data = validated_data.pop("export_norm", [])
         import_data = validated_data.pop("import_norm", [])
+        notes_data = validated_data.pop("notes", [])
+        conditions_data = validated_data.pop("conditions", [])
         instance = SionNormClassModel.objects.create(**validated_data)
 
         for e in export_data:
             SIONExportModel.objects.create(norm_class=instance, **e)
         for i in import_data:
             SIONImportModel.objects.create(norm_class=instance, **i)
+        for n in notes_data:
+            SionNormNote.objects.create(sion_norm=instance, **n)
+        for c in conditions_data:
+            SionNormCondition.objects.create(sion_norm=instance, **c)
 
         return instance
 
     def update(self, instance, validated_data):
         export_data = validated_data.pop("export_norm", [])
         import_data = validated_data.pop("import_norm", [])
+        notes_data = validated_data.pop("notes", [])
+        conditions_data = validated_data.pop("conditions", [])
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
         # Decide deletion semantics:
         # If the client included the nested key in the request body (even if empty list),
         # we will treat that as an explicit intent. Otherwise, don't touch that nested relation.
         # Use treat_empty_list_as_delete=True if you want an empty list to mean "delete all".
         provided_export = "export_norm" in (self.initial_data or {})
         provided_import = "import_norm" in (self.initial_data or {})
+        provided_notes = "notes" in (self.initial_data or {})
+        provided_conditions = "conditions" in (self.initial_data or {})
 
         if provided_export:
-            # If you want an empty array [] to delete all existing export_norm rows,
-            # pass treat_empty_list_as_delete=True. Default below is False for safety.
             _sync_nested(instance, SIONExportModel, export_data, fk_field="norm_class",
                          treat_empty_list_as_delete=False)
 
         if provided_import:
             _sync_nested(instance, SIONImportModel, import_data, fk_field="norm_class",
+                         treat_empty_list_as_delete=False)
+
+        if provided_notes:
+            _sync_nested(instance, SionNormNote, notes_data, fk_field="sion_norm",
+                         treat_empty_list_as_delete=False)
+
+        if provided_conditions:
+            _sync_nested(instance, SionNormCondition, conditions_data, fk_field="sion_norm",
                          treat_empty_list_as_delete=False)
 
         return instance

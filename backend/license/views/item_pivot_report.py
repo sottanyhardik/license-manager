@@ -174,6 +174,25 @@ class ItemPivotReportView(View):
         for norm, notification_dict in licenses_by_norm_notification.items():
             result_dict[norm] = dict(notification_dict)
 
+        # Fetch notes and conditions for each norm
+        from core.models import SionNormClassModel
+        norm_notes_conditions = {}
+        for norm_class in result_dict.keys():
+            try:
+                sion_norm = SionNormClassModel.objects.prefetch_related('notes', 'conditions').get(norm_class=norm_class)
+                norm_notes_conditions[norm_class] = {
+                    'notes': [
+                        {'note_text': note.note_text, 'display_order': note.display_order}
+                        for note in sion_norm.notes.all()
+                    ],
+                    'conditions': [
+                        {'condition_text': cond.condition_text, 'display_order': cond.display_order}
+                        for cond in sion_norm.conditions.all()
+                    ]
+                }
+            except SionNormClassModel.DoesNotExist:
+                norm_notes_conditions[norm_class] = {'notes': [], 'conditions': []}
+
         return {
             'items': [
                 {
@@ -184,6 +203,7 @@ class ItemPivotReportView(View):
                 for item_id, item_name in sorted_items
             ],
             'licenses_by_norm_notification': result_dict,
+            'norm_notes_conditions': norm_notes_conditions,
             'report_date': today.isoformat(),
         }
 
@@ -261,12 +281,15 @@ class ItemPivotReportView(View):
                         restriction_groups[restriction_key]['item_ids'].append(item.id)
         
         # Calculate available CIF within restriction for each group
+        balance_cif = license_obj.balance_cif or Decimal('0')
         for group_name, group_data in restriction_groups.items():
             if group_data['restriction_percentage'] and total_cif > 0:
                 # Maximum allowed CIF for this restriction group
                 max_allowed_cif = (total_cif * group_data['restriction_percentage']) / Decimal('100')
                 # Available CIF = max_allowed - debited
                 available_cif = max_allowed_cif - group_data['debited_cif']
+                # Cap at balance_cif - restriction cannot exceed available balance
+                available_cif = min(available_cif, balance_cif)
                 group_data['available_cif'] = max(available_cif, Decimal('0'))
 
         # Build row data

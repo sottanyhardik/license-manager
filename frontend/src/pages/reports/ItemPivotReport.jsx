@@ -164,6 +164,95 @@ export default function ItemPivotReport() {
         return total;
     };
 
+    // Calculate summary for a notification
+    const calculateNotificationSummary = (licenses) => {
+        const summary = {
+            openingBalance: 0,
+            regularItems: {},
+            restrictedItemsByPercentage: {}, // Group by restriction percentage
+            totalAvailable: 0
+        };
+
+        // Calculate opening balance (sum of all license balances)
+        licenses.forEach(license => {
+            const balance = parseFloat(license.balance_cif || 0);
+            summary.openingBalance += balance;
+        });
+
+        // First pass: Calculate restriction values per license (not per item, as it's shared)
+        const processedRestrictions = new Set(); // Track processed license+percentage combinations
+        licenses.forEach(license => {
+            if (reportData?.items) {
+                reportData.items.forEach(item => {
+                    const itemData = license.items?.[item.name];
+                    if (itemData && itemData.restriction !== null && itemData.restriction !== undefined) {
+                        const restrictionPercentage = parseFloat(itemData.restriction || 0);
+                        const restrictionKey = `${license.license_number}_${restrictionPercentage}`;
+
+                        // Only add restriction value once per license per percentage
+                        if (!processedRestrictions.has(restrictionKey)) {
+                            processedRestrictions.add(restrictionKey);
+
+                            if (!summary.restrictedItemsByPercentage[restrictionPercentage]) {
+                                summary.restrictedItemsByPercentage[restrictionPercentage] = {
+                                    items: {},
+                                    sharedRestrictionValue: 0
+                                };
+                            }
+                            summary.restrictedItemsByPercentage[restrictionPercentage].sharedRestrictionValue += parseFloat(itemData.restriction_value || 0);
+                        }
+                    }
+                });
+            }
+        });
+
+        // Second pass: Calculate item quantities
+        if (reportData?.items) {
+            reportData.items.forEach(item => {
+                let itemAvailable = 0;
+                let hasRestriction = false;
+                let restrictionPercentage = 0;
+
+                licenses.forEach(license => {
+                    const itemData = license.items?.[item.name];
+                    if (itemData) {
+                        // Available quantity
+                        itemAvailable += parseFloat(itemData.available_quantity || 0);
+
+                        // Check if item has restriction
+                        if (itemData.restriction !== null && itemData.restriction !== undefined) {
+                            hasRestriction = true;
+                            restrictionPercentage = parseFloat(itemData.restriction || 0);
+                        }
+                    }
+                });
+
+                if (itemAvailable > 0) {
+                    const itemSummary = {
+                        available: itemAvailable
+                    };
+
+                    if (hasRestriction) {
+                        // Add item to its restriction percentage group
+                        if (!summary.restrictedItemsByPercentage[restrictionPercentage]) {
+                            summary.restrictedItemsByPercentage[restrictionPercentage] = {
+                                items: {},
+                                sharedRestrictionValue: 0
+                            };
+                        }
+                        summary.restrictedItemsByPercentage[restrictionPercentage].items[item.name] = itemSummary;
+                    } else {
+                        summary.regularItems[item.name] = itemSummary;
+                    }
+
+                    summary.totalAvailable += itemAvailable;
+                }
+            });
+        }
+
+        return summary;
+    };
+
     if (loading) {
         return (
             <div className="container-fluid">
@@ -821,10 +910,172 @@ export default function ItemPivotReport() {
                                                     </tbody>
                                                 </table>
                                             </div>
+
+                                            {/* Summary Table */}
+                                            {(() => {
+                                                const summary = calculateNotificationSummary(licenses);
+                                                return (
+                                                    <div className="mt-4 px-3 pb-3">
+                                                        <h6 className="mb-3 text-primary">
+                                                            <i className="bi bi-calculator me-2"></i>
+                                                            Summary
+                                                        </h6>
+                                                        <div className="table-responsive">
+                                                            <table className="table table-bordered table-sm">
+                                                                <thead className="table-light">
+                                                                <tr>
+                                                                    <th style={{minWidth: '80px'}}>Sr No</th>
+                                                                    <th style={{minWidth: '200px'}}>Item Name</th>
+                                                                    <th className="text-end" style={{minWidth: '150px'}}>Available Balance QTY</th>
+                                                                </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                {/* Opening Balance */}
+                                                                <tr className="table-info">
+                                                                    <td colSpan="2" className="text-center fw-bold">OPENING BALANCE</td>
+                                                                    <td className="text-end fw-bold">
+                                                                        {summary.openingBalance.toLocaleString('en-IN', {
+                                                                            minimumFractionDigits: 2,
+                                                                            maximumFractionDigits: 2
+                                                                        })}
+                                                                    </td>
+                                                                </tr>
+
+                                                                {/* Regular Items */}
+                                                                {Object.entries(summary.regularItems).map(([itemName, itemData], idx) => (
+                                                                    <tr key={itemName}>
+                                                                        <td className="text-center">{idx + 1}</td>
+                                                                        <td className="fw-bold">{itemName}</td>
+                                                                        <td className="text-end">
+                                                                            {itemData.available.toLocaleString('en-IN', {
+                                                                                minimumFractionDigits: 2,
+                                                                                maximumFractionDigits: 2
+                                                                            })}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+
+                                                                {/* Restricted Items Grouped by Percentage */}
+                                                                {Object.keys(summary.restrictedItemsByPercentage).length > 0 && (
+                                                                    <>
+                                                                        {Object.entries(summary.restrictedItemsByPercentage)
+                                                                            .sort(([pctA], [pctB]) => parseFloat(pctA) - parseFloat(pctB))
+                                                                            .map(([percentage, groupData], groupIdx) => {
+                                                                                const startIdx = Object.keys(summary.regularItems).length +
+                                                                                    Object.entries(summary.restrictedItemsByPercentage)
+                                                                                        .slice(0, groupIdx)
+                                                                                        .reduce((acc, [, data]) => acc + Object.keys(data.items).length, 0);
+
+                                                                                return (
+                                                                                    <React.Fragment key={percentage}>
+                                                                                        <tr className="table-warning">
+                                                                                            <td colSpan="3" className="text-center fw-bold">
+                                                                                                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                                                                                RESTRICTED ITEMS - {percentage}%
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                        {Object.entries(groupData.items).map(([itemName, itemData], idx) => (
+                                                                                            <tr key={itemName} className="table-light">
+                                                                                                <td className="text-center">{startIdx + idx + 1}</td>
+                                                                                                <td className="fw-bold">{itemName}</td>
+                                                                                                <td className="text-end">
+                                                                                                    {itemData.available.toLocaleString('en-IN', {
+                                                                                                        minimumFractionDigits: 2,
+                                                                                                        maximumFractionDigits: 2
+                                                                                                    })}
+                                                                                                </td>
+                                                                                            </tr>
+                                                                                        ))}
+                                                                                        {/* Balance for this restriction percentage (shared across all items) */}
+                                                                                        <tr className="table-warning">
+                                                                                            <td colSpan="2" className="text-center fw-bold">Balance {percentage}%</td>
+                                                                                            <td className="text-end fw-bold">
+                                                                                                {groupData.sharedRestrictionValue.toLocaleString('en-IN', {
+                                                                                                    minimumFractionDigits: 2,
+                                                                                                    maximumFractionDigits: 2
+                                                                                                })}
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                    </React.Fragment>
+                                                                                );
+                                                                            })}
+                                                                    </>
+                                                                )}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
                             ))}
+
+                            {/* Notes and Conditions Section */}
+                            {activeNormTab && reportData.norm_notes_conditions && reportData.norm_notes_conditions[activeNormTab] && (
+                                reportData.norm_notes_conditions[activeNormTab].notes?.length > 0 || reportData.norm_notes_conditions[activeNormTab].conditions?.length > 0
+                            ) && (
+                                <div className="card shadow-sm border-0 mb-4">
+                                    <div className="card-header bg-light">
+                                        <h5 className="mb-0">
+                                            <i className="bi bi-info-circle-fill me-2 text-info"></i>
+                                            SION Norm {activeNormTab} - Notes & Conditions
+                                        </h5>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="row">
+                                            {/* Notes Section */}
+                                            {reportData.norm_notes_conditions[activeNormTab].notes?.length > 0 && (
+                                                <div className="col-md-6 mb-3 mb-md-0">
+                                                    <h6 className="text-primary mb-3">
+                                                        <i className="bi bi-sticky-fill me-2"></i>
+                                                        Notes
+                                                    </h6>
+                                                    <div className="list-group">
+                                                        {reportData.norm_notes_conditions[activeNormTab].notes
+                                                            .sort((a, b) => a.display_order - b.display_order)
+                                                            .map((note, index) => (
+                                                                <div key={index} className="list-group-item border-start border-primary border-3">
+                                                                    <div className="d-flex w-100 justify-content-between align-items-start">
+                                                                        <span className="badge bg-primary rounded-pill me-2">{index + 1}</span>
+                                                                        <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
+                                                                            {note.note_text}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Conditions Section */}
+                                            {reportData.norm_notes_conditions[activeNormTab].conditions?.length > 0 && (
+                                                <div className="col-md-6">
+                                                    <h6 className="text-warning mb-3">
+                                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                                        Conditions
+                                                    </h6>
+                                                    <div className="list-group">
+                                                        {reportData.norm_notes_conditions[activeNormTab].conditions
+                                                            .sort((a, b) => a.display_order - b.display_order)
+                                                            .map((condition, index) => (
+                                                                <div key={index} className="list-group-item border-start border-warning border-3">
+                                                                    <div className="d-flex w-100 justify-content-between align-items-start">
+                                                                        <span className="badge bg-warning text-dark rounded-pill me-2">{index + 1}</span>
+                                                                        <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
+                                                                            {condition.condition_text}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

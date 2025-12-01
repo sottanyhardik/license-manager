@@ -1,4 +1,5 @@
 import {Link} from "react-router-dom";
+import {formatDate} from "../utils/dateFormatter";
 
 /**
  * Reusable DataTable Component
@@ -32,18 +33,11 @@ export default function DataTable({
                 <span className="badge bg-secondary">No</span>
             );
         }
-        // Format date fields as dd-mm-yyyy
+        // Format date fields as dd-MM-yyyy
         if (columnName && (columnName.includes("date") || columnName.includes("_at") || columnName.includes("_on"))) {
-            try {
-                const date = new Date(value);
-                if (!isNaN(date.getTime())) {
-                    const day = String(date.getDate()).padStart(2, '0');
-                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                    const year = date.getFullYear();
-                    return `${day}-${month}-${year}`;
-                }
-            } catch (e) {
-                // If date parsing fails, fall through to default string conversion
+            const formattedDate = formatDate(value);
+            if (formattedDate) {
+                return formattedDate;
             }
         }
         if (typeof value === "object") {

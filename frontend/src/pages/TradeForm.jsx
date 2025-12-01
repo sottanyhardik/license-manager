@@ -4,6 +4,7 @@ import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import {formatDateForInput} from "../utils/dateFormatter";
 
 export default function TradeForm() {
     const { id } = useParams();
@@ -32,10 +33,7 @@ export default function TradeForm() {
     const formatDateForAPI = (date) => {
         if (!date) return null;
         if (!(date instanceof Date)) return date;
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        return formatDateForInput(date);
     };
 
     // Define handlePrefillFromBOE before useEffect
@@ -683,7 +681,7 @@ export default function TradeForm() {
                         <DatePicker
                             selected={formData.invoice_date instanceof Date ? formData.invoice_date : new Date(formData.invoice_date)}
                             onChange={(date) => setFormData(prev => ({ ...prev, invoice_date: date }))}
-                            dateFormat="dd/MM/yyyy"
+                            dateFormat="dd-MM-yyyy"
                             className="form-control"
                         />
                     </div>

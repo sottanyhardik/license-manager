@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../../api/axios";
+import {formatDate as formatDateUtil} from "../../utils/dateFormatter";
 
 /**
  * Reusable SION Norm Report Component
@@ -48,11 +49,7 @@ export default function SionNormReport({ sionNorm, title }) {
 
     const formatDate = (dateStr) => {
         if (!dateStr) return "—";
-        const date = new Date(dateStr);
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}-${month}-${year}`;
+        return formatDateUtil(dateStr) || "—";
     };
 
     const renderTableHeaders = () => (

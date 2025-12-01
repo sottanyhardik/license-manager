@@ -5,6 +5,7 @@ import AsyncCreatableSelect from "react-select/async-creatable";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import api from "../../api/axios";
+import {formatDateForInput} from "../../utils/dateFormatter";
 
 /**
  * NestedFieldArray Component
@@ -44,7 +45,7 @@ export default function NestedFieldArray({
     // Helper function to format Date object to YYYY-MM-DD for API
     const formatDateForAPI = (date) => {
         if (!date) return null;
-        return date.toISOString().split('T')[0];
+        return formatDateForInput(date);
     };
 
     const handleAdd = () => {

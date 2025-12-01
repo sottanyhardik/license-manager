@@ -1,6 +1,7 @@
 import {useState, Fragment} from "react";
 import {Link} from "react-router-dom";
 import api from "../api/axios";
+import {formatDate} from "../utils/dateFormatter";
 
 /**
  * Accordion Table Component
@@ -225,17 +226,10 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                             });
                                         }
                                     } else if (field.name.includes("date") && value) {
-                                        // Format date as dd-mm-yyyy
-                                        try {
-                                            const date = new Date(value);
-                                            if (!isNaN(date.getTime())) {
-                                                const day = String(date.getDate()).padStart(2, '0');
-                                                const month = String(date.getMonth() + 1).padStart(2, '0');
-                                                const year = date.getFullYear();
-                                                value = `${day}-${month}-${year}`;
-                                            }
-                                        } catch (e) {
-                                            // Keep original value
+                                        // Format date as dd-MM-yyyy
+                                        const formattedDate = formatDate(value);
+                                        if (formattedDate) {
+                                            value = formattedDate;
                                         }
                                     }
 

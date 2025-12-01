@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import api from "../../api/axios";
+import {formatDate} from "../../utils/dateFormatter";
 
 export default function ItemPivotReport() {
     const [reportData, setReportData] = useState(null);
@@ -649,13 +650,13 @@ export default function ItemPivotReport() {
                                                                 left: '180px',
                                                                 zIndex: 1,
                                                                 backgroundColor: '#fff'
-                                                            }}>{license.license_date}</td>
+                                                            }}>{formatDate(license.license_date)}</td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
                                                                 left: '280px',
                                                                 zIndex: 1,
                                                                 backgroundColor: '#fff'
-                                                            }}>{license.license_expiry_date}</td>
+                                                            }}>{formatDate(license.license_expiry_date)}</td>
                                                             <td className="text-truncate" style={{
                                                                 position: 'sticky',
                                                                 left: '380px',

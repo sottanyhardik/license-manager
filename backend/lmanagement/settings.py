@@ -211,6 +211,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",  # sometimes Vite is proxied to 3000 in dev
     "http://127.0.0.1:3000",
+    "http://localhost:8000",  # Django serving React frontend
+    "http://127.0.0.1:8000",
+    "http://64.227.155.170:8000",  # Production server
 ]
 
 # Allow cookies (credentials) across origins when frontend sends withCredentials
@@ -249,6 +252,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://64.227.155.170:8000",
 ]
 
 # ---------------------------------------------------------------------

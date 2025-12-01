@@ -76,7 +76,10 @@ ROOT_URLCONF = "lmanagement.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [
+            BASE_DIR.parent / "frontend" / "dist",  # React build folder (first priority)
+            BASE_DIR / "templates",
+        ],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -129,7 +132,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Static & Media
 # ---------------------------------------------------------------------
 STATIC_URL = "/static/"
-STATICFILES_DIRS = [BASE_DIR / "backend/static"]
+STATICFILES_DIRS = [
+    BASE_DIR / "backend/static",
+    BASE_DIR.parent / "frontend" / "dist" / "assets",  # React build assets
+]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 

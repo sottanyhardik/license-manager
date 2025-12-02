@@ -2,6 +2,7 @@ import React, {useEffect, useState} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
+import {formatIndianNumber} from "../../utils/numberFormatter";
 
 export default function ItemPivotReport() {
     const [reportData, setReportData] = useState(null);
@@ -934,10 +935,7 @@ export default function ItemPivotReport() {
                                                                 <tr className="table-info">
                                                                     <td colSpan="2" className="text-center fw-bold">OPENING BALANCE</td>
                                                                     <td className="text-end fw-bold">
-                                                                        {summary.openingBalance.toLocaleString('en-IN', {
-                                                                            minimumFractionDigits: 2,
-                                                                            maximumFractionDigits: 2
-                                                                        })}
+                                                                        {formatIndianNumber(summary.openingBalance, 2)}
                                                                     </td>
                                                                 </tr>
 
@@ -947,10 +945,7 @@ export default function ItemPivotReport() {
                                                                         <td className="text-center">{idx + 1}</td>
                                                                         <td className="fw-bold">{itemName}</td>
                                                                         <td className="text-end">
-                                                                            {itemData.available.toLocaleString('en-IN', {
-                                                                                minimumFractionDigits: 2,
-                                                                                maximumFractionDigits: 2
-                                                                            })}
+                                                                            {formatIndianNumber(itemData.available, 2)}
                                                                         </td>
                                                                     </tr>
                                                                 ))}
@@ -979,10 +974,7 @@ export default function ItemPivotReport() {
                                                                                                 <td className="text-center">{startIdx + idx + 1}</td>
                                                                                                 <td className="fw-bold">{itemName}</td>
                                                                                                 <td className="text-end">
-                                                                                                    {itemData.available.toLocaleString('en-IN', {
-                                                                                                        minimumFractionDigits: 2,
-                                                                                                        maximumFractionDigits: 2
-                                                                                                    })}
+                                                                                                    {formatIndianNumber(itemData.available, 2)}
                                                                                                 </td>
                                                                                             </tr>
                                                                                         ))}
@@ -990,10 +982,7 @@ export default function ItemPivotReport() {
                                                                                         <tr className="table-warning">
                                                                                             <td colSpan="2" className="text-center fw-bold">Balance {percentage}%</td>
                                                                                             <td className="text-end fw-bold">
-                                                                                                {groupData.sharedRestrictionValue.toLocaleString('en-IN', {
-                                                                                                    minimumFractionDigits: 2,
-                                                                                                    maximumFractionDigits: 2
-                                                                                                })}
+                                                                                                {formatIndianNumber(groupData.sharedRestrictionValue, 2)}
                                                                                             </td>
                                                                                         </tr>
                                                                                     </React.Fragment>

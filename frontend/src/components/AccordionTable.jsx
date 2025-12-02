@@ -2,6 +2,7 @@ import {useState, Fragment} from "react";
 import {Link} from "react-router-dom";
 import api from "../api/axios";
 import {formatDate} from "../utils/dateFormatter";
+import {formatIndianNumber} from "../utils/numberFormatter";
 
 /**
  * Accordion Table Component
@@ -216,14 +217,11 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                         const numValue = parseFloat(value);
 
                                         if (isIntegerField) {
-                                            // Integer fields: no decimals, with comma separator
-                                            value = Math.round(numValue).toLocaleString('en-US');
+                                            // Integer fields: no decimals, with Indian number format
+                                            value = formatIndianNumber(Math.round(numValue), 0);
                                         } else if (isDecimalField) {
-                                            // Decimal fields: 2 decimals, with comma separator
-                                            value = numValue.toLocaleString('en-US', {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2
-                                            });
+                                            // Decimal fields: 2 decimals, with Indian number format
+                                            value = formatIndianNumber(numValue, 2);
                                         }
                                     } else if (field.name.includes("date") && value) {
                                         // Format date as dd-MM-yyyy

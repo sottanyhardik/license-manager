@@ -323,7 +323,7 @@ class BusinessPDFExporter:
     @staticmethod
     def format_number(value, decimals=2, use_comma=True):
         """
-        Format number for display in PDF.
+        Format number for display in PDF using Indian number format (12,34,567.89).
 
         Args:
             value: Number to format
@@ -331,15 +331,59 @@ class BusinessPDFExporter:
             use_comma: Whether to use comma separators
 
         Returns:
-            Formatted string
+            Formatted string in Indian number format
         """
         try:
             num = float(value)
+
+            if not use_comma:
+                if decimals == 0:
+                    return f"{int(num)}"
+                else:
+                    return f"{num:.{decimals}f}"
+
+            # Split into integer and decimal parts
             if decimals == 0:
-                formatted = f"{int(num):,}" if use_comma else f"{int(num)}"
+                integer_part = str(int(num))
+                decimal_part = ""
             else:
-                formatted = f"{num:,.{decimals}f}" if use_comma else f"{num:.{decimals}f}"
-            return formatted
+                formatted = f"{num:.{decimals}f}"
+                parts = formatted.split('.')
+                integer_part = parts[0]
+                decimal_part = f".{parts[1]}"
+
+            # Handle negative numbers
+            is_negative = integer_part.startswith('-')
+            if is_negative:
+                integer_part = integer_part[1:]
+
+            # Apply Indian number format: last 3 digits, then groups of 2
+            if len(integer_part) <= 3:
+                formatted_int = integer_part
+            else:
+                # Get last 3 digits
+                last_three = integer_part[-3:]
+                remaining = integer_part[:-3]
+
+                # Group remaining digits in pairs from right to left
+                groups = []
+                while remaining:
+                    if len(remaining) <= 2:
+                        groups.append(remaining)
+                        break
+                    groups.append(remaining[-2:])
+                    remaining = remaining[:-2]
+
+                # Reverse groups and join with commas
+                groups.reverse()
+                formatted_int = ','.join(groups) + ',' + last_three
+
+            # Add negative sign back if needed
+            if is_negative:
+                formatted_int = '-' + formatted_int
+
+            return formatted_int + decimal_part
+
         except (ValueError, TypeError):
             return str(value)
 

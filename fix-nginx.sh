@@ -7,68 +7,19 @@ set -e
 
 echo "🔧 Fixing nginx configuration for static files..."
 
-# Backup existing config
-sudo cp /etc/nginx/sites-available/license-manager /etc/nginx/sites-available/license-manager.backup.$(date +%Y%m%d_%H%M%S)
+# Backup existing config if exists
+if [ -f /etc/nginx/sites-available/license-manager ]; then
+    sudo cp /etc/nginx/sites-available/license-manager /etc/nginx/sites-available/license-manager.backup.$(date +%Y%m%d_%H%M%S)
+fi
 
-# Update nginx config
-sudo tee /etc/nginx/sites-available/license-manager > /dev/null <<'EOF'
-server {
-    listen 80;
-    server_name 143.110.252.201 license-manager.duckdns.org;
+# Use the HTTP-only config file
+sudo cp /home/django/license-manager/nginx-http-only.conf /etc/nginx/sites-available/license-manager
 
-    client_max_body_size 100M;
-
-    # Frontend (React/Vite build)
-    root /home/django/license-manager/frontend/dist;
-    index index.html;
-
-    # Static files (Django admin, DRF, etc.)
-    location /static/ {
-        alias /home/django/license-manager/backend/staticfiles/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Media files (uploads, PDFs, etc.)
-    location /media/ {
-        alias /home/django/license-manager/backend/media/;
-        expires 7d;
-        add_header Cache-Control "public";
-    }
-
-    # Django API endpoints
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_redirect off;
-    }
-
-    # Django admin
-    location /admin/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_redirect off;
-    }
-
-    # Frontend assets (JS, CSS from Vite build)
-    location /assets/ {
-        alias /home/django/license-manager/frontend/dist/assets/;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Frontend routes - serve index.html for all other routes
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-EOF
+# Enable site if not already enabled
+if [ ! -L /etc/nginx/sites-enabled/license-manager ]; then
+    echo "🔗 Enabling site..."
+    sudo ln -s /etc/nginx/sites-available/license-manager /etc/nginx/sites-enabled/
+fi
 
 # Test nginx config
 echo "✅ Testing nginx configuration..."

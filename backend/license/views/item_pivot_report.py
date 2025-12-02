@@ -111,7 +111,7 @@ class ItemPivotReportView(View):
             'import_license__items',
             'import_license__hs_code',
             'export_license__norm_class'
-        ).order_by('license_number')
+        ).order_by('license_expiry_date', 'license_date')
 
         # Collect all unique items across all licenses
         all_items = {}  # Changed to dict to store item object for sorting

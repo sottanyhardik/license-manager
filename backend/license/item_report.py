@@ -145,7 +145,7 @@ def get_table_query(query_dict, date_range=None, or_filters=None, exclude_or_fil
                 my_filter &= or_filter_text
             else:
                 my_filter &= ~Q(**{item: exclude_and_filters[item]})
-    query_set = LicenseDetailsModel.objects.filter(my_filter).order_by('license_expiry_date')
+    query_set = LicenseDetailsModel.objects.filter(my_filter).order_by('license_expiry_date', 'license_date')
     return query_set.distinct()
 
 

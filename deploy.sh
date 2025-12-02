@@ -43,12 +43,12 @@ sudo chmod -R 775 /home/django/license-manager/backend/media
 
 # Restart services
 echo "🔄 Restarting services..."
-sudo systemctl restart license-manager
+sudo supervisorctl restart license-manager
 sudo systemctl restart nginx
 
 # Check status
 echo "✅ Checking service status..."
-sudo systemctl status license-manager --no-pager
+sudo supervisorctl status license-manager
 sudo systemctl status nginx --no-pager
 
 echo "✨ Deployment completed successfully!"

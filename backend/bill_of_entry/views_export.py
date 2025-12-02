@@ -193,26 +193,43 @@ def add_grouped_export_action(viewset_class):
                         company_total_inr += boe['total_inr']
                         company_total_fc += boe['total_fc']
 
-                    # Add port totals row
+                    # Add port totals row (17 columns now)
                     table_data.append([
                         '', '', f'Port Total', pdf_exporter.format_number(port_total_qty, decimals=0),
-                        '', pdf_exporter.format_number(port_total_value),
+                        '', pdf_exporter.format_number(port_total_value), '',  # Added empty for exchange rate
                         pdf_exporter.format_number(port_total_inr),
                         '', '', '', '', '', '', '', '', ''
                     ])
 
-                    # Create table with column widths (16 columns) - increased width for CIF INR column
+                    # Create table with column widths (17 columns) - optimized for better readability
                     from reportlab.lib.units import inch
-                    col_widths = [0.35 * inch, 0.65 * inch, 0.55 * inch, 0.65 * inch, 0.65 * inch, 0.7 * inch,
-                                  0.85 * inch, 1.0 * inch, 0.8 * inch, 0.75 * inch, 0.65 * inch, 0.55 * inch,
-                                  0.45 * inch, 0.65 * inch, 0.65 * inch, 0.7 * inch]
+                    col_widths = [
+                        0.3 * inch,   # Sr No
+                        0.65 * inch,  # BOE Number
+                        0.55 * inch,  # BOE Date
+                        0.5 * inch,   # Port
+                        0.55 * inch,  # Quantity (KGS)
+                        0.5 * inch,   # Unit Price ($)
+                        0.65 * inch,  # Value ($)
+                        0.5 * inch,   # Exchange Rate
+                        0.8 * inch,   # Total CIF INR
+                        0.8 * inch,   # Item Name
+                        0.6 * inch,   # Invoice
+                        0.75 * inch,  # License No.
+                        0.55 * inch,  # License Date
+                        0.5 * inch,   # License Port
+                        0.4 * inch,   # Item Sr.
+                        0.5 * inch,   # BOE Qty.
+                        0.55 * inch,  # BOE $.
+                        0.65 * inch   # BOE CIF
+                    ]
 
                     table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1)
 
-                    # Apply number column alignment for columns: 3, 4, 5, 6, 13, 14, 15 (0-indexed)
+                    # Apply number column alignment for columns: 4, 5, 6, 7, 8, 14, 15, 16, 17 (0-indexed)
                     from reportlab.platypus import TableStyle
                     additional_styles = []
-                    for col_idx in [3, 4, 5, 6, 13, 14, 15]:
+                    for col_idx in [4, 5, 6, 7, 8, 14, 15, 16]:
                         additional_styles.append(
                             ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
                         )

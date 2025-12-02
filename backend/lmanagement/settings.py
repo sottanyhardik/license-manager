@@ -19,7 +19,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-this-in-production")
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost,143.110.252.201,license-manager.duckdns.org").split(",")
+
+# HTTPS Settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "False").lower() == "true"
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "False").lower() == "true"
+CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "False").lower() == "true"
 
 # ---------------------------------------------------------------------
 # Applications
@@ -214,6 +220,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",  # Django serving React frontend
     "http://127.0.0.1:8000",
     "http://64.227.155.170:8000",  # Production server
+    "https://license-manager.duckdns.org",  # Production domain with SSL
+    "http://143.110.252.201:8000",  # New server IP
 ]
 
 # Allow cookies (credentials) across origins when frontend sends withCredentials
@@ -255,6 +263,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
     "http://64.227.155.170:8000",
+    "https://license-manager.duckdns.org",
+    "http://143.110.252.201:8000",
 ]
 
 # ---------------------------------------------------------------------

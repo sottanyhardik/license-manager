@@ -105,16 +105,6 @@ export const masterEntities = [
 // Report entities configuration
 export const reportEntities = [
     {
-        path: "/reports/expiring-licenses",
-        label: "Expiring Licenses",
-        icon: "calendar-x",
-    },
-    {
-        path: "/reports/active-licenses",
-        label: "Active Licenses",
-        icon: "calendar-check",
-    },
-    {
         path: "/reports/item-pivot",
         label: "Item Pivot Report",
         icon: "table",

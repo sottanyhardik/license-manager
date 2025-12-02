@@ -349,39 +349,33 @@ export default function MasterList() {
                         <button
                             className="btn btn-outline-info"
                             onClick={async () => {
-                                if (!window.confirm('This will update product names for all BOEs with empty product_name on this page. Continue?')) {
+                                if (!window.confirm('This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?')) {
                                     return;
                                 }
 
                                 setLoading(true);
-                                const emptyProductBoes = data.filter(item => !item.product_name || item.product_name.trim() === '');
+                                setError("");
 
-                                if (emptyProductBoes.length === 0) {
-                                    alert('No BOEs with empty product names found on this page.');
+                                try {
+                                    const response = await api.post(`/bill-of-entries/bulk-update-product-names/`);
+
                                     setLoading(false);
-                                    return;
-                                }
 
-                                let successCount = 0;
-                                let errorCount = 0;
+                                    if (response.data.success) {
+                                        alert(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
 
-                                for (const boe of emptyProductBoes) {
-                                    try {
-                                        await api.post(`/bill-of-entries/${boe.id}/update-product-name/`);
-                                        successCount++;
-                                    } catch (err) {
-                                        errorCount++;
-                                        console.error(`Failed to update BOE ${boe.id}:`, err);
+                                        // Refresh the list to show updated product names
+                                        fetchData(currentPage, pageSize, filterParams);
+                                    } else {
+                                        setError('Failed to update product names');
                                     }
+                                } catch (err) {
+                                    setLoading(false);
+                                    setError(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
+                                    alert(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
                                 }
-
-                                setLoading(false);
-                                alert(`Updated ${successCount} BOEs successfully. ${errorCount > 0 ? `${errorCount} failed.` : ''}`);
-
-                                // Refresh the list
-                                fetchData(currentPage, pageSize, filterParams);
                             }}
-                            title="Update all empty product names on current page"
+                            title="Update all empty product names in entire database"
                         >
                             <i className="bi bi-arrow-repeat me-1"></i>
                             Fetch All Products

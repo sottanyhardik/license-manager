@@ -204,7 +204,7 @@ class BillOfEntryModel(AuditModel):
                                 seen.add(item.name)
                                 item_names.append(item.name)
 
-        result = ' or '.join(item_names) if item_names else ""
+        result = ' or '.join(item_names) if list(set(item_names)) else ""
 
         # Truncate to 255 characters if needed (database field max_length)
         if len(result) > 255:

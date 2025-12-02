@@ -147,7 +147,7 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
         """
         # Get all BOEs with empty product_name
         empty_product_boes = BillOfEntryModel.objects.filter(
-            Q(product_name__isnull=True) | Q(product_name='')
+            Q(Q(product_name__isnull=True) | Q(product_name='')) & Q(invoice_no__isnull=True)
         ).prefetch_related('item_details__sr_number__items')
 
         total_count = empty_product_boes.count()

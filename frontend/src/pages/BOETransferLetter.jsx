@@ -279,8 +279,7 @@ export default function BOETransferLetter() {
                                             <thead className="table-light">
                                             <tr>
                                                 <th>#</th>
-                                                <th>SR Number</th>
-                                                <th>Description</th>
+                                                <th>License Number</th>
                                                 <th>CIF FC (editable)</th>
                                             </tr>
                                             </thead>
@@ -288,8 +287,7 @@ export default function BOETransferLetter() {
                                             {boe.item_details.map((detail, idx) => (
                                                 <tr key={detail.id}>
                                                     <td>{idx + 1}</td>
-                                                    <td>{detail.sr_number?.serial_number || detail.serial_number || '-'}</td>
-                                                    <td>{detail.product_description || detail.description || '-'}</td>
+                                                    <td>{detail.license?.license_number || detail.license_number || '-'}</td>
                                                     <td>
                                                         <input
                                                             type="number"

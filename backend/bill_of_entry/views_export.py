@@ -75,12 +75,14 @@ def add_grouped_export_action(viewset_class):
         # Calculate grand totals
         total_inr = sum(boe['total_inr']
                         for company in grouped_data.values()
-                        for product in company.values()
+                        for license_dict in company.values()
+                        for product in license_dict.values()
                         for port in product.values()
                         for boe in port)
         total_fc = sum(boe['total_fc']
                        for company in grouped_data.values()
-                       for product in company.values()
+                       for license_dict in company.values()
+                       for product in license_dict.values()
                        for port in product.values()
                        for boe in port)
 
@@ -101,7 +103,7 @@ def add_grouped_export_action(viewset_class):
         pdf_exporter.add_title(elements, subtitle=subtitle)
 
         # Process each company
-        for company_name, products_dict in grouped_data.items():
+        for company_name, license_dict in grouped_data.items():
             # Company header
             pdf_exporter.add_company_header(elements, company_name)
 
@@ -110,10 +112,15 @@ def add_grouped_export_action(viewset_class):
             company_total_inr = 0
             company_total_fc = 0
 
-            # Process each product (Item) within company
-            for product_name, ports_dict in products_dict.items():
-                # Product/Item subheader
-                pdf_exporter.add_section_header(elements, f"Item: {product_name}")
+            # Process each license serial within company
+            for license_serial, products_dict in license_dict.items():
+                # License Serial subheader
+                pdf_exporter.add_section_header(elements, f"License: {license_serial}")
+
+                # Process each product (Item) within license
+                for product_name, ports_dict in products_dict.items():
+                    # Product/Item subheader
+                    pdf_exporter.add_section_header(elements, f"Item: {product_name}")
 
                 sr_no = 1
                 product_total_qty = 0
@@ -288,12 +295,14 @@ def add_grouped_export_action(viewset_class):
         # Total and date
         total_inr = sum(boe['total_inr']
                         for company in grouped_data.values()
-                        for product in company.values()
+                        for license_dict in company.values()
+                        for product in license_dict.values()
                         for port in product.values()
                         for boe in port)
         total_fc = sum(boe['total_fc']
                        for company in grouped_data.values()
-                       for product in company.values()
+                       for license_dict in company.values()
+                       for product in license_dict.values()
                        for port in product.values()
                        for boe in port)
         ws.merge_cells(f'A{row}:P{row}')
@@ -303,7 +312,7 @@ def add_grouped_export_action(viewset_class):
         row += 2
 
         # Process each company
-        for company_name, products_dict in grouped_data.items():
+        for company_name, license_dict in grouped_data.items():
             # Company header
             ws.merge_cells(f'A{row}:P{row}')
             cell = ws[f'A{row}']
@@ -318,14 +327,25 @@ def add_grouped_export_action(viewset_class):
             company_total_inr = 0
             company_total_fc = 0
 
-            # Process each product (Item) within company
-            for product_name, ports_dict in products_dict.items():
-                # Product subheader
+            # Process each license serial within company
+            for license_serial, products_dict in license_dict.items():
+                # License Serial subheader
                 ws.merge_cells(f'A{row}:P{row}')
                 cell = ws[f'A{row}']
-                cell.value = f"Item: {product_name}"
-                cell.font = Font(bold=True, size=11, color="3b82f6")
+                cell.value = f"License: {license_serial}"
+                cell.font = Font(bold=True, size=12, color="FFFFFF")
+                cell.fill = PatternFill(start_color="2563eb", end_color="2563eb", fill_type="solid")
+                cell.alignment = Alignment(horizontal='center', vertical='center')
                 row += 1
+
+                # Process each product (Item) within license
+                for product_name, ports_dict in products_dict.items():
+                    # Product subheader
+                    ws.merge_cells(f'A{row}:P{row}')
+                    cell = ws[f'A{row}']
+                    cell.value = f"Item: {product_name}"
+                    cell.font = Font(bold=True, size=11, color="3b82f6")
+                    row += 1
 
                 # Table headers (16 columns - added Total CIF INR)
                 headers = ['Sr No', 'BOE Number', 'BOE Date', 'Port', 'Quantity (KGS)', 'Unit Price ($)', 'Value ($)',
@@ -480,14 +500,22 @@ def add_grouped_export_action(viewset_class):
         return response
 
     def _group_boe(self, queryset):
-        """Group bill of entries by company → product_name → port"""
-        # Structure: {company: {product_name: {port: [boe_list]}}}
-        grouped_data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        """Group bill of entries by company → license_serial_number → product_name → port"""
+        # Structure: {company: {license_serial: {product_name: {port: [boe_list]}}}}
+        grouped_data = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
 
         for boe in queryset:
             company_name = boe.company.name if boe.company else "Unknown"
             port_code = boe.port.code if boe.port else "Unknown Port"
             product_name = boe.product_name or "Unknown Product"
+
+            # Get first license serial number from item details
+            first_item = boe.item_details.first()
+            license_serial = "Unknown License"
+            if first_item and first_item.sr_number:
+                license_obj = first_item.sr_number.license if first_item.sr_number else None
+                if license_obj:
+                    license_serial = f"{license_obj.license_number} (Sr. {first_item.sr_number.serial_number})"
 
             # Collect license details for this BOE
             license_details = []
@@ -515,7 +543,7 @@ def add_grouped_export_action(viewset_class):
                 'license_details': license_details,  # List of license entries
             }
 
-            grouped_data[company_name][product_name][port_code].append(boe_data)
+            grouped_data[company_name][license_serial][product_name][port_code].append(boe_data)
 
         return grouped_data
 

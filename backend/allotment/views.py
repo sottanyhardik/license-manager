@@ -5,6 +5,19 @@ from allotment.views_export import add_grouped_export_action
 from core.constants import ROW_TYPE_CHOICES
 from core.views.master_view import MasterViewSet
 
+
+def _get_active_usd_rate():
+    """Get the active (latest) USD to INR exchange rate"""
+    from core.models import ExchangeRateModel
+    try:
+        latest_rate = ExchangeRateModel.objects.order_by('-date').first()
+        if latest_rate:
+            return float(latest_rate.usd)
+    except Exception:
+        pass
+    return None
+
+
 # Nested field definitions for AllotmentDetails (for list display only, not form)
 allotment_nested_field_defs = {
     "allotment_details": [
@@ -97,7 +110,8 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             },
             "type": {
                 "type": "select",
-                "choices": list(ROW_TYPE_CHOICES)
+                "choices": list(ROW_TYPE_CHOICES),
+                "default": "AT"  # Default to Allotment
             },
         }
     }
@@ -164,3 +178,24 @@ def custom_get_queryset_with_defaults(self):
 
 
 AllotmentViewSet.get_queryset = custom_get_queryset_with_defaults
+
+
+# Override create to inject exchange_rate default in metadata
+original_create = AllotmentViewSet.create
+
+
+def custom_create_with_defaults(self, request, *args, **kwargs):
+    """Override create to add exchange_rate default to metadata"""
+    response = original_create(self, request, *args, **kwargs)
+
+    # If this is a GET request to the create endpoint (for metadata), add exchange_rate default
+    if request.method == 'GET' and hasattr(response, 'data') and 'metadata' in response.data:
+        exchange_rate_default = _get_active_usd_rate()
+        if exchange_rate_default and 'fields' in response.data['metadata']:
+            if 'exchange_rate' in response.data['metadata']['fields']:
+                response.data['metadata']['fields']['exchange_rate']['default'] = exchange_rate_default
+
+    return response
+
+
+AllotmentViewSet.create = custom_create_with_defaults

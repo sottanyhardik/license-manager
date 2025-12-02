@@ -129,10 +129,10 @@ def add_grouped_export_action(viewset_class):
                     # Port subheader
                     pdf_exporter.add_section_header(elements, f"Port: {port_code}")
 
-                    # Table header - 16 columns (added Total CIF INR)
+                    # Table header - 17 columns (added Exchange Rate)
                     table_data = [[
                         'Sr\nNo', 'BOE\nNumber', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
-                        'Unit\nPrice ($)', 'Value\n($)', 'Total CIF\nINR', 'Item\nName', 'Invoice',
+                        'Unit\nPrice ($)', 'Value\n($)', 'Exchange\nRate', 'Total CIF\nINR', 'Item\nName', 'Invoice',
                         'License\nNo.', 'License\nDate', 'License\nPort', 'Item\nSr.',
                         'BOE\nQty.', 'BOE\n$.', 'BOE\nCIF'
                     ]]
@@ -155,7 +155,8 @@ def add_grouped_export_action(viewset_class):
                                     boe['total_fc'] / boe['total_quantity'] if boe['total_quantity'] > 0 else 0
                                 ),
                                 pdf_exporter.format_number(boe['total_fc']),
-                                pdf_exporter.format_number(boe['total_inr']),  # Remove Rupee symbol
+                                pdf_exporter.format_number(boe['exchange_rate']),  # Add exchange rate
+                                pdf_exporter.format_number(boe['total_inr']),
                                 product_name,
                                 boe['invoice_no'],
                                 first_detail['license_no'],
@@ -170,7 +171,7 @@ def add_grouped_export_action(viewset_class):
                             # Additional license detail rows (if multiple licenses)
                             for detail in boe['license_details'][1:]:
                                 table_data.append([
-                                    '', '', '', '', '', '', '', '',  # Empty main BOE info columns
+                                    '', '', '', '', '', '', '', '', '',  # Empty main BOE info columns (added one for exchange rate)
                                     '', '',  # Item Name, Invoice
                                     detail['license_no'],
                                     detail['license_date'],
@@ -335,9 +336,9 @@ def add_grouped_export_action(viewset_class):
                     cell.font = Font(bold=True, size=11, color="3b82f6")
                     row += 1
 
-                # Table headers (16 columns - added Total CIF INR)
+                # Table headers (17 columns - added Exchange Rate)
                 headers = ['Sr No', 'BOE Number', 'BOE Date', 'Port', 'Quantity (KGS)', 'Unit Price ($)', 'Value ($)',
-                           'Total CIF INR', 'Item Name', 'Invoice', 'License No.', 'BOE Date', 'BOE Port',
+                           'Exchange Rate', 'Total CIF INR', 'Item Name', 'Invoice', 'License No.', 'BOE Date', 'BOE Port',
                            'Item Sr.', 'BOE Qty.', 'BOE $.', 'BOE CIF']
 
                 # Write headers
@@ -361,7 +362,7 @@ def add_grouped_export_action(viewset_class):
                             first_detail = boe['license_details'][0]
                             unit_price = boe['total_fc'] / boe['total_quantity'] if boe['total_quantity'] > 0 else 0
 
-                            # Main BOE row (16 columns)
+                            # Main BOE row (17 columns)
                             data = [
                                 sr_no,
                                 boe['boe_number'],
@@ -370,6 +371,7 @@ def add_grouped_export_action(viewset_class):
                                 int(boe['total_quantity']),
                                 round(unit_price, 2),
                                 round(boe['total_fc'], 2),
+                                round(boe['exchange_rate'], 2),  # Exchange Rate
                                 round(boe['total_inr'], 2),  # Total CIF INR
                                 product_name,
                                 boe['invoice_no'],
@@ -386,18 +388,20 @@ def add_grouped_export_action(viewset_class):
                                 cell = ws.cell(row=row, column=col_idx, value=value)
                                 cell.border = border
                                 cell.alignment = Alignment(horizontal='center', vertical='center')
-                                if col_idx in [4, 5, 6, 7, 14, 15, 16]:  # Number columns
+                                if col_idx in [4, 5, 6, 7, 8, 15, 16, 17]:  # Number columns (updated for exchange rate)
                                     cell.alignment = Alignment(horizontal='right', vertical='center')
-                                    if col_idx in [5, 6, 15]:  # USD columns
+                                    if col_idx in [5, 6, 16]:  # USD columns
                                         cell.number_format = '#,##0.00'
-                                    elif col_idx in [7, 16]:  # INR columns
+                                    elif col_idx in [8, 17]:  # INR columns
                                         cell.number_format = '₹#,##0.00'
+                                    elif col_idx == 7:  # Exchange Rate column
+                                        cell.number_format = '#,##0.00'
                             row += 1
 
                             # Additional license detail rows
                             for detail in boe['license_details'][1:]:
                                 data = [
-                                    '', '', '', '', '', '', '', '',  # Empty main BOE columns
+                                    '', '', '', '', '', '', '', '', '',  # Empty main BOE columns (added one for exchange rate)
                                     '', '',  # Item Name, Invoice
                                     detail['license_no'],
                                     detail['license_date'],
@@ -412,9 +416,9 @@ def add_grouped_export_action(viewset_class):
                                     cell = ws.cell(row=row, column=col_idx, value=value)
                                     cell.border = border
                                     cell.alignment = Alignment(horizontal='center', vertical='center')
-                                    if col_idx in [14, 15, 16]:
+                                    if col_idx in [15, 16, 17]:  # Updated column indices
                                         cell.alignment = Alignment(horizontal='right', vertical='center')
-                                        if col_idx in [15, 16]:
+                                        if col_idx in [16, 17]:  # Updated column indices
                                             cell.number_format = '#,##0.00'
                                 row += 1
 
@@ -519,6 +523,17 @@ def add_grouped_export_action(viewset_class):
                     'cif_inr': float(detail.cif_inr or 0)
                 })
 
+            # Calculate exchange rate: use boe.exchange_rate if exists, otherwise calculate from total_inr / total_fc
+            total_fc = float(boe.get_total_fc or 0)
+            total_inr = float(boe.get_total_inr or 0)
+
+            if boe.exchange_rate and float(boe.exchange_rate) > 0:
+                exchange_rate = float(boe.exchange_rate)
+            elif total_fc > 0:
+                exchange_rate = total_inr / total_fc
+            else:
+                exchange_rate = 0
+
             boe_data = {
                 'boe_number': boe.bill_of_entry_number or '--',
                 'boe_date': boe.bill_of_entry_date.strftime('%d-%m-%Y') if boe.bill_of_entry_date else '--',
@@ -526,8 +541,9 @@ def add_grouped_export_action(viewset_class):
                 'product_name': product_name,
                 'invoice_no': boe.invoice_no or '--',
                 'total_quantity': float(boe.get_total_quantity or 0),
-                'total_fc': float(boe.get_total_fc or 0),
-                'total_inr': float(boe.get_total_inr or 0),
+                'total_fc': total_fc,
+                'total_inr': total_inr,
+                'exchange_rate': exchange_rate,  # Add exchange rate
                 'license_details': license_details,  # List of license entries
             }
 

@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
 
+from django.conf import settings
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -623,7 +624,7 @@ class AllotmentActionViewSet(ViewSet):
                 })
 
             # Create output directory
-            file_path = f'media/TL_ALLOT_{allotment.id}_{transfer_letter.name.replace(" ", "_")}/'
+            file_path = os.path.join(settings.MEDIA_ROOT, f'TL_ALLOT_{allotment.id}_{transfer_letter.name.replace(" ", "_")}')
             os.makedirs(file_path, exist_ok=True)
 
             # Generate transfer letters

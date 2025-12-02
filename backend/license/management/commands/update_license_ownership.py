@@ -1,4 +1,5 @@
 import time
+import os
 
 import requests
 from django.core.management.base import BaseCommand
@@ -7,7 +8,8 @@ from data_script.fetch_ownership import fetch_scrip_ownership
 from license.models import LicenseDetailsModel
 
 # === Config ===
-SERVER_API = "https://license-manager.duckdns.org/api/update-license-transfer/"
+# Use localhost when running locally, otherwise use the domain
+SERVER_API = os.getenv('LICENSE_API_URL', 'http://localhost:8000/api/license-actions/update-license-transfer/')
 APP_ID = "204000000"
 SESSION_ID = "A2B93634A5BD42AB7CD0AC7FE0646FD0"
 CSRF_TOKEN = "4a119454-6bab-40b7-adb3-b042224073e8"

@@ -537,9 +537,9 @@ export default function ItemPivotReport() {
                                             <span className="badge bg-white text-dark">{licenses.length}</span>
                                         </div>
                                         <div className="card-body p-0">
-                                            <div className="table-responsive" style={{overflowX: 'auto', width: '100%'}}>
+                                            <div className="table-responsive" style={{overflowX: 'auto'}}>
                                                 <table className="table table-hover table-sm mb-0"
-                                                       style={{tableLayout: 'auto', minWidth: 'max-content', width: 'max-content'}}>
+                                                       style={{tableLayout: 'auto', minWidth: '860px'}}>
                                                     <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                                                     <tr className="table-light">
                                                         <th className="text-center" style={{

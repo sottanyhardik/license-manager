@@ -509,6 +509,25 @@ export default function MasterList() {
                                         });
                                         navigate(`/bill-of-entries/${item.id}/generate-transfer-letter`);
                                     }
+                                },
+                                {
+                                    label: 'Update Product Name',
+                                    icon: 'bi bi-arrow-repeat',
+                                    className: 'btn btn-outline-info',
+                                    onClick: async (item) => {
+                                        if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) {
+                                            return;
+                                        }
+                                        try {
+                                            const response = await api.post(`/bill-of-entries/${item.id}/update-product-name/`);
+                                            alert(response.data.message || 'Product name updated successfully');
+                                            // Refresh the list to show updated product name
+                                            fetchData(currentPage, pageSize, filterParams);
+                                        } catch (err) {
+                                            alert(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
+                                        }
+                                    },
+                                    showIf: (item) => !item.product_name || item.product_name.trim() === ''
                                 }
                             ] : []}
                         />
@@ -557,6 +576,25 @@ export default function MasterList() {
                                     onClick: (item) => {
                                         navigate(`/bill-of-entries/${item.id}/generate-transfer-letter`);
                                     }
+                                },
+                                {
+                                    label: 'Update Product Name',
+                                    icon: 'bi bi-arrow-repeat',
+                                    className: 'btn btn-outline-info',
+                                    onClick: async (item) => {
+                                        if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) {
+                                            return;
+                                        }
+                                        try {
+                                            const response = await api.post(`/bill-of-entries/${item.id}/update-product-name/`);
+                                            alert(response.data.message || 'Product name updated successfully');
+                                            // Refresh the list to show updated product name
+                                            fetchData(currentPage, pageSize, filterParams);
+                                        } catch (err) {
+                                            alert(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
+                                        }
+                                    },
+                                    showIf: (item) => !item.product_name || item.product_name.trim() === ''
                                 }
                             ] : []}
                             loading={loading}

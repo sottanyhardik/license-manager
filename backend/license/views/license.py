@@ -146,8 +146,22 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     def get_queryset(self):
         """
         Override to add performance optimizations with select_related and prefetch_related.
+        For detail view (retrieve/update/partial_update), don't apply default filters so expired licenses can be edited.
         """
+        # For detail view actions, skip default filters by temporarily clearing them
+        skip_default_filters = self.action in ['retrieve', 'update', 'partial_update', 'destroy']
+
+        if skip_default_filters:
+            # Save original default filters
+            original_default_filters = getattr(self, 'default_filters', {})
+            # Temporarily clear default filters
+            self.default_filters = {}
+
         qs = super().get_queryset()
+
+        # Restore original default filters if they were cleared
+        if skip_default_filters:
+            self.default_filters = original_default_filters
 
         # Add select_related for ForeignKey fields to avoid N+1 queries
         qs = qs.select_related('exporter', 'port', 'current_owner')

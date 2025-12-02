@@ -140,6 +140,25 @@ class AllotmentSerializer(serializers.ModelSerializer):
             'related_company_name', 'display_label', 'allotment_details_read'
         ]
 
+    def create(self, validated_data):
+        """Set default values for type and exchange_rate if not provided"""
+        # Set default type to 'AT' (Allotment) if not provided
+        if 'type' not in validated_data or not validated_data['type']:
+            validated_data['type'] = 'AT'  # ALLOTMENT
+
+        # Set default exchange_rate to active USD rate if not provided
+        if 'exchange_rate' not in validated_data or not validated_data.get('exchange_rate'):
+            from core.models import ExchangeRateModel
+            try:
+                # Get the latest (active) exchange rate
+                latest_rate = ExchangeRateModel.objects.order_by('-date').first()
+                if latest_rate:
+                    validated_data['exchange_rate'] = latest_rate.usd
+            except Exception:
+                pass  # If no exchange rate found, leave it as is
+
+        return super().create(validated_data)
+
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         # Rename nested field for frontend compatibility

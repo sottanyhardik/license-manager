@@ -176,6 +176,7 @@ class BillOfEntryModel(AuditModel):
         Generate product_name from item_details -> sr_number -> items names.
         If item name is "Unknown Product" or no items linked, uses sr_number description instead.
         Returns unique item names joined by ' or ' (preserving order).
+        Truncates to 255 characters if needed (product_name field max_length).
         If no items found, returns empty string.
         """
         item_names = []
@@ -203,7 +204,13 @@ class BillOfEntryModel(AuditModel):
                                 seen.add(item.name)
                                 item_names.append(item.name)
 
-        return ' or '.join(item_names) if item_names else ""
+        result = ' or '.join(item_names) if item_names else ""
+
+        # Truncate to 255 characters if needed (database field max_length)
+        if len(result) > 255:
+            result = result[:252] + '...'
+
+        return result
 
 
 # -----------------------------

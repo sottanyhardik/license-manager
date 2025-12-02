@@ -1,18 +1,19 @@
 #!/bin/bash
 
 # License Manager Deployment Script
-# Run this script on the production server after SSH
+# Run this script on the production server: django@143.110.252.201
+# Usage: bash deploy.sh
 
 set -e  # Exit on error
 
 echo "🚀 Starting deployment..."
 
 # Navigate to project directory
-cd /var/www/license-manager
+cd /home/django/license-manager
 
 # Pull latest changes
 echo "📥 Pulling latest code from git..."
-git pull origin develop
+git pull origin feature/V4.0
 
 # Backend updates
 echo "🐍 Updating Python dependencies..."
@@ -37,8 +38,8 @@ python manage.py collectstatic --noinput
 
 # Set permissions
 echo "🔐 Setting permissions..."
-sudo chown -R www-data:www-data /var/www/license-manager/media
-sudo chmod -R 775 /var/www/license-manager/media
+sudo chown -R django:django /home/django/license-manager/backend/media
+sudo chmod -R 775 /home/django/license-manager/backend/media
 
 # Restart services
 echo "🔄 Restarting services..."

@@ -60,6 +60,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
 
+    ROLE_CHOICES = [
+        ('admin', 'Admin'),
+        ('manager', 'Manager'),
+        ('accounts', 'Accounts'),
+    ]
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='accounts')
+
     # Override group & permission related_names so they don't clash with auth.User if present
     groups = models.ManyToManyField(
         Group,

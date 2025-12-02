@@ -78,6 +78,10 @@ def add_grouped_export_action(viewset_class):
         # Group data
         grouped_data = self._group_allotments(queryset)
 
+        # Get active exchange rate
+        from core.models import ExchangeRateModel
+        active_rate = ExchangeRateModel.get_active_rate()
+
         # Create PDF exporter
         pdf_exporter = create_pdf_exporter(
             title="Allotment Report",
@@ -102,9 +106,65 @@ def add_grouped_export_action(viewset_class):
                         for items in ports.values()
                         for item in items)
 
-        # Add title with subtitle
-        subtitle = f"Total USD $: {pdf_exporter.format_number(total_usd)}"
-        pdf_exporter.add_title(elements, subtitle=subtitle)
+        # Create header section with title on left and exchange rate on right
+        if active_rate:
+            # Exchange rate mini table
+            exchange_rate_data = [
+                ['Exch. Rate', f"{active_rate.date.strftime('%d-%m-%Y')}"],
+                ['USD', f"{active_rate.usd}"],
+                ['EUR', f"{active_rate.euro}"],
+                ['GBP', f"{active_rate.pound_sterling}"],
+                ['CNY', f"{active_rate.chinese_yuan}"]
+            ]
+
+            exchange_table = Table(exchange_rate_data, colWidths=[0.8*inch, 0.8*inch])
+            exchange_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), pdf_exporter.HEADER_BG),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+                ('TOPPADDING', (0, 0), (-1, 0), 4),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 2),
+                ('TOPPADDING', (0, 1), (-1, -1), 2),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ]))
+
+            # Create title section
+            title_para = Paragraph("Allotment Report", pdf_exporter.title_style)
+            subtitle_para = Paragraph(f"Total USD $: {pdf_exporter.format_number(total_usd)}", pdf_exporter.subtitle_style)
+            timestamp_text = f"Generated on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
+            from reportlab.lib.styles import ParagraphStyle
+            timestamp_style = ParagraphStyle(
+                'Timestamp',
+                parent=pdf_exporter.styles['Normal'],
+                fontSize=9,
+                textColor=colors.grey,
+                alignment=TA_CENTER,
+                spaceAfter=16
+            )
+            timestamp_para = Paragraph(timestamp_text, timestamp_style)
+
+            # Create a layout table with title on left and exchange rate on right
+            header_layout = Table(
+                [[title_para, exchange_table]],
+                colWidths=[7.5*inch, 1.8*inch]
+            )
+            header_layout.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ]))
+
+            elements.append(header_layout)
+            elements.append(subtitle_para)
+            elements.append(timestamp_para)
+        else:
+            # No exchange rate, use standard title
+            subtitle = f"Total USD $: {pdf_exporter.format_number(total_usd)}"
+            pdf_exporter.add_title(elements, subtitle=subtitle)
 
         # Process each company
         for company_name, items_dict in grouped_data.items():
@@ -253,6 +313,10 @@ def add_grouped_export_action(viewset_class):
         # Group data
         grouped_data = self._group_allotments(queryset)
 
+        # Get active exchange rate
+        from core.models import ExchangeRateModel
+        active_rate = ExchangeRateModel.get_active_rate()
+
         # Create workbook
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -287,6 +351,15 @@ def add_grouped_export_action(viewset_class):
         cell = ws[f'A{row}']
         cell.value = f"Total USD $: {total_usd:,.2f}    {datetime.now().strftime('%d-%m-%Y')}"
         cell.alignment = Alignment(horizontal='center')
+        row += 1
+
+        # Exchange rate info
+        if active_rate:
+            ws.merge_cells(f'A{row}:Q{row}')
+            cell = ws[f'A{row}']
+            cell.value = f"Exchange Rate (as of {active_rate.date.strftime('%d-%m-%Y')}): USD {active_rate.usd} | EUR {active_rate.euro} | GBP {active_rate.pound_sterling} | CNY {active_rate.chinese_yuan}"
+            cell.alignment = Alignment(horizontal='center')
+            cell.font = Font(italic=True, size=10)
         row += 2
 
         # Process each company
@@ -506,8 +579,8 @@ def add_grouped_export_action(viewset_class):
             item_name_key = item_name.upper()  # Case-insensitive grouping key
 
             allot_data = {
-                'date': allotment.estimated_arrival_date.strftime(
-                    '%d-%m-%Y') if allotment.estimated_arrival_date else '--',
+                'date': allotment.created_on.strftime(
+                    '%d-%m-%Y') if allotment.created_on else '--',
                 'port': port_code,
                 'quantity': float(allotment.required_quantity or 0),
                 'unit_price': float(allotment.unit_value_per_unit or 0),

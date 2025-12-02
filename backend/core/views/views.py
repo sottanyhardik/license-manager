@@ -17,6 +17,7 @@ from ..models import (
     ItemHeadModel,
     ItemGroupModel,
     TransferLetterModel,
+    ExchangeRateModel,
 )
 from ..serializers import (
     CompanySerializer,
@@ -32,6 +33,7 @@ from ..serializers import (
     ItemHeadSerializer,
     GroupSerializer,
     TransferLetterSerializer,
+    ExchangeRateSerializer,
 )
 
 # Base API prefix used to construct select endpoints (adjust if needed).
@@ -473,5 +475,56 @@ TransferLetterViewSet = MasterViewSet.create_viewset(
         "list_display": ["name"],
         "form_fields": ["name", "tl"],
         "ordering": ["name"]
+    },
+)
+
+ExchangeRateViewSet = MasterViewSet.create_viewset(
+    ExchangeRateModel,
+    ExchangeRateSerializer,
+    config={
+        "search": ["date"],
+        "filter": {},
+        "list_display": ["date", "usd", "euro", "pound_sterling", "chinese_yuan", "is_active"],
+        "nested_field_defs": [
+            {"field": "is_active", "label": "Active", "type": "boolean"}
+        ],
+        "form_fields": ["date", "usd", "euro", "pound_sterling", "chinese_yuan"],
+        "ordering": ["-date"],  # Latest first
+        "field_meta": {
+            "date": {
+                "label": "Date",
+                "type": "date",
+                "required": True,
+                "help_text": "Date of the exchange rate (latest date will be the active rate)"
+            },
+            "usd": {
+                "label": "USD to INR",
+                "type": "number",
+                "required": True,
+                "step": "0.0001",
+                "help_text": "US Dollar to INR exchange rate"
+            },
+            "euro": {
+                "label": "Euro to INR",
+                "type": "number",
+                "required": True,
+                "step": "0.0001",
+                "help_text": "Euro to INR exchange rate"
+            },
+            "pound_sterling": {
+                "label": "GBP to INR",
+                "type": "number",
+                "required": True,
+                "step": "0.0001",
+                "help_text": "Pound Sterling to INR exchange rate"
+            },
+            "chinese_yuan": {
+                "label": "CNY to INR",
+                "type": "number",
+                "required": True,
+                "step": "0.0001",
+                "help_text": "Chinese Yuan to INR exchange rate"
+            }
+        }
     },
 )

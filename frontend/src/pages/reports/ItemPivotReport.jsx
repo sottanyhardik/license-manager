@@ -920,13 +920,13 @@ export default function ItemPivotReport() {
                                                             <i className="bi bi-calculator me-2"></i>
                                                             Summary
                                                         </h6>
-                                                        <div className="table-responsive">
-                                                            <table className="table table-bordered table-sm">
+                                                        <div style={{maxWidth: '1200px'}}>
+                                                            <table className="table table-bordered table-sm" style={{tableLayout: 'fixed', width: '1200px'}}>
                                                                 <thead className="table-light">
                                                                 <tr>
-                                                                    <th style={{minWidth: '80px'}}>Sr No</th>
-                                                                    <th style={{minWidth: '200px'}}>Item Name</th>
-                                                                    <th className="text-end" style={{minWidth: '150px'}}>Available Balance QTY</th>
+                                                                    <th style={{width: '100px'}}>Sr No</th>
+                                                                    <th style={{width: '800px'}}>Item Name</th>
+                                                                    <th className="text-end" style={{width: '300px'}}>Available Balance QTY</th>
                                                                 </tr>
                                                                 </thead>
                                                                 <tbody>

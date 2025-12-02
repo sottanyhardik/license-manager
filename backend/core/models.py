@@ -438,3 +438,66 @@ class PurchaseStatus(models.Model):
 
     def __str__(self):
         return self.label
+
+
+class ExchangeRateModel(AuditModel):
+    """
+    Exchange Rate model to store currency exchange rates.
+    The active exchange rate is the latest one based on the date field.
+    """
+    date = models.DateField(unique=True, help_text="Date of the exchange rate")
+    usd = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        validators=[MinValueValidator(DEC_0)],
+        help_text="USD to INR exchange rate"
+    )
+    euro = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        validators=[MinValueValidator(DEC_0)],
+        help_text="Euro to INR exchange rate"
+    )
+    pound_sterling = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        validators=[MinValueValidator(DEC_0)],
+        help_text="Pound Sterling to INR exchange rate"
+    )
+    chinese_yuan = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        validators=[MinValueValidator(DEC_0)],
+        help_text="Chinese Yuan to INR exchange rate"
+    )
+
+    class Meta:
+        ordering = ['-date']  # Latest date first
+        verbose_name = "Exchange Rate"
+        verbose_name_plural = "Exchange Rates"
+        indexes = [
+            models.Index(fields=['-date']),  # Index for getting latest rate
+        ]
+
+    def __str__(self):
+        return f"Exchange Rate - {self.date.strftime('%d-%m-%Y')}"
+
+    @classmethod
+    def get_active_rate(cls):
+        """
+        Get the most recent (active) exchange rate based on date.
+        Returns the ExchangeRateModel instance with the latest date.
+        """
+        return cls.objects.first()  # Already ordered by -date
+
+    @classmethod
+    def get_rate_for_date(cls, date):
+        """
+        Get the exchange rate for a specific date.
+        If no rate exists for that date, returns the most recent rate before that date.
+        """
+        return cls.objects.filter(date__lte=date).first()
+
+    def save(self, *args, **kwargs):
+        """Override save to ensure date uniqueness"""
+        super().save(*args, **kwargs)

@@ -35,7 +35,7 @@ export default function TopNav() {
                         ))}
 
                     {/* Reports Dropdown */}
-                    {hasRole(["admin", "manager"]) && (
+                    {hasRole(["admin", "manager", "accounts"]) && (
                         <li className="nav-item dropdown">
                             <a
                                 className="nav-link dropdown-toggle"

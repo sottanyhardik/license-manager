@@ -6,7 +6,7 @@ from .models import (
     HeadSIONNormsModel, SionNormClassModel,
     SIONExportModel, SIONImportModel,
     ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel, ItemGroupModel,
-    TransferLetterModel, SionNormNote, SionNormCondition
+    TransferLetterModel, SionNormNote, SionNormCondition, ExchangeRateModel
 )
 
 
@@ -232,3 +232,18 @@ class TransferLetterSerializer(AuditSerializerMixin):
     class Meta(AuditSerializerMixin.Meta):
         model = TransferLetterModel
         fields = "__all__"
+
+
+# ---- Exchange Rate ----
+class ExchangeRateSerializer(AuditSerializerMixin):
+    is_active = serializers.SerializerMethodField()
+
+    class Meta(AuditSerializerMixin.Meta):
+        model = ExchangeRateModel
+        fields = "__all__"
+
+    def get_is_active(self, obj):
+        """Check if this is the active (latest) exchange rate"""
+        from .models import ExchangeRateModel
+        active_rate = ExchangeRateModel.get_active_rate()
+        return obj.id == active_rate.id if active_rate else False

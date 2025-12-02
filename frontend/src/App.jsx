@@ -163,7 +163,7 @@ export default function App() {
                                 path="/reports/parle/sion-e1"
                                 element={
                                     <ProtectedRoute>
-                                        <RoleRoute roles={["admin", "manager"]}>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <SionE1/>
                                             </AdminLayout>
@@ -176,7 +176,7 @@ export default function App() {
                                 path="/reports/parle/sion-e5"
                                 element={
                                     <ProtectedRoute>
-                                        <RoleRoute roles={["admin", "manager"]}>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <SionE5/>
                                             </AdminLayout>
@@ -189,7 +189,7 @@ export default function App() {
                                 path="/reports/parle/sion-e126"
                                 element={
                                     <ProtectedRoute>
-                                        <RoleRoute roles={["admin", "manager"]}>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <SionE126/>
                                             </AdminLayout>
@@ -202,7 +202,7 @@ export default function App() {
                                 path="/reports/parle/sion-e132"
                                 element={
                                     <ProtectedRoute>
-                                        <RoleRoute roles={["admin", "manager"]}>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <SionE132/>
                                             </AdminLayout>
@@ -215,7 +215,7 @@ export default function App() {
                                 path="/reports/expiring-licenses"
                                 element={
                                     <ProtectedRoute>
-                                        <RoleRoute roles={["admin", "manager"]}>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ExpiringLicenses/>
                                             </AdminLayout>
@@ -228,7 +228,7 @@ export default function App() {
                                 path="/reports/active-licenses"
                                 element={
                                     <ProtectedRoute>
-                                        <RoleRoute roles={["admin", "manager"]}>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ActiveLicenses/>
                                             </AdminLayout>
@@ -241,7 +241,7 @@ export default function App() {
                                 path="/reports/item-pivot"
                                 element={
                                     <ProtectedRoute>
-                                        <RoleRoute roles={["admin", "manager"]}>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ItemPivotReport/>
                                             </AdminLayout>

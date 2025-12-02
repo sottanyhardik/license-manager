@@ -4,7 +4,7 @@ export const routes = [
         label: "Dashboard",
         component: "Dashboard",
         protected: true,
-        roles: ["admin", "manager", "viewer"],
+        roles: ["admin", "manager", "accounts"],
         icon: "speedometer2",
     },
     {
@@ -92,6 +92,12 @@ export const masterEntities = [
         label: "Item Names",
         entity: "item-names",
         icon: "tags",
+    },
+    {
+        path: "/masters/exchange-rates",
+        label: "Exchange Rates",
+        entity: "exchange-rates",
+        icon: "currency-exchange",
     },
     {
         path: "/masters/item-heads",

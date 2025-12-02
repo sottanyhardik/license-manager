@@ -105,7 +105,9 @@ export default function MasterForm() {
             } else {
                 apiPath = `/masters/${entityName}/`;
             }
-            const {data} = await api.options(apiPath);
+
+            // Use GET to fetch metadata (custom structure with form_fields, field_meta, etc.)
+            const {data} = await api.get(apiPath);
             setMetadata({
                 form_fields: data.form_fields || [],
                 nested_field_defs: data.nested_field_defs || {},
@@ -589,7 +591,7 @@ export default function MasterForm() {
         }
 
         // Handle date fields with DatePicker
-        if (fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
+        if (fieldMeta.type === "date" || fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
             return (
                 <div className="w-100">
                     <DatePicker
@@ -668,11 +670,11 @@ export default function MasterForm() {
         }
 
         // Handle decimal/number fields
-        if (fieldName.includes("price") || fieldName.includes("rate") || fieldName.includes("quantity") || fieldName.includes("duty")) {
+        if (fieldMeta.type === "number" || fieldName.includes("price") || fieldName.includes("rate") || fieldName.includes("quantity") || fieldName.includes("duty")) {
             return (
                 <input
                     type="number"
-                    step="0.01"
+                    step={fieldMeta.step || "0.01"}
                     className="form-control"
                     value={value}
                     onChange={(e) => handleChange(fieldName, e.target.value)}
@@ -748,13 +750,23 @@ export default function MasterForm() {
 
                                         const colClass = isTextarea ? "col-12" : "col-md-4";
 
+                                        const fieldMeta = metadata.field_meta?.[field] || {};
+                                        const label = fieldMeta.label || field.replace(/_/g, " ");
+                                        const helpText = fieldMeta.help_text;
+
                                         return (
                                             <div key={field} className={`${colClass}`}>
                                                 <div className="form-group-material">
                                                     <label className="form-label">
-                                                        {field.replace(/_/g, " ")}
+                                                        {label}
+                                                        {fieldMeta.required && <span className="text-danger">*</span>}
                                                     </label>
                                                     {renderField(field)}
+                                                    {helpText && (
+                                                        <small className="form-text text-muted d-block mt-1">
+                                                            {helpText}
+                                                        </small>
+                                                    )}
                                                 </div>
                                             </div>
                                         );

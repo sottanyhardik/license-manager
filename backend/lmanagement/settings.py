@@ -57,7 +57,6 @@ INSTALLED_APPS = [
     "trade",
 ]
 
-
 # ---------------------------------------------------------------------
 # Middleware
 # ---------------------------------------------------------------------
@@ -151,7 +150,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 # ---------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------
-# AUTH_USER_MODEL = "accounts.User"
+AUTH_USER_MODEL = "accounts.User"
 
 # Disable login redirects for API-only project (no HTML views)
 # LOGIN_URL = reverse_lazy("login")
@@ -281,4 +280,3 @@ FRONTEND_URL = "http://localhost:5173"  # update for production
 # ---------------------------------------------------------------------
 EXPIRY_DAY = 60
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
-

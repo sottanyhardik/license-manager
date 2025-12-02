@@ -22,10 +22,15 @@ def convert_docx_to_pdf(docx_path, pdf_path):
 
     # Try LibreOffice first
     try:
-        result = subprocess.run([
-            'soffice', '--headless', '--convert-to', 'pdf',
-            '--outdir', output_dir, docx_path
-        ], check=True, capture_output=True, timeout=30)
+        # Use a temporary user profile directory to avoid permission issues
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = os.environ.copy()
+            env['HOME'] = tmpdir
+
+            result = subprocess.run([
+                'soffice', '--headless', '--convert-to', 'pdf',
+                '--outdir', output_dir, docx_path
+            ], check=True, capture_output=True, timeout=30, env=env)
 
         # LibreOffice creates PDF with same name as DOCX
         expected_pdf = docx_path.replace('.docx', '.pdf')
@@ -33,7 +38,10 @@ def convert_docx_to_pdf(docx_path, pdf_path):
             os.rename(expected_pdf, pdf_path)
 
         return os.path.exists(pdf_path)
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+        print(f"LibreOffice conversion failed: {type(e).__name__}: {str(e)}")
+        if hasattr(e, 'stderr'):
+            print(f"stderr: {e.stderr.decode()}")
         pass
 
     # Try using macOS textutil + cupsfilter

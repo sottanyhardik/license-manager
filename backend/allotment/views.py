@@ -113,6 +113,10 @@ AllotmentViewSet = MasterViewSet.create_viewset(
                 "choices": list(ROW_TYPE_CHOICES),
                 "default": "AT"  # Default to Allotment
             },
+            "exchange_rate": {
+                "type": "number",
+                "default": _get_active_usd_rate()  # Default to active USD to INR rate
+            },
         }
     }
 )

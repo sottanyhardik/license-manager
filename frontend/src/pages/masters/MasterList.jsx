@@ -345,6 +345,48 @@ export default function MasterList() {
                         <i className="bi bi-file-earmark-pdf me-1"></i>
                         PDF
                     </button>
+                    {entityName === 'bill-of-entries' && (
+                        <button
+                            className="btn btn-outline-info"
+                            onClick={async () => {
+                                if (!window.confirm('This will update product names for all BOEs with empty product_name on this page. Continue?')) {
+                                    return;
+                                }
+
+                                setLoading(true);
+                                const emptyProductBoes = data.filter(item => !item.product_name || item.product_name.trim() === '');
+
+                                if (emptyProductBoes.length === 0) {
+                                    alert('No BOEs with empty product names found on this page.');
+                                    setLoading(false);
+                                    return;
+                                }
+
+                                let successCount = 0;
+                                let errorCount = 0;
+
+                                for (const boe of emptyProductBoes) {
+                                    try {
+                                        await api.post(`/bill-of-entries/${boe.id}/update-product-name/`);
+                                        successCount++;
+                                    } catch (err) {
+                                        errorCount++;
+                                        console.error(`Failed to update BOE ${boe.id}:`, err);
+                                    }
+                                }
+
+                                setLoading(false);
+                                alert(`Updated ${successCount} BOEs successfully. ${errorCount > 0 ? `${errorCount} failed.` : ''}`);
+
+                                // Refresh the list
+                                fetchData(currentPage, pageSize, filterParams);
+                            }}
+                            title="Update all empty product names on current page"
+                        >
+                            <i className="bi bi-arrow-repeat me-1"></i>
+                            Fetch All Products
+                        </button>
+                    )}
                     <Link
                         to={entityName === 'licenses' ? '/licenses/create' :
                             entityName === 'trades' ? '/trades/create' :

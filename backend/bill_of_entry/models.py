@@ -174,15 +174,18 @@ class BillOfEntryModel(AuditModel):
     def generate_product_name_from_items(self) -> str:
         """
         Generate product_name from item_details -> sr_number -> items names.
-        Returns item names joined by ' or '.
+        Returns unique item names joined by ' or ' (preserving order).
         If no items found, returns empty string.
         """
         item_names = []
+        seen = set()
+
         for item_detail in self.item_details.select_related('sr_number').prefetch_related('sr_number__items').all():
             if item_detail.sr_number:
                 # Get all item names from the M2M relationship
                 for item in item_detail.sr_number.items.all():
-                    if item.name and item.name not in item_names:
+                    if item.name and item.name not in seen:
+                        seen.add(item.name)
                         item_names.append(item.name)
 
         return ' or '.join(item_names) if item_names else ""

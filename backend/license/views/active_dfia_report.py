@@ -75,7 +75,7 @@ def add_active_dfia_report_action(viewset_class):
         ).prefetch_related(
             'export_license', 'export_license__norm_class',
             'import_license', 'import_license__items', 'import_license__hs_code'
-        ).order_by('-license_date')
+        ).order_by('license_expiry_date', 'license_date')
 
         # Group licenses by SION norm class, then by notification
         # Structure: {sion_norm: {notification: [licenses]}}

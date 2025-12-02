@@ -84,7 +84,7 @@ class ExpiringLicensesReportView(View):
                 export_license__norm_class__norm_class=sion_norm
             ).distinct()
 
-        licenses = licenses_query.order_by('license_expiry_date')
+        licenses = licenses_query.order_by('license_expiry_date', 'license_date')
 
         # Build report data
         licenses_data = []

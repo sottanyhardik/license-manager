@@ -68,7 +68,7 @@ def add_license_report_action(viewset_class):
             'exporter', 'port', 'current_owner'
         ).prefetch_related(
             'export_license', 'import_license'
-        ).order_by('notification_number', '-license_date')
+        ).order_by('license_expiry_date', 'license_date')
 
         # Group licenses by notification number
         grouped_licenses = defaultdict(list)

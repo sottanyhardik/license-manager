@@ -110,7 +110,7 @@ class LicenseDetailsModel(AuditModel):
     file_transfer_status = models.TextField(null=True, blank=True)
 
     class Meta:
-        ordering = ("license_expiry_date",)
+        ordering = ("license_expiry_date", "license_date")
         indexes = [
             models.Index(fields=['license_number']),  # Already unique, but helps with lookups
             models.Index(fields=['file_number']),

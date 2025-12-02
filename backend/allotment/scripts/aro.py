@@ -32,17 +32,24 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                 '--outdir', output_dir, docx_path
             ], check=True, capture_output=True, timeout=30, env=env)
 
-        # LibreOffice creates PDF with same name as DOCX
-        expected_pdf = docx_path.replace('.docx', '.pdf')
-        if os.path.exists(expected_pdf) and expected_pdf != pdf_path:
-            os.rename(expected_pdf, pdf_path)
+            # LibreOffice creates PDF with same name as DOCX in the output directory
+            expected_pdf = os.path.join(output_dir, os.path.basename(docx_path).replace('.docx', '.pdf'))
 
-        return os.path.exists(pdf_path)
+            # Check if PDF was created
+            if os.path.exists(expected_pdf):
+                if expected_pdf != pdf_path:
+                    os.rename(expected_pdf, pdf_path)
+                print(f"Successfully converted {docx_path} to PDF")
+                return True
+            else:
+                print(f"PDF not found at expected location: {expected_pdf}")
+                return False
+
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
         print(f"LibreOffice conversion failed: {type(e).__name__}: {str(e)}")
         if hasattr(e, 'stderr'):
             print(f"stderr: {e.stderr.decode()}")
-        pass
+        return False
 
     # Try using macOS textutil + cupsfilter
     try:

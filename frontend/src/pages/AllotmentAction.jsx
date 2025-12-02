@@ -747,15 +747,15 @@ export default function AllotmentAction() {
                             </div>
                         </div>
 
-                        {/* Edit CIF (FC) per SR */}
+                        {/* Edit CIF (FC) per Item */}
                         <div className="mb-3">
-                            <h6>Edit CIF (FC) per SR</h6>
+                            <h6>Edit CIF (FC) per Item</h6>
                             <div className="table-responsive">
                                 <table className="table table-sm table-bordered">
                                     <thead className="table-light">
                                     <tr>
                                         <th>#</th>
-                                        <th>SR Number</th>
+                                        <th>License Number</th>
                                         <th>CIF FC (editable)</th>
                                     </tr>
                                     </thead>
@@ -768,7 +768,7 @@ export default function AllotmentAction() {
                                         allotment.allotment_details.map((detail, idx) => (
                                             <tr key={detail.id}>
                                                 <td>{idx + 1}</td>
-                                                <td>{detail.serial_number}</td>
+                                                <td>{detail.license?.license_number || detail.license_number || '-'}</td>
                                                 <td>
                                                     <input
                                                         type="number"

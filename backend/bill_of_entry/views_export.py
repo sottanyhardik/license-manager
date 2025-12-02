@@ -215,27 +215,27 @@ def add_grouped_export_action(viewset_class):
                         ''   # BOE CIF
                     ])
 
-                    # Create table with column widths (17 columns) - optimized for better readability
+                    # Create table with column widths (17 columns) - increased for better readability
                     from reportlab.lib.units import inch
                     col_widths = [
-                        0.3 * inch,   # Sr No
-                        0.65 * inch,  # BOE Number
-                        0.55 * inch,  # BOE Date
-                        0.5 * inch,   # Port
-                        0.55 * inch,  # Quantity (KGS)
-                        0.5 * inch,   # Unit Price ($)
-                        0.65 * inch,  # Value ($)
-                        0.5 * inch,   # Exchange Rate
-                        0.8 * inch,   # Total CIF INR
-                        0.8 * inch,   # Item Name
-                        0.6 * inch,   # Invoice
-                        0.75 * inch,  # License No.
-                        0.55 * inch,  # License Date
-                        0.5 * inch,   # License Port
-                        0.4 * inch,   # Item Sr.
-                        0.5 * inch,   # BOE Qty.
-                        0.55 * inch,  # BOE $.
-                        0.65 * inch   # BOE CIF
+                        0.35 * inch,  # Sr No
+                        0.75 * inch,  # BOE Number
+                        0.65 * inch,  # BOE Date
+                        0.6 * inch,   # Port
+                        0.65 * inch,  # Quantity (KGS)
+                        0.6 * inch,   # Unit Price ($)
+                        0.75 * inch,  # Value ($)
+                        0.6 * inch,   # Exchange Rate
+                        0.9 * inch,   # Total CIF INR
+                        0.9 * inch,   # Item Name
+                        0.65 * inch,  # Invoice
+                        0.85 * inch,  # License No.
+                        0.65 * inch,  # License Date
+                        0.6 * inch,   # License Port
+                        0.45 * inch,  # Item Sr.
+                        0.6 * inch,   # BOE Qty.
+                        0.65 * inch,  # BOE $.
+                        0.75 * inch   # BOE CIF
                     ]
 
                     table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1)

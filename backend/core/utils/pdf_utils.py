@@ -134,10 +134,10 @@ class BusinessPDFExporter:
         return SimpleDocTemplate(
             buffer,
             pagesize=pagesize,
-            topMargin=0.25 * inch,
-            bottomMargin=0.25 * inch,
-            leftMargin=0.2 * inch,
-            rightMargin=0.2 * inch
+            topMargin=0.15 * inch,
+            bottomMargin=0.15 * inch,
+            leftMargin=0.15 * inch,
+            rightMargin=0.15 * inch
         )
 
     def add_title(self, elements, subtitle=None):

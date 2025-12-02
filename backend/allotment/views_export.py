@@ -91,8 +91,8 @@ def add_grouped_export_action(viewset_class):
 
         # Create PDF response - inline display for new tab
         response = HttpResponse(content_type='application/pdf')
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'Allotment_Report_{timestamp}.pdf'
+        today = datetime.now().strftime('%d-%m-%Y')
+        filename = f'Allotment Report - {today}.pdf'
         response['Content-Disposition'] = f'inline; filename="{filename}"'
 
         buffer = BytesIO()
@@ -561,8 +561,8 @@ def add_grouped_export_action(viewset_class):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        response['Content-Disposition'] = f'attachment; filename="Pending_Allotments_{timestamp}.xlsx"'
+        today = datetime.now().strftime('%d-%m-%Y')
+        response['Content-Disposition'] = f'attachment; filename="Allotment Report - {today}.xlsx"'
         wb.save(response)
 
         return response

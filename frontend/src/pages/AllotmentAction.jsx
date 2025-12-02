@@ -2,6 +2,7 @@ import {useEffect, useState} from "react";
 import {useParams, useNavigate, useLocation} from "react-router-dom";
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
+import CreatableSelect from 'react-select/creatable';
 
 export default function AllotmentAction() {
     const {id} = useParams();
@@ -40,12 +41,12 @@ export default function AllotmentAction() {
     const [deletingItems, setDeletingItems] = useState({});
     const [transferLetterData, setTransferLetterData] = useState({
         company: null,
-        companyName: "",
         addressLine1: "",
         addressLine2: "",
         template: "",
         cifEdits: {}
     });
+    const [companyOptions, setCompanyOptions] = useState([]);
     const [transferLetters, setTransferLetters] = useState([]);
     const [generatingTL, setGeneratingTL] = useState(false);
 
@@ -380,8 +381,8 @@ export default function AllotmentAction() {
             return;
         }
 
-        // Get company name from either HybridSelect (company.label) or manual input (companyName)
-        const finalCompanyName = transferLetterData.company?.label || transferLetterData.companyName || '';
+        // Get company name from company object
+        const finalCompanyName = transferLetterData.company?.label || '';
 
         if (!finalCompanyName.trim()) {
             setError("Please select or enter a company name");
@@ -440,18 +441,32 @@ export default function AllotmentAction() {
         }));
     };
 
-    const handleCompanyChange = async (selectedCompany) => {
-        console.log('Company selected from dropdown:', selectedCompany);
+    const loadCompanyOptions = async (inputValue) => {
+        try {
+            const {data} = await api.get(`/masters/companies/?search=${inputValue}`);
+            const results = data.results || data || [];
+            return results.map(company => ({
+                value: company.id,
+                label: company.name,
+                ...company
+            }));
+        } catch (err) {
+            console.error("Failed to load companies:", err);
+            return [];
+        }
+    };
 
-        // Set the company and also update companyName
+    const handleCompanyChange = async (selectedCompany, actionMeta) => {
+        console.log('Company changed:', selectedCompany, 'Action:', actionMeta);
+
+        // Set the company
         setTransferLetterData(prev => ({
             ...prev,
-            company: selectedCompany,
-            companyName: selectedCompany?.label || ""
+            company: selectedCompany
         }));
 
-        // Fetch and populate address if company is selected
-        if (selectedCompany && selectedCompany.value) {
+        // Fetch and populate address if company is selected from existing options (not created)
+        if (selectedCompany && selectedCompany.value && actionMeta.action !== 'create-option') {
             try {
                 const {data} = await api.get(`/masters/companies/${selectedCompany.value}/`);
                 console.log('Company details fetched:', data);
@@ -459,20 +474,17 @@ export default function AllotmentAction() {
                 setTransferLetterData(prev => ({
                     ...prev,
                     company: selectedCompany,
-                    companyName: selectedCompany?.label || "",
                     addressLine1: data.address_line_1 || "",
                     addressLine2: data.address_line_2 || ""
                 }));
             } catch (err) {
                 console.error("Failed to fetch company details:", err);
-                // Keep the company selected even if address fetch fails
             }
         } else if (!selectedCompany) {
             // Clear everything when company is cleared
             setTransferLetterData(prev => ({
                 ...prev,
                 company: null,
-                companyName: "",
                 addressLine1: "",
                 addressLine2: ""
             }));
@@ -689,26 +701,20 @@ export default function AllotmentAction() {
                         <div className="row mb-3">
                             <div className="col-md-4">
                                 <label className="form-label">Company <span className="text-danger">*</span></label>
-                                <HybridSelect
-                                    fieldMeta={{
-                                        endpoint: "/masters/companies/",
-                                        label_field: "name"
-                                    }}
+                                <CreatableSelect
                                     value={transferLetterData.company}
                                     onChange={handleCompanyChange}
-                                    placeholder="Select from dropdown..."
+                                    onInputChange={(inputValue) => {
+                                        if (inputValue.length >= 2) {
+                                            loadCompanyOptions(inputValue).then(options => setCompanyOptions(options));
+                                        }
+                                    }}
+                                    options={companyOptions}
+                                    placeholder="Type to search or enter company name..."
                                     isClearable={true}
+                                    formatCreateLabel={(inputValue) => `Use: "${inputValue}"`}
                                 />
-                                <small className="text-muted d-block mb-2">Select from dropdown to auto-fill addresses</small>
-
-                                <label className="form-label">OR Enter Company Name Manually</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    value={transferLetterData.companyName}
-                                    onChange={(e) => setTransferLetterData(prev => ({...prev, companyName: e.target.value, company: null}))}
-                                    placeholder="Type company name manually..."
-                                />
+                                <small className="text-muted">Select from dropdown to auto-fill addresses, or type to create custom entry</small>
                             </div>
                             <div className="col-md-4">
                                 <label className="form-label">Address Line 1</label>

@@ -113,6 +113,22 @@ export default function MasterForm() {
                 nested_field_defs: data.nested_field_defs || {},
                 field_meta: data.field_meta || {}
             });
+
+            // Apply default values from field_meta when creating new record (not editing)
+            if (!isEdit && data.field_meta) {
+                const defaults = {};
+                Object.keys(data.field_meta).forEach(fieldName => {
+                    const fieldConfig = data.field_meta[fieldName];
+                    if (fieldConfig.default !== undefined && fieldConfig.default !== null) {
+                        defaults[fieldName] = fieldConfig.default;
+                    }
+                });
+
+                // Only set defaults if we found any
+                if (Object.keys(defaults).length > 0) {
+                    setFormData(prevData => ({...prevData, ...defaults}));
+                }
+            }
         } catch (err) {
             console.error("Error fetching metadata:", err);
         }

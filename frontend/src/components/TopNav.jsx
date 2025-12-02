@@ -1,7 +1,7 @@
 import {useContext} from "react";
 import {Link} from "react-router-dom";
 import {AuthContext} from "../context/AuthContext";
-import {routes} from "../routes/config";
+import {routes, reportEntities, masterEntities} from "../routes/config";
 
 export default function TopNav() {
     const {user, logout, hasRole} = useContext(AuthContext);
@@ -33,6 +33,60 @@ export default function TopNav() {
                                 </Link>
                             </li>
                         ))}
+
+                    {/* Reports Dropdown */}
+                    {hasRole(["admin", "manager"]) && (
+                        <li className="nav-item dropdown">
+                            <a
+                                className="nav-link dropdown-toggle"
+                                href="#"
+                                role="button"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                            >
+                                <i className="bi bi-file-earmark-bar-graph me-1"></i>
+                                Reports
+                            </a>
+                            <ul className="dropdown-menu">
+                                {reportEntities.map((report) => (
+                                    <li key={report.path}>
+                                        <Link className="dropdown-item" to={report.path}>
+                                            <i className={`bi bi-${report.icon} me-2`}></i>
+                                            {report.label}
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </li>
+                    )}
+
+                    {/* Masters Dropdown */}
+                    {hasRole(["admin", "manager"]) && (
+                        <li className="nav-item dropdown">
+                            <a
+                                className="nav-link dropdown-toggle"
+                                href="#"
+                                role="button"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                            >
+                                <i className="bi bi-database me-1"></i>
+                                Masters
+                            </a>
+                            <ul className="dropdown-menu">
+                                {masterEntities
+                                    .filter((master) => !master.deprecated)
+                                    .map((master) => (
+                                        <li key={master.path}>
+                                            <Link className="dropdown-item" to={master.path}>
+                                                <i className={`bi bi-${master.icon} me-2`}></i>
+                                                {master.label}
+                                            </Link>
+                                        </li>
+                                    ))}
+                            </ul>
+                        </li>
+                    )}
                 </ul>
 
                 {/* Right User Dropdown */}

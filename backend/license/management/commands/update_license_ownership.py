@@ -5,7 +5,7 @@ from license.models import LicenseDetailsModel
 from backend.data_script.fetch_ownership import fetch_scrip_ownership
 
 # === Config ===
-SERVER_API = "http://167.71.233.211/api/update-license-transfer/"
+SERVER_API = "https://license-manager.duckdns.org/api/update-license-transfer/"
 APP_ID = "204000000"
 SESSION_ID = "A2B93634A5BD42AB7CD0AC7FE0646FD0"
 CSRF_TOKEN = "4a119454-6bab-40b7-adb3-b042224073e8"

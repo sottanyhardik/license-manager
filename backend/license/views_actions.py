@@ -8,6 +8,7 @@ from rest_framework.viewsets import ViewSet
 
 from license.models import LicenseDetailsModel
 from license.ledger_pdf import generate_license_ledger_pdf
+from core.models import CompanyModel
 
 
 class LicenseActionViewSet(ViewSet):
@@ -50,5 +51,77 @@ class LicenseActionViewSet(ViewSet):
         except Exception as e:
             return Response(
                 {'error': f'Failed to generate PDF: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'], url_path='update-license-transfer')
+    def update_license_transfer(self, request):
+        """
+        Update license ownership and transfer information.
+        Called by the update_license_ownership management command.
+
+        Expected payload:
+        {
+            "license_number": "3010090273",
+            "license_date": "2024-01-15",
+            "exporter_iec": "0305000123",
+            "current_owner": {
+                "iec": "0305000456",
+                "name": "Company Name"
+            },
+            "transfers": [...]
+        }
+        """
+        try:
+            data = request.data
+            license_number = data.get('license_number')
+            current_owner_data = data.get('current_owner')
+
+            if not license_number:
+                return Response(
+                    {'error': 'license_number is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Find the license
+            try:
+                license_obj = LicenseDetailsModel.objects.get(license_number=license_number)
+            except LicenseDetailsModel.DoesNotExist:
+                return Response(
+                    {'error': f'License {license_number} not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Update current owner if provided
+            if current_owner_data and current_owner_data.get('iec'):
+                owner_iec = current_owner_data.get('iec')
+
+                # Try to find company by IEC
+                try:
+                    owner_company = CompanyModel.objects.get(iec=owner_iec)
+                    license_obj.current_owner = owner_company
+                    license_obj.save(update_fields=['current_owner'])
+                except CompanyModel.DoesNotExist:
+                    # Log but don't fail - we might want to create the company later
+                    pass
+
+            # Store transfer data in latest_transfer field (JSON field)
+            transfers = data.get('transfers', [])
+            if transfers:
+                # Get the most recent transfer
+                latest_transfer = max(transfers, key=lambda t: t.get('transfer_date', '') or '')
+                license_obj.latest_transfer = latest_transfer
+                license_obj.save(update_fields=['latest_transfer'])
+
+            return Response({
+                'success': True,
+                'license_number': license_number,
+                'current_owner_updated': current_owner_data is not None,
+                'transfers_count': len(transfers)
+            })
+
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to update license transfer: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

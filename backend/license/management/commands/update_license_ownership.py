@@ -77,7 +77,11 @@ def fetch_and_post_license_status(dfia):
         payload = build_payload(dfia, data)
         res = requests.post(SERVER_API, json=payload)
 
-        print(f"✅ DFIA {dfia.license_number} updated | Status Code: {res.status_code}")
+        if res.status_code == 500:
+            print(f"❌ DFIA {dfia.license_number} | Status Code: {res.status_code}")
+            print(f"   Error Response: {res.text}")
+        else:
+            print(f"✅ DFIA {dfia.license_number} updated | Status Code: {res.status_code}")
     except Exception as e:
         print(f"❌ Error for DFIA {dfia.license_number}: {e}")
 

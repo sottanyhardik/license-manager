@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 from rest_framework.permissions import AllowAny
 
-from license.models import LicenseDetailsModel
+from license.models import LicenseDetailsModel, LicenseTransferModel
 from license.ledger_pdf import generate_license_ledger_pdf
 from core.models import CompanyModel
 
@@ -106,19 +106,78 @@ class LicenseActionViewSet(ViewSet):
                     # Log but don't fail - we might want to create the company later
                     pass
 
-            # Store transfer data in latest_transfer field (JSON field)
+            # Store transfer data in LicenseTransferModel
             transfers = data.get('transfers', [])
+            transfers_created = 0
+
             if transfers:
-                # Get the most recent transfer
-                latest_transfer = max(transfers, key=lambda t: t.get('transfer_date', '') or '')
-                license_obj.latest_transfer = latest_transfer
-                license_obj.save(update_fields=['latest_transfer'])
+                from datetime import datetime
+
+                for transfer_data in transfers:
+                    # Parse transfer_date if it's a string
+                    transfer_date = transfer_data.get('transfer_date')
+                    if transfer_date and isinstance(transfer_date, str):
+                        try:
+                            # Try parsing date format DD/MM/YYYY or YYYY-MM-DD
+                            if '/' in transfer_date:
+                                transfer_date = datetime.strptime(transfer_date, '%d/%m/%Y').date()
+                            else:
+                                transfer_date = datetime.strptime(transfer_date, '%Y-%m-%d').date()
+                        except:
+                            transfer_date = None
+
+                    # Parse datetime fields
+                    def parse_datetime(date_str):
+                        if not date_str:
+                            return None
+                        try:
+                            if 'T' in date_str:
+                                return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                            return datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
+                        except:
+                            return None
+
+                    # Find or create from_company
+                    from_company = None
+                    from_iec = transfer_data.get('from_iec')
+                    if from_iec:
+                        from_company, _ = CompanyModel.objects.get_or_create(
+                            iec=from_iec,
+                            defaults={'name': transfer_data.get('from_iec_entity_name', from_iec)}
+                        )
+
+                    # Find or create to_company
+                    to_company = None
+                    to_iec = transfer_data.get('to_iec')
+                    if to_iec:
+                        to_company, _ = CompanyModel.objects.get_or_create(
+                            iec=to_iec,
+                            defaults={'name': transfer_data.get('to_iec_entity_name', to_iec)}
+                        )
+
+                    # Create or update transfer record
+                    LicenseTransferModel.objects.update_or_create(
+                        license=license_obj,
+                        transfer_date=transfer_date,
+                        from_company=from_company,
+                        to_company=to_company,
+                        defaults={
+                            'transfer_status': transfer_data.get('transfer_status', ''),
+                            'transfer_initiation_date': parse_datetime(transfer_data.get('transfer_initiation_date')),
+                            'transfer_acceptance_date': parse_datetime(transfer_data.get('transfer_acceptance_date')),
+                            'cbic_status': transfer_data.get('cbic_status'),
+                            'cbic_response_date': parse_datetime(transfer_data.get('cbic_response_date')),
+                            'user_id_transfer_initiation': transfer_data.get('user_id_transfer_initiation'),
+                            'user_id_acceptance': transfer_data.get('user_id_acceptance'),
+                        }
+                    )
+                    transfers_created += 1
 
             return Response({
                 'success': True,
                 'license_number': license_number,
                 'current_owner_updated': current_owner_data is not None,
-                'transfers_count': len(transfers)
+                'transfers_count': transfers_created
             })
 
         except Exception as e:

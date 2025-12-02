@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
+from rest_framework.permissions import AllowAny
 
 from license.models import LicenseDetailsModel
 from license.ledger_pdf import generate_license_ledger_pdf
@@ -54,7 +55,7 @@ class LicenseActionViewSet(ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['post'], url_path='update-license-transfer')
+    @action(detail=False, methods=['post'], url_path='update-license-transfer', permission_classes=[AllowAny])
     def update_license_transfer(self, request):
         """
         Update license ownership and transfer information.

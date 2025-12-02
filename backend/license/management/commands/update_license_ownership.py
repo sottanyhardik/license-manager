@@ -1,8 +1,10 @@
 import time
+
 import requests
 from django.core.management.base import BaseCommand
-from license.models import LicenseDetailsModel
+
 from data_script.fetch_ownership import fetch_scrip_ownership
+from license.models import LicenseDetailsModel
 
 # === Config ===
 SERVER_API = "https://license-manager.duckdns.org/api/update-license-transfer/"

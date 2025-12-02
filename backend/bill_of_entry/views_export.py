@@ -114,9 +114,6 @@ def add_grouped_export_action(viewset_class):
 
             # Process each license serial within company
             for license_serial, products_dict in license_dict.items():
-                # License Serial subheader
-                pdf_exporter.add_section_header(elements, f"License: {license_serial}")
-
                 # Process each product (Item) within license
                 for product_name, ports_dict in products_dict.items():
                     # Product/Item subheader
@@ -329,15 +326,6 @@ def add_grouped_export_action(viewset_class):
 
             # Process each license serial within company
             for license_serial, products_dict in license_dict.items():
-                # License Serial subheader
-                ws.merge_cells(f'A{row}:P{row}')
-                cell = ws[f'A{row}']
-                cell.value = f"License: {license_serial}"
-                cell.font = Font(bold=True, size=12, color="FFFFFF")
-                cell.fill = PatternFill(start_color="2563eb", end_color="2563eb", fill_type="solid")
-                cell.alignment = Alignment(horizontal='center', vertical='center')
-                row += 1
-
                 # Process each product (Item) within license
                 for product_name, ports_dict in products_dict.items():
                     # Product subheader

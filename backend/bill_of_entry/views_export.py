@@ -237,9 +237,9 @@ def add_grouped_export_action(viewset_class):
                 elements.append(product_summary_table)
                 pdf_exporter.add_spacer(elements, 0.2)
 
-            # Add company total summary
+            # Add grand total summary
             summary_data = [[
-                'Company Total:',
+                'Grand Total:',
                 f"Qty: {pdf_exporter.format_number(company_total_qty, decimals=0)} KGS",
                 f"CIF (FC): ${pdf_exporter.format_number(company_total_fc)}",
                 f"CIF (INR): {pdf_exporter.format_number(company_total_inr)}"
@@ -436,9 +436,9 @@ def add_grouped_export_action(viewset_class):
                 ws.cell(row=row, column=7).number_format = '₹#,##0.00'
                 row += 2
 
-            # Add company total after all products
+            # Add grand total after all products
             ws.merge_cells(f'A{row}:B{row}')
-            cell = ws.cell(row=row, column=1, value="Company Total:")
+            cell = ws.cell(row=row, column=1, value="Grand Total:")
             cell.font = Font(bold=True, size=12, color="1e3a8a")
             cell.fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
             cell.alignment = Alignment(horizontal='center', vertical='center')

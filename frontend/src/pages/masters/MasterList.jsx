@@ -270,17 +270,11 @@ export default function MasterList() {
                 }
 
                 if (format === 'pdf') {
-                    // For PDF, fetch with credentials and open in new tab
-                    const response = await api.get(apiPath, {
-                        params,
-                        responseType: 'blob'
-                    });
-
-                    const blob = new Blob([response.data], {type: 'application/pdf'});
-                    const url = window.URL.createObjectURL(blob);
-                    window.open(url, '_blank');
-                    // Clean up after a delay to allow the browser to open the PDF
-                    setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                    // For PDF, open the URL directly with access token
+                    const token = localStorage.getItem('access');
+                    const queryParams = new URLSearchParams({...params, access_token: token}).toString();
+                    const pdfUrl = `/api${apiPath}?${queryParams}`;
+                    window.open(pdfUrl, '_blank');
                 } else {
                     // For Excel, download as before
                     const response = await api.get(apiPath, {
@@ -477,14 +471,11 @@ export default function MasterList() {
                                     className: 'btn btn-outline-primary',
                                     onClick: async (item) => {
                                         try {
-                                            const response = await api.get(`/license-actions/${item.id}/download-ledger/`, {
-                                                responseType: 'blob'
-                                            });
-                                            const blob = new Blob([response.data], { type: 'application/pdf' });
-                                            const url = window.URL.createObjectURL(blob);
-                                            window.open(url, '_blank');
+                                            const token = localStorage.getItem('access');
+                                            const pdfUrl = `/api/license-actions/${item.id}/download-ledger/?access_token=${token}`;
+                                            window.open(pdfUrl, '_blank');
                                         } catch (err) {
-                                            alert(err.response?.data?.error || 'Failed to generate ledger PDF');
+                                            alert(err || 'Failed to generate ledger PDF');
                                         }
                                     }
                                 }
@@ -508,12 +499,9 @@ export default function MasterList() {
                                     className: 'btn btn-outline-danger',
                                     onClick: async (item) => {
                                         try {
-                                            const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
-                                                responseType: 'blob'
-                                            });
-                                            const blob = new Blob([response.data], { type: 'application/pdf' });
-                                            const url = window.URL.createObjectURL(blob);
-                                            window.open(url, '_blank');
+                                            const token = localStorage.getItem('access');
+                                            const pdfUrl = `/api/allotment-actions/${item.id}/generate-pdf/?access_token=${token}`;
+                                            window.open(pdfUrl, '_blank');
                                         } catch (err) {
                                             alert(err.response?.data?.error || 'Failed to generate PDF');
                                         }
@@ -584,12 +572,9 @@ export default function MasterList() {
                                     className: 'btn btn-outline-danger',
                                     onClick: async (item) => {
                                         try {
-                                            const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
-                                                responseType: 'blob'
-                                            });
-                                            const blob = new Blob([response.data], { type: 'application/pdf' });
-                                            const url = window.URL.createObjectURL(blob);
-                                            window.open(url, '_blank');
+                                            const token = localStorage.getItem('access');
+                                            const pdfUrl = `/api/allotment-actions/${item.id}/generate-pdf/?access_token=${token}`;
+                                            window.open(pdfUrl, '_blank');
                                         } catch (err) {
                                             alert(err.response?.data?.error || 'Failed to generate PDF');
                                         }

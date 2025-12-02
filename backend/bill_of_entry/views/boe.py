@@ -133,6 +133,45 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
 
         return queryset
 
+    @action(detail=False, methods=['post'], url_path='bulk-update-product-names')
+    def bulk_update_product_names(self, request):
+        """
+        Bulk update product_name for all BOEs with empty/None product_name.
+
+        Returns:
+        - success: True if completed
+        - total: Total BOEs processed
+        - updated: Count of successfully updated BOEs
+        - skipped: Count of BOEs skipped (no items found)
+        - message: Summary message
+        """
+        # Get all BOEs with empty product_name
+        empty_product_boes = BillOfEntryModel.objects.filter(
+            Q(product_name__isnull=True) | Q(product_name='')
+        ).prefetch_related('item_details__sr_number__items')
+
+        total_count = empty_product_boes.count()
+        updated_count = 0
+        skipped_count = 0
+
+        for boe in empty_product_boes:
+            generated_name = boe.generate_product_name_from_items()
+
+            if generated_name:
+                boe.product_name = generated_name
+                boe.save(update_fields=['product_name'])
+                updated_count += 1
+            else:
+                skipped_count += 1
+
+        return Response({
+            'success': True,
+            'total': total_count,
+            'updated': updated_count,
+            'skipped': skipped_count,
+            'message': f'Processed {total_count} BOEs: {updated_count} updated, {skipped_count} skipped (no items found)'
+        })
+
 
 # Add grouped export functionality
 BillOfEntryViewSet = add_grouped_export_action(BillOfEntryViewSet)
@@ -369,51 +408,3 @@ def update_product_name(self, request, pk=None):
 
 
 BillOfEntryViewSet.update_product_name = update_product_name
-
-
-# Add bulk update product_name action
-@action(detail=False, methods=['post'], url_path='bulk-update-product-names')
-def bulk_update_product_names(self, request):
-    """
-    Bulk update product_name for all BOEs with empty/None product_name.
-
-    Returns:
-    - success: True if completed
-    - total: Total BOEs processed
-    - updated: Count of successfully updated BOEs
-    - skipped: Count of BOEs skipped (no items found)
-    - message: Summary message
-    """
-    from django.shortcuts import get_object_or_404
-    from rest_framework.response import Response
-    from django.db.models import Q
-
-    # Get all BOEs with empty product_name
-    empty_product_boes = BillOfEntryModel.objects.filter(
-        Q(product_name__isnull=True) | Q(product_name='')
-    ).prefetch_related('item_details__sr_number__items')
-
-    total_count = empty_product_boes.count()
-    updated_count = 0
-    skipped_count = 0
-
-    for boe in empty_product_boes:
-        generated_name = boe.generate_product_name_from_items()
-
-        if generated_name:
-            boe.product_name = generated_name
-            boe.save(update_fields=['product_name'])
-            updated_count += 1
-        else:
-            skipped_count += 1
-
-    return Response({
-        'success': True,
-        'total': total_count,
-        'updated': updated_count,
-        'skipped': skipped_count,
-        'message': f'Processed {total_count} BOEs: {updated_count} updated, {skipped_count} skipped (no items found)'
-    })
-
-
-BillOfEntryViewSet.bulk_update_product_names = bulk_update_product_names

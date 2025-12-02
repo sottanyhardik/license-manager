@@ -65,38 +65,61 @@ echo -e "${BLUE}📦 Collecting static files...${NC}"
 python manage.py collectstatic --noinput
 
 echo -e "${BLUE}🔐 Setting permissions...${NC}"
-sudo chown -R django:django /home/django/license-manager/backend/media
-sudo chmod -R 775 /home/django/license-manager/backend/media
-sudo chown -R django:django /home/django/license-manager/frontend/dist
-sudo chmod -R 755 /home/django/license-manager/frontend/dist
+# Set permissions (should already be owned by django user)
+chmod -R 775 /home/django/license-manager/backend/media 2>/dev/null || true
+chmod -R 755 /home/django/license-manager/frontend/dist 2>/dev/null || true
 
 echo -e "${BLUE}🔄 Restarting services...${NC}"
 
 # Restart supervisor processes
 echo -e "${YELLOW}  → Restarting license-manager...${NC}"
-sudo supervisorctl restart license-manager
-
-# Check if celery is configured
-if sudo supervisorctl status license-manager-celery &> /dev/null; then
-    echo -e "${YELLOW}  → Restarting celery worker...${NC}"
-    sudo supervisorctl restart license-manager-celery
+if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
+    sudo supervisorctl restart license-manager
+else
+    supervisorctl restart license-manager
 fi
 
-if sudo supervisorctl status license-manager-celery-beat &> /dev/null; then
+# Check if celery is configured
+if supervisorctl status license-manager-celery &> /dev/null; then
+    echo -e "${YELLOW}  → Restarting celery worker...${NC}"
+    if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
+        sudo supervisorctl restart license-manager-celery
+    else
+        supervisorctl restart license-manager-celery
+    fi
+fi
+
+if supervisorctl status license-manager-celery-beat &> /dev/null; then
     echo -e "${YELLOW}  → Restarting celery beat...${NC}"
-    sudo supervisorctl restart license-manager-celery-beat
+    if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
+        sudo supervisorctl restart license-manager-celery-beat
+    else
+        supervisorctl restart license-manager-celery-beat
+    fi
 fi
 
 # Restart nginx
 echo -e "${YELLOW}  → Reloading nginx...${NC}"
-sudo systemctl reload nginx
+if command -v sudo &> /dev/null && sudo -n systemctl status nginx &> /dev/null 2>&1; then
+    sudo systemctl reload nginx
+else
+    echo -e "${YELLOW}    (Skipping nginx reload - requires sudo)${NC}"
+fi
 
 echo -e "${BLUE}✅ Checking service status...${NC}"
 echo -e "${YELLOW}==================== Supervisor Status ====================${NC}"
-sudo supervisorctl status
+if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
+    sudo supervisorctl status
+else
+    supervisorctl status
+fi
 
 echo -e "${YELLOW}==================== Nginx Status ====================${NC}"
-sudo systemctl status nginx --no-pager | head -10
+if command -v sudo &> /dev/null && sudo -n systemctl status nginx &> /dev/null 2>&1; then
+    sudo systemctl status nginx --no-pager | head -10
+else
+    echo -e "${YELLOW}    (Nginx status check requires sudo)${NC}"
+fi
 
 echo -e "${GREEN}================================================${NC}"
 echo -e "${GREEN}✨ Deployment completed successfully!${NC}"
@@ -107,7 +130,11 @@ echo -e "   http://143.110.252.201"
 echo -e "   https://license-manager.duckdns.org"
 echo ""
 echo -e "${BLUE}📊 Service Status:${NC}"
-sudo supervisorctl status | grep license-manager
+if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
+    sudo supervisorctl status | grep license-manager
+else
+    supervisorctl status | grep license-manager
+fi
 
 ENDSSH
 

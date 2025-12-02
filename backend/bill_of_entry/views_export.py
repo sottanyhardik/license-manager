@@ -193,12 +193,26 @@ def add_grouped_export_action(viewset_class):
                         company_total_inr += boe['total_inr']
                         company_total_fc += boe['total_fc']
 
-                    # Add port totals row (17 columns now)
+                    # Add port totals row (17 columns now) - properly aligned
                     table_data.append([
-                        '', '', f'Port Total', pdf_exporter.format_number(port_total_qty, decimals=0),
-                        '', pdf_exporter.format_number(port_total_value), '',  # Added empty for exchange rate
-                        pdf_exporter.format_number(port_total_inr),
-                        '', '', '', '', '', '', '', '', ''
+                        '',  # Sr No
+                        '',  # BOE Number
+                        '',  # BOE Date
+                        'Port Total',  # Port
+                        pdf_exporter.format_number(port_total_qty, decimals=0),  # Quantity (KGS)
+                        '',  # Unit Price ($)
+                        pdf_exporter.format_number(port_total_value),  # Value ($)
+                        '',  # Exchange Rate
+                        pdf_exporter.format_number(port_total_inr),  # Total CIF INR
+                        '',  # Item Name
+                        '',  # Invoice
+                        '',  # License No.
+                        '',  # License Date
+                        '',  # License Port
+                        '',  # Item Sr.
+                        '',  # BOE Qty.
+                        '',  # BOE $.
+                        ''   # BOE CIF
                     ])
 
                     # Create table with column widths (17 columns) - optimized for better readability

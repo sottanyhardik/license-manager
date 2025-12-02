@@ -206,8 +206,8 @@ class BusinessPDFExporter:
             cell_style = ParagraphStyle(
                 'CellText',
                 parent=self.styles['Normal'],
-                fontSize=7,
-                leading=9,
+                fontSize=8,
+                leading=10,
                 textColor=colors.black,
                 wordWrap='CJK'
             )

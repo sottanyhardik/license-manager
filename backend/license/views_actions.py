@@ -29,9 +29,11 @@ class LicenseActionViewSet(ViewSet):
         """
         license_obj = get_object_or_404(
             LicenseDetailsModel.objects.prefetch_related(
-                'import_license__items__head',
+                'import_license__items__group',
+                'import_license__items__sion_norm_class',
                 'import_license__allotment_details__allotment__company',
-                'import_license__hs_code',
+                'import_license__hs_code'
+            ).select_related(
                 'exporter',
                 'port'
             ),

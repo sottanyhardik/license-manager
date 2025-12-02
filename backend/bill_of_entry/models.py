@@ -174,6 +174,7 @@ class BillOfEntryModel(AuditModel):
     def generate_product_name_from_items(self) -> str:
         """
         Generate product_name from item_details -> sr_number -> items names.
+        If item name is "Unknown Product" or no items linked, uses sr_number description instead.
         Returns unique item names joined by ' or ' (preserving order).
         If no items found, returns empty string.
         """
@@ -183,10 +184,24 @@ class BillOfEntryModel(AuditModel):
         for item_detail in self.item_details.select_related('sr_number').prefetch_related('sr_number__items').all():
             if item_detail.sr_number:
                 # Get all item names from the M2M relationship
-                for item in item_detail.sr_number.items.all():
-                    if item.name and item.name not in seen:
-                        seen.add(item.name)
-                        item_names.append(item.name)
+                sr_items = item_detail.sr_number.items.all()
+
+                if not sr_items.exists():
+                    # No items linked - use description from sr_number
+                    if item_detail.sr_number.description and item_detail.sr_number.description not in seen:
+                        seen.add(item_detail.sr_number.description)
+                        item_names.append(item_detail.sr_number.description)
+                else:
+                    for item in sr_items:
+                        if item.name:
+                            # If item name is "Unknown Product", use description instead
+                            if item.name.strip().upper() == "UNKNOWN PRODUCT":
+                                if item_detail.sr_number.description and item_detail.sr_number.description not in seen:
+                                    seen.add(item_detail.sr_number.description)
+                                    item_names.append(item_detail.sr_number.description)
+                            elif item.name not in seen:
+                                seen.add(item.name)
+                                item_names.append(item.name)
 
         return ' or '.join(item_names) if item_names else ""
 

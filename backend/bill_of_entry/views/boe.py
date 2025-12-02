@@ -326,3 +326,44 @@ def generate_transfer_letter(self, request, pk=None):
 
 
 BillOfEntryViewSet.generate_transfer_letter = generate_transfer_letter
+
+
+# Add update product_name action
+@action(detail=True, methods=['post'], url_path='update-product-name')
+def update_product_name(self, request, pk=None):
+    """
+    Update product_name for BOE by fetching item names from item_details -> sr_number -> items.
+    If product_name is empty/None, generates it from item names joined by ' or '.
+
+    Returns:
+    - success: True if updated
+    - product_name: The generated/updated product name
+    - message: Success message
+    """
+    from django.shortcuts import get_object_or_404
+    from rest_framework.response import Response
+
+    boe = get_object_or_404(BillOfEntryModel, id=pk)
+
+    # Generate product name from items
+    generated_name = boe.generate_product_name_from_items()
+
+    if not generated_name:
+        return Response({
+            'success': False,
+            'message': 'No items found to generate product name',
+            'product_name': boe.product_name
+        }, status=400)
+
+    # Update product_name
+    boe.product_name = generated_name
+    boe.save(update_fields=['product_name'])
+
+    return Response({
+        'success': True,
+        'product_name': generated_name,
+        'message': f'Product name updated successfully to: {generated_name}'
+    })
+
+
+BillOfEntryViewSet.update_product_name = update_product_name

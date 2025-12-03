@@ -578,19 +578,19 @@ export default function AllotmentAction() {
                 <div className="card mb-4">
                     <div className="card-body">
                         <h5 className="mb-3">Allotted Items ({allotment.allotment_details.length})</h5>
-                        <div className="table-responsive">
-                            <table className="table table-sm table-bordered" style={{tableLayout: 'fixed', width: '100%'}}>
+                        <div style={{overflowX: 'visible'}}>
+                            <table className="table table-sm table-bordered" style={{width: '100%'}}>
                                 <thead className="table-light">
                                 <tr>
-                                    <th style={{width: '9%', whiteSpace: 'nowrap'}}>License</th>
-                                    <th style={{width: '5%', whiteSpace: 'nowrap'}}>Serial</th>
-                                    <th style={{width: '25%'}}>Description</th>
-                                    <th style={{width: '15%'}}>Exporter</th>
-                                    <th style={{width: '9%', whiteSpace: 'nowrap'}}>License Date</th>
-                                    <th style={{width: '9%', whiteSpace: 'nowrap'}}>Expiry Date</th>
-                                    <th style={{width: '9%', whiteSpace: 'nowrap', textAlign: 'right'}}>Allotted Qty</th>
-                                    <th style={{width: '10%', whiteSpace: 'nowrap', textAlign: 'right'}}>Allotted Value</th>
-                                    <th style={{width: '9%', whiteSpace: 'nowrap'}}>Action</th>
+                                    <th style={{minWidth: '120px', whiteSpace: 'nowrap'}}>License</th>
+                                    <th style={{minWidth: '70px', whiteSpace: 'nowrap'}}>Serial</th>
+                                    <th style={{minWidth: '300px'}}>Description</th>
+                                    <th style={{minWidth: '250px'}}>Exporter</th>
+                                    <th style={{minWidth: '110px', whiteSpace: 'nowrap'}}>License Date</th>
+                                    <th style={{minWidth: '110px', whiteSpace: 'nowrap'}}>Expiry Date</th>
+                                    <th style={{minWidth: '120px', whiteSpace: 'nowrap', textAlign: 'right'}}>Allotted Qty</th>
+                                    <th style={{minWidth: '130px', whiteSpace: 'nowrap', textAlign: 'right'}}>Allotted Value</th>
+                                    <th style={{minWidth: '100px', whiteSpace: 'nowrap'}}>Action</th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -804,14 +804,14 @@ export default function AllotmentAction() {
                                                 description: "",
                                                 exporter: "",
                                                 license_number: "",
-                                                available_quantity_gte: "",
+                                                available_quantity_gte: "50",
                                                 available_quantity_lte: "",
                                                 available_value_gte: "",
                                                 available_value_lte: "",
                                                 notification_number: "",
                                                 norm_class: "",
                                                 hs_code: "",
-                                                is_expired: ""
+                                                is_expired: "false"
                                             })}
                                         >
                                             Clear Filters

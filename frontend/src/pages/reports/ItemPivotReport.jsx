@@ -24,6 +24,14 @@ export default function ItemPivotReport() {
         loadAvailableNorms();
     }, []);
 
+    // Reload available norms when filters change (but not on initial mount)
+    useEffect(() => {
+        // Skip first render (already loaded above)
+        if (minBalance !== 200 || licenseStatus !== 'active') {
+            loadAvailableNorms();
+        }
+    }, [minBalance, licenseStatus]);
+
     // Load report when active norm tab changes or filters change
     useEffect(() => {
         if (activeNormTab) {
@@ -45,19 +53,21 @@ export default function ItemPivotReport() {
 
     const loadAvailableNorms = async () => {
         try {
-            // Fetch all norms that have licenses with balance > 100
-            let url = 'license/reports/item-pivot/?format=json&days=30';
+            // Fetch only the list of norm classes (lightweight endpoint)
+            let url = `item-pivot/available-norms/`;
+            console.log('Fetching available norms from:', url);
             const response = await api.get(url);
-            const norms = Object.keys(response.data.licenses_by_norm_notification || {}).sort();
-            setAvailableNorms(norms);
+            console.log('Response:', response);
+            console.log('Response data:', response.data);
 
-            // Set first norm as active
-            if (norms.length > 0 && !activeNormTab) {
-                console.log('Setting active norm to:', norms[0]);
-                setActiveNormTab(norms[0]);
-            }
+            const norms = response.data || [];
+            setAvailableNorms(Array.isArray(norms) ? norms : []);
+
+            // Don't automatically set first norm as active - wait for user click
+            console.log('Available norms loaded:', norms.length);
         } catch (error) {
             console.error('Error loading available norms:', error);
+            console.error('Error details:', error.response?.data);
             setAvailableNorms([]);
         }
     };
@@ -254,37 +264,6 @@ export default function ItemPivotReport() {
         return summary;
     };
 
-    if (loading) {
-        return (
-            <div className="container-fluid">
-                <div className="d-flex justify-content-center align-items-center" style={{minHeight: '400px'}}>
-                    <div className="text-center">
-                        <div className="spinner-border text-primary mb-3" role="status"
-                             style={{width: '3rem', height: '3rem'}}>
-                            <span className="visually-hidden">Loading...</span>
-                        </div>
-                        <h5 className="text-muted">Loading Item Pivot Report...</h5>
-                        <p className="text-muted small">Please wait while we fetch the data</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    if (!reportData && !loading && activeNormTab) {
-        return (
-            <div className="container-fluid py-5">
-                <div className="alert alert-info d-flex align-items-center" role="alert">
-                    <i className="bi bi-info-circle-fill me-3" style={{fontSize: '1.5rem'}}></i>
-                    <div>
-                        <h5 className="alert-heading mb-1">No Report Data Available</h5>
-                        <p className="mb-0">No licenses found for norm: {activeNormTab}. Try adjusting your filters or
-                            check back later.</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="container-fluid px-3 py-3" style={{backgroundColor: '#f8f9fa', minHeight: '100vh'}}>
@@ -477,31 +456,49 @@ export default function ItemPivotReport() {
             <div className="row mb-4">
                 <div className="col-12">
                     <div className="card shadow-sm border-0">
-                        <div className="card-body p-2">
-                            <div className="d-flex flex-wrap gap-2" style={{justifyContent: 'flex-start'}}>
-                                {availableNorms.map((norm) => {
-                                    return (
-                                        <button
-                                            key={norm}
-                                            className={`btn btn-sm ${activeNormTab === norm ? 'btn-primary' : 'btn-outline-secondary'}`}
-                                            onClick={() => setActiveNormTab(norm)}
-                                            type="button"
-                                            style={{
-                                                width: '110px',
-                                                fontWeight: activeNormTab === norm ? 'bold' : 'normal',
-                                                transition: 'all 0.3s ease'
-                                            }}
-                                        >
-                                            <i className="bi bi-tag-fill me-1"></i>
-                                            {norm}
-                                            {loading && activeNormTab === norm && (
-                                                <span className="spinner-border spinner-border-sm ms-2" role="status"
-                                                      style={{width: '0.8rem', height: '0.8rem'}}></span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                        <div className="card-body p-3">
+                            <h6 className="mb-3 text-primary">
+                                <i className="bi bi-tag-fill me-2"></i>
+                                Available Norms ({availableNorms.length})
+                                <small className="text-muted ms-2">(includes E1, E5, E126, E132 conversion norms)</small>
+                            </h6>
+                            {availableNorms.length > 0 ? (
+                                <div className="d-flex flex-wrap gap-2">
+                                    {availableNorms.map((norm) => {
+                                        const isConversionNorm = ['E1', 'E5', 'E126', 'E132'].includes(norm);
+                                        return (
+                                            <button
+                                                key={norm}
+                                                className={`btn btn-sm ${activeNormTab === norm ? (isConversionNorm ? 'btn-success' : 'btn-primary') : (isConversionNorm ? 'btn-outline-success' : 'btn-outline-primary')}`}
+                                                onClick={() => {
+                                                    if (activeNormTab !== norm) {
+                                                        setReportData(null);
+                                                    }
+                                                    setActiveNormTab(norm);
+                                                }}
+                                                type="button"
+                                                style={{
+                                                    minWidth: '90px',
+                                                    fontWeight: activeNormTab === norm ? 'bold' : 'normal',
+                                                    transition: 'all 0.3s ease'
+                                                }}
+                                            >
+                                                <i className={`bi ${isConversionNorm ? 'bi-arrow-repeat' : 'bi-tag-fill'} me-1`}></i>
+                                                {norm}
+                                                {loading && activeNormTab === norm && (
+                                                    <span className="spinner-border spinner-border-sm ms-2" role="status"
+                                                          style={{width: '0.8rem', height: '0.8rem'}}></span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="text-center py-3">
+                                    <i className="bi bi-inbox text-muted" style={{fontSize: '2rem'}}></i>
+                                    <p className="text-muted mb-0 mt-2">No norms available.</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -510,7 +507,32 @@ export default function ItemPivotReport() {
             {/* Report Tables - Only show active norm */}
             <div className="row">
                 <div className="col-12">
-                    {activeNormTab && reportData.licenses_by_norm_notification[activeNormTab] && (
+                    {/* Loading state */}
+                    {loading && activeNormTab && (
+                        <div className="card shadow-sm border-0">
+                            <div className="card-body text-center py-5">
+                                <div className="spinner-border text-primary mb-3" role="status" style={{width: '3rem', height: '3rem'}}>
+                                    <span className="visually-hidden">Loading...</span>
+                                </div>
+                                <h5 className="text-muted">Loading {activeNormTab} Report...</h5>
+                                <p className="text-muted small">Please wait while we fetch the data</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* No data message after loading */}
+                    {!loading && activeNormTab && reportData && (!reportData.licenses_by_norm_notification[activeNormTab] || Object.keys(reportData.licenses_by_norm_notification[activeNormTab] || {}).length === 0) && (
+                        <div className="card shadow-sm border-0">
+                            <div className="card-body text-center py-5">
+                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
+                                <h5 className="mt-3 text-muted">No licenses found for {activeNormTab}</h5>
+                                <p className="text-muted">Try adjusting your filters to see more results.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Show report data */}
+                    {!loading && activeNormTab && reportData && reportData.licenses_by_norm_notification[activeNormTab] && Object.keys(reportData.licenses_by_norm_notification[activeNormTab]).length > 0 && (
                         <div>
                             {/* Notifications within active norm */}
                             {Object.entries(reportData.licenses_by_norm_notification[activeNormTab]).sort().map(([notification, licenses]) => (
@@ -1068,23 +1090,24 @@ export default function ItemPivotReport() {
                         </div>
                     )}
 
-                    {/* No data message */}
-                    {reportData && Object.keys(reportData.licenses_by_norm_notification || {}).length === 0 && (
+                    {/* No norm selected message */}
+                    {!loading && !activeNormTab && availableNorms.length > 0 && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
-                                <h5 className="mt-3 text-muted">No licenses found</h5>
-                                <p className="text-muted">Try adjusting your filters to see more results.</p>
+                                <i className="bi bi-tag" style={{fontSize: '3rem', color: '#667eea'}}></i>
+                                <h5 className="mt-3 text-primary">Select a Norm to View Report</h5>
+                                <p className="text-muted">Click on any norm tab above to load the report data</p>
                             </div>
                         </div>
                     )}
 
-                    {/* No norm selected message */}
-                    {!activeNormTab && availableNorms.length > 0 && (
+                    {/* No norms available */}
+                    {!loading && availableNorms.length === 0 && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-tag" style={{fontSize: '3rem', color: '#ccc'}}></i>
-                                <h5 className="mt-3 text-muted">Please select a norm tab above</h5>
+                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
+                                <h5 className="mt-3 text-muted">No Norms Available</h5>
+                                <p className="text-muted">No active norm classes found in the system.</p>
                             </div>
                         </div>
                     )}

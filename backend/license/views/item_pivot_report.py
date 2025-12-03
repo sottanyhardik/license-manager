@@ -15,9 +15,11 @@ from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
 from django.views import View
 from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 
-from core.constants import DEC_0, DEC_000, GE, MI, IP, SM
+from core.constants import DEC_0, DEC_000, GE, MI, IP, SM, CO
 from license.models import LicenseDetailsModel, LicenseImportItemsModel
 
 
@@ -75,7 +77,7 @@ class ItemPivotReportView(View):
         # Base query - active licenses with required purchase status
         licenses = LicenseDetailsModel.objects.filter(
             is_active=True,
-            purchase_status__in=[GE, MI, IP, SM]
+            purchase_status__in=[GE, MI, IP, SM, CO]
         )
 
         # Apply license status filter
@@ -157,7 +159,37 @@ class ItemPivotReportView(View):
                     if first_export and first_export.norm_class:
                         norm_class = first_export.norm_class.norm_class
 
-                licenses_by_norm_notification[norm_class][notification].append(license_row)
+                # Define conversion norms
+                conversion_norms = ['E1', 'E5', 'E126', 'E132']
+                is_conversion = license_obj.purchase_status == CO
+
+                # Build notification key based on norm class and purchase status
+                if norm_class in conversion_norms and is_conversion:
+                    # For conversion licenses in E1, E5, E126, E132
+                    if norm_class == 'E5':
+                        # E5 Conversion: split by Parle vs Others
+                        exporter_name = license_obj.exporter.name if license_obj.exporter else ''
+                        if 'PARLE' in exporter_name.upper():
+                            notification_key = f"{notification} - Conversion - Parle"
+                        else:
+                            notification_key = f"{notification} - Conversion"
+                    else:
+                        # E1, E126, E132 Conversion
+                        notification_key = f"{notification} - Conversion"
+
+                elif norm_class == 'E5':
+                    # E5 non-conversion: split by Parle vs Others
+                    exporter_name = license_obj.exporter.name if license_obj.exporter else ''
+                    if 'PARLE' in exporter_name.upper():
+                        notification_key = f"{notification} - Parle"
+                    else:
+                        notification_key = f"{notification} - Others"
+
+                else:
+                    # Regular grouping by notification for other norms
+                    notification_key = notification
+
+                licenses_by_norm_notification[norm_class][notification_key].append(license_row)
 
         # Determine which items have restrictions
         items_with_restrictions = set()
@@ -595,3 +627,35 @@ class ItemPivotViewSet(viewsets.ViewSet):
         """
         view = ItemPivotReportView()
         return view.get(request)
+
+    @action(detail=False, methods=['get'], url_path='available-norms')
+    def available_norms(self, request):
+        """
+        Get list of all active norm classes.
+        Returns a simple list of norm class names, including conversion norms (E1, E5, E126, E132).
+        """
+        try:
+            # Define conversion norm classes
+            CONVERSION_NORMS = ['E1', 'E5', 'E126', 'E132']
+
+            # Get all active SION norm classes from the database
+            from core.models import SionNormClassModel
+            active_norms = SionNormClassModel.objects.filter(
+                is_active=True
+            ).values_list('norm_class', flat=True).distinct()
+
+            # Convert to set and add conversion norms
+            all_norms = set(active_norms)
+            all_norms.update(CONVERSION_NORMS)
+
+            # Sort and return
+            result = sorted(list(all_norms))
+
+            print(f"Available norms endpoint: Found {len(result)} norms (including conversion norms)")
+            print(f"Norms: {result}")
+            return Response(result)
+        except Exception as e:
+            print(f"Error in available_norms: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({"error": str(e)}, status=500)

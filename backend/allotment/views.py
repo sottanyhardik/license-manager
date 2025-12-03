@@ -1,12 +1,13 @@
 # allotment/views.py
+from rest_framework import status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
 from allotment.models import AllotmentModel
 from allotment.serializers import AllotmentSerializer
 from allotment.views_export import add_grouped_export_action
 from core.constants import ROW_TYPE_CHOICES
 from core.views.master_view import MasterViewSet
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework import status
 
 
 def _get_active_usd_rate():
@@ -45,8 +46,11 @@ AllotmentViewSet = MasterViewSet.create_viewset(
                    "allotment_details__item__license__license_number"],
         "filter": {
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
+            "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
+                                "filter_field": "company"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
-            "related_company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
+            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name",
+                             "filter_field": "port"},
             "type": {"type": "choice", "choices": list(ROW_TYPE_CHOICES)},
             "estimated_arrival_date": {"type": "date_range"},
             "modified_on": {"type": "date_range"},
@@ -55,14 +59,15 @@ AllotmentViewSet = MasterViewSet.create_viewset(
         },
         "list_display": [
             "modified_on",
-            "company__name",
-            "invoice",
             "item_name",
+            "company__name",
+            "port__name",
             "required_quantity",
             "unit_value_per_unit",
             "required_value",
             "estimated_arrival_date",
             "is_approved",
+            "invoice",
             "dfia_list"
         ],
         "form_fields": [
@@ -190,7 +195,6 @@ def custom_get_queryset_with_defaults(self):
 
 
 AllotmentViewSet.get_queryset = custom_get_queryset_with_defaults
-
 
 # Override create to inject exchange_rate default in metadata
 original_create = AllotmentViewSet.create

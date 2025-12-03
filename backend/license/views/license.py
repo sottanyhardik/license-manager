@@ -1,13 +1,16 @@
 # license/views/license.py
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
+
+from core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, \
+    NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
 from core.views.master_view import MasterViewSet
 from license.models import LicenseDetailsModel
-from license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, LicenseDocumentSerializer
-from license.views.license_report import add_license_report_action
+from license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, \
+    LicenseDocumentSerializer
 from license.views.active_dfia_report import add_active_dfia_report_action
+from license.views.license_report import add_license_report_action
 
 # Nested field definitions for LicenseDetails
 license_nested_field_defs = {
@@ -19,7 +22,8 @@ license_nested_field_defs = {
         {"name": "start_serial_number", "type": "number", "label": "Start Serial Number", "default": 0},
         {"name": "net_quantity", "type": "number", "label": "Net Quantity", "default": 0},
         {"name": "fob_inr", "type": "number", "label": "FOB (INR)", "default": 0},
-        {"name": "currency", "type": "select", "label": "Currency", "choices": list(CURRENCY_CHOICES), "default": "usd"},
+        {"name": "currency", "type": "select", "label": "Currency", "choices": list(CURRENCY_CHOICES),
+         "default": "usd"},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)", "default": 0},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)", "default": 0},
     ],
@@ -52,7 +56,11 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
         "search": ["license_number", "file_number", "exporter__name"],
         "filter": {
             "exporter": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
+            "exclude_exporter": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
+                                 "filter_field": "exporter"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
+            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name",
+                             "filter_field": "port"},
             "export_license__norm_class": {"type": "fk", "fk_endpoint": "/masters/sion-classes/",
                                            "label_field": "norm_class"},
             "notification_number": {"type": "choice", "choices": list(NOTIFICATION_NORM_CHOICES)},
@@ -65,7 +73,8 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
         },
         "default_filters": {
             "is_expired": "False",
-            "is_null": "False"
+            "is_null": "False",
+            "purchase_status": "GE,NP,SM,CO"
         },
         "list_display": [
             "license_number",
@@ -256,7 +265,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         return Response({
             'export_license': LicenseExportItemSerializer(license_obj.export_license.all(), many=True).data,
-            'import_license': LicenseImportItemSerializer(license_obj.import_license.all(), many=True, context={'request': request}).data,
+            'import_license': LicenseImportItemSerializer(license_obj.import_license.all(), many=True,
+                                                          context={'request': request}).data,
             'license_documents': LicenseDocumentSerializer(license_obj.license_documents.all(), many=True).data
         })
 

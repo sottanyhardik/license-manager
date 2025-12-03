@@ -268,7 +268,7 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                 );
 
             case "fk":
-                // Foreign Key filter with async select
+                // Foreign Key filter with async multi-select
                 return (
                     <div key={fieldName} className="col-md-4">
                         <label className="form-label">{label}</label>
@@ -279,12 +279,13 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                             onChange={(val) => handleFilterChange(fieldName, val)}
                             placeholder={`Select ${label.toLowerCase()}`}
                             isClearable
+                            isMulti
                         />
                     </div>
                 );
 
             case "choice":
-                // Choice field filter with static select
+                // Choice field filter with static multi-select
                 const choiceOptions = config.choices?.map(choice => {
                     if (Array.isArray(choice)) {
                         return {value: choice[0], label: choice[1]};
@@ -295,16 +296,28 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                     return {value: choice, label: choice};
                 }) || [];
 
-                const selectedChoice = choiceOptions.find(opt => opt.value === filterValues[fieldName]) || null;
+                // Handle multi-select values (comma-separated string or array)
+                let selectedChoices = [];
+                if (filterValues[fieldName]) {
+                    const values = typeof filterValues[fieldName] === 'string'
+                        ? filterValues[fieldName].split(',')
+                        : filterValues[fieldName];
+                    selectedChoices = choiceOptions.filter(opt => values.includes(opt.value));
+                }
 
                 return (
                     <div key={fieldName} className="col-md-4">
                         <label className="form-label">{label}</label>
                         <Select
                             options={choiceOptions}
-                            value={selectedChoice}
-                            onChange={(selected) => handleFilterChange(fieldName, selected ? selected.value : "")}
+                            value={selectedChoices}
+                            onChange={(selected) => {
+                                // Convert array of selected options to comma-separated string
+                                const values = selected ? selected.map(s => s.value).join(',') : '';
+                                handleFilterChange(fieldName, values);
+                            }}
                             isClearable
+                            isMulti
                             placeholder={`Select ${label.toLowerCase()}`}
                             styles={{
                                 control: (base) => ({
@@ -317,6 +330,23 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                                     zIndex: 9999
                                 })
                             }}
+                        />
+                    </div>
+                );
+
+            case "exclude_fk":
+                // Exclude Foreign Key filter with async multi-select
+                return (
+                    <div key={fieldName} className="col-md-4">
+                        <label className="form-label">{label}</label>
+                        <AsyncSelectField
+                            endpoint={config.fk_endpoint || config.endpoint}
+                            labelField={config.label_field || "name"}
+                            value={filterValues[fieldName] || ""}
+                            onChange={(val) => handleFilterChange(fieldName, val)}
+                            placeholder={`Exclude ${label.toLowerCase()}`}
+                            isClearable
+                            isMulti
                         />
                     </div>
                 );

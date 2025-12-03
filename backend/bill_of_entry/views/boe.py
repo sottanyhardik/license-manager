@@ -30,7 +30,11 @@ BaseBillOfEntryViewSet = MasterViewSet.create_viewset(
         "search": ["bill_of_entry_number", "invoice_no", "product_name"],
         "filter": {
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
+            "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
+                                "filter_field": "company"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
+            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name",
+                             "filter_field": "port"},
             "bill_of_entry_date": {"type": "date_range"},
             "invoice_date": {"type": "date_range"},
             "is_fetch": {"type": "exact"},
@@ -38,14 +42,13 @@ BaseBillOfEntryViewSet = MasterViewSet.create_viewset(
         "list_display": [
             "bill_of_entry_number",
             "bill_of_entry_date",
-            "company__name",
             "port__name",
+            "company__name",
             "product_name",
-            "invoice_no",
-            "invoice_date",
             "total_fc",
             "total_inr",
             "total_quantity",
+            "invoice_no",
             "licenses",
         ],
         "form_fields": [

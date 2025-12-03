@@ -55,7 +55,7 @@ class MasterViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [permissions.AllowAny]
     pagination_class = StandardPagination
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]  # Removed DjangoFilterBackend
     ordering_fields = "__all__"
 
     # Defaults (overwritten by factory)
@@ -270,16 +270,42 @@ class MasterViewSet(viewsets.ModelViewSet):
                             qs = qs.filter(**{f"{field_name}__in": values})
 
                     elif filter_type == "fk":
-                        # Foreign key exact match (ID)
+                        # Foreign key filter - supports multi-select (comma-separated IDs)
                         value = params.get(field_name)
                         if value:
-                            qs = qs.filter(**{field_name: value})
+                            # Check if value contains comma (multi-select)
+                            if ',' in str(value):
+                                values = [v.strip() for v in str(value).split(",") if v.strip()]
+                                qs = qs.filter(**{f"{field_name}__in": values})
+                            else:
+                                # Single value exact match
+                                qs = qs.filter(**{field_name: value})
 
                     elif filter_type == "choice":
-                        # Choice field exact match
+                        # Choice field filter - supports multi-select (comma-separated values)
                         value = params.get(field_name)
                         if value:
-                            qs = qs.filter(**{field_name: value})
+                            # Check if value contains comma (multi-select)
+                            if ',' in str(value):
+                                values = [v.strip() for v in str(value).split(",") if v.strip()]
+                                qs = qs.filter(**{f"{field_name}__in": values})
+                            else:
+                                # Single value exact match
+                                qs = qs.filter(**{field_name: value})
+
+                    elif filter_type == "exclude_fk":
+                        # Exclude foreign key filter - supports multi-select (comma-separated IDs)
+                        value = params.get(field_name)
+                        if value:
+                            # Get the actual field name to filter on
+                            filter_field = config.get("filter_field", field_name.replace("exclude_", ""))
+                            # Check if value contains comma (multi-select)
+                            if ',' in str(value):
+                                values = [v.strip() for v in str(value).split(",") if v.strip()]
+                                qs = qs.exclude(**{f"{filter_field}__in": values})
+                            else:
+                                # Single value exact match
+                                qs = qs.exclude(**{filter_field: value})
 
                 # Now, process any remaining query parameters not in filter_config
                 # Apply icontains for text fields by default
@@ -304,16 +330,28 @@ class MasterViewSet(viewsets.ModelViewSet):
                         # Apply icontains for CharField and TextField
                         if isinstance(field, (dj_models.CharField, dj_models.TextField)):
                             try:
-                                qs = qs.filter(**{f"{param_name}__icontains": param_value})
+                                # Check for comma-separated values (multi-select for text fields)
+                                if ',' in str(param_value):
+                                    values = [v.strip() for v in str(param_value).split(",") if v.strip()]
+                                    # Use __in for multi-select text values
+                                    qs = qs.filter(**{f"{param_name}__in": values})
+                                else:
+                                    qs = qs.filter(**{f"{param_name}__icontains": param_value})
                             except Exception:
                                 # Skip if filter fails
                                 pass
-                        # Apply exact match for other field types (ForeignKey, numbers, dates, etc.)
+                        # Apply filter for other field types
                         elif isinstance(field, (dj_models.ForeignKey, dj_models.IntegerField,
                                                dj_models.DecimalField, dj_models.BooleanField,
                                                dj_models.DateField, dj_models.DateTimeField)):
                             try:
-                                qs = qs.filter(**{param_name: param_value})
+                                # ALWAYS support multi-select (comma-separated values) for ForeignKey and numeric fields
+                                if ',' in str(param_value):
+                                    values = [v.strip() for v in str(param_value).split(",") if v.strip()]
+                                    qs = qs.filter(**{f"{param_name}__in": values})
+                                else:
+                                    # Single value exact match
+                                    qs = qs.filter(**{param_name: param_value})
                             except Exception:
                                 # Skip if filter fails
                                 pass

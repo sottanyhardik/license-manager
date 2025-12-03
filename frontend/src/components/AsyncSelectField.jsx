@@ -131,8 +131,8 @@ export default function AsyncSelectField({
         setSelectedOption(selected);
 
         if (isMulti) {
-            // Return array of values
-            const values = selected ? selected.map(opt => opt.value) : [];
+            // Return comma-separated string of values for filter compatibility
+            const values = selected ? selected.map(opt => opt.value).join(',') : '';
             onChange(values);
         } else {
             // Return single value

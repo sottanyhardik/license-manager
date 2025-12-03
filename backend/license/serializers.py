@@ -413,8 +413,13 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         description = payload.get("description")
         hs_code = payload.get("hs_code")
 
-        # Convert empty strings to None for decimal/numeric fields
-        for field in ['serial_number', 'quantity', 'cif_fc', 'cif_inr']:
+        # Convert empty strings and None to 0 for required NOT NULL fields
+        for field in ['serial_number', 'quantity']:
+            if field in payload and (payload[field] == '' or payload[field] is None):
+                payload[field] = 0
+
+        # Convert empty strings to None for optional decimal fields
+        for field in ['cif_fc', 'cif_inr']:
             if field in payload and payload[field] == '':
                 payload[field] = None
 
@@ -445,8 +450,13 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             e.pop('start_serial_number', None)
             e.pop('end_serial_number', None)
 
-            # Convert empty strings to None for decimal/numeric fields
-            for field in ['net_quantity', 'fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr', 'old_quantity']:
+            # Convert empty strings and None to 0 for required NOT NULL fields
+            for field in ['net_quantity', 'old_quantity']:
+                if field in e and (e[field] == '' or e[field] is None):
+                    e[field] = 0
+
+            # Convert empty strings to None for optional decimal fields
+            for field in ['fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr']:
                 if field in e and e[field] == '':
                     e[field] = None
 
@@ -489,8 +499,13 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                     e.pop('start_serial_number', None)
                     e.pop('end_serial_number', None)
 
-                    # Convert empty strings to None for decimal/numeric fields
-                    for field in ['net_quantity', 'fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr', 'old_quantity']:
+                    # Convert empty strings and None to 0 for required NOT NULL fields
+                    for field in ['net_quantity', 'old_quantity']:
+                        if field in e and (e[field] == '' or e[field] is None):
+                            e[field] = 0
+
+                    # Convert empty strings to None for optional decimal fields
+                    for field in ['fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr']:
                         if field in e and e[field] == '':
                             e[field] = None
 

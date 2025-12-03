@@ -128,7 +128,7 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
             instance.license.export_license.values_list('norm_class__norm_class', flat=True).distinct()
         )
 
-        if license_norm_classes:
+        if license_norm_classes and instance.description:
             from core.models import ItemNameModel
             from django.db.models import Q
 
@@ -141,6 +141,7 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
             for item_name in matching_items:
                 # Simple matching by base name (before ' - ')
                 base_name = item_name.name.split(' - ')[0]
+
                 if base_name.lower() in instance.description.lower():
                     # Add item if not already linked
                     if not instance.items.filter(id=item_name.id).exists():

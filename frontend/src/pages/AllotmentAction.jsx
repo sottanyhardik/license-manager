@@ -728,6 +728,7 @@ export default function AllotmentAction() {
                                 <th>Notification</th>
                                 <th>Available Qty</th>
                                 <th>Available CIF FC</th>
+                                <th>Average</th>
                                 <th>Expiry</th>
                                 <th style={{width: "180px"}}>Allocate Qty</th>
                                 <th style={{width: "180px"}}>Allocate Value</th>
@@ -749,6 +750,14 @@ export default function AllotmentAction() {
                                         <td>{item.notification_number || '-'}</td>
                                         <td>{parseFloat(item.available_quantity || 0).toFixed(3)}</td>
                                         <td>{parseFloat(item.balance_cif_fc || 0).toFixed(2)}</td>
+                                        <td>
+                                            {(() => {
+                                                const qty = parseFloat(item.available_quantity || 0);
+                                                const value = parseFloat(item.balance_cif_fc || 0);
+                                                const average = qty > 0 ? (value / qty) : 0;
+                                                return average.toFixed(2);
+                                            })()}
+                                        </td>
                                         <td>{item.license_expiry_date}</td>
                                         <td>
                                             <div className="input-group input-group-sm">

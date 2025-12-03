@@ -102,6 +102,14 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
                 if re.search(pattern, imp.description, re.IGNORECASE)
             ]
 
+        # Special HS code validation for PP items
+        # PP should only match if HS code starts with 3902 (Polypropylene)
+        if base_name.upper() == 'PP':
+            matching_imports = [
+                imp for imp in matching_imports
+                if imp.hs_code and imp.hs_code.hs_code.startswith('3902')
+            ]
+
         # Link this ItemNameModel to matching import items
         for import_item in matching_imports:
             # Add item if not already linked
@@ -188,6 +196,14 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
                 else:
                     # For longer names, simple substring match is fine
                     matched = base_name.lower() in instance.description.lower()
+
+                # Special HS code validation for PP items
+                # PP should only match if HS code starts with 3902 (Polypropylene)
+                if matched and base_name.upper() == 'PP':
+                    hs_code = instance.hs_code.hs_code if instance.hs_code else ''
+                    if not hs_code.startswith('3902'):
+                        logger.debug(f"Skipping PP for item {instance.id}: HS code {hs_code} does not start with 3902")
+                        matched = False
 
                 if matched:
                     # Add item if not already linked

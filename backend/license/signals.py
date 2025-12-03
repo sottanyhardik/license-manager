@@ -72,9 +72,9 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
         return
 
     # Fetch SION norm classes for these item names
-    from core.models import SionNormClassModel
+    from core.models import SionNormClassModel, ItemNameModel
     norm_classes = SionNormClassModel.objects.filter(
-        export_norm__item__in=item_names
+        items__in=item_names
     ).distinct()
 
     if not norm_classes.exists():
@@ -88,15 +88,25 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
     if not sion_items.exists():
         return
 
-    # Create import items from SION norms
+    # Create import items from SION norms with automatic restriction linking
     serial_number = 1
     for sion_item in sion_items:
         # Check if an import item with this HS code already exists
         if instance.import_license.filter(hs_code=sion_item.hsn_code).exists():
             continue
 
+        # Determine if this import item should be restricted
+        # Check if any of the export item names have restriction_percentage > 0
+        has_restriction = False
+        restriction_item = None
+        for item_name in item_names:
+            if item_name.sion_norm_class == sion_item.norm_class and item_name.restriction_percentage > 0:
+                has_restriction = True
+                restriction_item = item_name
+                break
+
         # Create import item
-        LicenseImportItemsModel.objects.create(
+        import_item = LicenseImportItemsModel.objects.create(
             license=instance,
             serial_number=serial_number,
             hs_code=sion_item.hsn_code,
@@ -105,8 +115,12 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
             unit=sion_item.unit if sion_item.unit else 'kg',
             cif_fc=0,
             cif_inr=0,
-            is_restricted=False
+            is_restricted=has_restriction
         )
+
+        # Link the restriction ItemNameModel if applicable
+        if restriction_item:
+            import_item.items.add(restriction_item)
 
         serial_number += 1
 
@@ -136,9 +150,9 @@ def update_license_on_export_item_change(sender, instance, created, **kwargs):
 
                 if item_names:
                     # Fetch SION norm classes for these item names
-                    from core.models import SionNormClassModel
+                    from core.models import SionNormClassModel, ItemNameModel
                     norm_classes = SionNormClassModel.objects.filter(
-                        export_norm__item__in=item_names
+                        items__in=item_names
                     ).distinct()
 
                     if norm_classes.exists():
@@ -152,7 +166,16 @@ def update_license_on_export_item_change(sender, instance, created, **kwargs):
                             if license.import_license.filter(hs_code=sion_item.hsn_code).exists():
                                 continue
 
-                            LicenseImportItemsModel.objects.create(
+                            # Determine if this import item should be restricted
+                            has_restriction = False
+                            restriction_item = None
+                            for item_name in item_names:
+                                if item_name.sion_norm_class == sion_item.norm_class and item_name.restriction_percentage > 0:
+                                    has_restriction = True
+                                    restriction_item = item_name
+                                    break
+
+                            import_item = LicenseImportItemsModel.objects.create(
                                 license=license,
                                 serial_number=serial_number,
                                 hs_code=sion_item.hsn_code,
@@ -161,8 +184,13 @@ def update_license_on_export_item_change(sender, instance, created, **kwargs):
                                 unit=sion_item.unit if sion_item.unit else 'kg',
                                 cif_fc=0,
                                 cif_inr=0,
-                                is_restricted=False
+                                is_restricted=has_restriction
                             )
+
+                            # Link the restriction ItemNameModel if applicable
+                            if restriction_item:
+                                import_item.items.add(restriction_item)
+
                             serial_number += 1
 
 

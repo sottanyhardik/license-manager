@@ -70,6 +70,18 @@ class LicenseExportItemSerializer(serializers.ModelSerializer):
             return obj.item.name
         return None
 
+    def create(self, validated_data):
+        # Remove form-only fields that are not part of the model
+        validated_data.pop('start_serial_number', None)
+        validated_data.pop('end_serial_number', None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # Remove form-only fields that are not part of the model
+        validated_data.pop('start_serial_number', None)
+        validated_data.pop('end_serial_number', None)
+        return super().update(instance, validated_data)
+
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         # Add norm_class nested data for display

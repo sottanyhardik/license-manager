@@ -10,33 +10,41 @@ from license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseI
 
 def update_license_flags(license_instance):
     """
-    Helper function to update is_null and is_expired flags for a license.
+    Helper function to update is_null, is_expired flags and balance_cif for a license.
+    This is critical for dashboard accuracy - it recalculates balance_cif on every change.
     """
     needs_update = False
+    update_fields = {}
 
     # Update is_expired based on license_expiry_date
     if license_instance.license_expiry_date:
         new_is_expired = license_instance.license_expiry_date < timezone.now().date()
         if license_instance.is_expired != new_is_expired:
             needs_update = True
-            license_instance.is_expired = new_is_expired
+            update_fields['is_expired'] = new_is_expired
 
-    # Update is_null based on balance_cif
+    # Update balance_cif and is_null based on current balance calculation
     try:
         balance = license_instance.get_balance_cif
+
+        # Update balance_cif field (stored value for fast dashboard queries)
+        if license_instance.balance_cif != balance:
+            needs_update = True
+            update_fields['balance_cif'] = balance
+
+        # Update is_null based on balance
         new_is_null = balance <= Decimal('0.01')  # Consider <= 0.01 as null
         if license_instance.is_null != new_is_null:
             needs_update = True
-            license_instance.is_null = new_is_null
-    except Exception:
-        pass  # If balance calculation fails, skip
+            update_fields['is_null'] = new_is_null
+    except Exception as e:
+        # Log error but don't fail
+        import logging
+        logging.getLogger(__name__).error(f"Error calculating balance for license {license_instance.id}: {e}")
 
-    # Save if flags changed (use update to avoid triggering signal again)
-    if needs_update:
-        LicenseDetailsModel.objects.filter(pk=license_instance.pk).update(
-            is_expired=license_instance.is_expired,
-            is_null=license_instance.is_null
-        )
+    # Save if any fields changed (use update to avoid triggering signal again)
+    if needs_update and update_fields:
+        LicenseDetailsModel.objects.filter(pk=license_instance.pk).update(**update_fields)
 
 
 @receiver(post_save, sender=LicenseDetailsModel)

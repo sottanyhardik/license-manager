@@ -59,6 +59,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "purchase_status": {"type": "choice", "choices": list(LICENCE_PURCHASE_CHOICES_ACTIVE)},
             "license_date": {"type": "date_range"},
             "license_expiry_date": {"type": "date_range"},
+            "balance_cif": {"type": "range"},
             "is_expired": {"type": "exact"},
             "is_null": {"type": "exact"},
         },

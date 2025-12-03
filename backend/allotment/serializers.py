@@ -134,7 +134,7 @@ class AllotmentSerializer(serializers.ModelSerializer):
             'cif_fc', 'cif_inr', 'exchange_rate',
             'item_name', 'contact_person', 'contact_number', 'invoice',
             'estimated_arrival_date', 'bl_detail', 'port', 'related_company',
-            'is_boe', 'created_on', 'modified_on', 'created_by', 'modified_by',
+            'is_boe', 'is_approved', 'created_on', 'modified_on', 'created_by', 'modified_by',
             'required_value', 'dfia_list', 'balanced_quantity',
             'alloted_quantity', 'allotted_value', 'company_name', 'port_name',
             'related_company_name', 'display_label', 'allotment_details_read'

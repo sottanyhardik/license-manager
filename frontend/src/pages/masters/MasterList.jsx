@@ -232,6 +232,26 @@ export default function MasterList() {
         }
     };
 
+    const handleToggleBoolean = async (item, field, newValue) => {
+        try {
+            let apiPath;
+            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
+                apiPath = `/${entityName}/${item.id}/`;
+            } else if (entityName === 'bill-of-entries') {
+                apiPath = `/bill-of-entries/${item.id}/`;
+            } else {
+                apiPath = `/masters/${entityName}/${item.id}/`;
+            }
+
+            await api.patch(apiPath, { [field]: newValue });
+            // Refresh data to show updated value
+            fetchData(currentPage, pageSize, filterParams);
+        } catch (err) {
+            alert(err.response?.data?.detail || `Failed to update ${field}`);
+            throw err; // Re-throw to let component know it failed
+        }
+    };
+
     const handleExport = async (format) => {
         try {
             if (entityName === 'bill-of-entries' && format === 'xlsx') {
@@ -426,6 +446,7 @@ export default function MasterList() {
                             columns={metadata.list_display || []}
                             loading={loading}
                             onDelete={handleDelete}
+                            onToggleBoolean={handleToggleBoolean}
                             basePath={entityName === 'licenses' ? '/licenses' :
                                      (entityName === 'allotments' ? '/allotments' :
                                      (entityName === 'trades' ? '/trades' :

@@ -10,10 +10,11 @@ import {formatIndianNumber} from "../utils/numberFormatter";
  * Used for displaying records with nested arrays (like SION Norm Classes, Licenses)
  * that expand/collapse on click.
  */
-export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}, customActions = [], lazyLoadNested = false}) {
+export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}, customActions = [], lazyLoadNested = false, onToggleBoolean}) {
     const [expandedRows, setExpandedRows] = useState(new Set());
     const [nestedData, setNestedData] = useState({});
     const [loadingNested, setLoadingNested] = useState({});
+    const [togglingFields, setTogglingFields] = useState({});
 
     const toggleRow = async (id) => {
         const isCurrentlyExpanded = expandedRows.has(id);
@@ -38,6 +39,21 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
             }
         }
         setExpandedRows(newExpanded);
+    };
+
+    const handleToggleBoolean = async (item, field, currentValue) => {
+        if (!onToggleBoolean) return;
+
+        const fieldKey = `${item.id}-${field}`;
+        setTogglingFields({...togglingFields, [fieldKey]: true});
+
+        try {
+            await onToggleBoolean(item, field, !currentValue);
+        } catch (err) {
+            console.error('Failed to toggle field:', err);
+        } finally {
+            setTogglingFields({...togglingFields, [fieldKey]: false});
+        }
     };
 
     if (loading) {
@@ -295,6 +311,37 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                         } catch (e) {
                                             // Keep original value if date parsing fails
                                         }
+                                    }
+
+                                    // Handle boolean fields with switch toggle
+                                    const isBooleanField = typeof value === 'boolean' ||
+                                                          col.startsWith('is_') ||
+                                                          col.startsWith('has_');
+
+                                    if (isBooleanField && onToggleBoolean) {
+                                        const toggleKey = `${item.id}-${col}`;
+                                        const isToggling = togglingFields[toggleKey];
+                                        const boolValue = typeof value === 'boolean' ? value : false;
+
+                                        return (
+                                            <td key={col}>
+                                                <div className="form-check form-switch">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="form-check-input"
+                                                        role="switch"
+                                                        id={`switch-${item.id}-${col}`}
+                                                        checked={boolValue}
+                                                        onChange={() => handleToggleBoolean(item, col, boolValue)}
+                                                        disabled={isToggling}
+                                                        style={{cursor: isToggling ? 'wait' : 'pointer'}}
+                                                    />
+                                                    {isToggling && (
+                                                        <span className="spinner-border spinner-border-sm ms-2" role="status"></span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        );
                                     }
 
                                     return (

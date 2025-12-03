@@ -189,7 +189,7 @@ def add_grouped_export_action(viewset_class):
 
                 # Process each port within item
                 for port_code, allotments in ports_dict.items():
-                    # Table header with DFIA columns + Total CIF INR (removed BOE column)
+                    # Table header with DFIA columns + Total CIF INR (removed Approved column)
                     table_data = [[
                         'Sr No', 'Allotment\nDate', 'Port', 'Quantity\n(KGS)',
                         'Unit Price ($)', 'Value ($)', 'Total CIF\nINR', 'Item Name', 'Invoice', 'ETA',
@@ -210,7 +210,7 @@ def add_grouped_export_action(viewset_class):
                             invoice_text = allot['invoice']
 
                             if idx == 0:
-                                # First license row: show allotment data + license data (removed BOE column)
+                                # First license row: show allotment data + license data (removed approved column)
                                 table_data.append([
                                     sr_no,
                                     allot['date'],
@@ -234,7 +234,7 @@ def add_grouped_export_action(viewset_class):
                                 item_total_value += allot['value']
                                 item_total_inr += allot_cif_inr
                             else:
-                                # Subsequent license rows: empty allotment columns + license data (10 empty cols instead of 11)
+                                # Subsequent license rows: empty allotment columns + license data (10 empty cols)
                                 table_data.append([
                                     '', '', '', '', '', '', '', '', '', '',
                                     detail['dfia_no'],
@@ -252,7 +252,7 @@ def add_grouped_export_action(viewset_class):
                     company_total_value += item_total_value
                     company_total_inr += item_total_inr
 
-                    # Add totals row (17 columns total, removed BOE column)
+                    # Add totals row (17 columns total, removed Approved column)
                     table_data.append([
                         '', '', 'Total\nQuantity',
                         pdf_exporter.format_number(item_total_qty, decimals=0),
@@ -262,7 +262,7 @@ def add_grouped_export_action(viewset_class):
                         '', '', '', '', '', '', '', '', '', ''
                     ])
 
-                    # Create table with column widths for 17 columns (reduced Item Sr., increased DFIA CIF)
+                    # Create table with column widths for 17 columns (removed Approved column)
                     col_widths = [0.35 * inch, 0.6 * inch, 0.5 * inch, 0.6 * inch, 0.65 * inch, 0.65 * inch,
                                   0.85 * inch, 1.0 * inch, 0.8 * inch, 0.6 * inch,
                                   0.75 * inch, 0.6 * inch, 0.6 * inch, 0.4 * inch, 0.6 * inch, 0.65 * inch, 0.75 * inch]
@@ -270,12 +270,25 @@ def add_grouped_export_action(viewset_class):
                     # Use shared PDF exporter's create_table method
                     table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1, wrap_text=True)
 
-                    # Apply additional number column alignment for columns: 3, 4, 5, 6, 13, 14, 15, 16 (0-indexed, removed BOE)
+                    # Apply additional number column alignment for columns: 3, 4, 5, 6, 13, 14, 15, 16 (0-indexed, removed Approved column)
                     additional_styles = []
                     for col_idx in [3, 4, 5, 6, 13, 14, 15, 16]:
                         additional_styles.append(
                             ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
                         )
+
+                    # Apply light green background to approved rows (check is_approved for each allotment)
+                    row_idx = 1  # Start after header
+                    for allot in allotments:
+                        if allot.get('is_approved'):
+                            # Apply light green to ALL rows for this allotment (main + all license detail rows)
+                            num_rows = len(allot['details'])
+                            for i in range(num_rows):
+                                additional_styles.append(
+                                    ('BACKGROUND', (0, row_idx + i), (-1, row_idx + i), colors.Color(0.8, 1, 0.8))  # Light green
+                                )
+                        # Move row_idx by the number of detail rows for this allotment
+                        row_idx += len(allot['details'])
 
                     # Bold the last row (totals)
                     additional_styles.append(('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'))
@@ -393,9 +406,9 @@ def add_grouped_export_action(viewset_class):
 
                 # Process each port within item
                 for port_code, allotments in ports_dict.items():
-                    # Table headers - allotment info + license subheader (removed BOE column)
+                    # Table headers - allotment info + Approved + license subheader
                     main_headers = ['Sr No', 'Allotment Date', 'Port', 'Quantity (KGS)',
-                                    'Unit Price ($)', 'Value ($)', 'Total CIF INR', 'Item Name', 'Invoice', 'ETA']
+                                    'Unit Price ($)', 'Value ($)', 'Total CIF INR', 'Item Name', 'Invoice', 'ETA', 'Approved']
                     license_headers = ['DFIA No.', 'DFIA Date', 'DFIA Port', 'Item Sr. NO.', 'DFIA Qty.', 'DFIA $.',
                                        'DFIA CIF']
 
@@ -436,7 +449,7 @@ def add_grouped_export_action(viewset_class):
                         start_row_for_allot = row
                         allot_cif_inr = allot['value'] * allot.get('exchange_rate', 89.5)
 
-                        # Write allotment data (will be merged vertically if multiple licenses) - removed BOE
+                        # Write allotment data (will be merged vertically if multiple licenses) - added Approved
                         allot_data = [
                             sr_no,
                             allot['date'],
@@ -447,7 +460,8 @@ def add_grouped_export_action(viewset_class):
                             allot_cif_inr,
                             allot.get('item_name', display_item_name),
                             allot['invoice'],
-                            allot['eta']
+                            allot['eta'],
+                            '✓' if allot.get('is_approved') else ''
                         ]
 
                         # Write license details (one row per license)
@@ -464,6 +478,10 @@ def add_grouped_export_action(viewset_class):
                                             cell.number_format = '#,##0.00'
                                         elif col_idx == 7:  # INR column
                                             cell.number_format = '₹#,##0.00'
+
+                                    # Apply light green background if approved
+                                    if allot.get('is_approved'):
+                                        cell.fill = PatternFill(start_color='CCFFCC', end_color='CCFFCC', fill_type='solid')
 
                                 # Track totals only once per allotment
                                 item_total_qty += allot['quantity']
@@ -488,6 +506,10 @@ def add_grouped_export_action(viewset_class):
                                 if col_idx in [len(main_headers) + 5, len(main_headers) + 6,
                                                len(main_headers) + 7]:  # Qty, Value, and CIF columns
                                     cell.alignment = Alignment(horizontal='right', vertical='center')
+
+                                # Apply light green background if approved
+                                if allot.get('is_approved'):
+                                    cell.fill = PatternFill(start_color='CCFFCC', end_color='CCFFCC', fill_type='solid')
                             row += 1
 
                         # Merge allotment cells vertically if multiple licenses
@@ -590,6 +612,7 @@ def add_grouped_export_action(viewset_class):
                 'eta': allotment.estimated_arrival_date.strftime(
                     '%d-%m-%Y') if allotment.estimated_arrival_date else '--',
                 'is_boe': allotment.is_boe,
+                'is_approved': allotment.is_approved,
                 'details': []
             }
 

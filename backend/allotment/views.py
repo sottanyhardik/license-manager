@@ -59,8 +59,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "unit_value_per_unit",
             "required_value",
             "estimated_arrival_date",
-            "is_boe",
-            "is_allotted",
+            "is_approved",
             "dfia_list"
         ],
         "form_fields": [
@@ -77,6 +76,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "estimated_arrival_date",
             "bl_detail",
             "is_boe",
+            "is_approved",
         ],
         "ordering": ["estimated_arrival_date"],
         "nested_field_defs": allotment_nested_field_defs,
@@ -116,6 +116,11 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "exchange_rate": {
                 "type": "number",
                 "default": _get_active_usd_rate()  # Default to active USD to INR rate
+            },
+            "is_approved": {
+                "type": "boolean",
+                "widget": "switch",
+                "label": "Approved"
             },
         }
     }

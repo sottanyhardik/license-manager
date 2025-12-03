@@ -108,6 +108,7 @@ class AllotmentModel(AuditModel):
     )
     is_boe = models.BooleanField(default=False)
     is_allotted = models.BooleanField(default=False, help_text="True if DFIA licenses are allotted")
+    is_approved = models.BooleanField(default=False, help_text="Indicates if the allotment has been approved")
 
     class Meta:
         ordering = ["estimated_arrival_date"]

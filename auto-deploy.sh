@@ -71,55 +71,31 @@ chmod -R 755 /home/django/license-manager/frontend/dist 2>/dev/null || true
 
 echo -e "${BLUE}🔄 Restarting services...${NC}"
 
-# Restart supervisor processes
+# Restart supervisor processes (always use sudo)
 echo -e "${YELLOW}  → Restarting license-manager...${NC}"
-if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
-    sudo supervisorctl restart license-manager
-else
-    supervisorctl restart license-manager
-fi
+sudo supervisorctl restart license-manager
 
 # Check if celery is configured
-if supervisorctl status license-manager-celery &> /dev/null; then
+if sudo supervisorctl status license-manager-celery &> /dev/null 2>&1; then
     echo -e "${YELLOW}  → Restarting celery worker...${NC}"
-    if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
-        sudo supervisorctl restart license-manager-celery
-    else
-        supervisorctl restart license-manager-celery
-    fi
+    sudo supervisorctl restart license-manager-celery
 fi
 
-if supervisorctl status license-manager-celery-beat &> /dev/null; then
+if sudo supervisorctl status license-manager-celery-beat &> /dev/null 2>&1; then
     echo -e "${YELLOW}  → Restarting celery beat...${NC}"
-    if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
-        sudo supervisorctl restart license-manager-celery-beat
-    else
-        supervisorctl restart license-manager-celery-beat
-    fi
+    sudo supervisorctl restart license-manager-celery-beat
 fi
 
-# Restart nginx
+# Restart nginx (always use sudo)
 echo -e "${YELLOW}  → Reloading nginx...${NC}"
-if command -v sudo &> /dev/null && sudo -n systemctl status nginx &> /dev/null 2>&1; then
-    sudo systemctl reload nginx
-else
-    echo -e "${YELLOW}    (Skipping nginx reload - requires sudo)${NC}"
-fi
+sudo systemctl reload nginx
 
 echo -e "${BLUE}✅ Checking service status...${NC}"
 echo -e "${YELLOW}==================== Supervisor Status ====================${NC}"
-if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
-    sudo supervisorctl status
-else
-    supervisorctl status
-fi
+sudo supervisorctl status
 
 echo -e "${YELLOW}==================== Nginx Status ====================${NC}"
-if command -v sudo &> /dev/null && sudo -n systemctl status nginx &> /dev/null 2>&1; then
-    sudo systemctl status nginx --no-pager | head -10
-else
-    echo -e "${YELLOW}    (Nginx status check requires sudo)${NC}"
-fi
+sudo systemctl status nginx --no-pager | head -10
 
 echo -e "${GREEN}================================================${NC}"
 echo -e "${GREEN}✨ Deployment completed successfully!${NC}"
@@ -130,11 +106,7 @@ echo -e "   http://143.110.252.201"
 echo -e "   https://license-manager.duckdns.org"
 echo ""
 echo -e "${BLUE}📊 Service Status:${NC}"
-if command -v sudo &> /dev/null && sudo -n supervisorctl status &> /dev/null 2>&1; then
-    sudo supervisorctl status | grep license-manager
-else
-    supervisorctl status | grep license-manager
-fi
+sudo supervisorctl status | grep license-manager
 
 ENDSSH
 

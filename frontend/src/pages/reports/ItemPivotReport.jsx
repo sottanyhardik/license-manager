@@ -839,7 +839,7 @@ export default function ItemPivotReport() {
                                                                         <td className={`text-end ${hasData ? 'bg-light fw-semibold text-primary' : ''}`}>
                                                                             {itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light text-warning' : ''}`}>
+                                                                        <td className={`text-end ${hasData ? 'bg-light' : ''}`} style={hasData ? {color: '#d97706'} : {}}>
                                                                             {itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         <td className={`text-end ${hasData ? 'bg-light text-success fw-semibold' : ''}`}>
@@ -927,7 +927,7 @@ export default function ItemPivotReport() {
                                                                     <td className="text-end text-primary">
                                                                         {totalAllotted > 0 ? totalAllotted.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-end text-warning">
+                                                                    <td className="text-end" style={{color: '#d97706'}}>
                                                                         {totalDebited > 0 ? totalDebited.toFixed(3) : '-'}
                                                                     </td>
                                                                     <td className="text-end text-success">

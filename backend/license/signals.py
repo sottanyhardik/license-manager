@@ -112,7 +112,7 @@ def update_license_on_export_item_change(sender, instance, created, **kwargs):
 @receiver(post_save, sender=LicenseImportItemsModel)
 def update_license_on_import_item_change(sender, instance, created, **kwargs):
     """
-    Update license flags when import items are added/modified/deleted.
+    Update license flags when import items are added/modified.
     Also auto-link ItemNameModel items based on description/HS code and norm class.
     This ensures balance_cif, available_quantity, and available_value are updated.
     """
@@ -122,36 +122,35 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
     if instance.license:
         update_license_flags(instance.license)
 
-        # Auto-link ItemNameModel items when import item is created
-        if created:
-            # Get license export norm classes
-            license_norm_classes = list(
-                instance.license.export_license.values_list('norm_class__norm_class', flat=True).distinct()
+        # Auto-link ItemNameModel items when import item is created or updated
+        # Get license export norm classes
+        license_norm_classes = list(
+            instance.license.export_license.values_list('norm_class__norm_class', flat=True).distinct()
+        )
+
+        if license_norm_classes:
+            from core.models import ItemNameModel
+            from django.db.models import Q
+
+            # Get all ItemNameModel items that match the license norm classes
+            matching_items = ItemNameModel.objects.filter(
+                sion_norm_class__norm_class__in=license_norm_classes
             )
 
-            if license_norm_classes:
-                from core.models import ItemNameModel
-                from django.db.models import Q
+            # Try to match and link items based on description
+            for item_name in matching_items:
+                # Simple matching by base name (before ' - ')
+                base_name = item_name.name.split(' - ')[0]
+                if base_name.lower() in instance.description.lower():
+                    # Add item if not already linked
+                    if not instance.items.filter(id=item_name.id).exists():
+                        instance.items.add(item_name)
 
-                # Get all ItemNameModel items that match the license norm classes
-                matching_items = ItemNameModel.objects.filter(
-                    sion_norm_class__norm_class__in=license_norm_classes
-                )
-
-                # Try to match and link items based on description
-                for item_name in matching_items:
-                    # Simple matching by base name (before ' - ')
-                    base_name = item_name.name.split(' - ')[0]
-                    if base_name.lower() in instance.description.lower():
-                        # Add item if not already linked
-                        if not instance.items.filter(id=item_name.id).exists():
-                            instance.items.add(item_name)
-
-                            # Update is_restricted flag if item has restriction
-                            if item_name.restriction_percentage > 0 and not instance.is_restricted:
-                                instance.is_restricted = True
-                                instance.save(update_fields=['is_restricted'])
-                            break  # Only link one item per import item
+                        # Update is_restricted flag if item has restriction
+                        if item_name.restriction_percentage > 0 and not instance.is_restricted:
+                            instance.is_restricted = True
+                            instance.save(update_fields=['is_restricted'])
+                        break  # Only link one item per import item
 
 
 @receiver(post_delete, sender=LicenseImportItemsModel)

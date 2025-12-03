@@ -137,13 +137,6 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                 'name': item.name,
                 'is_active': item.is_active,
             }
-
-            # Add restriction information if available
-            if item.restriction_percentage and item.restriction_percentage > 0:
-                item_info['restriction_percentage'] = float(item.restriction_percentage)
-            else:
-                item_info['restriction_percentage'] = None
-
             # Add sion_norm_class information if available
             if item.sion_norm_class:
                 item_info['sion_norm_class'] = {
@@ -153,6 +146,12 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                 }
             else:
                 item_info['sion_norm_class'] = None
+
+            # Add restriction information if available
+            if item.restriction_percentage and item.restriction_percentage > 0:
+                item_info['restriction_percentage'] = float(item.restriction_percentage)
+            else:
+                item_info['restriction_percentage'] = None
 
             items_data.append(item_info)
 
@@ -409,6 +408,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
     # helper for M2M items in import rows
     def _create_import_item(self, license_inst, payload):
+        from license.signals import update_license_on_import_item_change
+
         items = payload.pop("items", [])
         description = payload.get("description")
         hs_code = payload.get("hs_code")
@@ -449,60 +450,82 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 product_description=description
             )
 
+        # Manually trigger signal to ensure ItemNameModel items are linked
+        # This ensures items are properly linked based on description matching
+        try:
+            update_license_on_import_item_change(
+                sender=LicenseImportItemsModel,
+                instance=obj,
+                created=True,
+                raw=False
+            )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to auto-link items in _create_import_item for {obj.id}: {str(e)}")
+
         return obj
 
     def create(self, validated_data):
+        from django.db import transaction
+
         exports = validated_data.pop("export_license", [])
         imports = validated_data.pop("import_license", [])
         docs = validated_data.pop("license_documents", [])
         transfers = validated_data.pop("transfers", [])
         purchases = validated_data.pop("purchases", [])
 
-        instance = LicenseDetailsModel.objects.create(**validated_data)
+        # Wrap entire license creation in atomic transaction
+        # If any error occurs, the entire license creation will be rolled back
+        with transaction.atomic():
+            instance = LicenseDetailsModel.objects.create(**validated_data)
 
-        for e in exports:
-            # Remove form-only fields and empty id fields
-            e.pop('start_serial_number', None)
-            e.pop('end_serial_number', None)
-            if 'id' in e and e['id'] == '':
-                e.pop('id')
+            for e in exports:
+                # Remove form-only fields and empty id fields
+                e.pop('start_serial_number', None)
+                e.pop('end_serial_number', None)
+                if 'id' in e and e['id'] == '':
+                    e.pop('id')
 
-            # Convert empty strings and None to 0 for required NOT NULL fields
-            for field in ['net_quantity', 'old_quantity']:
-                if field in e and (e[field] == '' or e[field] is None):
-                    e[field] = 0
+                # Convert empty strings and None to 0 for required NOT NULL fields
+                for field in ['net_quantity', 'old_quantity']:
+                    if field in e and (e[field] == '' or e[field] is None):
+                        e[field] = 0
 
-            # Convert empty strings to None for optional decimal fields
-            for field in ['fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr']:
-                if field in e and e[field] == '':
-                    e[field] = None
+                # Convert empty strings to None for optional decimal fields
+                for field in ['fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr']:
+                    if field in e and e[field] == '':
+                        e[field] = None
 
-            # Handle foreign key fields - convert IDs to model instances
-            if 'norm_class' in e and e['norm_class']:
-                from core.models import SionNormClassModel
-                if isinstance(e['norm_class'], (int, str)):
-                    try:
-                        e['norm_class'] = SionNormClassModel.objects.get(id=e['norm_class'])
-                    except (ValueError, SionNormClassModel.DoesNotExist):
-                        e['norm_class'] = None
+                # Handle foreign key fields - convert IDs to model instances
+                if 'norm_class' in e and e['norm_class']:
+                    from core.models import SionNormClassModel
+                    if isinstance(e['norm_class'], (int, str)):
+                        try:
+                            e['norm_class'] = SionNormClassModel.objects.get(id=e['norm_class'])
+                        except (ValueError, SionNormClassModel.DoesNotExist):
+                            e['norm_class'] = None
 
-            if 'hs_code' in e and e['hs_code']:
-                from core.models import HSCodeModel
-                if isinstance(e['hs_code'], (int, str)):
-                    try:
-                        e['hs_code'] = HSCodeModel.objects.get(id=e['hs_code'])
-                    except (ValueError, HSCodeModel.DoesNotExist):
-                        e['hs_code'] = None
+                if 'hs_code' in e and e['hs_code']:
+                    from core.models import HSCodeModel
+                    if isinstance(e['hs_code'], (int, str)):
+                        try:
+                            e['hs_code'] = HSCodeModel.objects.get(id=e['hs_code'])
+                        except (ValueError, HSCodeModel.DoesNotExist):
+                            e['hs_code'] = None
 
-            LicenseExportItemModel.objects.create(license=instance, **e)
-        for i in imports:
-            self._create_import_item(instance, i)
-        for d in docs:
-            LicenseDocumentModel.objects.create(license=instance, **d)
-        for t in transfers:
-            LicenseTransferModel.objects.create(license=instance, **t)
-        for p in purchases:
-            LicensePurchase.objects.create(license=instance, **p)
+                LicenseExportItemModel.objects.create(license=instance, **e)
+
+            # Create import items - signal is called inside _create_import_item
+            for i in imports:
+                self._create_import_item(instance, i)
+
+            for d in docs:
+                LicenseDocumentModel.objects.create(license=instance, **d)
+            for t in transfers:
+                LicenseTransferModel.objects.create(license=instance, **t)
+            for p in purchases:
+                LicensePurchase.objects.create(license=instance, **p)
 
         return instance
 
@@ -576,6 +599,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
         if imports is not None:
             from django.db import transaction
+            from license.signals import update_license_on_import_item_change
             import logging
             logger = logging.getLogger(__name__)
 
@@ -627,6 +651,17 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         if isinstance(items_list, list):
                             obj.items.set(items_list)
 
+                        # Trigger signal to ensure ItemNameModel items are linked
+                        try:
+                            update_license_on_import_item_change(
+                                sender=LicenseImportItemsModel,
+                                instance=obj,
+                                created=False,
+                                raw=False
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to auto-link items for import item {obj.id}: {str(e)}")
+
                         processed_ids.add(obj.id)
                         processed_serials.add(obj.serial_number)
                     # If no ID match, try to match by serial_number (for items without ID or wrong ID)
@@ -653,6 +688,17 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         # Update M2M relationship
                         if isinstance(items_list, list):
                             obj.items.set(items_list)
+
+                        # Trigger signal to ensure ItemNameModel items are linked
+                        try:
+                            update_license_on_import_item_change(
+                                sender=LicenseImportItemsModel,
+                                instance=obj,
+                                created=False,
+                                raw=False
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to auto-link items for import item {obj.id}: {str(e)}")
 
                         processed_ids.add(obj.id)
                         processed_serials.add(obj.serial_number)

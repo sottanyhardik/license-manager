@@ -78,9 +78,16 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
 
     # For each ItemNameModel, find and link matching import items
     for item_name in matching_items:
+        # Extract base name for matching:
+        # 1. Try splitting by ' - ' (e.g., "OLIVE OIL - E126" → "OLIVE OIL")
+        # 2. If no ' - ', use first word (e.g., "PICKLE 3% Restriction" → "PICKLE")
+        if ' - ' in item_name.name:
+            base_name = item_name.name.split(' - ')[0]
+        else:
+            base_name = item_name.name.split()[0] if item_name.name.split() else item_name.name
+
         # Build filter based on description/HS code patterns
-        # This is simplified - in production you'd want the full filter logic from populate_license_items
-        description_filter = Q(description__icontains=item_name.name.split(' - ')[0])
+        description_filter = Q(description__icontains=base_name)
 
         # Find matching import items for this license
         matching_imports = instance.import_license.filter(description_filter)
@@ -118,8 +125,14 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
     Also auto-link ItemNameModel items based on description/HS code and norm class.
     This ensures balance_cif, available_quantity, and available_value are updated.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     if kwargs.get('raw', False):
+        logger.debug(f"Signal skipped (raw=True) for import item {instance.id}")
         return
+
+    logger.info(f"Signal fired for import item {instance.id} (created={created})")
 
     if instance.license:
         update_license_flags(instance.license)
@@ -130,6 +143,8 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
             instance.license.export_license.values_list('norm_class__norm_class', flat=True).distinct()
         )
 
+        logger.info(f"License norm classes: {license_norm_classes}")
+
         if license_norm_classes and instance.description:
             from core.models import ItemNameModel
             from django.db.models import Q
@@ -139,21 +154,40 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
                 sion_norm_class__norm_class__in=license_norm_classes
             )
 
+            logger.info(f"Found {matching_items.count()} matching items for norm classes {license_norm_classes}")
+
             # Try to match and link items based on description
             for item_name in matching_items:
-                # Simple matching by base name (before ' - ')
-                base_name = item_name.name.split(' - ')[0]
+                # Extract base name for matching:
+                # 1. Try splitting by ' - ' (e.g., "OLIVE OIL - E126" → "OLIVE OIL")
+                # 2. If no ' - ', use first word (e.g., "PICKLE 3% Restriction" → "PICKLE")
+                if ' - ' in item_name.name:
+                    base_name = item_name.name.split(' - ')[0]
+                else:
+                    base_name = item_name.name.split()[0] if item_name.name.split() else item_name.name
+
+                logger.debug(f"Checking if '{base_name}' in '{instance.description}'")
 
                 if base_name.lower() in instance.description.lower():
                     # Add item if not already linked
                     if not instance.items.filter(id=item_name.id).exists():
+                        logger.info(f"Linking item {item_name.id} ({item_name.name}) to import item {instance.id}")
                         instance.items.add(item_name)
 
                         # Update is_restricted flag if item has restriction
                         if item_name.restriction_percentage > 0 and not instance.is_restricted:
+                            logger.info(
+                                f"Setting is_restricted=True for import item {instance.id} (restriction: {item_name.restriction_percentage}%)")
                             instance.is_restricted = True
                             instance.save(update_fields=['is_restricted'])
                         break  # Only link one item per import item
+                    else:
+                        logger.debug(f"Item {item_name.id} already linked to import item {instance.id}")
+        else:
+            if not license_norm_classes:
+                logger.warning(f"No license norm classes found for license {instance.license.id}")
+            if not instance.description:
+                logger.warning(f"No description for import item {instance.id}")
 
 
 @receiver(post_delete, sender=LicenseImportItemsModel)

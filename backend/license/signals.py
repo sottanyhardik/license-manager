@@ -184,17 +184,17 @@ def update_license_on_allotment_item_change(sender, instance, **kwargs):
 
 
 # Signals for balance updates on BOE items
-@receiver(post_save, sender='bill_of_entry.BillOfEntryItemsModel')
-@receiver(post_delete, sender='bill_of_entry.BillOfEntryItemsModel')
+@receiver(post_save, sender='bill_of_entry.RowDetails')
+@receiver(post_delete, sender='bill_of_entry.RowDetails')
 def update_license_on_boe_item_change(sender, instance, **kwargs):
     """
-    Update license flags when BOE items are added/modified/deleted.
+    Update license flags when BOE row details are added/modified/deleted.
     This ensures balance_cif is updated when BOE debits are made.
     """
     if kwargs.get('raw', False):
         return
 
-    # Get the license from the BOE item
-    if hasattr(instance, 'license_item') and instance.license_item:
-        if hasattr(instance.license_item, 'license') and instance.license_item.license:
-            update_license_flags(instance.license_item.license)
+    # Get the license from the BOE row detail via sr_number (LicenseImportItemsModel)
+    if hasattr(instance, 'sr_number') and instance.sr_number:
+        if hasattr(instance.sr_number, 'license') and instance.sr_number.license:
+            update_license_flags(instance.sr_number.license)

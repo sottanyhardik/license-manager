@@ -299,56 +299,6 @@ export default function Dashboard() {
 
             </div>
 
-            {/* Quick Actions */}
-            <div className="row g-3 mb-4">
-                <div className="col-12">
-                    <div className="card border-0 shadow-sm">
-                        <div className="card-header bg-white border-bottom">
-                            <h5 className="mb-0">
-                                <i className="bi bi-lightning-charge-fill text-warning me-2"></i>
-                                Quick Actions
-                            </h5>
-                        </div>
-                        <div className="card-body">
-                            <div className="row g-3">
-                                <div className="col-md-3">
-                                    <button
-                                        className="btn btn-outline-primary w-100"
-                                        onClick={() => navigate('/licenses/new')}>
-                                        <i className="bi bi-plus-circle me-2"></i>
-                                        New License
-                                    </button>
-                                </div>
-                                <div className="col-md-3">
-                                    <button
-                                        className="btn btn-outline-info w-100"
-                                        onClick={() => navigate('/allotments/new')}>
-                                        <i className="bi bi-plus-circle me-2"></i>
-                                        New Allotment
-                                    </button>
-                                </div>
-                                <div className="col-md-3">
-                                    <button
-                                        className="btn btn-outline-success w-100"
-                                        onClick={() => navigate('/bill-of-entry/new')}>
-                                        <i className="bi bi-plus-circle me-2"></i>
-                                        New BOE
-                                    </button>
-                                </div>
-                                <div className="col-md-3">
-                                    <button
-                                        className="btn btn-outline-secondary w-100"
-                                        onClick={() => navigate('/reports/item-pivot')}>
-                                        <i className="bi bi-file-earmark-text me-2"></i>
-                                        View Reports
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {/* Three Tables in One Row */}
             <div className="row g-3 mb-4">
                 {/* Expiring Licenses Table */}
@@ -542,56 +492,6 @@ export default function Dashboard() {
                                     No recent BOE records
                                 </div>
                             )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="row g-3 mb-4">
-                <div className="col-12">
-                    <div className="card border-0 shadow-sm">
-                        <div className="card-header bg-white border-bottom">
-                            <h5 className="mb-0">
-                                <i className="bi bi-lightning-fill text-warning me-2"></i>
-                                Quick Actions
-                            </h5>
-                        </div>
-                        <div className="card-body">
-                            <div className="row g-3">
-                                <div className="col-md-3">
-                                    <button
-                                        className="btn btn-outline-primary w-100"
-                                        onClick={() => navigate('/licenses/new')}>
-                                        <i className="bi bi-plus-circle me-2"></i>
-                                        Add License
-                                    </button>
-                                </div>
-                                <div className="col-md-3">
-                                    <button
-                                        className="btn btn-outline-info w-100"
-                                        onClick={() => navigate('/allotments/new')}>
-                                        <i className="bi bi-diagram-3 me-2"></i>
-                                        Create Allotment
-                                    </button>
-                                </div>
-                                <div className="col-md-3">
-                                    <button
-                                        className="btn btn-outline-success w-100"
-                                        onClick={() => navigate('/bill-of-entry/new')}>
-                                        <i className="bi bi-receipt me-2"></i>
-                                        Add BOE
-                                    </button>
-                                </div>
-                                <div className="col-md-3">
-                                    <button
-                                        className="btn btn-outline-secondary w-100"
-                                        onClick={() => navigate('/reports')}>
-                                        <i className="bi bi-file-earmark-bar-graph me-2"></i>
-                                        View Reports
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>

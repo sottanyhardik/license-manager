@@ -92,6 +92,16 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
         # Find matching import items for this license
         matching_imports = instance.import_license.filter(description_filter)
 
+        # For short names (<=3 chars), filter out false matches using word boundary check
+        import re
+        if len(base_name) <= 3:
+            pattern = r'\b' + re.escape(base_name) + r'\b'
+            # Further filter to only include items where base_name is a standalone word
+            matching_imports = [
+                imp for imp in matching_imports
+                if re.search(pattern, imp.description, re.IGNORECASE)
+            ]
+
         # Link this ItemNameModel to matching import items
         for import_item in matching_imports:
             # Add item if not already linked
@@ -168,7 +178,18 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
 
                 logger.debug(f"Checking if '{base_name}' in '{instance.description}'")
 
-                if base_name.lower() in instance.description.lower():
+                # Use word boundary matching for short names (<=3 chars) to avoid false matches
+                # e.g., "PP" should not match "approved", only "PP " or " PP" or standalone "PP"
+                import re
+                if len(base_name) <= 3:
+                    # Use word boundary regex for short names
+                    pattern = r'\b' + re.escape(base_name) + r'\b'
+                    matched = bool(re.search(pattern, instance.description, re.IGNORECASE))
+                else:
+                    # For longer names, simple substring match is fine
+                    matched = base_name.lower() in instance.description.lower()
+
+                if matched:
                     # Add item if not already linked
                     if not instance.items.filter(id=item_name.id).exists():
                         logger.info(f"Linking item {item_name.id} ({item_name.name}) to import item {instance.id}")

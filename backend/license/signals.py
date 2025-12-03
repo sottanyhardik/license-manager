@@ -184,8 +184,8 @@ def update_license_on_allotment_item_change(sender, instance, **kwargs):
 
 
 # Signals for balance updates on BOE items
-@receiver(post_save, sender='boe.BillOfEntryItemsModel')
-@receiver(post_delete, sender='boe.BillOfEntryItemsModel')
+@receiver(post_save, sender='bill_of_entry.BillOfEntryItemsModel')
+@receiver(post_delete, sender='bill_of_entry.BillOfEntryItemsModel')
 def update_license_on_boe_item_change(sender, instance, **kwargs):
     """
     Update license flags when BOE items are added/modified/deleted.

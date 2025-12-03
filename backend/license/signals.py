@@ -79,12 +79,10 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
     # For each ItemNameModel, find and link matching import items
     for item_name in matching_items:
         # Extract base name for matching:
-        # 1. Try splitting by ' - ' (e.g., "OLIVE OIL - E126" → "OLIVE OIL")
-        # 2. If no ' - ', use first word (e.g., "PICKLE 3% Restriction" → "PICKLE")
-        if ' - ' in item_name.name:
-            base_name = item_name.name.split(' - ')[0]
-        else:
-            base_name = item_name.name.split()[0] if item_name.name.split() else item_name.name
+        # Always use just the first word to avoid overly specific matches
+        # e.g., "FOOD FLAVOUR - E126" → "FOOD" (matches "Food Additives")
+        # e.g., "PICKLE 3% Restriction" → "PICKLE"
+        base_name = item_name.name.split()[0] if item_name.name.split() else item_name.name
 
         # Build filter based on description/HS code patterns
         description_filter = Q(description__icontains=base_name)
@@ -108,6 +106,14 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
             matching_imports = [
                 imp for imp in matching_imports
                 if imp.hs_code and imp.hs_code.hs_code.startswith('3902')
+            ]
+
+        # Special logic for PICKLE items
+        # If description contains "Food Additives for Pickles", exclude (FOOD FLAVOUR should match instead)
+        if base_name.upper() == 'PICKLE':
+            matching_imports = [
+                imp for imp in matching_imports
+                if not ('food additive' in imp.description.lower() and 'for pickle' in imp.description.lower())
             ]
 
         # Link this ItemNameModel to matching import items
@@ -177,12 +183,11 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
             # Try to match and link items based on description
             for item_name in matching_items:
                 # Extract base name for matching:
-                # 1. Try splitting by ' - ' (e.g., "OLIVE OIL - E126" → "OLIVE OIL")
-                # 2. If no ' - ', use first word (e.g., "PICKLE 3% Restriction" → "PICKLE")
-                if ' - ' in item_name.name:
-                    base_name = item_name.name.split(' - ')[0]
-                else:
-                    base_name = item_name.name.split()[0] if item_name.name.split() else item_name.name
+                # Always use just the first word to avoid overly specific matches
+                # e.g., "FOOD FLAVOUR - E126" → "FOOD" (matches "Food Additives")
+                # e.g., "PICKLE 3% Restriction" → "PICKLE"
+                # e.g., "OLIVE OIL - E126" → "OLIVE" (will still match "Olive Oil")
+                base_name = item_name.name.split()[0] if item_name.name.split() else item_name.name
 
                 logger.debug(f"Checking if '{base_name}' in '{instance.description}'")
 
@@ -203,6 +208,13 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
                     hs_code = instance.hs_code.hs_code if instance.hs_code else ''
                     if not hs_code.startswith('3902'):
                         logger.debug(f"Skipping PP for item {instance.id}: HS code {hs_code} does not start with 3902")
+                        matched = False
+
+                # Special logic for PICKLE items
+                # If description contains "Food Additives for Pickles", match FOOD FLAVOUR not PICKLE
+                if matched and base_name.upper() == 'PICKLE':
+                    if 'food additive' in instance.description.lower() and 'for pickle' in instance.description.lower():
+                        logger.debug(f"Skipping PICKLE for item {instance.id}: 'Food Additives for Pickles' should match FOOD FLAVOUR")
                         matched = False
 
                 if matched:

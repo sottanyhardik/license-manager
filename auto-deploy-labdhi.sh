@@ -155,11 +155,11 @@ if [ $? -eq 0 ]; then
     print_info "Testing production API..."
 
     # Test the production endpoint
-    if curl -s -m 10 'https://labdhi.duckdns.org/api/licenses/?page_size=1' > /dev/null 2>&1; then
+    if curl -s -m 10 'https://license-manager.duckdns.org/api/licenses/?page_size=1' > /dev/null 2>&1; then
         print_success "Production API is responding correctly"
 
         # Get license count
-        LICENSE_COUNT=$(curl -s -m 10 'https://labdhi.duckdns.org/api/licenses/?page_size=1' | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('count', 0))" 2>/dev/null || echo "N/A")
+        LICENSE_COUNT=$(curl -s -m 10 'https://license-manager.duckdns.org/api/licenses/?page_size=1' | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('count', 0))" 2>/dev/null || echo "N/A")
         print_info "Total licenses in production: $LICENSE_COUNT"
     else
         print_error "Production API not responding (might still be starting up)"
@@ -168,6 +168,9 @@ if [ $? -eq 0 ]; then
     echo ""
     print_info "View logs: ssh $SERVER_USER@$SERVER_IP 'tail -f /home/django/license-manager/logs/*.log'"
     print_info "Nginx error log: ssh $SERVER_USER@$SERVER_IP 'sudo tail -f /var/log/nginx/error.log'"
+    print_info "Application URLs:"
+    print_info "  → http://139.59.92.226"
+    print_info "  → https://labdhi.duckdns.org"
 else
     print_header "❌ Deployment Failed"
     print_error "Please check the error messages above and try again."

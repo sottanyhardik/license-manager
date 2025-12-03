@@ -19,7 +19,7 @@ license_nested_field_defs = {
         {"name": "start_serial_number", "type": "number", "label": "Start Serial Number"},
         {"name": "net_quantity", "type": "number", "label": "Net Quantity"},
         {"name": "fob_inr", "type": "number", "label": "FOB (INR)"},
-        {"name": "currency", "type": "select", "label": "Currency", "choices": list(CURRENCY_CHOICES)},
+        {"name": "currency", "type": "select", "label": "Currency", "choices": list(CURRENCY_CHOICES), "default": "USD"},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)"},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
     ],
@@ -32,7 +32,7 @@ license_nested_field_defs = {
         {"name": "items", "type": "fk_multi", "label": "Items", "fk_endpoint": "/masters/item-names/",
          "label_field": "name", "show_in_list": False},
         {"name": "quantity", "type": "number", "label": "Quantity"},
-        {"name": "unit", "type": "select", "label": "Unit", "choices": list(UNIT_CHOICES)},
+        {"name": "unit", "type": "select", "label": "Unit", "choices": list(UNIT_CHOICES), "default": "KG"},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)"},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)"},
         {"name": "is_restricted", "type": "boolean", "label": "Is Restricted"},
@@ -122,11 +122,13 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             },
             "scheme_code": {
                 "type": "select",
-                "choices": list(SCHEME_CODE_CHOICES)
+                "choices": list(SCHEME_CODE_CHOICES),
+                "default": "26"
             },
             "notification_number": {
                 "type": "select",
-                "choices": list(NOTIFICATION_NORM_CHOICES)
+                "choices": list(NOTIFICATION_NORM_CHOICES),
+                "default": "025/2023"
             },
         }
     }

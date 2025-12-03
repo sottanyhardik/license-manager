@@ -71,15 +71,9 @@ class LicenseExportItemSerializer(serializers.ModelSerializer):
         return None
 
     def create(self, validated_data):
-        # Remove form-only fields that are not part of the model
-        validated_data.pop('start_serial_number', None)
-        validated_data.pop('end_serial_number', None)
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        # Remove form-only fields that are not part of the model
-        validated_data.pop('start_serial_number', None)
-        validated_data.pop('end_serial_number', None)
         return super().update(instance, validated_data)
 
     def to_representation(self, instance):
@@ -442,6 +436,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         instance = LicenseDetailsModel.objects.create(**validated_data)
 
         for e in exports:
+            # Remove form-only fields that are not part of the model
+            e.pop('start_serial_number', None)
+            e.pop('end_serial_number', None)
             LicenseExportItemModel.objects.create(license=instance, **e)
         for i in imports:
             self._create_import_item(instance, i)
@@ -477,11 +474,15 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 for e in exports:
                     item_id = e.get('id')
 
+                    # Remove form-only fields that are not part of the model
+                    e.pop('start_serial_number', None)
+                    e.pop('end_serial_number', None)
+
                     if item_id and item_id in existing_items:
                         # Update existing item by ID
                         obj = existing_items[item_id]
                         for key, value in e.items():
-                            if key not in ('id', 'license'):
+                            if key not in ('id', 'license', 'start_serial_number', 'end_serial_number'):
                                 # Handle foreign keys by using _id suffix
                                 if key in ('norm_class', 'item') and value is not None:
                                     setattr(obj, f"{key}_id", value)
@@ -545,8 +546,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         obj = existing_items_by_id[item_id]
                         for key, value in i.items():
                             if key not in ('id', 'license', 'license_date', 'license_expiry', 'balance_cif_fc',
-                                          'license_number', 'notification_number', 'exporter_name', 'hs_code_detail',
-                                          'hs_code_label', 'allotted_quantity', 'allotted_value'):
+                                           'license_number', 'notification_number', 'exporter_name', 'hs_code_detail',
+                                           'hs_code_label', 'allotted_quantity', 'allotted_value'):
                                 # Handle foreign keys by using _id suffix
                                 if key == 'hs_code' and value is not None:
                                     setattr(obj, 'hs_code_id', value)
@@ -572,8 +573,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         obj = existing_items_by_serial[serial_number]
                         for key, value in i.items():
                             if key not in ('id', 'license', 'license_date', 'license_expiry', 'balance_cif_fc',
-                                          'license_number', 'notification_number', 'exporter_name', 'hs_code_detail',
-                                          'hs_code_label', 'allotted_quantity', 'allotted_value'):
+                                           'license_number', 'notification_number', 'exporter_name', 'hs_code_detail',
+                                           'hs_code_label', 'allotted_quantity', 'allotted_value'):
                                 # Handle foreign keys by using _id suffix
                                 if key == 'hs_code' and value is not None:
                                     setattr(obj, 'hs_code_id', value)

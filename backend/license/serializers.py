@@ -426,14 +426,21 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             if field in payload and payload[field] == '':
                 payload[field] = None
 
+        # Handle foreign key fields - convert IDs to model instances
+        if 'hs_code' in payload and payload['hs_code']:
+            from core.models import HSCodeModel
+            if isinstance(payload['hs_code'], (int, str)):
+                payload['hs_code'] = HSCodeModel.objects.get(id=payload['hs_code'])
+
         obj = LicenseImportItemsModel.objects.create(license=license_inst, **payload)
         if isinstance(items, Iterable):
             obj.items.set(items)
 
         # Save description to ProductDescriptionModel if both description and hs_code exist
-        if description and hs_code:
+        # Use the converted hs_code from payload (which is now a model instance)
+        if description and payload.get('hs_code'):
             ProductDescriptionModel.objects.get_or_create(
-                hs_code=hs_code,
+                hs_code=payload['hs_code'],
                 product_description=description
             )
 
@@ -462,6 +469,17 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             for field in ['fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr']:
                 if field in e and e[field] == '':
                     e[field] = None
+
+            # Handle foreign key fields - convert IDs to model instances
+            if 'norm_class' in e and e['norm_class']:
+                from core.models import SionNormClassModel
+                if isinstance(e['norm_class'], (int, str)):
+                    e['norm_class'] = SionNormClassModel.objects.get(id=e['norm_class'])
+
+            if 'hs_code' in e and e['hs_code']:
+                from core.models import HSCodeModel
+                if isinstance(e['hs_code'], (int, str)):
+                    e['hs_code'] = HSCodeModel.objects.get(id=e['hs_code'])
 
             LicenseExportItemModel.objects.create(license=instance, **e)
         for i in imports:

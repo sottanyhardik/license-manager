@@ -64,8 +64,6 @@ export default function NestedFieldArray({
                 newItem[field.name] = "";
             }
         });
-        console.log("Adding new nested item with defaults:", newItem);
-        console.log("Field definitions:", fields);
         onChange([...value, newItem]);
     };
 

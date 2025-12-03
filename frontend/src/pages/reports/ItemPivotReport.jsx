@@ -61,6 +61,7 @@ export default function ItemPivotReport() {
             console.log('Response data:', response.data);
 
             const norms = response.data || [];
+            // Response is now array of {norm_class, description} objects
             setAvailableNorms(Array.isArray(norms) ? norms : []);
 
             // Don't automatically set first norm as active - wait for user click
@@ -464,30 +465,44 @@ export default function ItemPivotReport() {
                             </h6>
                             {availableNorms.length > 0 ? (
                                 <div className="d-flex flex-wrap gap-2">
-                                    {availableNorms.map((norm) => {
-                                        const isConversionNorm = ['E1', 'E5', 'E126', 'E132'].includes(norm);
+                                    {availableNorms.map((normObj) => {
+                                        const normClass = normObj.norm_class || normObj;
+                                        const description = normObj.description || '';
+                                        const isConversionNorm = ['E1', 'E5', 'E126', 'E132'].includes(normClass);
                                         return (
                                             <button
-                                                key={norm}
-                                                className={`btn btn-sm ${activeNormTab === norm ? (isConversionNorm ? 'btn-success' : 'btn-primary') : (isConversionNorm ? 'btn-outline-success' : 'btn-outline-primary')}`}
+                                                key={normClass}
+                                                className={`btn btn-sm ${activeNormTab === normClass ? (isConversionNorm ? 'btn-success' : 'btn-primary') : (isConversionNorm ? 'btn-outline-success' : 'btn-outline-primary')}`}
                                                 onClick={() => {
-                                                    if (activeNormTab !== norm) {
+                                                    if (activeNormTab !== normClass) {
                                                         setReportData(null);
                                                     }
-                                                    setActiveNormTab(norm);
+                                                    setActiveNormTab(normClass);
                                                 }}
                                                 type="button"
                                                 style={{
-                                                    minWidth: '90px',
-                                                    fontWeight: activeNormTab === norm ? 'bold' : 'normal',
-                                                    transition: 'all 0.3s ease'
+                                                    minWidth: '120px',
+                                                    fontWeight: activeNormTab === normClass ? 'bold' : 'normal',
+                                                    transition: 'all 0.3s ease',
+                                                    textAlign: 'center',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    padding: '8px 12px'
                                                 }}
                                             >
-                                                <i className={`bi ${isConversionNorm ? 'bi-arrow-repeat' : 'bi-tag-fill'} me-1`}></i>
-                                                {norm}
-                                                {loading && activeNormTab === norm && (
-                                                    <span className="spinner-border spinner-border-sm ms-2" role="status"
-                                                          style={{width: '0.8rem', height: '0.8rem'}}></span>
+                                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: description ? '4px' : '0'}}>
+                                                    <i className={`bi ${isConversionNorm ? 'bi-arrow-repeat' : 'bi-tag-fill'} me-1`}></i>
+                                                    <span style={{fontSize: '1rem', fontWeight: '600'}}>{normClass}</span>
+                                                    {loading && activeNormTab === normClass && (
+                                                        <span className="spinner-border spinner-border-sm ms-2" role="status"
+                                                              style={{width: '0.8rem', height: '0.8rem'}}></span>
+                                                    )}
+                                                </div>
+                                                {description && (
+                                                    <small style={{fontSize: '0.7rem', opacity: 0.85, lineHeight: '1.2'}}>
+                                                        {description}
+                                                    </small>
                                                 )}
                                             </button>
                                         );

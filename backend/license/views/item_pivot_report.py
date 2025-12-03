@@ -631,8 +631,8 @@ class ItemPivotViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='available-norms')
     def available_norms(self, request):
         """
-        Get list of all active norm classes.
-        Returns a simple list of norm class names, including conversion norms (E1, E5, E126, E132).
+        Get list of all active norm classes with their descriptions.
+        Returns array of objects with norm_class and description, including conversion norms (E1, E5, E126, E132).
         """
         try:
             # Define conversion norm classes
@@ -640,19 +640,31 @@ class ItemPivotViewSet(viewsets.ViewSet):
 
             # Get all active SION norm classes from the database
             from core.models import SionNormClassModel
-            active_norms = SionNormClassModel.objects.filter(
+            active_norms_data = SionNormClassModel.objects.filter(
                 is_active=True
-            ).values_list('norm_class', flat=True).distinct()
+            ).values('norm_class', 'description')
 
-            # Convert to set and add conversion norms
-            all_norms = set(active_norms)
-            all_norms.update(CONVERSION_NORMS)
+            # Build result with norm_class and description
+            norms_dict = {}
+            for norm in active_norms_data:
+                norms_dict[norm['norm_class']] = {
+                    'norm_class': norm['norm_class'],
+                    'description': norm['description'] or ''
+                }
 
-            # Sort and return
-            result = sorted(list(all_norms))
+            # Add conversion norms if not already present
+            for conv_norm in CONVERSION_NORMS:
+                if conv_norm not in norms_dict:
+                    norms_dict[conv_norm] = {
+                        'norm_class': conv_norm,
+                        'description': ''
+                    }
+
+            # Sort by norm_class and return as array
+            result = sorted(norms_dict.values(), key=lambda x: x['norm_class'])
 
             print(f"Available norms endpoint: Found {len(result)} norms (including conversion norms)")
-            print(f"Norms: {result}")
+            print(f"Norms: {[n['norm_class'] for n in result]}")
             return Response(result)
         except Exception as e:
             print(f"Error in available_norms: {str(e)}")

@@ -17,6 +17,7 @@ def update_license_flags(license_instance):
     update_fields = {}
 
     # Update is_expired based on license_expiry_date
+    # BUSINESS RULE: Expired = expiry date < today
     if license_instance.license_expiry_date:
         new_is_expired = license_instance.license_expiry_date < timezone.now().date()
         if license_instance.is_expired != new_is_expired:
@@ -33,7 +34,8 @@ def update_license_flags(license_instance):
             update_fields['balance_cif'] = balance
 
         # Update is_null based on balance
-        new_is_null = balance <= Decimal('0.01')  # Consider <= 0.01 as null
+        # BUSINESS RULE: Null DFIA = balance < $500
+        new_is_null = balance < Decimal('500')
         if license_instance.is_null != new_is_null:
             needs_update = True
             update_fields['is_null'] = new_is_null

@@ -73,7 +73,18 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
             Object.entries(filterValues).forEach(([key, value]) => {
                 // Include all non-empty values, including "all" to explicitly disable defaults
                 if (value !== null && value !== undefined && value !== "") {
-                    params[key] = value;
+                    // Convert UI format to Django format for date ranges
+                    // _from -> __gte (greater than or equal)
+                    // _to -> __lte (less than or equal)
+                    if (key.endsWith('_from')) {
+                        const baseField = key.replace('_from', '');
+                        params[`${baseField}__gte`] = value;
+                    } else if (key.endsWith('_to')) {
+                        const baseField = key.replace('_to', '');
+                        params[`${baseField}__lte`] = value;
+                    } else {
+                        params[key] = value;
+                    }
                 }
             });
 

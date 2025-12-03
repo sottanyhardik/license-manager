@@ -297,7 +297,10 @@ def custom_get_queryset_with_defaults(self):
     # Handle is_invoice filter (custom logic, not a model field)
     if 'is_invoice' in params:
         is_invoice = params.get('is_invoice', '').lower()
-        if is_invoice in ['true', '1', 'yes']:
+        if is_invoice == 'all':
+            # Show all BOE records (no filter)
+            pass
+        elif is_invoice in ['true', '1', 'yes']:
             # Filter records where invoice_no is not null and not empty
             qs = qs.filter(Q(invoice_no__isnull=False) & ~Q(invoice_no=''))
         elif is_invoice in ['false', '0', 'no']:

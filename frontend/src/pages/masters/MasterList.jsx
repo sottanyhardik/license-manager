@@ -145,24 +145,53 @@ export default function MasterList() {
         backendDefaultsApplied.current = false;
         pendingRequestRef.current = null;
 
-        // Check if we should restore filters from previous session
-        const shouldRestore = shouldRestoreFilters();
-        const restored = shouldRestore ? restoreFilterState(entityName) : null;
+        // Parse URL query parameters
+        const urlParams = new URLSearchParams(location.search);
+        const urlFilters = {};
+        for (const [key, value] of urlParams.entries()) {
+            // Convert Django-style date filters to UI format
+            // __gte (greater than or equal) -> _from
+            // __lte (less than or equal) -> _to
+            if (key.endsWith('__gte')) {
+                const baseField = key.replace('__gte', '');
+                urlFilters[`${baseField}_from`] = value;
+            } else if (key.endsWith('__lte')) {
+                const baseField = key.replace('__lte', '');
+                urlFilters[`${baseField}_to`] = value;
+            } else {
+                urlFilters[key] = value;
+            }
+        }
 
-        if (restored) {
-            // Restore previous filter state
-            setFilterParams(restored.filters);
-            setCurrentPage(restored.pagination?.currentPage || 1);
-            setPageSize(restored.pagination?.pageSize || 25);
-            backendDefaultsApplied.current = true;
-            fetchData(restored.pagination?.currentPage || 1, restored.pagination?.pageSize || 25, restored.filters);
-        } else {
-            // Use default filters
+        // Check if URL has filter parameters
+        const hasUrlFilters = Object.keys(urlFilters).length > 0;
+
+        if (hasUrlFilters) {
+            // Use URL filters (highest priority - from dashboard cards)
+            setFilterParams(urlFilters);
             setCurrentPage(1);
-            const defaultFilters = getDefaultFilters();
-            setFilterParams(defaultFilters);
             backendDefaultsApplied.current = true;
-            fetchData(1, 25, defaultFilters);
+            fetchData(1, 25, urlFilters);
+        } else {
+            // Check if we should restore filters from previous session
+            const shouldRestore = shouldRestoreFilters();
+            const restored = shouldRestore ? restoreFilterState(entityName) : null;
+
+            if (restored) {
+                // Restore previous filter state
+                setFilterParams(restored.filters);
+                setCurrentPage(restored.pagination?.currentPage || 1);
+                setPageSize(restored.pagination?.pageSize || 25);
+                backendDefaultsApplied.current = true;
+                fetchData(restored.pagination?.currentPage || 1, restored.pagination?.pageSize || 25, restored.filters);
+            } else {
+                // Use default filters
+                setCurrentPage(1);
+                const defaultFilters = getDefaultFilters();
+                setFilterParams(defaultFilters);
+                backendDefaultsApplied.current = true;
+                fetchData(1, 25, defaultFilters);
+            }
         }
 
         // Check if a new item was created and needs to be highlighted
@@ -174,7 +203,7 @@ export default function MasterList() {
         }
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [entityName]);
+    }, [entityName, location.search]);
 
     // Update filterParams when backend default filters are received (for UI display only)
     useEffect(() => {

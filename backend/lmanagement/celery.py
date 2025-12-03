@@ -28,14 +28,19 @@ app.conf.update(
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
 
 
-# Optional: example periodic tasks schedule (uncomment & edit in production)
-# app.conf.beat_schedule = {
-#     "example-every-midnight": {
-#         "task": "accounts.tasks.send_daily_report",  # update to your task path
-#         "schedule": crontab(minute=0, hour=0),
-#         "args": (),
-#     },
-#}
+# Periodic tasks schedule
+app.conf.beat_schedule = {
+    # Sync all licenses daily at 12:00 AM IST (6:30 PM UTC previous day)
+    # IST = UTC + 5:30, so 12:00 AM IST = 6:30 PM UTC (18:30)
+    "sync-licenses-daily-midnight-ist": {
+        "task": "license.tasks.sync_all_licenses",
+        "schedule": crontab(minute=30, hour=18),  # 18:30 UTC = 12:00 AM IST
+        "args": (),
+        "options": {
+            "expires": 3600,  # Task expires after 1 hour
+        }
+    },
+}
 
 
 @app.task(bind=True)

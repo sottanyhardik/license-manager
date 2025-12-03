@@ -415,6 +415,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
         # Remove fields that don't exist in LicenseImportItemsModel
         payload.pop('duty_type', None)  # This field only exists in export items
+        if 'id' in payload and payload['id'] == '':
+            payload.pop('id')
 
         # Convert empty strings and None to 0 for required NOT NULL fields
         for field in ['serial_number', 'quantity']:
@@ -430,7 +432,10 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         if 'hs_code' in payload and payload['hs_code']:
             from core.models import HSCodeModel
             if isinstance(payload['hs_code'], (int, str)):
-                payload['hs_code'] = HSCodeModel.objects.get(id=payload['hs_code'])
+                try:
+                    payload['hs_code'] = HSCodeModel.objects.get(id=payload['hs_code'])
+                except (ValueError, HSCodeModel.DoesNotExist):
+                    payload['hs_code'] = None
 
         obj = LicenseImportItemsModel.objects.create(license=license_inst, **payload)
         if isinstance(items, Iterable):
@@ -456,9 +461,11 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         instance = LicenseDetailsModel.objects.create(**validated_data)
 
         for e in exports:
-            # Remove form-only fields that are not part of the model
+            # Remove form-only fields and empty id fields
             e.pop('start_serial_number', None)
             e.pop('end_serial_number', None)
+            if 'id' in e and e['id'] == '':
+                e.pop('id')
 
             # Convert empty strings and None to 0 for required NOT NULL fields
             for field in ['net_quantity', 'old_quantity']:
@@ -474,12 +481,18 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             if 'norm_class' in e and e['norm_class']:
                 from core.models import SionNormClassModel
                 if isinstance(e['norm_class'], (int, str)):
-                    e['norm_class'] = SionNormClassModel.objects.get(id=e['norm_class'])
+                    try:
+                        e['norm_class'] = SionNormClassModel.objects.get(id=e['norm_class'])
+                    except (ValueError, SionNormClassModel.DoesNotExist):
+                        e['norm_class'] = None
 
             if 'hs_code' in e and e['hs_code']:
                 from core.models import HSCodeModel
                 if isinstance(e['hs_code'], (int, str)):
-                    e['hs_code'] = HSCodeModel.objects.get(id=e['hs_code'])
+                    try:
+                        e['hs_code'] = HSCodeModel.objects.get(id=e['hs_code'])
+                    except (ValueError, HSCodeModel.DoesNotExist):
+                        e['hs_code'] = None
 
             LicenseExportItemModel.objects.create(license=instance, **e)
         for i in imports:

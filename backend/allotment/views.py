@@ -4,6 +4,9 @@ from allotment.serializers import AllotmentSerializer
 from allotment.views_export import add_grouped_export_action
 from core.constants import ROW_TYPE_CHOICES
 from core.views.master_view import MasterViewSet
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
 
 
 def _get_active_usd_rate():
@@ -208,3 +211,57 @@ def custom_create_with_defaults(self, request, *args, **kwargs):
 
 
 AllotmentViewSet.create = custom_create_with_defaults
+
+
+# Add copy action
+@action(detail=True, methods=['post'], url_path='copy')
+def copy_allotment(self, request, pk=None):
+    """
+    Copy an allotment without invoice number and allotment items.
+    Creates a new allotment with the same data except invoice and allotment_details.
+    """
+    try:
+        # Get the original allotment
+        original = self.get_object()
+
+        # Create a copy without invoice and allotment items
+        copied_data = {
+            'company': original.company_id,
+            'type': original.type,
+            'required_quantity': original.required_quantity,
+            'unit_value_per_unit': original.unit_value_per_unit,
+            'cif_fc': original.cif_fc,
+            'cif_inr': original.cif_inr,
+            'exchange_rate': original.exchange_rate,
+            'item_name': original.item_name,
+            'contact_person': original.contact_person,
+            'contact_number': original.contact_number,
+            'estimated_arrival_date': original.estimated_arrival_date,
+            'bl_detail': original.bl_detail,
+            'port': original.port_id if original.port else None,
+            'related_company': original.related_company_id if original.related_company else None,
+            'is_approved': False,  # Reset approval status
+        }
+
+        # Remove None values
+        copied_data = {k: v for k, v in copied_data.items() if v is not None}
+
+        # Create new allotment using serializer
+        serializer = AllotmentSerializer(data=copied_data, context={'request': request})
+        if serializer.is_valid():
+            new_allotment = serializer.save()
+            return Response(
+                AllotmentSerializer(new_allotment, context={'request': request}).data,
+                status=status.HTTP_201_CREATED
+            )
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+AllotmentViewSet.copy_allotment = copy_allotment

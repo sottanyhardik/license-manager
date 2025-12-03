@@ -540,6 +540,23 @@ export default function MasterList() {
                                         });
                                         navigate(`/allotments/${item.id}/allocate`, { state: { scrollToTransferLetter: true } });
                                     }
+                                },
+                                {
+                                    label: 'Copy',
+                                    icon: 'bi bi-files',
+                                    className: 'btn btn-outline-primary',
+                                    onClick: async (item) => {
+                                        if (!window.confirm('Create a copy of this allotment without invoice and items?')) {
+                                            return;
+                                        }
+                                        try {
+                                            await api.post(`/allotments/${item.id}/copy/`);
+                                            alert('Allotment copied successfully');
+                                            fetchData(currentPage, pageSize, filterParams);
+                                        } catch (err) {
+                                            alert(err.response?.data?.error || 'Failed to copy allotment');
+                                        }
+                                    }
                                 }
                             ] : entityName === 'bill-of-entries' ? [
                                 {
@@ -608,6 +625,23 @@ export default function MasterList() {
                                     onClick: (item) => {
                                         // Navigate to allocate page and scroll to transfer letter section
                                         navigate(`/allotments/${item.id}/allocate`, { state: { scrollToTransferLetter: true } })
+                                    }
+                                },
+                                {
+                                    label: 'Copy',
+                                    icon: 'bi bi-files',
+                                    className: 'btn btn-outline-primary',
+                                    onClick: async (item) => {
+                                        if (!window.confirm('Create a copy of this allotment without invoice and items?')) {
+                                            return;
+                                        }
+                                        try {
+                                            await api.post(`/allotments/${item.id}/copy/`);
+                                            alert('Allotment copied successfully');
+                                            fetchData(currentPage, pageSize, filterParams);
+                                        } catch (err) {
+                                            alert(err.response?.data?.error || 'Failed to copy allotment');
+                                        }
                                     }
                                 }
                             ] : entityName === 'bill-of-entries' ? [

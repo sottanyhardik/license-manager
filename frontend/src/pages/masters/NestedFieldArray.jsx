@@ -51,7 +51,8 @@ export default function NestedFieldArray({
     const handleAdd = () => {
         const newItem = {};
         fields.forEach(field => {
-            newItem[field.name] = "";
+            // Use default value if specified, otherwise empty string
+            newItem[field.name] = field.default !== undefined ? field.default : "";
         });
         onChange([...value, newItem]);
     };

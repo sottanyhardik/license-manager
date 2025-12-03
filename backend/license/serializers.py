@@ -413,6 +413,11 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         description = payload.get("description")
         hs_code = payload.get("hs_code")
 
+        # Convert empty strings to None for decimal/numeric fields
+        for field in ['serial_number', 'quantity', 'cif_fc', 'cif_inr']:
+            if field in payload and payload[field] == '':
+                payload[field] = None
+
         obj = LicenseImportItemsModel.objects.create(license=license_inst, **payload)
         if isinstance(items, Iterable):
             obj.items.set(items)
@@ -439,6 +444,12 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             # Remove form-only fields that are not part of the model
             e.pop('start_serial_number', None)
             e.pop('end_serial_number', None)
+
+            # Convert empty strings to None for decimal/numeric fields
+            for field in ['net_quantity', 'fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr', 'old_quantity']:
+                if field in e and e[field] == '':
+                    e[field] = None
+
             LicenseExportItemModel.objects.create(license=instance, **e)
         for i in imports:
             self._create_import_item(instance, i)
@@ -477,6 +488,11 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                     # Remove form-only fields that are not part of the model
                     e.pop('start_serial_number', None)
                     e.pop('end_serial_number', None)
+
+                    # Convert empty strings to None for decimal/numeric fields
+                    for field in ['net_quantity', 'fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr', 'old_quantity']:
+                        if field in e and e[field] == '':
+                            e[field] = None
 
                     if item_id and item_id in existing_items:
                         # Update existing item by ID

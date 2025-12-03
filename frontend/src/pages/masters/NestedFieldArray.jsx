@@ -51,8 +51,18 @@ export default function NestedFieldArray({
     const handleAdd = () => {
         const newItem = {};
         fields.forEach(field => {
-            // Use default value if specified, otherwise empty string
-            newItem[field.name] = field.default !== undefined ? field.default : "";
+            // Use default value if specified
+            if (field.default !== undefined) {
+                newItem[field.name] = field.default;
+            }
+            // For number/decimal fields without defaults, use null instead of empty string
+            else if (field.type === "number") {
+                newItem[field.name] = null;
+            }
+            // For other fields, use empty string
+            else {
+                newItem[field.name] = "";
+            }
         });
         console.log("Adding new nested item with defaults:", newItem);
         console.log("Field definitions:", fields);

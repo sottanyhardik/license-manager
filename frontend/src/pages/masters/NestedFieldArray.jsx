@@ -54,6 +54,8 @@ export default function NestedFieldArray({
             // Use default value if specified, otherwise empty string
             newItem[field.name] = field.default !== undefined ? field.default : "";
         });
+        console.log("Adding new nested item with defaults:", newItem);
+        console.log("Field definitions:", fields);
         onChange([...value, newItem]);
     };
 

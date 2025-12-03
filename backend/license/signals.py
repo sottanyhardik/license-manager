@@ -1,5 +1,5 @@
 # license/signals.py
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
 from decimal import Decimal
@@ -56,25 +56,34 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
     if not created and instance.import_license.exists():
         return
 
-    # Get all export items with norm classes
-    export_items = instance.export_license.filter(norm_class__isnull=False)
+    # Get all export items with item names (user_itemname)
+    export_items = instance.export_license.filter(item__isnull=False)
 
     if not export_items.exists():
         return
 
-    # Collect all norm classes from export items
-    norm_classes = set()
+    # Collect all item names from export items
+    item_names = set()
     for export_item in export_items:
-        if export_item.norm_class:
-            norm_classes.add(export_item.norm_class)
+        if export_item.item:
+            item_names.add(export_item.item)
 
-    if not norm_classes:
+    if not item_names:
         return
 
-    # Fetch SION norm items for these norm classes
+    # Fetch SION norm classes for these item names
+    from core.models import SionNormClassModel
+    norm_classes = SionNormClassModel.objects.filter(
+        export_norm__item__in=item_names
+    ).distinct()
+
+    if not norm_classes.exists():
+        return
+
+    # Fetch SION import items for these norm classes
     sion_items = SIONImportModel.objects.filter(
         norm_class__in=norm_classes
-    ).select_related('hs_code')
+    ).select_related('hsn_code')
 
     if not sion_items.exists():
         return
@@ -83,17 +92,17 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
     serial_number = 1
     for sion_item in sion_items:
         # Check if an import item with this HS code already exists
-        if instance.import_license.filter(hs_code=sion_item.hs_code).exists():
+        if instance.import_license.filter(hs_code=sion_item.hsn_code).exists():
             continue
 
         # Create import item
         LicenseImportItemsModel.objects.create(
             license=instance,
             serial_number=serial_number,
-            hs_code=sion_item.hs_code,
-            description=sion_item.description or (sion_item.hs_code.description if sion_item.hs_code else ''),
-            quantity=0,
-            unit='kg',
+            hs_code=sion_item.hsn_code,
+            description=sion_item.description or (sion_item.hsn_code.product_description if sion_item.hsn_code else ''),
+            quantity=sion_item.quantity if sion_item.quantity else 0,
+            unit=sion_item.unit if sion_item.unit else 'kg',
             cif_fc=0,
             cif_inr=0,
             is_restricted=False
@@ -114,37 +123,93 @@ def update_license_on_export_item_change(sender, instance, created, **kwargs):
     if instance.license:
         update_license_flags(instance.license)
 
-        # Also trigger import item auto-fetch if this is a new export item with norm_class
-        if created and instance.norm_class:
+        # Also trigger import item auto-fetch if this is a new export item with item name
+        if created and instance.item:
             license = instance.license
             # Check if we should auto-fetch import items
             if not license.import_license.exists():
-                # Get all norm classes from this license
-                norm_classes = set()
-                for export_item in license.export_license.filter(norm_class__isnull=False):
-                    if export_item.norm_class:
-                        norm_classes.add(export_item.norm_class)
+                # Get all item names from this license
+                item_names = set()
+                for export_item in license.export_license.filter(item__isnull=False):
+                    if export_item.item:
+                        item_names.add(export_item.item)
 
-                if norm_classes:
-                    # Fetch SION norm items
-                    sion_items = SIONImportModel.objects.filter(
-                        norm_class__in=norm_classes
-                    ).select_related('hs_code')
+                if item_names:
+                    # Fetch SION norm classes for these item names
+                    from core.models import SionNormClassModel
+                    norm_classes = SionNormClassModel.objects.filter(
+                        export_norm__item__in=item_names
+                    ).distinct()
 
-                    serial_number = 1
-                    for sion_item in sion_items:
-                        if license.import_license.filter(hs_code=sion_item.hs_code).exists():
-                            continue
+                    if norm_classes.exists():
+                        # Fetch SION import items
+                        sion_items = SIONImportModel.objects.filter(
+                            norm_class__in=norm_classes
+                        ).select_related('hsn_code')
 
-                        LicenseImportItemsModel.objects.create(
-                            license=license,
-                            serial_number=serial_number,
-                            hs_code=sion_item.hs_code,
-                            description=sion_item.description or (sion_item.hs_code.description if sion_item.hs_code else ''),
-                            quantity=0,
-                            unit='kg',
-                            cif_fc=0,
-                            cif_inr=0,
-                            is_restricted=False
-                        )
-                        serial_number += 1
+                        serial_number = 1
+                        for sion_item in sion_items:
+                            if license.import_license.filter(hs_code=sion_item.hsn_code).exists():
+                                continue
+
+                            LicenseImportItemsModel.objects.create(
+                                license=license,
+                                serial_number=serial_number,
+                                hs_code=sion_item.hsn_code,
+                                description=sion_item.description or (sion_item.hsn_code.product_description if sion_item.hsn_code else ''),
+                                quantity=sion_item.quantity if sion_item.quantity else 0,
+                                unit=sion_item.unit if sion_item.unit else 'kg',
+                                cif_fc=0,
+                                cif_inr=0,
+                                is_restricted=False
+                            )
+                            serial_number += 1
+
+
+# Signals for balance updates on import items
+@receiver(post_save, sender=LicenseImportItemsModel)
+@receiver(post_delete, sender=LicenseImportItemsModel)
+def update_license_on_import_item_change(sender, instance, **kwargs):
+    """
+    Update license flags when import items are added/modified/deleted.
+    This ensures balance_cif, available_quantity, and available_value are updated.
+    """
+    if kwargs.get('raw', False):
+        return
+
+    if instance.license:
+        update_license_flags(instance.license)
+
+
+# Signals for balance updates on allotment items
+@receiver(post_save, sender='allotment.AllotmentItems')
+@receiver(post_delete, sender='allotment.AllotmentItems')
+def update_license_on_allotment_item_change(sender, instance, **kwargs):
+    """
+    Update license flags when allotment items are added/modified/deleted.
+    This ensures balance_cif is updated when allocations change.
+    """
+    if kwargs.get('raw', False):
+        return
+
+    # Get the license from the allotment item
+    if hasattr(instance, 'item') and instance.item:
+        if hasattr(instance.item, 'license') and instance.item.license:
+            update_license_flags(instance.item.license)
+
+
+# Signals for balance updates on BOE items
+@receiver(post_save, sender='boe.BillOfEntryItemsModel')
+@receiver(post_delete, sender='boe.BillOfEntryItemsModel')
+def update_license_on_boe_item_change(sender, instance, **kwargs):
+    """
+    Update license flags when BOE items are added/modified/deleted.
+    This ensures balance_cif is updated when BOE debits are made.
+    """
+    if kwargs.get('raw', False):
+        return
+
+    # Get the license from the BOE item
+    if hasattr(instance, 'license_item') and instance.license_item:
+        if hasattr(instance.license_item, 'license') and instance.license_item.license:
+            update_license_flags(instance.license_item.license)

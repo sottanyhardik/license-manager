@@ -2,7 +2,8 @@
 
 # Automated Deployment Script for License Manager
 # Deploys to django@143.110.252.201:/home/django/license-manager
-# Usage: bash auto-deploy.sh
+# Usage: ./auto-deploy.sh
+# Password: admin (hardcoded)
 
 set -e  # Exit on error
 
@@ -18,123 +19,157 @@ SERVER_USER="django"
 SERVER_IP="143.110.252.201"
 SERVER_PATH="/home/django/license-manager"
 BRANCH="feature/V4.0"
+PASSWORD="admin"
 
-echo -e "${BLUE}🚀 Starting automated deployment to ${SERVER_USER}@${SERVER_IP}${NC}"
-echo -e "${BLUE}================================================${NC}"
+print_header() {
+    echo -e "\n${BLUE}================================================${NC}"
+    echo -e "${BLUE}$1${NC}"
+    echo -e "${BLUE}================================================${NC}\n"
+}
 
-# Deploy via SSH
-ssh ${SERVER_USER}@${SERVER_IP} << 'ENDSSH'
+print_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+print_info() {
+    echo -e "${BLUE}→ $1${NC}"
+}
+
+print_header "🚀 Starting Deployment to Production"
+
+# Check if sshpass is installed, if not use expect
+if command -v sshpass &> /dev/null; then
+    print_info "Using sshpass for authentication"
+    SSH_CMD="sshpass -p '$PASSWORD' ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP"
+    SUDO_CMD="echo '$PASSWORD' | sudo -S"
+else
+    print_info "Using SSH (password will be prompted if needed)"
+    SSH_CMD="ssh $SERVER_USER@$SERVER_IP"
+    SUDO_CMD="sudo"
+fi
+
+# Execute deployment via SSH
+$SSH_CMD bash << ENDSSH
 set -e
 
-# Color codes
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}📂 Navigating to project directory...${NC}"
-cd /home/django/license-manager
+echo -e "\${BLUE}→ Navigating to project directory...\${NC}"
+cd $SERVER_PATH
 
-echo -e "${BLUE}📥 Pulling latest code from feature/V4.0...${NC}"
-git pull origin feature/V4.0
+echo -e "\${BLUE}→ Pulling latest code from $BRANCH...\${NC}"
+git pull origin $BRANCH
 
-echo -e "${BLUE}📦 Installing frontend dependencies...${NC}"
+echo -e "\${BLUE}→ Installing frontend dependencies...\${NC}"
 cd frontend
-npm install
+npm install --silent
 
-echo -e "${BLUE}🏗️  Building frontend...${NC}"
+echo -e "\${BLUE}→ Building frontend...\${NC}"
 npm run build
 
-echo -e "${GREEN}✅ Frontend build completed${NC}"
-echo -e "${BLUE}📋 Frontend dist contents:${NC}"
-ls -lh dist/
-
-echo -e "${BLUE}🐍 Activating Python virtual environment...${NC}"
-cd /home/django/license-manager
+echo -e "\${BLUE}→ Activating Python virtual environment...\${NC}"
+cd $SERVER_PATH
 source venv/bin/activate
 
-echo -e "${BLUE}📦 Installing Python dependencies...${NC}"
+echo -e "\${BLUE}→ Installing Python dependencies...\${NC}"
 cd backend
 pip install -r requirements.txt --quiet
 
-echo -e "${BLUE}🗄️  Running database migrations...${NC}"
+echo -e "\${BLUE}→ Running database migrations...\${NC}"
 python manage.py migrate
 
-echo -e "${BLUE}📦 Collecting static files...${NC}"
+echo -e "\${BLUE}→ Collecting static files...\${NC}"
 python manage.py collectstatic --noinput
 
-echo -e "${BLUE}🔐 Setting permissions...${NC}"
-# Set permissions (should already be owned by django user)
-chmod -R 775 /home/django/license-manager/backend/media 2>/dev/null || true
-chmod -R 755 /home/django/license-manager/frontend/dist 2>/dev/null || true
+echo -e "\${BLUE}→ Setting file permissions...\${NC}"
+echo '$PASSWORD' | sudo -S chown -R django:django $SERVER_PATH/backend/media 2>/dev/null || true
+echo '$PASSWORD' | sudo -S chmod -R 775 $SERVER_PATH/backend/media 2>/dev/null || true
+echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null || true
 
-echo -e "${BLUE}🔄 Restarting services...${NC}"
+echo -e "\${BLUE}→ Restarting license-manager service...\${NC}"
+echo '$PASSWORD' | sudo -S supervisorctl restart license-manager
 
-# Restart supervisor processes (always use sudo)
-echo -e "${YELLOW}  → Restarting license-manager...${NC}"
-sudo supervisorctl restart license-manager
-
-# Check if celery is configured
-if sudo supervisorctl status license-manager-celery &> /dev/null 2>&1; then
-    echo -e "${YELLOW}  → Restarting celery worker...${NC}"
-    sudo supervisorctl restart license-manager-celery
+echo -e "\${BLUE}→ Checking and restarting Celery if configured...\${NC}"
+if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery &>/dev/null; then
+    echo '$PASSWORD' | sudo -S supervisorctl restart license-manager-celery
+    echo -e "\${GREEN}  ✅ Celery worker restarted\${NC}"
+else
+    echo -e "\${YELLOW}  ⚠️  Celery not configured\${NC}"
 fi
 
-if sudo supervisorctl status license-manager-celery-beat &> /dev/null 2>&1; then
-    echo -e "${YELLOW}  → Restarting celery beat...${NC}"
-    sudo supervisorctl restart license-manager-celery-beat
+if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery-beat &>/dev/null; then
+    echo '$PASSWORD' | sudo -S supervisorctl restart license-manager-celery-beat
+    echo -e "\${GREEN}  ✅ Celery beat restarted\${NC}"
+else
+    echo -e "\${YELLOW}  ⚠️  Celery Beat not configured\${NC}"
 fi
 
-# Restart nginx (always use sudo)
-echo -e "${YELLOW}  → Reloading nginx...${NC}"
-sudo systemctl reload nginx
+echo -e "\${BLUE}→ Reloading Nginx...\${NC}"
+echo '$PASSWORD' | sudo -S systemctl reload nginx
 
-echo -e "${BLUE}✅ Checking service status...${NC}"
-echo -e "${YELLOW}==================== Supervisor Status ====================${NC}"
-sudo supervisorctl status
+echo -e "\n\${BLUE}================================================\${NC}"
+echo -e "\${BLUE}📊 Service Status\${NC}"
+echo -e "\${BLUE}================================================\${NC}"
+echo -e "\${YELLOW}Supervisor Services:\${NC}"
+echo '$PASSWORD' | sudo -S supervisorctl status
 
-echo -e "${YELLOW}==================== Nginx Status ====================${NC}"
-sudo systemctl status nginx --no-pager | head -10
+echo -e "\n\${YELLOW}Nginx Status:\${NC}"
+echo '$PASSWORD' | sudo -S systemctl status nginx --no-pager | head -15
 
-echo -e "${GREEN}================================================${NC}"
-echo -e "${GREEN}✨ Deployment completed successfully!${NC}"
-echo -e "${GREEN}================================================${NC}"
+echo -e "\n\${BLUE}================================================\${NC}"
+echo -e "\${BLUE}✨ Deployment Summary\${NC}"
+echo -e "\${BLUE}================================================\${NC}"
+echo -e "\${GREEN}✅ Code pulled from $BRANCH\${NC}"
+echo -e "\${GREEN}✅ Frontend built and deployed\${NC}"
+echo -e "\${GREEN}✅ Backend dependencies installed\${NC}"
+echo -e "\${GREEN}✅ Database migrations applied\${NC}"
+echo -e "\${GREEN}✅ Static files collected\${NC}"
+echo -e "\${GREEN}✅ Services restarted\${NC}"
 echo ""
-echo -e "${BLUE}🌐 Application URLs:${NC}"
-echo -e "   http://143.110.252.201"
-echo -e "   https://license-manager.duckdns.org"
+echo -e "\${BLUE}🌐 Application URLs:\${NC}"
+echo -e "   → http://$SERVER_IP"
+echo -e "   → https://license-manager.duckdns.org"
 echo ""
-echo -e "${BLUE}📊 Service Status:${NC}"
-sudo supervisorctl status | grep license-manager
 
+echo -e "\${BLUE}→ Final service status check...\${NC}"
+echo '$PASSWORD' | sudo -S supervisorctl status | grep license-manager
+
+echo -e "\n\${GREEN}================================================\${NC}"
+echo -e "\${GREEN}🎉 Deployment completed successfully!\${NC}"
+echo -e "\${GREEN}================================================\${NC}"
 ENDSSH
 
 # Check if SSH command was successful
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}================================================${NC}"
-    echo -e "${GREEN}🎉 Deployment completed successfully!${NC}"
-    echo -e "${GREEN}================================================${NC}"
+    print_header "🎉 Local Deployment Verification"
+    print_success "Deployment completed successfully!"
+    print_info "Testing production API..."
+
+    # Test the production endpoint
+    if curl -s -m 10 'https://license-manager.duckdns.org/api/licenses/?page_size=1' > /dev/null 2>&1; then
+        print_success "Production API is responding correctly"
+
+        # Get license count
+        LICENSE_COUNT=$(curl -s -m 10 'https://license-manager.duckdns.org/api/licenses/?page_size=1' | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('count', 0))" 2>/dev/null || echo "N/A")
+        print_info "Total licenses in production: $LICENSE_COUNT"
+    else
+        print_error "Production API not responding (might still be starting up)"
+    fi
+
     echo ""
-    echo -e "${BLUE}📝 Deployment Summary:${NC}"
-    echo -e "   ✅ Code pulled from ${BRANCH}"
-    echo -e "   ✅ Frontend built and deployed"
-    echo -e "   ✅ Backend dependencies installed"
-    echo -e "   ✅ Database migrations applied"
-    echo -e "   ✅ Static files collected"
-    echo -e "   ✅ Services restarted"
-    echo ""
-    echo -e "${BLUE}🔍 Test your deployment:${NC}"
-    echo -e "   → http://143.110.252.201"
-    echo -e "   → https://license-manager.duckdns.org"
-    echo ""
-    echo -e "${BLUE}📊 View logs:${NC}"
-    echo -e "   → App logs: ssh ${SERVER_USER}@${SERVER_IP} 'tail -f /home/django/license-manager/logs/*.log'"
-    echo -e "   → Nginx error: ssh ${SERVER_USER}@${SERVER_IP} 'sudo tail -f /var/log/nginx/error.log'"
+    print_info "View logs: ssh $SERVER_USER@$SERVER_IP 'tail -f /home/django/license-manager/logs/*.log'"
+    print_info "Nginx error log: ssh $SERVER_USER@$SERVER_IP 'sudo tail -f /var/log/nginx/error.log'"
 else
-    echo -e "${RED}================================================${NC}"
-    echo -e "${RED}❌ Deployment failed!${NC}"
-    echo -e "${RED}================================================${NC}"
-    echo -e "${YELLOW}Please check the error messages above and try again.${NC}"
+    print_header "❌ Deployment Failed"
+    print_error "Please check the error messages above and try again."
     exit 1
 fi

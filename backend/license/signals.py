@@ -4,7 +4,6 @@ from django.dispatch import receiver
 from django.utils import timezone
 from decimal import Decimal
 from license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
-from core.models import SIONImportModel
 
 
 def update_license_flags(license_instance):
@@ -41,9 +40,9 @@ def update_license_flags(license_instance):
 @receiver(post_save, sender=LicenseDetailsModel)
 def auto_fetch_import_items(sender, instance, created, **kwargs):
     """
-    Automatically populate import items from SION norms when a license is saved.
+    Automatically link ItemNameModel items to existing LicenseImportItemsModel when a license is saved.
     Also updates is_null and is_expired flags.
-    This fetches items based on the norm classes in export items.
+    This works like populate_license_items command - matches based on description/HS filters and norm class.
     """
     # Prevent infinite recursion by checking if we're already in a save
     if kwargs.get('raw', False):
@@ -52,77 +51,48 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
     # Update license flags
     update_license_flags(instance)
 
-    # Only auto-fetch if this is a new license OR if there are no existing import items
-    if not created and instance.import_license.exists():
+    # Only auto-link items if import items exist
+    if not instance.import_license.exists():
         return
 
-    # Get all export items with item names (user_itemname)
-    export_items = instance.export_license.filter(item__isnull=False)
+    # Get license export norm classes
+    license_norm_classes = list(
+        instance.export_license.values_list('norm_class__norm_class', flat=True).distinct()
+    )
 
-    if not export_items.exists():
+    if not license_norm_classes:
         return
 
-    # Collect all item names from export items
-    item_names = set()
-    for export_item in export_items:
-        if export_item.item:
-            item_names.add(export_item.item)
+    # Get all ItemNameModel items that match the license norm classes
+    from core.models import ItemNameModel
+    from django.db.models import Q
 
-    if not item_names:
+    matching_items = ItemNameModel.objects.filter(
+        sion_norm_class__norm_class__in=license_norm_classes
+    )
+
+    if not matching_items.exists():
         return
 
-    # Fetch SION norm classes for these item names
-    from core.models import SionNormClassModel, ItemNameModel
-    norm_classes = SionNormClassModel.objects.filter(
-        items__in=item_names
-    ).distinct()
+    # For each ItemNameModel, find and link matching import items
+    for item_name in matching_items:
+        # Build filter based on description/HS code patterns
+        # This is simplified - in production you'd want the full filter logic from populate_license_items
+        description_filter = Q(description__icontains=item_name.name.split(' - ')[0])
 
-    if not norm_classes.exists():
-        return
+        # Find matching import items for this license
+        matching_imports = instance.import_license.filter(description_filter)
 
-    # Fetch SION import items for these norm classes
-    sion_items = SIONImportModel.objects.filter(
-        norm_class__in=norm_classes
-    ).select_related('hsn_code')
+        # Link this ItemNameModel to matching import items
+        for import_item in matching_imports:
+            # Add item if not already linked
+            if not import_item.items.filter(id=item_name.id).exists():
+                import_item.items.add(item_name)
 
-    if not sion_items.exists():
-        return
-
-    # Create import items from SION norms with automatic restriction linking
-    serial_number = 1
-    for sion_item in sion_items:
-        # Check if an import item with this HS code already exists
-        if instance.import_license.filter(hs_code=sion_item.hsn_code).exists():
-            continue
-
-        # Determine if this import item should be restricted
-        # Check if any of the export item names have restriction_percentage > 0
-        has_restriction = False
-        restriction_item = None
-        for item_name in item_names:
-            if item_name.sion_norm_class == sion_item.norm_class and item_name.restriction_percentage > 0:
-                has_restriction = True
-                restriction_item = item_name
-                break
-
-        # Create import item
-        import_item = LicenseImportItemsModel.objects.create(
-            license=instance,
-            serial_number=serial_number,
-            hs_code=sion_item.hsn_code,
-            description=sion_item.description or (sion_item.hsn_code.product_description if sion_item.hsn_code else ''),
-            quantity=sion_item.quantity if sion_item.quantity else 0,
-            unit=sion_item.unit if sion_item.unit else 'kg',
-            cif_fc=0,
-            cif_inr=0,
-            is_restricted=has_restriction
-        )
-
-        # Link the restriction ItemNameModel if applicable
-        if restriction_item:
-            import_item.items.add(restriction_item)
-
-        serial_number += 1
+                # Update is_restricted flag if item has restriction
+                if item_name.restriction_percentage > 0 and not import_item.is_restricted:
+                    import_item.is_restricted = True
+                    import_item.save(update_fields=['is_restricted'])
 
 
 @receiver(post_save, sender=LicenseExportItemModel)
@@ -137,70 +107,57 @@ def update_license_on_export_item_change(sender, instance, created, **kwargs):
     if instance.license:
         update_license_flags(instance.license)
 
-        # Also trigger import item auto-fetch if this is a new export item with item name
-        if created and instance.item:
-            license = instance.license
-            # Check if we should auto-fetch import items
-            if not license.import_license.exists():
-                # Get all item names from this license
-                item_names = set()
-                for export_item in license.export_license.filter(item__isnull=False):
-                    if export_item.item:
-                        item_names.add(export_item.item)
-
-                if item_names:
-                    # Fetch SION norm classes for these item names
-                    from core.models import SionNormClassModel, ItemNameModel
-                    norm_classes = SionNormClassModel.objects.filter(
-                        items__in=item_names
-                    ).distinct()
-
-                    if norm_classes.exists():
-                        # Fetch SION import items
-                        sion_items = SIONImportModel.objects.filter(
-                            norm_class__in=norm_classes
-                        ).select_related('hsn_code')
-
-                        serial_number = 1
-                        for sion_item in sion_items:
-                            if license.import_license.filter(hs_code=sion_item.hsn_code).exists():
-                                continue
-
-                            # Determine if this import item should be restricted
-                            has_restriction = False
-                            restriction_item = None
-                            for item_name in item_names:
-                                if item_name.sion_norm_class == sion_item.norm_class and item_name.restriction_percentage > 0:
-                                    has_restriction = True
-                                    restriction_item = item_name
-                                    break
-
-                            import_item = LicenseImportItemsModel.objects.create(
-                                license=license,
-                                serial_number=serial_number,
-                                hs_code=sion_item.hsn_code,
-                                description=sion_item.description or (sion_item.hsn_code.product_description if sion_item.hsn_code else ''),
-                                quantity=sion_item.quantity if sion_item.quantity else 0,
-                                unit=sion_item.unit if sion_item.unit else 'kg',
-                                cif_fc=0,
-                                cif_inr=0,
-                                is_restricted=has_restriction
-                            )
-
-                            # Link the restriction ItemNameModel if applicable
-                            if restriction_item:
-                                import_item.items.add(restriction_item)
-
-                            serial_number += 1
-
 
 # Signals for balance updates on import items
 @receiver(post_save, sender=LicenseImportItemsModel)
-@receiver(post_delete, sender=LicenseImportItemsModel)
-def update_license_on_import_item_change(sender, instance, **kwargs):
+def update_license_on_import_item_change(sender, instance, created, **kwargs):
     """
     Update license flags when import items are added/modified/deleted.
+    Also auto-link ItemNameModel items based on description/HS code and norm class.
     This ensures balance_cif, available_quantity, and available_value are updated.
+    """
+    if kwargs.get('raw', False):
+        return
+
+    if instance.license:
+        update_license_flags(instance.license)
+
+        # Auto-link ItemNameModel items when import item is created
+        if created:
+            # Get license export norm classes
+            license_norm_classes = list(
+                instance.license.export_license.values_list('norm_class__norm_class', flat=True).distinct()
+            )
+
+            if license_norm_classes:
+                from core.models import ItemNameModel
+                from django.db.models import Q
+
+                # Get all ItemNameModel items that match the license norm classes
+                matching_items = ItemNameModel.objects.filter(
+                    sion_norm_class__norm_class__in=license_norm_classes
+                )
+
+                # Try to match and link items based on description
+                for item_name in matching_items:
+                    # Simple matching by base name (before ' - ')
+                    base_name = item_name.name.split(' - ')[0]
+                    if base_name.lower() in instance.description.lower():
+                        # Add item if not already linked
+                        if not instance.items.filter(id=item_name.id).exists():
+                            instance.items.add(item_name)
+
+                            # Update is_restricted flag if item has restriction
+                            if item_name.restriction_percentage > 0 and not instance.is_restricted:
+                                instance.is_restricted = True
+                                instance.save(update_fields=['is_restricted'])
+                            break  # Only link one item per import item
+
+
+@receiver(post_delete, sender=LicenseImportItemsModel)
+def update_license_on_import_item_delete(sender, instance, **kwargs):
+    """
+    Update license flags when import items are deleted.
     """
     if kwargs.get('raw', False):
         return

@@ -245,18 +245,16 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
     def get_balance_cif_fc(self, obj):
         """
-        CENTRALIZED available_value calculation - uses available_value_calculated property.
+        ITEM-LEVEL available CIF FC calculation.
 
-        This is the SINGLE SOURCE OF TRUTH for available value.
-        The property handles:
-        - is_restricted = True OR items have restriction_percentage > 0:
-          Uses restriction-based calculation (2%, 3%, 5%, 10% etc.)
-          Formula: (License Export CIF × restriction_percentage / 100) - (debits + allotments)
-        - Otherwise: Uses license.balance_cif (shared across all non-restricted items)
+        Uses balance_cif_fc property which calculates:
+        - For restricted items: restriction-based calculation
+        - For special rows (CIF 0/0.01/0.1): license-level calculation
+        - For regular items: item-level calculation (item_credit - item_debit - item_allotment)
 
-        DO NOT add custom calculation logic here - always delegate to the model property.
+        This is different from available_value which uses license-level balance for non-restricted items.
         """
-        return obj.available_value_calculated
+        return obj.balance_cif_fc
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

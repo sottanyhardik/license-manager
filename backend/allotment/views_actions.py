@@ -215,11 +215,17 @@ class AllotmentActionViewSet(ViewSet):
                 # Get the license import item
                 license_item = LicenseImportItemsModel.objects.get(id=item_id)
 
+                # Calculate actual available quantity (same logic as serializer)
+                # This is critical because DB field includes all allotments, but calculation
+                # only includes AT-type allotments without BOE (active allotments)
+                from core.scripts.calculate_balance import calculate_available_quantity
+                actual_available_qty = Decimal(str(calculate_available_quantity(license_item)))
+
                 # Check if available quantity is sufficient
-                if license_item.available_quantity < qty:
+                if actual_available_qty < qty:
                     errors.append({
                         'item_id': item_id,
-                        'error': f'Insufficient available quantity. Available: {license_item.available_quantity}, Requested: {qty}'
+                        'error': f'Insufficient available quantity. Available: {actual_available_qty}, Requested: {qty}'
                     })
                     continue
 
@@ -326,10 +332,18 @@ class AllotmentActionViewSet(ViewSet):
                     'error': str(e)
                 })
 
+        # Refresh allotment to get updated balanced_quantity
+        allotment.refresh_from_db()
+
+        # Serialize allotment data to return updated balance
+        from allotment.serializers import AllotmentSerializer
+        allotment_data = AllotmentSerializer(allotment).data
+
         return Response({
             'success': len(created_items),
             'created_items': created_items,
-            'errors': errors
+            'errors': errors,
+            'allotment': allotment_data  # Include updated allotment with new balanced_quantity
         }, status=status.HTTP_201_CREATED if created_items else status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['delete'], url_path='delete-item/(?P<item_id>[^/.]+)')

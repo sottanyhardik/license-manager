@@ -19,6 +19,7 @@ export default function AllotmentAction() {
     const [filters, setFilters] = useState({
         description: "",
         exporter: "",
+        license_number: "",
         available_quantity_gte: "50",
         available_quantity_lte: "",
         available_value_gte: "100",
@@ -53,12 +54,17 @@ export default function AllotmentAction() {
     }, [allotment, isFirstLoad]);
 
     useEffect(() => {
+        // Skip initial fetch if we're waiting for allotment data to set the description filter
+        if (isFirstLoad && !allotment?.item_name) {
+            return;
+        }
+
         const timer = setTimeout(() => {
             setPagination(prev => ({...prev, currentPage: 1})); // Reset to page 1 on filter change
             fetchData(1);
         }, 300); // Debounce for 300ms
         return () => clearTimeout(timer);
-    }, [id, search, filters]);
+    }, [id, search, filters, isFirstLoad, allotment?.item_name]);
 
     useEffect(() => {
         fetchData(pagination.currentPage);
@@ -131,12 +137,13 @@ export default function AllotmentAction() {
         if (!allotment?.unit_value_per_unit) return { qty: 0, value: 0 };
 
         const unitPrice = parseFloat(allotment.unit_value_per_unit);
-        const balancedQty = parseInt(allotment.balanced_quantity || 0);
+        // Use balanced_quantity directly from backend (already calculated: required - allotted)
+        const balancedQty = parseFloat(allotment.balanced_quantity || 0);
         const requiredValue = parseFloat(allotment.required_value || 0);
         const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
         const allottedValue = parseFloat(allotment.allotted_value || 0);
         const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableQty = parseInt(item.available_quantity);
+        const availableQty = parseFloat(item.available_quantity);
         const availableCifFc = parseFloat(item.balance_cif_fc || 0);
 
         // Max quantity is the minimum of balanced quantity and available quantity
@@ -173,13 +180,14 @@ export default function AllotmentAction() {
         let inputQty = parseInt(qty) || 0;
 
         // Get balance quantities and values with buffer
-        const balancedQty = parseInt(allotment.balanced_quantity || 0);
+        // Use balanced_quantity from backend (already calculated: required - allotted)
+        const balancedQty = parseFloat(allotment.balanced_quantity || 0);
         const requiredValue = parseFloat(allotment.required_value || 0);
         const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
         const allottedValue = parseFloat(allotment.allotted_value || 0);
         const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
         const availableCifFc = parseFloat(item.balance_cif_fc || 0);
-        const availableQty = parseInt(item.available_quantity || 0);
+        const availableQty = parseFloat(item.available_quantity || 0);
 
         // Constrain to minimum of balanced quantity and available quantity
         if (inputQty > balancedQty) {
@@ -320,12 +328,81 @@ export default function AllotmentAction() {
                 setError(`Error: ${data.errors[0].error}`);
             } else {
                 setSuccess(`Successfully allocated ${allocation.qty} from ${item.license_number}`);
+
                 // Clear this item's allocation
                 const newAllocationData = {...allocationData};
                 delete newAllocationData[item.id];
                 setAllocationData(newAllocationData);
-                // Refresh data immediately to update available quantities and allotted items
-                fetchData(pagination.currentPage);
+
+                // Update allotment data (for balance quantity/value display)
+                if (data.allotment) {
+                    setAllotment(data.allotment);
+                }
+
+                // Update all items from the same license
+                const allocatedValue = parseFloat(allocation.cif_fc);
+                const licenseNumber = item.license_number;
+
+                setAvailableItems(prevItems => {
+                    // First, update all items from the same license
+                    const updatedItems = prevItems.map(i => {
+                        // Only update items from the same license
+                        if (i.license_number === licenseNumber) {
+                            // For the allocated item, also update quantity
+                            if (i.id === item.id) {
+                                const allocatedQty = parseFloat(allocation.qty);
+                                const itemAvailableQty = parseFloat(i.available_quantity);
+                                const newAvailableQty = itemAvailableQty - allocatedQty;
+
+                                // If fully allocated, mark for removal
+                                if (newAvailableQty <= 0) {
+                                    return null; // Will be filtered out
+                                }
+
+                                // Update both quantity and CIF FC (shared license balance)
+                                const itemAvailableValue = parseFloat(i.balance_cif_fc);
+                                const newAvailableValue = itemAvailableValue - allocatedValue;
+
+                                return {
+                                    ...i,
+                                    available_quantity: newAvailableQty.toFixed(3),
+                                    balance_cif_fc: Math.max(0, newAvailableValue).toFixed(2)
+                                };
+                            } else {
+                                // For other items in same license, only update CIF FC (shared balance)
+                                const itemAvailableValue = parseFloat(i.balance_cif_fc);
+                                const newAvailableValue = itemAvailableValue - allocatedValue;
+
+                                return {
+                                    ...i,
+                                    balance_cif_fc: Math.max(0, newAvailableValue).toFixed(2)
+                                };
+                            }
+                        }
+                        return i;
+                    });
+
+                    // Filter out null entries (fully allocated items)
+                    return updatedItems.filter(i => i !== null);
+                });
+
+                // ONLY scroll to transfer letter section if balance quantity is exactly 0
+                if (data.allotment) {
+                    const requiredQty = parseInt(data.allotment.required_quantity || 0);
+                    const allotedQty = parseInt(data.allotment.alloted_quantity || 0);
+                    const balanceQty = requiredQty - allotedQty;
+
+                    // Strict check: balance must be EXACTLY 0 (not negative, not positive)
+                    if (balanceQty === 0 && requiredQty > 0) {
+                        // Balance is complete, scroll to transfer letter section
+                        setTimeout(() => {
+                            const element = document.getElementById('transfer-letter-section');
+                            if (element) {
+                                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                        }, 800);
+                    }
+                }
             }
         } catch (err) {
             setError(err.response?.data?.error || "Failed to allocate item");
@@ -358,9 +435,9 @@ export default function AllotmentAction() {
     if (initialLoading) return <div className="p-4">Loading...</div>;
 
     return (
-        <div className="container-fluid p-4">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2>Allocate License Items</h2>
+        <div style={{height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
+            <div className="d-flex justify-content-between align-items-center mb-3" style={{flexShrink: 0}}>
+                <h2 className="mb-0">Allocate License Items</h2>
                 <div className="d-flex gap-2">
                     <button
                         className="btn btn-info"
@@ -430,8 +507,8 @@ export default function AllotmentAction() {
                 </div>
             </div>
 
-            {error && <div className="alert alert-danger">{error}</div>}
-            {success && <div className="alert alert-success">{success}</div>}
+            {/* Scrollable content area */}
+            <div style={{flex: 1, overflowY: 'auto', paddingRight: '8px'}}>
 
             {allotment && (() => {
                 const unitPrice = parseFloat(allotment.unit_value_per_unit || 0);
@@ -439,7 +516,8 @@ export default function AllotmentAction() {
                 const requiredValue = parseFloat(allotment.required_value || 0);
                 const allotedQty = parseInt(allotment.alloted_quantity || 0);
                 const allotedValue = parseFloat(allotment.allotted_value || 0);
-                const balanceQty = requiredQty - allotedQty;
+                // Use balanced_quantity from backend (already calculated correctly)
+                const balanceQty = parseFloat(allotment.balanced_quantity || 0);
                 const balanceValue = requiredValue - allotedValue;
 
                 return (
@@ -588,9 +666,35 @@ export default function AllotmentAction() {
                         />
                     </div>
 
+                    {/* Show success/error messages near the table for better visibility */}
+                    {error && (
+                        <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                            {error}
+                            <button type="button" className="btn-close" onClick={() => setError("")}></button>
+                        </div>
+                    )}
+                    {success && (
+                        <div className="alert alert-success alert-dismissible fade show" role="alert">
+                            <i className="bi bi-check-circle-fill me-2"></i>
+                            {success}
+                            <button type="button" className="btn-close" onClick={() => setSuccess("")}></button>
+                        </div>
+                    )}
+
                     <div className="card mb-3 bg-light">
                         <div className="card-body">
                             <div className="row g-3">
+                                <div className="col-md-3">
+                                    <label className="form-label">License Number</label>
+                                    <input
+                                        type="text"
+                                        className="form-control form-control-sm"
+                                        placeholder="Filter by license number..."
+                                        value={filters.license_number}
+                                        onChange={(e) => setFilters({...filters, license_number: e.target.value})}
+                                    />
+                                </div>
                                 <div className="col-md-3">
                                     <label className="form-label">Item Description</label>
                                     <input
@@ -699,6 +803,7 @@ export default function AllotmentAction() {
                                             onClick={() => setFilters({
                                                 description: "",
                                                 exporter: "",
+                                                license_number: "",
                                                 available_quantity_gte: "",
                                                 available_quantity_lte: "",
                                                 available_value_gte: "",
@@ -717,22 +822,22 @@ export default function AllotmentAction() {
                         </div>
 
                     <div className="table-responsive">
-                        <table className="table table-striped table-hover">
-                            <thead>
+                        <table className="table table-sm table-hover" style={{fontSize: '0.875rem'}}>
+                            <thead className="sticky-top" style={{backgroundColor: 'var(--surface-color)', zIndex: 10}}>
                             <tr>
-                                <th>License</th>
-                                <th>Serial</th>
-                                <th>HS Code</th>
-                                <th>Description</th>
-                                <th>Exporter</th>
-                                <th>Notification</th>
-                                <th>Available Qty</th>
-                                <th>Available CIF FC</th>
-                                <th>Average</th>
-                                <th>Expiry</th>
-                                <th style={{width: "180px"}}>Allocate Qty</th>
-                                <th style={{width: "180px"}}>Allocate Value</th>
-                                <th style={{width: "150px"}}>Action</th>
+                                <th style={{minWidth: '100px'}}>License</th>
+                                <th style={{minWidth: '50px'}}>Serial</th>
+                                <th style={{minWidth: '90px'}}>HS Code</th>
+                                <th style={{minWidth: '200px'}}>Description</th>
+                                <th style={{minWidth: '150px'}}>Exporter</th>
+                                <th style={{minWidth: '90px'}}>Notification</th>
+                                <th style={{minWidth: '100px', textAlign: 'right'}}>Avail Qty</th>
+                                <th style={{minWidth: '110px', textAlign: 'right'}}>Avail CIF FC</th>
+                                <th style={{minWidth: '80px', textAlign: 'right'}}>Average</th>
+                                <th style={{minWidth: '90px'}}>Expiry</th>
+                                <th style={{minWidth: '150px'}}>Allocate Qty</th>
+                                <th style={{minWidth: '150px'}}>Allocate Value</th>
+                                <th style={{minWidth: '130px', position: 'sticky', right: 0, backgroundColor: 'var(--surface-color)', zIndex: 5}}>Action</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -742,15 +847,15 @@ export default function AllotmentAction() {
 
                                 return (
                                     <tr key={item.id}>
-                                        <td>{item.license_number}</td>
-                                        <td>{item.serial_number}</td>
-                                        <td>{item.hs_code_label || '-'}</td>
-                                        <td>{item.description}</td>
-                                        <td>{item.exporter_name}</td>
-                                        <td>{item.notification_number || '-'}</td>
-                                        <td>{parseFloat(item.available_quantity || 0).toFixed(3)}</td>
-                                        <td>{parseFloat(item.balance_cif_fc || 0).toFixed(2)}</td>
-                                        <td>
+                                        <td style={{fontSize: '0.8rem'}}>{item.license_number}</td>
+                                        <td style={{fontSize: '0.8rem', textAlign: 'center'}}>{item.serial_number}</td>
+                                        <td style={{fontSize: '0.8rem'}}>{item.hs_code_label || '-'}</td>
+                                        <td style={{fontSize: '0.8rem', maxWidth: '250px', whiteSpace: 'normal'}}>{item.description}</td>
+                                        <td style={{fontSize: '0.8rem'}}>{item.exporter_name}</td>
+                                        <td style={{fontSize: '0.8rem', textAlign: 'center'}}>{item.notification_number || '-'}</td>
+                                        <td style={{fontSize: '0.8rem', textAlign: 'right', fontWeight: '500'}}>{parseFloat(item.available_quantity || 0).toFixed(3)}</td>
+                                        <td style={{fontSize: '0.8rem', textAlign: 'right', fontWeight: '500'}}>{parseFloat(item.balance_cif_fc || 0).toFixed(2)}</td>
+                                        <td style={{fontSize: '0.8rem', textAlign: 'right', color: 'var(--text-secondary)'}}>
                                             {(() => {
                                                 const qty = parseFloat(item.available_quantity || 0);
                                                 const value = parseFloat(item.balance_cif_fc || 0);
@@ -758,64 +863,73 @@ export default function AllotmentAction() {
                                                 return average.toFixed(2);
                                             })()}
                                         </td>
-                                        <td>{item.license_expiry_date}</td>
+                                        <td style={{fontSize: '0.8rem'}}>{item.license_expiry_date}</td>
                                         <td>
-                                            <div className="input-group input-group-sm">
+                                            <div className="input-group input-group-sm" style={{minWidth: '140px'}}>
                                                 <input
                                                     type="number"
-                                                    className="form-control"
+                                                    className="form-control form-control-sm"
                                                     value={currentAllocation?.qty || ""}
                                                     onChange={(e) => handleQuantityChange(item.id, e.target.value)}
-                                                    placeholder="Quantity"
+                                                    placeholder="Qty"
                                                     step="1"
                                                     min="0"
+                                                    max={maxAllocation.qty}
                                                     title={`Max allowed: ${maxAllocation.qty} (with $20 buffer)`}
+                                                    style={{fontSize: '0.8rem'}}
                                                 />
                                                 <button
-                                                    className="btn btn-outline-secondary"
+                                                    className="btn btn-outline-secondary btn-sm"
                                                     type="button"
                                                     onClick={() => handleMaxQuantity(item)}
                                                     title={`Max: ${maxAllocation.qty} (includes $20 buffer)`}
+                                                    style={{fontSize: '0.75rem', padding: '0.25rem 0.5rem'}}
                                                 >
                                                     Max
                                                 </button>
                                             </div>
                                         </td>
                                         <td>
-                                            <div className="input-group input-group-sm">
+                                            <div className="input-group input-group-sm" style={{minWidth: '140px'}}>
                                                 <input
                                                     type="number"
-                                                    className="form-control"
+                                                    className="form-control form-control-sm"
                                                     value={currentAllocation?.cif_fc || ""}
                                                     onChange={(e) => handleValueChange(item.id, e.target.value)}
                                                     placeholder="Value"
                                                     step="0.01"
                                                     min="0"
                                                     title={`Max allowed: ${maxAllocation.value.toFixed(2)} (with $20 buffer)`}
+                                                    style={{fontSize: '0.8rem'}}
                                                 />
                                                 <button
-                                                    className="btn btn-outline-secondary"
+                                                    className="btn btn-outline-secondary btn-sm"
                                                     type="button"
                                                     onClick={() => handleMaxValue(item)}
                                                     title={`Max: ${maxAllocation.value.toFixed(2)} (includes $20 buffer)`}
+                                                    style={{fontSize: '0.75rem', padding: '0.25rem 0.5rem'}}
                                                 >
                                                     Max
                                                 </button>
                                             </div>
                                         </td>
-                                        <td>
+                                        <td style={{position: 'sticky', right: 0, backgroundColor: 'var(--surface-color)', zIndex: 4}}>
                                             <button
-                                                className="btn btn-primary btn-sm"
+                                                className="btn btn-primary btn-sm w-100"
                                                 onClick={() => handleConfirmAllot(item)}
                                                 disabled={!currentAllocation || parseFloat(currentAllocation.qty) <= 0 || saving[item.id]}
+                                                style={{fontSize: '0.8rem', whiteSpace: 'nowrap'}}
                                             >
                                                 {saving[item.id] ? (
                                                     <>
                                                         <span className="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                        Allotting...
+                                                        Saving...
                                                     </>
                                                 ) : (
-                                                    "Confirm Allot"
+                                                    <>
+                                                        <i className="bi bi-check-circle me-1"></i>
+                                                        Confirm
+                                                    </>
                                                 )}
                                             </button>
                                         </td>
@@ -899,6 +1013,10 @@ export default function AllotmentAction() {
                     )}
                 </div>
             </div>
+
+            {/* End scrollable content area */}
+            </div>
+
         </div>
     );
 }

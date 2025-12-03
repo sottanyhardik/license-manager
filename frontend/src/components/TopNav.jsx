@@ -7,8 +7,15 @@ export default function TopNav() {
     const {user, logout, hasRole} = useContext(AuthContext);
 
     return (
-        <nav className="navbar navbar-expand-lg navbar-dark bg-dark px-3">
-            <Link className="navbar-brand fw-bold" to="/">
+        <nav className="navbar navbar-expand-lg navbar-dark px-3" style={{
+            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        }}>
+            <Link className="navbar-brand fw-bold" to="/" style={{
+                fontSize: '1.25rem',
+                letterSpacing: '0.5px'
+            }}>
+                <i className="bi bi-shield-check me-2" style={{color: '#3b82f6'}}></i>
                 License Manager
             </Link>
 

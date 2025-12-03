@@ -413,6 +413,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         description = payload.get("description")
         hs_code = payload.get("hs_code")
 
+        # Remove fields that don't exist in LicenseImportItemsModel
+        payload.pop('duty_type', None)  # This field only exists in export items
+
         # Convert empty strings and None to 0 for required NOT NULL fields
         for field in ['serial_number', 'quantity']:
             if field in payload and (payload[field] == '' or payload[field] is None):
@@ -565,6 +568,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                     items_list = i.pop('items', [])
                     description = i.get('description')
                     hs_code = i.get('hs_code')
+
+                    # Remove fields that don't exist in LicenseImportItemsModel
+                    i.pop('duty_type', None)  # This field only exists in export items
 
                     obj = None
 

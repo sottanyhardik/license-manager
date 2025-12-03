@@ -579,32 +579,32 @@ export default function AllotmentAction() {
                     <div className="card-body">
                         <h5 className="mb-3">Allotted Items ({allotment.allotment_details.length})</h5>
                         <div className="table-responsive">
-                            <table className="table table-sm table-bordered">
+                            <table className="table table-sm table-bordered" style={{tableLayout: 'fixed', width: '100%'}}>
                                 <thead className="table-light">
                                 <tr>
-                                    <th>License</th>
-                                    <th>Serial</th>
-                                    <th>Description</th>
-                                    <th>Exporter</th>
-                                    <th>License Date</th>
-                                    <th>Expiry Date</th>
-                                    <th>Allotted Qty</th>
-                                    <th>Allotted Value (CIF FC)</th>
-                                    <th style={{width: "80px"}}>Action</th>
+                                    <th style={{width: '9%', whiteSpace: 'nowrap'}}>License</th>
+                                    <th style={{width: '5%', whiteSpace: 'nowrap'}}>Serial</th>
+                                    <th style={{width: '25%'}}>Description</th>
+                                    <th style={{width: '15%'}}>Exporter</th>
+                                    <th style={{width: '9%', whiteSpace: 'nowrap'}}>License Date</th>
+                                    <th style={{width: '9%', whiteSpace: 'nowrap'}}>Expiry Date</th>
+                                    <th style={{width: '9%', whiteSpace: 'nowrap', textAlign: 'right'}}>Allotted Qty</th>
+                                    <th style={{width: '10%', whiteSpace: 'nowrap', textAlign: 'right'}}>Allotted Value</th>
+                                    <th style={{width: '9%', whiteSpace: 'nowrap'}}>Action</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 {allotment.allotment_details.map((detail) => (
                                     <tr key={detail.id}>
-                                        <td>{detail.license_number}</td>
-                                        <td>{detail.serial_number}</td>
-                                        <td>{detail.product_description}</td>
-                                        <td>{detail.exporter}</td>
-                                        <td>{detail.license_date}</td>
-                                        <td>{detail.license_expiry}</td>
-                                        <td className="text-end">{parseInt(detail.qty || 0).toLocaleString()}</td>
-                                        <td className="text-end">{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
-                                        <td className="text-center">
+                                        <td style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{detail.license_number}</td>
+                                        <td style={{whiteSpace: 'nowrap'}}>{detail.serial_number}</td>
+                                        <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
+                                        <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
+                                        <td style={{whiteSpace: 'nowrap', fontSize: '0.85rem'}}>{detail.license_date}</td>
+                                        <td style={{whiteSpace: 'nowrap', fontSize: '0.85rem'}}>{detail.license_expiry}</td>
+                                        <td className="text-end" style={{whiteSpace: 'nowrap'}}>{parseInt(detail.qty || 0).toLocaleString()}</td>
+                                        <td className="text-end" style={{whiteSpace: 'nowrap'}}>{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
+                                        <td className="text-center" style={{whiteSpace: 'nowrap'}}>
                                             <button
                                                 className="btn btn-danger btn-sm"
                                                 onClick={() => handleDeleteAllotment(detail.id)}

@@ -29,6 +29,7 @@ const ExpiringLicenses = lazy(() => import("./pages/reports/ExpiringLicenses"));
 const ActiveLicenses = lazy(() => import("./pages/reports/ActiveLicenses"));
 const ItemPivotReport = lazy(() => import("./pages/reports/ItemPivotReport"));
 const TradeForm = lazy(() => import("./pages/TradeForm"));
+const LedgerCSVUpload = lazy(() => import("./pages/LedgerCSVUpload"));
 
 export default function App() {
     return (
@@ -337,6 +338,19 @@ export default function App() {
                                         <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <TradeForm/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/ledger-csv-upload"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <LedgerCSVUpload/>
                                             </AdminLayout>
                                         </RoleRoute>
                                     </ProtectedRoute>

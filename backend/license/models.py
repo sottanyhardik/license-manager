@@ -932,10 +932,11 @@ class LicenseImportItemsModel(models.Model):
         Row-level balance. For special rows (0 / 0.01 / 0.1), fall back to license-level sums.
 
         Business Logic (Priority Order):
-        1. If item has head with restriction: use restriction-based calculation
-        2. If all items OTHER THAN serial_number = 1 have CIF = 0: use license balance
-        3. If item CIF is 0/0.01/0.1: use license-level calculation
-        4. Otherwise: use item-level calculation
+        1. If is_restricted=True: use license-level balance (non-restricted)
+        2. If item has head with restriction percentage: use restriction-based calculation
+        3. If all items OTHER THAN serial_number = 1 have CIF = 0: use license balance
+        4. If item CIF is 0/0.01/0.1: use license-level calculation
+        5. Otherwise: use item-level calculation
 
         Always calculated fresh from database without caching.
         Uses centralized license calculation methods for consistency.
@@ -943,16 +944,24 @@ class LicenseImportItemsModel(models.Model):
         if not self.license:
             return DEC_0
 
-        # PRIORITY 1: Check if item has restrictions
+        # PRIORITY 1: Check is_restricted flag
+        # If is_restricted=False (not restricted), always use license-level balance
+        if not self.is_restricted:
+            # Non-restricted item: use license-level balance
+            return self.license.get_balance_cif
+
+        # PRIORITY 2: If is_restricted=True, check if item has restriction percentage
         restriction_balance = self._calculate_head_restriction_balance()
-        if restriction_balance > DEC_0 or self.items.filter(
-                sion_norm_class__isnull=False,
-                restriction_percentage__gt=DEC_0
-        ).exists():
+        has_restriction_pct = self.items.filter(
+            sion_norm_class__isnull=False,
+            restriction_percentage__gt=DEC_0
+        ).exists()
+
+        if has_restriction_pct:
             # This item has restrictions, use restriction calculation
             return restriction_balance
 
-        # PRIORITY 2: Check if business logic applies: all other items have zero CIF and this is serial_number 1
+        # PRIORITY 3: Check if business logic applies: all other items have zero CIF and this is serial_number 1
         if self.serial_number == 1:
             all_items = LicenseImportItemsModel.objects.filter(license=self.license)
             other_items = [item for item in all_items if item.serial_number != 1]
@@ -968,7 +977,7 @@ class LicenseImportItemsModel(models.Model):
                 # Return the license's balance directly - use centralized calculation
                 return self.license.get_balance_cif
 
-        # PRIORITY 3 & 4: Original logic - use centralized methods where possible
+        # PRIORITY 4 & 5: Original logic - use centralized methods where possible
         if not self.cif_fc or self.cif_fc in (Decimal("0"), Decimal("0.1"), Decimal("0.01")):
             # License-level calculation - use centralized methods
             credit = self.license._calculate_license_credit()

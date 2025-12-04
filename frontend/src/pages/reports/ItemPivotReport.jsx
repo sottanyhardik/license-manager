@@ -536,7 +536,7 @@ export default function ItemPivotReport() {
                     )}
 
                     {/* No data message after loading */}
-                    {!loading && activeNormTab && reportData && reportData.licenses_by_norm_notification && (!reportData.licenses_by_norm_notification[activeNormTab] || Object.keys(reportData.licenses_by_norm_notification[activeNormTab] || {}).length === 0) && (
+                    {!loading && activeNormTab && reportData?.licenses_by_norm_notification && (!reportData.licenses_by_norm_notification[activeNormTab] || Object.keys(reportData.licenses_by_norm_notification[activeNormTab] || {}).length === 0) && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
                                 <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
@@ -547,7 +547,7 @@ export default function ItemPivotReport() {
                     )}
 
                     {/* Show report data */}
-                    {!loading && activeNormTab && reportData && reportData.licenses_by_norm_notification && reportData.licenses_by_norm_notification[activeNormTab] && Object.keys(reportData.licenses_by_norm_notification[activeNormTab]).length > 0 && (
+                    {!loading && activeNormTab && reportData?.licenses_by_norm_notification?.[activeNormTab] && Object.keys(reportData.licenses_by_norm_notification[activeNormTab]).length > 0 && (
                         <div>
                             {/* Notifications within active norm */}
                             {Object.entries(reportData.licenses_by_norm_notification[activeNormTab]).sort().map(([notification, licenses]) => (
@@ -1039,7 +1039,7 @@ export default function ItemPivotReport() {
                             ))}
 
                             {/* Notes and Conditions Section */}
-                            {activeNormTab && reportData.norm_notes_conditions && reportData.norm_notes_conditions[activeNormTab] && (
+                            {activeNormTab && reportData?.norm_notes_conditions?.[activeNormTab] && (
                                 reportData.norm_notes_conditions[activeNormTab].notes?.length > 0 || reportData.norm_notes_conditions[activeNormTab].conditions?.length > 0
                             ) && (
                                 <div className="card shadow-sm border-0 mb-4">

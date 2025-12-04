@@ -379,17 +379,25 @@ BillOfEntryViewSet.generate_transfer_letter = generate_transfer_letter
 def update_product_name(self, request, pk=None):
     """
     Update product_name for BOE by fetching item names from item_details -> sr_number -> items.
-    If product_name is empty/None, generates it from item names joined by ' or '.
+    Only updates if product_name is empty/None (keeps existing values).
 
     Returns:
-    - success: True if updated
-    - product_name: The generated/updated product name
-    - message: Success message
+    - success: True if updated, False if skipped
+    - product_name: The current product name
+    - message: Success or skip message
     """
     from django.shortcuts import get_object_or_404
     from rest_framework.response import Response
 
     boe = get_object_or_404(BillOfEntryModel, id=pk)
+
+    # Check if product_name is already filled
+    if boe.product_name and boe.product_name.strip():
+        return Response({
+            'success': False,
+            'product_name': boe.product_name,
+            'message': f'Product name already exists: {boe.product_name}. Skipped update.'
+        })
 
     # Generate product name from items
     generated_name = boe.generate_product_name_from_items()
@@ -401,7 +409,7 @@ def update_product_name(self, request, pk=None):
             'product_name': boe.product_name
         }, status=400)
 
-    # Update product_name
+    # Update product_name only if it was empty
     boe.product_name = generated_name
     boe.save(update_fields=['product_name'])
 

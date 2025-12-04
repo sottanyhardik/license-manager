@@ -122,8 +122,31 @@ export default function Settings() {
                 </ol>
             </nav>
 
+            <h1 className="mb-4">Settings</h1>
+
+            {/* Ledger Upload Section */}
+            <div className="card shadow-sm mb-4">
+                <div className="card-header bg-primary text-white">
+                    <h5 className="mb-0">
+                        <i className="bi bi-file-earmark-spreadsheet me-2"></i>
+                        Ledger Upload
+                    </h5>
+                </div>
+                <div className="card-body">
+                    <p className="text-muted mb-3">Upload license ledger files to update the system</p>
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => navigate('/ledger-upload')}
+                    >
+                        <i className="bi bi-upload me-2"></i>
+                        Go to Ledger Upload
+                    </button>
+                </div>
+            </div>
+
+            {/* User Management Section */}
             <div className="d-flex justify-content-between align-items-center mb-4">
-                <h1>User Management</h1>
+                <h2>User Management</h2>
                 <button className="btn btn-primary" onClick={() => handleOpenModal()}>
                     <i className="bi bi-plus-circle me-2"></i>
                     Add User

@@ -40,14 +40,6 @@ export const routes = [
         icon: "arrow-left-right",
     },
     {
-        path: "/ledger-upload",
-        label: "Ledger Upload",
-        component: "LedgerUpload",
-        protected: true,
-        roles: ["admin", "manager"],
-        icon: "file-earmark-spreadsheet",
-    },
-    {
         path: "/settings",
         label: "Settings",
         component: "Settings",

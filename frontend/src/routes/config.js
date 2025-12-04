@@ -40,6 +40,14 @@ export const routes = [
         icon: "arrow-left-right",
     },
     {
+        path: "/ledger-csv-upload",
+        label: "Ledger CSV Upload",
+        component: "LedgerCSVUpload",
+        protected: true,
+        roles: ["admin", "manager"],
+        icon: "cloud-upload",
+    },
+    {
         path: "/settings",
         label: "Settings",
         component: "Settings",

@@ -393,6 +393,11 @@ class MasterViewSet(viewsets.ModelViewSet):
                                 pass
 
                 # Apply all Q objects with AND logic (each filter must match)
+                # Note: Multi-select within a single filter uses OR (via __in)
+                # Example: company__in=[29,30] means company=29 OR company=30
+                # Combined filters use AND
+                # Example: Q(company__in=[29,30]) & Q(port__in=[489])
+                #          = (company=29 OR company=30) AND port=489
                 if q_objects:
                     from functools import reduce
                     import operator

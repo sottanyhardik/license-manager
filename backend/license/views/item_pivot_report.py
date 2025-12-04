@@ -141,7 +141,7 @@ class ItemPivotReportView(View):
 
         for license_obj in licenses:
             # Skip licenses with balance < min_balance
-            balance = license_obj.balance_cif or Decimal('0')
+            balance = license_obj.get_balance_cif or Decimal('0')
             if balance < Decimal(str(min_balance)):
                 continue
 
@@ -313,7 +313,7 @@ class ItemPivotReportView(View):
                         restriction_groups[restriction_key]['item_ids'].append(item.id)
         
         # Calculate available CIF within restriction for each group
-        balance_cif = license_obj.balance_cif or Decimal('0')
+        balance_cif = license_obj.get_balance_cif or Decimal('0')
         for group_name, group_data in restriction_groups.items():
             if group_data['restriction_percentage'] and total_cif > 0:
                 # Maximum allowed CIF for this restriction group
@@ -338,7 +338,7 @@ class ItemPivotReportView(View):
             'port': str(license_obj.port) if license_obj.port else '',
             'notification_number': notification_display,
             'total_cif': float(total_cif),
-            'balance_cif': float(license_obj.balance_cif or Decimal('0')),
+            'balance_cif': float(license_obj.get_balance_cif or Decimal('0')),
             'items': {}
         }
 

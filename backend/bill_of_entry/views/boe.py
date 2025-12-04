@@ -36,7 +36,6 @@ BaseBillOfEntryViewSet = MasterViewSet.create_viewset(
             "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name",
                              "filter_field": "port"},
             "bill_of_entry_date": {"type": "date_range"},
-            "invoice_date": {"type": "date_range"},
             "is_fetch": {"type": "exact"},
         },
         "list_display": [

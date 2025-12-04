@@ -156,9 +156,11 @@ def custom_get_queryset_with_defaults(self):
     params = self.request.query_params
 
     # Don't apply default filters for retrieve/update/delete operations (detail views)
-    # Check if this is a detail operation by looking at the action
+    # Check if this is a detail operation by looking at the action or if pk is in kwargs
     action = getattr(self, 'action', None)
-    if action in ['retrieve', 'update', 'partial_update', 'destroy']:
+    kwargs = getattr(self, 'kwargs', {})
+
+    if action in ['retrieve', 'update', 'partial_update', 'destroy'] or 'pk' in kwargs:
         # For detail views, return all records without default filters
         return qs
 
@@ -274,3 +276,28 @@ def copy_allotment(self, request, pk=None):
 
 
 AllotmentViewSet.copy_allotment = copy_allotment
+
+
+# Add destroy action
+def destroy_allotment(self, request, pk=None):
+    """
+    Delete an allotment.
+    """
+    try:
+        # Get object directly from model without filters
+        allotment = AllotmentModel.objects.get(pk=pk)
+        allotment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except AllotmentModel.DoesNotExist:
+        return Response(
+            {'error': 'AllotmentModel matching query does not exist.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+AllotmentViewSet.destroy = destroy_allotment

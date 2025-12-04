@@ -1,9 +1,11 @@
 # allotment/signals.py
 from decimal import Decimal
-from django.db.models.signals import post_save, post_delete, pre_save
-from django.dispatch import receiver
+
 from django.db.models import Sum, DecimalField, Value
 from django.db.models.functions import Coalesce
+from django.db.models.signals import post_save, pre_delete
+from django.dispatch import receiver
+
 from allotment.models import AllotmentItems
 
 DEC_0 = Decimal("0")
@@ -80,18 +82,30 @@ def update_is_allotted_on_save(sender, instance, created, **kwargs):
         update_license_balance(instance.item)
 
 
-@receiver(post_delete, sender=AllotmentItems)
+@receiver(pre_delete, sender=AllotmentItems)
 def update_is_allotted_on_delete(sender, instance, **kwargs):
     """
     Update is_allotted to False if no more AllotmentItems exist for this allotment
     Also update the license item's available balance
     """
-    if instance.allotment:
-        # Check if there are any remaining allotment_details
-        has_details = instance.allotment.allotment_details.exists()
-        instance.allotment.is_allotted = has_details
-        instance.allotment.save(update_fields=['is_allotted'])
+    # Use try-except to handle case where allotment is being cascade-deleted
+    try:
+        if instance.allotment:
+            # Check if allotment still exists in database
+            from allotment.models import AllotmentModel
+            if AllotmentModel.objects.filter(pk=instance.allotment.pk).exists():
+                # Check if there are any remaining allotment_details
+                has_details = instance.allotment.allotment_details.exists()
+                if has_details:
+                    instance.allotment.allotment_details.delete()
+    except Exception as e:
+        # Allotment is being deleted, skip the update
+        pass
 
     # Update license item balance
     if instance.item:
-        update_license_balance(instance.item)
+        try:
+            update_license_balance(instance.item)
+        except Exception:
+            # Item might be deleted or in invalid state, skip
+            pass

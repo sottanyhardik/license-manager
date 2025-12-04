@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views.views import (CompanyViewSet, PortViewSet, HSCodeViewSet, HeadSIONNormsViewSet, SionNormClassViewSet,
                           ProductDescriptionViewSet, UnitPriceViewSet, ItemNameViewSet, ItemHeadViewSet, GroupViewSet,
                           TransferLetterViewSet, ExchangeRateViewSet)
+from allotment.views import AllotmentViewSet
 
 router = DefaultRouter()
 router.register(r'companies', CompanyViewSet)
@@ -18,4 +19,5 @@ router.register("item-heads", ItemHeadViewSet)  # Deprecated
 router.register("item-names", ItemNameViewSet)
 router.register("exchange-rates", ExchangeRateViewSet)
 router.register("transfer-letters", TransferLetterViewSet)
+router.register("allotments", AllotmentViewSet, basename='masters-allotment')
 urlpatterns = router.urls

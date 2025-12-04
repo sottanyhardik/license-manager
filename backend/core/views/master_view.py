@@ -194,7 +194,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                 return qs
 
             def apply_advanced_filters(self, qs, params, filter_config):
-                """Apply advanced filters based on filter_config."""
+                """Apply advanced filters based on filter_config using OR logic."""
                 from django.db.models import Q
                 from django.db import models as dj_models
 
@@ -205,6 +205,9 @@ class MasterViewSet(viewsets.ModelViewSet):
                 # Track processed fields to avoid duplicates
                 processed_fields = set()
 
+                # Collect all Q objects for OR filtering
+                q_objects = []
+
                 # First, process fields defined in filter_config
                 for field_name, config in filter_config.items():
                     processed_fields.add(field_name)
@@ -214,7 +217,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                         # Case-insensitive contains
                         value = params.get(field_name)
                         if value:
-                            qs = qs.filter(**{f"{field_name}__icontains": value})
+                            q_objects.append(Q(**{f"{field_name}__icontains": value}))
 
                     elif filter_type == "date_range":
                         # Date range filter
@@ -223,9 +226,9 @@ class MasterViewSet(viewsets.ModelViewSet):
                         date_from = params.get(f"{field_name}_from")
                         date_to = params.get(f"{field_name}_to")
                         if date_from:
-                            qs = qs.filter(**{f"{field_name}__gte": date_from})
+                            q_objects.append(Q(**{f"{field_name}__gte": date_from}))
                         if date_to:
-                            qs = qs.filter(**{f"{field_name}__lte": date_to})
+                            q_objects.append(Q(**{f"{field_name}__lte": date_to}))
 
                     elif filter_type == "range":
                         # Numeric range filter
@@ -236,9 +239,9 @@ class MasterViewSet(viewsets.ModelViewSet):
                         min_value = params.get(min_field)
                         max_value = params.get(max_field)
                         if min_value:
-                            qs = qs.filter(**{f"{field_name}__gte": min_value})
+                            q_objects.append(Q(**{f"{field_name}__gte": min_value}))
                         if max_value:
-                            qs = qs.filter(**{f"{field_name}__lte": max_value})
+                            q_objects.append(Q(**{f"{field_name}__lte": max_value}))
 
                     elif filter_type == "exact":
                         # Exact match (with boolean conversion)
@@ -259,20 +262,20 @@ class MasterViewSet(viewsets.ModelViewSet):
                             if field_name == "is_boe":
                                 if value:
                                     # is_boe=True: has bill of entry
-                                    qs = qs.filter(bill_of_entry__isnull=False).distinct()
+                                    q_objects.append(Q(bill_of_entry__isnull=False))
                                 else:
                                     # is_boe=False: no bill of entry
-                                    qs = qs.filter(bill_of_entry__isnull=True)
+                                    q_objects.append(Q(bill_of_entry__isnull=True))
                             else:
                                 # Apply filter even if value is False (important for boolean fields)
-                                qs = qs.filter(**{field_name: value})
+                                q_objects.append(Q(**{field_name: value}))
 
                     elif filter_type == "in":
                         # IN filter (comma-separated values)
                         value = params.get(field_name)
                         if value:
                             values = [v.strip() for v in value.split(",")]
-                            qs = qs.filter(**{f"{field_name}__in": values})
+                            q_objects.append(Q(**{f"{field_name}__in": values}))
 
                     elif filter_type == "fk":
                         # Foreign key filter - supports multi-select (comma-separated IDs)
@@ -281,10 +284,10 @@ class MasterViewSet(viewsets.ModelViewSet):
                             # Check if value contains comma (multi-select)
                             if ',' in str(value):
                                 values = [v.strip() for v in str(value).split(",") if v.strip()]
-                                qs = qs.filter(**{f"{field_name}__in": values})
+                                q_objects.append(Q(**{f"{field_name}__in": values}))
                             else:
                                 # Single value exact match
-                                qs = qs.filter(**{field_name: value})
+                                q_objects.append(Q(**{field_name: value}))
 
                     elif filter_type == "choice":
                         # Choice field filter - supports multi-select (comma-separated values)
@@ -293,10 +296,10 @@ class MasterViewSet(viewsets.ModelViewSet):
                             # Check if value contains comma (multi-select)
                             if ',' in str(value):
                                 values = [v.strip() for v in str(value).split(",") if v.strip()]
-                                qs = qs.filter(**{f"{field_name}__in": values})
+                                q_objects.append(Q(**{f"{field_name}__in": values}))
                             else:
                                 # Single value exact match
-                                qs = qs.filter(**{field_name: value})
+                                q_objects.append(Q(**{field_name: value}))
 
                     elif filter_type == "exclude_fk":
                         # Exclude foreign key filter - supports multi-select (comma-separated IDs)
@@ -307,10 +310,10 @@ class MasterViewSet(viewsets.ModelViewSet):
                             # Check if value contains comma (multi-select)
                             if ',' in str(value):
                                 values = [v.strip() for v in str(value).split(",") if v.strip()]
-                                qs = qs.exclude(**{f"{filter_field}__in": values})
+                                q_objects.append(~Q(**{f"{filter_field}__in": values}))
                             else:
                                 # Single value exact match
-                                qs = qs.exclude(**{filter_field: value})
+                                q_objects.append(~Q(**{filter_field: value}))
 
                 # Now, process any remaining query parameters not in filter_config
                 # Apply icontains for text fields by default
@@ -339,9 +342,9 @@ class MasterViewSet(viewsets.ModelViewSet):
                                 if ',' in str(param_value):
                                     values = [v.strip() for v in str(param_value).split(",") if v.strip()]
                                     # Use __in for multi-select text values
-                                    qs = qs.filter(**{f"{param_name}__in": values})
+                                    q_objects.append(Q(**{f"{param_name}__in": values}))
                                 else:
-                                    qs = qs.filter(**{f"{param_name}__icontains": param_value})
+                                    q_objects.append(Q(**{f"{param_name}__icontains": param_value}))
                             except Exception:
                                 # Skip if filter fails
                                 pass
@@ -353,13 +356,21 @@ class MasterViewSet(viewsets.ModelViewSet):
                                 # ALWAYS support multi-select (comma-separated values) for ForeignKey and numeric fields
                                 if ',' in str(param_value):
                                     values = [v.strip() for v in str(param_value).split(",") if v.strip()]
-                                    qs = qs.filter(**{f"{param_name}__in": values})
+                                    q_objects.append(Q(**{f"{param_name}__in": values}))
                                 else:
                                     # Single value exact match
-                                    qs = qs.filter(**{param_name: param_value})
+                                    q_objects.append(Q(**{param_name: param_value}))
                             except Exception:
                                 # Skip if filter fails
                                 pass
+
+                # Apply all Q objects with OR logic
+                if q_objects:
+                    from functools import reduce
+                    import operator
+                    # Combine all Q objects with OR
+                    combined_q = reduce(operator.or_, q_objects)
+                    qs = qs.filter(combined_q)
 
                 return qs
 

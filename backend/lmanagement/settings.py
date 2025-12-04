@@ -67,6 +67,8 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # Disable CSRF for API endpoints (JWT authenticated)
+    "core.middleware.DisableCSRFForAPIMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -172,6 +174,10 @@ REST_FRAMEWORK = {
     ],
     "DATETIME_FORMAT": "%d-%m-%Y %H:%M",
     "DATE_FORMAT": "%d-%m-%Y",
+    # Disable CSRF for API endpoints when using JWT authentication
+    "DEFAULT_RENDERER_CLASSES": (
+        "rest_framework.renderers.JSONRenderer",
+    ),
 }
 
 SIMPLE_JWT = {

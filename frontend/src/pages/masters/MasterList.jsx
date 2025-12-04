@@ -62,11 +62,6 @@ export default function MasterList() {
     const backendDefaultsApplied = useRef(false);
     const pendingRequestRef = useRef(null);
 
-    // Debug: Log filterParams changes
-    useEffect(() => {
-        console.log('MasterList: filterParams state updated to', filterParams);
-    }, [filterParams]);
-
     const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
         // If there's already a pending request with same params, skip this one
         const requestKey = JSON.stringify({page, size, filters, entity: entityName});
@@ -227,8 +222,6 @@ export default function MasterList() {
     }, [metadata.default_filters]);
 
     const handleFilterChange = useCallback((filters) => {
-        console.log('MasterList: handleFilterChange called with filters', filters);
-
         // Convert Django-style date filters back to UI format for state persistence
         // This ensures date values are preserved when passed back as initialFilters
         const convertedFilters = {};
@@ -244,7 +237,6 @@ export default function MasterList() {
             }
         });
 
-        console.log('MasterList: Converted filters for state', convertedFilters);
         setFilterParams(convertedFilters);
         setCurrentPage(1);
         fetchData(1, pageSize, filters); // Send original format to API

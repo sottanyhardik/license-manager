@@ -39,10 +39,6 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
 
         // Only update if initialFilters actually changed (not just a re-render)
         if (JSON.stringify(prevInitialFilters.current) !== JSON.stringify(initialFilters)) {
-            console.log('AdvancedFilter: initialFilters changed', {
-                prev: prevInitialFilters.current,
-                new: initialFilters
-            });
             prevInitialFilters.current = initialFilters;
             skipNextAutoApply.current = true; // Skip auto-apply since parent is updating
 
@@ -53,11 +49,9 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
 
             // Update filter values (excluding search)
             const {search: _s, ...filtersWithoutSearch} = initialFilters;
-            console.log('AdvancedFilter: Setting filter values', filtersWithoutSearch);
             // Merge with existing filterValues to preserve any local changes
             setFilterValues(prev => {
                 const merged = {...defaultFilters, ...filtersWithoutSearch};
-                console.log('AdvancedFilter: Merged filter values', {prev, merged});
                 return merged;
             });
         }
@@ -142,7 +136,6 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
             case "date_range":
                 const fromValue = filterValues[`${fieldName}_from`] || "";
                 const toValue = filterValues[`${fieldName}_to`] || "";
-                console.log(`AdvancedFilter: Rendering date_range for ${fieldName}`, {fromValue, toValue, filterValues});
 
                 return (
                     <div key={fieldName} className="col-md-6">
@@ -155,7 +148,6 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                                     placeholder="From"
                                     value={fromValue}
                                     onChange={(e) => {
-                                        console.log(`AdvancedFilter: ${fieldName}_from changed to`, e.target.value);
                                         handleFilterChange(`${fieldName}_from`, e.target.value);
                                     }}
                                 />
@@ -168,7 +160,6 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                                     placeholder="To"
                                     value={toValue}
                                     onChange={(e) => {
-                                        console.log(`AdvancedFilter: ${fieldName}_to changed to`, e.target.value);
                                         handleFilterChange(`${fieldName}_to`, e.target.value);
                                     }}
                                 />

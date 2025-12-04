@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 from rest_framework.permissions import AllowAny
+import requests
 
 from license.models import LicenseDetailsModel, LicenseTransferModel
 from license.ledger_pdf import generate_license_ledger_pdf
@@ -54,6 +55,36 @@ class LicenseActionViewSet(ViewSet):
         except Exception as e:
             return Response(
                 {'error': f'Failed to generate PDF: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'], url_path='fetch-ledger')
+    def fetch_ledger(self, request, pk=None):
+        """
+        Fetch ledger details from DGFT API and update database.
+        Retrieves latest transaction data for the license.
+        """
+        license_obj = get_object_or_404(LicenseDetailsModel, pk=pk)
+
+        try:
+            # TODO: Implement DGFT API call
+            # For now, return a placeholder response
+            # The actual implementation will require:
+            # 1. DGFT API endpoint URL
+            # 2. Authentication credentials/tokens
+            # 3. API request parameters (license number, etc.)
+            # 4. Response parsing logic
+            # 5. Database update logic using ledger_parser_refactored
+
+            return Response({
+                'success': False,
+                'message': 'DGFT API integration pending - endpoint and credentials required',
+                'license_number': license_obj.license_number
+            }, status=status.HTTP_501_NOT_IMPLEMENTED)
+
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to fetch ledger: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

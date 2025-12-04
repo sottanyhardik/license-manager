@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Upload, FileText, AlertCircle, CheckCircle, Download, Info } from 'lucide-react';
 import api from '../services/api';
 
 const LedgerCSVUpload = () => {
@@ -90,7 +89,7 @@ const LedgerCSVUpload = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-              <FileText className="w-6 h-6" />
+              <i className="bi bi-file-earmark-text" style={{fontSize: '1.5rem'}}></i>
               Custom Ledger CSV Upload
             </h1>
             <p className="text-gray-600 mt-1">Import DFIA debit transactions from CSV file</p>
@@ -99,7 +98,7 @@ const LedgerCSVUpload = () => {
             onClick={fetchTemplateInfo}
             className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
           >
-            <Info className="w-4 h-4" />
+            <i className="bi bi-info-circle"></i>
             View Instructions
           </button>
         </div>
@@ -149,7 +148,7 @@ const LedgerCSVUpload = () => {
                 onClick={downloadTemplate}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition w-full justify-center"
               >
-                <Download className="w-4 h-4" />
+                <i className="bi bi-download"></i>
                 Download Template CSV
               </button>
             </div>
@@ -159,7 +158,7 @@ const LedgerCSVUpload = () => {
         {/* File Upload Section */}
         <div className="space-y-4">
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition">
-            <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+            <i className="bi bi-cloud-upload text-gray-400 mb-4" style={{fontSize: '3rem'}}></i>
             <label htmlFor="file-input" className="cursor-pointer">
               <span className="text-blue-600 hover:text-blue-700 font-semibold">
                 Click to upload
@@ -179,7 +178,7 @@ const LedgerCSVUpload = () => {
           {file && (
             <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
               <div className="flex items-center gap-3">
-                <FileText className="w-5 h-5 text-blue-600" />
+                <i className="bi bi-file-earmark-text text-blue-600" style={{fontSize: '1.25rem'}}></i>
                 <div>
                   <p className="font-medium text-gray-800">{file.name}</p>
                   <p className="text-sm text-gray-500">
@@ -215,7 +214,7 @@ const LedgerCSVUpload = () => {
               </>
             ) : (
               <>
-                <Upload className="w-5 h-5" />
+                <i className="bi bi-cloud-upload"></i>
                 Upload and Process
               </>
             )}
@@ -225,7 +224,7 @@ const LedgerCSVUpload = () => {
         {/* Error Message */}
         {error && (
           <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+            <i className="bi bi-exclamation-circle text-red-600" style={{fontSize: '1.25rem'}}></i>
             <div className="flex-1">
               <h3 className="font-semibold text-red-900">Error</h3>
               <p className="text-red-700 text-sm mt-1">{error}</p>
@@ -237,7 +236,7 @@ const LedgerCSVUpload = () => {
         {result && !error && (
           <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+              <i className="bi bi-check-circle text-green-600" style={{fontSize: '1.25rem'}}></i>
               <div className="flex-1">
                 <h3 className="font-semibold text-green-900">{result.message}</h3>
                 <div className="mt-3 space-y-2 text-sm">

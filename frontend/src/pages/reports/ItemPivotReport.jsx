@@ -288,7 +288,7 @@ export default function ItemPivotReport() {
                                             </>
                                         )}
                                         <i className="bi bi-tag-fill me-1"></i>
-                                        Active Norm: {activeNormTab || 'Loading...'}
+                                        Active Norm: {activeNormTab || 'None Selected'}
                                         {reportData && (
                                             <>
                                                 <span className="mx-2">•</span>

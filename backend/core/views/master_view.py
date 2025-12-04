@@ -278,9 +278,15 @@ class MasterViewSet(viewsets.ModelViewSet):
                             q_objects.append(Q(**{f"{field_name}__in": values}))
 
                     elif filter_type == "fk":
-                        # Foreign key filter - supports multi-select (comma-separated IDs)
+                        # Foreign key filter - supports multi-select (comma-separated IDs or array format)
+                        # Check for both 'field_name' and 'field_name[]' (array format from frontend)
                         value = params.get(field_name)
-                        if value:
+                        array_values = params.getlist(f"{field_name}[]")  # Handle array format like company[]=29
+
+                        if array_values:
+                            # Array format from frontend (e.g., company[]=29)
+                            q_objects.append(Q(**{f"{field_name}__in": array_values}))
+                        elif value:
                             # Check if value contains comma (multi-select)
                             if ',' in str(value):
                                 values = [v.strip() for v in str(value).split(",") if v.strip()]
@@ -302,13 +308,19 @@ class MasterViewSet(viewsets.ModelViewSet):
                                 q_objects.append(Q(**{field_name: value}))
 
                     elif filter_type == "exclude_fk":
-                        # Exclude foreign key filter - supports multi-select (comma-separated IDs)
+                        # Exclude foreign key filter - supports multi-select (comma-separated IDs or array format)
                         value = params.get(field_name)
-                        if value:
+                        array_values = params.getlist(f"{field_name}[]")  # Handle array format
+
+                        if array_values or value:
                             # Get the actual field name to filter on
                             filter_field = config.get("filter_field", field_name.replace("exclude_", ""))
-                            # Check if value contains comma (multi-select)
-                            if ',' in str(value):
+
+                            if array_values:
+                                # Array format from frontend
+                                q_objects.append(~Q(**{f"{filter_field}__in": array_values}))
+                            elif ',' in str(value):
+                                # Check if value contains comma (multi-select)
                                 values = [v.strip() for v in str(value).split(",") if v.strip()]
                                 q_objects.append(~Q(**{f"{filter_field}__in": values}))
                             else:

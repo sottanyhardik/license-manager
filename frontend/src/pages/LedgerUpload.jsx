@@ -24,14 +24,15 @@ const LedgerUpload = () => {
     setDragActive(false);
 
     const droppedFiles = Array.from(e.dataTransfer.files).filter(
-      file => file.name.endsWith('.csv') || file.name.endsWith('.xlsx')
+      file => file.name.endsWith('.csv')
     );
 
     if (droppedFiles.length > 0) {
       setFiles(droppedFiles);
       setError(null);
+      setResults([]);
     } else {
-      setError('Please drop CSV or Excel files only');
+      setError('Please drop CSV files only');
     }
   };
 
@@ -108,88 +109,116 @@ const LedgerUpload = () => {
   };
 
   return (
-    <div className="container-fluid p-4">
+    <div className="container-fluid px-4 py-3">
+      {/* Header */}
       <div className="row mb-4">
         <div className="col-12">
-          <div className="d-flex justify-content-between align-items-center">
+          <div className="d-flex align-items-center mb-2">
+            <div className="bg-primary bg-opacity-10 rounded p-2 me-3">
+              <i className="bi bi-file-earmark-spreadsheet text-primary fs-3"></i>
+            </div>
             <div>
-              <h4 className="mb-1">
-                <i className="bi bi-file-earmark-spreadsheet me-2"></i>
-                Ledger Upload
-              </h4>
-              <p className="text-muted mb-0">Upload DFIA license ledger files (CSV format)</p>
+              <h4 className="mb-0 fw-bold">Ledger Upload</h4>
+              <p className="text-muted mb-0 small">Upload DFIA license ledger files in CSV format</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Upload Card */}
-      <div className="row">
-        <div className="col-12">
-          <div className="card shadow-sm">
-            <div className="card-body">
-              {/* File Drop Zone */}
+      <div className="row g-4">
+        {/* Left Column - Upload Section */}
+        <div className="col-lg-7">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-body p-4">
+              {/* Drop Zone */}
               <div
-                className={`border-2 border-dashed rounded p-5 text-center mb-4 ${
-                  dragActive ? 'border-primary bg-light' : 'border-secondary'
+                className={`border-2 border-dashed rounded-3 p-5 text-center transition-all ${
+                  dragActive
+                    ? 'border-primary bg-primary bg-opacity-10'
+                    : 'border-light bg-light bg-opacity-50'
                 }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
-                style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
+                style={{
+                  cursor: 'pointer',
+                  minHeight: '240px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  transition: 'all 0.3s ease'
+                }}
               >
-                <i
-                  className={`bi bi-cloud-upload display-4 mb-3 ${
+                <div className="mb-3">
+                  <i className={`bi bi-cloud-arrow-up display-1 ${
                     dragActive ? 'text-primary' : 'text-muted'
-                  }`}
-                ></i>
-                <h5 className="mb-2">Drag & Drop Files Here</h5>
-                <p className="text-muted mb-3">or</p>
-                <label htmlFor="file-input" className="btn btn-primary">
+                  }`}></i>
+                </div>
+                <h5 className="fw-semibold mb-2">
+                  {dragActive ? 'Drop files here' : 'Drag & drop your files'}
+                </h5>
+                <p className="text-muted mb-3 small">or</p>
+                <label htmlFor="file-input" className="btn btn-primary px-4">
                   <i className="bi bi-folder2-open me-2"></i>
                   Browse Files
                 </label>
                 <input
                   id="file-input"
                   type="file"
-                  accept=".csv,.xlsx"
+                  accept=".csv"
                   multiple
                   onChange={handleFileChange}
                   className="d-none"
                 />
-                <p className="text-muted mt-3 mb-0 small">
-                  Supported formats: CSV, Excel (.xlsx)
+                <p className="text-muted mt-3 mb-0" style={{ fontSize: '0.85rem' }}>
+                  <i className="bi bi-info-circle me-1"></i>
+                  Supported format: CSV files only
                 </p>
               </div>
 
-              {/* File List */}
+              {/* Selected Files */}
               {files.length > 0 && (
-                <div className="mb-4">
-                  <h6 className="mb-3">
-                    <i className="bi bi-files me-2"></i>
-                    Selected Files ({files.length})
-                  </h6>
-                  <div className="list-group">
+                <div className="mt-4">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h6 className="mb-0 fw-semibold">
+                      <i className="bi bi-paperclip me-2 text-primary"></i>
+                      Selected Files ({files.length})
+                    </h6>
+                    <button
+                      className="btn btn-sm btn-outline-danger"
+                      onClick={() => {
+                        setFiles([]);
+                        document.getElementById('file-input').value = '';
+                      }}
+                      disabled={uploading}
+                    >
+                      <i className="bi bi-trash me-1"></i>
+                      Clear All
+                    </button>
+                  </div>
+                  <div className="list-group list-group-flush">
                     {files.map((file, index) => (
                       <div
                         key={index}
-                        className="list-group-item d-flex justify-content-between align-items-center"
+                        className="list-group-item px-0 d-flex justify-content-between align-items-center"
                       >
                         <div className="d-flex align-items-center">
-                          <i className="bi bi-file-earmark-spreadsheet text-success fs-4 me-3"></i>
+                          <div className="bg-success bg-opacity-10 rounded p-2 me-3">
+                            <i className="bi bi-file-earmark-text text-success fs-5"></i>
+                          </div>
                           <div>
-                            <div className="fw-medium">{file.name}</div>
+                            <div className="fw-medium mb-0">{file.name}</div>
                             <small className="text-muted">{formatFileSize(file.size)}</small>
                           </div>
                         </div>
                         <button
                           type="button"
-                          className="btn btn-sm btn-outline-danger"
+                          className="btn btn-sm btn-light text-danger"
                           onClick={() => removeFile(index)}
                           disabled={uploading}
                         >
-                          <i className="bi bi-trash"></i>
+                          <i className="bi bi-x-lg"></i>
                         </button>
                       </div>
                     ))}
@@ -199,22 +228,23 @@ const LedgerUpload = () => {
 
               {/* Error Alert */}
               {error && (
-                <div className="alert alert-danger d-flex align-items-center mb-4" role="alert">
-                  <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                <div className="alert alert-danger d-flex align-items-center mt-4 mb-0" role="alert">
+                  <i className="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
                   <div>{error}</div>
                 </div>
               )}
 
               {/* Upload Button */}
-              <div className="d-grid">
+              <div className="d-grid mt-4">
                 <button
-                  className="btn btn-primary btn-lg"
+                  className="btn btn-primary btn-lg py-3"
                   onClick={handleUpload}
                   disabled={files.length === 0 || uploading}
+                  style={{ fontSize: '1rem', fontWeight: '600' }}
                 >
                   {uploading ? (
                     <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
                       Processing {files.length} file{files.length > 1 ? 's' : ''}...
                     </>
                   ) : (
@@ -228,76 +258,84 @@ const LedgerUpload = () => {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Results Section */}
-      {results.length > 0 && (
-        <div className="row mt-4">
-          <div className="col-12">
-            <div className="card shadow-sm">
-              <div className="card-header bg-white">
-                <h5 className="mb-0">
-                  <i className="bi bi-check-circle me-2"></i>
+        {/* Right Column - Instructions & Results */}
+        <div className="col-lg-5">
+          {/* Results Section */}
+          {results.length > 0 ? (
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-header bg-white border-bottom py-3">
+                <h6 className="mb-0 fw-semibold">
+                  <i className="bi bi-check-circle text-success me-2"></i>
                   Upload Results
-                </h5>
+                </h6>
               </div>
-              <div className="card-body">
+              <div className="card-body p-3" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 {results.map((result, index) => (
                   <div
                     key={index}
-                    className={`alert ${
-                      result.success ? 'alert-success' : 'alert-danger'
-                    } mb-3`}
+                    className={`border rounded-3 p-3 mb-3 ${
+                      result.success
+                        ? 'border-success bg-success bg-opacity-10'
+                        : 'border-danger bg-danger bg-opacity-10'
+                    }`}
                   >
                     <div className="d-flex align-items-start">
-                      <i
-                        className={`bi ${
-                          result.success ? 'bi-check-circle-fill' : 'bi-x-circle-fill'
-                        } fs-4 me-3`}
-                      ></i>
+                      <div className={`rounded-circle p-2 me-3 ${
+                        result.success ? 'bg-success' : 'bg-danger'
+                      }`} style={{ width: '40px', height: '40px' }}>
+                        <i className={`bi ${
+                          result.success ? 'bi-check-lg' : 'bi-x-lg'
+                        } text-white d-flex justify-content-center align-items-center fs-5`}></i>
+                      </div>
                       <div className="flex-grow-1">
-                        <h6 className="alert-heading mb-2">
+                        <h6 className="mb-2 fw-semibold" style={{ fontSize: '0.9rem' }}>
                           {result.fileName}
                         </h6>
 
                         {result.success ? (
                           <>
-                            <p className="mb-2">{result.message}</p>
+                            <p className="mb-2 text-success small">{result.message}</p>
 
                             {result.stats && (
-                              <div className="mb-2">
-                                <small className="d-block">
-                                  <strong>Statistics:</strong>
-                                </small>
-                                <small className="d-block">
-                                  • Licenses Created: {result.stats.licenses_created || 0}
-                                </small>
-                                <small className="d-block">
-                                  • Licenses Updated: {result.stats.licenses_updated || 0}
-                                </small>
-                                <small className="d-block">
-                                  • Total Transactions: {result.stats.total_transactions || 0}
-                                </small>
+                              <div className="bg-white rounded p-2 mb-2">
+                                <div className="row g-2 text-center">
+                                  <div className="col-4">
+                                    <div className="fw-bold text-primary">{result.stats.total_licenses || 0}</div>
+                                    <div className="text-muted" style={{ fontSize: '0.75rem' }}>Licenses</div>
+                                  </div>
+                                  <div className="col-4">
+                                    <div className="fw-bold text-success">{result.stats.files_processed || 0}</div>
+                                    <div className="text-muted" style={{ fontSize: '0.75rem' }}>Processed</div>
+                                  </div>
+                                  <div className="col-4">
+                                    <div className="fw-bold text-danger">{result.stats.files_failed || 0}</div>
+                                    <div className="text-muted" style={{ fontSize: '0.75rem' }}>Failed</div>
+                                  </div>
+                                </div>
                               </div>
                             )}
 
                             {result.licenses && result.licenses.length > 0 && (
-                              <div className="mt-2">
-                                <small className="d-block mb-1">
-                                  <strong>Processed Licenses:</strong>
-                                </small>
-                                <div className="d-flex flex-wrap gap-2">
-                                  {result.licenses.map((license, idx) => (
-                                    <span key={idx} className="badge bg-success">
+                              <div>
+                                <small className="text-muted d-block mb-2">License Numbers:</small>
+                                <div className="d-flex flex-wrap gap-1">
+                                  {result.licenses.slice(0, 5).map((license, idx) => (
+                                    <span key={idx} className="badge bg-primary" style={{ fontSize: '0.75rem' }}>
                                       {license}
                                     </span>
                                   ))}
+                                  {result.licenses.length > 5 && (
+                                    <span className="badge bg-secondary" style={{ fontSize: '0.75rem' }}>
+                                      +{result.licenses.length - 5} more
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             )}
                           </>
                         ) : (
-                          <p className="mb-0 text-danger">{result.error}</p>
+                          <p className="mb-0 text-danger small">{result.error}</p>
                         )}
                       </div>
                     </div>
@@ -305,66 +343,76 @@ const LedgerUpload = () => {
                 ))}
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Instructions Card */}
-      <div className="row mt-4">
-        <div className="col-12">
-          <div className="card shadow-sm">
-            <div className="card-header bg-white">
-              <h5 className="mb-0">
-                <i className="bi bi-info-circle me-2"></i>
-                File Format Instructions
-              </h5>
-            </div>
-            <div className="card-body">
-              <h6 className="mb-3">Required CSV Format:</h6>
-              <div className="table-responsive">
-                <table className="table table-sm table-bordered">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Regn.No.</th>
-                      <th>Regn.Date</th>
-                      <th>Lic.No.</th>
-                      <th>Lic.Date</th>
-                      <th>RANo. (Port)</th>
-                      <th>IEC</th>
-                      <th>Scheme Code</th>
-                      <th>Notification</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>3011006401</td>
-                      <td>24/01/2025</td>
-                      <td>3011006401</td>
-                      <td>24/01/2025</td>
-                      <td>INMUN1</td>
-                      <td>1059704957</td>
-                      <td>26</td>
-                      <td>0325/2023</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="alert alert-info mt-3">
-                <h6 className="alert-heading">
-                  <i className="bi bi-lightbulb me-2"></i>
-                  Important Notes:
+          ) : (
+            /* Instructions Card */
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white border-bottom py-3">
+                <h6 className="mb-0 fw-semibold">
+                  <i className="bi bi-info-circle text-primary me-2"></i>
+                  File Format Guide
                 </h6>
-                <ul className="mb-0">
-                  <li>The CSV file must contain header row with exact column names</li>
-                  <li>License numbers and IEC codes will be zero-padded to 10 digits</li>
-                  <li>Dates should be in DD/MM/YYYY format</li>
-                  <li>Credit transactions (license imports) and Debit transactions (BOE) are automatically processed</li>
-                  <li>Multiple files can be uploaded at once</li>
-                </ul>
+              </div>
+              <div className="card-body p-4">
+                <div className="mb-4">
+                  <h6 className="fw-semibold mb-3" style={{ fontSize: '0.9rem' }}>Required CSV Columns:</h6>
+                  <div className="bg-light rounded-3 p-3">
+                    <div className="row g-2 small">
+                      <div className="col-6">
+                        <div className="d-flex align-items-center mb-2">
+                          <i className="bi bi-check-circle-fill text-success me-2"></i>
+                          <code>Regn.No.</code>
+                        </div>
+                        <div className="d-flex align-items-center mb-2">
+                          <i className="bi bi-check-circle-fill text-success me-2"></i>
+                          <code>Regn.Date</code>
+                        </div>
+                        <div className="d-flex align-items-center mb-2">
+                          <i className="bi bi-check-circle-fill text-success me-2"></i>
+                          <code>Lic.No.</code>
+                        </div>
+                        <div className="d-flex align-items-center">
+                          <i className="bi bi-check-circle-fill text-success me-2"></i>
+                          <code>Lic.Date</code>
+                        </div>
+                      </div>
+                      <div className="col-6">
+                        <div className="d-flex align-items-center mb-2">
+                          <i className="bi bi-check-circle-fill text-success me-2"></i>
+                          <code>IEC</code>
+                        </div>
+                        <div className="d-flex align-items-center mb-2">
+                          <i className="bi bi-check-circle-fill text-success me-2"></i>
+                          <code>Scheme.Cd.</code>
+                        </div>
+                        <div className="d-flex align-items-center mb-2">
+                          <i className="bi bi-check-circle-fill text-success me-2"></i>
+                          <code>Port</code>
+                        </div>
+                        <div className="d-flex align-items-center">
+                          <i className="bi bi-check-circle-fill text-success me-2"></i>
+                          <code>Notification</code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="alert alert-info mb-0" style={{ fontSize: '0.85rem' }}>
+                  <h6 className="alert-heading fw-semibold" style={{ fontSize: '0.9rem' }}>
+                    <i className="bi bi-lightbulb me-2"></i>
+                    Important Notes
+                  </h6>
+                  <ul className="mb-0 ps-3">
+                    <li className="mb-1">CSV must include header row with exact column names</li>
+                    <li className="mb-1">License numbers auto-padded to 10 digits</li>
+                    <li className="mb-1">Date format: <code>DD/MM/YYYY</code></li>
+                    <li className="mb-1">Credit (imports) and Debit (BOE) auto-processed</li>
+                    <li>Multiple files can be uploaded simultaneously</li>
+                  </ul>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -105,20 +105,49 @@ class LicenseValidationService:
     @staticmethod
     def validate_sufficient_balance(
             license_obj,
-            required_value: Decimal
+            required_value: Decimal,
+            import_item=None
     ) -> tuple[bool, str]:
         """
         Validate that license has sufficient balance for allocation.
-        
+
+        If import_item is provided and is_restricted=True, uses restriction-based balance.
+        Otherwise, uses license-level balance.
+
         Args:
             license_obj: LicenseDetailsModel instance
             required_value: Required value to allocate
-            
+            import_item: Optional LicenseImportItemsModel instance
+
         Returns:
             Tuple of (is_valid, error_message)
         """
-        available_balance = license_obj.get_balance_cif
         required = to_decimal(required_value, DEC_0)
+
+        # If import_item provided and is_restricted=True, use restriction balance
+        if import_item and import_item.is_restricted:
+            from license.services.restriction_calculator import RestrictionCalculator
+
+            # Get restriction percentage for this item
+            restriction_pct = RestrictionCalculator.get_item_restriction_percentage(import_item)
+
+            if restriction_pct > DEC_0:
+                # Calculate restriction balance
+                total_export_cif = license_obj._calculate_license_credit()
+                available_balance = RestrictionCalculator.calculate_restriction_balance(
+                    license_obj,
+                    restriction_pct,
+                    total_export_cif
+                )
+
+                if available_balance < required:
+                    return False, f"Insufficient restricted balance ({restriction_pct}%). Available: {available_balance}, Required: {required}"
+            else:
+                # Item marked as restricted but no restriction percentage found
+                available_balance = license_obj.get_balance_cif
+        else:
+            # Use license-level balance for non-restricted items
+            available_balance = license_obj.get_balance_cif
 
         if available_balance < required:
             return False, f"Insufficient balance. Available: {available_balance}, Required: {required}"
@@ -201,13 +230,13 @@ class LicenseValidationService:
     ) -> tuple[bool, List[str]]:
         """
         Comprehensive validation for allocation.
-        
+
         Args:
             license_obj: LicenseDetailsModel instance
             import_item: LicenseImportItemsModel instance
             quantity: Quantity to allocate
             value: Value to allocate
-            
+
         Returns:
             Tuple of (is_valid, error_messages)
         """
@@ -218,8 +247,8 @@ class LicenseValidationService:
         if not is_active:
             errors.append(active_error)
 
-        # Check sufficient balance
-        has_balance, balance_error = cls.validate_sufficient_balance(license_obj, value)
+        # Check sufficient balance (passes import_item for restriction handling)
+        has_balance, balance_error = cls.validate_sufficient_balance(license_obj, value, import_item)
         if not has_balance:
             errors.append(balance_error)
 
@@ -228,14 +257,15 @@ class LicenseValidationService:
         if not has_quantity:
             errors.append(quantity_error)
 
-        # Check restriction limits
-        within_restriction, restriction_error = cls.validate_restriction_limit(
-            license_obj,
-            import_item,
-            value
-        )
-        if not within_restriction:
-            errors.append(restriction_error)
+        # Check restriction limits (only if is_restricted=True)
+        if import_item.is_restricted:
+            within_restriction, restriction_error = cls.validate_restriction_limit(
+                license_obj,
+                import_item,
+                value
+            )
+            if not within_restriction:
+                errors.append(restriction_error)
 
         return len(errors) == 0, errors
 

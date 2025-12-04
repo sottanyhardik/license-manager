@@ -1,0 +1,899 @@
+/* Modern Professional Color Variables */
+:root {
+    /* Primary Brand Colors - Professional Blue */
+    --primary-color: #2563eb;
+    --primary-light: #3b82f6;
+    --primary-dark: #1e40af;
+    --primary-gradient: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+
+    /* Secondary Colors */
+    --secondary-color: #64748b;
+    --secondary-light: #94a3b8;
+    --secondary-dark: #475569;
+
+    /* Accent Colors */
+    --accent-color: #8b5cf6;
+    --accent-light: #a78bfa;
+
+    /* Status Colors */
+    --success-color: #10b981;
+    --success-light: #34d399;
+    --danger-color: #ef4444;
+    --danger-light: #f87171;
+    --warning-color: #f97316;
+    --warning-light: #fb923c;
+    --info-color: #06b6d4;
+    --info-light: #22d3ee;
+
+    /* Surface & Background */
+    --surface-color: #ffffff;
+    --surface-hover: #f8fafc;
+    --background-color: #f1f5f9;
+    --background-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+
+    /* Text Colors */
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-tertiary: #94a3b8;
+    --text-muted: #cbd5e1;
+
+    /* Border & Dividers */
+    --divider-color: #e2e8f0;
+    --border-light: #cbd5e1;
+    --border-medium: #94a3b8;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+
+    /* Navigation */
+    --nav-bg: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    --nav-hover: rgba(59, 130, 246, 0.15);
+
+    /* Bootstrap color overrides */
+    --bs-primary: #2563eb;
+    --bs-primary-rgb: 37, 99, 235;
+    --bs-link-color: #2563eb;
+    --bs-link-hover-color: #1e40af;
+    --bs-body-bg: #f1f5f9;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+#root {
+    margin: 0 auto;
+    background-color: var(--background-color);
+    min-height: 100vh;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    color: var(--text-primary);
+    background-color: var(--background-color);
+    line-height: 1.6;
+    font-size: 14px;
+    overflow-x: hidden;
+}
+
+/* Ensure proper scrolling on all pages */
+html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.logo {
+    height: 6em;
+    padding: 1.5em;
+    will-change: filter;
+    transition: filter 300ms;
+}
+
+.logo:hover {
+    filter: drop-shadow(0 0 2em #646cffaa);
+}
+
+.logo.react:hover {
+    filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    a:nth-of-type(2) .logo {
+        animation: logo-spin infinite 20s linear;
+    }
+}
+
+.card {
+    padding: 1.5em;
+}
+
+.read-the-docs {
+    color: #888;
+}
+
+/* Custom styles for form switches */
+.form-switch .form-check-input {
+    width: 3em;
+    height: 1.5em;
+    cursor: pointer;
+    border: 1px solid #dee2e6;
+    background-color: #e9ecef;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+.form-switch .form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.form-switch .form-check-input:focus {
+    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
+    border-color: #86b7fe;
+}
+
+.form-switch .form-check-label {
+    margin-left: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+/* Ensure switches align properly in nested forms */
+.nested-items-container .form-switch {
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+}
+
+/* Better spacing for switch groups in filters */
+.btn-group .btn-check + .btn {
+    border-width: 1px;
+}
+
+.btn-group .btn-check:checked + .btn {
+    font-weight: 600;
+}
+
+/* Highlighting for updated fields from SION fetch */
+.border-warning.border-2 {
+    animation: highlightPulse 0.5s ease-in-out;
+}
+
+@keyframes highlightPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(249, 115, 22, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+    }
+}
+
+/* Material Design Form Styles */
+.form-group-material {
+    position: relative;
+    margin-bottom: 1.75rem;
+}
+
+.form-group-material .form-control,
+.form-group-material .form-select,
+.form-group-material textarea.form-control {
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    background-color: var(--surface-color);
+    width: 100%;
+    box-shadow: none;
+}
+
+.form-group-material .form-control:focus,
+.form-group-material .form-select:focus,
+.form-group-material textarea.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    outline: 0;
+    background-color: #fff;
+}
+
+.form-group-material .form-control:hover:not(:focus):not(:disabled),
+.form-group-material .form-select:hover:not(:focus):not(:disabled),
+.form-group-material textarea.form-control:hover:not(:focus):not(:disabled) {
+    border-color: var(--text-secondary);
+}
+
+.form-group-material label.form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    text-transform: capitalize !important;
+    display: block;
+    letter-spacing: 0.3px;
+}
+
+/* Enhanced card styling for forms - Material Design */
+.card {
+    border: 1px solid var(--divider-color);
+    box-shadow: var(--shadow-sm);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    background-color: var(--surface-color);
+}
+
+.card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.card-header {
+    background-color: var(--surface-color);
+    border-bottom: 1px solid var(--divider-color);
+    padding: 1rem 1.5rem;
+    border-radius: 8px 8px 0 0 !important;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+}
+
+/* Nested field array styling */
+.nested-items-container .card {
+    margin-bottom: 1rem;
+    border: 1px solid var(--divider-color);
+}
+
+.nested-items-container .card-header {
+    background-color: #eff6ff;
+    color: var(--primary-dark);
+    font-weight: 600;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.nested-items-container .card-body {
+    padding: 1.5rem;
+    background-color: var(--surface-color);
+}
+
+/* Material Design Button Styles */
+.btn {
+    font-weight: 500;
+    padding: 8px 20px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    text-transform: none;
+    letter-spacing: 0.3px;
+    font-size: 0.875rem;
+    box-shadow: none;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: white;
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    color: white;
+    border-color: var(--success-color);
+}
+
+.btn-success:hover {
+    background-color: #0ea472;
+    border-color: #0ea472;
+    color: white;
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+    color: white;
+    border-color: var(--danger-color);
+}
+
+.btn-danger:hover {
+    background-color: #dc2626;
+    border-color: #dc2626;
+    color: white;
+}
+
+.btn-outline-danger {
+    border: 1px solid var(--danger-color);
+    color: var(--danger-color);
+    background: transparent;
+}
+
+.btn-outline-danger:hover {
+    background: var(--danger-color);
+    border-color: var(--danger-color);
+    color: white;
+}
+
+/* React Select enhancements - Material Design */
+.react-select__control {
+    border-radius: 6px !important;
+    border-color: var(--border-light) !important;
+    min-height: 38px !important;
+    transition: all 0.2s ease !important;
+    box-shadow: none !important;
+    background-color: var(--surface-color) !important;
+}
+
+.react-select__control:hover {
+    border-color: var(--text-secondary) !important;
+}
+
+.react-select__control--is-focused {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+
+.react-select__menu {
+    border-radius: 6px !important;
+    box-shadow: var(--shadow-lg) !important;
+    z-index: 9999 !important;
+    border: 1px solid var(--divider-color) !important;
+}
+
+.react-select__option--is-selected {
+    background-color: var(--primary-color) !important;
+}
+
+.react-select__option--is-focused {
+    background-color: #eff6ff !important;
+    color: var(--text-primary) !important;
+}
+
+/* Date picker styling - Material Design */
+.react-datepicker-wrapper {
+    width: 100%;
+    display: block;
+}
+
+.react-datepicker__input-container {
+    width: 100%;
+    display: block;
+}
+
+.react-datepicker__input-container input {
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.875rem;
+    width: 100%;
+    transition: all 0.2s ease;
+    display: block;
+    background-color: var(--surface-color);
+    box-shadow: none;
+}
+
+.react-datepicker__input-container input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    outline: 0;
+}
+
+.react-datepicker__input-container input:hover:not(:focus) {
+    border-color: var(--text-secondary);
+}
+
+/* Ensure DatePicker in forms looks consistent */
+.form-group-material .react-datepicker-wrapper,
+.form-group-material .react-datepicker__input-container {
+    width: 100%;
+    display: block;
+}
+
+/* DatePicker calendar styling */
+.react-datepicker__header {
+    background-color: var(--primary-color) !important;
+    border-bottom: none !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker__day-name {
+    color: white !important;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+    background-color: var(--primary-color) !important;
+}
+
+.react-datepicker__day:hover {
+    background-color: var(--primary-light) !important;
+}
+
+.react-datepicker__close-icon::after {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+.react-datepicker__close-icon:hover::after {
+    background-color: var(--primary-dark) !important;
+}
+
+/* Ensure all form labels are capitalized */
+label.form-label,
+.form-label,
+label,
+.form-group-material label,
+.form-group-material .form-label {
+    text-transform: capitalize !important;
+}
+
+/* Additional capitalization rules */
+.card-header h6,
+.nested-items-container label {
+    text-transform: capitalize !important;
+}
+
+/* Force all labels to be capitalized - highest priority */
+label,
+label.form-label,
+.form-label,
+.form-group-material label,
+.form-group-material .form-label,
+.col-md-4 label,
+.col-12 label,
+div label {
+    text-transform: capitalize !important;
+    font-weight: 500 !important;
+}
+
+/* ========================================
+   Bootstrap Component Color Overrides
+   ======================================== */
+
+/* Bootstrap Buttons */
+.btn-primary {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+}
+
+.btn-primary:hover {
+    background-color: #1e40af !important;
+    border-color: #1e40af !important;
+}
+
+.btn-primary:focus,
+.btn-primary:active,
+.btn-primary.active,
+.btn-primary:first-child:active {
+    background-color: #1e40af !important;
+    border-color: #1e40af !important;
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.25) !important;
+}
+
+.btn-primary:disabled,
+.btn-primary.disabled {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+    opacity: 0.65;
+}
+
+.btn-outline-primary {
+    color: #2563eb !important;
+    border-color: #2563eb !important;
+}
+
+.btn-outline-primary:hover {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+    color: white !important;
+}
+
+.btn-outline-primary:focus,
+.btn-outline-primary:active {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.25) !important;
+}
+
+/* Bootstrap Form Controls */
+.form-control:focus,
+.form-select:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.15) !important;
+}
+
+.form-check-input:checked {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+}
+
+.form-check-input:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.15) !important;
+}
+
+.form-switch .form-check-input:checked {
+    background-color: #2563eb !important;
+}
+
+/* Bootstrap Links */
+a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #1e40af;
+}
+
+/* Bootstrap Badges */
+.badge.bg-primary,
+.badge.text-bg-primary {
+    background-color: #2563eb !important;
+}
+
+/* Bootstrap Alerts */
+.alert-primary {
+    color: #1e3a8a;
+    background-color: #dbeafe;
+    border-color: #bfdbfe;
+}
+
+.alert-primary .alert-link {
+    color: #1e40af;
+}
+
+/* Bootstrap Pagination */
+.pagination .page-link {
+    color: #2563eb;
+}
+
+.pagination .page-link:hover {
+    color: #1e40af;
+    background-color: #eff6ff;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+}
+
+.pagination .page-link:focus {
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.15);
+}
+
+/* Bootstrap Progress Bar */
+.progress-bar,
+.progress-bar.bg-primary {
+    background-color: #2563eb !important;
+}
+
+/* Bootstrap Spinners */
+.spinner-border.text-primary {
+    color: #2563eb !important;
+}
+
+.spinner-grow.text-primary {
+    color: #2563eb !important;
+}
+
+/* Bootstrap Nav Pills */
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+    background-color: #2563eb !important;
+    color: white !important;
+}
+
+.nav-pills .nav-link:hover {
+    background-color: #eff6ff !important;
+    color: #1e40af !important;
+}
+
+.nav-pills .nav-link {
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+/* Bootstrap Nav Tabs */
+.nav-tabs .nav-link.active {
+    color: #2563eb;
+    border-color: var(--divider-color) var(--divider-color) #fff;
+}
+
+.nav-tabs .nav-link:hover {
+    color: #1e40af;
+}
+
+/* Bootstrap Accordion */
+.accordion-button:not(.collapsed) {
+    background-color: #eff6ff;
+    color: #1e40af;
+}
+
+.accordion-button:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.15);
+}
+
+/* Bootstrap List Group */
+.list-group-item.active {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+}
+
+.list-group-item-primary {
+    color: #1e3a8a;
+    background-color: #dbeafe;
+}
+
+.list-group-item-primary.list-group-item-action:hover,
+.list-group-item-primary.list-group-item-action:focus {
+    color: #1e3a8a;
+    background-color: #bfdbfe;
+}
+
+/* Bootstrap Dropdown */
+.dropdown-item.active,
+.dropdown-item:active {
+    background-color: #2563eb !important;
+    color: white;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background-color: #eff6ff;
+    color: #1e40af;
+}
+
+/* Bootstrap Breadcrumb */
+.breadcrumb-item.active {
+    color: #2563eb;
+}
+
+.breadcrumb-item a {
+    color: #2563eb;
+}
+
+.breadcrumb-item a:hover {
+    color: #1e40af;
+}
+
+/* Bootstrap Tables */
+.table-primary {
+    --bs-table-bg: #eff6ff;
+    --bs-table-border-color: #bfdbfe;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #eff6ff;
+}
+
+/* Bootstrap Text Colors */
+.text-primary {
+    color: #2563eb !important;
+}
+
+.text-bg-primary {
+    background-color: #2563eb !important;
+}
+
+/* Bootstrap Border Colors */
+.border-primary {
+    border-color: #2563eb !important;
+}
+
+/* Bootstrap Background Colors */
+.bg-primary,
+.bg-primary.bg-gradient,
+div.bg-primary,
+span.bg-primary,
+td.bg-primary,
+th.bg-primary {
+    background-color: #2563eb !important;
+}
+
+.bg-primary-subtle {
+    background-color: #eff6ff !important;
+}
+
+/* Bootstrap Toast */
+.toast-header {
+    background-color: #eff6ff;
+    color: #1e40af;
+}
+
+/* Bootstrap Input Group */
+.input-group-text {
+    border-color: var(--border-light);
+}
+
+.input-group:focus-within .input-group-text {
+    border-color: #3b82f6;
+}
+
+/* Additional Bootstrap Primary Overrides */
+.btn-check:checked + .btn-primary,
+.btn-check:active + .btn-primary {
+    background-color: #1e40af !important;
+    border-color: #1e40af !important;
+}
+
+.btn-close:focus {
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.15);
+}
+
+/* Bootstrap Card with primary header */
+.card-header.bg-primary,
+.card-header.text-bg-primary {
+    background-color: #2563eb !important;
+    color: white;
+}
+
+/* Bootstrap Placeholder */
+.placeholder.bg-primary {
+    background-color: #2563eb !important;
+}
+
+/* Bootstrap Offcanvas */
+.offcanvas-header .btn-close:focus {
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.15);
+}
+
+/* Bootstrap Form Validation with Primary */
+.was-validated .form-control:valid:focus,
+.form-control.is-valid:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.15);
+}
+
+/* Bootstrap Range Slider */
+.form-range:focus::-webkit-slider-thumb {
+    box-shadow: 0 0 0 1px #fff, 0 0 0 0.25rem rgba(37, 99, 235, 0.15);
+}
+
+.form-range::-webkit-slider-thumb:active {
+    background-color: #bfdbfe;
+}
+
+.form-range::-moz-range-thumb:active {
+    background-color: #bfdbfe;
+}
+
+/* Bootstrap Floating Labels */
+.form-floating > .form-control:focus ~ label,
+.form-floating > .form-control:not(:placeholder-shown) ~ label,
+.form-floating > .form-select ~ label {
+    color: rgba(37, 99, 235, 0.65);
+}
+
+.form-floating > .form-control:focus ~ label {
+    color: #3b82f6;
+}
+
+/* Bootstrap Modal Header with Primary */
+.modal-header.bg-primary {
+    background-color: #2563eb !important;
+}
+
+/* Bootstrap Popover */
+.popover-header {
+    background-color: #eff6ff;
+}
+
+/* Bootstrap Tooltip */
+.tooltip-inner {
+    background-color: #1e293b;
+}
+
+/* Bootstrap Button Group */
+.btn-group > .btn-primary:not(:last-child):not(.dropdown-toggle),
+.btn-group > .btn-group:not(:last-child) > .btn-primary {
+    border-right-color: #1e40af;
+}
+
+.btn-group > .btn-primary:not(:first-child),
+.btn-group > .btn-group:not(:first-child) > .btn-primary {
+    border-left-color: #1e40af;
+}
+
+/* Bootstrap Focus Ring */
+.focus-ring-primary {
+    --bs-focus-ring-color: rgba(37, 99, 235, 0.25);
+}
+
+/* ========================================
+   Toast Notifications
+   ======================================== */
+
+/* Toast Animation */
+@keyframes fadeInSlide {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.fade-in-slide {
+    animation: fadeInSlide 0.3s ease-out;
+}
+
+/* Toast Container */
+.toast-container {
+    z-index: 10000 !important;
+}
+
+/* Toast Styling */
+.toast {
+    min-width: 300px;
+    box-shadow: var(--shadow-lg);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.toast.text-bg-success {
+    background-color: var(--success-color) !important;
+}
+
+.toast.text-bg-danger {
+    background-color: var(--danger-color) !important;
+}
+
+.toast.text-bg-warning {
+    background-color: var(--warning-color) !important;
+    color: #ffffff !important;
+}
+
+.toast.text-bg-info {
+    background-color: var(--info-color) !important;
+}
+
+.toast.text-bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+.toast .toast-body {
+    padding: 1rem;
+    font-size: 0.9375rem;
+}
+
+.toast .btn-close {
+    opacity: 0.8;
+}
+
+.toast .btn-close:hover {
+    opacity: 1;
+}
+
+/* Warning toast specific - use dark text */
+.toast.text-bg-warning .btn-close {
+    filter: invert(1);
+}

@@ -1,0 +1,26 @@
+# FILE: deploy/celery.service
+# Example systemd service for Celery worker (edit paths, user, group)
+# Place as /etc/systemd/system/celery.service
+# Reload systemd after adding: sudo systemctl daemon-reload
+
+[Unit]
+Description=Celery Worker for lmanagement
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+# Set your project base dir here
+WorkingDirectory=/srv/lmanagement
+# Optional: EnvironmentFile=/srv/lmanagement/.env
+Environment=DJANGO_SETTINGS_MODULE=lmanagement.settings
+# Optional: activate venv before running by using ExecStart that calls the wrapper script
+ExecStart=/srv/lmanagement/venv/bin/celery -A lmanagement worker --loglevel=info --concurrency=4 --max-tasks-per-child=100 --without-gossip --without-mingle --without-heartbeat
+Restart=always
+RestartSec=10
+# Limit memory or cpu if desired
+#MemoryLimit=1G
+
+[Install]
+WantedBy=multi-user.target

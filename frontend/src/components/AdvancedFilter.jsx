@@ -135,6 +135,10 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                 );
 
             case "date_range":
+                const fromValue = filterValues[`${fieldName}_from`] || "";
+                const toValue = filterValues[`${fieldName}_to`] || "";
+                console.log(`AdvancedFilter: Rendering date_range for ${fieldName}`, {fromValue, toValue, filterValues});
+
                 return (
                     <div key={fieldName} className="col-md-6">
                         <label className="form-label">{label} Range</label>
@@ -144,8 +148,11 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                                     type="date"
                                     className="form-control"
                                     placeholder="From"
-                                    value={filterValues[`${fieldName}_from`] || ""}
-                                    onChange={(e) => handleFilterChange(`${fieldName}_from`, e.target.value)}
+                                    value={fromValue}
+                                    onChange={(e) => {
+                                        console.log(`AdvancedFilter: ${fieldName}_from changed to`, e.target.value);
+                                        handleFilterChange(`${fieldName}_from`, e.target.value);
+                                    }}
                                 />
                                 <small className="text-muted">From</small>
                             </div>
@@ -154,8 +161,11 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                                     type="date"
                                     className="form-control"
                                     placeholder="To"
-                                    value={filterValues[`${fieldName}_to`] || ""}
-                                    onChange={(e) => handleFilterChange(`${fieldName}_to`, e.target.value)}
+                                    value={toValue}
+                                    onChange={(e) => {
+                                        console.log(`AdvancedFilter: ${fieldName}_to changed to`, e.target.value);
+                                        handleFilterChange(`${fieldName}_to`, e.target.value);
+                                    }}
                                 />
                                 <small className="text-muted">To</small>
                             </div>

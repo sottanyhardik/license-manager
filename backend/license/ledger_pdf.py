@@ -170,14 +170,14 @@ def generate_license_ledger_pdf(license_obj):
             item_groups[fallback_key].append(import_item)
 
     # Process each item group, sorted by the first item's serial number
-    for group_key, items in sorted(item_groups.items(), key=lambda x: min(item.serial_number for item in x[1])):
+    for group_key, items in sorted(item_groups.items(), key=lambda x: min((item.serial_number for item in x[1] if item.serial_number is not None), default=0)):
         # Get the description from the first item in the group (sorted by serial number)
-        first_item = sorted(items, key=lambda x: x.serial_number)[0]
+        first_item = sorted(items, key=lambda x: x.serial_number if x.serial_number is not None else 0)[0]
         description = first_item.description if first_item.description else "No Description"
 
         # Collect all serial numbers for this description
-        serial_numbers = [str(item.serial_number) for item in items]
-        serial_numbers_str = ", ".join(serial_numbers)
+        serial_numbers = [str(item.serial_number) for item in items if item.serial_number is not None]
+        serial_numbers_str = ", ".join(serial_numbers) if serial_numbers else "N/A"
 
         # Get HS code from first item
         hs_code = items[0].hs_code.hs_code if items[0].hs_code else '-'

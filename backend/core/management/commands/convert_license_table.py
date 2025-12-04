@@ -1,8 +1,9 @@
 import csv
 import os
+
 from django.core.management.base import BaseCommand
 
-from backend.scripts.parse_ledger import parse_license_data
+from scripts.parse_ledger import parse_license_data
 
 
 class Command(BaseCommand):

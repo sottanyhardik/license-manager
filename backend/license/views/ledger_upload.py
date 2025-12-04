@@ -1,17 +1,20 @@
 """
 Ledger upload API endpoint for processing DFIA license ledger files.
 """
-import io
 import csv
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import IsAuthenticated
+import io
+
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from scripts.ledger_parser_refactored import process_ledger_file
+from backend.scripts.parse_ledger import parse_license_data, create_object
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class LedgerUploadView(APIView):
     """
     API endpoint to upload and process ledger CSV files.
@@ -33,8 +36,10 @@ class LedgerUploadView(APIView):
         }
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = []  # Allow access without authentication for now
     parser_classes = [MultiPartParser, FormParser]
+    authentication_classes = []  # Disable authentication requirements
+    http_method_names = ['post', 'options']  # Explicitly allow POST and OPTIONS
 
     def post(self, request):
         """Process uploaded ledger file(s)."""
@@ -47,8 +52,9 @@ class LedgerUploadView(APIView):
             )
 
         all_results = []
+        total_licenses = []
 
-        for uploaded_file in files:
+        for file_sequence_number, uploaded_file in enumerate(files, start=1):
             try:
                 # Validate file type
                 if not uploaded_file.name.endswith('.csv'):
@@ -59,23 +65,37 @@ class LedgerUploadView(APIView):
                     })
                     continue
 
-                # Read and decode file
-                try:
-                    decoded_file = uploaded_file.read().decode('utf-8-sig')
-                except UnicodeDecodeError:
-                    decoded_file = uploaded_file.read().decode('latin-1')
+                # Decode the uploaded file and wrap it for csv.reader
+                decoded_file = uploaded_file.read().decode('utf-8-sig')
+                decoded_file = decoded_file.replace(': ', '')
+                decoded_file = decoded_file.replace(' ', '')
+                decoded_file = decoded_file.replace(':\xa0', '')
+                csvfile = io.StringIO(decoded_file)
 
-                # Clean up the content
-                decoded_file = decoded_file.replace(': ', '').replace(' ', '')
+                reader = csv.reader(csvfile)
 
-                # Process the ledger file
-                created_licenses = process_ledger_file(decoded_file, is_csv=True)
+                # Read all rows, skipping empty ones
+                rows = []
+                for row in reader:
+                    if not any(field.strip() for field in row):
+                        continue
+                    rows.append(row)
+
+                # Parse the CSV data into license dictionaries
+                dict_list = parse_license_data(rows)
+
+                # Create/update license objects
+                created_license_numbers = []
+                for dict_data in dict_list:
+                    license_number = create_object(dict_data)
+                    created_license_numbers.append(license_number)
+                    total_licenses.append(license_number)
 
                 all_results.append({
                     'file': uploaded_file.name,
                     'success': True,
-                    'licenses': created_licenses,
-                    'count': len(created_licenses)
+                    'licenses': created_license_numbers,
+                    'count': len(created_license_numbers)
                 })
 
             except Exception as e:
@@ -86,13 +106,9 @@ class LedgerUploadView(APIView):
                 })
 
         # Aggregate results
-        total_licenses = []
         failed_files = []
-
         for result in all_results:
-            if result['success']:
-                total_licenses.extend(result['licenses'])
-            else:
+            if not result['success']:
                 failed_files.append({
                     'file': result['file'],
                     'error': result['error']

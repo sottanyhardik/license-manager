@@ -63,7 +63,7 @@ const LedgerUpload = () => {
         formData.append('ledger', file);
 
         try {
-          const response = await api.post('/licenses/upload-ledger/', formData, {
+          const response = await api.post('/upload-ledger/', formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },

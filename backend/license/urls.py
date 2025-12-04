@@ -9,7 +9,6 @@ from license.views.inventory_balance_report import InventoryBalanceReportView
 from license.views.inventory_balance_viewset import InventoryBalanceViewSet
 from license.views.license_items import LicenseItemViewSet
 from license.views.dashboard import DashboardDataView
-from license.views.ledger_csv_upload import LedgerCSVUploadView
 from license.views.ledger_upload import LedgerUploadView
 from license.views_actions import LicenseActionViewSet
 
@@ -23,15 +22,16 @@ router.register(r"active-licenses", ActiveLicensesViewSet, basename="active-lice
 router.register(r"item-pivot", ItemPivotViewSet, basename="item-pivot")
 
 urlpatterns = [
-    path("", include(router.urls)),
+    # Specific paths must come BEFORE router.urls to avoid conflicts
     # Dashboard unified endpoint
     path("dashboard/", DashboardDataView.as_view(), name="dashboard"),
-    # Ledger Upload endpoints
-    path("ledger-csv-upload/", LedgerCSVUploadView.as_view(), name="ledger-csv-upload"),
+    # Ledger Upload endpoint
     path("upload-ledger/", LedgerUploadView.as_view(), name="upload-ledger"),
-    # Legacy endpoints for backward compatibility
+    # Report endpoints
     path("reports/inventory-balance/", InventoryBalanceReportView.as_view(), name="inventory-balance-report"),
-    path("license/reports/expiring-licenses/", ExpiringLicensesReportView.as_view(), name="expiring-licenses-report"),
-    path("license/reports/active-licenses/", ActiveLicensesReportView.as_view(), name="active-licenses-report"),
-    path("license/reports/item-pivot/", ItemPivotReportView.as_view(), name="item-pivot-report"),
+    path("reports/expiring-licenses/", ExpiringLicensesReportView.as_view(), name="expiring-licenses-report"),
+    path("reports/active-licenses/", ActiveLicensesReportView.as_view(), name="active-licenses-report"),
+    path("reports/item-pivot/", ItemPivotReportView.as_view(), name="item-pivot-report"),
+    # Router URLs must come LAST
+    path("", include(router.urls)),
 ]

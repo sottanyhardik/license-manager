@@ -171,6 +171,11 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
     if instance.license:
         update_license_flags(instance.license)
 
+        # Only auto-link items if no items are currently linked (items field is empty)
+        if instance.items.exists():
+            logger.info(f"Import item {instance.id} already has items linked. Skipping auto-link.")
+            return
+
         # Auto-link ItemNameModel items when import item is created or updated
         # Get license export norm classes
         license_norm_classes = list(
@@ -191,10 +196,7 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
             logger.info(f"Found {matching_items.count()} matching items for norm classes {license_norm_classes}")
 
             # Try to match and link items based on description
-            # First, find the best matching item
-            best_match = None
-            best_match_score = 0
-
+            # Link ALL matching items (not just one) since multiple items can be valid
             for item_name in matching_items:
                 # Extract base name for matching:
                 # Always use just the first word to avoid overly specific matches
@@ -232,28 +234,16 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
                         matched = False
 
                 if matched:
-                    # Calculate match score (longer base_name = better match)
-                    match_score = len(base_name)
-                    if match_score > best_match_score:
-                        best_match = item_name
-                        best_match_score = match_score
-
-            # Clear all existing items and link only the best match
-            if best_match:
-                current_items = list(instance.items.all())
-                if len(current_items) != 1 or current_items[0].id != best_match.id:
-                    logger.info(f"Clearing existing items {[i.id for i in current_items]} and linking best match: {best_match.id} ({best_match.name})")
-                    instance.items.clear()
-                    instance.items.add(best_match)
+                    # Link this item (allows multiple items to be linked)
+                    logger.info(f"Linking item {item_name.id} ({item_name.name}) to import item {instance.id}")
+                    instance.items.add(item_name)
 
                     # Update is_restricted flag if item has restriction
-                    if best_match.restriction_percentage > 0 and not instance.is_restricted:
+                    if item_name.restriction_percentage > 0 and not instance.is_restricted:
                         logger.info(
-                            f"Setting is_restricted=True for import item {instance.id} (restriction: {best_match.restriction_percentage}%)")
+                            f"Setting is_restricted=True for import item {instance.id} (restriction: {item_name.restriction_percentage}%)")
                         instance.is_restricted = True
                         instance.save(update_fields=['is_restricted'])
-                else:
-                    logger.debug(f"Item {best_match.id} already correctly linked to import item {instance.id}")
         else:
             if not license_norm_classes:
                 logger.warning(f"No license norm classes found for license {instance.license.id}")

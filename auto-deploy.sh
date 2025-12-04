@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 SERVER_USER="django"
-SERVER_IP="139.59.92.226"
+SERVER_IP="143.110.252.201"
 SERVER_PATH="/home/django/license-manager"
 BRANCH="feature/V4.0"
 PASSWORD="admin"

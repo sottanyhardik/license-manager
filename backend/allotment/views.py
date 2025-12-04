@@ -180,6 +180,9 @@ def custom_get_queryset_with_defaults(self):
     elif is_boe_param in ['true', 'True', '1']:
         # Explicitly filter for is_boe=True
         qs = qs.filter(is_boe=True)
+    elif is_boe_param.lower() == 'all':
+        # Show all records - no filtering by is_boe
+        pass
     elif 'is_boe' not in params:
         # Default: Not BOE (only if not specified)
         qs = qs.filter(is_boe=False)
@@ -188,7 +191,9 @@ def custom_get_queryset_with_defaults(self):
     if 'type' not in params:
         qs = qs.filter(type='AT')  # Default: Allotment type
 
-    if 'is_allotted' not in params:
+    # Handle is_allotted filter - skip if "all"
+    is_allotted_param = params.get('is_allotted', '')
+    if is_allotted_param.lower() != 'all' and 'is_allotted' not in params:
         qs = qs.filter(is_allotted=True)  # Default: Allotted
 
     return qs

@@ -243,6 +243,10 @@ class MasterViewSet(viewsets.ModelViewSet):
                         # Exact match (with boolean conversion)
                         value = params.get(field_name)
                         if value is not None and value != "":
+                            # Skip filtering if value is "all" (show all records)
+                            if isinstance(value, str) and value.lower() == "all":
+                                continue
+
                             # Convert string boolean values to actual boolean
                             if isinstance(value, str):
                                 if value.lower() in ("true", "1", "yes"):

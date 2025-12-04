@@ -82,11 +82,11 @@ def all_queryset(query_dict, and_filter=None, or_filters=None, exclude_or_filter
         object.save()
     if maximum_qty:
         query_set = query_set.filter(
-            Q(available_quantity__gte=minimun_qty) & Q(available_value__gte=minimun_value) & Q(is_restrict=False) & Q(
+            Q(available_quantity__gte=minimun_qty) & Q(available_value__gte=minimun_value) & Q(is_restricted=False) & Q(
                 available_quantity__lte=maximum_qty))
     else:
         query_set = query_set.filter(
-            Q(available_quantity__gte=minimun_qty) & Q(available_value__gte=minimun_value) & Q(is_restrict=False))
+            Q(available_quantity__gte=minimun_qty) & Q(available_value__gte=minimun_value) & Q(is_restricted=False))
     return query_set.distinct()
 
 

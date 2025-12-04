@@ -11,7 +11,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from backend.scripts.parse_ledger import parse_license_data, create_object
+from scripts.parse_ledger import parse_license_data, create_object
 
 
 @method_decorator(csrf_exempt, name='dispatch')

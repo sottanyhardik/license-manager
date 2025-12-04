@@ -80,10 +80,13 @@ export default function AsyncSelectField({
             // For multi-select, val should be an array of IDs
             let ids = Array.isArray(val) ? val : [val];
 
-            // Handle comma-separated string values
+            // Handle comma-separated string values for backward compatibility
             if (ids.length === 1 && typeof ids[0] === 'string' && ids[0].includes(',')) {
                 ids = ids[0].split(',').map(id => id.trim()).filter(id => id);
             }
+
+            // Filter out empty/null values
+            ids = ids.filter(id => id !== null && id !== undefined && id !== '');
 
             const options = [];
 
@@ -131,8 +134,8 @@ export default function AsyncSelectField({
         setSelectedOption(selected);
 
         if (isMulti) {
-            // Return comma-separated string of values for filter compatibility
-            const values = selected ? selected.map(opt => opt.value).join(',') : '';
+            // Return array of values for API compatibility
+            const values = selected ? selected.map(opt => opt.value) : [];
             onChange(values);
         } else {
             // Return single value

@@ -536,7 +536,7 @@ export default function ItemPivotReport() {
                     )}
 
                     {/* No data message after loading */}
-                    {!loading && activeNormTab && reportData?.licenses_by_norm_notification && (!reportData.licenses_by_norm_notification[activeNormTab] || Object.keys(reportData.licenses_by_norm_notification[activeNormTab] || {}).length === 0) && (
+                    {!loading && activeNormTab && reportData?.licenses_by_norm_notification && (!reportData?.licenses_by_norm_notification?.[activeNormTab] || Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length === 0) && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
                                 <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
@@ -547,10 +547,10 @@ export default function ItemPivotReport() {
                     )}
 
                     {/* Show report data */}
-                    {!loading && activeNormTab && reportData?.licenses_by_norm_notification?.[activeNormTab] && Object.keys(reportData.licenses_by_norm_notification[activeNormTab]).length > 0 && (
+                    {!loading && activeNormTab && reportData?.licenses_by_norm_notification?.[activeNormTab] && Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length > 0 && (
                         <div>
                             {/* Notifications within active norm */}
-                            {Object.entries(reportData.licenses_by_norm_notification[activeNormTab]).sort().map(([notification, licenses]) => (
+                            {Object.entries(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).sort().map(([notification, licenses]) => (
                                 <div key={`${activeNormTab}-${notification}`} className="mb-4">
                                     <div className="card shadow-sm border-0">
                                         <div
@@ -1040,7 +1040,7 @@ export default function ItemPivotReport() {
 
                             {/* Notes and Conditions Section */}
                             {activeNormTab && reportData?.norm_notes_conditions?.[activeNormTab] && (
-                                reportData.norm_notes_conditions[activeNormTab].notes?.length > 0 || reportData.norm_notes_conditions[activeNormTab].conditions?.length > 0
+                                reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 || reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0
                             ) && (
                                 <div className="card shadow-sm border-0 mb-4">
                                     <div className="card-header bg-light">
@@ -1052,14 +1052,14 @@ export default function ItemPivotReport() {
                                     <div className="card-body">
                                         <div className="row">
                                             {/* Notes Section */}
-                                            {reportData.norm_notes_conditions[activeNormTab].notes?.length > 0 && (
+                                            {reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 && (
                                                 <div className="col-md-6 mb-3 mb-md-0">
                                                     <h6 className="text-primary mb-3">
                                                         <i className="bi bi-sticky-fill me-2"></i>
                                                         Notes
                                                     </h6>
                                                     <div className="list-group">
-                                                        {reportData.norm_notes_conditions[activeNormTab].notes
+                                                        {reportData?.norm_notes_conditions?.[activeNormTab]?.notes
                                                             .sort((a, b) => a.display_order - b.display_order)
                                                             .map((note, index) => (
                                                                 <div key={index} className="list-group-item border-start border-primary border-3">
@@ -1076,14 +1076,14 @@ export default function ItemPivotReport() {
                                             )}
 
                                             {/* Conditions Section */}
-                                            {reportData.norm_notes_conditions[activeNormTab].conditions?.length > 0 && (
+                                            {reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0 && (
                                                 <div className="col-md-6">
                                                     <h6 className="text-warning mb-3">
                                                         <i className="bi bi-exclamation-triangle-fill me-2"></i>
                                                         Conditions
                                                     </h6>
                                                     <div className="list-group">
-                                                        {reportData.norm_notes_conditions[activeNormTab].conditions
+                                                        {reportData?.norm_notes_conditions?.[activeNormTab]?.conditions
                                                             .sort((a, b) => a.display_order - b.display_order)
                                                             .map((condition, index) => (
                                                                 <div key={index} className="list-group-item border-start border-warning border-3">

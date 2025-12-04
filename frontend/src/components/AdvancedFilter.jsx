@@ -89,7 +89,7 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
             });
 
             onFilterChange(params);
-        }, 500); // Reduced from 800ms to 500ms for better responsiveness
+        }, 800); // Increased to 800ms to allow users to finish typing dates
 
         return () => clearTimeout(timeoutId);
     }, [searchTerm, filterValues, onFilterChange]);

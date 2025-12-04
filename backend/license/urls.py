@@ -10,6 +10,7 @@ from license.views.inventory_balance_viewset import InventoryBalanceViewSet
 from license.views.license_items import LicenseItemViewSet
 from license.views.dashboard import DashboardDataView
 from license.views.ledger_csv_upload import LedgerCSVUploadView
+from license.views.ledger_upload import LedgerUploadView
 from license.views_actions import LicenseActionViewSet
 
 router = routers.DefaultRouter()
@@ -25,8 +26,9 @@ urlpatterns = [
     path("", include(router.urls)),
     # Dashboard unified endpoint
     path("dashboard/", DashboardDataView.as_view(), name="dashboard"),
-    # CSV Upload endpoint
+    # Ledger Upload endpoints
     path("ledger-csv-upload/", LedgerCSVUploadView.as_view(), name="ledger-csv-upload"),
+    path("upload-ledger/", LedgerUploadView.as_view(), name="upload-ledger"),
     # Legacy endpoints for backward compatibility
     path("reports/inventory-balance/", InventoryBalanceReportView.as_view(), name="inventory-balance-report"),
     path("license/reports/expiring-licenses/", ExpiringLicensesReportView.as_view(), name="expiring-licenses-report"),

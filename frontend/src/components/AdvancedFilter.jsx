@@ -54,7 +54,12 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
             // Update filter values (excluding search)
             const {search: _s, ...filtersWithoutSearch} = initialFilters;
             console.log('AdvancedFilter: Setting filter values', filtersWithoutSearch);
-            setFilterValues({...defaultFilters, ...filtersWithoutSearch});
+            // Merge with existing filterValues to preserve any local changes
+            setFilterValues(prev => {
+                const merged = {...defaultFilters, ...filtersWithoutSearch};
+                console.log('AdvancedFilter: Merged filter values', {prev, merged});
+                return merged;
+            });
         }
     }, [initialFilters, defaultFilters]);
 

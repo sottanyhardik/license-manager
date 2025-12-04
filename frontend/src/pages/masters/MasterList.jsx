@@ -228,9 +228,26 @@ export default function MasterList() {
 
     const handleFilterChange = useCallback((filters) => {
         console.log('MasterList: handleFilterChange called with filters', filters);
-        setFilterParams(filters);
+
+        // Convert Django-style date filters back to UI format for state persistence
+        // This ensures date values are preserved when passed back as initialFilters
+        const convertedFilters = {};
+        Object.entries(filters).forEach(([key, value]) => {
+            if (key.endsWith('__gte')) {
+                const baseField = key.replace('__gte', '');
+                convertedFilters[`${baseField}_from`] = value;
+            } else if (key.endsWith('__lte')) {
+                const baseField = key.replace('__lte', '');
+                convertedFilters[`${baseField}_to`] = value;
+            } else {
+                convertedFilters[key] = value;
+            }
+        });
+
+        console.log('MasterList: Converted filters for state', convertedFilters);
+        setFilterParams(convertedFilters);
         setCurrentPage(1);
-        fetchData(1, pageSize, filters);
+        fetchData(1, pageSize, filters); // Send original format to API
     }, [fetchData, pageSize]);
 
     const handlePageChange = (page) => {

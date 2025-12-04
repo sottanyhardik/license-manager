@@ -78,7 +78,7 @@ export default function ItemPivotReport() {
 
         setLoading(true);
         try {
-            let url = `license/reports/item-pivot/?format=json&days=30&sion_norm=${normClass}`;
+            let url = `reports/item-pivot/?format=json&days=30&sion_norm=${normClass}`;
 
             if (selectedCompanies.length > 0) {
                 url += `&company_ids=${selectedCompanies.join(',')}`;
@@ -105,7 +105,7 @@ export default function ItemPivotReport() {
     const handleExport = async () => {
         setDownloading(true);
         try {
-            let url = `license/reports/item-pivot/?format=excel&days=30`;
+            let url = `reports/item-pivot/?format=excel&days=30`;
 
             if (activeNormTab) {
                 url += `&sion_norm=${activeNormTab}`;

@@ -52,6 +52,7 @@ class MasterViewSet(viewsets.ModelViewSet):
         - Exposes 'nested_field_defs' and 'field_meta' in list() and OPTIONS metadata
     """
 
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [permissions.AllowAny]
     pagination_class = StandardPagination

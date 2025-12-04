@@ -220,11 +220,17 @@ class MasterViewSet(viewsets.ModelViewSet):
                             q_objects.append(Q(**{f"{field_name}__icontains": value}))
 
                     elif filter_type == "date_range":
-                        # Date range filter
+                        # Date range filter (supports both regular and array format)
                         processed_fields.add(f"{field_name}_from")
                         processed_fields.add(f"{field_name}_to")
-                        date_from = params.get(f"{field_name}_from")
-                        date_to = params.get(f"{field_name}_to")
+                        # Check both regular and array format for date parameters
+                        date_from = params.get(f"{field_name}_from") or (params.getlist(f"{field_name}_from[]") or [None])[0]
+                        date_to = params.get(f"{field_name}_to") or (params.getlist(f"{field_name}_to[]") or [None])[0]
+                        # Also check for Django format (__gte, __lte)
+                        if not date_from:
+                            date_from = params.get(f"{field_name}__gte")
+                        if not date_to:
+                            date_to = params.get(f"{field_name}__lte")
                         if date_from:
                             q_objects.append(Q(**{f"{field_name}__gte": date_from}))
                         if date_to:
@@ -271,9 +277,14 @@ class MasterViewSet(viewsets.ModelViewSet):
                                 q_objects.append(Q(**{field_name: value}))
 
                     elif filter_type == "in":
-                        # IN filter (comma-separated values)
+                        # IN filter (comma-separated values or array format)
                         value = params.get(field_name)
-                        if value:
+                        array_values = params.getlist(f"{field_name}[]")  # Handle array format
+
+                        if array_values:
+                            # Array format from frontend
+                            q_objects.append(Q(**{f"{field_name}__in": array_values}))
+                        elif value:
                             values = [v.strip() for v in value.split(",")]
                             q_objects.append(Q(**{f"{field_name}__in": values}))
 
@@ -296,9 +307,14 @@ class MasterViewSet(viewsets.ModelViewSet):
                                 q_objects.append(Q(**{field_name: value}))
 
                     elif filter_type == "choice":
-                        # Choice field filter - supports multi-select (comma-separated values)
+                        # Choice field filter - supports multi-select (comma-separated values or array format)
                         value = params.get(field_name)
-                        if value:
+                        array_values = params.getlist(f"{field_name}[]")  # Handle array format
+
+                        if array_values:
+                            # Array format from frontend
+                            q_objects.append(Q(**{f"{field_name}__in": array_values}))
+                        elif value:
                             # Check if value contains comma (multi-select)
                             if ',' in str(value):
                                 values = [v.strip() for v in str(value).split(",") if v.strip()]

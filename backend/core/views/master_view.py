@@ -364,12 +364,12 @@ class MasterViewSet(viewsets.ModelViewSet):
                                 # Skip if filter fails
                                 pass
 
-                # Apply all Q objects with OR logic
+                # Apply all Q objects with AND logic (each filter must match)
                 if q_objects:
                     from functools import reduce
                     import operator
-                    # Combine all Q objects with OR
-                    combined_q = reduce(operator.or_, q_objects)
+                    # Combine all Q objects with AND
+                    combined_q = reduce(operator.and_, q_objects)
                     qs = qs.filter(combined_q)
 
                 return qs

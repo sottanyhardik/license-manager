@@ -39,6 +39,10 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
 
         // Only update if initialFilters actually changed (not just a re-render)
         if (JSON.stringify(prevInitialFilters.current) !== JSON.stringify(initialFilters)) {
+            console.log('AdvancedFilter: initialFilters changed', {
+                prev: prevInitialFilters.current,
+                new: initialFilters
+            });
             prevInitialFilters.current = initialFilters;
             skipNextAutoApply.current = true; // Skip auto-apply since parent is updating
 
@@ -49,6 +53,7 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
 
             // Update filter values (excluding search)
             const {search: _s, ...filtersWithoutSearch} = initialFilters;
+            console.log('AdvancedFilter: Setting filter values', filtersWithoutSearch);
             setFilterValues({...defaultFilters, ...filtersWithoutSearch});
         }
     }, [initialFilters, defaultFilters]);

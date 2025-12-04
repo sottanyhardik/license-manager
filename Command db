@@ -1,0 +1,1 @@
+cd /Users/hardiksottany/PycharmProjects/license-manager/backend && python manage.py migrate accounts --fake

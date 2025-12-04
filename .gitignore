@@ -1,0 +1,38 @@
+# Server-specific setup scripts
+restore-db.sh
+setup-labdhi-server.sh
+setup-ssl-labdhi.sh
+
+# Vite cache
+frontend/.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Django
+*.log
+db.sqlite3
+media/
+staticfiles/
+
+# Node
+node_modules/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

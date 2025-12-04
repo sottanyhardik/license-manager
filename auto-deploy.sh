@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Automated Deployment Script for License Manager
-# Deploys to django@143.110.252.201:/home/django/license-manager
+# Deploys to multiple servers sequentially
 # Usage: ./auto-deploy.sh
 # Password: admin (hardcoded)
 
@@ -16,9 +16,9 @@ NC='\033[0m' # No Color
 
 # Configuration
 SERVER_USER="django"
-SERVER_IP="143.110.252.201"
+SERVERS=("143.110.252.201" "139.59.92.226")
 SERVER_PATH="/home/django/license-manager"
-BRANCH="feature/V4.0"
+BRANCH="master"
 PASSWORD="admin"
 
 print_header() {
@@ -39,21 +39,25 @@ print_info() {
     echo -e "${BLUE}→ $1${NC}"
 }
 
-print_header "🚀 Starting Deployment to Production"
+# Function to deploy to a single server
+deploy_to_server() {
+    local SERVER_IP=$1
 
-# Check if sshpass is installed, if not use expect
-if command -v sshpass &> /dev/null; then
-    print_info "Using sshpass for authentication"
-    SSH_CMD="sshpass -p '$PASSWORD' ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP"
-    SUDO_CMD="echo '$PASSWORD' | sudo -S"
-else
-    print_info "Using SSH (password will be prompted if needed)"
-    SSH_CMD="ssh $SERVER_USER@$SERVER_IP"
-    SUDO_CMD="sudo"
-fi
+    print_header "🚀 Starting Deployment to $SERVER_IP"
 
-# Execute deployment via SSH
-$SSH_CMD bash << ENDSSH
+    # Check if sshpass is installed, if not use expect
+    if command -v sshpass &> /dev/null; then
+        print_info "Using sshpass for authentication"
+        SSH_CMD="sshpass -p '$PASSWORD' ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP"
+        SUDO_CMD="echo '$PASSWORD' | sudo -S"
+    else
+        print_info "Using SSH (password will be prompted if needed)"
+        SSH_CMD="ssh $SERVER_USER@$SERVER_IP"
+        SUDO_CMD="sudo"
+    fi
+
+    # Execute deployment via SSH
+    $SSH_CMD bash << ENDSSH
 set -e
 
 # Colors
@@ -148,28 +152,65 @@ echo -e "\${GREEN}🎉 Deployment completed successfully!\${NC}"
 echo -e "\${GREEN}================================================\${NC}"
 ENDSSH
 
-# Check if SSH command was successful
-if [ $? -eq 0 ]; then
-    print_header "🎉 Local Deployment Verification"
-    print_success "Deployment completed successfully!"
-    print_info "Testing production API..."
+    # Check if SSH command was successful
+    if [ $? -eq 0 ]; then
+        print_header "🎉 Deployment Verification for $SERVER_IP"
+        print_success "Deployment to $SERVER_IP completed successfully!"
+        print_info "Testing API at http://$SERVER_IP..."
 
-    # Test the production endpoint
-    if curl -s -m 10 'https://labdhi.duckdns.org/api/licenses/?page_size=1' > /dev/null 2>&1; then
-        print_success "Production API is responding correctly"
+        # Test the server endpoint
+        if curl -s -m 10 "http://$SERVER_IP/api/licenses/?page_size=1" > /dev/null 2>&1; then
+            print_success "API at $SERVER_IP is responding correctly"
 
-        # Get license count
-        LICENSE_COUNT=$(curl -s -m 10 'https://labdhi.duckdns.org/api/licenses/?page_size=1' | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('count', 0))" 2>/dev/null || echo "N/A")
-        print_info "Total licenses in production: $LICENSE_COUNT"
+            # Get license count
+            LICENSE_COUNT=$(curl -s -m 10 "http://$SERVER_IP/api/licenses/?page_size=1" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('count', 0))" 2>/dev/null || echo "N/A")
+            print_info "Total licenses on $SERVER_IP: $LICENSE_COUNT"
+        else
+            print_error "API at $SERVER_IP not responding (might still be starting up)"
+        fi
+
+        echo ""
+        print_info "View logs: ssh $SERVER_USER@$SERVER_IP 'tail -f /home/django/license-manager/logs/*.log'"
+        print_info "Nginx error log: ssh $SERVER_USER@$SERVER_IP 'sudo tail -f /var/log/nginx/error.log'"
+        return 0
     else
-        print_error "Production API not responding (might still be starting up)"
+        print_header "❌ Deployment to $SERVER_IP Failed"
+        print_error "Please check the error messages above."
+        return 1
     fi
+}
 
-    echo ""
-    print_info "View logs: ssh $SERVER_USER@$SERVER_IP 'tail -f /home/django/license-manager/logs/*.log'"
-    print_info "Nginx error log: ssh $SERVER_USER@$SERVER_IP 'sudo tail -f /var/log/nginx/error.log'"
-else
-    print_header "❌ Deployment Failed"
-    print_error "Please check the error messages above and try again."
+# Main deployment loop
+print_header "🚀 Starting Multi-Server Deployment"
+print_info "Deploying to ${#SERVERS[@]} servers: ${SERVERS[*]}"
+echo ""
+
+FAILED_SERVERS=()
+SUCCESS_COUNT=0
+
+for SERVER_IP in "${SERVERS[@]}"; do
+    if deploy_to_server "$SERVER_IP"; then
+        ((SUCCESS_COUNT++))
+        echo ""
+    else
+        FAILED_SERVERS+=("$SERVER_IP")
+        echo ""
+    fi
+done
+
+# Final summary
+print_header "📊 Deployment Summary"
+print_success "Successfully deployed to $SUCCESS_COUNT/${#SERVERS[@]} servers"
+
+if [ ${#FAILED_SERVERS[@]} -gt 0 ]; then
+    print_error "Failed servers: ${FAILED_SERVERS[*]}"
     exit 1
+else
+    print_success "All servers deployed successfully!"
+    echo ""
+    print_info "Application URLs:"
+    print_info "   → http://143.110.252.201"
+    print_info "   → http://139.59.92.226"
+    print_info "   → https://labdhi.duckdns.org"
+    exit 0
 fi

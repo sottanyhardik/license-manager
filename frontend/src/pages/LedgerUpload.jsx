@@ -23,23 +23,43 @@ const LedgerUpload = () => {
     e.stopPropagation();
     setDragActive(false);
 
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
     const droppedFiles = Array.from(e.dataTransfer.files).filter(
       file => file.name.endsWith('.csv')
     );
 
-    if (droppedFiles.length > 0) {
-      setFiles(droppedFiles);
-      setError(null);
+    const validFiles = droppedFiles.filter(file => file.size <= MAX_FILE_SIZE);
+    const oversizedFiles = droppedFiles.filter(file => file.size > MAX_FILE_SIZE);
+
+    if (oversizedFiles.length > 0) {
+      setError(`${oversizedFiles.length} file(s) exceed the 50MB size limit and were not added`);
+    }
+
+    if (validFiles.length > 0) {
+      setFiles(validFiles);
+      if (!oversizedFiles.length) {
+        setError(null);
+      }
       setResults([]);
-    } else {
+    } else if (!oversizedFiles.length) {
       setError('Please drop CSV files only');
     }
   };
 
   const handleFileChange = (e) => {
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
     const selectedFiles = Array.from(e.target.files);
-    setFiles(selectedFiles);
-    setError(null);
+
+    const validFiles = selectedFiles.filter(file => file.size <= MAX_FILE_SIZE);
+    const oversizedFiles = selectedFiles.filter(file => file.size > MAX_FILE_SIZE);
+
+    if (oversizedFiles.length > 0) {
+      setError(`${oversizedFiles.length} file(s) exceed the 50MB size limit and were not added`);
+    } else {
+      setError(null);
+    }
+
+    setFiles(validFiles);
     setResults([]);
   };
 
@@ -298,19 +318,14 @@ const LedgerUpload = () => {
                             {result.licenses && result.licenses.length > 0 && (
                               <div>
                                 <small className="d-block mb-1">
-                                  <strong>License Numbers:</strong>
+                                  <strong>License Numbers ({result.licenses.length}):</strong>
                                 </small>
                                 <div className="d-flex flex-wrap gap-1">
-                                  {result.licenses.slice(0, 8).map((license, idx) => (
+                                  {result.licenses.map((license, idx) => (
                                     <span key={idx} className="badge bg-success">
                                       {license}
                                     </span>
                                   ))}
-                                  {result.licenses.length > 8 && (
-                                    <span className="badge bg-secondary">
-                                      +{result.licenses.length - 8} more
-                                    </span>
-                                  )}
                                 </div>
                               </div>
                             )}
@@ -383,7 +398,8 @@ const LedgerUpload = () => {
                   <li className="mb-1">License numbers will be zero-padded to 10 digits</li>
                   <li className="mb-1">Date format: DD/MM/YYYY</li>
                   <li className="mb-1">Credit and Debit transactions are automatically processed</li>
-                  <li>Multiple files can be uploaded at once</li>
+                  <li className="mb-1">Multiple files can be uploaded at once</li>
+                  <li className="mb-1"><strong>Maximum file size: 50MB per file</strong></li>
                 </ul>
               </div>
             </div>

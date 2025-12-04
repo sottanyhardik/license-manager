@@ -54,6 +54,9 @@ class LedgerUploadView(APIView):
         all_results = []
         total_licenses = []
 
+        # Max file size: 50MB
+        MAX_FILE_SIZE = 50 * 1024 * 1024
+
         for file_sequence_number, uploaded_file in enumerate(files, start=1):
             try:
                 # Validate file type
@@ -65,8 +68,22 @@ class LedgerUploadView(APIView):
                     })
                     continue
 
+                # Validate file size
+                if uploaded_file.size > MAX_FILE_SIZE:
+                    all_results.append({
+                        'file': uploaded_file.name,
+                        'success': False,
+                        'error': f'File size exceeds maximum limit of {MAX_FILE_SIZE // (1024 * 1024)}MB'
+                    })
+                    continue
+
+                # Read file in chunks for large files
+                file_content = b''
+                for chunk in uploaded_file.chunks():
+                    file_content += chunk
+
                 # Decode the uploaded file and wrap it for csv.reader
-                decoded_file = uploaded_file.read().decode('utf-8-sig')
+                decoded_file = file_content.decode('utf-8-sig')
                 decoded_file = decoded_file.replace(': ', '')
                 decoded_file = decoded_file.replace(' ', '')
                 decoded_file = decoded_file.replace(':\xa0', '')

@@ -145,6 +145,7 @@ def _prepare_allotment_data(allotment, company_name, address_line1, address_line
             'company_address_2': final_address2,
             'today': datetime.now().date().strftime("%d/%m/%Y"),
             'license': license.license_number,
+            'serial_number': license_item.serial_number,
             'license_date': license.license_date.strftime("%d/%m/%Y") if license.license_date else '',
             'file_number': license.file_number or '',
             'quantity': allotment_item.qty,
@@ -169,7 +170,8 @@ def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits
     final_address2 = address_line2 if address_line2 else ''
 
     for item in boe.item_details.all():
-        license_obj = item.sr_number.license if item.sr_number else None
+        license_item = item.sr_number
+        license_obj = license_item.license if license_item else None
         if not license_obj:
             continue
 
@@ -184,6 +186,7 @@ def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits
             'company_address_2': final_address2,
             'today': datetime.now().date().strftime("%d/%m/%Y"),
             'license': license_obj.license_number,
+            'serial_number': license_item.serial_number if license_item else '',
             'license_date': license_obj.license_date.strftime("%d/%m/%Y") if license_obj.license_date else '',
             'file_number': license_obj.file_number or '',
             'quantity': item.qty,

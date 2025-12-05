@@ -98,13 +98,30 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
             doc = DocxTemplate(tl_path)
             doc.render(context)
 
+            # Build filename: license_number + serial_number + purchase_status + BOE_number (if exists)
+            license_number = context.get('license', 'LICENSE').replace('/', '_')
+            serial_number = context.get('serial_number', idx)
+            purchase_status = context.get('status', '')
+            boe_info = context.get('boe', '')
+
+            # Create descriptive filename
+            filename_parts = [license_number, str(serial_number)]
+            if purchase_status:
+                filename_parts.append(purchase_status)
+            if boe_info and 'BE NUMBER:' in boe_info:
+                # Extract BE number from "BE NUMBER: XXXXX"
+                be_num = boe_info.replace('BE NUMBER:', '').strip().replace('/', '_')
+                filename_parts.append(be_num)
+
+            base_filename = '_'.join(filename_parts)
+
             # Save as DOCX first
-            docx_filename = f"{transfer_letter_name}_{idx}.docx"
+            docx_filename = f"{base_filename}.docx"
             docx_path = os.path.join(path, docx_filename)
             doc.save(docx_path)
 
             # Convert DOCX to PDF
-            pdf_filename = f"{transfer_letter_name}_{idx}.pdf"
+            pdf_filename = f"{base_filename}.pdf"
             pdf_path = os.path.join(path, pdf_filename)
 
             if convert_docx_to_pdf(docx_path, pdf_path):

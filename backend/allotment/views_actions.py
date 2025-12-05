@@ -230,39 +230,46 @@ class AllotmentActionViewSet(ViewSet):
                     continue
 
                 # Check if available CIF FC is sufficient
-                # CRITICAL: For restricted items, use available_value (maintained by update_restriction_balances)
-                # For non-restricted items OR exception licenses (098/2009, Conversion), use calculated balance_cif_fc
+                # PRIORITY 1: Check is_restricted flag
+                # If is_restricted=False (not restricted), always use license-level balance (balance_cif_fc)
+                # If is_restricted=True AND has restriction percentage, use restricted balance logic
 
                 # Get calculated balance
                 balance_cif_fc = Decimal(str(license_item.balance_cif_fc or 0))
 
-                # Check if license is exception (098/2009 or Conversion)
-                is_exception = (
-                    license_item.license and (
-                        license_item.license.notification_number == "098/2009" or
-                        license_item.license.purchase_status == "CO"
-                    )
-                )
-
-                # Check if item has restrictions
-                has_restriction = license_item.items.filter(
-                    sion_norm_class__isnull=False,
-                    restriction_percentage__gt=0
-                ).exists()
-
-                # Determine which value to use
-                if has_restriction and not is_exception:
-                    # Restricted item, non-exception license: use stored available_value
-                    stored_available = Decimal(str(license_item.available_value or 0))
-                    # If available_value is not set (0 or NULL), fall back to balance_cif_fc
-                    if stored_available > 0:
-                        available_cif = stored_available
-                    else:
-                        # Not yet processed by update_restriction_balances, use calculated
-                        available_cif = balance_cif_fc
-                else:
-                    # Non-restricted item OR exception license: use calculated balance_cif_fc
+                # PRIORITY 1: Check is_restricted flag
+                if not license_item.is_restricted:
+                    # Non-restricted item: always use balance_cif_fc from property
                     available_cif = balance_cif_fc
+                else:
+                    # is_restricted=True: check if item has restriction percentage
+                    # Check if license is exception (098/2009 or Conversion)
+                    is_exception = (
+                        license_item.license and (
+                            license_item.license.notification_number == "098/2009" or
+                            license_item.license.purchase_status == "CO"
+                        )
+                    )
+
+                    # Check if item has restrictions
+                    has_restriction = license_item.items.filter(
+                        sion_norm_class__isnull=False,
+                        restriction_percentage__gt=0
+                    ).exists()
+
+                    # Determine which value to use
+                    if has_restriction and not is_exception:
+                        # Restricted item, non-exception license: use stored available_value
+                        stored_available = Decimal(str(license_item.available_value or 0))
+                        # If available_value is not set (0 or NULL), fall back to balance_cif_fc
+                        if stored_available > 0:
+                            available_cif = stored_available
+                        else:
+                            # Not yet processed by update_restriction_balances, use calculated
+                            available_cif = balance_cif_fc
+                    else:
+                        # Exception license or no restriction percentage: use calculated balance_cif_fc
+                        available_cif = balance_cif_fc
 
                 # CRITICAL: available_cif can NEVER exceed balance_cif_fc
                 if available_cif > balance_cif_fc:

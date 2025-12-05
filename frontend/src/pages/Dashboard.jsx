@@ -29,22 +29,22 @@ export default function Dashboard() {
             const response = await api.get("/dashboard/");
             const data = response.data;
 
-            // Set license stats
+            // Set license stats with safe defaults
             setStats({
-                licenses: data.license_stats,
-                allotments: data.allotment_stats,
-                boe: data.boe_stats,
+                licenses: data?.license_stats || {total: 0, active: 0, expired: 0, null_dfia: 0, expiring_soon: 0},
+                allotments: data?.allotment_stats || {total: 0, recent: []},
+                boe: data?.boe_stats || {total: 0, pending_invoices: 0, recent: []},
                 trade: {
-                    imports: data.boe_stats.total,
-                    exports: data.allotment_stats.total
+                    imports: data?.boe_stats?.total || 0,
+                    exports: data?.allotment_stats?.total || 0
                 }
             });
 
             // Set expiring licenses
-            setExpiringLicenses(data.expiring_licenses || []);
+            setExpiringLicenses(data?.expiring_licenses || []);
 
             // Set BOE monthly trend
-            setBoeMonthlyData(data.boe_monthly_trend || []);
+            setBoeMonthlyData(data?.boe_monthly_trend || []);
 
         } catch (error) {
             console.error("Error fetching dashboard data:", error);

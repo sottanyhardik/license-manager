@@ -351,6 +351,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     # Add PDF directly
                     merger.append(file_path)
                     logger.info(f"Added PDF: {file_path}")
+                elif file_ext in ['.doc', '.docx']:
+                    # Skip DOCX/DOC files - don't convert them
+                    logger.info(f"Skipping DOCX/DOC file: {file_path}")
+                    continue
                 elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
                     # Convert image to PDF
                     img = Image.open(file_path)

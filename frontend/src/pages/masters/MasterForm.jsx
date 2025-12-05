@@ -484,8 +484,10 @@ export default function MasterForm() {
                         Object.entries(value).forEach(([subKey, subValue]) => {
                             appendToFormData(subKey, subValue, fullKey);
                         });
-                    } else if (value !== null && value !== undefined && value !== '') {
-                        formDataObj.append(fullKey, value);
+                    } else if (value !== null && value !== undefined) {
+                        // Allow empty strings for nested fields (important for nested arrays)
+                        // Only skip truly null/undefined values
+                        formDataObj.append(fullKey, value === '' ? '' : value);
                     }
                 };
 

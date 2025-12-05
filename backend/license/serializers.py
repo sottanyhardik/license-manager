@@ -358,19 +358,23 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
                         doc_dict[index][field_name] = data.get(key)
 
-            # Convert dict to list
+            # Convert dict to list and create regular dict with parsed data
             if doc_dict:
                 license_documents = [doc_dict[i] for i in sorted(doc_dict.keys())]
-                # Create mutable copy of data
-                data = data.copy()
-                data.setlist('license_documents', [])  # Clear old format
                 logger.info("Parsed %d documents from FormData", len(license_documents))
                 for i, doc in enumerate(license_documents):
                     logger.info("Document %d: type=%s, file=%s", i, doc.get('type'), doc.get('file'))
 
-                # Store parsed documents in data
-                data._mutable = True
-                data['license_documents'] = license_documents
+                # Convert MultiValueDict to regular dict for processing
+                parsed_data = {}
+                for key in data.keys():
+                    # Skip the old FormData format keys
+                    if not key.startswith('license_documents['):
+                        parsed_data[key] = data.get(key)
+
+                # Add parsed license_documents as list
+                parsed_data['license_documents'] = license_documents
+                data = parsed_data
 
         return super().to_internal_value(data)
 
@@ -434,6 +438,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 rep['export_license'] = rep.pop('export_license_read')
             if 'import_license_read' in rep:
                 rep['import_license'] = rep.pop('import_license_read')
+            if 'license_documents_read' in rep:
+                rep['license_documents'] = rep.pop('license_documents_read')
 
         # Replace the stale balance_cif database field with fresh calculated value
         if 'get_balance_cif' in rep:
@@ -807,29 +813,57 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 existing_items = {item.id: item for item in instance.license_documents.all()}
                 processed_ids = set()
 
-                # Update or create documents
-                for d in docs:
+                # Process documents from payload
+                for idx, d in enumerate(docs):
                     item_id = d.get('id')
+                    # Convert item_id to int if it's a string
+                    if item_id:
+                        try:
+                            item_id = int(item_id)
+                        except (ValueError, TypeError):
+                            item_id = None
+
+                    logger.info(f"Processing document {idx}: id={item_id}, type={d.get('type')}, file type={type(d.get('file'))}, file={d.get('file')}")
 
                     if item_id and item_id in existing_items:
-                        # Update existing item by ID
+                        # Keep existing document - mark as processed so it won't be deleted
                         obj = existing_items[item_id]
-                        for key, value in d.items():
-                            if key not in ('id', 'license'):
-                                setattr(obj, key, value)
+                        logger.info(f"  -> Updating existing document ID={item_id}")
+
+                        # Update type if changed
+                        if 'type' in d and d['type']:
+                            obj.type = d['type']
+                            logger.info(f"  -> Updated type to {d['type']}")
+
+                        # Update file only if new File object provided
+                        if 'file' in d and d['file'] and not isinstance(d['file'], str):
+                            obj.file = d['file']
+                            logger.info(f"  -> Updated file to {d['file']}")
+
                         obj.save()
                         processed_ids.add(item_id)
                     else:
-                        # Create new item - validate required fields
-                        d.pop('id', None)  # Remove ID if present
-                        d.pop('license', None)  # Remove license field
+                        # Create new document
+                        logger.info(f"  -> Creating new document")
+                        d.pop('id', None)
+                        d.pop('license', None)
 
-                        # Only create if type and file are present
-                        if d.get('type') and d.get('file'):
+                        # Only create if type and file are present (and file is a File object, not URL string)
+                        file_obj = d.get('file')
+                        has_type = bool(d.get('type'))
+                        has_file = bool(file_obj)
+                        is_file_obj = has_file and not isinstance(file_obj, str)
+
+                        logger.info(f"  -> Validation: has_type={has_type}, has_file={has_file}, is_file_obj={is_file_obj}")
+
+                        if d.get('type') and d.get('file') and not isinstance(d.get('file'), str):
                             obj = LicenseDocumentModel.objects.create(license=instance, **d)
                             processed_ids.add(obj.id)
+                            logger.info(f"  -> Created new document with ID={obj.id}")
+                        else:
+                            logger.warning(f"  -> Skipped creating document: validation failed")
 
-                # Delete items that are no longer in the payload
+                # Delete documents that were removed from the form (not in payload)
                 for item_id, item in existing_items.items():
                     if item_id not in processed_ids:
                         item.delete()

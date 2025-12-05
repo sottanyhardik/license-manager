@@ -168,14 +168,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         """Override to log incoming request data."""
         import logging
         logger = logging.getLogger(__name__)
-        logger.info("="*50)
+        logger.info("=" * 50)
         logger.info("ViewSet.update called")
         logger.info("request.data type: %s", type(request.data))
         logger.info("request.data keys: %s", list(request.data.keys()) if hasattr(request.data, 'keys') else 'N/A')
 
         # Log license_documents from request.data
         if 'license_documents' in request.data:
-            docs = request.data.getlist('license_documents') if hasattr(request.data, 'getlist') else request.data.get('license_documents')
+            docs = request.data.getlist('license_documents') if hasattr(request.data, 'getlist') else request.data.get(
+                'license_documents')
             logger.info("license_documents in request.data: %s", docs)
         else:
             logger.info("license_documents NOT in request.data")
@@ -303,6 +304,103 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                                                           context={'request': request}).data,
             'license_documents': LicenseDocumentSerializer(license_obj.license_documents.all(), many=True).data
         })
+
+    @action(detail=True, methods=['get'], url_path='merged-documents')
+    def merged_documents(self, request, pk=None):
+        """
+        Merge all license documents (LICENSE COPY + TRANSFER LETTER) into one PDF.
+        Converts images to PDF if needed.
+        """
+        from django.http import FileResponse, HttpResponse
+        import io
+        import os
+        import logging
+
+        logger = logging.getLogger(__name__)
+        license_obj = LicenseDetailsModel.objects.get(pk=pk)
+        documents = license_obj.license_documents.all()
+
+        if not documents.exists():
+            return HttpResponse("No documents found for this license", status=404)
+
+        # Check if required libraries are installed
+        try:
+            from PyPDF2 import PdfMerger, PdfReader
+            from PIL import Image
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.utils import ImageReader
+        except ImportError as e:
+            return HttpResponse(f"Missing required library: {str(e)}. Please install PyPDF2 and Pillow.", status=500)
+
+        try:
+            merger = PdfMerger()
+
+            for doc in documents:
+                if not doc.file:
+                    continue
+
+                file_path = doc.file.path
+                file_ext = os.path.splitext(file_path)[1].lower()
+
+                if file_ext == '.pdf':
+                    # Add PDF directly
+                    merger.append(file_path)
+                    logger.info(f"Added PDF: {file_path}")
+                elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                    # Convert image to PDF
+                    img = Image.open(file_path)
+
+                    # Convert to RGB if necessary
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+
+                    # Create PDF from image using ReportLab
+                    img_buffer = io.BytesIO()
+                    img_width, img_height = img.size
+
+                    # Use A4 size for PDF
+                    pdf_canvas = canvas.Canvas(img_buffer, pagesize=A4)
+                    a4_width, a4_height = A4
+
+                    # Calculate scaling to fit image on A4 page
+                    scale = min(a4_width / img_width, a4_height / img_height)
+                    new_width = img_width * scale
+                    new_height = img_height * scale
+
+                    # Center image on page
+                    x = (a4_width - new_width) / 2
+                    y = (a4_height - new_height) / 2
+
+                    # Use ImageReader for PIL Image object
+                    img_reader = ImageReader(img)
+                    pdf_canvas.drawImage(img_reader, x, y, width=new_width, height=new_height)
+                    pdf_canvas.save()
+
+                    # Rewind buffer and create PdfReader from it
+                    img_buffer.seek(0)
+                    pdf_reader = PdfReader(img_buffer)
+                    merger.append(pdf_reader)
+                    logger.info(f"Converted and added image: {file_path}")
+
+            # Write merged PDF to buffer
+            output_buffer = io.BytesIO()
+            merger.write(output_buffer)
+            merger.close()
+            output_buffer.seek(0)
+
+            # Return merged PDF
+            response = FileResponse(
+                output_buffer,
+                content_type='application/pdf',
+                as_attachment=False,
+                filename=f'license_{license_obj.license_number}_documents.pdf'
+            )
+            return response
+
+        except Exception as e:
+            logger.error(f"Error merging documents: {str(e)}", exc_info=True)
+            return HttpResponse(f"Error merging documents: {str(e)}", status=500)
 
 
 # Add license report actions to viewset

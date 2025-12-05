@@ -45,8 +45,25 @@ _D = Decimal  # shorthand
 
 
 def license_path(instance, filename):
-    """Upload path: <license_number>/<type>.pdf"""
-    return f"{instance.license.license_number}/{instance.type}.pdf"
+    """
+    Upload path with naming convention:
+    - LICENSE COPY -> licenses/<license_number>/<license_number> Copy.ext
+    - TRANSFER LETTER -> licenses/<license_number>/<license_number> TL.ext
+    - OTHER -> licenses/<license_number>/<license_number> Other.ext
+    """
+    import os
+    license_number = instance.license.license_number
+    file_ext = os.path.splitext(filename)[1]  # Get original extension
+
+    # Map document type to suffix
+    type_suffix_map = {
+        'LICENSE COPY': 'Copy',
+        'TRANSFER LETTER': 'TL',
+        'OTHER': 'Other',
+    }
+
+    suffix = type_suffix_map.get(instance.type, instance.type)
+    return f"licenses/{license_number}/{license_number} {suffix}{file_ext}"
 
 
 # -----------------------------

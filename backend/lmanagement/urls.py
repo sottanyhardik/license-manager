@@ -14,6 +14,13 @@ urlpatterns = [
     path("api/", include("trade.urls")),  # trade in/out CRUD
     path("api/masters/", include("core.urls")),  # options/select endpoints
 
+    # Serve media files in development
+    re_path(
+        r"^media/(?P<path>.*)$",
+        serve,
+        {"document_root": settings.MEDIA_ROOT},
+    ),
+
     # Serve React assets directly
     re_path(
         r"^assets/(?P<path>.*)$",

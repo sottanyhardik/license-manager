@@ -440,28 +440,6 @@ export default function MasterForm() {
         setFieldErrors({});
 
         try {
-            // Filter license_documents during update: only send new documents with File objects
-            if (isEdit && entityName === 'licenses' && formData.license_documents) {
-                console.log('=== DEBUG: Filtering license_documents for UPDATE ===');
-                console.log('Before filter:', formData.license_documents);
-
-                // Keep only documents that have a File object (new uploads)
-                // Skip documents with string file values (existing files)
-                formData.license_documents = formData.license_documents.filter(doc => {
-                    const hasNewFile = doc.file && doc.file instanceof File;
-                    console.log('Document:', {
-                        type: doc.type,
-                        hasFile: !!doc.file,
-                        isFileObject: doc.file instanceof File,
-                        isString: typeof doc.file === 'string',
-                        keeping: hasNewFile
-                    });
-                    return hasNewFile;
-                });
-
-                console.log('After filter:', formData.license_documents);
-            }
-
             // DEBUG: Log license_documents before sending
             if (entityName === 'licenses' && formData.license_documents) {
                 console.log('=== DEBUG: license_documents before sending ===');

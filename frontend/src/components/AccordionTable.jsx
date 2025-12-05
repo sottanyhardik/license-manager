@@ -340,6 +340,16 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                 <Link to={`${basePath}/${item.id}/edit`}>
                                                     {value || "-"}
                                                 </Link>
+                                            ) : col === "license_number" ? (
+                                                <a
+                                                    href={`http://localhost:8000/api/licenses/${item.id}/merged-documents/`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-primary text-decoration-none"
+                                                    title="View merged license documents"
+                                                >
+                                                    {value || "-"}
+                                                </a>
                                             ) : (
                                                 value || "-"
                                             )}

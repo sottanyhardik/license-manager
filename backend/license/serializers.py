@@ -431,7 +431,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             # For list view, add empty arrays for nested items (fields were removed in __init__)
             rep['export_license'] = []
             rep['import_license'] = []
-            rep['license_documents'] = []
+            # For license_documents, check if any exist to show merge link in frontend
+            rep['license_documents'] = [{'id': doc.id} for doc in instance.license_documents.all()[:1]] if instance.license_documents.exists() else []
         else:
             # Detail view - rename the read-only fields back to their original names for frontend compatibility
             if 'export_license_read' in rep:

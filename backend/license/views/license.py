@@ -336,7 +336,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         try:
             merger = PdfMerger()
 
-            for doc in documents:
+            # Sort documents: TRANSFER LETTER first, then LICENSE COPY, then OTHER
+            type_order = {'TRANSFER LETTER': 0, 'LICENSE COPY': 1, 'OTHER': 2}
+            sorted_documents = sorted(documents, key=lambda doc: type_order.get(doc.type, 3))
+
+            for doc in sorted_documents:
                 if not doc.file:
                     continue
 

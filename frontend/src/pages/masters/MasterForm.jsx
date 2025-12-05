@@ -749,7 +749,7 @@ export default function MasterForm() {
                                 </div>
                             )}
 
-                            <form onSubmit={handleSubmit}>
+                            <form onSubmit={handleSubmit} encType="multipart/form-data">
                                 {/* Regular Fields - 3 columns layout */}
                                 <div className="row">
                                     {metadata.form_fields?.map((field) => {

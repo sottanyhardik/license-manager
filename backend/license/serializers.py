@@ -328,6 +328,52 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("created_by", "modified_by", "created_on", "modified_on")
 
+    def to_internal_value(self, data):
+        """
+        Override to parse FormData nested arrays.
+        DRF doesn't automatically parse license_documents[0].type format from FormData.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Parse nested arrays from FormData format (license_documents[0].type)
+        if hasattr(data, 'getlist'):
+            # It's MultiValueDict (FormData)
+            logger.info("Parsing FormData for nested arrays")
+
+            # Extract license_documents from FormData
+            doc_dict = {}
+            for key in list(data.keys()):
+                if key.startswith('license_documents['):
+                    # Extract index and field name
+                    # Format: license_documents[0].type or license_documents[0].file
+                    import re
+                    match = re.match(r'license_documents\[(\d+)\]\.(.+)', key)
+                    if match:
+                        index = int(match.group(1))
+                        field_name = match.group(2)
+
+                        if index not in doc_dict:
+                            doc_dict[index] = {}
+
+                        doc_dict[index][field_name] = data.get(key)
+
+            # Convert dict to list
+            if doc_dict:
+                license_documents = [doc_dict[i] for i in sorted(doc_dict.keys())]
+                # Create mutable copy of data
+                data = data.copy()
+                data.setlist('license_documents', [])  # Clear old format
+                logger.info("Parsed %d documents from FormData", len(license_documents))
+                for i, doc in enumerate(license_documents):
+                    logger.info("Document %d: type=%s, file=%s", i, doc.get('type'), doc.get('file'))
+
+                # Store parsed documents in data
+                data._mutable = True
+                data['license_documents'] = license_documents
+
+        return super().to_internal_value(data)
+
     def get_get_balance_cif(self, obj):
         """Return balance_cif field directly instead of computing it."""
         # Use the model field directly, not the computed property

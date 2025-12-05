@@ -623,19 +623,53 @@ export default function MasterForm() {
 
                 // Create a user-friendly error message
                 const errorMessages = [];
-                Object.entries(err.response.data).forEach(([field, errors]) => {
+
+                // Helper function to process errors recursively
+                const processErrors = (errors, fieldPath = '') => {
                     if (Array.isArray(errors)) {
-                        errors.forEach(error => {
-                            if (typeof error === 'object' && error.non_field_errors) {
-                                errorMessages.push(`${field}: ${error.non_field_errors.join(', ')}`);
-                            } else {
-                                errorMessages.push(`${field}: ${error}`);
+                        errors.forEach((error, index) => {
+                            if (typeof error === 'object' && error !== null) {
+                                // Handle nested field errors (like license_documents[0].type)
+                                if (error.non_field_errors) {
+                                    errorMessages.push(`${fieldPath}: ${error.non_field_errors.join(', ')}`);
+                                }
+                                Object.entries(error).forEach(([key, value]) => {
+                                    if (key !== 'non_field_errors') {
+                                        const nestedPath = fieldPath ? `${fieldPath}[${index}].${key}` : `${key}[${index}]`;
+                                        processErrors(value, nestedPath);
+                                    }
+                                });
+                            } else if (typeof error === 'string') {
+                                const displayPath = fieldPath || 'Form';
+                                errorMessages.push(`${displayPath}: ${error}`);
                             }
                         });
+                    } else if (typeof errors === 'string') {
+                        const displayPath = fieldPath || 'Form';
+                        errorMessages.push(`${displayPath}: ${errors}`);
+                    } else if (typeof errors === 'object' && errors !== null) {
+                        Object.entries(errors).forEach(([key, value]) => {
+                            const nestedPath = fieldPath ? `${fieldPath}.${key}` : key;
+                            processErrors(value, nestedPath);
+                        });
+                    }
+                };
+
+                // Handle top-level non_field_errors
+                if (err.response.data.non_field_errors) {
+                    errorMessages.push(...err.response.data.non_field_errors);
+                }
+
+                // Process all field errors
+                Object.entries(err.response.data).forEach(([field, errors]) => {
+                    if (field !== 'non_field_errors') {
+                        processErrors(errors, field);
                     }
                 });
 
-                const errorMsg = errorMessages.length > 0 ? errorMessages.join('\n') : "Validation errors occurred. Please check the form.";
+                const errorMsg = errorMessages.length > 0
+                    ? errorMessages.join('\n')
+                    : "Validation errors occurred. Please check the form.";
                 setError(errorMsg);
                 toast.error(errorMsg);
             } else {

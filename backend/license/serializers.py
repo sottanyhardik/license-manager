@@ -319,7 +319,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     export_license = serializers.ListField(child=serializers.DictField(), required=False, write_only=True)
     import_license = serializers.ListField(child=serializers.DictField(), required=False, write_only=True)
 
-    license_documents = LicenseDocumentSerializer(many=True, required=False)
+    # Separate read/write for license_documents to handle file uploads
+    license_documents_read = LicenseDocumentSerializer(source='license_documents', many=True, read_only=True)
+    license_documents = serializers.ListField(child=serializers.DictField(), required=False, write_only=True)
 
     class Meta:
         model = LicenseDetailsModel

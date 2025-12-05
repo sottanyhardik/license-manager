@@ -83,6 +83,12 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
         # Create output directory
         dir_name = f'{prefix}_{transfer_letter.name.replace(" ", "_")}'
         file_path = os.path.join(settings.MEDIA_ROOT, dir_name)
+
+        # Clean up old directory if it exists (always generate fresh)
+        import shutil
+        if os.path.exists(file_path):
+            shutil.rmtree(file_path)
+
         os.makedirs(file_path, exist_ok=True)
 
         # Generate transfer letters

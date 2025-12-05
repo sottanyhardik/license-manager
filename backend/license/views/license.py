@@ -43,7 +43,16 @@ license_nested_field_defs = {
     ],
     "license_documents": [
         {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
-        {"name": "type", "type": "text", "label": "Document Type"},
+        {
+            "name": "type",
+            "type": "select",
+            "label": "Document Type",
+            "choices": [
+                {"value": "LICENSE COPY", "label": "LICENSE COPY"},
+                {"value": "TRANSFER LETTER", "label": "TRANSFER LETTER"},
+                {"value": "OTHER", "label": "OTHER"}
+            ]
+        },
         {"name": "file", "type": "file", "label": "File"},
     ],
 }

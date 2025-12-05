@@ -344,7 +344,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                 // Check if license has documents
                                                 item.license_documents && item.license_documents.length > 0 ? (
                                                     <a
-                                                        href={`http://localhost:8000/api/licenses/${item.id}/merged-documents/`}
+                                                        href={`/api/licenses/${item.id}/merged-documents/`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="text-primary text-decoration-none"

@@ -1140,9 +1140,15 @@ class LicenseImportItemsModel(models.Model):
 # Documents
 # -----------------------------
 class LicenseDocumentModel(models.Model):
+    DOCUMENT_TYPE_CHOICES = [
+        ('LICENSE COPY', 'LICENSE COPY'),
+        ('TRANSFER LETTER', 'TRANSFER LETTER'),
+        ('OTHER', 'OTHER'),
+    ]
+
     license = models.ForeignKey("license.LicenseDetailsModel", on_delete=models.CASCADE,
                                 related_name="license_documents")
-    type = models.CharField(max_length=255)
+    type = models.CharField(max_length=255, choices=DOCUMENT_TYPE_CHOICES)
     file = models.FileField(upload_to=license_path)
 
     def __str__(self) -> str:

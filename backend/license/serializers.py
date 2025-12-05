@@ -519,7 +519,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 self._create_import_item(instance, i)
 
             for d in docs:
-                LicenseDocumentModel.objects.create(license=instance, **d)
+                # Validate required fields
+                if d.get('type') and d.get('file'):
+                    LicenseDocumentModel.objects.create(license=instance, **d)
             for t in transfers:
                 LicenseTransferModel.objects.create(license=instance, **t)
             for p in purchases:
@@ -757,11 +759,14 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         obj.save()
                         processed_ids.add(item_id)
                     else:
-                        # Create new item
+                        # Create new item - validate required fields
                         d.pop('id', None)  # Remove ID if present
                         d.pop('license', None)  # Remove license field
-                        obj = LicenseDocumentModel.objects.create(license=instance, **d)
-                        processed_ids.add(obj.id)
+
+                        # Only create if type and file are present
+                        if d.get('type') and d.get('file'):
+                            obj = LicenseDocumentModel.objects.create(license=instance, **d)
+                            processed_ids.add(obj.id)
 
                 # Delete items that are no longer in the payload
                 for item_id, item in existing_items.items():

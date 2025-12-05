@@ -1,9 +1,10 @@
 import "./App.css";
 import {BrowserRouter, Navigate, Route, Routes} from "react-router-dom";
 import {lazy, Suspense} from "react";
+import {ToastContainer} from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 import {AuthProvider} from "./context/AuthContext";
-import {ToastProvider} from "./components/ToastContext";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleRoute from "./routes/RoleRoute";
 import AdminLayout from "./layout/AdminLayout";
@@ -35,10 +36,20 @@ const LedgerUpload = lazy(() => import("./pages/LedgerUpload"));
 export default function App() {
     return (
         <AuthProvider>
-            <ToastProvider>
-                <BrowserRouter>
-                    <Suspense fallback={<div className="p-4">Loading...</div>}>
-                        <Routes>
+            <BrowserRouter>
+                <ToastContainer
+                    position="top-right"
+                    autoClose={3000}
+                    hideProgressBar={false}
+                    newestOnTop
+                    closeOnClick
+                    rtl={false}
+                    pauseOnFocusLoss
+                    draggable
+                    pauseOnHover
+                />
+                <Suspense fallback={<div className="p-4">Loading...</div>}>
+                    <Routes>
 
                             {/* Public */}
                             <Route path="/login" element={<Login/>}/>
@@ -440,7 +451,6 @@ export default function App() {
                         </Routes>
                     </Suspense>
                 </BrowserRouter>
-            </ToastProvider>
         </AuthProvider>
     );
 }

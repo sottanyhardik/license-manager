@@ -7,6 +7,7 @@
 
 import {useCallback, useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
+import {toast} from 'react-toastify';
 import {masterApi} from '../../services/api';
 import {formCalculator} from '../../services/calculators';
 import {useApiCall} from '../useApiCall';
@@ -71,7 +72,7 @@ export const useMasterForm = (endpoint, recordId = null, options = {}) => {
                 setOriginalData(defaults);
             }
         } catch (error) {
-            console.error('Failed to load initial data:', error);
+            toast.error('Failed to load form data');
         } finally {
             setLoading(false);
         }

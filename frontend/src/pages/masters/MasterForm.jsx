@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {useLocation, useNavigate, useParams} from "react-router-dom";
+import { toast } from 'react-toastify';
 import api from "../../api/axios";
 import NestedFieldArray from "./NestedFieldArray";
 import HybridSelect from "../../components/HybridSelect";
@@ -130,7 +131,7 @@ export default function MasterForm() {
                 }
             }
         } catch (err) {
-            console.error("Error fetching metadata:", err);
+            toast.error("Failed to load form metadata");
         }
     };
 
@@ -173,14 +174,12 @@ export default function MasterForm() {
                 const expiryDate = licenseDate.toISOString().split('T')[0];
                 updates.license_expiry_date = expiryDate;
             } catch (err) {
-                console.error("Error calculating expiry date:", err);
+                // Silently fail for date calculation errors
             }
         }
 
         // Fetch allotment details when allotment is selected in bill-of-entries
         if (field === "allotment" && entityName === "bill-of-entries") {
-            console.log("Allotment changed, value:", value);
-
             // Handle both array and single value
             let allotmentIds = [];
             if (Array.isArray(value)) {
@@ -188,8 +187,6 @@ export default function MasterForm() {
             } else if (value) {
                 allotmentIds = [value];
             }
-
-            console.log("Allotment IDs:", allotmentIds);
 
             if (allotmentIds.length > 0) {
                 setFetchingAllotment(true);
@@ -202,9 +199,7 @@ export default function MasterForm() {
                     let firstCompany = null;
 
                     for (const allotmentId of allotmentIds) {
-                        console.log("Fetching details for allotment:", allotmentId);
                         const {data} = await api.get(`/bill-of-entries/fetch-allotment-details/?allotment_id=${allotmentId}`);
-                        console.log("Fetched allotment details:", data);
 
                         // Use exchange_rate, product_name, port, and company from first allotment
                         if (!firstExchangeRate && data.exchange_rate) {
@@ -242,12 +237,9 @@ export default function MasterForm() {
                     if (allItemDetails.length > 0) {
                         updates.item_details = allItemDetails;
                     }
-
-                    console.log("Updates to apply:", updates);
                 } catch (err) {
-                    console.error("Error fetching allotment details:", err);
-                    alert("Failed to fetch allotment details: " + (err.response?.data?.error || err.message));
-                } finally {
+                    toast.error("Failed to fetch allotment details: " + (err.response?.data?.error || err.message));
+                } finally{
                     setFetchingAllotment(false);
                 }
             }
@@ -425,11 +417,14 @@ export default function MasterForm() {
             let message = [];
             if (addedCount > 0) message.push(`Added ${addedCount} new import items`);
             if (updatedCount > 0) message.push(`Updated ${updatedCount} existing items`);
-            alert(message.join('. ') || "No changes made");
+            if (message.length > 0) {
+                toast.success(message.join('. '));
+            } else {
+                toast.info("No changes made");
+            }
 
         } catch (err) {
-            console.error("Error fetching SION imports:", err);
-            alert(err.response?.data?.detail || "Failed to fetch import items from SION");
+            toast.error(err.response?.data?.detail || "Failed to fetch import items from SION");
         }
     };
 
@@ -548,6 +543,9 @@ export default function MasterForm() {
                 timestamp: new Date().getTime()
             }));
 
+            // Show success message
+            toast.success(isEdit ? `${entityTitle} updated successfully` : `${entityTitle} created successfully`);
+
             // Redirect based on entity type
             let redirectPath;
             if (entityName === 'licenses') {
@@ -565,8 +563,6 @@ export default function MasterForm() {
             }
             navigate(redirectPath);
         } catch (err) {
-            console.error("Save error:", err.response?.data);
-
             // Handle field-level errors
             if (err.response?.data && typeof err.response.data === 'object') {
                 setFieldErrors(err.response.data);
@@ -585,12 +581,13 @@ export default function MasterForm() {
                     }
                 });
 
-                setError(errorMessages.length > 0 ? errorMessages.join('\n') : "Validation errors occurred. Please check the form.");
+                const errorMsg = errorMessages.length > 0 ? errorMessages.join('\n') : "Validation errors occurred. Please check the form.";
+                setError(errorMsg);
+                toast.error(errorMsg);
             } else {
-                setError(
-                    err.response?.data?.detail ||
-                    "Failed to save record"
-                );
+                const errorMsg = err.response?.data?.detail || "Failed to save record";
+                setError(errorMsg);
+                toast.error(errorMsg);
             }
         } finally {
             setSaving(false);

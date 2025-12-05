@@ -1,5 +1,6 @@
 import {useEffect, useState, useCallback, useRef} from "react";
 import {Link, useParams, useLocation, useNavigate} from "react-router-dom";
+import { toast } from 'react-toastify';
 import api from "../../api/axios";
 import {boeApi} from "../../services/api";
 import AdvancedFilter from "../../components/AdvancedFilter";
@@ -67,14 +68,11 @@ export default function MasterList() {
         const requestKey = JSON.stringify({page, size, filters, entity: entityName});
 
         if (pendingRequestRef.current === requestKey) {
-            console.log("🚫 Skipping duplicate request - already in progress");
             return;
         }
 
         // Mark this request as pending
         pendingRequestRef.current = requestKey;
-
-        console.log("🔄 Fetching data:", {page, size, filters, entity: entityName});
 
         setLoading(true);
         setError("");
@@ -99,8 +97,6 @@ export default function MasterList() {
                 } else {
                     apiPath = `/masters/${entityName}/`;
                 }
-
-                console.log("📡 API Call:", apiPath, params);
 
                 const {data: apiResponse} = await api.get(apiPath, {params});
                 response = apiResponse;
@@ -128,9 +124,10 @@ export default function MasterList() {
             setHasPrevious(response.has_previous || false);
 
         } catch (err) {
-            console.error("Error fetching data:", err);
-            setError(err.response?.data?.detail || "Failed to load data");
-        } finally {
+            const errorMsg = err.response?.data?.detail || "Failed to load data";
+            setError(errorMsg);
+            toast.error(errorMsg);
+        } finally{
             setLoading(false);
             // Clear the pending request marker
             pendingRequestRef.current = null;
@@ -192,14 +189,6 @@ export default function MasterList() {
                 backendDefaultsApplied.current = true;
                 fetchData(1, 25, defaultFilters);
             }
-        }
-
-        // Check if a new item was created and needs to be highlighted
-        const newItemId = getNewlyCreatedItem();
-        if (newItemId) {
-            console.log('New item created:', newItemId);
-            // You can add logic here to scroll to or highlight the new item
-            // For example, after data loads, find the item and scroll to it
         }
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -270,9 +259,10 @@ export default function MasterList() {
                 }
                 await api.delete(apiPath);
             }
+            toast.success("Record deleted successfully");
             fetchData(currentPage, pageSize, filterParams);
         } catch (err) {
-            alert(err.response?.data?.detail || "Failed to delete record");
+            toast.error(err.response?.data?.detail || "Failed to delete record");
         }
     };
 
@@ -288,10 +278,11 @@ export default function MasterList() {
             }
 
             await api.patch(apiPath, { [field]: newValue });
+            toast.success("Field updated successfully");
             // Refresh data to show updated value
             fetchData(currentPage, pageSize, filterParams);
         } catch (err) {
-            alert(err.response?.data?.detail || `Failed to update ${field}`);
+            toast.error(err.response?.data?.detail || `Failed to update ${field}`);
             throw err; // Re-throw to let component know it failed
         }
     };
@@ -360,7 +351,7 @@ export default function MasterList() {
                 }
             }
         } catch (err) {
-            alert(err.response?.data?.detail || `Failed to export as ${format.toUpperCase()}`);
+            toast.error(err.response?.data?.detail || `Failed to export as ${format.toUpperCase()}`);
         }
     };
 

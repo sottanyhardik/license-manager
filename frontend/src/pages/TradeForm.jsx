@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { toast } from 'react-toastify';
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import DatePicker from "react-datepicker";
@@ -67,8 +68,7 @@ export default function TradeForm() {
                 lines: lines
             }));
         } catch (err) {
-            console.error("BOE fetch error:", err);
-            alert("Failed to fetch BOE details");
+            toast.error("Failed to fetch BOE details");
         }
     }, [formData.boe, billingMode]);
 
@@ -118,7 +118,7 @@ export default function TradeForm() {
 
     const handlePrefillFromCompany = async () => {
         if (!formData.from_company) {
-            alert("Please select From Company first");
+            toast.warning("Please select From Company first");
             return;
         }
         try {
@@ -133,13 +133,13 @@ export default function TradeForm() {
                 from_addr_line_2: data.address_line_2 || ""
             }));
         } catch (err) {
-            alert("Failed to fetch company details");
+            toast.error("Failed to fetch company details");
         }
     };
 
     const handlePrefillToCompany = async () => {
         if (!formData.to_company) {
-            alert("Please select To Company first");
+            toast.warning("Please select To Company first");
             return;
         }
         try {
@@ -154,13 +154,13 @@ export default function TradeForm() {
                 to_addr_line_2: data.address_line_2 || ""
             }));
         } catch (err) {
-            alert("Failed to fetch company details");
+            toast.error("Failed to fetch company details");
         }
     };
 
     const handlePrefillInvoiceNumber = async () => {
         if (!formData.from_company) {
-            alert("Please select From Company first");
+            toast.warning("Please select From Company first");
             return;
         }
         try {
@@ -177,7 +177,7 @@ export default function TradeForm() {
                 invoice_number: data.invoice_number || ""
             }));
         } catch (err) {
-            alert("Failed to generate invoice number");
+            toast.error("Failed to generate invoice number");
         }
     };
 
@@ -375,10 +375,9 @@ export default function TradeForm() {
                 await api.post(`/trades/`, payload, { headers });
             }
 
+            toast.success(isEdit ? "Trade updated successfully" : "Trade created successfully");
             navigate("/trades");
         } catch (err) {
-            console.error("Save error:", err.response?.data);
-
             // Handle field-level errors
             if (err.response?.data && typeof err.response.data === 'object') {
                 setFieldErrors(err.response.data);
@@ -395,9 +394,13 @@ export default function TradeForm() {
                     }
                 });
 
-                setError(errorMessages.join('\n') || "Validation errors occurred");
+                const errorMsg = errorMessages.join('\n') || "Validation errors occurred";
+                setError(errorMsg);
+                toast.error(errorMsg);
             } else {
-                setError(err.response?.data?.detail || "Failed to save trade");
+                const errorMsg = err.response?.data?.detail || "Failed to save trade";
+                setError(errorMsg);
+                toast.error(errorMsg);
             }
         } finally {
             setSaving(false);
@@ -406,13 +409,13 @@ export default function TradeForm() {
 
     const handleDownloadPDF = async () => {
         if (!id) {
-            alert("Please save the trade first");
+            toast.warning("Please save the trade first");
             return;
         }
 
         // Check if this is a SALE transaction
         if (formData.direction !== 'SALE') {
-            alert("Bill of Supply can only be generated for SALE transactions");
+            toast.warning("Bill of Supply can only be generated for SALE transactions");
             return;
         }
 
@@ -432,8 +435,7 @@ export default function TradeForm() {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            console.error('Failed to download Bill of Supply:', err);
-            alert('Failed to download Bill of Supply. Please try again.');
+            toast.error('Failed to download Bill of Supply. Please try again.');
         }
     };
 

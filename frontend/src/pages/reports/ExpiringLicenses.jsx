@@ -25,7 +25,6 @@ export default function ExpiringLicenses() {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (error) {
-            console.error('Error downloading report:', error);
             alert('Failed to download report. Please try again.');
         } finally {
             setLoading(false);

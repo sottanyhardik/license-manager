@@ -1,5 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 
+import logging
 from celery import shared_task
 from django.db.models import Q
 
@@ -7,6 +8,8 @@ from bill_of_entry.scripts.boe import request_bill_of_entry, be_details
 from core.models import PortModel
 from backend.scripts.dgft_shipping_bill import get_shipping_dgft_cookies, get_dgft_shipping_details
 from .celery import app
+
+logger = logging.getLogger(__name__)
 
 
 @app.task
@@ -53,7 +56,7 @@ def dgft_shipping_details(data):
         }
         dict_data = get_dgft_shipping_details(cookie, data)
         if dict_data:
-            print(dict_data)
+            logger.info(f"DGFT shipping details for {shipping.shipping_bill}: {dict_data}")
             shipping.custom_file_number = dict_data['custom_file_number']
             shipping.file_number = dict_data['file_number']
             shipping.time_of_upload = dict_data['time_of_upload']
@@ -68,7 +71,7 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, captcha, data_id):
     data = BillOfEntryModel.objects.filter(pk=data_id).filter(
         Q(is_fetch=False) | Q(appraisement=None) | Q(ooc_date=None) | Q(ooc_date='N.A.')).order_by('failed').first()
     if data:
-        print("'''''''''''''''''\n{0}''''''''''''''''''''".format(data.bill_of_entry_number))
+        logger.info(f"Processing bill of entry: {data.bill_of_entry_number}")
         if not data:
             return True
         if not data.bill_of_entry_date:
@@ -103,11 +106,11 @@ def fetch_data_to_model(cookies, csrftoken, data_dict, captcha, data_id):
             else:
                 data.failed = data.failed + 1
                 data.save()
-                print(False)
+                logger.warning(f"Failed to fetch BE details for {data.bill_of_entry_number}")
         else:
             data.failed = data.failed + 1
             data.save()
-            print(False)
+            logger.warning(f"Failed to request bill of entry for {data.bill_of_entry_number}")
         return True
     else:
         return False

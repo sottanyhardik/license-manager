@@ -46,4 +46,4 @@ for model_name, model in app.models.items():
     try:
         admin.site.register(model, model_admin)
     except:
-        print("Already registered")
+        pass

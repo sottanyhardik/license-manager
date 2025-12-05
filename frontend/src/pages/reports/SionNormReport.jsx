@@ -22,7 +22,7 @@ export default function SionNormReport({ sionNorm, title }) {
             const response = await api.get(`/licenses/active-dfia-report/?${params}`);
             setData(response.data);
         } catch (error) {
-            console.error("Error fetching SION norm report:", error);
+            // Silently handle error
         } finally {
             setLoading(false);
         }

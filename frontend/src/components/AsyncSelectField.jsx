@@ -65,7 +65,6 @@ export default function AsyncSelectField({
             const {data} = await api.get(`${baseEndpoint}${numId}/`);
             return formatOption(data);
         } catch (err) {
-            console.error(`Error fetching option ${id}:`, err);
             return null;
         }
     };
@@ -125,7 +124,6 @@ export default function AsyncSelectField({
             const results = data.results || data || [];
             return results.map(item => formatOption(item));
         } catch (err) {
-            console.error("Error loading options:", err);
             return [];
         }
     };

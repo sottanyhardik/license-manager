@@ -125,15 +125,12 @@ export default function NestedFieldArray({
                         search: inputValue
                     };
                     const response = await api.get("/masters/product-descriptions/", {params});
-                    console.log("Product descriptions response:", response.data);
 
                     if (!response.data.results || response.data.results.length === 0) {
-                        console.log("No results found for:", inputValue);
                         return [];
                     }
 
                     return response.data.results.map(desc => {
-                        console.log("Description item:", desc);
                         return {
                             value: desc.product_description,
                             label: desc.product_description,
@@ -141,7 +138,6 @@ export default function NestedFieldArray({
                         };
                     });
                 } catch (error) {
-                    console.error("Error loading descriptions:", error);
                     return [];
                 }
             };

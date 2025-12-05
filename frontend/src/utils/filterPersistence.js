@@ -22,7 +22,7 @@ export const saveFilterState = (pageKey, { filters, pagination, search }) => {
         };
         sessionStorage.setItem(`${STORAGE_KEY_PREFIX}${pageKey}`, JSON.stringify(state));
     } catch (error) {
-        console.error('Failed to save filter state:', error);
+        // Silently handle error
     }
 };
 
@@ -47,7 +47,6 @@ export const restoreFilterState = (pageKey) => {
 
         return state;
     } catch (error) {
-        console.error('Failed to restore filter state:', error);
         return null;
     }
 };
@@ -60,7 +59,7 @@ export const clearFilterState = (pageKey) => {
     try {
         sessionStorage.removeItem(`${STORAGE_KEY_PREFIX}${pageKey}`);
     } catch (error) {
-        console.error('Failed to clear filter state:', error);
+        // Silently handle error
     }
 };
 
@@ -93,7 +92,7 @@ export const markNewItemCreated = (itemId) => {
             timestamp: new Date().getTime()
         }));
     } catch (error) {
-        console.error('Failed to mark new item:', error);
+        // Silently handle error
     }
 };
 

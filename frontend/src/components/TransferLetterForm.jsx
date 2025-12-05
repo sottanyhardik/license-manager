@@ -1,4 +1,5 @@
 import {useState, useEffect} from "react";
+import { toast } from 'react-toastify';
 import api from "../api/axios";
 import CreatableSelect from 'react-select/creatable';
 
@@ -34,7 +35,7 @@ export default function TransferLetterForm({
             const {data} = await api.get('/masters/transfer-letters/');
             setTransferLetters(data.results || data || []);
         } catch (err) {
-            console.error("Failed to load transfer letters:", err);
+            toast.error("Failed to load transfer letters");
         }
     };
 
@@ -48,14 +49,11 @@ export default function TransferLetterForm({
                 ...company
             }));
         } catch (err) {
-            console.error("Failed to load companies:", err);
             return [];
         }
     };
 
     const handleCompanyChange = async (selectedCompany, actionMeta) => {
-        console.log('Company changed:', selectedCompany, 'Action:', actionMeta);
-
         setTransferLetterData(prev => ({
             ...prev,
             company: selectedCompany
@@ -65,7 +63,6 @@ export default function TransferLetterForm({
         if (selectedCompany && selectedCompany.value && actionMeta.action !== 'create-option') {
             try {
                 const {data} = await api.get(`/masters/companies/${selectedCompany.value}/`);
-                console.log('Company details fetched:', data);
 
                 setTransferLetterData(prev => ({
                     ...prev,
@@ -74,7 +71,7 @@ export default function TransferLetterForm({
                     addressLine2: data.address_line_2 || ""
                 }));
             } catch (err) {
-                console.error("Failed to fetch company details:", err);
+                toast.error("Failed to fetch company details");
             }
         } else if (!selectedCompany) {
             setTransferLetterData(prev => ({
@@ -117,8 +114,6 @@ export default function TransferLetterForm({
             template_id: transferLetterData.template,
             cif_edits: transferLetterData.cifEdits || {}
         };
-
-        console.log(`${instanceType} Transfer Letter Request Data:`, requestData);
 
         try {
             const endpoint = instanceType === 'allotment'

@@ -663,11 +663,8 @@ class ItemPivotViewSet(viewsets.ViewSet):
             # Sort by norm_class and return as array
             result = sorted(norms_dict.values(), key=lambda x: x['norm_class'])
 
-            print(f"Available norms endpoint: Found {len(result)} norms (including conversion norms)")
-            print(f"Norms: {[n['norm_class'] for n in result]}")
             return Response(result)
         except Exception as e:
-            print(f"Error in available_norms: {str(e)}")
             import traceback
             traceback.print_exc()
             return Response({"error": str(e)}, status=500)

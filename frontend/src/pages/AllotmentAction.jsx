@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {useParams, useNavigate, useLocation} from "react-router-dom";
+import { toast } from 'react-toastify';
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import TransferLetterForm from "../components/TransferLetterForm";
@@ -86,7 +87,7 @@ export default function AllotmentAction() {
             const notificationChoices = data?.actions?.POST?.notification_number?.choices || [];
             setNotificationOptions(notificationChoices);
         } catch (err) {
-            console.error("Failed to load notification options:", err);
+            // Silently fail for notification options
         }
     };
 
@@ -200,26 +201,10 @@ export default function AllotmentAction() {
         // Calculate value from quantity
         let allocateCifFc = inputQty * unitPrice;
 
-        // Log all values for debugging
-        console.log('Allocation calculation:', {
-            inputQty,
-            unitPrice,
-            calculatedValue: allocateCifFc,
-            balancedQty,
-            requiredValue,
-            requiredValueWithBuffer,
-            allottedValue,
-            balancedValueWithBuffer,
-            valueDifference: balancedValueWithBuffer - allocateCifFc,
-            willAdjustForValue: allocateCifFc > balancedValueWithBuffer
-        });
-
         // If calculated value exceeds balanced value with buffer, adjust quantity down
         if (allocateCifFc > balancedValueWithBuffer) {
-            console.log('⚠️ Value exceeds buffer - adjusting quantity down');
             inputQty = Math.floor(balancedValueWithBuffer / unitPrice);
             allocateCifFc = inputQty * unitPrice;
-            console.log('Adjusted to:', { inputQty, allocateCifFc });
         }
 
         // If calculated value exceeds available CIF FC, adjust quantity down
@@ -307,6 +292,7 @@ export default function AllotmentAction() {
     const handleConfirmAllot = async (item) => {
         const allocation = allocationData[item.id];
         if (!allocation || parseFloat(allocation.qty) <= 0) {
+            toast.error("Please enter a valid quantity");
             setError("Please enter a valid quantity");
             return;
         }
@@ -325,9 +311,13 @@ export default function AllotmentAction() {
             });
 
             if (data.errors && data.errors.length > 0) {
-                setError(`Error: ${data.errors[0].error}`);
+                const errorMsg = `Error: ${data.errors[0].error}`;
+                setError(errorMsg);
+                toast.error(errorMsg);
             } else {
-                setSuccess(`Successfully allocated ${allocation.qty} from ${item.license_number}`);
+                const successMsg = `Successfully allocated ${allocation.qty} from ${item.license_number}`;
+                setSuccess(successMsg);
+                toast.success(successMsg);
 
                 // Clear this item's allocation
                 const newAllocationData = {...allocationData};
@@ -405,8 +395,10 @@ export default function AllotmentAction() {
                 }
             }
         } catch (err) {
-            setError(err.response?.data?.error || "Failed to allocate item");
-        } finally {
+            const errorMsg = err.response?.data?.error || "Failed to allocate item";
+            setError(errorMsg);
+            toast.error(errorMsg);
+        } finally{
             setSaving({...saving, [item.id]: false});
         }
     };
@@ -422,12 +414,16 @@ export default function AllotmentAction() {
 
         try {
             const {data} = await api.delete(`/allotment-actions/${id}/delete-item/${allotmentItemId}/`);
-            setSuccess(data.message || "Successfully removed allocation");
+            const successMsg = data.message || "Successfully removed allocation";
+            setSuccess(successMsg);
+            toast.success(successMsg);
             // Refresh data immediately to update available quantities and allotted items
             fetchData(pagination.currentPage);
         } catch (err) {
-            setError(err.response?.data?.error || "Failed to delete allocation");
-        } finally {
+            const errorMsg = err.response?.data?.error || "Failed to delete allocation";
+            setError(errorMsg);
+            toast.error(errorMsg);
+        } finally{
             setDeletingItems({...deletingItems, [allotmentItemId]: false});
         }
     };

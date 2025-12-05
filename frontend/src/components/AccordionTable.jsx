@@ -32,7 +32,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                     const response = await api.get(`${basePath}/${id}/nested_items/`);
                     setNestedData({...nestedData, [id]: response.data});
                 } catch (err) {
-                    console.error('Failed to load nested items:', err);
+                    // Silently handle error
                 } finally {
                     setLoadingNested({...loadingNested, [id]: false});
                 }
@@ -50,7 +50,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
         try {
             await onToggleBoolean(item, field, !currentValue);
         } catch (err) {
-            console.error('Failed to toggle field:', err);
+            // Silently handle error
         } finally {
             setTogglingFields({...togglingFields, [fieldKey]: false});
         }
@@ -90,7 +90,6 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
             if (fieldConfig && typeof fieldConfig === 'object' && Array.isArray(fieldConfig.fields)) {
                 actualFieldConfig = fieldConfig.fields;
             } else {
-                console.error(`fieldConfig for ${fieldKey} is not an array or valid object:`, fieldConfig);
                 return (
                     <div className="alert alert-warning mb-0">
                         <small>Invalid configuration for {fieldKey.replace(/_/g, " ")}.</small>
@@ -102,13 +101,6 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
         // Get fields to display - use nestedListDisplay if available, otherwise use field config
         const listDisplayFields = nestedListDisplay[fieldKey] || [];
         let visibleFields;
-
-        console.log(`Rendering nested table for ${fieldKey}:`, {
-            listDisplayFields,
-            nestedListDisplay,
-            fieldKey,
-            hasConfig: listDisplayFields.length > 0
-        });
 
         if (listDisplayFields.length > 0) {
             // Use the configured list display fields
@@ -141,8 +133,6 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                 f.name !== "license"
             );
         }
-
-        console.log(`Visible fields for ${fieldKey}:`, visibleFields.map(f => f.name));
 
         // Determine icon based on field name
         const getIcon = () => {

@@ -29,7 +29,6 @@ export const AuthProvider = ({children}) => {
             setUser(data);
             localStorage.setItem("user", JSON.stringify(data));
         } catch (err) {
-            console.log("ME ENDPOINT FAILED:", err.response);
             localStorage.clear();
             setUser(null);
         }
@@ -41,7 +40,6 @@ export const AuthProvider = ({children}) => {
     }, []);
 
     const loginSuccess = (data) => {
-        console.log("SAVING TOKENS:", data);
         localStorage.setItem("access", data.access);
         localStorage.setItem("refresh", data.refresh);
         localStorage.setItem("user", JSON.stringify(data.user));

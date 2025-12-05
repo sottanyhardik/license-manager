@@ -46,7 +46,6 @@ export default function ItemPivotReport() {
             const normsData = normsResponse.data?.results || normsResponse.data || [];
             setSionNorms(Array.isArray(normsData) ? normsData : []);
         } catch (error) {
-            console.error('Error loading filter options:', error);
             setSionNorms([]);
         }
     };
@@ -55,20 +54,14 @@ export default function ItemPivotReport() {
         try {
             // Fetch only the list of norm classes (lightweight endpoint)
             let url = `item-pivot/available-norms/`;
-            console.log('Fetching available norms from:', url);
             const response = await api.get(url);
-            console.log('Response:', response);
-            console.log('Response data:', response.data);
 
             const norms = response.data || [];
             // Response is now array of {norm_class, description} objects
             setAvailableNorms(Array.isArray(norms) ? norms : []);
 
             // Don't automatically set first norm as active - wait for user click
-            console.log('Available norms loaded:', norms.length);
         } catch (error) {
-            console.error('Error loading available norms:', error);
-            console.error('Error details:', error.response?.data);
             setAvailableNorms([]);
         }
     };
@@ -89,12 +82,9 @@ export default function ItemPivotReport() {
             url += `&min_balance=${minBalance}`;
             url += `&license_status=${licenseStatus}`;
 
-            console.log('Fetching report for norm:', normClass, 'URL:', url);
             const response = await api.get(url);
-            console.log('Report data received:', response.data);
             setReportData(response.data);
         } catch (error) {
-            console.error('Error loading report:', error);
             alert('Failed to load report. Please try again.');
             setReportData(null);
         } finally {
@@ -132,7 +122,6 @@ export default function ItemPivotReport() {
             link.remove();
             window.URL.revokeObjectURL(downloadUrl);
         } catch (error) {
-            console.error('Error downloading report:', error);
             alert('Failed to download report. Please try again.');
         } finally {
             setDownloading(false);

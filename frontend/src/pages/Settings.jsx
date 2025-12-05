@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {useNavigate} from "react-router-dom";
+import { toast } from 'react-toastify';
 import api from "../api/axios";
 
 export default function Settings() {
@@ -27,9 +28,8 @@ export default function Settings() {
             const response = await api.get("auth/users/");
             setUsers(response.data);
         } catch (error) {
-            console.error("Error loading users:", error);
-            alert("Failed to load users");
-        } finally {
+            toast.error("Failed to load users");
+        } finally{
             setLoading(false);
         }
     };
@@ -75,16 +75,15 @@ export default function Settings() {
                     delete updateData.password;
                 }
                 await api.put(`auth/users/${editingUser.id}/`, updateData);
-                alert("User updated successfully");
+                toast.success("User updated successfully");
             } else {
                 await api.post("auth/users/", formData);
-                alert("User created successfully");
+                toast.success("User created successfully");
             }
             handleCloseModal();
             loadUsers();
         } catch (error) {
-            console.error("Error saving user:", error);
-            alert(error.response?.data?.detail || "Failed to save user");
+            toast.error(error.response?.data?.detail || "Failed to save user");
         }
     };
 
@@ -92,11 +91,10 @@ export default function Settings() {
         if (!window.confirm("Are you sure you want to delete this user?")) return;
         try {
             await api.delete(`auth/users/${userId}/`);
-            alert("User deleted successfully");
+            toast.success("User deleted successfully");
             loadUsers();
         } catch (error) {
-            console.error("Error deleting user:", error);
-            alert("Failed to delete user");
+            toast.error("Failed to delete user");
         }
     };
 

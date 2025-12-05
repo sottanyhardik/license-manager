@@ -22,7 +22,6 @@ export const formatDate = (date) => {
 
         return `${day}-${month}-${year}`;
     } catch (error) {
-        console.error('Error formatting date:', error);
         return '';
     }
 };
@@ -47,7 +46,6 @@ export const formatDateForInput = (date) => {
 
         return `${year}-${month}-${day}`;
     } catch (error) {
-        console.error('Error formatting date for input:', error);
         return '';
     }
 };
@@ -74,7 +72,6 @@ export const formatDateTime = (datetime) => {
 
         return `${day}-${month}-${year} ${hours}:${minutes}`;
     } catch (error) {
-        console.error('Error formatting datetime:', error);
         return '';
     }
 };

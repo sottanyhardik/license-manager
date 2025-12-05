@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {useNavigate} from "react-router-dom";
+import { toast } from 'react-toastify';
 import api from "../api/axios";
 
 export default function Dashboard() {
@@ -47,7 +48,7 @@ export default function Dashboard() {
             setBoeMonthlyData(data?.boe_monthly_trend || []);
 
         } catch (error) {
-            console.error("Error fetching dashboard data:", error);
+            toast.error("Failed to load dashboard data");
         } finally {
             setLoading(false);
         }

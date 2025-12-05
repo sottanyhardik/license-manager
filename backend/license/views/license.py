@@ -164,6 +164,31 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     - is_null: True when balance_cif < 200, False when balance_cif >= 200
     """
 
+    def update(self, request, *args, **kwargs):
+        """Override to log incoming request data."""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("="*50)
+        logger.info("ViewSet.update called")
+        logger.info("request.data type: %s", type(request.data))
+        logger.info("request.data keys: %s", list(request.data.keys()) if hasattr(request.data, 'keys') else 'N/A')
+
+        # Log license_documents from request.data
+        if 'license_documents' in request.data:
+            docs = request.data.getlist('license_documents') if hasattr(request.data, 'getlist') else request.data.get('license_documents')
+            logger.info("license_documents in request.data: %s", docs)
+        else:
+            logger.info("license_documents NOT in request.data")
+
+        # Log all keys that contain 'license_documents'
+        if hasattr(request.data, 'keys'):
+            doc_keys = [k for k in request.data.keys() if 'license_documents' in k]
+            logger.info("Keys containing 'license_documents': %s", doc_keys)
+            for key in doc_keys[:5]:  # Log first 5
+                logger.info("  %s = %s", key, request.data.get(key))
+
+        return super().update(request, *args, **kwargs)
+
     def get_queryset(self):
         """
         Override to add performance optimizations with select_related and prefetch_related.

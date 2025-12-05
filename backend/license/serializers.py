@@ -530,11 +530,24 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
+        # DEBUG: Log what we receive
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("="*50)
+        logger.info("UPDATE called with validated_data keys: %s", list(validated_data.keys()))
+
         exports = validated_data.pop("export_license", None)
         imports = validated_data.pop("import_license", None)
         docs = validated_data.pop("license_documents", None)
         transfers = validated_data.pop("transfers", None)
         purchases = validated_data.pop("purchases", None)
+
+        # DEBUG: Log license_documents
+        logger.info("license_documents extracted: %s", docs)
+        if docs:
+            logger.info("Number of documents: %s", len(docs))
+            for i, doc in enumerate(docs):
+                logger.info("Document %s: keys=%s, type=%s, file=%s", i, list(doc.keys()), doc.get('type'), doc.get('file'))
 
         for k, v in validated_data.items():
             setattr(instance, k, v)

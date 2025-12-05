@@ -103,6 +103,18 @@ export default function NestedFieldArray({
             ...newArray[index],
             ...updates
         };
+
+        // DEBUG: Log license_documents changes
+        if (fieldKey === 'license_documents') {
+            console.log('[NestedFieldArray] license_documents changed:', {
+                index,
+                fieldName,
+                fieldValue,
+                newItem: newArray[index],
+                fullArray: newArray
+            });
+        }
+
         onChange(newArray);
     };
 

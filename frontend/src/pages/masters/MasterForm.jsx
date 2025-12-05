@@ -154,6 +154,11 @@ export default function MasterForm() {
     };
 
     const handleChange = async (field, value) => {
+        // DEBUG: Log license_documents changes
+        if (field === 'license_documents') {
+            console.log('[MasterForm.handleChange] license_documents updated:', value);
+        }
+
         const updates = {[field]: value};
 
         // Auto-calculate registration_number when license_number changes
@@ -435,6 +440,43 @@ export default function MasterForm() {
         setFieldErrors({});
 
         try {
+            // Filter license_documents during update: only send new documents with File objects
+            if (isEdit && entityName === 'licenses' && formData.license_documents) {
+                console.log('=== DEBUG: Filtering license_documents for UPDATE ===');
+                console.log('Before filter:', formData.license_documents);
+
+                // Keep only documents that have a File object (new uploads)
+                // Skip documents with string file values (existing files)
+                formData.license_documents = formData.license_documents.filter(doc => {
+                    const hasNewFile = doc.file && doc.file instanceof File;
+                    console.log('Document:', {
+                        type: doc.type,
+                        hasFile: !!doc.file,
+                        isFileObject: doc.file instanceof File,
+                        isString: typeof doc.file === 'string',
+                        keeping: hasNewFile
+                    });
+                    return hasNewFile;
+                });
+
+                console.log('After filter:', formData.license_documents);
+            }
+
+            // DEBUG: Log license_documents before sending
+            if (entityName === 'licenses' && formData.license_documents) {
+                console.log('=== DEBUG: license_documents before sending ===');
+                console.log('Raw formData.license_documents:', formData.license_documents);
+                formData.license_documents.forEach((doc, index) => {
+                    console.log(`Document ${index}:`, {
+                        type: doc.type,
+                        typeOf: typeof doc.type,
+                        file: doc.file,
+                        fileType: doc.file ? doc.file.constructor.name : 'null',
+                        allKeys: Object.keys(doc)
+                    });
+                });
+            }
+
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
                 apiPath = `/${entityName}/`;
@@ -494,6 +536,16 @@ export default function MasterForm() {
                 Object.entries(formData).forEach(([key, value]) => {
                     appendToFormData(key, value);
                 });
+
+                // DEBUG: Log FormData contents for license_documents
+                if (entityName === 'licenses') {
+                    console.log('=== DEBUG: FormData contents ===');
+                    for (let [key, value] of formDataObj.entries()) {
+                        if (key.includes('license_documents')) {
+                            console.log(key, ':', value);
+                        }
+                    }
+                }
 
                 if (isEdit) {
                     response = await api.patch(`${apiPath}${id}/`, formDataObj, {

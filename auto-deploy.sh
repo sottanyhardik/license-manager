@@ -171,6 +171,53 @@ echo ""
 echo -e "\${BLUE}→ Final service status check...\${NC}"
 echo '$PASSWORD' | sudo -S supervisorctl status | grep license-manager
 
+echo -e "\n\${BLUE}================================================\${NC}"
+echo -e "\${BLUE}🧪 Testing Celery Functions\${NC}"
+echo -e "\${BLUE}================================================\${NC}"
+
+echo -e "\${BLUE}→ Checking registered Celery tasks...\${NC}"
+cd $SERVER_PATH/backend
+source $SERVER_PATH/venv/bin/activate
+
+# Test Level-1 task
+echo -e "\${BLUE}→ Testing Level-1 task (identify_licenses_needing_update)...\${NC}"
+python manage.py shell -c "
+from license.tasks import identify_licenses_needing_update
+print('✓ Level-1 task imported successfully')
+print('  Task name:', identify_licenses_needing_update.name)
+" 2>/dev/null && echo -e "\${GREEN}  ✅ Level-1 task OK\${NC}" || echo -e "\${RED}  ❌ Level-1 task failed\${NC}"
+
+# Test Level-2 task
+echo -e "\${BLUE}→ Testing Level-2 task (update_identified_licenses)...\${NC}"
+python manage.py shell -c "
+from license.tasks import update_identified_licenses
+print('✓ Level-2 task imported successfully')
+print('  Task name:', update_identified_licenses.name)
+" 2>/dev/null && echo -e "\${GREEN}  ✅ Level-2 task OK\${NC}" || echo -e "\${RED}  ❌ Level-2 task failed\${NC}"
+
+# Check Celery Beat schedule
+echo -e "\${BLUE}→ Verifying Celery Beat schedule...\${NC}"
+python manage.py shell -c "
+from lmanagement.celery import app
+schedule = app.conf.beat_schedule
+if 'update-balances-11am-ist' in schedule and 'update-balances-8pm-ist' in schedule:
+    print('✓ Scheduled tasks configured:')
+    print('  - 11 AM IST (5:30 UTC)')
+    print('  - 8 PM IST (14:30 UTC)')
+    exit(0)
+else:
+    print('✗ Schedule not found')
+    exit(1)
+" 2>/dev/null && echo -e "\${GREEN}  ✅ Schedule configured correctly\${NC}" || echo -e "\${RED}  ❌ Schedule configuration failed\${NC}"
+
+# Test CeleryTaskTracker model
+echo -e "\${BLUE}→ Testing CeleryTaskTracker model...\${NC}"
+python manage.py shell -c "
+from core.models import CeleryTaskTracker
+count = CeleryTaskTracker.objects.count()
+print(f'✓ CeleryTaskTracker table accessible: {count} records')
+" 2>/dev/null && echo -e "\${GREEN}  ✅ Task tracking ready\${NC}" || echo -e "\${RED}  ❌ Task tracking failed\${NC}"
+
 echo -e "\n\${GREEN}================================================\${NC}"
 echo -e "\${GREEN}🎉 Deployment completed successfully!\${NC}"
 echo -e "\${GREEN}================================================\${NC}"

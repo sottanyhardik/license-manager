@@ -156,12 +156,12 @@ class ItemPivotReportView(View):
         licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
 
         for license_obj in licenses:
+            license_row = self._build_license_row(license_obj, sorted_items)
+
             # Skip licenses with balance < min_balance
-            balance = license_obj.get_balance_cif or Decimal('0')
-            if balance < Decimal(str(min_balance)):
+            if license_row and license_row.get('balance_cif', 0) < min_balance:
                 continue
 
-            license_row = self._build_license_row(license_obj, sorted_items)
             if license_row:
                 # Handle blank/empty notification numbers
                 notification = (license_obj.notification_number or '').strip()
@@ -360,7 +360,7 @@ class ItemPivotReportView(View):
             'port': str(license_obj.port) if license_obj.port else '',
             'notification_number': notification_display,
             'total_cif': float(total_cif),
-            'balance_cif': float(license_obj.get_balance_cif or Decimal('0')),
+            'balance_cif': float(balance_cif),  # Reuse already calculated balance
             'items': {}
         }
 

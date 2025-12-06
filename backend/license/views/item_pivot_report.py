@@ -118,21 +118,28 @@ class ItemPivotReportView(View):
             exclude_id_list = [int(cid.strip()) for cid in exclude_company_ids.split(',') if cid.strip()]
             licenses = licenses.exclude(exporter_id__in=exclude_id_list)
 
+        # Build filtered prefetch querysets based on sion_norm
+        import_items_qs = LicenseImportItemsModel.objects.select_related('hs_code')
+        export_items_qs = LicenseExportItemModel.objects.select_related('norm_class')
+        item_names_qs = ItemNameModel.objects.filter(is_active=True).select_related('sion_norm_class')
+
+        # If sion_norm specified, filter prefetch queries to only that norm
+        if sion_norm:
+            item_names_qs = item_names_qs.filter(sion_norm_class__norm_class=sion_norm)
+            export_items_qs = export_items_qs.filter(norm_class__norm_class=sion_norm)
+
         # Optimize with select_related and prefetch_related to reduce queries
         licenses = licenses.select_related(
             'exporter',
             'port'
         ).prefetch_related(
             Prefetch('import_license',
-                     queryset=LicenseImportItemsModel.objects.select_related('hs_code').prefetch_related(
-                         Prefetch('items',
-                                  queryset=ItemNameModel.objects.filter(is_active=True).select_related(
-                                      'sion_norm_class'))
+                     queryset=import_items_qs.prefetch_related(
+                         Prefetch('items', queryset=item_names_qs)
                      ).only('id', 'license_id', 'hs_code_id', 'quantity', 'allotted_quantity',
                             'debited_quantity', 'available_quantity', 'debited_value', 'cif_fc', 'description')),
             Prefetch('export_license',
-                     queryset=LicenseExportItemModel.objects.select_related('norm_class').only(
-                         'id', 'license_id', 'norm_class_id', 'cif_fc'))
+                     queryset=export_items_qs.only('id', 'license_id', 'norm_class_id', 'cif_fc'))
         ).only('id', 'license_number', 'license_date', 'license_expiry_date', 'exporter_id',
                'port_id', 'notification_number', 'purchase_status'
         ).order_by('license_expiry_date', 'license_date')

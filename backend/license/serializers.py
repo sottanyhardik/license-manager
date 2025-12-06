@@ -481,6 +481,46 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         return obj.get_balance_cif
 
     # helper for M2M items in import rows
+    def _calculate_import_quantity(self, license_inst, hs_code_id):
+        """
+        Calculate import item quantity based on formula:
+        Import Quantity = Export Net Quantity × SION Norm Quantity
+        """
+        from decimal import Decimal
+        from core.models import SIONImportModel
+
+        # Get all export items for this license
+        export_items = license_inst.export_license.all()
+
+        if not export_items.exists():
+            return Decimal('0')
+
+        # Get the first export item's net quantity and norm class
+        first_export = export_items.first()
+        net_quantity = Decimal(str(first_export.net_quantity or 0))
+        norm_class = first_export.norm_class
+
+        if not norm_class or net_quantity == 0:
+            return Decimal('0')
+
+        # Find matching SION import norm based on HS code and norm class
+        try:
+            sion_import = SIONImportModel.objects.filter(
+                norm_class=norm_class,
+                hsn_code_id=hs_code_id
+            ).first()
+
+            if sion_import:
+                norm_quantity = Decimal(str(sion_import.quantity or 0))
+                calculated_quantity = net_quantity * norm_quantity
+                return calculated_quantity
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to calculate import quantity: {str(e)}")
+
+        return Decimal('0')
+
     def _create_import_item(self, license_inst, payload):
         from license.signals import update_license_on_import_item_change
 
@@ -492,6 +532,12 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         payload.pop('duty_type', None)  # This field only exists in export items
         if 'id' in payload and payload['id'] == '':
             payload.pop('id')
+
+        # Auto-calculate quantity if not provided or is 0
+        if hs_code and (not payload.get('quantity') or payload.get('quantity') == 0 or payload.get('quantity') == ''):
+            calculated_qty = self._calculate_import_quantity(license_inst, hs_code)
+            if calculated_qty > 0:
+                payload['quantity'] = calculated_qty
 
         # Convert empty strings and None to 0 for required NOT NULL fields
         for field in ['serial_number', 'quantity']:
@@ -725,6 +771,14 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         logger.debug(f"  -> Matched by ID {item_id}")
                         # Update existing item by ID
                         obj = existing_items_by_id[item_id]
+
+                        # Auto-calculate quantity if not provided or is 0
+                        hs_code = i.get('hs_code')
+                        if hs_code and (not i.get('quantity') or i.get('quantity') == 0 or i.get('quantity') == ''):
+                            calculated_qty = self._calculate_import_quantity(instance, hs_code)
+                            if calculated_qty > 0:
+                                i['quantity'] = calculated_qty
+
                         for key, value in i.items():
                             if key not in ('id', 'license', 'license_date', 'license_expiry', 'balance_cif_fc',
                                            'license_number', 'notification_number', 'exporter_name', 'hs_code_detail',
@@ -763,6 +817,14 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
                         # Update existing item by serial_number
                         obj = existing_items_by_serial[serial_number]
+
+                        # Auto-calculate quantity if not provided or is 0
+                        hs_code = i.get('hs_code')
+                        if hs_code and (not i.get('quantity') or i.get('quantity') == 0 or i.get('quantity') == ''):
+                            calculated_qty = self._calculate_import_quantity(instance, hs_code)
+                            if calculated_qty > 0:
+                                i['quantity'] = calculated_qty
+
                         for key, value in i.items():
                             if key not in ('id', 'license', 'license_date', 'license_expiry', 'balance_cif_fc',
                                            'license_number', 'notification_number', 'exporter_name', 'hs_code_detail',

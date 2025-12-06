@@ -469,20 +469,21 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
         raise
 
 
-@shared_task(name='update_all_balances_periodic')
-def update_all_balances_periodic():
+@shared_task(name='identify_licenses_needing_update')
+def identify_licenses_needing_update():
     """
-    Periodic task that runs every 30 minutes to update balance_cif for all licenses.
-    This ensures balance_cif stays current without manual intervention.
+    LEVEL 1 TASK: Identify which licenses need updates without actually updating them.
+    This prevents creating unnecessary update tasks.
 
-    Updates:
+    Checks:
     - balance_cif (from LicenseBalanceCalculator)
     - is_expired (based on expiry_date)
     - is_null (balance < $500)
     - is_active (False if expired)
 
     Returns:
-        dict with status and stats
+        - If updates needed: Triggers level-2 task with list of license IDs
+        - If no updates needed: Returns immediately with 0 tasks created
     """
     from django.utils import timezone
     from decimal import Decimal
@@ -490,14 +491,14 @@ def update_all_balances_periodic():
     from license.services.balance_calculator import LicenseBalanceCalculator
     from core.models import CeleryTaskTracker
 
-    task_id = update_all_balances_periodic.request.id
-    logger.info(f"Starting periodic balance update: task_id={task_id}")
+    task_id = identify_licenses_needing_update.request.id
+    logger.info(f"[LEVEL-1] Starting license identification: task_id={task_id}")
     start_time = datetime.now()
 
     # Track task in database
     tracker = CeleryTaskTracker.objects.create(
         task_id=task_id,
-        task_name='update_all_balances_periodic',
+        task_name='identify_licenses_needing_update',
         status='STARTED',
         started_at=start_time
     )
@@ -505,13 +506,116 @@ def update_all_balances_periodic():
     try:
         licenses = LicenseDetailsModel.objects.all()
         total_licenses = licenses.count()
+        today = timezone.now().date()
+
+        licenses_to_update = []
+
+        # Identify licenses that need updates
+        for license_obj in licenses.iterator(chunk_size=200):
+            try:
+                # Calculate what the values should be
+                balance = LicenseBalanceCalculator.calculate_balance(license_obj)
+                is_expired = license_obj.license_expiry_date < today if license_obj.license_expiry_date else False
+                is_null = balance < Decimal('500')
+                is_active = not is_expired
+
+                # Check if any value changed
+                if (license_obj.balance_cif != balance or
+                    license_obj.is_expired != is_expired or
+                    license_obj.is_null != is_null or
+                    license_obj.is_active != is_active):
+                    # This license needs update
+                    licenses_to_update.append(license_obj.id)
+
+            except Exception as e:
+                logger.error(f"Error checking license {license_obj.license_number}: {str(e)}")
+
+        elapsed = (datetime.now() - start_time).total_seconds()
+
+        result = {
+            'status': 'success',
+            'total_checked': total_licenses,
+            'needs_update': len(licenses_to_update),
+            'skipped': total_licenses - len(licenses_to_update),
+            'elapsed_seconds': elapsed,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        # Update tracker
+        tracker.status = 'SUCCESS'
+        tracker.completed_at = timezone.now()
+        tracker.result = result
+        tracker.save(update_fields=['status', 'completed_at', 'result'])
+
+        # Only trigger level-2 task if there are licenses to update
+        if licenses_to_update:
+            logger.info(f"[LEVEL-1] Found {len(licenses_to_update)} licenses needing update. Triggering level-2 task.")
+            # Trigger level-2 task with the list of IDs
+            update_identified_licenses.apply_async(args=[licenses_to_update])
+            result['level2_triggered'] = True
+        else:
+            logger.info(f"[LEVEL-1] No licenses need updating. Skipping level-2 task.")
+            result['level2_triggered'] = False
+
+        return result
+
+    except Exception as e:
+        error_msg = f"[LEVEL-1] License identification failed: {str(e)}"
+        logger.error(error_msg)
+
+        # Update tracker
+        tracker.status = 'FAILURE'
+        tracker.completed_at = timezone.now()
+        tracker.result = {'status': 'error', 'error': str(e)}
+        tracker.traceback = str(e)
+        tracker.save(update_fields=['status', 'completed_at', 'result', 'traceback'])
+
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+
+@shared_task(name='update_identified_licenses')
+def update_identified_licenses(license_ids):
+    """
+    LEVEL 2 TASK: Update ONLY the licenses identified by level-1 task.
+    This task only runs if there are licenses that actually need updating.
+
+    Args:
+        license_ids: List of license IDs that need updating (from level-1)
+
+    Returns:
+        dict with update statistics
+    """
+    from django.utils import timezone
+    from decimal import Decimal
+    from license.models import LicenseDetailsModel
+    from license.services.balance_calculator import LicenseBalanceCalculator
+    from core.models import CeleryTaskTracker
+
+    task_id = update_identified_licenses.request.id
+    logger.info(f"[LEVEL-2] Starting update of {len(license_ids)} identified licenses: task_id={task_id}")
+    start_time = datetime.now()
+
+    # Track task in database
+    tracker = CeleryTaskTracker.objects.create(
+        task_id=task_id,
+        task_name='update_identified_licenses',
+        status='STARTED',
+        started_at=start_time,
+        total=len(license_ids)
+    )
+
+    try:
+        # Fetch only the licenses that need updating
+        licenses = LicenseDetailsModel.objects.filter(id__in=license_ids)
+        today = timezone.now().date()
 
         updated_count = 0
         error_count = 0
-        today = timezone.now().date()
-
         batch_size = 100
-        skipped_count = 0
 
         for i, license_obj in enumerate(licenses.iterator(chunk_size=batch_size)):
             try:
@@ -523,16 +627,7 @@ def update_all_balances_periodic():
                 is_null = balance < Decimal('500')
                 is_active = not is_expired
 
-                # Check if any value changed - skip update if nothing changed
-                if (license_obj.balance_cif == balance and
-                    license_obj.is_expired == is_expired and
-                    license_obj.is_null == is_null and
-                    license_obj.is_active == is_active):
-                    # Nothing changed, skip this license
-                    skipped_count += 1
-                    continue
-
-                # Update license only if something changed
+                # Update license (we already know it needs updating from level-1)
                 LicenseDetailsModel.objects.filter(pk=license_obj.pk).update(
                     balance_cif=balance,
                     is_expired=is_expired,
@@ -545,9 +640,8 @@ def update_all_balances_periodic():
                 # Update progress every batch
                 if (i + 1) % batch_size == 0:
                     tracker.current = i + 1
-                    tracker.total = total_licenses
-                    tracker.progress_message = f'Updated {updated_count} licenses, skipped {skipped_count}...'
-                    tracker.save(update_fields=['current', 'total', 'progress_message'])
+                    tracker.progress_message = f'Updated {updated_count} licenses...'
+                    tracker.save(update_fields=['current', 'progress_message'])
 
             except Exception as e:
                 error_count += 1
@@ -558,9 +652,8 @@ def update_all_balances_periodic():
         result = {
             'status': 'success',
             'updated': updated_count,
-            'skipped': skipped_count,
             'errors': error_count,
-            'total_licenses': total_licenses,
+            'total_identified': len(license_ids),
             'elapsed_seconds': elapsed,
             'timestamp': datetime.now().isoformat()
         }
@@ -571,11 +664,11 @@ def update_all_balances_periodic():
         tracker.result = result
         tracker.save(update_fields=['status', 'completed_at', 'result'])
 
-        logger.info(f"Periodic balance update completed: {result}")
+        logger.info(f"[LEVEL-2] Update completed: {result}")
         return result
 
     except Exception as e:
-        error_msg = f"Periodic balance update failed: {str(e)}"
+        error_msg = f"[LEVEL-2] Update failed: {str(e)}"
         logger.error(error_msg)
 
         # Update tracker

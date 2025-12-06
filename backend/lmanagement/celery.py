@@ -41,13 +41,23 @@ app.conf.beat_schedule = {
         }
     },
 
-    # Update balance_cif every 30 minutes
-    "update-balances-every-30-minutes": {
-        "task": "update_all_balances_periodic",
-        "schedule": crontab(minute='*/30'),  # Every 30 minutes
+    # Update balances twice daily: 11 AM and 8 PM IST
+    # 11 AM IST = 5:30 AM UTC (5:30)
+    # 8 PM IST = 2:30 PM UTC (14:30)
+    "update-balances-11am-ist": {
+        "task": "identify_licenses_needing_update",
+        "schedule": crontab(minute=30, hour=5),  # 5:30 AM UTC = 11:00 AM IST
         "args": (),
         "options": {
-            "expires": 1800,  # Task expires after 30 minutes
+            "expires": 3600,  # Task expires after 1 hour
+        }
+    },
+    "update-balances-8pm-ist": {
+        "task": "identify_licenses_needing_update",
+        "schedule": crontab(minute=30, hour=14),  # 2:30 PM UTC = 8:00 PM IST
+        "args": (),
+        "options": {
+            "expires": 3600,  # Task expires after 1 hour
         }
     },
 

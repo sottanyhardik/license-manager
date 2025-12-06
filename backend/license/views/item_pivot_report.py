@@ -5,23 +5,21 @@ Shows licenses with items as column headers, displaying quantities and values pe
 Similar to the GE DFIA report format.
 """
 
-from datetime import date, timedelta
-from decimal import Decimal
-from typing import Dict, List, Any, Set
 from collections import defaultdict
+from decimal import Decimal
+from typing import Dict, List, Any
 
-from django.db.models import Sum, Q, F, DecimalField, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Sum
 from django.http import JsonResponse, HttpResponse
 from django.views import View
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 
 from core.constants import DEC_0, DEC_000, GE, MI, IP, SM, CO
-from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemsModel
 from core.models import ItemNameModel
+from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
 
 
 class ItemPivotReportView(View):
@@ -43,7 +41,8 @@ class ItemPivotReportView(View):
         license_status = request.GET.get('license_status', 'active')
 
         try:
-            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status)
+            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance,
+                                               license_status)
         except Exception as e:
             return JsonResponse({
                 'error': str(e)
@@ -55,8 +54,8 @@ class ItemPivotReportView(View):
             return JsonResponse(report_data, safe=False)
 
     def generate_report(self, days: int = 30, sion_norm: str = None,
-                       company_ids: str = None, exclude_company_ids: str = None,
-                       min_balance: int = 200, license_status: str = 'active') -> Dict[str, Any]:
+                        company_ids: str = None, exclude_company_ids: str = None,
+                        min_balance: int = 200, license_status: str = 'active') -> Dict[str, Any]:
         """
         Generate item-wise pivot report.
 
@@ -117,12 +116,13 @@ class ItemPivotReportView(View):
             'port'
         ).prefetch_related(
             Prefetch('import_license',
-                    queryset=LicenseImportItemsModel.objects.select_related('hs_code').prefetch_related(
-                        Prefetch('items',
-                                queryset=ItemNameModel.objects.filter(is_active=True).select_related('sion_norm_class'))
-                    )),
+                     queryset=LicenseImportItemsModel.objects.select_related('hs_code').prefetch_related(
+                         Prefetch('items',
+                                  queryset=ItemNameModel.objects.filter(is_active=True).select_related(
+                                      'sion_norm_class'))
+                     )),
             Prefetch('export_license',
-                    queryset=LicenseExportItemsModel.objects.select_related('norm_class'))
+                     queryset=LicenseExportItemModel.objects.select_related('norm_class'))
         ).order_by('license_expiry_date', 'license_date')
 
         # Collect all unique items across all licenses
@@ -221,7 +221,8 @@ class ItemPivotReportView(View):
         norm_notes_conditions = {}
         for norm_class in result_dict.keys():
             try:
-                sion_norm = SionNormClassModel.objects.prefetch_related('notes', 'conditions').get(norm_class=norm_class)
+                sion_norm = SionNormClassModel.objects.prefetch_related('notes', 'conditions').get(
+                    norm_class=norm_class)
                 norm_notes_conditions[norm_class] = {
                     'notes': [
                         {'note_text': note.note_text, 'display_order': note.display_order}
@@ -264,7 +265,7 @@ class ItemPivotReportView(View):
         total_cif = license_obj.export_license.aggregate(
             total=Sum('cif_fc')
         )['total'] or Decimal('0')
-        
+
         # Aggregate quantities by item (sum across all serial numbers)
         item_quantities = defaultdict(lambda: {
             'quantity': Decimal('0.000'),
@@ -297,10 +298,10 @@ class ItemPivotReportView(View):
                 item_quantities[item.id]['available_quantity'] += import_item.available_quantity or DEC_000
                 item_quantities[item.id]['debited_value'] += import_item.debited_value or DEC_0
                 item_quantities[item.id]['cif_value'] += import_item.cif_fc or DEC_0
-                
+
                 if import_item.hs_code and not item_quantities[item.id]['hs_code']:
                     item_quantities[item.id]['hs_code'] = import_item.hs_code.hs_code
-                
+
                 if import_item.description and not item_quantities[item.id]['description']:
                     item_quantities[item.id]['description'] = import_item.description
 
@@ -321,7 +322,7 @@ class ItemPivotReportView(View):
                     restriction_groups[restriction_key]['debited_cif'] += import_item.debited_value or DEC_0
                     if item.id not in restriction_groups[restriction_key]['item_ids']:
                         restriction_groups[restriction_key]['item_ids'].append(item.id)
-        
+
         # Calculate available CIF within restriction for each group
         balance_cif = license_obj.get_balance_cif or Decimal('0')
         for group_name, group_data in restriction_groups.items():
@@ -405,7 +406,7 @@ class ItemPivotReportView(View):
             HttpResponse with Excel file
         """
         import openpyxl
-        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.styles import Font, Alignment, PatternFill
 
         workbook = openpyxl.Workbook()
         # Remove default sheet
@@ -418,7 +419,9 @@ class ItemPivotReportView(View):
             notifications_dict = licenses_by_norm_notification[norm_class]
             for notification, licenses_list in sorted(notifications_dict.items()):
                 # Sanitize sheet name (Excel has 31 char limit and doesn't allow certain chars)
-                sheet_name = f"{norm_class}_{notification}"[:31].replace('/', '-').replace('\\', '-').replace('*', '-').replace('[', '(').replace(']', ')')
+                sheet_name = f"{norm_class}_{notification}"[:31].replace('/', '-').replace('\\', '-').replace('*',
+                                                                                                              '-').replace(
+                    '[', '(').replace(']', ')')
                 worksheet = workbook.create_sheet(title=sheet_name)
 
                 current_row = 1
@@ -524,11 +527,13 @@ class ItemPivotReportView(View):
                         if has_restriction:
                             # Write restriction as number only (percentage)
                             restriction_val = item_data.get('restriction')
-                            worksheet.cell(row=current_row, column=col_num, value=restriction_val if restriction_val else '')
+                            worksheet.cell(row=current_row, column=col_num,
+                                           value=restriction_val if restriction_val else '')
                             col_num += 1
                             # Write restriction value (available CIF)
                             restriction_value = item_data.get('restriction_value', 0)
-                            worksheet.cell(row=current_row, column=col_num, value=restriction_value if restriction_value else '')
+                            worksheet.cell(row=current_row, column=col_num,
+                                           value=restriction_value if restriction_value else '')
                             col_num += 1
 
                     current_row += 1

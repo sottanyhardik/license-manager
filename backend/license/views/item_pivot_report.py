@@ -40,6 +40,18 @@ class ItemPivotReportView(View):
         min_balance = int(request.GET.get('min_balance', 200))
         license_status = request.GET.get('license_status', 'active')
 
+        # For Excel export, use streaming approach to avoid timeout
+        if output_format == 'excel':
+            try:
+                return self.export_to_excel_streaming(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return JsonResponse({
+                    'error': str(e)
+                }, status=500)
+
+        # For JSON, generate full report
         try:
             report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance,
                                                license_status)
@@ -48,10 +60,7 @@ class ItemPivotReportView(View):
                 'error': str(e)
             }, status=500)
 
-        if output_format == 'excel':
-            return self.export_to_excel(report_data)
-        else:
-            return JsonResponse(report_data, safe=False)
+        return JsonResponse(report_data, safe=False)
 
     def generate_report(self, days: int = 30, sion_norm: str = None,
                         company_ids: str = None, exclude_company_ids: str = None,
@@ -644,6 +653,183 @@ class ItemPivotReportView(View):
 
         except Exception as e:
             # Clean up temp file in case of error
+            try:
+                os.unlink(temp_file.name)
+            except:
+                pass
+            raise e
+
+    def export_to_excel_streaming(self, days=30, sion_norm=None, company_ids=None,
+                                  exclude_company_ids=None, min_balance=200, license_status='active'):
+        """
+        Export report to Excel - uses existing generate_report for data, then formats as Excel.
+        This ensures consistency with JSON output.
+
+        Returns:
+            StreamingHttpResponse with Excel file
+        """
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.cell import WriteOnlyCell
+        from django.http import StreamingHttpResponse
+        import tempfile
+        import os
+
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+        temp_file.close()
+
+        try:
+            # Use the working generate_report method
+            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status)
+
+            workbook = openpyxl.Workbook(write_only=True)
+            licenses_by_norm_notif = report_data.get('licenses_by_norm_notification', {})
+
+            for norm_class in sorted(licenses_by_norm_notif.keys()):
+                notifications_dict = licenses_by_norm_notif[norm_class]
+                for notification, licenses_list in sorted(notifications_dict.items()):
+                    # Filter items to only those with data in THIS norm-notification
+                    items_with_data = []
+                    for item in report_data['items']:
+                        item_name = item['name']
+                        has_data = any(
+                            lic['items'].get(item_name, {}).get('quantity', 0) > 0
+                            for lic in licenses_list
+                        )
+                        if has_data:
+                            items_with_data.append(item)
+
+                    # Create sheet
+                    sheet_name = f"{norm_class}_{notification}"[:31].replace('/', '-').replace('\\', '-').replace('*', '-')
+                    worksheet = workbook.create_sheet(title=sheet_name)
+
+                    # Title row
+                    title_cell = WriteOnlyCell(worksheet, value=f"Item Pivot Report - {norm_class} - {notification}")
+                    title_cell.font = Font(bold=True, size=14)
+                    title_cell.alignment = Alignment(horizontal='center')
+                    worksheet.append([title_cell] + [None] * 25)
+                    worksheet.append([])
+
+                    # Headers
+                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Balance CIF']
+                    item_headers = []
+                    for item in items_with_data:
+                        item_name = item['name']
+                        has_restriction = item.get('has_restriction', False)
+                        headers = [
+                            f"{item_name} HSN Code",
+                            f"{item_name} Product Description",
+                            f"{item_name} Total QTY",
+                            f"{item_name} Allotted QTY",
+                            f"{item_name} Debited QTY",
+                            f"{item_name} Balance QTY"
+                        ]
+                        if has_restriction:
+                            headers.extend([
+                                f"{item_name} Restriction %",
+                                f"{item_name} Restriction Value"
+                            ])
+                        item_headers.extend(headers)
+
+                    all_headers = base_headers + item_headers
+                    header_row = []
+                    for header in all_headers:
+                        cell = WriteOnlyCell(worksheet, value=header)
+                        cell.font = Font(bold=True, color='FFFFFF')
+                        cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+                        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+                        header_row.append(cell)
+                    worksheet.append(header_row)
+
+                    # Data rows
+                    for idx, lic in enumerate(licenses_list, 1):
+                        row_data = [
+                            idx,
+                            lic['license_number'],
+                            lic['license_date'],
+                            lic['license_expiry_date'],
+                            lic['exporter'],
+                            lic['total_cif'],
+                            lic['balance_cif']
+                        ]
+
+                        for item in items_with_data:
+                            item_name = item['name']
+                            has_restriction = item.get('has_restriction', False)
+                            item_data = lic['items'].get(item_name, {})
+                            row_data.extend([
+                                item_data.get('hs_code', ''),
+                                item_data.get('description', ''),
+                                item_data.get('quantity', 0),
+                                item_data.get('allotted_quantity', 0),
+                                item_data.get('debited_quantity', 0),
+                                item_data.get('available_quantity', 0)
+                            ])
+                            if has_restriction:
+                                row_data.extend([
+                                    item_data.get('restriction'),
+                                    item_data.get('restriction_value', 0)
+                                ])
+
+                        worksheet.append(row_data)
+
+                    # Totals row
+                    totals_row = [WriteOnlyCell(worksheet, value='TOTAL')]
+                    totals_row[0].font = Font(bold=True)
+                    totals_row.extend([None, None, None, None])
+
+                    total_cif_cell = WriteOnlyCell(worksheet, value=sum(l['total_cif'] for l in licenses_list))
+                    total_cif_cell.font = Font(bold=True)
+                    totals_row.append(total_cif_cell)
+
+                    balance_cif_cell = WriteOnlyCell(worksheet, value=sum(l['balance_cif'] for l in licenses_list))
+                    balance_cif_cell.font = Font(bold=True)
+                    totals_row.append(balance_cif_cell)
+
+                    for item in items_with_data:
+                        item_name = item['name']
+                        has_restriction = item.get('has_restriction', False)
+                        totals_row.extend([None, None])  # HSN, Description
+                        for qty_type in ['quantity', 'allotted_quantity', 'debited_quantity', 'available_quantity']:
+                            total = sum(l['items'].get(item_name, {}).get(qty_type, 0) for l in licenses_list)
+                            cell = WriteOnlyCell(worksheet, value=total)
+                            cell.font = Font(bold=True)
+                            totals_row.append(cell)
+                        if has_restriction:
+                            totals_row.append(None)  # Restriction %
+                            total_restriction = sum(l['items'].get(item_name, {}).get('restriction_value', 0) for l in licenses_list)
+                            cell = WriteOnlyCell(worksheet, value=total_restriction)
+                            cell.font = Font(bold=True)
+                            totals_row.append(cell)
+
+                    worksheet.append(totals_row)
+
+            # Save workbook
+            workbook.save(temp_file.name)
+            workbook.close()
+
+            # Stream file
+            def file_iterator(file_path, chunk_size=8192):
+                with open(file_path, 'rb') as f:
+                    while True:
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        yield chunk
+                try:
+                    os.unlink(file_path)
+                except:
+                    pass
+
+            response = StreamingHttpResponse(
+                file_iterator(temp_file.name),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename="item_pivot_report.xlsx"'
+            return response
+
+        except Exception as e:
             try:
                 os.unlink(temp_file.name)
             except:

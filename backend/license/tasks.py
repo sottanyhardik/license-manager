@@ -165,11 +165,23 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
                 worksheet.append([title_cell] + [None] * 25)
                 worksheet.append([])
 
-                # Build headers
+                # Build headers - only include items that have data in this norm-notification
                 base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Balance CIF']
                 item_headers = []
 
+                # Filter items to only those with data in this norm-notification
+                items_with_data = []
                 for item in report_data['items']:
+                    item_name = item['name']
+                    # Check if ANY license in this list has this item
+                    has_data = any(
+                        license_data['items'].get(item_name, {}).get('quantity', 0) > 0
+                        for license_data in licenses_list
+                    )
+                    if has_data:
+                        items_with_data.append(item)
+
+                for item in items_with_data:
                     item_name = item['name']
                     has_restriction = item.get('has_restriction', False)
                     headers = [
@@ -208,7 +220,7 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
                         license_data['balance_cif']
                     ]
 
-                    for item in report_data['items']:
+                    for item in items_with_data:
                         item_name = item['name']
                         has_restriction = item.get('has_restriction', False)
                         item_data = license_data['items'].get(item_name, {
@@ -249,7 +261,7 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
                 balance_cif_cell.font = Font(bold=True)
                 totals_row.append(balance_cif_cell)
 
-                for item in report_data['items']:
+                for item in items_with_data:
                     item_name = item['name']
                     has_restriction = item.get('has_restriction', False)
 

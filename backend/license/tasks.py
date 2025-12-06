@@ -95,6 +95,10 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
     self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100, 'status': 'Generating report data...'})
 
     try:
+        # Validate parameters
+        if not sion_norm:
+            raise ValueError('sion_norm parameter is required')
+
         # Generate report data
         view = ItemPivotReportView()
         report_data = view.generate_report(
@@ -105,6 +109,10 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
             min_balance=min_balance,
             license_status=license_status
         )
+
+        # Check if report_data contains an error
+        if isinstance(report_data, dict) and 'error' in report_data:
+            raise ValueError(report_data['error'])
 
         self.update_state(state='PROGRESS', meta={'current': 50, 'total': 100, 'status': 'Creating Excel file...'})
 
@@ -121,8 +129,15 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
         workbook = openpyxl.Workbook(write_only=True)
 
         licenses_by_norm_notification = report_data.get('licenses_by_norm_notification', {})
+
+        # Check if there's data to export
+        if not licenses_by_norm_notification:
+            raise ValueError('No data found matching the filters. Try adjusting the parameters.')
+
         total_sheets = sum(len(notif_dict) for notif_dict in licenses_by_norm_notification.values())
         current_sheet = 0
+
+        logger.info(f"Generating {total_sheets} sheets for task {self.request.id}")
 
         # Create a sheet for each norm-notification combination
         for norm_class in sorted(licenses_by_norm_notification.keys()):
@@ -279,8 +294,13 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
 
     except Exception as e:
         logger.error(f"Error generating item pivot Excel: {str(e)}", exc_info=True)
-        return {
-            'status': 'FAILURE',
-            'error': str(e),
-            'task_id': self.request.id
-        }
+        # Update task state to FAILURE with error message
+        self.update_state(
+            state='FAILURE',
+            meta={
+                'error': str(e),
+                'exc_type': type(e).__name__
+            }
+        )
+        # Re-raise to mark task as failed
+        raise

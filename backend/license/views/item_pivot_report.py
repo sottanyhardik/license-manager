@@ -725,14 +725,14 @@ class ItemPivotViewSet(viewsets.ViewSet):
             traceback.print_exc()
             return Response({"error": str(e)}, status=500)
 
-    @action(detail=False, methods=['post'], url_path='generate-async')
+    @action(detail=False, methods=['post', 'get'], url_path='generate-async')
     def generate_async(self, request):
         """
         Generate Excel report asynchronously using Celery.
 
-        POST Body:
+        Query Parameters / POST Body:
             days: Number of days to look back (default: 30)
-            sion_norm: Filter by SION norm (optional)
+            sion_norm: Filter by SION norm (REQUIRED)
             company_ids: Comma-separated company IDs (optional)
             exclude_company_ids: Comma-separated company IDs to exclude (optional)
             min_balance: Minimum balance CIF (default: 200)
@@ -743,13 +743,21 @@ class ItemPivotViewSet(viewsets.ViewSet):
         """
         from license.tasks import generate_item_pivot_excel
 
-        # Get parameters from request
-        days = int(request.data.get('days', request.GET.get('days', 30)))
-        sion_norm = request.data.get('sion_norm', request.GET.get('sion_norm'))
-        company_ids = request.data.get('company_ids', request.GET.get('company_ids'))
-        exclude_company_ids = request.data.get('exclude_company_ids', request.GET.get('exclude_company_ids'))
-        min_balance = int(request.data.get('min_balance', request.GET.get('min_balance', 200)))
-        license_status = request.data.get('license_status', request.GET.get('license_status', 'active'))
+        # Get parameters from request (support both GET and POST)
+        params = request.data if request.method == 'POST' else request.GET
+        days = int(params.get('days', 30))
+        sion_norm = params.get('sion_norm')
+        company_ids = params.get('company_ids')
+        exclude_company_ids = params.get('exclude_company_ids')
+        min_balance = int(params.get('min_balance', 200))
+        license_status = params.get('license_status', 'active')
+
+        # Validate required parameters
+        if not sion_norm:
+            return Response({
+                'error': 'sion_norm parameter is required',
+                'available_norms': ['E1', 'E5', 'E126', 'E132']
+            }, status=400)
 
         # Start the Celery task
         task = generate_item_pivot_excel.delay(

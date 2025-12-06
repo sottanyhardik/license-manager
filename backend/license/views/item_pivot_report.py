@@ -9,7 +9,7 @@ from collections import defaultdict
 from decimal import Decimal
 from typing import Dict, List, Any
 
-from django.db.models import Sum
+from django.db.models import Sum, Prefetch
 from django.http import JsonResponse, HttpResponse
 from django.views import View
 from rest_framework import viewsets
@@ -110,7 +110,6 @@ class ItemPivotReportView(View):
             licenses = licenses.exclude(exporter_id__in=exclude_id_list)
 
         # Optimize with select_related and prefetch_related to reduce queries
-        from django.db.models import Prefetch
         licenses = licenses.select_related(
             'exporter',
             'port'
@@ -120,10 +119,17 @@ class ItemPivotReportView(View):
                          Prefetch('items',
                                   queryset=ItemNameModel.objects.filter(is_active=True).select_related(
                                       'sion_norm_class'))
-                     )),
+                     ).only('id', 'license_id', 'hs_code_id', 'quantity', 'allotted_quantity',
+                            'debited_quantity', 'available_quantity', 'debited_value', 'cif_fc', 'description')),
             Prefetch('export_license',
-                     queryset=LicenseExportItemModel.objects.select_related('norm_class'))
+                     queryset=LicenseExportItemModel.objects.select_related('norm_class').only(
+                         'id', 'license_id', 'norm_class_id', 'cif_fc'))
+        ).only('id', 'license_number', 'license_date', 'license_expiry_date', 'exporter_id',
+               'port_id', 'notification_number', 'purchase_status', 'get_balance_cif'
         ).order_by('license_expiry_date', 'license_date')
+
+        # Convert to list to avoid re-evaluating queryset
+        licenses = list(licenses)
 
         # Collect all unique items across all licenses
         all_items = {}  # Changed to dict to store item object for sorting
@@ -216,13 +222,20 @@ class ItemPivotReportView(View):
         for norm, notification_dict in licenses_by_norm_notification.items():
             result_dict[norm] = dict(notification_dict)
 
-        # Fetch notes and conditions for each norm
+        # Fetch notes and conditions for all norms in a single query
         from core.models import SionNormClassModel
+        norm_classes_list = list(result_dict.keys())
+        sion_norms = SionNormClassModel.objects.filter(
+            norm_class__in=norm_classes_list
+        ).prefetch_related('notes', 'conditions')
+
+        # Build dict from fetched norms
         norm_notes_conditions = {}
-        for norm_class in result_dict.keys():
-            try:
-                sion_norm = SionNormClassModel.objects.prefetch_related('notes', 'conditions').get(
-                    norm_class=norm_class)
+        sion_norms_dict = {sn.norm_class: sn for sn in sion_norms}
+
+        for norm_class in norm_classes_list:
+            if norm_class in sion_norms_dict:
+                sion_norm = sion_norms_dict[norm_class]
                 norm_notes_conditions[norm_class] = {
                     'notes': [
                         {'note_text': note.note_text, 'display_order': note.display_order}
@@ -233,7 +246,7 @@ class ItemPivotReportView(View):
                         for cond in sion_norm.conditions.all()
                     ]
                 }
-            except SionNormClassModel.DoesNotExist:
+            else:
                 norm_notes_conditions[norm_class] = {'notes': [], 'conditions': []}
 
         return {
@@ -261,10 +274,8 @@ class ItemPivotReportView(View):
         Returns:
             Dictionary with license data and item quantities
         """
-        # Calculate total CIF from export license items
-        total_cif = license_obj.export_license.aggregate(
-            total=Sum('cif_fc')
-        )['total'] or Decimal('0')
+        # Calculate total CIF from export license items (already prefetched)
+        total_cif = sum(item.cif_fc or Decimal('0') for item in license_obj.export_license.all())
 
         # Aggregate quantities by item (sum across all serial numbers)
         item_quantities = defaultdict(lambda: {

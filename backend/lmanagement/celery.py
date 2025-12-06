@@ -40,6 +40,26 @@ app.conf.beat_schedule = {
             "expires": 3600,  # Task expires after 1 hour
         }
     },
+
+    # Update balance_cif every 30 minutes
+    "update-balances-every-30-minutes": {
+        "task": "update_all_balances_periodic",
+        "schedule": crontab(minute='*/30'),  # Every 30 minutes
+        "args": (),
+        "options": {
+            "expires": 1800,  # Task expires after 30 minutes
+        }
+    },
+
+    # Cleanup old task records every hour
+    "cleanup-old-tasks-hourly": {
+        "task": "cleanup_old_task_records",
+        "schedule": crontab(minute=0),  # Every hour at :00
+        "args": (),
+        "options": {
+            "expires": 3600,  # Task expires after 1 hour
+        }
+    },
 }
 
 

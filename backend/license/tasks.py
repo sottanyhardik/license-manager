@@ -456,3 +456,149 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
         )
         # Re-raise to mark task as failed
         raise
+
+
+@shared_task(name='update_all_balances_periodic')
+def update_all_balances_periodic():
+    """
+    Periodic task that runs every 30 minutes to update balance_cif for all licenses.
+    This ensures balance_cif stays current without manual intervention.
+
+    Updates:
+    - balance_cif (from LicenseBalanceCalculator)
+    - is_expired (based on expiry_date)
+    - is_null (balance < $500)
+    - is_active (False if expired)
+
+    Returns:
+        dict with status and stats
+    """
+    from django.utils import timezone
+    from decimal import Decimal
+    from license.models import LicenseDetailsModel
+    from license.services.balance_calculator import LicenseBalanceCalculator
+    from core.models import CeleryTaskTracker
+
+    task_id = update_all_balances_periodic.request.id
+    logger.info(f"Starting periodic balance update: task_id={task_id}")
+    start_time = datetime.now()
+
+    # Track task in database
+    tracker = CeleryTaskTracker.objects.create(
+        task_id=task_id,
+        task_name='update_all_balances_periodic',
+        status='STARTED',
+        started_at=start_time
+    )
+
+    try:
+        licenses = LicenseDetailsModel.objects.all()
+        total_licenses = licenses.count()
+
+        updated_count = 0
+        error_count = 0
+        today = timezone.now().date()
+
+        batch_size = 100
+        for i, license_obj in enumerate(licenses.iterator(chunk_size=batch_size)):
+            try:
+                # Calculate balance
+                balance = LicenseBalanceCalculator.calculate_balance(license_obj)
+
+                # Determine flags
+                is_expired = license_obj.license_expiry_date < today if license_obj.license_expiry_date else False
+                is_null = balance < Decimal('500')
+                is_active = not is_expired
+
+                # Update license
+                LicenseDetailsModel.objects.filter(pk=license_obj.pk).update(
+                    balance_cif=balance,
+                    is_expired=is_expired,
+                    is_null=is_null,
+                    is_active=is_active
+                )
+
+                updated_count += 1
+
+                # Update progress every batch
+                if (i + 1) % batch_size == 0:
+                    tracker.current = i + 1
+                    tracker.total = total_licenses
+                    tracker.progress_message = f'Updated {updated_count} licenses...'
+                    tracker.save(update_fields=['current', 'total', 'progress_message'])
+
+            except Exception as e:
+                error_count += 1
+                logger.error(f"Error updating license {license_obj.license_number}: {str(e)}")
+
+        elapsed = (datetime.now() - start_time).total_seconds()
+
+        result = {
+            'status': 'success',
+            'updated': updated_count,
+            'errors': error_count,
+            'total_licenses': total_licenses,
+            'elapsed_seconds': elapsed,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        # Update tracker
+        tracker.status = 'SUCCESS'
+        tracker.completed_at = timezone.now()
+        tracker.result = result
+        tracker.save(update_fields=['status', 'completed_at', 'result'])
+
+        logger.info(f"Periodic balance update completed: {result}")
+        return result
+
+    except Exception as e:
+        error_msg = f"Periodic balance update failed: {str(e)}"
+        logger.error(error_msg)
+
+        # Update tracker
+        tracker.status = 'FAILURE'
+        tracker.completed_at = timezone.now()
+        tracker.result = {'status': 'error', 'error': str(e)}
+        tracker.traceback = str(e)
+        tracker.save(update_fields=['status', 'completed_at', 'result', 'traceback'])
+
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+
+@shared_task(name='cleanup_old_task_records')
+def cleanup_old_task_records():
+    """
+    Cleanup task that runs every hour to delete completed Celery task records older than 2 hours.
+    Keeps the database clean and prevents table bloat.
+
+    Returns:
+        dict with count of deleted records
+    """
+    from django.utils import timezone
+    from core.models import CeleryTaskTracker
+
+    logger.info("Starting cleanup of old task records")
+
+    # Delete completed/failed tasks older than 2 hours
+    cutoff_time = timezone.now() - timedelta(hours=2)
+
+    old_tasks = CeleryTaskTracker.objects.filter(
+        status__in=['SUCCESS', 'FAILURE', 'REVOKED'],
+        completed_at__lt=cutoff_time
+    )
+
+    count = old_tasks.count()
+    old_tasks.delete()
+
+    logger.info(f"Cleaned up {count} old task records")
+
+    return {
+        'status': 'success',
+        'deleted_count': count,
+        'cutoff_time': cutoff_time.isoformat(),
+        'timestamp': datetime.now().isoformat()
+    }

@@ -501,3 +501,58 @@ class ExchangeRateModel(AuditModel):
     def save(self, *args, **kwargs):
         """Override save to ensure date uniqueness"""
         super().save(*args, **kwargs)
+
+
+class CeleryTaskTracker(models.Model):
+    """
+    Track all Celery tasks for monitoring and cleanup.
+    Automatically records task start, completion, and results.
+    """
+    task_id = models.CharField(max_length=255, unique=True, db_index=True)
+    task_name = models.CharField(max_length=255, db_index=True)
+    status = models.CharField(
+        max_length=50,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('STARTED', 'Started'),
+            ('SUCCESS', 'Success'),
+            ('FAILURE', 'Failure'),
+            ('RETRY', 'Retry'),
+            ('REVOKED', 'Revoked'),
+        ],
+        default='PENDING',
+        db_index=True
+    )
+
+    # Task metadata
+    args = models.JSONField(default=list, blank=True)
+    kwargs = models.JSONField(default=dict, blank=True)
+    result = models.JSONField(null=True, blank=True)
+    traceback = models.TextField(null=True, blank=True)
+
+    # Timing
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Progress tracking
+    current = models.IntegerField(default=0)
+    total = models.IntegerField(default=100)
+    progress_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'completed_at']),
+            models.Index(fields=['task_name', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.task_name} ({self.task_id[:8]}) - {self.status}"
+
+    @property
+    def duration(self):
+        """Calculate task duration in seconds"""
+        if self.completed_at and self.started_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None

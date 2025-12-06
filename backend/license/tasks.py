@@ -23,7 +23,7 @@ def update_items():
 
 
 @shared_task(bind=True)
-def update_all_license_balances(self):
+def update_all_license_balances(self, license_status='all'):
     """
     High-priority task to update balance_cif, is_active, is_expired, and restrictions for all licenses.
     Triggered manually from Item Pivot Report for fast, accurate report generation.
@@ -32,8 +32,11 @@ def update_all_license_balances(self):
     1. Updates balance_cif for all licenses using LicenseBalanceCalculator
     2. Updates is_expired based on license_expiry_date
     3. Updates is_null based on balance < $500
-    4. Updates is_active based on expiry (mark inactive if expired)
+    4. Updates is_active: False if expired, True if not expired
     5. Checks and updates restriction flags on import items
+
+    Args:
+        license_status: Filter licenses by status ('active', 'inactive', 'all')
 
     Returns:
         dict with status, counts, and timing info
@@ -43,12 +46,20 @@ def update_all_license_balances(self):
     from license.models import LicenseDetailsModel, LicenseImportItemsModel
     from license.services.balance_calculator import LicenseBalanceCalculator
 
-    logger.info(f"Starting update_all_license_balances task: task_id={self.request.id}")
+    logger.info(f"Starting update_all_license_balances task: task_id={self.request.id}, license_status={license_status}")
     start_time = datetime.now()
 
     try:
-        # Get all licenses
+        # Get licenses based on status filter
         licenses = LicenseDetailsModel.objects.all()
+
+        # Filter by license status if specified
+        if license_status == 'active':
+            licenses = licenses.filter(is_active=True)
+        elif license_status == 'inactive':
+            licenses = licenses.filter(is_active=False)
+        # else: license_status == 'all', no filter
+
         total_licenses = licenses.count()
 
         logger.info(f"Processing {total_licenses} licenses")

@@ -96,7 +96,8 @@ export default function ItemPivotReport() {
     };
 
     const handleUpdateBalance = async () => {
-        if (!confirm('This will update balance, expiry status, and restrictions for all licenses. Continue?')) {
+        const statusText = licenseStatus === 'active' ? 'active' : licenseStatus === 'inactive' ? 'inactive' : 'all';
+        if (!confirm(`This will update balance, expiry status, and restrictions for ${statusText} licenses. Continue?`)) {
             return;
         }
 
@@ -104,8 +105,10 @@ export default function ItemPivotReport() {
         setUpdateProgress({ current: 0, total: 100, status: 'Starting update...' });
 
         try {
-            // Trigger the update task
-            const response = await api.post('item-pivot/update-balance/');
+            // Trigger the update task with current license status filter
+            const response = await api.post('item-pivot/update-balance/', {
+                license_status: licenseStatus
+            });
             const taskId = response.data.task_id;
             setUpdateTaskId(taskId);
 

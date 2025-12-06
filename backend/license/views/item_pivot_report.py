@@ -1014,11 +1014,18 @@ class ItemPivotViewSet(viewsets.ViewSet):
         """
         from license.tasks import update_all_license_balances
 
+        # Get license_status parameter from request body
+        license_status = request.data.get('license_status', 'all')
+
         # Start the Celery task with high priority
-        task = update_all_license_balances.apply_async(priority=9)  # High priority (0-9, 9 is highest)
+        task = update_all_license_balances.apply_async(
+            args=[license_status],
+            priority=9  # High priority (0-9, 9 is highest)
+        )
 
         return Response({
             'task_id': task.id,
             'status': 'PENDING',
-            'message': 'Balance update started. This will update all licenses with current balance, expiry status, and restrictions. Use the task_id to check status.'
+            'license_status': license_status,
+            'message': f'Balance update started for {license_status} licenses. Use the task_id to check status.'
         }, status=202)

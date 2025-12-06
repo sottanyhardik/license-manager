@@ -1,16 +1,15 @@
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useState, useContext} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
 import {formatIndianNumber} from "../../utils/numberFormatter";
+import {ToastContext} from "../../components/ToastContext";
 
 export default function ItemPivotReport() {
+    const {showToast} = useContext(ToastContext);
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
-    const [updatingBalance, setUpdatingBalance] = useState(false);
-    const [updateTaskId, setUpdateTaskId] = useState(null);
-    const [updateProgress, setUpdateProgress] = useState({ current: 0, total: 100, status: '' });
 
     // Filter states
     const [selectedCompanies, setSelectedCompanies] = useState([]);
@@ -97,57 +96,50 @@ export default function ItemPivotReport() {
 
     const handleUpdateBalance = async () => {
         const statusText = licenseStatus === 'active' ? 'active' : licenseStatus === 'inactive' ? 'inactive' : 'all';
-        if (!confirm(`This will update balance, expiry status, and restrictions for ${statusText} licenses. Continue?`)) {
-            return;
-        }
-
-        setUpdatingBalance(true);
-        setUpdateProgress({ current: 0, total: 100, status: 'Starting update...' });
 
         try {
-            // Trigger the update task with current license status filter
+            // Trigger the update task with current license status filter (no confirmation, runs in background)
             const response = await api.post('item-pivot/update-balance/', {
                 license_status: licenseStatus
             });
             const taskId = response.data.task_id;
-            setUpdateTaskId(taskId);
 
-            // Start polling for status
+            // Show immediate toast notification
+            showToast(`Balance update started for ${statusText} licenses. You'll be notified when complete.`, 'info', 5000);
+
+            // Start polling for status in background
             pollUpdateStatus(taskId);
         } catch (error) {
-            alert('Failed to start balance update. Please try again.');
-            setUpdatingBalance(false);
+            showToast('Failed to start balance update. Please try again.', 'error');
         }
     };
 
     const pollUpdateStatus = async (taskId) => {
         try {
             const response = await api.get(`item-pivot/task-status/${taskId}/`);
-            const { state, current, total, status, result } = response.data;
-
-            setUpdateProgress({ current, total, status });
+            const { state, result } = response.data;
 
             if (state === 'SUCCESS') {
-                setUpdatingBalance(false);
-                setUpdateTaskId(null);
-                alert(`Balance update completed!\n\nUpdated: ${result.updated} licenses\nRestrictions updated: ${result.restrictions_updated}\nTime: ${result.elapsed_seconds.toFixed(2)}s`);
+                // Show success notification
+                showToast(
+                    `Balance update completed! Updated ${result.updated} licenses in ${result.elapsed_seconds.toFixed(1)}s`,
+                    'success',
+                    6000
+                );
 
                 // Reload the report if a norm is active
                 if (activeNormTab) {
                     loadReport(activeNormTab);
                 }
             } else if (state === 'FAILURE') {
-                setUpdatingBalance(false);
-                setUpdateTaskId(null);
-                alert('Balance update failed: ' + status);
+                showToast('Balance update failed. Please try again.', 'error');
             } else {
-                // Continue polling
-                setTimeout(() => pollUpdateStatus(taskId), 1000);
+                // Continue polling every 2 seconds
+                setTimeout(() => pollUpdateStatus(taskId), 2000);
             }
         } catch (error) {
-            setUpdatingBalance(false);
-            setUpdateTaskId(null);
-            alert('Failed to check update status. Please refresh the page.');
+            // Silently fail polling errors (task might still be running)
+            console.error('Polling error:', error);
         }
     };
 
@@ -361,21 +353,10 @@ export default function ItemPivotReport() {
                                     <button
                                         className="btn btn-warning"
                                         onClick={handleUpdateBalance}
-                                        disabled={updatingBalance}
-                                        title="Update balance_cif, is_active, is_expired, and restrictions for all licenses"
+                                        title="Update balance_cif, is_active, is_expired, and restrictions. Runs in background."
                                     >
-                                        {updatingBalance ? (
-                                            <>
-                                                <span className="spinner-border spinner-border-sm me-2" role="status"
-                                                      aria-hidden="true"></span>
-                                                {updateProgress.status || 'Updating...'}
-                                            </>
-                                        ) : (
-                                            <>
-                                                <i className="bi bi-arrow-clockwise me-2"></i>
-                                                Update Balance
-                                            </>
-                                        )}
+                                        <i className="bi bi-arrow-clockwise me-2"></i>
+                                        Update Balance
                                     </button>
                                     <button
                                         className="btn btn-success"

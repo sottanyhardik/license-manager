@@ -1,12 +1,11 @@
-import React, {useEffect, useState, useContext} from "react";
+import React, {useEffect, useState} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
 import {formatIndianNumber} from "../../utils/numberFormatter";
-import {ToastContext} from "../../components/ToastContext";
+import {toast} from "react-toastify";
 
 export default function ItemPivotReport() {
-    const {showToast} = useContext(ToastContext);
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -105,12 +104,14 @@ export default function ItemPivotReport() {
             const taskId = response.data.task_id;
 
             // Show immediate toast notification
-            showToast(`Balance update started for ${statusText} licenses. You'll be notified when complete.`, 'info', 5000);
+            toast.info(`Balance update started for ${statusText} licenses. You'll be notified when complete.`, {
+                autoClose: 5000
+            });
 
             // Start polling for status in background
             pollUpdateStatus(taskId);
         } catch (error) {
-            showToast('Failed to start balance update. Please try again.', 'error');
+            toast.error('Failed to start balance update. Please try again.');
         }
     };
 
@@ -121,10 +122,9 @@ export default function ItemPivotReport() {
 
             if (state === 'SUCCESS') {
                 // Show success notification
-                showToast(
+                toast.success(
                     `Balance update completed! Updated ${result.updated} licenses in ${result.elapsed_seconds.toFixed(1)}s`,
-                    'success',
-                    6000
+                    { autoClose: 6000 }
                 );
 
                 // Reload the report if a norm is active
@@ -132,7 +132,7 @@ export default function ItemPivotReport() {
                     loadReport(activeNormTab);
                 }
             } else if (state === 'FAILURE') {
-                showToast('Balance update failed. Please try again.', 'error');
+                toast.error('Balance update failed. Please try again.');
             } else {
                 // Continue polling every 2 seconds
                 setTimeout(() => pollUpdateStatus(taskId), 2000);

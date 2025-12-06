@@ -709,3 +709,94 @@ class ItemPivotViewSet(viewsets.ViewSet):
             import traceback
             traceback.print_exc()
             return Response({"error": str(e)}, status=500)
+
+    @action(detail=False, methods=['post'], url_path='generate-async')
+    def generate_async(self, request):
+        """
+        Generate Excel report asynchronously using Celery.
+
+        POST Body:
+            days: Number of days to look back (default: 30)
+            sion_norm: Filter by SION norm (optional)
+            company_ids: Comma-separated company IDs (optional)
+            exclude_company_ids: Comma-separated company IDs to exclude (optional)
+            min_balance: Minimum balance CIF (default: 200)
+            license_status: Filter by status (default: 'active')
+
+        Returns:
+            task_id: ID to check status and download file
+        """
+        from license.tasks import generate_item_pivot_excel
+
+        # Get parameters from request
+        days = int(request.data.get('days', request.GET.get('days', 30)))
+        sion_norm = request.data.get('sion_norm', request.GET.get('sion_norm'))
+        company_ids = request.data.get('company_ids', request.GET.get('company_ids'))
+        exclude_company_ids = request.data.get('exclude_company_ids', request.GET.get('exclude_company_ids'))
+        min_balance = int(request.data.get('min_balance', request.GET.get('min_balance', 200)))
+        license_status = request.data.get('license_status', request.GET.get('license_status', 'active'))
+
+        # Start the Celery task
+        task = generate_item_pivot_excel.delay(
+            days=days,
+            sion_norm=sion_norm,
+            company_ids=company_ids,
+            exclude_company_ids=exclude_company_ids,
+            min_balance=min_balance,
+            license_status=license_status
+        )
+
+        return Response({
+            'task_id': task.id,
+            'status': 'PENDING',
+            'message': 'Report generation started. Use the task_id to check status.'
+        }, status=202)
+
+    @action(detail=False, methods=['get'], url_path='task-status/(?P<task_id>[^/.]+)')
+    def task_status(self, request, task_id=None):
+        """
+        Check the status of an async Excel generation task.
+
+        Returns:
+            state: Task state (PENDING, PROGRESS, SUCCESS, FAILURE)
+            current: Current progress (0-100)
+            total: Total progress (100)
+            status: Status message
+            result: Result data (if completed)
+        """
+        from celery.result import AsyncResult
+
+        task = AsyncResult(task_id)
+
+        if task.state == 'PENDING':
+            response = {
+                'state': task.state,
+                'current': 0,
+                'total': 100,
+                'status': 'Pending...'
+            }
+        elif task.state == 'PROGRESS':
+            response = {
+                'state': task.state,
+                'current': task.info.get('current', 0),
+                'total': task.info.get('total', 100),
+                'status': task.info.get('status', '')
+            }
+        elif task.state == 'SUCCESS':
+            response = {
+                'state': task.state,
+                'current': 100,
+                'total': 100,
+                'status': 'Completed!',
+                'result': task.info
+            }
+        else:
+            # Something went wrong
+            response = {
+                'state': task.state,
+                'current': 100,
+                'total': 100,
+                'status': str(task.info) if task.info else 'Unknown error'
+            }
+
+        return Response(response)

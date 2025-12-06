@@ -127,6 +127,24 @@ echo -e "\${BLUE}→ Reloading Nginx...\${NC}"
 echo '$PASSWORD' | sudo -S systemctl reload nginx
 
 echo -e "\n\${BLUE}================================================\${NC}"
+echo -e "\${BLUE}🔧 System Updates\${NC}"
+echo -e "\${BLUE}================================================\${NC}"
+
+echo -e "\${BLUE}→ Updating package lists...\${NC}"
+echo '$PASSWORD' | sudo -S apt-get update -qq
+
+echo -e "\${BLUE}→ Checking for available updates...\${NC}"
+UPDATES=\$(apt list --upgradable 2>/dev/null | grep -v "Listing" | wc -l)
+if [ \$UPDATES -gt 0 ]; then
+    echo -e "\${YELLOW}  ⚠️  \$UPDATES updates available\${NC}"
+    echo -e "\${BLUE}→ Installing system updates (non-interactive)...\${NC}"
+    echo '$PASSWORD' | sudo -S DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+    echo -e "\${GREEN}  ✅ System updates installed\${NC}"
+else
+    echo -e "\${GREEN}  ✅ System is up to date\${NC}"
+fi
+
+echo -e "\n\${BLUE}================================================\${NC}"
 echo -e "\${BLUE}📊 Service Status\${NC}"
 echo -e "\${BLUE}================================================\${NC}"
 echo -e "\${YELLOW}Supervisor Services:\${NC}"
@@ -156,6 +174,13 @@ echo '$PASSWORD' | sudo -S supervisorctl status | grep license-manager
 echo -e "\n\${GREEN}================================================\${NC}"
 echo -e "\${GREEN}🎉 Deployment completed successfully!\${NC}"
 echo -e "\${GREEN}================================================\${NC}"
+
+echo -e "\n\${BLUE}================================================\${NC}"
+echo -e "\${BLUE}🔄 Server Reboot\${NC}"
+echo -e "\${BLUE}================================================\${NC}"
+echo -e "\${YELLOW}→ Rebooting server to apply all updates...\${NC}"
+echo -e "\${YELLOW}→ Server will be back online in ~30 seconds\${NC}"
+echo '$PASSWORD' | sudo -S reboot
 ENDSSH
 
     # Check if SSH command was successful

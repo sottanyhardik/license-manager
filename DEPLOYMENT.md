@@ -1,32 +1,103 @@
 # License Manager - Deployment Guide
 
-## 🚀 Deployment Steps
+## ⚠️ IMPORTANT: Manual Deployment Only
 
-### Quick Reference - Common Commands
+**DO NOT run `./auto-deploy.sh` automatically!**
+
+The deployment script performs:
+- ✅ Code deployment and builds
+- ✅ Celery queue purge (removes all pending tasks)
+- ✅ System updates (apt-get upgrade)
+- 🔄 **Server reboot** (applies all updates)
+
+**Always run manually when you can monitor the process.**
+
+---
+
+## 🚀 Quick Deployment
+
+### Run Deployment Script
+
+```bash
+cd /Users/hardiksottany/PycharmProjects/license-manager
+./auto-deploy.sh
+```
+
+**What it does:**
+1. Pulls latest code from `version-4.1`
+2. Builds frontend (npm install & build)
+3. Installs Python dependencies
+4. Runs migrations and collects static files
+5. **Purges Celery queue** (removes stale tasks)
+6. Restarts all services (Gunicorn, Celery, Nginx)
+7. **Runs system updates** (apt-get update && upgrade)
+8. **Reboots servers** (~30 seconds downtime)
+
+Deploys to **both servers**: 143.110.252.201 and 139.59.92.226
+
+---
+
+## 📋 Post-Deployment Checklist
+
+### 1. Wait for Servers (30-60 seconds)
+
+### 2. Verify Services Running
+
+```bash
+ssh django@143.110.252.201 'sudo supervisorctl status'
+ssh django@139.59.92.226 'sudo supervisorctl status'
+```
+
+### 3. Test Application URLs
+
+- http://143.110.252.201 (Server 1)
+- https://license-manager.duckdns.org (Server 1 HTTPS)
+- http://139.59.92.226 (Server 2)
+- https://labdhi.duckdns.org (Server 2 HTTPS)
+
+### 4. Verify Celery Tasks
+
+```bash
+ssh django@143.110.252.201 'cd /home/django/license-manager/backend && source ../venv/bin/activate && celery -A lmanagement inspect registered | grep -E "identify_licenses|update_identified"'
+```
+
+Expected tasks:
+- `identify_licenses_needing_update` (Level-1)
+- `update_identified_licenses` (Level-2)
+
+---
+
+## 🔧 Manual Commands (Legacy)
+
+### Quick Reference
 
 ```bash
 # Restart application
-sudo systemctl restart license-manager
+sudo supervisorctl restart license-manager
+
+# Restart Celery
+sudo supervisorctl restart license-manager-celery license-manager-celery-beat
 
 # Restart Nginx
-sudo systemctl restart nginx
+sudo systemctl reload nginx
 
-# View application logs
-sudo journalctl -u license-manager -f
-
-# View Nginx error logs
+# View logs
+tail -f /home/django/license-manager/logs/celery.log
+tail -f /home/django/license-manager/logs/celery_beat.log
 sudo tail -f /var/log/nginx/error.log
 
 # Check service status
-sudo systemctl status license-manager
+sudo supervisorctl status
 sudo systemctl status nginx
-sudo systemctl status redis-server
 
-# Update application
-cd /var/www/license-manager && git pull
-source venv/bin/activate && cd backend && pip install -r requirements.txt
-python manage.py migrate && python manage.py collectstatic --noinput
-sudo systemctl restart license-manager
+# Purge Celery queue manually
+cd /home/django/license-manager/backend
+source ../venv/bin/activate
+celery -A lmanagement purge -f
+
+# Manual system update
+sudo apt-get update && sudo apt-get upgrade -y
+sudo reboot
 ```
 
 ---

@@ -102,6 +102,12 @@ echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null |
 echo -e "\${BLUE}→ Restarting license-manager service...\${NC}"
 echo '$PASSWORD' | sudo -S supervisorctl restart license-manager
 
+echo -e "\${BLUE}→ Purging Celery queue (removing all pending tasks)...\${NC}"
+cd backend
+celery -A lmanagement purge -f 2>/dev/null || echo -e "\${YELLOW}  ⚠️  Could not purge Celery queue (queue might be empty)\${NC}"
+cd ..
+echo -e "\${GREEN}  ✅ Celery queue purged\${NC}"
+
 echo -e "\${BLUE}→ Checking and restarting Celery if configured...\${NC}"
 if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery &>/dev/null; then
     echo '$PASSWORD' | sudo -S supervisorctl restart license-manager-celery

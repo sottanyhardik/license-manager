@@ -39,11 +39,11 @@ def add_grouped_export_action(viewset_class):
         # Get filtered queryset
         queryset = self.filter_queryset(self.get_queryset())
 
-        # Filter only BOEs with item details and order by company, item, port, date
+        # Filter only BOEs with item details and order by date first, then company, item, port
         queryset = queryset.filter(
             item_details__isnull=False
         ).distinct().order_by(
-            'company__name', 'product_name', 'port__code', 'bill_of_entry_date'
+            'bill_of_entry_date', 'company__name', 'product_name', 'port__code'
         ).prefetch_related(
             'item_details__sr_number__license',
             'item_details__sr_number__hs_code',

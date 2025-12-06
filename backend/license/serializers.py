@@ -376,7 +376,28 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 parsed_data['license_documents'] = license_documents
                 data = parsed_data
 
+        # Clean empty strings for boolean fields before validation
+        self._clean_boolean_fields(data)
+
         return super().to_internal_value(data)
+
+    def _clean_boolean_fields(self, data):
+        """Convert empty strings to False for boolean fields in nested data."""
+        # Boolean fields in main license
+        boolean_fields = ['is_audit', 'is_mnm', 'is_not_registered', 'is_null', 'is_au',
+                         'is_active', 'is_incomplete', 'is_expired', 'is_individual']
+
+        for field in boolean_fields:
+            if field in data and data[field] == '':
+                data[field] = False
+
+        # Boolean fields in import_license nested array
+        if 'import_license' in data and isinstance(data['import_license'], list):
+            for item in data['import_license']:
+                if isinstance(item, dict) and 'is_restricted' in item and item['is_restricted'] == '':
+                    item['is_restricted'] = False
+
+        return data
 
     def get_get_balance_cif(self, obj):
         """Return balance_cif field directly instead of computing it."""

@@ -20,7 +20,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 
 from core.constants import DEC_0, DEC_000, GE, MI, IP, SM, CO
-from license.models import LicenseDetailsModel, LicenseImportItemsModel
+from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemsModel
+from core.models import ItemNameModel
 
 
 class ItemPivotReportView(View):
@@ -109,10 +110,19 @@ class ItemPivotReportView(View):
             exclude_id_list = [int(cid.strip()) for cid in exclude_company_ids.split(',') if cid.strip()]
             licenses = licenses.exclude(exporter_id__in=exclude_id_list)
 
-        licenses = licenses.select_related('exporter', 'port').prefetch_related(
-            'import_license__items',
-            'import_license__hs_code',
-            'export_license__norm_class'
+        # Optimize with select_related and prefetch_related to reduce queries
+        from django.db.models import Prefetch
+        licenses = licenses.select_related(
+            'exporter',
+            'port'
+        ).prefetch_related(
+            Prefetch('import_license',
+                    queryset=LicenseImportItemsModel.objects.select_related('hs_code').prefetch_related(
+                        Prefetch('items',
+                                queryset=ItemNameModel.objects.filter(is_active=True).select_related('sion_norm_class'))
+                    )),
+            Prefetch('export_license',
+                    queryset=LicenseExportItemsModel.objects.select_related('norm_class'))
         ).order_by('license_expiry_date', 'license_date')
 
         # Collect all unique items across all licenses

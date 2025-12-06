@@ -512,7 +512,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
             if sion_import:
                 norm_quantity = Decimal(str(sion_import.quantity or 0))
-                calculated_quantity = net_quantity * norm_quantity
+                # SION norms are per MT (1000 kg), so multiply by 1000 to get per kg
+                calculated_quantity = net_quantity * norm_quantity * Decimal('1000')
                 return calculated_quantity
         except Exception as e:
             import logging

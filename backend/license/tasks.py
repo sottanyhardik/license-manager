@@ -95,12 +95,11 @@ def generate_item_pivot_excel(self, days=30, sion_norm=None, company_ids=None,
     self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100, 'status': 'Generating report data...'})
 
     try:
-        # Validate parameters
-        if not sion_norm:
-            raise ValueError('sion_norm parameter is required')
-
-        # Generate report data
+        # Generate report data (sion_norm is optional - if not provided, exports ALL norms)
         view = ItemPivotReportView()
+
+        logger.info(f"Generating report with params: sion_norm={sion_norm}, days={days}, min_balance={min_balance}")
+
         report_data = view.generate_report(
             days=days,
             sion_norm=sion_norm,

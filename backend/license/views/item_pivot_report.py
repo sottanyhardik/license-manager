@@ -145,17 +145,15 @@ class ItemPivotReportView(View):
             Prefetch('export_license',
                      queryset=export_items_qs.only('id', 'license_id', 'norm_class_id', 'cif_fc'))
         ).only('id', 'license_number', 'license_date', 'license_expiry_date', 'exporter_id',
-               'port_id', 'notification_number', 'purchase_status'
+               'port_id', 'notification_number', 'purchase_status', 'balance_cif'
         ).order_by('license_expiry_date', 'license_date')
 
         # Collect all unique items across all licenses
-        # Use iterator to process in batches and avoid loading all into memory
+        # Use list() with prefetch_related for optimal performance (iterator breaks prefetch)
         all_items = {}  # Changed to dict to store item object for sorting
-        valid_licenses = []  # Licenses already filtered by balance_cif at DB level
+        valid_licenses = list(licenses)  # Licenses already filtered by balance_cif at DB level
 
-        for license_obj in licenses.iterator(chunk_size=100):
-            valid_licenses.append(license_obj)
-
+        for license_obj in valid_licenses:
             for import_item in license_obj.import_license.all():
                 for item in import_item.items.all():
                     # Only add items with valid names and that are active
@@ -353,7 +351,8 @@ class ItemPivotReportView(View):
                         restriction_groups[restriction_key]['item_ids'].append(item.id)
 
         # Calculate available CIF within restriction for each group
-        balance_cif = license_obj.get_balance_cif or Decimal('0')
+        # Use stored balance_cif field instead of property to avoid extra queries
+        balance_cif = license_obj.balance_cif or Decimal('0')
         for group_name, group_data in restriction_groups.items():
             if group_data['restriction_percentage'] and total_cif > 0:
                 # Maximum allowed CIF for this restriction group

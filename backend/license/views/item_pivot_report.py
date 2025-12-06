@@ -95,9 +95,15 @@ class ItemPivotReportView(View):
             )
         # If 'all', no date filter applied
 
-        # Filter by SION norm if specified
-        if sion_norm:
-            licenses = licenses.filter(export_license__norm_class__norm_class=sion_norm).distinct()
+        # Filter by SION norm if specified (REQUIRED for performance)
+        if not sion_norm:
+            from django.http import JsonResponse
+            return {
+                'error': 'sion_norm parameter is required. Please select a SION norm (E1, E5, E126, E132, etc.)',
+                'available_norms': ['E1', 'E5', 'E126', 'E132']  # Common norms
+            }
+
+        licenses = licenses.filter(export_license__norm_class__norm_class=sion_norm).distinct()
 
         # Filter by company IDs if specified
         if company_ids:
@@ -127,6 +133,15 @@ class ItemPivotReportView(View):
         ).only('id', 'license_number', 'license_date', 'license_expiry_date', 'exporter_id',
                'port_id', 'notification_number', 'purchase_status'
         ).order_by('license_expiry_date', 'license_date')
+
+        # Check license count before processing
+        license_count = licenses.count()
+        if license_count > 500:
+            return {
+                'error': f'Too many licenses to process ({license_count} licenses). Please add filters to reduce the dataset.',
+                'suggestion': 'Use company_ids, exclude_company_ids, or reduce the date range (days parameter).',
+                'license_count': license_count
+            }
 
         # Convert to list to avoid re-evaluating queryset
         licenses = list(licenses)

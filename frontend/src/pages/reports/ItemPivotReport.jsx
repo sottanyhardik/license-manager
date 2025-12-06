@@ -8,6 +8,9 @@ export default function ItemPivotReport() {
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
+    const [updatingBalance, setUpdatingBalance] = useState(false);
+    const [updateTaskId, setUpdateTaskId] = useState(null);
+    const [updateProgress, setUpdateProgress] = useState({ current: 0, total: 100, status: '' });
 
     // Filter states
     const [selectedCompanies, setSelectedCompanies] = useState([]);
@@ -89,6 +92,59 @@ export default function ItemPivotReport() {
             setReportData(null);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUpdateBalance = async () => {
+        if (!confirm('This will update balance, expiry status, and restrictions for all licenses. Continue?')) {
+            return;
+        }
+
+        setUpdatingBalance(true);
+        setUpdateProgress({ current: 0, total: 100, status: 'Starting update...' });
+
+        try {
+            // Trigger the update task
+            const response = await api.post('item-pivot/update-balance/');
+            const taskId = response.data.task_id;
+            setUpdateTaskId(taskId);
+
+            // Start polling for status
+            pollUpdateStatus(taskId);
+        } catch (error) {
+            alert('Failed to start balance update. Please try again.');
+            setUpdatingBalance(false);
+        }
+    };
+
+    const pollUpdateStatus = async (taskId) => {
+        try {
+            const response = await api.get(`item-pivot/task-status/${taskId}/`);
+            const { state, current, total, status, result } = response.data;
+
+            setUpdateProgress({ current, total, status });
+
+            if (state === 'SUCCESS') {
+                setUpdatingBalance(false);
+                setUpdateTaskId(null);
+                alert(`Balance update completed!\n\nUpdated: ${result.updated} licenses\nRestrictions updated: ${result.restrictions_updated}\nTime: ${result.elapsed_seconds.toFixed(2)}s`);
+
+                // Reload the report if a norm is active
+                if (activeNormTab) {
+                    loadReport(activeNormTab);
+                }
+            } else if (state === 'FAILURE') {
+                setUpdatingBalance(false);
+                setUpdateTaskId(null);
+                alert('Balance update failed: ' + status);
+            } else {
+                // Continue polling
+                setTimeout(() => pollUpdateStatus(taskId), 1000);
+            }
+        } catch (error) {
+            setUpdatingBalance(false);
+            setUpdateTaskId(null);
+            alert('Failed to check update status. Please refresh the page.');
         }
     };
 
@@ -298,6 +354,25 @@ export default function ItemPivotReport() {
                                         <i className={`bi bi-funnel${hasActiveFilters ? '-fill' : ''} me-2`}></i>
                                         {filtersCollapsed ? 'Show' : 'Hide'} Filters
                                         {hasActiveFilters && <span className="badge bg-primary ms-2">Active</span>}
+                                    </button>
+                                    <button
+                                        className="btn btn-warning"
+                                        onClick={handleUpdateBalance}
+                                        disabled={updatingBalance}
+                                        title="Update balance_cif, is_active, is_expired, and restrictions for all licenses"
+                                    >
+                                        {updatingBalance ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status"
+                                                      aria-hidden="true"></span>
+                                                {updateProgress.status || 'Updating...'}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="bi bi-arrow-clockwise me-2"></i>
+                                                Update Balance
+                                            </>
+                                        )}
                                     </button>
                                     <button
                                         className="btn btn-success"

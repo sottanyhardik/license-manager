@@ -118,6 +118,10 @@ class ItemPivotReportView(View):
             exclude_id_list = [int(cid.strip()) for cid in exclude_company_ids.split(',') if cid.strip()]
             licenses = licenses.exclude(exporter_id__in=exclude_id_list)
 
+        # Filter by min_balance at database level using stored balance_cif field
+        # This dramatically reduces the number of licenses we need to process
+        licenses = licenses.filter(balance_cif__gte=min_balance)
+
         # Build filtered prefetch querysets based on sion_norm
         import_items_qs = LicenseImportItemsModel.objects.select_related('hs_code')
         export_items_qs = LicenseExportItemModel.objects.select_related('norm_class')
@@ -144,17 +148,12 @@ class ItemPivotReportView(View):
                'port_id', 'notification_number', 'purchase_status'
         ).order_by('license_expiry_date', 'license_date')
 
-        # Collect all unique items across all licenses AND filter by min_balance early
+        # Collect all unique items across all licenses
         # Use iterator to process in batches and avoid loading all into memory
         all_items = {}  # Changed to dict to store item object for sorting
-        valid_licenses = []  # Only keep licenses that meet min_balance criteria
+        valid_licenses = []  # Licenses already filtered by balance_cif at DB level
 
         for license_obj in licenses.iterator(chunk_size=100):
-            # Filter by balance early to avoid processing unnecessary licenses
-            balance = license_obj.get_balance_cif
-            if balance < min_balance:
-                continue
-
             valid_licenses.append(license_obj)
 
             for import_item in license_obj.import_license.all():
@@ -997,3 +996,29 @@ class ItemPivotViewSet(viewsets.ViewSet):
             }
 
         return Response(response)
+
+    @action(detail=False, methods=['post'], url_path='update-balance')
+    def update_balance(self, request):
+        """
+        Trigger high-priority task to update balance_cif, is_active, is_expired, and restrictions.
+
+        This task:
+        1. Updates balance_cif for all licenses using LicenseBalanceCalculator
+        2. Updates is_expired based on license_expiry_date
+        3. Updates is_null based on balance < $500
+        4. Updates is_active based on expiry (mark inactive if expired)
+        5. Checks and updates restriction flags on import items
+
+        Returns:
+            task_id: ID to check status using task-status endpoint
+        """
+        from license.tasks import update_all_license_balances
+
+        # Start the Celery task with high priority
+        task = update_all_license_balances.apply_async(priority=9)  # High priority (0-9, 9 is highest)
+
+        return Response({
+            'task_id': task.id,
+            'status': 'PENDING',
+            'message': 'Balance update started. This will update all licenses with current balance, expiry status, and restrictions. Use the task_id to check status.'
+        }, status=202)

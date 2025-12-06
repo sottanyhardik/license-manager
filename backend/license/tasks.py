@@ -22,6 +22,136 @@ def update_items():
         update_balance_values_task(item.id)
 
 
+@shared_task(bind=True)
+def update_all_license_balances(self):
+    """
+    High-priority task to update balance_cif, is_active, is_expired, and restrictions for all licenses.
+    Triggered manually from Item Pivot Report for fast, accurate report generation.
+
+    This task:
+    1. Updates balance_cif for all licenses using LicenseBalanceCalculator
+    2. Updates is_expired based on license_expiry_date
+    3. Updates is_null based on balance < $500
+    4. Updates is_active based on expiry (mark inactive if expired)
+    5. Checks and updates restriction flags on import items
+
+    Returns:
+        dict with status, counts, and timing info
+    """
+    from django.utils import timezone
+    from decimal import Decimal
+    from license.models import LicenseDetailsModel, LicenseImportItemsModel
+    from license.services.balance_calculator import LicenseBalanceCalculator
+
+    logger.info(f"Starting update_all_license_balances task: task_id={self.request.id}")
+    start_time = datetime.now()
+
+    try:
+        # Get all licenses
+        licenses = LicenseDetailsModel.objects.all()
+        total_licenses = licenses.count()
+
+        logger.info(f"Processing {total_licenses} licenses")
+
+        # Update task state
+        self.update_state(
+            state='PROGRESS',
+            meta={'current': 0, 'total': total_licenses, 'status': 'Updating license balances...'}
+        )
+
+        updated_count = 0
+        error_count = 0
+        today = timezone.now().date()
+
+        # Process licenses in batches
+        batch_size = 50
+        for i, license_obj in enumerate(licenses.iterator(chunk_size=batch_size)):
+            try:
+                # Calculate balance using centralized service
+                balance = LicenseBalanceCalculator.calculate_balance(license_obj)
+
+                # Determine flags
+                is_expired = license_obj.license_expiry_date < today if license_obj.license_expiry_date else False
+                is_null = balance < Decimal('500')
+                is_active = not is_expired  # Mark inactive if expired
+
+                # Update license fields
+                LicenseDetailsModel.objects.filter(pk=license_obj.pk).update(
+                    balance_cif=balance,
+                    is_expired=is_expired,
+                    is_null=is_null,
+                    is_active=is_active
+                )
+
+                updated_count += 1
+
+                # Update progress every batch
+                if (i + 1) % batch_size == 0:
+                    progress = int(((i + 1) / total_licenses) * 90)  # Reserve 10% for restrictions
+                    self.update_state(
+                        state='PROGRESS',
+                        meta={
+                            'current': i + 1,
+                            'total': total_licenses,
+                            'status': f'Updated {updated_count} licenses...'
+                        }
+                    )
+
+            except Exception as e:
+                error_count += 1
+                logger.error(f"Error updating license {license_obj.license_number}: {str(e)}")
+
+        # Update restriction flags on import items
+        self.update_state(
+            state='PROGRESS',
+            meta={'current': 90, 'total': 100, 'status': 'Updating restriction flags...'}
+        )
+
+        restriction_count = 0
+        import_items = LicenseImportItemsModel.objects.prefetch_related('items')
+
+        for import_item in import_items.iterator(chunk_size=100):
+            # Check if any linked ItemNameModel has restriction
+            has_restriction = any(
+                item.restriction_percentage > 0
+                for item in import_item.items.all()
+            )
+
+            # Update is_restricted flag if needed
+            if has_restriction and not import_item.is_restricted:
+                import_item.is_restricted = True
+                import_item.save(update_fields=['is_restricted'])
+                restriction_count += 1
+            elif not has_restriction and import_item.is_restricted:
+                import_item.is_restricted = False
+                import_item.save(update_fields=['is_restricted'])
+                restriction_count += 1
+
+        elapsed = (datetime.now() - start_time).total_seconds()
+
+        result = {
+            'status': 'success',
+            'updated': updated_count,
+            'errors': error_count,
+            'restrictions_updated': restriction_count,
+            'total_licenses': total_licenses,
+            'elapsed_seconds': elapsed,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        logger.info(f"Update completed: {result}")
+        return result
+
+    except Exception as e:
+        error_msg = f"Failed to update license balances: {str(e)}"
+        logger.error(error_msg)
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+
 @shared_task
 def sync_all_licenses():
     """

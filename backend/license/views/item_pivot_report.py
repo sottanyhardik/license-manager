@@ -137,12 +137,19 @@ class ItemPivotReportView(View):
                'port_id', 'notification_number', 'purchase_status'
         ).order_by('license_expiry_date', 'license_date')
 
-        # Convert to list to avoid re-evaluating queryset
-        licenses = list(licenses)
-
-        # Collect all unique items across all licenses
+        # Collect all unique items across all licenses AND filter by min_balance early
+        # Use iterator to process in batches and avoid loading all into memory
         all_items = {}  # Changed to dict to store item object for sorting
-        for license_obj in licenses:
+        valid_licenses = []  # Only keep licenses that meet min_balance criteria
+
+        for license_obj in licenses.iterator(chunk_size=100):
+            # Filter by balance early to avoid processing unnecessary licenses
+            balance = license_obj.get_balance_cif
+            if balance < min_balance:
+                continue
+
+            valid_licenses.append(license_obj)
+
             for import_item in license_obj.import_license.all():
                 for item in import_item.items.all():
                     # Only add items with valid names and that are active
@@ -164,12 +171,8 @@ class ItemPivotReportView(View):
         from collections import defaultdict
         licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
 
-        for license_obj in licenses:
+        for license_obj in valid_licenses:
             license_row = self._build_license_row(license_obj, sorted_items)
-
-            # Skip licenses with balance < min_balance
-            if license_row and license_row.get('balance_cif', 0) < min_balance:
-                continue
 
             if license_row:
                 # Handle blank/empty notification numbers

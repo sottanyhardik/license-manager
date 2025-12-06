@@ -125,7 +125,7 @@ class ItemPivotReportView(View):
                      queryset=LicenseExportItemModel.objects.select_related('norm_class').only(
                          'id', 'license_id', 'norm_class_id', 'cif_fc'))
         ).only('id', 'license_number', 'license_date', 'license_expiry_date', 'exporter_id',
-               'port_id', 'notification_number', 'purchase_status', 'get_balance_cif'
+               'port_id', 'notification_number', 'purchase_status'
         ).order_by('license_expiry_date', 'license_date')
 
         # Convert to list to avoid re-evaluating queryset

@@ -71,6 +71,7 @@ def update_all_license_balances(self, license_status='all'):
         )
 
         updated_count = 0
+        skipped_count = 0
         error_count = 0
         today = timezone.now().date()
 
@@ -86,7 +87,16 @@ def update_all_license_balances(self, license_status='all'):
                 is_null = balance < Decimal('500')
                 is_active = not is_expired  # Mark inactive if expired
 
-                # Update license fields
+                # Check if any value changed - skip update if nothing changed (optimization)
+                if (license_obj.balance_cif == balance and
+                    license_obj.is_expired == is_expired and
+                    license_obj.is_null == is_null and
+                    license_obj.is_active == is_active):
+                    # Nothing changed, skip this license to reduce DB writes
+                    skipped_count += 1
+                    continue
+
+                # Update license fields only if something changed
                 LicenseDetailsModel.objects.filter(pk=license_obj.pk).update(
                     balance_cif=balance,
                     is_expired=is_expired,
@@ -104,7 +114,7 @@ def update_all_license_balances(self, license_status='all'):
                         meta={
                             'current': i + 1,
                             'total': total_licenses,
-                            'status': f'Updated {updated_count} licenses...'
+                            'status': f'Updated {updated_count} licenses, skipped {skipped_count}...'
                         }
                     )
 
@@ -143,6 +153,7 @@ def update_all_license_balances(self, license_status='all'):
         result = {
             'status': 'success',
             'updated': updated_count,
+            'skipped': skipped_count,
             'errors': error_count,
             'restrictions_updated': restriction_count,
             'total_licenses': total_licenses,
@@ -500,6 +511,8 @@ def update_all_balances_periodic():
         today = timezone.now().date()
 
         batch_size = 100
+        skipped_count = 0
+
         for i, license_obj in enumerate(licenses.iterator(chunk_size=batch_size)):
             try:
                 # Calculate balance
@@ -510,7 +523,16 @@ def update_all_balances_periodic():
                 is_null = balance < Decimal('500')
                 is_active = not is_expired
 
-                # Update license
+                # Check if any value changed - skip update if nothing changed
+                if (license_obj.balance_cif == balance and
+                    license_obj.is_expired == is_expired and
+                    license_obj.is_null == is_null and
+                    license_obj.is_active == is_active):
+                    # Nothing changed, skip this license
+                    skipped_count += 1
+                    continue
+
+                # Update license only if something changed
                 LicenseDetailsModel.objects.filter(pk=license_obj.pk).update(
                     balance_cif=balance,
                     is_expired=is_expired,
@@ -524,7 +546,7 @@ def update_all_balances_periodic():
                 if (i + 1) % batch_size == 0:
                     tracker.current = i + 1
                     tracker.total = total_licenses
-                    tracker.progress_message = f'Updated {updated_count} licenses...'
+                    tracker.progress_message = f'Updated {updated_count} licenses, skipped {skipped_count}...'
                     tracker.save(update_fields=['current', 'total', 'progress_message'])
 
             except Exception as e:
@@ -536,6 +558,7 @@ def update_all_balances_periodic():
         result = {
             'status': 'success',
             'updated': updated_count,
+            'skipped': skipped_count,
             'errors': error_count,
             'total_licenses': total_licenses,
             'elapsed_seconds': elapsed,

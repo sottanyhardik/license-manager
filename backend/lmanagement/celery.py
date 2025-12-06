@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+
 from celery import Celery
 from celery.schedules import crontab
 from django.conf import settings
@@ -26,7 +27,6 @@ app.conf.update(
 
 # Auto-discover tasks from all installed apps (looks for tasks.py modules)
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
-
 
 # Periodic tasks schedule
 app.conf.beat_schedule = {

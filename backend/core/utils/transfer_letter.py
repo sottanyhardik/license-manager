@@ -112,6 +112,50 @@ def merge_license_documents(licenses, output_path):
         return False
 
 
+def merge_tl_with_license_copy(tl_pdf_path, license_copy_path, output_path):
+    """
+    Merge Transfer Letter PDF with License Copy PDF.
+
+    Args:
+        tl_pdf_path: Path to the transfer letter PDF (e.g., "0311044439_1_CO.pdf")
+        license_copy_path: Path to the license copy PDF (e.g., "0311044439 - Copy.pdf")
+        output_path: Path where merged FS PDF should be saved (e.g., "0311044439 - FS.pdf")
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        from PyPDF2 import PdfMerger
+
+        # Check if both files exist
+        if not os.path.exists(tl_pdf_path):
+            print(f"✗ Transfer letter PDF not found: {tl_pdf_path}")
+            return False
+
+        if not os.path.exists(license_copy_path):
+            print(f"✗ License copy PDF not found: {license_copy_path}")
+            return False
+
+        merger = PdfMerger()
+
+        # Add transfer letter first, then license copy
+        merger.append(tl_pdf_path)
+        merger.append(license_copy_path)
+
+        # Write merged PDF
+        merger.write(output_path)
+        merger.close()
+
+        print(f"✓ Created FS PDF: {os.path.basename(output_path)}")
+        return True
+
+    except Exception as e:
+        print(f"✗ Error merging TL with License Copy: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def generate_transfer_letter_generic(instance, request, instance_type='allotment'):
     """
     Generate transfer letter for either Allotment or BOE.
@@ -208,6 +252,7 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                     unique_licenses.add(item.sr_number.license)
 
         # Create separate merged PDF for each license
+        license_copy_map = {}  # Map license_number -> license_copy_path
         if unique_licenses:
             for license_obj in unique_licenses:
                 # Create filename: "LICENSE_NUMBER - Copy.pdf"
@@ -217,6 +262,38 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
                 # Merge documents for this specific license only
                 merge_license_documents([license_obj], merged_pdf_path)
+
+                # Store mapping for FS merge
+                if os.path.exists(merged_pdf_path):
+                    license_copy_map[license_number] = merged_pdf_path
+
+        # Create FS PDFs: merge each TL PDF with its corresponding License Copy
+        # Look for all PDF files in the directory (these are the TL PDFs)
+        for filename in os.listdir(file_path):
+            if not filename.endswith('.pdf'):
+                continue
+
+            # Skip the "- Copy.pdf" files themselves
+            if filename.endswith(' - Copy.pdf'):
+                continue
+
+            # Skip already created "- FS.pdf" files
+            if filename.endswith(' - FS.pdf'):
+                continue
+
+            # Extract license number from filename (first part before _)
+            # Example: "0311044439_1_CO.pdf" -> "0311044439"
+            license_number = filename.split('_')[0]
+
+            # Check if we have a license copy for this license number
+            if license_number in license_copy_map:
+                tl_pdf_path = os.path.join(file_path, filename)
+                license_copy_path = license_copy_map[license_number]
+                fs_filename = f'{license_number} - FS.pdf'
+                fs_pdf_path = os.path.join(file_path, fs_filename)
+
+                # Merge TL + License Copy -> FS
+                merge_tl_with_license_copy(tl_pdf_path, license_copy_path, fs_pdf_path)
 
         # Create zip file
         file_name = f'{dir_name}.zip'

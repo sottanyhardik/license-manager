@@ -93,7 +93,7 @@ export default function TransferLetterForm({
         }));
     };
 
-    const handleGenerate = async () => {
+    const handleGenerate = async (includeLicenseCopy = true) => {
         if (!transferLetterData.template) {
             onError?.("Please select a transfer letter template");
             return;
@@ -112,7 +112,8 @@ export default function TransferLetterForm({
             address_line1: transferLetterData.addressLine1.trim(),
             address_line2: transferLetterData.addressLine2.trim(),
             template_id: transferLetterData.template,
-            cif_edits: transferLetterData.cifEdits || {}
+            cif_edits: transferLetterData.cifEdits || {},
+            include_license_copy: includeLicenseCopy
         };
 
         try {
@@ -127,13 +128,17 @@ export default function TransferLetterForm({
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `TransferLetter_${instanceType}_${instanceId}.zip`);
+            const copyType = includeLicenseCopy ? 'WithCopy' : 'WithoutCopy';
+            link.setAttribute('download', `TransferLetter_${instanceType}_${instanceId}_${copyType}.zip`);
             document.body.appendChild(link);
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
 
-            onSuccess?.("Transfer letter generated successfully");
+            const message = includeLicenseCopy
+                ? "Transfer letter with license copy generated successfully"
+                : "Transfer letter without license copy generated successfully";
+            onSuccess?.(message);
         } catch (err) {
             onError?.(err.response?.data?.error || "Failed to generate transfer letter");
         } finally {
@@ -252,11 +257,11 @@ export default function TransferLetterForm({
                     </div>
                 )}
 
-                {/* Generate Button */}
-                <div className="d-flex justify-content-end">
+                {/* Generate Buttons */}
+                <div className="d-flex justify-content-end gap-2">
                     <button
-                        className="btn btn-warning"
-                        onClick={handleGenerate}
+                        className="btn btn-primary"
+                        onClick={() => handleGenerate(true)}
                         disabled={generating || disabled || !transferLetterData.template || !items || items.length === 0}
                     >
                         {generating ? (
@@ -267,7 +272,24 @@ export default function TransferLetterForm({
                         ) : (
                             <>
                                 <i className="bi bi-file-earmark-text me-2"></i>
-                                Generate Transfer Letter
+                                With Copy
+                            </>
+                        )}
+                    </button>
+                    <button
+                        className="btn btn-warning"
+                        onClick={() => handleGenerate(false)}
+                        disabled={generating || disabled || !transferLetterData.template || !items || items.length === 0}
+                    >
+                        {generating ? (
+                            <>
+                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <i className="bi bi-file-earmark-text me-2"></i>
+                                Without Copy
                             </>
                         )}
                     </button>

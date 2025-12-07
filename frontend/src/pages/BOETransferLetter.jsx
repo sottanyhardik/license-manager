@@ -77,9 +77,9 @@ export default function BOETransferLetter() {
                         instanceType="boe"
                         items={boe.item_details?.map(detail => ({
                             id: detail.id,
-                            license_number: detail.license?.license_number || detail.license_number || '-',
+                            license_number: detail.license_number || '-',
                             cif_fc: detail.cif_fc,
-                            purchase_status: detail.license?.purchase_status || detail.sr_number?.license?.purchase_status || 'N/A'
+                            purchase_status: detail.purchase_status || 'N/A'
                         })) || []}
                         onSuccess={(msg) => setSuccess(msg)}
                         onError={(msg) => setError(msg)}

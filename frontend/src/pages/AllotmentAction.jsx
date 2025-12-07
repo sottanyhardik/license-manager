@@ -639,9 +639,9 @@ export default function AllotmentAction() {
                         instanceType="allotment"
                         items={allotment.allotment_details.map(detail => ({
                             id: detail.id,
-                            license_number: detail.license?.license_number || detail.license_number || '-',
+                            license_number: detail.license_number || '-',
                             cif_fc: detail.cif_fc,
-                            purchase_status: detail.license?.purchase_status || detail.item?.license?.purchase_status || 'N/A'
+                            purchase_status: detail.purchase_status || 'N/A'
                         }))}
                         onSuccess={(msg) => setSuccess(msg)}
                         onError={(msg) => setError(msg)}

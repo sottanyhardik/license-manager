@@ -264,6 +264,5 @@ else
     print_info "Application URLs:"
     print_info "   → http://143.110.252.201"
     print_info "   → http://139.59.92.226"
-    print_info "   → https://labdhi.duckdns.org"
     exit 0
 fi

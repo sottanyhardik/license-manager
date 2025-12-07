@@ -209,8 +209,22 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
         # Merge license documents into a single PDF if any licenses found
         if unique_licenses:
-            merged_pdf_path = os.path.join(file_path, 'LICENSE_DOCUMENTS_MERGED.pdf')
-            merge_license_documents(list(unique_licenses), merged_pdf_path)
+            # Create filename with license numbers
+            license_list = list(unique_licenses)
+            if len(license_list) == 1:
+                # Single license: use "LICENSE_NUMBER - Copy.pdf"
+                license_number = license_list[0].license_number.replace('/', '_')
+                merged_filename = f'{license_number} - Copy.pdf'
+            else:
+                # Multiple licenses: use "LICENSE1_LICENSE2 - Copy.pdf"
+                license_numbers = '_'.join([lic.license_number.replace('/', '_') for lic in sorted(license_list, key=lambda x: x.license_number)])
+                # Limit filename length to avoid filesystem issues
+                if len(license_numbers) > 100:
+                    license_numbers = license_numbers[:100] + '_etc'
+                merged_filename = f'{license_numbers} - Copy.pdf'
+
+            merged_pdf_path = os.path.join(file_path, merged_filename)
+            merge_license_documents(license_list, merged_pdf_path)
 
         # Create zip file
         file_name = f'{dir_name}.zip'

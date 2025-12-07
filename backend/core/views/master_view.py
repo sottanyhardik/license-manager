@@ -40,6 +40,32 @@ class StandardPagination(PageNumberPagination):
     max_page_size = 200
 
 
+class CaseInsensitiveSearchFilter(filters.SearchFilter):
+    """Custom SearchFilter that uses icontains for case-insensitive search."""
+
+    def filter_queryset(self, request, queryset, view):
+        """
+        Override to use icontains for case-insensitive contains search on all fields.
+        """
+        from django.db.models import Q
+
+        search_fields = self.get_search_fields(view, request)
+        search_terms = self.get_search_terms(request)
+
+        if not search_fields or not search_terms:
+            return queryset
+
+        orm_lookups = []
+        for search_term in search_terms:
+            queries = []
+            for search_field in search_fields:
+                # Use icontains for all fields (case-insensitive contains)
+                queries.append(Q(**{f"{search_field}__icontains": search_term}))
+            orm_lookups.append(Q(*queries, _connector=Q.OR))
+
+        return queryset.filter(Q(*orm_lookups, _connector=Q.AND))
+
+
 class MasterViewSet(viewsets.ModelViewSet):
     """
     🔹 Generic Reusable Master CRUD ViewSet
@@ -56,7 +82,7 @@ class MasterViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [permissions.AllowAny]
     pagination_class = StandardPagination
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]  # Removed DjangoFilterBackend
+    filter_backends = [CaseInsensitiveSearchFilter, filters.OrderingFilter]  # Use custom search with icontains
     ordering_fields = "__all__"
 
     # Defaults (overwritten by factory)

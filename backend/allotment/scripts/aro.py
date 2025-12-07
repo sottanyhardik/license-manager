@@ -61,6 +61,11 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                 # Run soffice in headless mode with simple environment
                 # Use absolute path to ensure it's found even in restricted environments
                 logger.debug("Running soffice command...")
+
+                # Set explicit environment to ensure LibreOffice can run
+                env = os.environ.copy()
+                env['HOME'] = '/tmp'  # Temporary home for LibreOffice user profile
+
                 result = subprocess.run([
                     '/usr/bin/soffice',
                     '--headless',
@@ -70,7 +75,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                     '--convert-to', 'pdf',
                     '--outdir', output_dir,
                     docx_path
-                ], capture_output=True, timeout=60, text=True)
+                ], capture_output=True, timeout=60, text=True, env=env)
 
                 logger.debug(f"soffice exit code: {result.returncode}")
                 if result.stdout:

@@ -59,10 +59,10 @@ def convert_docx_to_pdf(docx_path, pdf_path):
             # Lock acquired, proceed with conversion
             try:
                 # Run soffice in headless mode with simple environment
-                # Don't override HOME as it can cause permission issues
+                # Use absolute path to ensure it's found even in restricted environments
                 logger.debug("Running soffice command...")
                 result = subprocess.run([
-                    'soffice',
+                    '/usr/bin/soffice',
                     '--headless',
                     '--norestore',
                     '--nofirststartwizard',

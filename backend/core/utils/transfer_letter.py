@@ -176,6 +176,7 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
         template_id = request.data.get('template_id')
         cif_edits = request.data.get('cif_edits', {})
         include_license_copy = request.data.get('include_license_copy', True)  # Default: True (with license copy)
+        selected_items = request.data.get('selected_items', [])  # List of item IDs to include
 
         if not template_id:
             return Response({
@@ -208,12 +209,12 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
         if instance_type == 'allotment':
             data = _prepare_allotment_data(
-                instance, company_name, address_line1, address_line2, cif_edits
+                instance, company_name, address_line1, address_line2, cif_edits, selected_items
             )
             prefix = f'TL_ALLOT_{instance.id}'
         elif instance_type == 'boe':
             data = _prepare_boe_data(
-                instance, company_name, address_line1, address_line2, cif_edits
+                instance, company_name, address_line1, address_line2, cif_edits, selected_items
             )
             # Use BOE number from instance (e.g., "1234567" from bill_of_entry_number)
             boe_number = instance.bill_of_entry_number or instance.id
@@ -338,13 +339,20 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-def _prepare_allotment_data(allotment, company_name, address_line1, address_line2, cif_edits):
+def _prepare_allotment_data(allotment, company_name, address_line1, address_line2, cif_edits, selected_items=None):
     """
     Prepare data for allotment transfer letter generation.
+
+    Args:
+        selected_items: List of allotment_detail IDs to include (None = include all)
     """
     data = []
 
     for allotment_item in allotment.allotment_details.all():
+        # Filter by selected items if provided
+        if selected_items and allotment_item.id not in selected_items:
+            continue
+
         license_item = allotment_item.item
         if not license_item:
             continue
@@ -380,9 +388,12 @@ def _prepare_allotment_data(allotment, company_name, address_line1, address_line
     return data
 
 
-def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits):
+def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits, selected_items=None):
     """
     Prepare data for BOE transfer letter generation.
+
+    Args:
+        selected_items: List of item_detail IDs to include (None = include all)
     """
     data = []
 
@@ -392,6 +403,10 @@ def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits
     final_address2 = address_line2 if address_line2 else ''
 
     for item in boe.item_details.all():
+        # Filter by selected items if provided
+        if selected_items and item.id not in selected_items:
+            continue
+
         license_item = item.sr_number
         license_obj = license_item.license if license_item else None
         if not license_obj:

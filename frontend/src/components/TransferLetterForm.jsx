@@ -10,7 +10,7 @@ import CreatableSelect from 'react-select/creatable';
 export default function TransferLetterForm({
     instanceId,
     instanceType, // 'allotment' or 'boe'
-    items, // Array of items with id, license_number, and cif_fc
+    items, // Array of items with id, license_number, cif_fc, and purchase_status
     disabled = false,
     onSuccess,
     onError
@@ -25,10 +25,16 @@ export default function TransferLetterForm({
     const [companyOptions, setCompanyOptions] = useState([]);
     const [transferLetters, setTransferLetters] = useState([]);
     const [generating, setGenerating] = useState(false);
+    const [selectedItems, setSelectedItems] = useState(items?.map(item => item.id) || []);
 
     useEffect(() => {
         fetchTransferLetters();
     }, []);
+
+    useEffect(() => {
+        // Update selected items when items prop changes
+        setSelectedItems(items?.map(item => item.id) || []);
+    }, [items]);
 
     const fetchTransferLetters = async () => {
         try {
@@ -93,6 +99,16 @@ export default function TransferLetterForm({
         }));
     };
 
+    const handleRemoveItem = (itemId) => {
+        setSelectedItems(prev => prev.filter(id => id !== itemId));
+    };
+
+    const handleAddItem = (itemId) => {
+        setSelectedItems(prev => [...prev, itemId]);
+    };
+
+    const isItemSelected = (itemId) => selectedItems.includes(itemId);
+
     const handleGenerate = async (includeLicenseCopy = true) => {
         if (!transferLetterData.template) {
             onError?.("Please select a transfer letter template");
@@ -105,15 +121,29 @@ export default function TransferLetterForm({
             return;
         }
 
+        if (selectedItems.length === 0) {
+            onError?.("Please select at least one item to generate transfer letter");
+            return;
+        }
+
         setGenerating(true);
+
+        // Filter CIF edits to only include selected items
+        const filteredCifEdits = {};
+        selectedItems.forEach(itemId => {
+            if (transferLetterData.cifEdits[itemId] !== undefined) {
+                filteredCifEdits[itemId] = transferLetterData.cifEdits[itemId];
+            }
+        });
 
         const requestData = {
             company_name: finalCompanyName.trim(),
             address_line1: transferLetterData.addressLine1.trim(),
             address_line2: transferLetterData.addressLine2.trim(),
             template_id: transferLetterData.template,
-            cif_edits: transferLetterData.cifEdits || {},
-            include_license_copy: includeLicenseCopy
+            cif_edits: filteredCifEdits,
+            include_license_copy: includeLicenseCopy,
+            selected_items: selectedItems
         };
 
         try {
@@ -216,35 +246,71 @@ export default function TransferLetterForm({
                 {/* Edit CIF (FC) per Item */}
                 {items && items.length > 0 && (
                     <div className="mb-3">
-                        <h6>Edit CIF (FC) per Item</h6>
+                        <h6>Items for Transfer Letter ({selectedItems.length} of {items.length} selected)</h6>
                         <div className="table-responsive">
                             <table className="table table-sm table-bordered">
                                 <thead className="table-light">
                                 <tr>
-                                    <th>#</th>
+                                    <th style={{width: '50px'}}>#</th>
                                     <th>License Number</th>
-                                    <th>CIF FC (editable)</th>
+                                    <th>Purchase Status</th>
+                                    <th style={{width: '150px'}}>CIF FC (editable)</th>
+                                    <th style={{width: '100px'}}>Action</th>
                                 </tr>
                                 </thead>
                                 <tbody>
-                                {items.map((item, idx) => (
-                                    <tr key={item.id}>
-                                        <td>{idx + 1}</td>
-                                        <td>{item.license_number || '-'}</td>
-                                        <td>
-                                            <input
-                                                type="number"
-                                                className="form-control form-control-sm"
-                                                value={transferLetterData.cifEdits[item.id] !== undefined
-                                                    ? transferLetterData.cifEdits[item.id]
-                                                    : parseFloat(item.cif_fc || 0).toFixed(2)}
-                                                onChange={(e) => handleCifEdit(item.id, e.target.value)}
-                                                step="0.01"
-                                                disabled={disabled}
-                                            />
-                                        </td>
-                                    </tr>
-                                ))}
+                                {items.map((item, idx) => {
+                                    const isSelected = isItemSelected(item.id);
+                                    return (
+                                        <tr key={item.id} className={!isSelected ? 'table-secondary' : ''}>
+                                            <td>{idx + 1}</td>
+                                            <td>{item.license_number || '-'}</td>
+                                            <td>
+                                                <span className={`badge ${
+                                                    item.purchase_status === 'CO' ? 'bg-success' :
+                                                    item.purchase_status === 'FS' ? 'bg-primary' :
+                                                    item.purchase_status === 'PP' ? 'bg-warning' :
+                                                    'bg-secondary'
+                                                }`}>
+                                                    {item.purchase_status || 'N/A'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    className="form-control form-control-sm"
+                                                    value={transferLetterData.cifEdits[item.id] !== undefined
+                                                        ? transferLetterData.cifEdits[item.id]
+                                                        : parseFloat(item.cif_fc || 0).toFixed(2)}
+                                                    onChange={(e) => handleCifEdit(item.id, e.target.value)}
+                                                    step="0.01"
+                                                    disabled={disabled || !isSelected}
+                                                />
+                                            </td>
+                                            <td>
+                                                {isSelected ? (
+                                                    <button
+                                                        className="btn btn-sm btn-danger"
+                                                        onClick={() => handleRemoveItem(item.id)}
+                                                        disabled={disabled}
+                                                        title="Remove from transfer letter"
+                                                    >
+                                                        <i className="bi bi-trash"></i>
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        className="btn btn-sm btn-success"
+                                                        onClick={() => handleAddItem(item.id)}
+                                                        disabled={disabled}
+                                                        title="Add to transfer letter"
+                                                    >
+                                                        <i className="bi bi-plus-lg"></i>
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                                 </tbody>
                             </table>
                         </div>
@@ -262,7 +328,7 @@ export default function TransferLetterForm({
                     <button
                         className="btn btn-primary"
                         onClick={() => handleGenerate(true)}
-                        disabled={generating || disabled || !transferLetterData.template || !items || items.length === 0}
+                        disabled={generating || disabled || !transferLetterData.template || selectedItems.length === 0}
                     >
                         {generating ? (
                             <>
@@ -272,14 +338,14 @@ export default function TransferLetterForm({
                         ) : (
                             <>
                                 <i className="bi bi-file-earmark-text me-2"></i>
-                                With Copy
+                                With Copy ({selectedItems.length})
                             </>
                         )}
                     </button>
                     <button
                         className="btn btn-warning"
                         onClick={() => handleGenerate(false)}
-                        disabled={generating || disabled || !transferLetterData.template || !items || items.length === 0}
+                        disabled={generating || disabled || !transferLetterData.template || selectedItems.length === 0}
                     >
                         {generating ? (
                             <>
@@ -289,7 +355,7 @@ export default function TransferLetterForm({
                         ) : (
                             <>
                                 <i className="bi bi-file-earmark-text me-2"></i>
-                                Without Copy
+                                Without Copy ({selectedItems.length})
                             </>
                         )}
                     </button>

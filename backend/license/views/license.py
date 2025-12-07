@@ -305,6 +305,99 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'license_documents': LicenseDocumentSerializer(license_obj.license_documents.all(), many=True).data
         })
 
+    @action(detail=True, methods=['get'], url_path='item-usage')
+    def item_usage(self, request, pk=None):
+        """
+        Get real-time usage details for a specific license item (export or import).
+        Shows where the item is used in BOEs and Allotments.
+
+        Query params:
+        - item_id: ID of the export or import item
+        - type: 'export' or 'import'
+        """
+        from bill_of_entry.models import RowDetails
+        from allotment.models import AllotmentItems
+
+        license_obj = self.get_object()
+        item_id = request.query_params.get('item_id')
+        item_type = request.query_params.get('type')
+
+        if not item_id or not item_type:
+            return Response({'error': 'item_id and type parameters are required'}, status=400)
+
+        boes = []
+        allotments = []
+
+        if item_type == 'import':
+            # Find BOE usage through RowDetails (sr_number points to LicenseImportItemsModel)
+            # Only show transaction_type = 'D' (Debited)
+            row_details = RowDetails.objects.filter(
+                sr_number_id=item_id,
+                transaction_type='D'
+            ).select_related(
+                'bill_of_entry',
+                'bill_of_entry__company',
+                'bill_of_entry__port'
+            ).values(
+                'bill_of_entry__id',
+                'bill_of_entry__bill_of_entry_number',
+                'bill_of_entry__bill_of_entry_date',
+                'bill_of_entry__port__name',
+                'bill_of_entry__company__name',
+                'qty',
+                'cif_fc',
+                'cif_inr'
+            )
+
+            for detail in row_details:
+                boes.append({
+                    'id': detail['bill_of_entry__id'],
+                    'bill_of_entry_number': detail['bill_of_entry__bill_of_entry_number'],
+                    'date': detail['bill_of_entry__bill_of_entry_date'],
+                    'port': detail['bill_of_entry__port__name'],
+                    'company': detail['bill_of_entry__company__name'],
+                    'quantity': float(detail['qty']),
+                    'cif_fc': float(detail['cif_fc']),
+                    'cif_inr': float(detail['cif_inr'])
+                })
+
+            # Find Allotment usage through AllotmentItems
+            # Only show allotments where is_boe=True
+            allotment_items = AllotmentItems.objects.filter(
+                item_id=item_id,
+                allotment__is_boe=True
+            ).select_related(
+                'allotment',
+                'allotment__company'
+            ).values(
+                'allotment__id',
+                'allotment__invoice',
+                'allotment__company__name',
+                'qty',
+                'cif_fc',
+                'cif_inr'
+            )
+
+            for item in allotment_items:
+                allotments.append({
+                    'id': item['allotment__id'],
+                    'allotment_number': item['allotment__invoice'] or f"Allotment #{item['allotment__id']}",
+                    'company': item['allotment__company__name'],
+                    'quantity': float(item['qty']),
+                    'cif_fc': float(item['cif_fc']),
+                    'cif_inr': float(item['cif_inr'])
+                })
+
+        elif item_type == 'export':
+            # For export items, check allotments (AllotmentItems might link to export items)
+            # This depends on your data model structure
+            pass
+
+        return Response({
+            'boes': boes,
+            'allotments': allotments
+        })
+
     @action(detail=True, methods=['get'], url_path='merged-documents')
     def merged_documents(self, request, pk=None):
         """

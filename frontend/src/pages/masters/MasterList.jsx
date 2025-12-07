@@ -7,6 +7,7 @@ import AdvancedFilter from "../../components/AdvancedFilter";
 import DataPagination from "../../components/DataPagination";
 import DataTable from "../../components/DataTable";
 import AccordionTable from "../../components/AccordionTable";
+import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters, getNewlyCreatedItem} from "../../utils/filterPersistence";
 
 /**
@@ -62,6 +63,10 @@ export default function MasterList() {
     const [filterParams, setFilterParams] = useState(getDefaultFilters());
     const backendDefaultsApplied = useRef(false);
     const pendingRequestRef = useRef(null);
+
+    // License Balance Modal state
+    const [showBalanceModal, setShowBalanceModal] = useState(false);
+    const [selectedLicenseId, setSelectedLicenseId] = useState(null);
 
     const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
         // If there's already a pending request with same params, skip this one
@@ -544,6 +549,15 @@ export default function MasterList() {
                                 }
                             ] : entityName === 'licenses' ? [
                                 {
+                                    label: 'View Balance',
+                                    icon: 'bi bi-eye',
+                                    className: 'btn btn-outline-info',
+                                    onClick: (item) => {
+                                        setSelectedLicenseId(item.id);
+                                        setShowBalanceModal(true);
+                                    }
+                                },
+                                {
                                     label: 'Ledger',
                                     icon: 'bi bi-file-pdf',
                                     className: 'btn btn-outline-primary',
@@ -757,6 +771,15 @@ export default function MasterList() {
                     )}
                 </div>
             </div>
+
+            {/* License Balance Modal */}
+            {entityName === 'licenses' && (
+                <LicenseBalanceModal
+                    show={showBalanceModal}
+                    onHide={() => setShowBalanceModal(false)}
+                    licenseId={selectedLicenseId}
+                />
+            )}
         </div>
     );
 }

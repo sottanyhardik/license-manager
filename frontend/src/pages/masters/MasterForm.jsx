@@ -8,6 +8,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import {markNewItemCreated} from "../../utils/filterPersistence";
 import {formatDateForInput} from "../../utils/dateFormatter";
+import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 
 /**
  * Generic Master Form for Create/Edit
@@ -37,6 +38,8 @@ export default function MasterForm() {
     const [error, setError] = useState("");
     const [fieldErrors, setFieldErrors] = useState({}); // Track field-level errors
     const [updatedFields, setUpdatedFields] = useState({}); // Track updated fields for highlighting
+    const [showBalanceModal, setShowBalanceModal] = useState(false); // License balance modal state
+    const [savedLicenseId, setSavedLicenseId] = useState(null); // Store saved license ID for modal
 
     // Helper function to parse date from YYYY-MM-DD to Date object
     const parseDate = (dateString) => {
@@ -772,6 +775,10 @@ export default function MasterForm() {
         );
     };
 
+    const handleModalClose = () => {
+        setShowBalanceModal(false);
+    };
+
     const entityTitle = entityName
         ?.split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -888,6 +895,23 @@ export default function MasterForm() {
                                             </>
                                         )}
                                     </button>
+
+                                    {/* License Balance Actions button - only show for licenses in edit mode */}
+                                    {entityName === 'licenses' && isEdit && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-info me-2"
+                                            onClick={() => {
+                                                setSavedLicenseId(id);
+                                                setShowBalanceModal(true);
+                                            }}
+                                            disabled={saving}
+                                        >
+                                            <i className="bi bi-eye me-2"></i>
+                                            View Balance
+                                        </button>
+                                    )}
+
                                     <button
                                         type="button"
                                         className="btn btn-secondary"
@@ -920,6 +944,15 @@ export default function MasterForm() {
                     </div>
                 </div>
             </div>
+
+            {/* License Balance Modal */}
+            {entityName === 'licenses' && (
+                <LicenseBalanceModal
+                    show={showBalanceModal}
+                    onHide={handleModalClose}
+                    licenseId={savedLicenseId}
+                />
+            )}
         </div>
     );
 }

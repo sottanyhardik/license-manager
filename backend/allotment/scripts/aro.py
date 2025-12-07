@@ -15,21 +15,40 @@ logger = logging.getLogger(__name__)
 
 def convert_docx_to_pdf(docx_path, pdf_path):
     """
-    Convert DOCX to PDF using LibreOffice with file locking to prevent concurrent access issues.
+    Convert DOCX to PDF using unoconv (preferred) or LibreOffice with file locking.
 
     Returns True if successful, False otherwise.
     """
-    output_dir = os.path.dirname(pdf_path)
-    lock_file_path = '/tmp/libreoffice_conversion.lock'
-
-    # Force logging to file for debugging
-    import sys
-    sys.stdout.flush()
-    sys.stderr.flush()
-
     logger.info(f"Starting PDF conversion: {os.path.basename(docx_path)}")
     logger.debug(f"DOCX path: {docx_path}, PDF path: {pdf_path}")
     print(f"[CONVERT] Starting: {os.path.basename(docx_path)}", flush=True)
+
+    # Method 1: Try unoconv first (more reliable in server environments)
+    try:
+        logger.debug("Attempting conversion with unoconv...")
+        result = subprocess.run([
+            'unoconv',
+            '-f', 'pdf',
+            '-o', pdf_path,
+            docx_path
+        ], capture_output=True, timeout=60, text=True)
+
+        if result.returncode == 0 and os.path.exists(pdf_path):
+            logger.info(f"✓ Successfully converted with unoconv: {os.path.basename(docx_path)}")
+            print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF")
+            return True
+        else:
+            logger.warning(f"unoconv failed (exit code: {result.returncode}), trying LibreOffice...")
+            if result.stderr:
+                logger.debug(f"unoconv stderr: {result.stderr}")
+    except FileNotFoundError:
+        logger.debug("unoconv not found, falling back to LibreOffice")
+    except Exception as e:
+        logger.warning(f"unoconv error: {str(e)}, falling back to LibreOffice")
+
+    # Method 2: Fall back to LibreOffice with file locking
+    output_dir = os.path.dirname(pdf_path)
+    lock_file_path = '/tmp/libreoffice_conversion.lock'
 
     # Use file lock to ensure only one LibreOffice conversion at a time
     # This prevents concurrent LibreOffice processes from conflicting

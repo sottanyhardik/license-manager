@@ -10,6 +10,7 @@ import CreatableSelect from 'react-select/creatable';
 export default function TransferLetterForm({
     instanceId,
     instanceType, // 'allotment' or 'boe'
+    instanceIdentifier, // Optional: BOE number or Allotment number for filename
     items, // Array of items with id, license_number, cif_fc, and purchase_status
     disabled = false,
     onSuccess,
@@ -160,7 +161,8 @@ export default function TransferLetterForm({
             const link = document.createElement('a');
             link.href = url;
             const copyType = includeLicenseCopy ? 'WithCopy' : 'WithoutCopy';
-            link.setAttribute('download', `TransferLetter_${instanceType}_${instanceId}_${copyType}.zip`);
+            const identifier = instanceIdentifier || instanceId;
+            link.setAttribute('download', `TransferLetter_${instanceType}_${identifier}_${copyType}.zip`);
             document.body.appendChild(link);
             link.click();
             link.remove();

@@ -75,6 +75,7 @@ export default function BOETransferLetter() {
                     <TransferLetterForm
                         instanceId={id}
                         instanceType="boe"
+                        instanceIdentifier={boe.bill_of_entry_number}
                         items={boe.item_details?.map(detail => ({
                             id: detail.id,
                             license_number: detail.license_number || '-',

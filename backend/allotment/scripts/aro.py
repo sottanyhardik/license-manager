@@ -97,15 +97,35 @@ def convert_docx_to_pdf(docx_path, pdf_path):
             # Lock acquired, proceed with conversion
             try:
                 # Run soffice in headless mode with simple environment
-                # Use absolute path to ensure it's found even in restricted environments
-                logger.debug("Running soffice command...")
+                # Try multiple possible paths for soffice (Linux and macOS)
+                soffice_paths = [
+                    '/usr/bin/soffice',  # Linux
+                    '/opt/homebrew/bin/soffice',  # macOS (Apple Silicon)
+                    '/usr/local/bin/soffice',  # macOS (Intel)
+                    'soffice'  # Fallback to PATH
+                ]
+
+                soffice_path = None
+                for path in soffice_paths:
+                    if path == 'soffice' or os.path.exists(path):
+                        soffice_path = path
+                        break
+
+                if not soffice_path:
+                    msg = f"✗ LibreOffice (soffice) not found in PATH"
+                    logger.error(msg)
+                    print(msg)
+                    return False
+
+                logger.debug(f"Running soffice command from: {soffice_path}")
 
                 # Set explicit environment to ensure LibreOffice can run
                 env = os.environ.copy()
-                env['HOME'] = '/tmp'  # Temporary home for LibreOffice user profile
+                if not os.path.exists(os.path.expanduser('~')):
+                    env['HOME'] = '/tmp'  # Temporary home for LibreOffice user profile
 
                 result = subprocess.run([
-                    '/usr/bin/soffice',
+                    soffice_path,
                     '--headless',
                     '--norestore',
                     '--nofirststartwizard',

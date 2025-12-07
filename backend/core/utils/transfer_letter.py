@@ -274,6 +274,9 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                         license_copy_map[license_number] = merged_pdf_path
 
             # Create FS PDFs: merge each TL PDF with its corresponding License Copy
+            # Keep track of which TL and Copy PDFs have FS created successfully
+            successfully_merged = []  # List of (tl_path, copy_path) tuples
+
             # Look for all PDF files in the directory (these are the TL PDFs)
             for filename in os.listdir(file_path):
                 if not filename.endswith('.pdf'):
@@ -300,22 +303,23 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
                     # Merge TL + License Copy -> FS
                     if merge_tl_with_license_copy(tl_pdf_path, license_copy_path, fs_pdf_path):
-                        # FS PDF created successfully - delete the source files (TL and Copy)
-                        try:
-                            os.remove(tl_pdf_path)
-                            print(f"✓ Deleted TL PDF: {filename}")
-                        except Exception as e:
-                            print(f"✗ Could not delete TL PDF {filename}: {str(e)}")
+                        # FS PDF created successfully - track for deletion
+                        successfully_merged.append((tl_pdf_path, license_copy_path))
+                        print(f"✓ Created FS PDF: {fs_filename}")
 
-            # Delete all "- Copy.pdf" files after FS PDFs are created
-            for filename in os.listdir(file_path):
-                if filename.endswith(' - Copy.pdf'):
-                    copy_pdf_path = os.path.join(file_path, filename)
-                    try:
-                        os.remove(copy_pdf_path)
-                        print(f"✓ Deleted Copy PDF: {filename}")
-                    except Exception as e:
-                        print(f"✗ Could not delete Copy PDF {filename}: {str(e)}")
+            # Delete only the TL and Copy PDFs that have FS successfully created
+            for tl_path, copy_path in successfully_merged:
+                try:
+                    os.remove(tl_path)
+                    print(f"✓ Deleted TL PDF: {os.path.basename(tl_path)}")
+                except Exception as e:
+                    print(f"✗ Could not delete TL PDF {os.path.basename(tl_path)}: {str(e)}")
+
+                try:
+                    os.remove(copy_path)
+                    print(f"✓ Deleted Copy PDF: {os.path.basename(copy_path)}")
+                except Exception as e:
+                    print(f"✗ Could not delete Copy PDF {os.path.basename(copy_path)}: {str(e)}")
 
         # Create zip file
         file_name = f'{dir_name}.zip'

@@ -326,8 +326,13 @@ export default function TransferLetterForm({
                 {/* Generate Buttons */}
                 <div className="d-flex justify-content-end gap-2">
                     <button
+                        type="button"
                         className="btn btn-primary"
-                        onClick={() => handleGenerate(true)}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!generating) handleGenerate(true);
+                        }}
                         disabled={generating || disabled || !transferLetterData.template || selectedItems.length === 0}
                     >
                         {generating ? (
@@ -343,8 +348,13 @@ export default function TransferLetterForm({
                         )}
                     </button>
                     <button
+                        type="button"
                         className="btn btn-warning"
-                        onClick={() => handleGenerate(false)}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!generating) handleGenerate(false);
+                        }}
                         disabled={generating || disabled || !transferLetterData.template || selectedItems.length === 0}
                     >
                         {generating ? (

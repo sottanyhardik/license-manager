@@ -79,7 +79,7 @@ export default function BOETransferLetter() {
                             id: detail.id,
                             license_number: detail.license?.license_number || detail.license_number || '-',
                             cif_fc: detail.cif_fc,
-                            purchase_status: detail.purchase_status
+                            purchase_status: detail.license?.purchase_status || detail.sr_number?.license?.purchase_status || 'N/A'
                         })) || []}
                         onSuccess={(msg) => setSuccess(msg)}
                         onError={(msg) => setError(msg)}

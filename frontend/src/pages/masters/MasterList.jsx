@@ -113,7 +113,8 @@ export default function MasterList() {
                 nested_field_defs: response.nested_field_defs || {},
                 nested_list_display: response.nested_list_display || {},
                 field_meta: response.field_meta || {},
-                default_filters: response.default_filters || {}
+                default_filters: response.default_filters || {},
+                inline_editable: response.inline_editable || []
             });
 
             // Pagination

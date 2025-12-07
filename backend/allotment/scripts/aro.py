@@ -5,55 +5,83 @@ Generates transfer letters from DOCX templates and converts to PDF
 import os
 import subprocess
 import tempfile
+import fcntl
+import time
 from docxtpl import DocxTemplate
 
 
 def convert_docx_to_pdf(docx_path, pdf_path):
     """
-    Convert DOCX to PDF using LibreOffice.
+    Convert DOCX to PDF using LibreOffice with file locking to prevent concurrent access issues.
 
     Returns True if successful, False otherwise.
     """
     output_dir = os.path.dirname(pdf_path)
+    lock_file_path = '/tmp/libreoffice_conversion.lock'
 
-    # Try LibreOffice conversion
+    # Use file lock to ensure only one LibreOffice conversion at a time
+    # This prevents concurrent LibreOffice processes from conflicting
     try:
-        # Run soffice in headless mode with simple environment
-        # Don't override HOME as it can cause permission issues
-        result = subprocess.run([
-            'soffice',
-            '--headless',
-            '--norestore',
-            '--nofirststartwizard',
-            '--nologo',
-            '--convert-to', 'pdf',
-            '--outdir', output_dir,
-            docx_path
-        ], capture_output=True, timeout=60, text=True)
+        with open(lock_file_path, 'w') as lock_file:
+            # Try to acquire exclusive lock with timeout
+            max_wait = 300  # 5 minutes max wait
+            wait_interval = 0.5  # Check every 0.5 seconds
+            waited = 0
 
-        # LibreOffice creates PDF with same name as DOCX in the output directory
-        expected_pdf = os.path.join(output_dir, os.path.basename(docx_path).replace('.docx', '.pdf'))
+            while waited < max_wait:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except IOError:
+                    # Lock is held by another process, wait
+                    time.sleep(wait_interval)
+                    waited += wait_interval
+            else:
+                print(f"✗ Timeout waiting for LibreOffice lock: {os.path.basename(docx_path)}")
+                return False
 
-        # Check if PDF was created
-        if os.path.exists(expected_pdf):
-            if expected_pdf != pdf_path:
-                os.rename(expected_pdf, pdf_path)
-            print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF")
-            return True
-        else:
-            print(f"✗ PDF not created: {os.path.basename(docx_path)}")
-            if result.stdout:
-                print(f"  stdout: {result.stdout}")
-            if result.stderr:
-                print(f"  stderr: {result.stderr}")
-            return False
+            # Lock acquired, proceed with conversion
+            try:
+                # Run soffice in headless mode with simple environment
+                # Don't override HOME as it can cause permission issues
+                result = subprocess.run([
+                    'soffice',
+                    '--headless',
+                    '--norestore',
+                    '--nofirststartwizard',
+                    '--nologo',
+                    '--convert-to', 'pdf',
+                    '--outdir', output_dir,
+                    docx_path
+                ], capture_output=True, timeout=60, text=True)
 
-    except subprocess.TimeoutExpired:
-        print(f"✗ Conversion timeout for {os.path.basename(docx_path)}")
-        return False
-    except FileNotFoundError:
-        print(f"✗ LibreOffice (soffice) not found in PATH")
-        return False
+                # LibreOffice creates PDF with same name as DOCX in the output directory
+                expected_pdf = os.path.join(output_dir, os.path.basename(docx_path).replace('.docx', '.pdf'))
+
+                # Check if PDF was created
+                if os.path.exists(expected_pdf):
+                    if expected_pdf != pdf_path:
+                        os.rename(expected_pdf, pdf_path)
+                    print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF")
+                    return True
+                else:
+                    print(f"✗ PDF not created: {os.path.basename(docx_path)}")
+                    if result.stdout:
+                        print(f"  stdout: {result.stdout}")
+                    if result.stderr:
+                        print(f"  stderr: {result.stderr}")
+                    return False
+
+            except subprocess.TimeoutExpired:
+                print(f"✗ Conversion timeout for {os.path.basename(docx_path)}")
+                return False
+            except FileNotFoundError:
+                print(f"✗ LibreOffice (soffice) not found in PATH")
+                return False
+            finally:
+                # Release lock automatically when exiting the with block
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
     except Exception as e:
         print(f"✗ Conversion error for {os.path.basename(docx_path)}: {type(e).__name__}: {str(e)}")
         return False

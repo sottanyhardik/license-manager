@@ -175,6 +175,7 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
         address_line2 = request.data.get('address_line2', '').strip()
         template_id = request.data.get('template_id')
         cif_edits = request.data.get('cif_edits', {})
+        include_license_copy = request.data.get('include_license_copy', True)  # Default: True (with license copy)
 
         if not template_id:
             return Response({
@@ -214,7 +215,9 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
             data = _prepare_boe_data(
                 instance, company_name, address_line1, address_line2, cif_edits
             )
-            prefix = f'TL_BOE_{instance.bill_of_entry_number}'
+            # Use BOE number from instance (e.g., "1234567" from bill_of_entry_number)
+            boe_number = instance.bill_of_entry_number or instance.id
+            prefix = f'TL_BOE_{boe_number}'
         else:
             return Response({
                 'error': f'Invalid instance type: {instance_type}'
@@ -240,76 +243,78 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
             transfer_letter_name=transfer_letter.name.replace(' ', '_')
         )
 
-        # Collect unique licenses from the data
-        unique_licenses = set()
-        if instance_type == 'allotment':
-            for allotment_item in instance.allotment_details.all():
-                if allotment_item.item and allotment_item.item.license:
-                    unique_licenses.add(allotment_item.item.license)
-        elif instance_type == 'boe':
-            for item in instance.item_details.all():
-                if item.sr_number and item.sr_number.license:
-                    unique_licenses.add(item.sr_number.license)
+        # Only include license copy if requested
+        if include_license_copy:
+            # Collect unique licenses from the data
+            unique_licenses = set()
+            if instance_type == 'allotment':
+                for allotment_item in instance.allotment_details.all():
+                    if allotment_item.item and allotment_item.item.license:
+                        unique_licenses.add(allotment_item.item.license)
+            elif instance_type == 'boe':
+                for item in instance.item_details.all():
+                    if item.sr_number and item.sr_number.license:
+                        unique_licenses.add(item.sr_number.license)
 
-        # Create separate merged PDF for each license
-        license_copy_map = {}  # Map license_number -> license_copy_path
-        if unique_licenses:
-            for license_obj in unique_licenses:
-                # Create filename: "LICENSE_NUMBER - Copy.pdf"
-                license_number = license_obj.license_number.replace('/', '_')
-                merged_filename = f'{license_number} - Copy.pdf'
-                merged_pdf_path = os.path.join(file_path, merged_filename)
+            # Create separate merged PDF for each license
+            license_copy_map = {}  # Map license_number -> license_copy_path
+            if unique_licenses:
+                for license_obj in unique_licenses:
+                    # Create filename: "LICENSE_NUMBER - Copy.pdf"
+                    license_number = license_obj.license_number.replace('/', '_')
+                    merged_filename = f'{license_number} - Copy.pdf'
+                    merged_pdf_path = os.path.join(file_path, merged_filename)
 
-                # Merge documents for this specific license only
-                merge_license_documents([license_obj], merged_pdf_path)
+                    # Merge documents for this specific license only
+                    merge_license_documents([license_obj], merged_pdf_path)
 
-                # Store mapping for FS merge
-                if os.path.exists(merged_pdf_path):
-                    license_copy_map[license_number] = merged_pdf_path
+                    # Store mapping for FS merge
+                    if os.path.exists(merged_pdf_path):
+                        license_copy_map[license_number] = merged_pdf_path
 
-        # Create FS PDFs: merge each TL PDF with its corresponding License Copy
-        # Look for all PDF files in the directory (these are the TL PDFs)
-        for filename in os.listdir(file_path):
-            if not filename.endswith('.pdf'):
-                continue
+            # Create FS PDFs: merge each TL PDF with its corresponding License Copy
+            # Look for all PDF files in the directory (these are the TL PDFs)
+            for filename in os.listdir(file_path):
+                if not filename.endswith('.pdf'):
+                    continue
 
-            # Skip the "- Copy.pdf" files themselves
-            if filename.endswith(' - Copy.pdf'):
-                continue
+                # Skip the "- Copy.pdf" files themselves
+                if filename.endswith(' - Copy.pdf'):
+                    continue
 
-            # Skip already created "- FS.pdf" files
-            if filename.endswith(' - FS.pdf'):
-                continue
+                # Skip already created "- FS.pdf" files
+                if filename.endswith(' - FS.pdf'):
+                    continue
 
-            # Extract license number from filename (first part before _)
-            # Example: "0311044439_1_CO.pdf" -> "0311044439"
-            license_number = filename.split('_')[0]
+                # Extract license number from filename (first part before _)
+                # Example: "0311044439_1_CO.pdf" -> "0311044439"
+                license_number = filename.split('_')[0]
 
-            # Check if we have a license copy for this license number
-            if license_number in license_copy_map:
-                tl_pdf_path = os.path.join(file_path, filename)
-                license_copy_path = license_copy_map[license_number]
-                fs_filename = f'{license_number} - FS.pdf'
-                fs_pdf_path = os.path.join(file_path, fs_filename)
+                # Check if we have a license copy for this license number
+                if license_number in license_copy_map:
+                    tl_pdf_path = os.path.join(file_path, filename)
+                    license_copy_path = license_copy_map[license_number]
+                    fs_filename = f'{license_number} - FS.pdf'
+                    fs_pdf_path = os.path.join(file_path, fs_filename)
 
-                # Merge TL + License Copy -> FS
-                if merge_tl_with_license_copy(tl_pdf_path, license_copy_path, fs_pdf_path):
-                    # FS PDF created successfully - delete the source files (TL and Copy)
+                    # Merge TL + License Copy -> FS
+                    if merge_tl_with_license_copy(tl_pdf_path, license_copy_path, fs_pdf_path):
+                        # FS PDF created successfully - delete the source files (TL and Copy)
+                        try:
+                            os.remove(tl_pdf_path)
+                            print(f"✓ Deleted TL PDF: {filename}")
+                        except Exception as e:
+                            print(f"✗ Could not delete TL PDF {filename}: {str(e)}")
+
+            # Delete all "- Copy.pdf" files after FS PDFs are created
+            for filename in os.listdir(file_path):
+                if filename.endswith(' - Copy.pdf'):
+                    copy_pdf_path = os.path.join(file_path, filename)
                     try:
-                        os.remove(tl_pdf_path)
-                        print(f"✓ Deleted TL PDF: {filename}")
+                        os.remove(copy_pdf_path)
+                        print(f"✓ Deleted Copy PDF: {filename}")
                     except Exception as e:
-                        print(f"✗ Could not delete TL PDF {filename}: {str(e)}")
-
-        # Delete all "- Copy.pdf" files after FS PDFs are created
-        for filename in os.listdir(file_path):
-            if filename.endswith(' - Copy.pdf'):
-                copy_pdf_path = os.path.join(file_path, filename)
-                try:
-                    os.remove(copy_pdf_path)
-                    print(f"✓ Deleted Copy PDF: {filename}")
-                except Exception as e:
-                    print(f"✗ Could not delete Copy PDF {filename}: {str(e)}")
+                        print(f"✗ Could not delete Copy PDF {filename}: {str(e)}")
 
         # Create zip file
         file_name = f'{dir_name}.zip'

@@ -27,7 +27,13 @@ BaseBillOfEntryViewSet = MasterViewSet.create_viewset(
     BillOfEntryModel,
     BillOfEntrySerializer,
     config={
-        "search": ["bill_of_entry_number", "invoice_no", "product_name"],
+        "search": [
+            "bill_of_entry_number",
+            "invoice_no",
+            "product_name",
+            "item_details__sr_number__license__license_number",  # License number from related items
+        ],
+        "inline_editable": ["invoice_no"],  # Enable inline editing for invoice_no
         "filter": {
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",

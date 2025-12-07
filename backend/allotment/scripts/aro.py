@@ -19,6 +19,19 @@ def convert_docx_to_pdf(docx_path, pdf_path):
 
     Returns True if successful, False otherwise.
     """
+    # Add file logging for debugging
+    debug_log = "/tmp/pdf_conversion_debug.log"
+    try:
+        with open(debug_log, "a") as f:
+            f.write(f"\n{'='*80}\n")
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Starting conversion\n")
+            f.write(f"DOCX: {docx_path}\n")
+            f.write(f"PDF: {pdf_path}\n")
+            f.write(f"DOCX exists: {os.path.exists(docx_path)}\n")
+            f.flush()
+    except Exception as e:
+        pass  # Ignore logging errors
+
     logger.info(f"Starting PDF conversion: {os.path.basename(docx_path)}")
     logger.debug(f"DOCX path: {docx_path}, PDF path: {pdf_path}")
     print(f"[CONVERT] Starting: {os.path.basename(docx_path)}", flush=True)
@@ -34,6 +47,12 @@ def convert_docx_to_pdf(docx_path, pdf_path):
         ], capture_output=True, timeout=60, text=True)
 
         if result.returncode == 0 and os.path.exists(pdf_path):
+            try:
+                with open(debug_log, "a") as f:
+                    f.write(f"SUCCESS: unoconv converted successfully\n")
+                    f.flush()
+            except:
+                pass
             logger.info(f"✓ Successfully converted with unoconv: {os.path.basename(docx_path)}")
             print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF")
             return True
@@ -111,11 +130,27 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                     if expected_pdf != pdf_path:
                         logger.debug(f"Renaming {expected_pdf} to {pdf_path}")
                         os.rename(expected_pdf, pdf_path)
+                    try:
+                        with open(debug_log, "a") as f:
+                            f.write(f"SUCCESS: LibreOffice converted successfully\n")
+                            f.write(f"PDF size: {os.path.getsize(pdf_path)} bytes\n")
+                            f.flush()
+                    except:
+                        pass
                     msg = f"✓ Successfully converted {os.path.basename(docx_path)} to PDF"
                     logger.info(msg)
                     print(msg)
                     return True
                 else:
+                    try:
+                        with open(debug_log, "a") as f:
+                            f.write(f"FAILED: PDF not created at {expected_pdf}\n")
+                            f.write(f"Exit code: {result.returncode}\n")
+                            f.write(f"Stdout: {result.stdout}\n")
+                            f.write(f"Stderr: {result.stderr}\n")
+                            f.flush()
+                    except:
+                        pass
                     msg = f"✗ PDF not created: {os.path.basename(docx_path)}"
                     logger.error(msg)
                     print(msg)

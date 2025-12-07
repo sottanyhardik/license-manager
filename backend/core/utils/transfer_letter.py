@@ -16,6 +16,102 @@ from rest_framework.response import Response
 from core.models import TransferLetterModel
 
 
+def merge_license_documents(licenses, output_path):
+    """
+    Merge all license documents into a single PDF.
+
+    Args:
+        licenses: List of unique license objects
+        output_path: Path where merged PDF should be saved
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        from PyPDF2 import PdfMerger, PdfReader
+        from PIL import Image
+        from reportlab.pdfgen import canvas as pdf_canvas
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.utils import ImageReader
+        import io
+
+        merger = PdfMerger()
+        added_count = 0
+
+        # Sort documents: TRANSFER LETTER first, then LICENSE COPY, then OTHER
+        type_order = {'TRANSFER LETTER': 0, 'LICENSE COPY': 1, 'OTHER': 2}
+
+        for license_obj in licenses:
+            documents = license_obj.license_documents.all()
+            sorted_docs = sorted(documents, key=lambda doc: type_order.get(doc.type, 3))
+
+            for doc in sorted_docs:
+                if not doc.file:
+                    continue
+
+                file_path = doc.file.path
+                if not os.path.exists(file_path):
+                    continue
+
+                file_ext = os.path.splitext(file_path)[1].lower()
+
+                if file_ext == '.pdf':
+                    # Add PDF directly
+                    merger.append(file_path)
+                    added_count += 1
+                elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                    # Convert image to PDF
+                    img = Image.open(file_path)
+
+                    # Convert to RGB if necessary
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+
+                    # Create PDF from image using ReportLab
+                    img_buffer = io.BytesIO()
+                    img_width, img_height = img.size
+
+                    # Use A4 size for PDF
+                    canvas = pdf_canvas.Canvas(img_buffer, pagesize=A4)
+                    a4_width, a4_height = A4
+
+                    # Calculate scaling to fit image on A4 page
+                    scale = min(a4_width / img_width, a4_height / img_height)
+                    new_width = img_width * scale
+                    new_height = img_height * scale
+
+                    # Center image on page
+                    x = (a4_width - new_width) / 2
+                    y = (a4_height - new_height) / 2
+
+                    # Use ImageReader for PIL Image object
+                    img_reader = ImageReader(img)
+                    canvas.drawImage(img_reader, x, y, width=new_width, height=new_height)
+                    canvas.save()
+
+                    # Rewind buffer and add to merger
+                    img_buffer.seek(0)
+                    pdf_reader = PdfReader(img_buffer)
+                    merger.append(pdf_reader)
+                    added_count += 1
+
+        if added_count > 0:
+            # Write merged PDF
+            merger.write(output_path)
+            merger.close()
+            print(f"✓ Merged {added_count} license documents into {os.path.basename(output_path)}")
+            return True
+        else:
+            print("✗ No license documents found to merge")
+            return False
+
+    except Exception as e:
+        print(f"✗ Error merging license documents: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def generate_transfer_letter_generic(instance, request, instance_type='allotment'):
     """
     Generate transfer letter for either Allotment or BOE.
@@ -99,6 +195,22 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
             path=file_path,
             transfer_letter_name=transfer_letter.name.replace(' ', '_')
         )
+
+        # Collect unique licenses from the data
+        unique_licenses = set()
+        if instance_type == 'allotment':
+            for allotment_item in instance.allotment_details.all():
+                if allotment_item.item and allotment_item.item.license:
+                    unique_licenses.add(allotment_item.item.license)
+        elif instance_type == 'boe':
+            for item in instance.item_details.all():
+                if item.sr_number and item.sr_number.license:
+                    unique_licenses.add(item.sr_number.license)
+
+        # Merge license documents into a single PDF if any licenses found
+        if unique_licenses:
+            merged_pdf_path = os.path.join(file_path, 'LICENSE_DOCUMENTS_MERGED.pdf')
+            merge_license_documents(list(unique_licenses), merged_pdf_path)
 
         # Create zip file
         file_name = f'{dir_name}.zip'

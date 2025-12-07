@@ -2,6 +2,7 @@ import {useState, useEffect} from "react";
 import { toast } from 'react-toastify';
 import api from "../api/axios";
 import CreatableSelect from 'react-select/creatable';
+import AsyncSelect from 'react-select/async';
 
 /**
  * Reusable Transfer Letter Form Component
@@ -20,31 +21,17 @@ export default function TransferLetterForm({
         company: null,
         addressLine1: "",
         addressLine2: "",
-        template: "",
+        template: null,
         cifEdits: {}
     });
     const [companyOptions, setCompanyOptions] = useState([]);
-    const [transferLetters, setTransferLetters] = useState([]);
     const [generating, setGenerating] = useState(null); // null | 'with_copy' | 'without_copy'
     const [selectedItems, setSelectedItems] = useState(items?.map(item => item.id) || []);
-
-    useEffect(() => {
-        fetchTransferLetters();
-    }, []);
 
     useEffect(() => {
         // Update selected items when items prop changes
         setSelectedItems(items?.map(item => item.id) || []);
     }, [items]);
-
-    const fetchTransferLetters = async () => {
-        try {
-            const {data} = await api.get('/masters/transfer-letters/');
-            setTransferLetters(data.results || data || []);
-        } catch (err) {
-            toast.error("Failed to load transfer letters");
-        }
-    };
 
     const loadCompanyOptions = async (inputValue) => {
         try {
@@ -54,6 +41,19 @@ export default function TransferLetterForm({
                 value: company.id,
                 label: company.name,
                 ...company
+            }));
+        } catch (err) {
+            return [];
+        }
+    };
+
+    const loadTransferLetterOptions = async (inputValue) => {
+        try {
+            const {data} = await api.get(`/masters/transfer-letters/?search=${inputValue || ''}`);
+            const results = data.results || data || [];
+            return results.map(tl => ({
+                value: tl.id,
+                label: tl.name
             }));
         } catch (err) {
             return [];
@@ -142,7 +142,7 @@ export default function TransferLetterForm({
             company_name: finalCompanyName.trim(),
             address_line1: transferLetterData.addressLine1.trim(),
             address_line2: transferLetterData.addressLine2.trim(),
-            template_id: transferLetterData.template,
+            template_id: transferLetterData.template?.value || transferLetterData.template,
             cif_edits: filteredCifEdits,
             include_license_copy: includeLicenseCopy,
             selected_items: selectedItems
@@ -232,17 +232,16 @@ export default function TransferLetterForm({
                 <div className="row mb-3">
                     <div className="col-md-6">
                         <label className="form-label">Template</label>
-                        <select
-                            className="form-select"
+                        <AsyncSelect
                             value={transferLetterData.template}
-                            onChange={(e) => setTransferLetterData(prev => ({...prev, template: e.target.value}))}
-                            disabled={disabled}
-                        >
-                            <option value="">— Select Transfer Letter Template —</option>
-                            {transferLetters.map((tl) => (
-                                <option key={tl.id} value={tl.id}>{tl.name}</option>
-                            ))}
-                        </select>
+                            onChange={(selectedTemplate) => setTransferLetterData(prev => ({...prev, template: selectedTemplate}))}
+                            loadOptions={loadTransferLetterOptions}
+                            defaultOptions
+                            cacheOptions
+                            placeholder="Select Transfer Letter Template..."
+                            isClearable={true}
+                            isDisabled={disabled}
+                        />
                     </div>
                 </div>
 

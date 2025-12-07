@@ -248,7 +248,7 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
             doc = DocxTemplate(tl_path)
             doc.render(context)
 
-            # Build filename: license_number + serial_number + purchase_status + BOE_number (if exists)
+            # Build filename: license_number + serial_number + purchase_status + BOE_number + template_name
             license_number = context.get('license', 'LICENSE').replace('/', '_')
             serial_number = context.get('serial_number', idx)
             purchase_status = context.get('status', '')
@@ -262,6 +262,12 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
                 # Extract BE number from "BE NUMBER: XXXXX"
                 be_num = boe_info.replace('BE NUMBER:', '').strip().replace('/', '_')
                 filename_parts.append(be_num)
+
+            # Add template name to filename
+            if transfer_letter_name:
+                # Clean template name for filename (remove spaces and special chars)
+                clean_template_name = transfer_letter_name.replace(' ', '_').replace('/', '_')
+                filename_parts.append(clean_template_name)
 
             base_filename = '_'.join(filename_parts)
 

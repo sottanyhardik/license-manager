@@ -24,7 +24,7 @@ export default function TransferLetterForm({
     });
     const [companyOptions, setCompanyOptions] = useState([]);
     const [transferLetters, setTransferLetters] = useState([]);
-    const [generating, setGenerating] = useState(false);
+    const [generating, setGenerating] = useState(null); // null | 'with_copy' | 'without_copy'
     const [selectedItems, setSelectedItems] = useState(items?.map(item => item.id) || []);
 
     useEffect(() => {
@@ -126,7 +126,8 @@ export default function TransferLetterForm({
             return;
         }
 
-        setGenerating(true);
+        // Set generating state based on which button was clicked
+        setGenerating(includeLicenseCopy ? 'with_copy' : 'without_copy');
 
         // Filter CIF edits to only include selected items
         const filteredCifEdits = {};
@@ -172,7 +173,7 @@ export default function TransferLetterForm({
         } catch (err) {
             onError?.(err.response?.data?.error || "Failed to generate transfer letter");
         } finally {
-            setGenerating(false);
+            setGenerating(null);
         }
     };
 
@@ -331,11 +332,11 @@ export default function TransferLetterForm({
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (!generating) handleGenerate(true);
+                            if (generating === null) handleGenerate(true);
                         }}
-                        disabled={generating || disabled || !transferLetterData.template || selectedItems.length === 0}
+                        disabled={generating !== null || disabled || !transferLetterData.template || selectedItems.length === 0}
                     >
-                        {generating ? (
+                        {generating === 'with_copy' ? (
                             <>
                                 <span className="spinner-border spinner-border-sm me-2" role="status"></span>
                                 Generating...
@@ -353,11 +354,11 @@ export default function TransferLetterForm({
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (!generating) handleGenerate(false);
+                            if (generating === null) handleGenerate(false);
                         }}
-                        disabled={generating || disabled || !transferLetterData.template || selectedItems.length === 0}
+                        disabled={generating !== null || disabled || !transferLetterData.template || selectedItems.length === 0}
                     >
-                        {generating ? (
+                        {generating === 'without_copy' ? (
                             <>
                                 <span className="spinner-border spinner-border-sm me-2" role="status"></span>
                                 Generating...

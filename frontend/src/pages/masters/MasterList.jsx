@@ -648,6 +648,8 @@ export default function MasterList() {
                                     showIf: (item) => !item.product_name || item.product_name.trim() === ''
                                 }
                             ] : []}
+                            inlineEditable={metadata.inline_editable || []}
+                            onInlineUpdate={handleInlineUpdate}
                         />
                     ) : (
                         <DataTable

@@ -10,11 +10,14 @@ import {formatIndianNumber} from "../utils/numberFormatter";
  * Used for displaying records with nested arrays (like SION Norm Classes, Licenses)
  * that expand/collapse on click.
  */
-export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}, customActions = [], lazyLoadNested = false, onToggleBoolean}) {
+export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}, customActions = [], lazyLoadNested = false, onToggleBoolean, inlineEditable = [], onInlineUpdate}) {
     const [expandedRows, setExpandedRows] = useState(new Set());
     const [nestedData, setNestedData] = useState({});
     const [loadingNested, setLoadingNested] = useState({});
     const [togglingFields, setTogglingFields] = useState({});
+    const [editingCell, setEditingCell] = useState(null); // {rowId, columnName}
+    const [editValue, setEditValue] = useState("");
+    const [saving, setSaving] = useState(false);
 
     const toggleRow = async (id) => {
         const isCurrentlyExpanded = expandedRows.has(id);
@@ -54,6 +57,44 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
         } finally {
             setTogglingFields({...togglingFields, [fieldKey]: false});
         }
+    };
+
+    const handleCellClick = (item, columnName) => {
+        if (inlineEditable.includes(columnName)) {
+            setEditingCell({rowId: item.id, columnName});
+            setEditValue(item[columnName] || "");
+        }
+    };
+
+    const handleSave = async (item, columnName) => {
+        if (!onInlineUpdate) return;
+
+        setSaving(true);
+        try {
+            await onInlineUpdate(item.id, columnName, editValue);
+            setEditingCell(null);
+        } catch (error) {
+            console.error("Failed to update:", error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleCancel = () => {
+        setEditingCell(null);
+        setEditValue("");
+    };
+
+    const handleKeyDown = (e, item, columnName) => {
+        if (e.key === 'Enter') {
+            handleSave(item, columnName);
+        } else if (e.key === 'Escape') {
+            handleCancel();
+        }
+    };
+
+    const isEditing = (item, columnName) => {
+        return editingCell?.rowId === item.id && editingCell?.columnName === columnName;
     };
 
     if (loading) {
@@ -334,9 +375,53 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                         );
                                     }
 
+                                    const isEditableField = inlineEditable.includes(col);
+                                    const isCurrentlyEditing = isEditing(item, col);
+
                                     return (
-                                        <td key={col}>
-                                            {col === "id" ? (
+                                        <td
+                                            key={col}
+                                            onClick={() => !isCurrentlyEditing && handleCellClick(item, col)}
+                                            style={isEditableField ? {cursor: 'pointer'} : {}}
+                                            title={isEditableField ? 'Click to edit' : ''}
+                                        >
+                                            {isCurrentlyEditing ? (
+                                                <div className="d-flex align-items-center gap-1">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control form-control-sm"
+                                                        value={editValue}
+                                                        onChange={(e) => setEditValue(e.target.value)}
+                                                        onKeyDown={(e) => handleKeyDown(e, item, col)}
+                                                        onBlur={() => handleSave(item, col)}
+                                                        autoFocus
+                                                        disabled={saving}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                    <button
+                                                        className="btn btn-sm btn-success"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleSave(item, col);
+                                                        }}
+                                                        disabled={saving}
+                                                        title="Save"
+                                                    >
+                                                        <i className="bi bi-check"></i>
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-sm btn-secondary"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleCancel();
+                                                        }}
+                                                        disabled={saving}
+                                                        title="Cancel"
+                                                    >
+                                                        <i className="bi bi-x"></i>
+                                                    </button>
+                                                </div>
+                                            ) : col === "id" ? (
                                                 <Link to={`${basePath}/${item.id}/edit`}>
                                                     {value || "-"}
                                                 </Link>
@@ -356,7 +441,12 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                     <span className="text-muted">{value || "-"}</span>
                                                 )
                                             ) : (
-                                                value || "-"
+                                                <span>
+                                                    {value || "-"}
+                                                    {isEditableField && (
+                                                        <i className="bi bi-pencil ms-2 text-muted" style={{fontSize: '0.8rem'}}></i>
+                                                    )}
+                                                </span>
                                             )}
                                         </td>
                                     );

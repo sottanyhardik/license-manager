@@ -1,19 +1,5 @@
 # License Manager - Deployment Guide
 
-## ⚠️ IMPORTANT: Manual Deployment Only
-
-**DO NOT run `./auto-deploy.sh` automatically!**
-
-The deployment script performs:
-- ✅ Code deployment and builds
-- ✅ Celery queue purge (removes all pending tasks)
-- ✅ System updates (apt-get upgrade)
-- 🔄 **Server reboot** (applies all updates)
-
-**Always run manually when you can monitor the process.**
-
----
-
 ## 🚀 Quick Deployment
 
 ### Run Deployment Script
@@ -30,8 +16,9 @@ cd /Users/hardiksottany/PycharmProjects/license-manager
 4. Runs migrations and collects static files
 5. **Purges Celery queue** (removes stale tasks)
 6. Restarts all services (Gunicorn, Celery, Nginx)
-7. **Runs system updates** (apt-get update && upgrade)
-8. **Reboots servers** (~30 seconds downtime)
+7. **Tests Celery functions** (Level-1 & Level-2 tasks)
+
+**No downtime!** Services are restarted without server reboot.
 
 Deploys to **both servers**: 143.110.252.201 and 139.59.92.226
 

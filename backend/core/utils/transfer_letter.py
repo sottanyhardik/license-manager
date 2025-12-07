@@ -207,24 +207,16 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                 if item.sr_number and item.sr_number.license:
                     unique_licenses.add(item.sr_number.license)
 
-        # Merge license documents into a single PDF if any licenses found
+        # Create separate merged PDF for each license
         if unique_licenses:
-            # Create filename with license numbers
-            license_list = list(unique_licenses)
-            if len(license_list) == 1:
-                # Single license: use "LICENSE_NUMBER - Copy.pdf"
-                license_number = license_list[0].license_number.replace('/', '_')
+            for license_obj in unique_licenses:
+                # Create filename: "LICENSE_NUMBER - Copy.pdf"
+                license_number = license_obj.license_number.replace('/', '_')
                 merged_filename = f'{license_number} - Copy.pdf'
-            else:
-                # Multiple licenses: use "LICENSE1_LICENSE2 - Copy.pdf"
-                license_numbers = '_'.join([lic.license_number.replace('/', '_') for lic in sorted(license_list, key=lambda x: x.license_number)])
-                # Limit filename length to avoid filesystem issues
-                if len(license_numbers) > 100:
-                    license_numbers = license_numbers[:100] + '_etc'
-                merged_filename = f'{license_numbers} - Copy.pdf'
+                merged_pdf_path = os.path.join(file_path, merged_filename)
 
-            merged_pdf_path = os.path.join(file_path, merged_filename)
-            merge_license_documents(license_list, merged_pdf_path)
+                # Merge documents for this specific license only
+                merge_license_documents([license_obj], merged_pdf_path)
 
         # Create zip file
         file_name = f'{dir_name}.zip'

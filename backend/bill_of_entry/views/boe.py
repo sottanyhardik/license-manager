@@ -297,9 +297,9 @@ def custom_get_queryset_with_defaults(self):
 
     params = self.request.query_params
 
-    # Don't apply default invoice filter for retrieve action (fetching single BOE by ID)
-    # This allows HybridSelect to fetch BOEs even if they have an invoice assigned
-    if self.action == 'retrieve':
+    # Don't apply default invoice filter for retrieve/update/partial_update actions
+    # This allows fetching/updating single BOE by ID regardless of invoice status
+    if self.action in ['retrieve', 'update', 'partial_update']:
         return qs
 
     # Handle is_invoice filter (custom logic, not a model field)

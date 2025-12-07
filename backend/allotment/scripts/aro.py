@@ -22,8 +22,14 @@ def convert_docx_to_pdf(docx_path, pdf_path):
     output_dir = os.path.dirname(pdf_path)
     lock_file_path = '/tmp/libreoffice_conversion.lock'
 
+    # Force logging to file for debugging
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
+
     logger.info(f"Starting PDF conversion: {os.path.basename(docx_path)}")
     logger.debug(f"DOCX path: {docx_path}, PDF path: {pdf_path}")
+    print(f"[CONVERT] Starting: {os.path.basename(docx_path)}", flush=True)
 
     # Use file lock to ensure only one LibreOffice conversion at a time
     # This prevents concurrent LibreOffice processes from conflicting

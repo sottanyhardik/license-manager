@@ -246,13 +246,6 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
         # Only include license copy if requested
         if include_license_copy:
-            # Get identifier for filenames (BOE number or Allotment ID)
-            identifier = None
-            if instance_type == 'boe':
-                identifier = instance.bill_of_entry_number or str(instance.id)
-            elif instance_type == 'allotment':
-                identifier = str(instance.id)
-
             # Collect unique licenses from the data
             unique_licenses = set()
             if instance_type == 'allotment':
@@ -268,9 +261,9 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
             license_copy_map = {}  # Map license_number -> license_copy_path
             if unique_licenses:
                 for license_obj in unique_licenses:
-                    # Create filename: "BOE_NUMBER_LICENSE_NUMBER - Copy.pdf" or "ALLOT_ID_LICENSE_NUMBER - Copy.pdf"
+                    # Create filename: "LICENSE_NUMBER - Copy.pdf"
                     license_number = license_obj.license_number.replace('/', '_')
-                    merged_filename = f'{identifier}_{license_number} - Copy.pdf'
+                    merged_filename = f'{license_number} - Copy.pdf'
                     merged_pdf_path = os.path.join(file_path, merged_filename)
 
                     # Merge documents for this specific license only
@@ -305,8 +298,8 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                 if license_number in license_copy_map:
                     tl_pdf_path = os.path.join(file_path, filename)
                     license_copy_path = license_copy_map[license_number]
-                    # Create filename: "BOE_NUMBER_LICENSE_NUMBER - FS.pdf" or "ALLOT_ID_LICENSE_NUMBER - FS.pdf"
-                    fs_filename = f'{identifier}_{license_number} - FS.pdf'
+                    # Create filename: "LICENSE_NUMBER - FS.pdf"
+                    fs_filename = f'{license_number} - FS.pdf'
                     fs_pdf_path = os.path.join(file_path, fs_filename)
 
                     # Merge TL + License Copy -> FS

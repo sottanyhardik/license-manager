@@ -287,6 +287,27 @@ export default function MasterList() {
         }
     };
 
+    const handleInlineUpdate = async (itemId, fieldName, newValue) => {
+        try {
+            let apiPath;
+            if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
+                apiPath = `/${entityName}/${itemId}/`;
+            } else if (entityName === 'bill-of-entries') {
+                apiPath = `/bill-of-entries/${itemId}/`;
+            } else {
+                apiPath = `/masters/${entityName}/${itemId}/`;
+            }
+
+            await api.patch(apiPath, { [fieldName]: newValue });
+            toast.success(`${fieldName} updated successfully`);
+            // Refresh data to show updated value
+            fetchData(currentPage, pageSize, filterParams);
+        } catch (err) {
+            toast.error(err.response?.data?.detail || `Failed to update ${fieldName}`);
+            throw err;
+        }
+    };
+
     const handleExport = async (format) => {
         try {
             if (entityName === 'bill-of-entries' && format === 'xlsx') {
@@ -714,6 +735,8 @@ export default function MasterList() {
                             basePath={entityName === 'licenses' ? '/licenses' :
                                      (entityName === 'trades' ? '/trades' :
                                      `/masters/${entityName}`)}
+                            inlineEditable={metadata.inline_editable || []}
+                            onInlineUpdate={handleInlineUpdate}
                         />
                     )}
 

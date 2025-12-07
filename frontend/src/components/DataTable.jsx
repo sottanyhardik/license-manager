@@ -1,3 +1,4 @@
+import {useState} from "react";
 import {Link} from "react-router-dom";
 import {formatDate} from "../utils/dateFormatter";
 
@@ -12,6 +13,8 @@ import {formatDate} from "../utils/dateFormatter";
  * - customActions: array of custom action objects {label, icon, onClick, className, showIf}
  * - loading: boolean
  * - basePath: base URL path for edit links (e.g., "/masters/companies")
+ * - inlineEditable: array of field names that can be edited inline
+ * - onInlineUpdate: callback function(itemId, fieldName, newValue) - called when inline edit is saved
  */
 export default function DataTable({
     data = [],
@@ -20,8 +23,13 @@ export default function DataTable({
     onDelete,
     customActions = [],
     loading = false,
-    basePath = ""
+    basePath = "",
+    inlineEditable = [],
+    onInlineUpdate
 }) {
+    const [editingCell, setEditingCell] = useState(null); // {rowId, columnName}
+    const [editValue, setEditValue] = useState("");
+    const [saving, setSaving] = useState(false);
     const formatValue = (value, columnName) => {
         if (value === null || value === undefined) {
             return <span className="text-muted">-</span>;
@@ -50,6 +58,44 @@ export default function DataTable({
         return column
             .replace(/_/g, " ")
             .replace(/\b\w/g, (char) => char.toUpperCase());
+    };
+
+    const handleCellClick = (item, columnName) => {
+        if (inlineEditable.includes(columnName)) {
+            setEditingCell({rowId: item.id, columnName});
+            setEditValue(item[columnName] || "");
+        }
+    };
+
+    const handleSave = async (item, columnName) => {
+        if (!onInlineUpdate) return;
+
+        setSaving(true);
+        try {
+            await onInlineUpdate(item.id, columnName, editValue);
+            setEditingCell(null);
+        } catch (error) {
+            console.error("Failed to update:", error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleCancel = () => {
+        setEditingCell(null);
+        setEditValue("");
+    };
+
+    const handleKeyDown = (e, item, columnName) => {
+        if (e.key === 'Enter') {
+            handleSave(item, columnName);
+        } else if (e.key === 'Escape') {
+            handleCancel();
+        }
+    };
+
+    const isEditing = (item, columnName) => {
+        return editingCell?.rowId === item.id && editingCell?.columnName === columnName;
     };
 
     if (loading) {
@@ -91,9 +137,54 @@ export default function DataTable({
                             {columns.map((column) => {
                                 // Convert head__name to head_name for annotated fields
                                 const fieldKey = column.replace(/__/g, '_');
+                                const value = item[fieldKey] || item[column];
+                                const isEditableField = inlineEditable.includes(column);
+                                const isCurrentlyEditing = isEditing(item, column);
+
                                 return (
-                                    <td key={column}>
-                                        {formatValue(item[fieldKey] || item[column], column)}
+                                    <td
+                                        key={column}
+                                        onClick={() => !isCurrentlyEditing && handleCellClick(item, column)}
+                                        style={isEditableField ? {cursor: 'pointer'} : {}}
+                                        title={isEditableField ? 'Click to edit' : ''}
+                                    >
+                                        {isCurrentlyEditing ? (
+                                            <div className="d-flex align-items-center gap-1">
+                                                <input
+                                                    type="text"
+                                                    className="form-control form-control-sm"
+                                                    value={editValue}
+                                                    onChange={(e) => setEditValue(e.target.value)}
+                                                    onKeyDown={(e) => handleKeyDown(e, item, column)}
+                                                    onBlur={() => handleSave(item, column)}
+                                                    autoFocus
+                                                    disabled={saving}
+                                                />
+                                                <button
+                                                    className="btn btn-sm btn-success"
+                                                    onClick={() => handleSave(item, column)}
+                                                    disabled={saving}
+                                                    title="Save"
+                                                >
+                                                    <i className="bi bi-check"></i>
+                                                </button>
+                                                <button
+                                                    className="btn btn-sm btn-secondary"
+                                                    onClick={handleCancel}
+                                                    disabled={saving}
+                                                    title="Cancel"
+                                                >
+                                                    <i className="bi bi-x"></i>
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span>
+                                                {formatValue(value, column)}
+                                                {isEditableField && (
+                                                    <i className="bi bi-pencil ms-2 text-muted" style={{fontSize: '0.8rem'}}></i>
+                                                )}
+                                            </span>
+                                        )}
                                     </td>
                                 );
                             })}

@@ -87,6 +87,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "is_approved",
         ],
         "ordering": ["estimated_arrival_date"],
+        "inline_editable": ["is_approved"],
         "nested_field_defs": allotment_nested_field_defs,
         "nested_list_display": {
             "allotment_details": [

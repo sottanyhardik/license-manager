@@ -8,6 +8,7 @@ import DataPagination from "../../components/DataPagination";
 import DataTable from "../../components/DataTable";
 import AccordionTable from "../../components/AccordionTable";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
+import TransferLetterModal from "../../components/TransferLetterModal";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters, getNewlyCreatedItem} from "../../utils/filterPersistence";
 
 /**
@@ -67,6 +68,11 @@ export default function MasterList() {
     // License Balance Modal state
     const [showBalanceModal, setShowBalanceModal] = useState(false);
     const [selectedLicenseId, setSelectedLicenseId] = useState(null);
+
+    // Transfer Letter Modal state (for BOE)
+    const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
+    const [transferLetterType, setTransferLetterType] = useState('');
+    const [transferLetterEntityId, setTransferLetterEntityId] = useState(null);
 
     const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
         // If there's already a pending request with same params, skip this one
@@ -459,6 +465,7 @@ export default function MasterList() {
                     )}
                     <Link
                         to={entityName === 'licenses' ? '/licenses/create' :
+                            entityName === 'allotments' ? '/allotments/create' :
                             entityName === 'trades' ? '/trades/create' :
                             `/masters/${entityName}/create`}
                         className="btn btn-primary"
@@ -501,8 +508,8 @@ export default function MasterList() {
             {/* Table */}
             <div className="card">
                 <div className="card-body">
-                    {/* Use AccordionTable for entities with nested fields, regular DataTable for others */}
-                    {metadata.nested_field_defs && Object.keys(metadata.nested_field_defs).length > 0 ? (
+                    {/* Use AccordionTable for entities with nested fields (except licenses and allotments), regular DataTable for others */}
+                    {metadata.nested_field_defs && Object.keys(metadata.nested_field_defs).length > 0 && entityName !== 'licenses' && entityName !== 'allotments' ? (
                         <AccordionTable
                             data={data}
                             columns={metadata.list_display || []}
@@ -515,7 +522,7 @@ export default function MasterList() {
                                      `/masters/${entityName}`))}
                             nestedFieldDefs={metadata.nested_field_defs}
                             nestedListDisplay={metadata.nested_list_display || {}}
-                            lazyLoadNested={entityName === 'licenses'}
+                            lazyLoadNested={false}
                             customActions={entityName === 'trades' ? [
                                 {
                                     label: 'Invoice PDF',
@@ -598,36 +605,6 @@ export default function MasterList() {
                                             alert(err.response?.data?.error || 'Failed to generate PDF');
                                         }
                                     }
-                                },
-                                {
-                                    label: 'Transfer Letter',
-                                    icon: 'bi bi-file-earmark-text',
-                                    className: 'btn btn-outline-warning',
-                                    onClick: (item) => {
-                                        saveFilterState(entityName, {
-                                            filters: filterParams,
-                                            pagination: { currentPage, pageSize },
-                                            search: ''
-                                        });
-                                        navigate(`/allotments/${item.id}/allocate`, { state: { scrollToTransferLetter: true } });
-                                    }
-                                },
-                                {
-                                    label: 'Copy',
-                                    icon: 'bi bi-files',
-                                    className: 'btn btn-outline-primary',
-                                    onClick: async (item) => {
-                                        if (!window.confirm('Create a copy of this allotment without invoice and items?')) {
-                                            return;
-                                        }
-                                        try {
-                                            await api.post(`/allotments/${item.id}/copy/`);
-                                            alert('Allotment copied successfully');
-                                            fetchData(currentPage, pageSize, filterParams);
-                                        } catch (err) {
-                                            alert(err.response?.data?.error || 'Failed to copy allotment');
-                                        }
-                                    }
                                 }
                             ] : entityName === 'bill-of-entries' ? [
                                 {
@@ -635,12 +612,9 @@ export default function MasterList() {
                                     icon: 'bi bi-file-earmark-text',
                                     className: 'btn btn-outline-warning',
                                     onClick: (item) => {
-                                        saveFilterState(entityName, {
-                                            filters: filterParams,
-                                            pagination: { currentPage, pageSize },
-                                            search: ''
-                                        });
-                                        navigate(`/bill-of-entries/${item.id}/generate-transfer-letter`);
+                                        setTransferLetterType('boe');
+                                        setTransferLetterEntityId(item.id);
+                                        setShowTransferLetterModal(true);
                                     }
                                 },
                                 {
@@ -670,12 +644,43 @@ export default function MasterList() {
                         <DataTable
                             data={data}
                             columns={metadata.list_display || []}
-                            customActions={entityName === 'allotments' ? [
+                            customActions={entityName === 'licenses' ? [
+                                {
+                                    label: 'View Balance',
+                                    icon: 'bi bi-eye',
+                                    className: 'btn btn-outline-info',
+                                    onClick: (item) => {
+                                        setSelectedLicenseId(item.id);
+                                        setShowBalanceModal(true);
+                                    }
+                                },
+                                {
+                                    label: 'Download PDF',
+                                    icon: 'bi bi-file-pdf',
+                                    className: 'btn btn-outline-danger',
+                                    onClick: async (item) => {
+                                        try {
+                                            const token = localStorage.getItem('access');
+                                            const pdfUrl = `/api/licenses/${item.id}/balance-pdf/?access_token=${token}`;
+                                            window.open(pdfUrl, '_blank');
+                                        } catch (err) {
+                                            alert(err || 'Failed to generate PDF');
+                                        }
+                                    }
+                                }
+                            ] : entityName === 'allotments' ? [
                                 {
                                     label: 'Allocate',
                                     icon: 'bi bi-box-arrow-in-down',
                                     className: 'btn btn-outline-success',
-                                    onClick: (item) => navigate(`/allotments/${item.id}/allocate`)
+                                    onClick: (item) => {
+                                        saveFilterState(entityName, {
+                                            filters: filterParams,
+                                            pagination: { currentPage, pageSize },
+                                            search: ''
+                                        });
+                                        navigate(`/allotments/${item.id}/allocate`);
+                                    }
                                 },
                                 {
                                     label: 'PDF',
@@ -690,32 +695,6 @@ export default function MasterList() {
                                             alert(err.response?.data?.error || 'Failed to generate PDF');
                                         }
                                     }
-                                },
-                                {
-                                    label: 'Transfer Letter',
-                                    icon: 'bi bi-file-earmark-text',
-                                    className: 'btn btn-outline-warning',
-                                    onClick: (item) => {
-                                        // Navigate to allocate page and scroll to transfer letter section
-                                        navigate(`/allotments/${item.id}/allocate`, { state: { scrollToTransferLetter: true } })
-                                    }
-                                },
-                                {
-                                    label: 'Copy',
-                                    icon: 'bi bi-files',
-                                    className: 'btn btn-outline-primary',
-                                    onClick: async (item) => {
-                                        if (!window.confirm('Create a copy of this allotment without invoice and items?')) {
-                                            return;
-                                        }
-                                        try {
-                                            await api.post(`/allotments/${item.id}/copy/`);
-                                            alert('Allotment copied successfully');
-                                            fetchData(currentPage, pageSize, filterParams);
-                                        } catch (err) {
-                                            alert(err.response?.data?.error || 'Failed to copy allotment');
-                                        }
-                                    }
                                 }
                             ] : entityName === 'bill-of-entries' ? [
                                 {
@@ -723,7 +702,9 @@ export default function MasterList() {
                                     icon: 'bi bi-file-earmark-text',
                                     className: 'btn btn-outline-warning',
                                     onClick: (item) => {
-                                        navigate(`/bill-of-entries/${item.id}/generate-transfer-letter`);
+                                        setTransferLetterType('boe');
+                                        setTransferLetterEntityId(item.id);
+                                        setShowTransferLetterModal(true);
                                     }
                                 },
                                 {
@@ -747,9 +728,9 @@ export default function MasterList() {
                                 }
                             ] : []}
                             loading={loading}
-                            onEdit={() => {}}
                             onDelete={handleDelete}
                             basePath={entityName === 'licenses' ? '/licenses' :
+                                     entityName === 'allotments' ? '/allotments' :
                                      (entityName === 'trades' ? '/trades' :
                                      `/masters/${entityName}`)}
                             inlineEditable={metadata.inline_editable || []}
@@ -780,6 +761,17 @@ export default function MasterList() {
                     licenseId={selectedLicenseId}
                 />
             )}
+
+            {/* Transfer Letter Modal (for BOE) */}
+            {entityName === 'bill-of-entries' && (
+                <TransferLetterModal
+                    show={showTransferLetterModal}
+                    onHide={() => setShowTransferLetterModal(false)}
+                    type={transferLetterType}
+                    entityId={transferLetterEntityId}
+                />
+            )}
+
         </div>
     );
 }

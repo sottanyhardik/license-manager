@@ -1,5 +1,4 @@
 import {useState} from "react";
-import {Link} from "react-router-dom";
 import {formatDate} from "../utils/dateFormatter";
 
 /**
@@ -30,11 +29,27 @@ export default function DataTable({
     const [editingCell, setEditingCell] = useState(null); // {rowId, columnName}
     const [editValue, setEditValue] = useState("");
     const [saving, setSaving] = useState(false);
-    const formatValue = (value, columnName) => {
+    const formatValue = (value, columnName, isEditableField = false) => {
         if (value === null || value === undefined) {
             return <span className="text-muted">-</span>;
         }
         if (typeof value === "boolean") {
+            // If it's an editable boolean field, render as a toggle switch
+            if (isEditableField) {
+                return (
+                    <div className="form-check form-switch" style={{display: 'inline-block'}}>
+                        <input
+                            className="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            checked={value}
+                            onChange={() => {}} // Handled by parent onClick
+                            style={{cursor: 'pointer'}}
+                        />
+                    </div>
+                );
+            }
+            // Otherwise render as badge
             return value ? (
                 <span className="badge bg-success">Yes</span>
             ) : (
@@ -98,6 +113,18 @@ export default function DataTable({
         return editingCell?.rowId === item.id && editingCell?.columnName === columnName;
     };
 
+    const handleBooleanToggle = async (item, columnName, currentValue) => {
+        setSaving(true);
+        try {
+            const newValue = !currentValue;
+            await onInlineUpdate(item.id, columnName, newValue);
+        } catch (error) {
+            console.error('Failed to toggle:', error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="text-center py-5">
@@ -144,9 +171,16 @@ export default function DataTable({
                                 return (
                                     <td
                                         key={column}
-                                        onClick={() => !isCurrentlyEditing && handleCellClick(item, column)}
+                                        onClick={() => {
+                                            if (!isCurrentlyEditing && isEditableField && typeof value === 'boolean') {
+                                                // For boolean fields with inline editing, toggle immediately
+                                                handleBooleanToggle(item, column, value);
+                                            } else if (!isCurrentlyEditing) {
+                                                handleCellClick(item, column);
+                                            }
+                                        }}
                                         style={isEditableField ? {cursor: 'pointer'} : {}}
-                                        title={isEditableField ? 'Click to edit' : ''}
+                                        title={isEditableField && typeof value === 'boolean' ? 'Click to toggle' : (isEditableField ? 'Click to edit' : '')}
                                     >
                                         {isCurrentlyEditing ? (
                                             <div className="d-flex align-items-center gap-1">
@@ -179,8 +213,8 @@ export default function DataTable({
                                             </div>
                                         ) : (
                                             <span>
-                                                {formatValue(value, column)}
-                                                {isEditableField && (
+                                                {formatValue(value, column, isEditableField)}
+                                                {isEditableField && typeof value !== 'boolean' && (
                                                     <i className="bi bi-pencil ms-2 text-muted" style={{fontSize: '0.8rem'}}></i>
                                                 )}
                                             </span>
@@ -206,13 +240,13 @@ export default function DataTable({
                                         );
                                     })}
                                     {onEdit && (
-                                        <Link
-                                            to={`${basePath}/${item.id}/edit`}
+                                        <button
+                                            onClick={() => onEdit(item)}
                                             className="btn btn-outline-primary"
                                             title="Edit"
                                         >
                                             <i className="bi bi-pencil"></i>
-                                        </Link>
+                                        </button>
                                     )}
                                     {onDelete && (
                                         <button

@@ -5,10 +5,13 @@ import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import TransferLetterForm from "../components/TransferLetterForm";
 
-export default function AllotmentAction() {
-    const {id} = useParams();
+export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
+    const {id: paramId} = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+
+    // Use prop ID if provided (for modal), otherwise use URL param (for page)
+    const id = propId || paramId;
 
     const [allotment, setAllotment] = useState(null);
     const [availableItems, setAvailableItems] = useState([]);
@@ -431,14 +434,18 @@ export default function AllotmentAction() {
     if (initialLoading) return <div className="p-4">Loading...</div>;
 
     return (
-        <div style={{height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
+        <div style={{height: isModal ? '100%' : 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
             <div className="d-flex justify-content-between align-items-center mb-3" style={{flexShrink: 0}}>
-                <h2 className="mb-0">Allocate License Items</h2>
-                <div className="d-flex gap-2">
+                {!isModal && <h2 className="mb-0">Allocate License Items</h2>}
+                <div className="d-flex gap-2" style={{marginLeft: isModal ? 'auto' : '0'}}>
                     <button
                         className="btn btn-info"
                         onClick={() => {
-                            // Store current filters before navigating to edit
+                            if (isModal && onClose) {
+                                // In modal mode, close the allocation modal and navigate to edit page
+                                onClose();
+                            }
+                            // Navigate to edit page
                             sessionStorage.setItem('allotmentListFilters', JSON.stringify({
                                 returnTo: 'edit',
                                 timestamp: new Date().getTime()
@@ -487,19 +494,21 @@ export default function AllotmentAction() {
                             Transfer Letter
                         </button>
                     )}
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => {
-                            // Store a flag to indicate we're returning to list
-                            sessionStorage.setItem('allotmentListFilters', JSON.stringify({
-                                returnTo: 'list',
-                                timestamp: new Date().getTime()
-                            }));
-                            navigate('/allotments');
-                        }}
-                    >
-                        Back to Allotments
-                    </button>
+                    {!isModal && (
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => {
+                                // Store a flag to indicate we're returning to list
+                                sessionStorage.setItem('allotmentListFilters', JSON.stringify({
+                                    returnTo: 'list',
+                                    timestamp: new Date().getTime()
+                                }));
+                                navigate('/allotments');
+                            }}
+                        >
+                            Back to Allotments
+                        </button>
+                    )}
                 </div>
             </div>
 

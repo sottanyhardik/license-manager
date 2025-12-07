@@ -1,26 +1,33 @@
 import TopNav from "../components/TopNav";
 import {useLocation, useNavigate} from "react-router-dom";
+import {useEffect, useState} from "react";
 
 export default function AdminLayout({children}) {
     const location = useLocation();
     const navigate = useNavigate();
+    const [isInIframe, setIsInIframe] = useState(false);
+
+    useEffect(() => {
+        // Check if the page is loaded in an iframe
+        setIsInIframe(window.self !== window.top);
+    }, []);
 
     return (
         <div className="d-flex flex-column" style={{minHeight: "100vh"}}>
-            <TopNav/>
+            {!isInIframe && <TopNav/>}
             <div className="flex-grow-1" style={{
                 backgroundColor: 'var(--background-color)',
                 overflowY: 'auto'
             }}>
                 <div className="container-fluid" style={{
-                    padding: '2rem 1.5rem',
+                    padding: isInIframe ? '1rem 1.5rem' : '2rem 1.5rem',
                     maxWidth: '100%',
-                    paddingBottom: '5rem'
+                    paddingBottom: isInIframe ? '1rem' : '5rem'
                 }}>
                     {children}
                 </div>
             </div>
-            <footer className="bg-white border-top py-3 mt-auto" style={{position: 'sticky', bottom: 0, zIndex: 1000}}>
+            {!isInIframe && <footer className="bg-white border-top py-3 mt-auto" style={{position: 'sticky', bottom: 0, zIndex: 1000}}>
                 <div className="container-fluid">
                     <div className="row align-items-center">
                         <div className="col-md-8">
@@ -58,7 +65,7 @@ export default function AdminLayout({children}) {
                         </div>
                     </div>
                 </div>
-            </footer>
+            </footer>}
         </div>
     );
 }

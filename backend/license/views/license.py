@@ -398,6 +398,392 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'allotments': allotments
         })
 
+    @action(detail=True, methods=['get'], url_path='balance-pdf')
+    def balance_pdf(self, request, pk=None):
+        """
+        Generate PDF report for license balance details with all BOEs and Allotments.
+        """
+        from django.http import HttpResponse
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        import io
+        from datetime import date
+
+        license_obj = self.get_object()
+
+        # Create PDF buffer
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
+                              rightMargin=10*mm, leftMargin=10*mm,
+                              topMargin=12*mm, bottomMargin=12*mm)
+
+        # Container for PDF elements
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Custom styles
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.HexColor('#1a1a1a'),
+            alignment=TA_CENTER,
+            spaceAfter=8,
+            spaceBefore=3,
+            fontName='Helvetica-Bold'
+        )
+
+        section_style = ParagraphStyle(
+            'SectionTitle',
+            parent=styles['Heading2'],
+            fontSize=10,
+            textColor=colors.HexColor('#2c3e50'),
+            spaceBefore=5,
+            spaceAfter=3,
+            fontName='Helvetica-Bold'
+        )
+
+        # Add title
+        title = Paragraph(f"<b>License Balance Report</b>", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 3))
+
+        # Add license header information split into 2 rows for clarity
+        header_data = [
+            # Row 1: Headers
+            ['License Number', 'License Date', 'License Expiry Date', 'Exporter Name', 'Port Name'],
+            # Row 1: Values
+            [
+                license_obj.license_number or '-',
+                license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-',
+                license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-',
+                Paragraph(license_obj.exporter.name if license_obj.exporter else '-', styles['Normal']),
+                Paragraph(license_obj.port.name if license_obj.port else '-', styles['Normal'])
+            ],
+            # Row 2: Headers
+            ['Purchase Status', 'Balance CIF', 'Get Norm Class', 'Latest Transfer', ''],
+            # Row 2: Values
+            [
+                license_obj.purchase_status or '-',
+                f"{float(license_obj.balance_cif or 0):.2f}",
+                license_obj.get_norm_class or '-',
+                Paragraph(str(license_obj.latest_transfer) if license_obj.latest_transfer else '-', styles['Normal']),
+                ''
+            ]
+        ]
+
+        header_table = Table(header_data, colWidths=[35*mm, 30*mm, 35*mm, 90*mm, 85*mm])
+        header_table.setStyle(TableStyle([
+            # Row 1 header
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            # Row 2 header
+            ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#2c3e50')),
+            ('TEXTCOLOR', (0, 2), (-1, 2), colors.whitesmoke),
+            ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
+            # Data rows
+            ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#ecf0f1')),
+            ('BACKGROUND', (0, 3), (-1, 3), colors.HexColor('#ecf0f1')),
+            # Common styles
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 2), (-1, 2), 8),
+            ('FONTSIZE', (0, 1), (-1, 1), 7.5),
+            ('FONTSIZE', (0, 3), (-1, 3), 7.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+        ]))
+        elements.append(header_table)
+        elements.append(Spacer(1, 5))
+
+        # Export Items Section
+        if license_obj.export_license.exists():
+            # Section header as table row
+            export_section_header = Table([['Export Items']], colWidths=[275*mm])
+            export_section_header.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#2c3e50')),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 11),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            elements.append(export_section_header)
+
+            export_data = [['Item', 'Total CIF', 'Balance CIF']]
+            for item in license_obj.export_license.all():
+                item_desc = item.description or (str(item.norm_class) if item.norm_class else None) or 'None'
+                export_data.append([
+                    Paragraph(item_desc, styles['Normal']),
+                    f"{float(item.cif_fc or item.fob_fc or 0):.2f}",
+                    f"{float(license_obj.balance_cif or 0):.2f}"
+                ])
+
+            export_table = Table(export_data, colWidths=[185*mm, 45*mm, 45*mm])
+            export_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#ecf0f1')])
+            ]))
+            elements.append(export_table)
+            elements.append(Spacer(1, 8))
+
+        # Import Items Section with Usage Details
+        if license_obj.import_license.exists():
+            # Section header as table row
+            import_section_header = Table([['Import Items']], colWidths=[275*mm])
+            import_section_header.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#2c3e50')),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 11),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            elements.append(import_section_header)
+
+            from bill_of_entry.models import RowDetails
+            from allotment.models import AllotmentItems
+
+            for item in license_obj.import_license.all():
+                # Main item data
+                item_names = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else '-'
+
+                # Get HS code label
+                hs_code_display = str(item.hs_code.hs_code if item.hs_code else '-')
+
+                item_data = [[
+                    'Sr', 'HS Code', 'Description', 'Item', 'Total Qty',
+                    'Allotted', 'Debited', 'Available', 'CIF FC', 'Bal CIF'
+                ], [
+                    str(item.serial_number or '-'),
+                    hs_code_display,
+                    Paragraph(str(item.description or '-'), styles['Normal']),
+                    Paragraph(item_names, styles['Normal']),
+                    f"{float(item.quantity or 0):.2f}",
+                    f"{float(item.allotted_quantity or 0):.2f}",
+                    f"{float(item.debited_quantity or 0):.2f}",
+                    f"{float(item.available_quantity or 0):.2f}",
+                    f"{float(item.cif_fc or 0):.2f}",
+                    f"{float(item.balance_cif_fc or 0):.2f}"
+                ]]
+
+                item_table = Table(item_data, colWidths=[12*mm, 25*mm, 60*mm, 50*mm, 23*mm, 21*mm, 21*mm, 21*mm, 21*mm, 21*mm])
+                item_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 8),
+                    ('FONTSIZE', (0, 1), (-1, -1), 7.5),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#ecf0f1'))
+                ]))
+                elements.append(item_table)
+                elements.append(Spacer(1, 3))
+
+                # BOEs
+                boes = RowDetails.objects.filter(
+                    sr_number_id=item.id,
+                    transaction_type='D'
+                ).select_related('bill_of_entry', 'bill_of_entry__company', 'bill_of_entry__port')
+
+                if boes.exists():
+                    # BOEs header as section row
+                    boe_section_header = Table([['BOEs']], colWidths=[275*mm])
+                    boe_section_header.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#27ae60')),
+                        ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, -1), 9),
+                        ('TOPPADDING', (0, 0), (-1, -1), 3),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#333333')),
+                    ]))
+                    elements.append(boe_section_header)
+
+                    boe_data = [['BOE Number', 'Date', 'Port', 'Company', 'Qty', 'CIF $', 'CIF INR']]
+
+                    # Calculate totals
+                    total_qty = 0
+                    total_cif_fc = 0
+                    total_cif_inr = 0
+
+                    for detail in boes:
+                        total_qty += float(detail.qty or 0)
+                        total_cif_fc += float(detail.cif_fc or 0)
+                        total_cif_inr += float(detail.cif_inr or 0)
+
+                        boe_data.append([
+                            detail.bill_of_entry.bill_of_entry_number,
+                            detail.bill_of_entry.bill_of_entry_date.strftime('%d/%m/%Y') if detail.bill_of_entry.bill_of_entry_date else '-',
+                            Paragraph(detail.bill_of_entry.port.name if detail.bill_of_entry.port else '-', styles['Normal']),
+                            Paragraph(detail.bill_of_entry.company.name if detail.bill_of_entry.company else '-', styles['Normal']),
+                            f"{float(detail.qty):.2f}",
+                            f"{float(detail.cif_fc):.2f}",
+                            f"{float(detail.cif_inr):.2f}"
+                        ])
+
+                    # Add total footer row
+                    boe_data.append([
+                        '', '', '', 'Total',
+                        f"{total_qty:.2f}",
+                        f"{total_cif_fc:.2f}",
+                        f"{total_cif_inr:.2f}"
+                    ])
+
+                    boe_table = Table(boe_data, colWidths=[40*mm, 25*mm, 50*mm, 70*mm, 25*mm, 30*mm, 35*mm])
+                    boe_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 8),
+                        ('FONTSIZE', (0, 1), (-1, -2), 7.5),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                        ('TOPPADDING', (0, 0), (-1, -1), 3),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+                        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#e8f5e9')]),
+                        # Footer row styling
+                        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#d4edda')),
+                        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, -1), (-1, -1), 8),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+                    ]))
+                    elements.append(boe_table)
+                    elements.append(Spacer(1, 5))
+
+                # Allotments
+                allotments = AllotmentItems.objects.filter(
+                    item_id=item.id,
+                    allotment__is_boe=True
+                ).select_related('allotment', 'allotment__company')
+
+                if allotments.exists():
+                    # Allotments header as section row
+                    allot_section_header = Table([['Allotments']], colWidths=[275*mm])
+                    allot_section_header.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#e67e22')),
+                        ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, -1), 9),
+                        ('TOPPADDING', (0, 0), (-1, -1), 3),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#333333')),
+                    ]))
+                    elements.append(allot_section_header)
+
+                    allot_data = [['Company', 'Qty', 'CIF $', 'CIF INR']]
+
+                    # Calculate totals
+                    total_allot_qty = 0
+                    total_allot_cif_fc = 0
+                    total_allot_cif_inr = 0
+
+                    for allot in allotments:
+                        total_allot_qty += float(allot.qty or 0)
+                        total_allot_cif_fc += float(allot.cif_fc or 0)
+                        total_allot_cif_inr += float(allot.cif_inr or 0)
+
+                        allot_data.append([
+                            Paragraph(allot.allotment.company.name if allot.allotment.company else '-', styles['Normal']),
+                            f"{float(allot.qty):.2f}",
+                            f"{float(allot.cif_fc):.2f}",
+                            f"{float(allot.cif_inr):.2f}"
+                        ])
+
+                    # Add total footer row
+                    allot_data.append([
+                        'Total',
+                        f"{total_allot_qty:.2f}",
+                        f"{total_allot_cif_fc:.2f}",
+                        f"{total_allot_cif_inr:.2f}"
+                    ])
+
+                    allot_table = Table(allot_data, colWidths=[155*mm, 40*mm, 40*mm, 40*mm])
+                    allot_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e67e22')),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 8),
+                        ('FONTSIZE', (0, 1), (-1, -2), 7.5),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                        ('TOPPADDING', (0, 0), (-1, -1), 3),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+                        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fef5e7')]),
+                        # Footer row styling
+                        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#fdebd0')),
+                        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, -1), (-1, -1), 8),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+                    ]))
+                    elements.append(allot_table)
+                    elements.append(Spacer(1, 5))
+
+                # Balance calculation as table footer
+                balance = float(item.quantity or 0) - float(item.debited_quantity or 0) - float(item.allotted_quantity or 0)
+                balance_table = Table([[f'Balance Quantity: {balance:.2f}']], colWidths=[275*mm])
+                balance_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#e8e8e8')),
+                    ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#e74c3c')),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+                ]))
+                elements.append(balance_table)
+                elements.append(Spacer(1, 8))
+
+        # Build PDF
+        doc.build(elements)
+
+        # Get PDF from buffer
+        pdf = buffer.getvalue()
+        buffer.close()
+
+        # Create response
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{license_obj.license_number}-balance.pdf"'
+        response.write(pdf)
+
+        return response
+
     @action(detail=True, methods=['get'], url_path='merged-documents')
     def merged_documents(self, request, pk=None):
         """

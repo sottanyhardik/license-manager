@@ -13,13 +13,16 @@
     "axios": "^1.13.2",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.2",
     "jwt-decode": "^4.0.0",
     "react": "^19.2.0",
     "react-datepicker": "^8.9.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6",
     "react-select": "^5.10.2",
-    "react-toastify": "^11.0.5"
+    "react-toastify": "^11.0.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

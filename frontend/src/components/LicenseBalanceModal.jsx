@@ -66,11 +66,19 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
     const loadItemOptions = async (inputValue) => {
         try {
+            // Filter items by license's norm class (get_norm_class)
+            const params = {
+                search: inputValue,
+                page_size: 50
+            };
+
+            // Add norm class filter if available
+            if (licenseData?.get_norm_class) {
+                params.norm_class = licenseData.get_norm_class;
+            }
+
             const { data } = await api.get('/masters/item-names/', {
-                params: {
-                    search: inputValue,
-                    page_size: 50
-                }
+                params
             });
             return data.results.map(item => ({
                 value: item.id,
@@ -146,50 +154,230 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         setEditingItems([]);
     };
 
+    const handleDownloadPDF = async () => {
+        try {
+            toast.info('Generating PDF file...');
+
+            // Call backend to generate PDF
+            const token = localStorage.getItem('access');
+            const pdfUrl = `/api/licenses/${licenseId}/balance-pdf/?access_token=${token}`;
+
+            // Open PDF in new tab to download
+            window.open(pdfUrl, '_blank');
+
+            toast.success('PDF file is being generated!');
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            toast.error('Failed to generate PDF file');
+        }
+    };
+
     if (!show) return null;
 
     return (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-xl" style={{ maxWidth: '95%' }}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h5 className="modal-title">
-                            License Balance Details{licenseData ? ` - ${licenseData.license_number}` : ''}
+                <div className="modal-content" style={{
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+                    border: 'none'
+                }}>
+                    <div className="modal-header" style={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: 'white',
+                        borderTopLeftRadius: '12px',
+                        borderTopRightRadius: '12px',
+                        padding: '1.5rem',
+                        borderBottom: 'none'
+                    }}>
+                        <h5 className="modal-title" style={{
+                            fontWeight: '600',
+                            fontSize: '1.25rem',
+                            letterSpacing: '0.3px',
+                            flex: 1
+                        }}>
+                            <i className="bi bi-file-text me-2"></i>
+                            License Balance Report{licenseData ? ` - ${licenseData.license_number}` : ''}
                         </h5>
-                        <button type="button" className="btn-close" onClick={onHide}></button>
+                        <div className="d-flex gap-3 align-items-center">
+                            {licenseData && (
+                                <button
+                                    type="button"
+                                    className="btn btn-sm"
+                                    onClick={handleDownloadPDF}
+                                    disabled={loading}
+                                    style={{
+                                        backgroundColor: 'white',
+                                        color: '#667eea',
+                                        border: 'none',
+                                        fontWeight: '500',
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: '6px',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                        transition: 'all 0.3s'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.transform = 'translateY(-2px)';
+                                        e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.transform = 'translateY(0)';
+                                        e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                                    }}
+                                >
+                                    <i className="bi bi-file-earmark-pdf me-2"></i>
+                                    Download PDF
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                className="btn-close btn-close-white"
+                                onClick={onHide}
+                                style={{ fontSize: '0.875rem' }}
+                            ></button>
+                        </div>
                     </div>
-                    <div className="modal-body">
+                    <div className="modal-body" style={{
+                        padding: '2rem',
+                        backgroundColor: '#f8f9fa'
+                    }}>
                         {loading || !licenseData ? (
                             <div className="text-center py-5">
-                                <div className="spinner-border text-primary"></div>
-                                <p className="mt-2">Loading...</p>
+                                <div className="spinner-border" style={{ color: '#667eea' }}></div>
+                                <p className="mt-2" style={{ color: '#6c757d' }}>Loading...</p>
                             </div>
                         ) : (
                             <>
-                                {/* Export Items */}
-                                {licenseData.export_license && licenseData.export_license.length > 0 && (
-                                    <div className="mb-5">
-                                        <h5 className="mb-3">Export Items</h5>
-                                        <table className="table table-bordered table-hover">
-                                            <thead className="table-light">
+                                {/* License Header Details */}
+                                <div style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: '8px',
+                                    padding: '1.5rem',
+                                    marginBottom: '1.5rem',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                                }}>
+                                    <div className="table-responsive">
+                                        <table className="table table-sm" style={{ marginBottom: '0', border: 'none' }}>
+                                            <thead style={{ backgroundColor: '#667eea', color: 'white' }}>
                                                 <tr>
-                                                    <th>Item</th>
-                                                    <th>Total CIF</th>
-                                                    <th>Balance CIF</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Number</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Date</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Expiry Date</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Exporter Name</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Port Name</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {licenseData.export_license.map((item) => (
+                                                <tr style={{ backgroundColor: '#f8f9fa' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef', fontWeight: '500' }}>
+                                                        {licenseData.license_number || '-'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                        {licenseData.license_date ? new Date(licenseData.license_date).toLocaleDateString('en-GB') : '-'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                        {licenseData.license_expiry_date ? new Date(licenseData.license_expiry_date).toLocaleDateString('en-GB') : '-'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                        {licenseData.exporter_name || '-'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                        {licenseData.port_name || '-'}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        <table className="table table-sm" style={{ marginBottom: '0', border: 'none', marginTop: '0.5rem' }}>
+                                            <thead style={{ backgroundColor: '#667eea', color: 'white' }}>
+                                                <tr>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Purchase Status</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Balance CIF</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Get Norm Class</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem', minWidth: '300px' }}>Latest Transfer</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr style={{ backgroundColor: '#f8f9fa' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                        {licenseData.purchase_status || '-'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                        {parseFloat(licenseData.balance_cif || 0).toFixed(2)}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                        {licenseData.get_norm_class || '-'}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                        {licenseData.latest_transfer || '-'}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Export Items */}
+                                {licenseData.export_license && licenseData.export_license.length > 0 && (
+                                    <div className="mb-4" style={{
+                                        backgroundColor: 'white',
+                                        borderRadius: '8px',
+                                        padding: '1.5rem',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                                    }}>
+                                        <h5 className="mb-3" style={{
+                                            color: '#2c3e50',
+                                            fontWeight: '600',
+                                            borderBottom: '2px solid #667eea',
+                                            paddingBottom: '0.5rem'
+                                        }}>
+                                            <i className="bi bi-box-seam me-2"></i>
+                                            Export Items
+                                        </h5>
+                                        <table className="table table-hover" style={{
+                                            marginBottom: '0',
+                                            border: 'none'
+                                        }}>
+                                            <thead style={{
+                                                backgroundColor: '#667eea',
+                                                color: 'white'
+                                            }}>
+                                                <tr>
+                                                    <th style={{ border: 'none', padding: '0.75rem' }}>Item</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem' }}>Total CIF</th>
+                                                    <th style={{ border: 'none', padding: '0.75rem' }}>Balance CIF</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {licenseData.export_license.map((item, index) => (
                                                     <>
                                                         <tr
                                                             key={item.id}
                                                             onClick={() => handleRowClick(item, 'export')}
-                                                            style={{ cursor: 'pointer' }}
-                                                            className={expandedItem?.id === item.id ? 'table-active' : ''}
+                                                            style={{
+                                                                cursor: 'pointer',
+                                                                backgroundColor: expandedItem?.id === item.id ? '#f0f4ff' : index % 2 === 0 ? '#ffffff' : '#f8f9fa',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                            onMouseOver={(e) => {
+                                                                if (expandedItem?.id !== item.id) {
+                                                                    e.currentTarget.style.backgroundColor = '#e8eef9';
+                                                                }
+                                                            }}
+                                                            onMouseOut={(e) => {
+                                                                if (expandedItem?.id !== item.id) {
+                                                                    e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                                                                }
+                                                            }}
                                                         >
-                                                            <td>{item.description || item.norm_class_label || 'None'}</td>
-                                                            <td>{parseFloat(item.cif_fc || item.fob_fc || 0).toFixed(2)}</td>
-                                                            <td>{parseFloat(licenseData.balance_cif || 0).toFixed(2)}</td>
+                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                {item.description || item.norm_class_label || 'None'}
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                {parseFloat(item.cif_fc || item.fob_fc || 0).toFixed(2)}
+                                                            </td>
+                                                            <td style={{ padding: '0.75rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                {parseFloat(licenseData.balance_cif || 0).toFixed(2)}
+                                                            </td>
                                                         </tr>
                                                         {expandedItem?.id === item.id && usageData && (
                                                             <tr>
@@ -271,22 +459,41 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
                                 {/* Import Items */}
                                 {licenseData.import_license && licenseData.import_license.length > 0 && (
-                                    <div>
-                                        <h5 className="mb-3">Import Items</h5>
+                                    <div style={{
+                                        backgroundColor: 'white',
+                                        borderRadius: '8px',
+                                        padding: '1.5rem',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                                    }}>
+                                        <h5 className="mb-3" style={{
+                                            color: '#2c3e50',
+                                            fontWeight: '600',
+                                            borderBottom: '2px solid #764ba2',
+                                            paddingBottom: '0.5rem'
+                                        }}>
+                                            <i className="bi bi-inbox me-2"></i>
+                                            Import Items
+                                        </h5>
                                         <div className="table-responsive">
-                                            <table className="table table-bordered table-hover table-sm">
-                                                <thead className="table-light">
+                                            <table className="table table-hover table-sm" style={{
+                                                marginBottom: '0',
+                                                border: 'none'
+                                            }}>
+                                                <thead style={{
+                                                    backgroundColor: '#764ba2',
+                                                    color: 'white'
+                                                }}>
                                                     <tr>
-                                                        <th style={{ minWidth: '50px' }}>Sr No</th>
-                                                        <th style={{ minWidth: '100px' }}>HS Code</th>
-                                                        <th style={{ minWidth: '200px' }}>Description</th>
-                                                        <th style={{ minWidth: '250px' }}>Item</th>
-                                                        <th style={{ minWidth: '100px' }}>Total Quantity</th>
-                                                        <th style={{ minWidth: '100px' }}>Allotted Qty</th>
-                                                        <th style={{ minWidth: '100px' }}>Debited Qty</th>
-                                                        <th style={{ minWidth: '100px' }}>Available Qty</th>
-                                                        <th style={{ minWidth: '100px' }}>CIF FC</th>
-                                                        <th style={{ minWidth: '100px' }}>Balance CIF FC</th>
+                                                        <th style={{ minWidth: '50px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Sr No</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>HS Code</th>
+                                                        <th style={{ minWidth: '200px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Description</th>
+                                                        <th style={{ minWidth: '250px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Item</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Total Quantity</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Allotted Qty</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Debited Qty</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Available Qty</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>CIF FC</th>
+                                                        <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Balance CIF FC</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -295,13 +502,32 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             <tr
                                                                 key={item.id}
                                                                 onClick={() => handleRowClick(item, 'import')}
-                                                                style={{ cursor: editingItemId ? 'default' : 'pointer' }}
-                                                                className={expandedItem?.id === item.id ? 'table-active' : ''}
+                                                                style={{
+                                                                    cursor: editingItemId ? 'default' : 'pointer',
+                                                                    backgroundColor: expandedItem?.id === item.id ? '#f5f0ff' : index % 2 === 0 ? '#ffffff' : '#f8f9fa',
+                                                                    transition: 'all 0.2s'
+                                                                }}
+                                                                onMouseOver={(e) => {
+                                                                    if (expandedItem?.id !== item.id && !editingItemId) {
+                                                                        e.currentTarget.style.backgroundColor = '#e8e0f9';
+                                                                    }
+                                                                }}
+                                                                onMouseOut={(e) => {
+                                                                    if (expandedItem?.id !== item.id) {
+                                                                        e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                                                                    }
+                                                                }}
                                                             >
-                                                                <td>{item.serial_number || index + 1}</td>
-                                                                <td>{item.hs_code_label || item.hs_code || '-'}</td>
-                                                                <td>{item.description || '-'}</td>
-                                                                <td onClick={(e) => e.stopPropagation()}>
+                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                    {item.serial_number || index + 1}
+                                                                </td>
+                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                    {item.hs_code_label || item.hs_code || '-'}
+                                                                </td>
+                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                    {item.description || '-'}
+                                                                </td>
+                                                                <td onClick={(e) => e.stopPropagation()} style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                                     {editingItemId === item.id ? (
                                                                         <div className="d-flex align-items-center gap-1">
                                                                             <AsyncSelect
@@ -355,12 +581,24 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                         </div>
                                                                     )}
                                                                 </td>
-                                                                <td>{parseFloat(item.quantity || 0).toFixed(2)}</td>
-                                                                <td>{parseFloat(item.allotted_quantity || 0).toFixed(2)}</td>
-                                                                <td>{parseFloat(item.debited_quantity || 0).toFixed(2)}</td>
-                                                                <td>{parseFloat(item.available_quantity || 0).toFixed(2)}</td>
-                                                                <td>{parseFloat(item.cif_fc || 0).toFixed(2)}</td>
-                                                                <td>{parseFloat(item.balance_cif_fc || 0).toFixed(2)}</td>
+                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                    {parseFloat(item.quantity || 0).toFixed(2)}
+                                                                </td>
+                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                    {parseFloat(item.allotted_quantity || 0).toFixed(2)}
+                                                                </td>
+                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                    {parseFloat(item.debited_quantity || 0).toFixed(2)}
+                                                                </td>
+                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                    {parseFloat(item.available_quantity || 0).toFixed(2)}
+                                                                </td>
+                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                    {parseFloat(item.cif_fc || 0).toFixed(2)}
+                                                                </td>
+                                                                <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
+                                                                    {parseFloat(item.balance_cif_fc || 0).toFixed(2)}
+                                                                </td>
                                                             </tr>
                                                             {expandedItem?.id === item.id && usageData && (
                                                                 <tr>
@@ -468,8 +706,38 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                             </>
                         )}
                     </div>
-                    <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onHide}>
+                    <div className="modal-footer" style={{
+                        backgroundColor: '#f8f9fa',
+                        borderTop: '1px solid #dee2e6',
+                        padding: '1rem 2rem',
+                        borderBottomLeftRadius: '12px',
+                        borderBottomRightRadius: '12px'
+                    }}>
+                        <button
+                            type="button"
+                            className="btn"
+                            onClick={onHide}
+                            style={{
+                                backgroundColor: '#6c757d',
+                                color: 'white',
+                                borderRadius: '6px',
+                                padding: '0.5rem 1.5rem',
+                                fontWeight: '500',
+                                border: 'none',
+                                transition: 'all 0.3s'
+                            }}
+                            onMouseOver={(e) => {
+                                e.target.style.backgroundColor = '#5a6268';
+                                e.target.style.transform = 'translateY(-2px)';
+                                e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                            }}
+                            onMouseOut={(e) => {
+                                e.target.style.backgroundColor = '#6c757d';
+                                e.target.style.transform = 'translateY(0)';
+                                e.target.style.boxShadow = 'none';
+                            }}
+                        >
+                            <i className="bi bi-x-circle me-2"></i>
                             Close
                         </button>
                     </div>

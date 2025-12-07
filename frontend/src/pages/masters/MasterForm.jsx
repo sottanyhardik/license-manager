@@ -17,18 +17,25 @@ import LicenseBalanceModal from "../../components/LicenseBalanceModal";
  * - Create: /masters/:entity/create OR /licenses/create
  * - Edit: /masters/:entity/:id/edit OR /licenses/:id/edit
  */
-export default function MasterForm() {
+export default function MasterForm({
+    entityName: propEntityName,
+    recordId: propRecordId,
+    isModal = false,
+    onClose,
+    onSuccess
+}) {
     const {entity, id} = useParams();
     const location = useLocation();
     const navigate = useNavigate();
 
-    // Determine the actual entity name - either from params or from path
-    const entityName = entity ||
+    // Use prop values if provided (for modal), otherwise use URL params (for page)
+    const entityName = propEntityName || entity ||
         (location.pathname.includes('/licenses') ? 'licenses' : null) ||
         (location.pathname.includes('/allotments') ? 'allotments' : null) ||
         (location.pathname.includes('/bill-of-entries') ? 'bill-of-entries' : null) ||
         (location.pathname.includes('/trades') ? 'trades' : null);
-    const isEdit = Boolean(id);
+    const recordId = propRecordId || id;
+    const isEdit = Boolean(recordId);
 
     const [formData, setFormData] = useState({});
     const [metadata, setMetadata] = useState({});
@@ -99,7 +106,7 @@ export default function MasterForm() {
             fetchRecord();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [entityName, id]);
+    }, [entityName, recordId]);
 
     const fetchMetadata = async () => {
         try {
@@ -143,9 +150,9 @@ export default function MasterForm() {
         try {
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `/${entityName}/${id}/`;
+                apiPath = `/${entityName}/${recordId}/`;
             } else {
-                apiPath = `/masters/${entityName}/${id}/`;
+                apiPath = `/masters/${entityName}/${recordId}/`;
             }
             const {data} = await api.get(apiPath);
             setFormData(data);
@@ -561,7 +568,7 @@ export default function MasterForm() {
                 });
 
                 if (isEdit) {
-                    response = await api.patch(`${apiPath}${id}/`, cleanedFormData);
+                    response = await api.patch(`${apiPath}${recordId}/`, cleanedFormData);
                 } else {
                     response = await api.post(apiPath, cleanedFormData);
                 }
@@ -581,13 +588,24 @@ export default function MasterForm() {
             // Show success message
             toast.success(isEdit ? `${entityTitle} updated successfully` : `${entityTitle} created successfully`);
 
-            // Redirect based on entity type
+            // If modal mode, call onSuccess and onClose
+            if (isModal && onSuccess) {
+                const savedId = response.data?.id || recordId;
+                onSuccess(savedId);
+            }
+
+            if (isModal && onClose) {
+                onClose();
+                return;
+            }
+
+            // Redirect based on entity type (only for non-modal)
             let redirectPath;
             if (entityName === 'licenses') {
                 redirectPath = '/licenses';
             } else if (entityName === 'allotments') {
                 // For allotments, redirect to action page after save
-                const savedId = response.data.id || id;
+                const savedId = response.data.id || recordId;
                 redirectPath = `/allotments/${savedId}/allocate`;
             } else if (entityName === 'bill-of-entries') {
                 redirectPath = `/bill-of-entries`;
@@ -916,6 +934,11 @@ export default function MasterForm() {
                                         type="button"
                                         className="btn btn-secondary"
                                         onClick={() => {
+                                            if (isModal && onClose) {
+                                                onClose();
+                                                return;
+                                            }
+
                                             // Set flag to restore filters when canceling
                                             sessionStorage.setItem('allotmentListFilters', JSON.stringify({
                                                 returnTo: 'list',

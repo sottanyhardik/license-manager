@@ -305,6 +305,13 @@ class MasterViewSet(viewsets.ModelViewSet):
                                 # Apply filter even if value is False (important for boolean fields)
                                 q_objects.append(Q(**{field_name: value}))
 
+                    elif filter_type == "related_exact":
+                        # Exact match on a related field (e.g., sion_norm_class__norm_class)
+                        value = params.get(field_name)
+                        if value is not None and value != "":
+                            lookup = config.get("lookup", field_name)
+                            q_objects.append(Q(**{lookup: value}))
+
                     elif filter_type == "in":
                         # IN filter (comma-separated values or array format)
                         value = params.get(field_name)

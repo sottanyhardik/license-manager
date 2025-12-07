@@ -451,6 +451,7 @@ ItemNameViewSet = MasterViewSet.create_viewset(
                     "display_field": "label",
                     "async": True
                 },
+                "norm_class": {"type": "related_exact", "lookup": "sion_norm_class__norm_class"},
             },
             "list_display": ["group__name", "name", "sion_norm_class_label", 'display_order', "restriction_percentage"],
             "form_fields": ["group", "name", "is_active", "sion_norm_class", 'display_order', "restriction_percentage"],

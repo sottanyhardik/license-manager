@@ -3,9 +3,12 @@ import {useParams, useNavigate} from "react-router-dom";
 import api from "../api/axios";
 import TransferLetterForm from "../components/TransferLetterForm";
 
-export default function BOETransferLetter() {
-    const {id} = useParams();
+export default function BOETransferLetter({ boeId: propId, isModal = false, onClose }) {
+    const {id: paramId} = useParams();
     const navigate = useNavigate();
+
+    // Use prop ID if provided (for modal), otherwise use URL param (for page)
+    const id = propId || paramId;
 
     const [boe, setBoe] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -31,15 +34,17 @@ export default function BOETransferLetter() {
 
     return (
         <div className="container-fluid p-4">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2>Generate Transfer Letter - BOE: {boe?.bill_of_entry_number}</h2>
-                <button
-                    className="btn btn-secondary"
-                    onClick={() => navigate('/bill-of-entries')}
-                >
-                    Back to BOE List
-                </button>
-            </div>
+            {!isModal && (
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Generate Transfer Letter - BOE: {boe?.bill_of_entry_number}</h2>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => navigate('/bill-of-entries')}
+                    >
+                        Back to BOE List
+                    </button>
+                </div>
+            )}
 
             {error && <div className="alert alert-danger">{error}</div>}
             {success && <div className="alert alert-success">{success}</div>}

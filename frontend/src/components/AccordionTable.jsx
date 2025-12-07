@@ -10,7 +10,7 @@ import {formatIndianNumber} from "../utils/numberFormatter";
  * Used for displaying records with nested arrays (like SION Norm Classes, Licenses)
  * that expand/collapse on click.
  */
-export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}, customActions = [], lazyLoadNested = false, onToggleBoolean, inlineEditable = [], onInlineUpdate}) {
+export default function AccordionTable({data, columns, loading, onDelete, basePath, nestedFieldDefs = {}, nestedListDisplay = {}, customActions = [], lazyLoadNested = false, onToggleBoolean, inlineEditable = [], onInlineUpdate, onRowClick = null}) {
     const [expandedRows, setExpandedRows] = useState(new Set());
     const [nestedData, setNestedData] = useState({});
     const [loadingNested, setLoadingNested] = useState({});
@@ -19,7 +19,13 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
     const [editValue, setEditValue] = useState("");
     const [saving, setSaving] = useState(false);
 
-    const toggleRow = async (id) => {
+    const toggleRow = async (id, item) => {
+        // If custom onRowClick is provided, use it instead of default accordion behavior
+        if (onRowClick) {
+            onRowClick(item);
+            return;
+        }
+
         const isCurrentlyExpanded = expandedRows.has(id);
         const newExpanded = new Set(expandedRows);
 
@@ -318,7 +324,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                 <td>
                                     <button
                                         className="btn btn-sm btn-link p-0 text-primary"
-                                        onClick={() => toggleRow(item.id)}
+                                        onClick={() => toggleRow(item.id, item)}
                                         title={isExpanded ? "Collapse" : "Expand"}
                                     >
                                         <i className={`bi bi-chevron-${isExpanded ? "down" : "right"} fs-6`}></i>

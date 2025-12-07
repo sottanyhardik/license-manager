@@ -10,45 +10,52 @@ from docxtpl import DocxTemplate
 
 def convert_docx_to_pdf(docx_path, pdf_path):
     """
-    Convert DOCX to PDF using available tools.
-
-    Tries in order:
-    1. LibreOffice (soffice)
-    2. Microsoft Word (if on macOS)
+    Convert DOCX to PDF using LibreOffice.
 
     Returns True if successful, False otherwise.
     """
     output_dir = os.path.dirname(pdf_path)
 
-    # Try LibreOffice first
+    # Try LibreOffice conversion
     try:
-        # Use a temporary user profile directory to avoid permission issues
-        with tempfile.TemporaryDirectory() as tmpdir:
-            env = os.environ.copy()
-            env['HOME'] = tmpdir
+        # Run soffice in headless mode with simple environment
+        # Don't override HOME as it can cause permission issues
+        result = subprocess.run([
+            'soffice',
+            '--headless',
+            '--norestore',
+            '--nofirststartwizard',
+            '--nologo',
+            '--convert-to', 'pdf',
+            '--outdir', output_dir,
+            docx_path
+        ], capture_output=True, timeout=60, text=True)
 
-            result = subprocess.run([
-                'soffice', '--headless', '--convert-to', 'pdf',
-                '--outdir', output_dir, docx_path
-            ], check=True, capture_output=True, timeout=30, env=env)
+        # LibreOffice creates PDF with same name as DOCX in the output directory
+        expected_pdf = os.path.join(output_dir, os.path.basename(docx_path).replace('.docx', '.pdf'))
 
-            # LibreOffice creates PDF with same name as DOCX in the output directory
-            expected_pdf = os.path.join(output_dir, os.path.basename(docx_path).replace('.docx', '.pdf'))
+        # Check if PDF was created
+        if os.path.exists(expected_pdf):
+            if expected_pdf != pdf_path:
+                os.rename(expected_pdf, pdf_path)
+            print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF")
+            return True
+        else:
+            print(f"✗ PDF not created: {os.path.basename(docx_path)}")
+            if result.stdout:
+                print(f"  stdout: {result.stdout}")
+            if result.stderr:
+                print(f"  stderr: {result.stderr}")
+            return False
 
-            # Check if PDF was created
-            if os.path.exists(expected_pdf):
-                if expected_pdf != pdf_path:
-                    os.rename(expected_pdf, pdf_path)
-                print(f"Successfully converted {docx_path} to PDF")
-                return True
-            else:
-                print(f"PDF not found at expected location: {expected_pdf}")
-                return False
-
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
-        print(f"LibreOffice conversion failed: {type(e).__name__}: {str(e)}")
-        if hasattr(e, 'stderr'):
-            print(f"stderr: {e.stderr.decode()}")
+    except subprocess.TimeoutExpired:
+        print(f"✗ Conversion timeout for {os.path.basename(docx_path)}")
+        return False
+    except FileNotFoundError:
+        print(f"✗ LibreOffice (soffice) not found in PATH")
+        return False
+    except Exception as e:
+        print(f"✗ Conversion error for {os.path.basename(docx_path)}: {type(e).__name__}: {str(e)}")
         return False
 
     # Try using macOS textutil + cupsfilter

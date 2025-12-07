@@ -293,7 +293,23 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                 fs_pdf_path = os.path.join(file_path, fs_filename)
 
                 # Merge TL + License Copy -> FS
-                merge_tl_with_license_copy(tl_pdf_path, license_copy_path, fs_pdf_path)
+                if merge_tl_with_license_copy(tl_pdf_path, license_copy_path, fs_pdf_path):
+                    # FS PDF created successfully - delete the source files (TL and Copy)
+                    try:
+                        os.remove(tl_pdf_path)
+                        print(f"✓ Deleted TL PDF: {filename}")
+                    except Exception as e:
+                        print(f"✗ Could not delete TL PDF {filename}: {str(e)}")
+
+        # Delete all "- Copy.pdf" files after FS PDFs are created
+        for filename in os.listdir(file_path):
+            if filename.endswith(' - Copy.pdf'):
+                copy_pdf_path = os.path.join(file_path, filename)
+                try:
+                    os.remove(copy_pdf_path)
+                    print(f"✓ Deleted Copy PDF: {filename}")
+                except Exception as e:
+                    print(f"✗ Could not delete Copy PDF {filename}: {str(e)}")
 
         # Create zip file
         file_name = f'{dir_name}.zip'

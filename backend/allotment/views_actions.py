@@ -39,6 +39,7 @@ class AllotmentActionViewSet(ViewSet):
         - search: Search in license number, description, exporter name
         - license_number: Filter by license number (icontains)
         - exporter: Filter by exporter ID
+        - exclude_exporter: Exclude exporter ID
         - description: Filter by description (icontains)
         - available_quantity_gte: Minimum available quantity
         - available_quantity_lte: Maximum available quantity
@@ -48,6 +49,10 @@ class AllotmentActionViewSet(ViewSet):
         - norm_class: Filter by license norm class (export license)
         - hs_code: Filter by HS code
         - is_expired: Filter expired licenses (true/false)
+        - is_restricted: Filter by is_restricted flag (true/false/all)
+        - purchase_status: Filter by purchase status (comma-separated)
+        - license_status: Filter by license status (active/expired/expiring_soon/all)
+        - item_names: Filter by item name IDs (comma-separated)
         """
         allotment = get_object_or_404(
             AllotmentModel.objects.prefetch_related('allotment_details__item__license__exporter'), pk=pk)
@@ -56,6 +61,7 @@ class AllotmentActionViewSet(ViewSet):
         search = request.query_params.get('search', '')
         license_number = request.query_params.get('license_number', '')
         exporter = request.query_params.get('exporter', '')
+        exclude_exporter = request.query_params.get('exclude_exporter', '')
         description = request.query_params.get('description', '')
         available_quantity_gte = request.query_params.get('available_quantity_gte', '')
         available_quantity_lte = request.query_params.get('available_quantity_lte', '')
@@ -65,6 +71,10 @@ class AllotmentActionViewSet(ViewSet):
         norm_class = request.query_params.get('norm_class', '')
         hs_code = request.query_params.get('hs_code', '')
         is_expired = request.query_params.get('is_expired', '')
+        is_restricted = request.query_params.get('is_restricted', '')
+        purchase_status = request.query_params.get('purchase_status', '')
+        license_status = request.query_params.get('license_status', '')
+        item_names = request.query_params.get('item_names', '')
 
         # Get available license import items with available quantity
         # Show all items with available quantity > 0 (including partially allocated ones)
@@ -144,6 +154,46 @@ class AllotmentActionViewSet(ViewSet):
                 queryset = queryset.filter(license__license_expiry_date__lt=today)
             elif is_expired.lower() in ['false', '0', 'no']:
                 queryset = queryset.filter(license__license_expiry_date__gte=today)
+
+        # Apply exclude exporter filter
+        if exclude_exporter:
+            queryset = queryset.exclude(license__exporter_id=exclude_exporter)
+
+        # Apply is_restricted filter
+        if is_restricted and is_restricted.lower() != 'all':
+            if is_restricted.lower() in ['true', '1', 'yes']:
+                queryset = queryset.filter(is_restricted=True)
+            elif is_restricted.lower() in ['false', '0', 'no']:
+                queryset = queryset.filter(is_restricted=False)
+
+        # Apply purchase_status filter
+        if purchase_status:
+            status_list = [s.strip() for s in purchase_status.split(',') if s.strip()]
+            if status_list:
+                queryset = queryset.filter(license__purchase_status__in=status_list)
+
+        # Apply license_status filter
+        if license_status and license_status.lower() != 'all':
+            from django.utils import timezone
+            from datetime import timedelta
+            today = timezone.now().date()
+            if license_status.lower() == 'active':
+                queryset = queryset.filter(license__license_expiry_date__gte=today)
+            elif license_status.lower() == 'expired':
+                queryset = queryset.filter(license__license_expiry_date__lt=today)
+            elif license_status.lower() == 'expiring_soon':
+                # Expiring within next 30 days
+                expiring_date = today + timedelta(days=30)
+                queryset = queryset.filter(
+                    license__license_expiry_date__gte=today,
+                    license__license_expiry_date__lte=expiring_date
+                )
+
+        # Apply item_names filter
+        if item_names:
+            item_name_list = [int(i.strip()) for i in item_names.split(',') if i.strip().isdigit()]
+            if item_name_list:
+                queryset = queryset.filter(items__id__in=item_name_list).distinct()
 
         # Pagination
         page = int(request.query_params.get('page', 1))

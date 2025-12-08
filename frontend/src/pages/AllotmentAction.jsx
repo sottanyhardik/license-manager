@@ -1,6 +1,7 @@
 import {useEffect, useState} from "react";
 import {useParams, useNavigate, useLocation} from "react-router-dom";
 import { toast } from 'react-toastify';
+import Select from "react-select";
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import TransferLetterForm from "../components/TransferLetterForm";
@@ -23,6 +24,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const [filters, setFilters] = useState({
         description: "",
         exporter: "",
+        exclude_exporter: "",
         license_number: "",
         available_quantity_gte: "50",
         available_quantity_lte: "",
@@ -31,10 +33,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         notification_number: "",
         norm_class: "",
         hs_code: "",
-        is_expired: "false"
+        is_expired: "false",
+        is_restricted: "all",
+        purchase_status: "",
+        license_status: "active",
+        item_names: ""
     });
     const [isFirstLoad, setIsFirstLoad] = useState(true);
     const [notificationOptions, setNotificationOptions] = useState([]);
+    const [availableItemNames, setAvailableItemNames] = useState([]);
     const [pagination, setPagination] = useState({
         currentPage: 1,
         pageSize: 20,
@@ -47,6 +54,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
     useEffect(() => {
         fetchNotificationOptions();
+        fetchAvailableItemNames();
     }, []);
 
     // Set description from allotment item_name on first load
@@ -91,6 +99,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             setNotificationOptions(notificationChoices);
         } catch (err) {
             // Silently fail for notification options
+        }
+    };
+
+    const fetchAvailableItemNames = async () => {
+        try {
+            const {data} = await api.get('item-report/available-items/');
+            const items = data || [];
+            setAvailableItemNames(items.map(item => ({value: item.id, label: item.name})));
+        } catch (err) {
+            // Silently fail for item names
         }
     };
 
@@ -803,21 +821,98 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             onChange={(e) => setFilters({...filters, available_value_lte: e.target.value})}
                                         />
                                     </div>
+                                    <div className="col-md-3">
+                                        <label className="form-label">Is Restricted</label>
+                                        <select
+                                            className="form-control form-control-sm"
+                                            value={filters.is_restricted}
+                                            onChange={(e) => setFilters({...filters, is_restricted: e.target.value})}
+                                        >
+                                            <option value="all">All</option>
+                                            <option value="true">Restricted</option>
+                                            <option value="false">Not Restricted</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-md-3">
+                                        <label className="form-label">Purchase Status</label>
+                                        <Select
+                                            isMulti
+                                            value={filters.purchase_status ? filters.purchase_status.split(',').map(s => ({
+                                                value: s,
+                                                label: s === 'GE' ? 'GE Purchase' : s === 'GO' ? 'GE Operating' : s === 'SM' ? 'SM Purchase' : s === 'MI' ? 'Conversion' : s === 'IP' ? 'IP' : 'CO'
+                                            })) : []}
+                                            onChange={(selected) => setFilters({...filters, purchase_status: selected ? selected.map(s => s.value).join(',') : ''})}
+                                            options={[
+                                                {value: 'GE', label: 'GE Purchase'},
+                                                {value: 'GO', label: 'GE Operating'},
+                                                {value: 'SM', label: 'SM Purchase'},
+                                                {value: 'MI', label: 'Conversion'},
+                                                {value: 'IP', label: 'IP'},
+                                                {value: 'CO', label: 'CO'}
+                                            ]}
+                                            placeholder="All"
+                                            className="basic-multi-select"
+                                            classNamePrefix="select"
+                                        />
+                                    </div>
+                                    <div className="col-md-3">
+                                        <label className="form-label">License Status</label>
+                                        <select
+                                            className="form-control form-control-sm"
+                                            value={filters.license_status}
+                                            onChange={(e) => setFilters({...filters, license_status: e.target.value})}
+                                        >
+                                            <option value="all">All</option>
+                                            <option value="active">Active</option>
+                                            <option value="expired">Expired</option>
+                                            <option value="expiring_soon">Expiring Soon</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-md-3">
+                                        <label className="form-label">Exclude Exporter</label>
+                                        <HybridSelect
+                                            fieldMeta={{endpoint: "/masters/companies/", label_field: "name"}}
+                                            value={filters.exclude_exporter}
+                                            onChange={(value) => setFilters({...filters, exclude_exporter: value})}
+                                            placeholder="None"
+                                            isClearable={true}
+                                        />
+                                    </div>
                                     <div className="col-md-12">
+                                        <label className="form-label">Filter by Item Name</label>
+                                        <Select
+                                            isMulti
+                                            value={filters.item_names ? filters.item_names.split(',').map(id => {
+                                                const item = availableItemNames.find(i => i.value === parseInt(id));
+                                                return item || {value: id, label: id};
+                                            }) : []}
+                                            onChange={(selected) => setFilters({...filters, item_names: selected ? selected.map(s => s.value).join(',') : ''})}
+                                            options={availableItemNames}
+                                            placeholder="All Item Names"
+                                            className="basic-multi-select"
+                                            classNamePrefix="select"
+                                        />
+                                    </div>
+                                    <div className="col-md-12 mt-2">
                                         <button
                                             className="btn btn-sm btn-secondary"
                                             onClick={() => setFilters({
                                                 description: "",
                                                 exporter: "",
+                                                exclude_exporter: "",
                                                 license_number: "",
                                                 available_quantity_gte: "50",
                                                 available_quantity_lte: "",
-                                                available_value_gte: "",
+                                                available_value_gte: "100",
                                                 available_value_lte: "",
                                                 notification_number: "",
                                                 norm_class: "",
                                                 hs_code: "",
-                                                is_expired: "false"
+                                                is_expired: "false",
+                                                is_restricted: "all",
+                                                purchase_status: "",
+                                                license_status: "active",
+                                                item_names: ""
                                             })}
                                         >
                                             Clear Filters
@@ -837,10 +932,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <th style={{minWidth: '200px'}}>Description</th>
                                 <th style={{minWidth: '150px'}}>Exporter</th>
                                 <th style={{minWidth: '90px'}}>Notification</th>
+                                <th style={{minWidth: '150px'}}>Item Name</th>
+                                <th style={{minWidth: '80px', textAlign: 'center'}}>Is Restricted</th>
                                 <th style={{minWidth: '100px', textAlign: 'right'}}>Avail Qty</th>
                                 <th style={{minWidth: '110px', textAlign: 'right'}}>Avail CIF FC</th>
                                 <th style={{minWidth: '80px', textAlign: 'right'}}>Average</th>
                                 <th style={{minWidth: '90px'}}>Expiry</th>
+                                <th style={{minWidth: '150px'}}>Notes</th>
                                 <th style={{minWidth: '150px'}}>Allocate Qty</th>
                                 <th style={{minWidth: '150px'}}>Allocate Value</th>
                                 <th style={{minWidth: '130px', position: 'sticky', right: 0, backgroundColor: 'var(--surface-color)', zIndex: 5}}>Action</th>
@@ -859,6 +957,19 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         <td style={{fontSize: '0.8rem', maxWidth: '250px', whiteSpace: 'normal'}}>{item.description}</td>
                                         <td style={{fontSize: '0.8rem'}}>{item.exporter_name}</td>
                                         <td style={{fontSize: '0.8rem', textAlign: 'center'}}>{item.notification_number || '-'}</td>
+                                        <td style={{fontSize: '0.8rem'}}>
+                                            {item.items_detail && item.items_detail.length > 0
+                                                ? item.items_detail.map(i => i.name).join(', ')
+                                                : '-'
+                                            }
+                                        </td>
+                                        <td style={{fontSize: '0.8rem', textAlign: 'center'}}>
+                                            {item.is_restricted ? (
+                                                <span className="badge bg-warning text-dark">Yes</span>
+                                            ) : (
+                                                <span className="badge bg-success">No</span>
+                                            )}
+                                        </td>
                                         <td style={{fontSize: '0.8rem', textAlign: 'right', fontWeight: '500'}}>{parseFloat(item.available_quantity || 0).toFixed(3)}</td>
                                         <td style={{fontSize: '0.8rem', textAlign: 'right', fontWeight: '500'}}>{parseFloat(item.balance_cif_fc || 0).toFixed(2)}</td>
                                         <td style={{fontSize: '0.8rem', textAlign: 'right', color: 'var(--text-secondary)'}}>
@@ -870,6 +981,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             })()}
                                         </td>
                                         <td style={{fontSize: '0.8rem'}}>{item.license_expiry_date}</td>
+                                        <td style={{fontSize: '0.8rem', maxWidth: '200px', whiteSpace: 'normal'}}>{item.notes || '-'}</td>
                                         <td>
                                             <div className="input-group input-group-sm" style={{minWidth: '140px'}}>
                                                 <input

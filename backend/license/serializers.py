@@ -96,6 +96,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     license_expiry_date = serializers.DateField(source="license.license_expiry_date", read_only=True, format="%Y-%m-%d")
     notification_number = serializers.CharField(source="license.notification_number", read_only=True)
     exporter_name = serializers.CharField(source="license.exporter.name", read_only=True)
+    notes = serializers.CharField(source="license.balance_report_notes", read_only=True, allow_null=True, allow_blank=True)
     hs_code_detail = HSCodeSerializer(source='hs_code', read_only=True)
     hs_code_label = serializers.SerializerMethodField()
 
@@ -115,7 +116,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                   'old_quantity', 'unit', 'cif_fc', 'cif_inr', 'available_quantity', 'available_value',
                   'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value',
                   'license_number', 'license_date', 'license_expiry_date',
-                  'notification_number', 'exporter_name', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
+                  'notification_number', 'exporter_name', 'notes', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
                   'is_restricted']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly

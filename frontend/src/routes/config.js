@@ -115,4 +115,9 @@ export const reportEntities = [
         label: "Item Pivot Report",
         icon: "table",
     },
+    {
+        path: "/reports/item-report",
+        label: "Item Report",
+        icon: "list-ul",
+    },
 ];

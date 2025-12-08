@@ -5,6 +5,7 @@ from license.views import LicenseDetailsViewSet
 from license.views.expiring_licenses_report import ExpiringLicensesViewSet, ExpiringLicensesReportView
 from license.views.active_licenses_report import ActiveLicensesViewSet, ActiveLicensesReportView
 from license.views.item_pivot_report import ItemPivotViewSet, ItemPivotReportView
+from license.views.item_report import ItemReportViewSet, ItemReportView
 from license.views.inventory_balance_report import InventoryBalanceReportView
 from license.views.inventory_balance_viewset import InventoryBalanceViewSet
 from license.views.license_items import LicenseItemViewSet
@@ -20,6 +21,7 @@ router.register(r"inventory-balance", InventoryBalanceViewSet, basename="invento
 router.register(r"expiring-licenses", ExpiringLicensesViewSet, basename="expiring-licenses")
 router.register(r"active-licenses", ActiveLicensesViewSet, basename="active-licenses")
 router.register(r"item-pivot", ItemPivotViewSet, basename="item-pivot")
+router.register(r"item-report", ItemReportViewSet, basename="item-report")
 
 urlpatterns = [
     # Specific paths must come BEFORE router.urls to avoid conflicts
@@ -32,6 +34,7 @@ urlpatterns = [
     path("reports/expiring-licenses/", ExpiringLicensesReportView.as_view(), name="expiring-licenses-report"),
     path("reports/active-licenses/", ActiveLicensesReportView.as_view(), name="active-licenses-report"),
     path("reports/item-pivot/", ItemPivotReportView.as_view(), name="item-pivot-report"),
+    path("reports/item-report/", ItemReportView.as_view(), name="item-report"),
     # Router URLs must come LAST
     path("", include(router.urls)),
 ]

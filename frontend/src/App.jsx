@@ -29,6 +29,7 @@ const SionE132 = lazy(() => import("./pages/reports/SionE132"));
 const ExpiringLicenses = lazy(() => import("./pages/reports/ExpiringLicenses"));
 const ActiveLicenses = lazy(() => import("./pages/reports/ActiveLicenses"));
 const ItemPivotReport = lazy(() => import("./pages/reports/ItemPivotReport"));
+const ItemReport = lazy(() => import("./pages/reports/ItemReport"));
 const TradeForm = lazy(() => import("./pages/TradeForm"));
 const LedgerCSVUpload = lazy(() => import("./pages/LedgerCSVUpload"));
 const LedgerUpload = lazy(() => import("./pages/LedgerUpload"));
@@ -257,6 +258,19 @@ export default function App() {
                                         <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ItemPivotReport/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/reports/item-report"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <ItemReport/>
                                             </AdminLayout>
                                         </RoleRoute>
                                     </ProtectedRoute>

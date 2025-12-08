@@ -47,7 +47,7 @@ class LicenseActionViewSet(ViewSet):
             # Create response
             response = HttpResponse(pdf_content, content_type='application/pdf')
             filename = f"License_Ledger_{license_obj.license_number}.pdf"
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
 
             return response
 

@@ -779,7 +779,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         # Create response
         response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{license_obj.license_number}-balance.pdf"'
+        response['Content-Disposition'] = f'inline; filename="{license_obj.license_number}-balance.pdf"'
         response.write(pdf)
 
         return response

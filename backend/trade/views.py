@@ -218,7 +218,7 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
             # Create response
             response = HttpResponse(pdf, content_type='application/pdf')
             filename = f"Bill_of_Supply_{trade.invoice_number}_{trade.invoice_date.strftime('%Y%m%d') if trade.invoice_date else 'NA'}.pdf"
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
 
             return response
 

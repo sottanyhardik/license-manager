@@ -163,6 +163,38 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     - is_expired: True when license_expiry_date < today, False when license_expiry_date >= today
     - is_null: True when balance_cif < 200, False when balance_cif >= 200
     """
+    lookup_value_regex = '[^/]+'  # Allow both numbers and strings
+
+    def get_object(self):
+        """
+        Override to support lookup by either pk (ID) or license_number.
+        """
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        filter_kwargs = {self.lookup_field: self.kwargs[lookup_url_kwarg]}
+
+        # Try to get by primary key first (if it's a number)
+        lookup_value = self.kwargs[lookup_url_kwarg]
+        try:
+            # If lookup value is numeric, try ID first
+            if lookup_value.isdigit():
+                filter_kwargs = {'pk': int(lookup_value)}
+                obj = self.get_queryset().get(**filter_kwargs)
+            else:
+                # Otherwise lookup by license number
+                filter_kwargs = {'license_number': lookup_value}
+                obj = self.get_queryset().get(**filter_kwargs)
+        except (ValueError, self.queryset.model.DoesNotExist):
+            # If ID lookup fails, try license_number
+            try:
+                filter_kwargs = {'license_number': lookup_value}
+                obj = self.get_queryset().get(**filter_kwargs)
+            except self.queryset.model.DoesNotExist:
+                from django.http import Http404
+                raise Http404(f"License with identifier '{lookup_value}' not found")
+
+        # May raise a permission denied
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     def update(self, request, *args, **kwargs):
         """Override to log incoming request data."""

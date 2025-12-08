@@ -158,9 +158,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         try {
             toast.info('Generating PDF file...');
 
-            // Call backend to generate PDF
+            // Call backend to generate PDF - use license number instead of ID
             const token = localStorage.getItem('access');
-            const pdfUrl = `/api/licenses/${licenseId}/balance-pdf/?access_token=${token}`;
+            const licenseNumber = licenseData?.license_number || licenseId;
+            const pdfUrl = `/api/licenses/${licenseNumber}/balance-pdf/?access_token=${token}`;
 
             // Open PDF in new tab to download
             window.open(pdfUrl, '_blank');
@@ -539,11 +540,26 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 onChange={setEditingItems}
                                                                                 placeholder="Select items..."
                                                                                 className="flex-grow-1"
+                                                                                menuPortalTarget={document.body}
+                                                                                menuPosition="fixed"
                                                                                 styles={{
                                                                                     control: (base) => ({
                                                                                         ...base,
                                                                                         minHeight: '32px',
                                                                                         fontSize: '0.875rem'
+                                                                                    }),
+                                                                                    menuPortal: (base) => ({
+                                                                                        ...base,
+                                                                                        zIndex: 9999
+                                                                                    }),
+                                                                                    menu: (base) => ({
+                                                                                        ...base,
+                                                                                        minWidth: '300px',
+                                                                                        width: 'max-content'
+                                                                                    }),
+                                                                                    option: (base) => ({
+                                                                                        ...base,
+                                                                                        whiteSpace: 'nowrap'
                                                                                     })
                                                                                 }}
                                                                             />

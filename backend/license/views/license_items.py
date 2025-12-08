@@ -21,10 +21,10 @@ class LicenseItemSimpleSerializer(serializers.ModelSerializer):
         return f"{obj.license.license_number} - S.No.{obj.serial_number}"
 
 
-class LicenseItemViewSet(viewsets.ReadOnlyModelViewSet):
+class LicenseItemViewSet(viewsets.ModelViewSet):
     """
-    Read-only viewset for license items.
-    Used for dropdowns and selection in BOE forms.
+    ViewSet for license items.
+    Used for dropdowns, selection in BOE forms, and updating individual fields like is_restricted.
     """
     queryset = LicenseImportItemsModel.objects.select_related('license', 'hs_code').all()
     serializer_class = LicenseItemSimpleSerializer
@@ -33,3 +33,11 @@ class LicenseItemViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['license', 'hs_code']
     ordering_fields = ['serial_number', 'license__license_number']
     ordering = ['license__license_number', 'serial_number']
+
+    def get_serializer_class(self):
+        """Use simple serializer for list/retrieve, allow full model updates for update/partial_update."""
+        if self.action in ['update', 'partial_update']:
+            # For updates, allow all fields from the model
+            from license.serializers import LicenseImportItemSerializer
+            return LicenseImportItemSerializer
+        return self.serializer_class

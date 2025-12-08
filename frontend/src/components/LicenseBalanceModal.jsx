@@ -253,6 +253,34 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         setEditingItems([]);
     };
 
+    const handleRestrictedToggle = async (itemId, isRestricted) => {
+        try {
+            // Update via the license-items API endpoint
+            await api.patch(`/license-items/${itemId}/`, {
+                is_restricted: isRestricted
+            });
+
+            // Update local state
+            setLicenseData(prevData => ({
+                ...prevData,
+                import_license: prevData.import_license.map(importItem => {
+                    if (importItem.id === itemId) {
+                        return {
+                            ...importItem,
+                            is_restricted: isRestricted
+                        };
+                    }
+                    return importItem;
+                })
+            }));
+
+            toast.success(`Item ${isRestricted ? 'marked as restricted' : 'unmarked as restricted'}`);
+        } catch (error) {
+            console.error('Error updating is_restricted:', error);
+            toast.error('Failed to update restriction status');
+        }
+    };
+
     const handleDownloadPDF = async () => {
         try {
             toast.info('Generating PDF file...');
@@ -690,6 +718,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Allotted Qty</th>
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Debited Qty</th>
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Available Qty</th>
+                                                        <th style={{ minWidth: '120px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Is Restricted</th>
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>CIF FC</th>
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Balance CIF FC</th>
                                                     </tr>
@@ -823,6 +852,21 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                 <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                                     {parseFloat(item.available_quantity || 0).toFixed(2)}
                                                                 </td>
+                                                                <td
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}
+                                                                >
+                                                                    <div className="form-check form-switch d-flex justify-content-center">
+                                                                        <input
+                                                                            className="form-check-input"
+                                                                            type="checkbox"
+                                                                            role="switch"
+                                                                            checked={item.is_restricted || false}
+                                                                            onChange={(e) => handleRestrictedToggle(item.id, e.target.checked)}
+                                                                            style={{ cursor: 'pointer' }}
+                                                                        />
+                                                                    </div>
+                                                                </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                                     {parseFloat(item.cif_fc || 0).toFixed(2)}
                                                                 </td>
@@ -832,7 +876,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             </tr>
                                                             {expandedItem?.id === item.id && usageData && (
                                                                 <tr>
-                                                                    <td colSpan="10">
+                                                                    <td colSpan="11">
                                                                         <div className="p-3 bg-light">
                                                                             <h6>Usage Details:</h6>
 

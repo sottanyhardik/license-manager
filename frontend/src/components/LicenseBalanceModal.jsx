@@ -3,35 +3,35 @@ import api from '../api/axios';
 import AsyncSelect from 'react-select/async';
 import { toast } from 'react-toastify';
 
-// Inline Notes Component
-function NotesSection({ licenseId, notes, onUpdate }) {
+// Inline Editable Text Component
+function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
     const [isEditing, setIsEditing] = useState(false);
-    const [noteText, setNoteText] = useState(notes);
+    const [textValue, setTextValue] = useState(text);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        setNoteText(notes);
-    }, [notes]);
+        setTextValue(text);
+    }, [text]);
 
     const handleSave = async () => {
         setSaving(true);
         try {
             await api.patch(`/licenses/${licenseId}/`, {
-                balance_report_notes: noteText
+                [fieldName]: textValue
             });
-            onUpdate(noteText);
+            onUpdate(textValue);
             setIsEditing(false);
-            toast.success('Notes saved successfully');
+            toast.success(`${label} saved successfully`);
         } catch (error) {
-            console.error('Error saving notes:', error);
-            toast.error('Failed to save notes');
+            console.error(`Error saving ${label}:`, error);
+            toast.error(`Failed to save ${label}`);
         } finally {
             setSaving(false);
         }
     };
 
     const handleCancel = () => {
-        setNoteText(notes);
+        setTextValue(text);
         setIsEditing(false);
     };
 
@@ -42,9 +42,9 @@ function NotesSection({ licenseId, notes, onUpdate }) {
                     <textarea
                         className="form-control mb-2"
                         rows="4"
-                        value={noteText}
-                        onChange={(e) => setNoteText(e.target.value)}
-                        placeholder="Enter notes here..."
+                        value={textValue}
+                        onChange={(e) => setTextValue(e.target.value)}
+                        placeholder={`Enter ${label.toLowerCase()} here...`}
                         style={{
                             fontSize: '0.875rem',
                             borderColor: '#667eea',
@@ -78,7 +78,7 @@ function NotesSection({ licenseId, notes, onUpdate }) {
                     style={{
                         minHeight: '80px',
                         padding: '0.75rem',
-                        backgroundColor: noteText ? '#fffacd' : '#f8f9fa',
+                        backgroundColor: textValue ? '#fffacd' : '#f8f9fa',
                         border: '1px solid #dee2e6',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -88,14 +88,14 @@ function NotesSection({ licenseId, notes, onUpdate }) {
                     }}
                     onMouseOver={(e) => {
                         e.currentTarget.style.borderColor = '#667eea';
-                        e.currentTarget.style.backgroundColor = noteText ? '#fffacd' : '#e9ecef';
+                        e.currentTarget.style.backgroundColor = textValue ? '#fffacd' : '#e9ecef';
                     }}
                     onMouseOut={(e) => {
                         e.currentTarget.style.borderColor = '#dee2e6';
-                        e.currentTarget.style.backgroundColor = noteText ? '#fffacd' : '#f8f9fa';
+                        e.currentTarget.style.backgroundColor = textValue ? '#fffacd' : '#f8f9fa';
                     }}
                 >
-                    {noteText || <span style={{ color: '#6c757d', fontStyle: 'italic' }}>Click to add notes...</span>}
+                    {textValue || <span style={{ color: '#6c757d', fontStyle: 'italic' }}>Click to add {label.toLowerCase()}...</span>}
                 </div>
             )}
         </div>
@@ -370,7 +370,43 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             <tbody>
                                                 <tr style={{ backgroundColor: '#f8f9fa' }}>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef', fontWeight: '500' }}>
-                                                        {licenseData.license_number || '-'}
+                                                        <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
+                                                            <span style={{ fontWeight: '600', color: '#2c3e50' }}>
+                                                                {licenseData.license_number || '-'}
+                                                            </span>
+                                                            {(licenseData.has_tl || licenseData.has_copy) && (
+                                                                <a
+                                                                    href={`/api/licenses/${licenseData.id}/merged-documents/?access_token=${localStorage.getItem('access')}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    title="View merged documents"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                    }}
+                                                                    style={{
+                                                                        fontSize: '0.75rem',
+                                                                        color: '#28a745',
+                                                                        textDecoration: 'none',
+                                                                        padding: '2px 6px',
+                                                                        backgroundColor: '#d4edda',
+                                                                        borderRadius: '3px',
+                                                                        fontWeight: '500',
+                                                                        transition: 'all 0.2s',
+                                                                        whiteSpace: 'nowrap'
+                                                                    }}
+                                                                    onMouseOver={(e) => {
+                                                                        e.target.style.backgroundColor = '#c3e6cb';
+                                                                        e.target.style.textDecoration = 'underline';
+                                                                    }}
+                                                                    onMouseOut={(e) => {
+                                                                        e.target.style.backgroundColor = '#d4edda';
+                                                                        e.target.style.textDecoration = 'none';
+                                                                    }}
+                                                                >
+                                                                    Copy
+                                                                </a>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                         {licenseData.license_date ? new Date(licenseData.license_date).toLocaleDateString('en-GB') : '-'}
@@ -416,6 +452,37 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                     </div>
                                 </div>
 
+                                {/* Condition Sheet Section */}
+                                <div className="mb-4" style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: '8px',
+                                    padding: '1.5rem',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                                }}>
+                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 style={{
+                                            color: '#2c3e50',
+                                            fontWeight: '600',
+                                            borderBottom: '2px solid #667eea',
+                                            paddingBottom: '0.5rem',
+                                            marginBottom: '0',
+                                            flex: 1
+                                        }}>
+                                            <i className="bi bi-file-earmark-text me-2"></i>
+                                            Condition Sheet
+                                        </h5>
+                                    </div>
+                                    <InlineEditableText
+                                        licenseId={licenseId}
+                                        text={licenseData.condition_sheet || ''}
+                                        fieldName="condition_sheet"
+                                        label="Condition Sheet"
+                                        onUpdate={(newText) => {
+                                            setLicenseData(prev => ({ ...prev, condition_sheet: newText }));
+                                        }}
+                                    />
+                                </div>
+
                                 {/* Notes Section */}
                                 <div className="mb-4" style={{
                                     backgroundColor: 'white',
@@ -436,11 +503,13 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             Notes
                                         </h5>
                                     </div>
-                                    <NotesSection
+                                    <InlineEditableText
                                         licenseId={licenseId}
-                                        notes={licenseData.balance_report_notes || ''}
-                                        onUpdate={(newNotes) => {
-                                            setLicenseData(prev => ({ ...prev, balance_report_notes: newNotes }));
+                                        text={licenseData.balance_report_notes || ''}
+                                        fieldName="balance_report_notes"
+                                        label="Notes"
+                                        onUpdate={(newText) => {
+                                            setLicenseData(prev => ({ ...prev, balance_report_notes: newText }));
                                         }}
                                     />
                                 </div>

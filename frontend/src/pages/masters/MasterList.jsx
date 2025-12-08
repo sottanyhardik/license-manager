@@ -644,6 +644,34 @@ export default function MasterList() {
                         <DataTable
                             data={data}
                             columns={metadata.list_display || []}
+                            customCellRender={entityName === 'licenses' ? {
+                                license_number: (item, value) => (
+                                    <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
+                                        <span style={{ fontWeight: '500' }}>{value || '-'}</span>
+                                        {(item.has_tl || item.has_copy) && (
+                                            <a
+                                                href={`/api/licenses/${item.id}/merged-documents/?access_token=${localStorage.getItem('access')}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                title="View merged documents"
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{
+                                                    fontSize: '0.7rem',
+                                                    color: '#28a745',
+                                                    textDecoration: 'none',
+                                                    padding: '1px 4px',
+                                                    backgroundColor: '#d4edda',
+                                                    borderRadius: '2px',
+                                                    fontWeight: '500',
+                                                    whiteSpace: 'nowrap'
+                                                }}
+                                            >
+                                                Copy
+                                            </a>
+                                        )}
+                                    </div>
+                                )
+                            } : {}}
                             customActions={entityName === 'licenses' ? [
                                 {
                                     label: 'Edit',

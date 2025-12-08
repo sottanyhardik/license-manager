@@ -819,7 +819,32 @@ export default function ItemPivotReport() {
                                                                 left: '60px',
                                                                 zIndex: 1,
                                                                 backgroundColor: '#fff'
-                                                            }}>{license.license_number}</td>
+                                                            }}>
+                                                                <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
+                                                                    <span>{license.license_number}</span>
+                                                                    {(license.has_tl || license.has_copy) && (
+                                                                        <a
+                                                                            href={`/api/licenses/${license.id}/merged-documents/?access_token=${localStorage.getItem('access')}`}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            title="View merged documents"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            style={{
+                                                                                fontSize: '0.7rem',
+                                                                                color: '#28a745',
+                                                                                textDecoration: 'none',
+                                                                                padding: '1px 4px',
+                                                                                backgroundColor: '#d4edda',
+                                                                                borderRadius: '2px',
+                                                                                fontWeight: '500',
+                                                                                whiteSpace: 'nowrap'
+                                                                            }}
+                                                                        >
+                                                                            Copy
+                                                                        </a>
+                                                                    )}
+                                                                </div>
+                                                            </td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
                                                                 left: '180px',

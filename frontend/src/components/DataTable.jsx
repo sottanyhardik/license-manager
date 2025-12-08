@@ -24,7 +24,8 @@ export default function DataTable({
     loading = false,
     basePath = "",
     inlineEditable = [],
-    onInlineUpdate
+    onInlineUpdate,
+    customCellRender = {}
 }) {
     const [editingCell, setEditingCell] = useState(null); // {rowId, columnName}
     const [editValue, setEditValue] = useState("");
@@ -213,7 +214,7 @@ export default function DataTable({
                                             </div>
                                         ) : (
                                             <span>
-                                                {formatValue(value, column, isEditableField)}
+                                                {customCellRender[column] ? customCellRender[column](item, value) : formatValue(value, column, isEditableField)}
                                                 {isEditableField && typeof value !== 'boolean' && (
                                                     <i className="bi bi-pencil ms-2 text-muted" style={{fontSize: '0.8rem'}}></i>
                                                 )}

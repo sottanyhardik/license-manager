@@ -311,6 +311,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     latest_transfer = serializers.CharField(read_only=True, required=False)
     get_norm_class = serializers.CharField(read_only=True, required=False)
     get_balance_cif = serializers.SerializerMethodField()
+    has_tl = serializers.SerializerMethodField()
+    has_copy = serializers.SerializerMethodField()
 
     # Nested serializers - separate for read/write to avoid validation issues
     export_license_read = LicenseExportItemSerializer(source='export_license', many=True, read_only=True)
@@ -479,6 +481,14 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     def get_get_balance_cif(self, obj):
         """Get fresh balance_cif (always calculated from property, not cached field)"""
         return obj.get_balance_cif
+
+    def get_has_tl(self, obj):
+        """Check if license has Transfer Letter documents"""
+        return obj.license_documents.filter(type='TRANSFER LETTER').exists()
+
+    def get_has_copy(self, obj):
+        """Check if license has License Copy documents"""
+        return obj.license_documents.filter(type='LICENSE COPY').exists()
 
     # helper for M2M items in import rows
     def _calculate_import_quantity(self, license_inst, hs_code_id):

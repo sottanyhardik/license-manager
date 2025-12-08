@@ -496,30 +496,41 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         elements.append(Spacer(1, 3))
 
         # Add license header information split into 2 rows for clarity
+        # Check if license has specific document types
+        has_tl = license_obj.license_documents.filter(type='TRANSFER LETTER').exists()
+        has_copy = license_obj.license_documents.filter(type='LICENSE COPY').exists()
+
+        # Build license number with link if documents exist
+        license_number_text = license_obj.license_number or '-'
+        if has_tl or has_copy:
+            # Get the base URL from request
+            base_url = request.build_absolute_uri('/').rstrip('/')
+            merge_url = f"{base_url}/api/licenses/{license_obj.id}/merged-documents/"
+            license_number_text = f'{license_obj.license_number or "-"} (<link href="{merge_url}" color="blue"><u>Copy</u></link>)'
+
         header_data = [
             # Row 1: Headers
             ['License Number', 'License Date', 'License Expiry Date', 'Exporter Name', 'Port Name'],
             # Row 1: Values
             [
-                license_obj.license_number or '-',
+                Paragraph(license_number_text, styles['Normal']),
                 license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-',
                 license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-',
                 Paragraph(license_obj.exporter.name if license_obj.exporter else '-', styles['Normal']),
                 Paragraph(license_obj.port.name if license_obj.port else '-', styles['Normal'])
             ],
             # Row 2: Headers
-            ['Purchase Status', 'Balance CIF', 'Get Norm Class', 'Latest Transfer', 'Condition Sheet'],
+            ['Purchase Status', 'Balance CIF', 'Get Norm Class', 'Latest Transfer'],
             # Row 2: Values
             [
                 license_obj.purchase_status or '-',
                 f"{float(license_obj.balance_cif or 0):.2f}",
                 license_obj.get_norm_class or '-',
-                Paragraph(str(license_obj.latest_transfer) if license_obj.latest_transfer else '-', styles['Normal']),
-                Paragraph(license_obj.condition_sheet if license_obj.condition_sheet else '-', styles['Normal'])
+                Paragraph(str(license_obj.latest_transfer) if license_obj.latest_transfer else '-', styles['Normal'])
             ]
         ]
 
-        header_table = Table(header_data, colWidths=[35*mm, 30*mm, 35*mm, 90*mm, 85*mm])
+        header_table = Table(header_data, colWidths=[35*mm, 30*mm, 35*mm, 180*mm])
         header_table.setStyle(TableStyle([
             # Row 1 header
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),

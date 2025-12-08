@@ -336,6 +336,19 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                                     minHeight: "38px",
                                     borderColor: "#dee2e6"
                                 }),
+                                valueContainer: (base) => ({
+                                    ...base,
+                                    flexWrap: 'wrap'
+                                }),
+                                multiValue: (base) => ({
+                                    ...base,
+                                    maxWidth: '100%'
+                                }),
+                                multiValueLabel: (base) => ({
+                                    ...base,
+                                    whiteSpace: 'normal',
+                                    wordBreak: 'break-word'
+                                }),
                                 menu: (base) => ({
                                     ...base,
                                     zIndex: 9999

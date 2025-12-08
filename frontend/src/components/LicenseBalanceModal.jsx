@@ -546,7 +546,24 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                     control: (base) => ({
                                                                                         ...base,
                                                                                         minHeight: '32px',
-                                                                                        fontSize: '0.875rem'
+                                                                                        fontSize: '0.875rem',
+                                                                                        minWidth: '400px'
+                                                                                    }),
+                                                                                    valueContainer: (base) => ({
+                                                                                        ...base,
+                                                                                        flexWrap: 'wrap',
+                                                                                        maxHeight: '100px',
+                                                                                        overflow: 'auto'
+                                                                                    }),
+                                                                                    multiValue: (base) => ({
+                                                                                        ...base,
+                                                                                        maxWidth: '100%'
+                                                                                    }),
+                                                                                    multiValueLabel: (base) => ({
+                                                                                        ...base,
+                                                                                        whiteSpace: 'normal',
+                                                                                        wordBreak: 'break-word',
+                                                                                        padding: '3px 6px'
                                                                                     }),
                                                                                     menuPortal: (base) => ({
                                                                                         ...base,
@@ -554,7 +571,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                     }),
                                                                                     menu: (base) => ({
                                                                                         ...base,
-                                                                                        minWidth: '300px',
+                                                                                        minWidth: '400px',
                                                                                         width: 'max-content'
                                                                                     }),
                                                                                     option: (base) => ({

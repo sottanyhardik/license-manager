@@ -306,6 +306,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 # Show non-null licenses: balance_cif >= 200
                 qs = qs.filter(balance_cif__gte=200)
 
+        # Handle purchase_status filter - apply default if not provided
+        purchase_status_value = params.get('purchase_status')
+
+        # If purchase_status not provided or empty, apply default
+        if not purchase_status_value or purchase_status_value == "":
+            purchase_status_value = default_filters.get('purchase_status')
+
         # Call parent method for remaining filters (exclude is_expired and is_null from parent processing)
         # Create a new QueryDict-like object without is_expired and is_null
         from django.http import QueryDict
@@ -313,6 +320,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         for key, value in params.items():
             if key not in ('is_expired', 'is_null'):
                 filtered_params[key] = value
+
+        # Add purchase_status default if needed
+        if purchase_status_value and 'purchase_status' not in filtered_params:
+            filtered_params['purchase_status'] = purchase_status_value
 
         # Create a copy of filter_config without is_expired and is_null
         filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null')}

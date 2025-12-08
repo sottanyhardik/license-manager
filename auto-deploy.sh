@@ -97,16 +97,18 @@ if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
     if grep -q "psycopg2.errors.InsufficientPrivilege.*must be owner of table" /tmp/migration_output.log; then
         echo -e "\${YELLOW}⚠️  Database permission issue detected. Attempting to fix...\${NC}"
 
-        # Determine database name based on server IP
+        # Determine database name and user based on server IP
         DB_NAME="lmanagement"
+        DB_USER="lmanagement"
         if [[ "$SERVER_IP" == "143.110.252.201" ]]; then
             DB_NAME="license_manager_db"
+            DB_USER="django"
         fi
-        echo -e "\${BLUE}→ Using database: \${DB_NAME}\${NC}"
+        echo -e "\${BLUE}→ Using database: \${DB_NAME} with user: \${DB_USER}\${NC}"
 
         # Try to fix the permission issue
-        echo -e "\${BLUE}→ Granting table ownership to django user...\${NC}"
-        if echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "ALTER TABLE license_licensedetailsmodel OWNER TO django;" 2>/dev/null; then
+        echo -e "\${BLUE}→ Granting table ownership to \${DB_USER} user...\${NC}"
+        if echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};" 2>/dev/null; then
             echo -e "\${GREEN}✅ Ownership granted, retrying migration...\${NC}"
             python manage.py migrate
         else
@@ -118,7 +120,7 @@ if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
             else
                 echo -e "\${RED}❌ Could not fix database permissions automatically\${NC}"
                 echo -e "\${YELLOW}Please run manually on the server:\${NC}"
-                echo -e "sudo -u postgres psql -d \${DB_NAME} -c \"ALTER TABLE license_licensedetailsmodel OWNER TO django;\""
+                echo -e "sudo -u postgres psql -d \${DB_NAME} -c \"ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};\""
                 echo -e "cd $SERVER_PATH/backend && source ../venv/bin/activate && python manage.py migrate"
                 exit 1
             fi

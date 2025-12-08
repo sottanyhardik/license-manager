@@ -807,7 +807,8 @@ export default function ItemPivotReport() {
                                                     </thead>
                                                     <tbody>
                                                     {licenses.map((license, idx) => (
-                                                        <tr key={license.license_number} className="align-middle">
+                                                        <React.Fragment key={license.license_number}>
+                                                        <tr className="align-middle">
                                                             <td className="text-center fw-bold" style={{
                                                                 position: 'sticky',
                                                                 left: 0,
@@ -935,6 +936,50 @@ export default function ItemPivotReport() {
                                                                 );
                                                             })}
                                                         </tr>
+                                                        {/* Notes and Condition Sheet Row */}
+                                                        {(license.balance_report_notes || license.condition_sheet) && (
+                                                            <tr key={`${license.license_number}-details`} style={{ backgroundColor: '#f8f9fa' }}>
+                                                                <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 6 : 4))} style={{
+                                                                    padding: '10px 15px',
+                                                                    borderTop: 'none'
+                                                                }}>
+                                                                    <div style={{ fontSize: '0.85rem', lineHeight: '1.5' }}>
+                                                                        {license.condition_sheet && (
+                                                                            <div style={{
+                                                                                marginBottom: license.balance_report_notes ? '8px' : '0',
+                                                                                backgroundColor: '#ffff00',
+                                                                                padding: '6px 10px',
+                                                                                borderRadius: '4px'
+                                                                            }}>
+                                                                                <strong style={{ color: '#000' }}>
+                                                                                    <i className="bi bi-file-earmark-text me-1"></i>
+                                                                                    Condition Sheet:
+                                                                                </strong>
+                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
+                                                                                    {license.condition_sheet}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                        {license.balance_report_notes && (
+                                                                            <div style={{
+                                                                                backgroundColor: '#ff6b6b',
+                                                                                padding: '6px 10px',
+                                                                                borderRadius: '4px'
+                                                                            }}>
+                                                                                <strong style={{ color: '#000' }}>
+                                                                                    <i className="bi bi-sticky me-1"></i>
+                                                                                    Notes:
+                                                                                </strong>
+                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
+                                                                                    {license.balance_report_notes}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                        </React.Fragment>
                                                     ))}
                                                     <tr className="table-warning fw-bold" style={{
                                                         position: 'sticky',

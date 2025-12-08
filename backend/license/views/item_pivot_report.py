@@ -147,9 +147,11 @@ class ItemPivotReportView(View):
                      ).only('id', 'license_id', 'hs_code_id', 'quantity', 'allotted_quantity',
                             'debited_quantity', 'available_quantity', 'debited_value', 'cif_fc', 'description')),
             Prefetch('export_license',
-                     queryset=export_items_qs.only('id', 'license_id', 'norm_class_id', 'cif_fc'))
+                     queryset=export_items_qs.only('id', 'license_id', 'norm_class_id', 'cif_fc')),
+            'license_documents'
         ).only('id', 'license_number', 'license_date', 'license_expiry_date', 'exporter_id',
-               'port_id', 'notification_number', 'purchase_status', 'balance_cif'
+               'port_id', 'notification_number', 'purchase_status', 'balance_cif',
+               'balance_report_notes', 'condition_sheet'
         ).order_by('license_expiry_date', 'license_date')
 
         # Collect all unique items across all licenses
@@ -373,7 +375,12 @@ class ItemPivotReportView(View):
         if not notification_display:
             notification_display = 'Unknown'
 
+        # Check for document types
+        has_tl = license_obj.license_documents.filter(type='TRANSFER LETTER').exists()
+        has_copy = license_obj.license_documents.filter(type='LICENSE COPY').exists()
+
         row_data = {
+            'id': license_obj.id,
             'license_number': license_obj.license_number,
             'license_date': license_obj.license_date.isoformat() if license_obj.license_date else None,
             'license_expiry_date': license_obj.license_expiry_date.isoformat(),
@@ -382,6 +389,10 @@ class ItemPivotReportView(View):
             'notification_number': notification_display,
             'total_cif': float(total_cif),
             'balance_cif': float(balance_cif),  # Reuse already calculated balance
+            'balance_report_notes': license_obj.balance_report_notes or '',
+            'condition_sheet': license_obj.condition_sheet or '',
+            'has_tl': has_tl,
+            'has_copy': has_copy,
             'items': {}
         }
 

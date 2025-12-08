@@ -228,7 +228,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         For detail view (retrieve/update/partial_update), don't apply default filters so expired licenses can be edited.
         """
         # For detail view actions, skip default filters by temporarily clearing them
-        skip_default_filters = self.action in ['retrieve', 'update', 'partial_update', 'destroy', 'nested_items', 'item_usage']
+        skip_default_filters = self.action in ['retrieve', 'update', 'partial_update', 'destroy', 'nested_items', 'item_usage', 'balance_pdf']
 
         if skip_default_filters:
             # Save original default filters

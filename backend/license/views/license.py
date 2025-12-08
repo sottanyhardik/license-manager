@@ -83,7 +83,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
         "default_filters": {
             "is_expired": "False",
             "is_null": "False",
-            "purchase_status": "GE,NP,SM,CO"
+            "purchase_status": "GE,NP,IP,SM,OT,CO,RA"
         },
         "list_display": [
             "license_number",

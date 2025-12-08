@@ -97,21 +97,28 @@ if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
     if grep -q "psycopg2.errors.InsufficientPrivilege.*must be owner of table" /tmp/migration_output.log; then
         echo -e "\${YELLOW}⚠️  Database permission issue detected. Attempting to fix...\${NC}"
 
+        # Determine database name based on server IP
+        DB_NAME="lmanagement"
+        if [[ "$SERVER_IP" == "143.110.252.201" ]]; then
+            DB_NAME="license_manager_db"
+        fi
+        echo -e "\${BLUE}→ Using database: \${DB_NAME}\${NC}"
+
         # Try to fix the permission issue
         echo -e "\${BLUE}→ Granting table ownership to django user...\${NC}"
-        if echo '$PASSWORD' | sudo -S -u postgres psql -d license_manager_db -c "ALTER TABLE license_licensedetailsmodel OWNER TO django;" 2>/dev/null; then
+        if echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "ALTER TABLE license_licensedetailsmodel OWNER TO django;" 2>/dev/null; then
             echo -e "\${GREEN}✅ Ownership granted, retrying migration...\${NC}"
             python manage.py migrate
         else
             # If ownership change fails, try adding column manually
             echo -e "\${YELLOW}→ Attempting manual column addition...\${NC}"
-            if echo '$PASSWORD' | sudo -S -u postgres psql -d license_manager_db -c "ALTER TABLE license_licensedetailsmodel ADD COLUMN IF NOT EXISTS balance_report_notes text NULL;" 2>/dev/null; then
+            if echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "ALTER TABLE license_licensedetailsmodel ADD COLUMN IF NOT EXISTS balance_report_notes text NULL;" 2>/dev/null; then
                 echo -e "\${GREEN}✅ Column added manually, faking migration...\${NC}"
                 python manage.py migrate license --fake
             else
                 echo -e "\${RED}❌ Could not fix database permissions automatically\${NC}"
                 echo -e "\${YELLOW}Please run manually on the server:\${NC}"
-                echo -e "sudo -u postgres psql -d license_manager_db -c \"ALTER TABLE license_licensedetailsmodel OWNER TO django;\""
+                echo -e "sudo -u postgres psql -d \${DB_NAME} -c \"ALTER TABLE license_licensedetailsmodel OWNER TO django;\""
                 echo -e "cd $SERVER_PATH/backend && source ../venv/bin/activate && python manage.py migrate"
                 exit 1
             fi

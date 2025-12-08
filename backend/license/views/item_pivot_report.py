@@ -139,7 +139,8 @@ class ItemPivotReportView(View):
         # Optimize with select_related and prefetch_related to reduce queries
         licenses = licenses.select_related(
             'exporter',
-            'port'
+            'port',
+            'current_owner'
         ).prefetch_related(
             Prefetch('import_license',
                      queryset=import_items_qs.prefetch_related(
@@ -148,10 +149,11 @@ class ItemPivotReportView(View):
                             'debited_quantity', 'available_quantity', 'debited_value', 'cif_fc', 'description')),
             Prefetch('export_license',
                      queryset=export_items_qs.only('id', 'license_id', 'norm_class_id', 'cif_fc')),
-            'license_documents'
+            'license_documents',
+            'transfers'
         ).only('id', 'license_number', 'license_date', 'license_expiry_date', 'exporter_id',
                'port_id', 'notification_number', 'purchase_status', 'balance_cif',
-               'balance_report_notes', 'condition_sheet'
+               'balance_report_notes', 'condition_sheet', 'current_owner_id'
         ).order_by('license_expiry_date', 'license_date')
 
         # Collect all unique items across all licenses
@@ -379,6 +381,17 @@ class ItemPivotReportView(View):
         has_tl = license_obj.license_documents.filter(type='TRANSFER LETTER').exists()
         has_copy = license_obj.license_documents.filter(type='LICENSE COPY').exists()
 
+        # Get latest transfer
+        latest_transfer_text = ''
+        transfer_qs = license_obj.transfers.order_by("-transfer_date", "-id")
+        if transfer_qs.exists():
+            transfer = transfer_qs.first()
+            latest_transfer_text = str(transfer)
+        elif license_obj.current_owner:
+            latest_transfer_text = f"Current Owner is {license_obj.current_owner.name}"
+        else:
+            latest_transfer_text = "Data Not Found"
+
         row_data = {
             'id': license_obj.id,
             'license_number': license_obj.license_number,
@@ -391,6 +404,7 @@ class ItemPivotReportView(View):
             'balance_cif': float(balance_cif),  # Reuse already calculated balance
             'balance_report_notes': license_obj.balance_report_notes or '',
             'condition_sheet': license_obj.condition_sheet or '',
+            'latest_transfer': latest_transfer_text,
             'has_tl': has_tl,
             'has_copy': has_copy,
             'items': {}

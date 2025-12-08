@@ -936,8 +936,8 @@ export default function ItemPivotReport() {
                                                                 );
                                                             })}
                                                         </tr>
-                                                        {/* Notes and Condition Sheet Row */}
-                                                        {(license.balance_report_notes || license.condition_sheet) && (
+                                                        {/* Notes, Condition Sheet and Latest Transfer Row */}
+                                                        {(license.balance_report_notes || license.condition_sheet || license.latest_transfer) && (
                                                             <tr key={`${license.license_number}-details`} style={{ backgroundColor: '#f8f9fa' }}>
                                                                 <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 6 : 4))} style={{
                                                                     padding: '10px 15px',
@@ -946,7 +946,7 @@ export default function ItemPivotReport() {
                                                                     <div style={{ fontSize: '0.85rem', lineHeight: '1.5' }}>
                                                                         {license.condition_sheet && (
                                                                             <div style={{
-                                                                                marginBottom: license.balance_report_notes ? '8px' : '0',
+                                                                                marginBottom: (license.balance_report_notes || license.latest_transfer) ? '8px' : '0',
                                                                                 backgroundColor: '#ffff00',
                                                                                 padding: '6px 10px',
                                                                                 borderRadius: '4px'
@@ -962,6 +962,7 @@ export default function ItemPivotReport() {
                                                                         )}
                                                                         {license.balance_report_notes && (
                                                                             <div style={{
+                                                                                marginBottom: license.latest_transfer ? '8px' : '0',
                                                                                 backgroundColor: '#ff6b6b',
                                                                                 padding: '6px 10px',
                                                                                 borderRadius: '4px'
@@ -972,6 +973,21 @@ export default function ItemPivotReport() {
                                                                                 </strong>
                                                                                 <span style={{ color: '#000', marginLeft: '8px' }}>
                                                                                     {license.balance_report_notes}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                        {license.latest_transfer && (
+                                                                            <div style={{
+                                                                                backgroundColor: '#4dd0e1',
+                                                                                padding: '6px 10px',
+                                                                                borderRadius: '4px'
+                                                                            }}>
+                                                                                <strong style={{ color: '#000' }}>
+                                                                                    <i className="bi bi-arrow-left-right me-1"></i>
+                                                                                    Latest Transfer:
+                                                                                </strong>
+                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
+                                                                                    {license.latest_transfer}
                                                                                 </span>
                                                                             </div>
                                                                         )}

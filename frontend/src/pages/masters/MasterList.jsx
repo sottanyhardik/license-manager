@@ -646,6 +646,19 @@ export default function MasterList() {
                             columns={metadata.list_display || []}
                             customActions={entityName === 'licenses' ? [
                                 {
+                                    label: 'Edit',
+                                    icon: 'bi bi-pencil',
+                                    className: 'btn btn-outline-primary',
+                                    onClick: (item) => {
+                                        saveFilterState(entityName, {
+                                            filters: filterParams,
+                                            pagination: { currentPage, pageSize },
+                                            search: ''
+                                        });
+                                        navigate(`/licenses/${item.id}/edit`);
+                                    }
+                                },
+                                {
                                     label: 'View Balance',
                                     icon: 'bi bi-eye',
                                     className: 'btn btn-outline-info',

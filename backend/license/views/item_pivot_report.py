@@ -83,26 +83,30 @@ class ItemPivotReportView(View):
         today = date.today()
         start_date = today - timedelta(days=days)
 
-        # Base query - active licenses with required purchase status
+        # Base query - licenses with required purchase status
+        # Note: Don't filter by is_active here as it may exclude expired licenses
         licenses = LicenseDetailsModel.objects.filter(
-            is_active=True,
             purchase_status__in=[GE, MI, IP, SM, CO]
         )
 
         # Apply license status filter
         if license_status == 'active':
             # Active: expiry date > today - 30 days (not expired more than 30 days ago)
-            licenses = licenses.filter(license_expiry_date__gt=today - timedelta(days=30))
+            licenses = licenses.filter(
+                is_active=True,
+                license_expiry_date__gt=today - timedelta(days=30)
+            )
         elif license_status == 'expired':
-            # Expired: expiry date < today
+            # Expired: expiry date < today (don't filter by is_active to include all expired licenses)
             licenses = licenses.filter(license_expiry_date__lt=today)
         elif license_status == 'expiring_soon':
             # Expiring soon: expiry within next 30 days
             licenses = licenses.filter(
+                is_active=True,
                 license_expiry_date__gte=today,
                 license_expiry_date__lte=today + timedelta(days=30)
             )
-        # If 'all', no date filter applied
+        # If 'all', no date or is_active filter applied - shows everything
 
         # Filter by SION norm if specified (optional)
         if sion_norm:

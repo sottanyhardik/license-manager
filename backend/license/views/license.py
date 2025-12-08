@@ -508,14 +508,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 Paragraph(license_obj.port.name if license_obj.port else '-', styles['Normal'])
             ],
             # Row 2: Headers
-            ['Purchase Status', 'Balance CIF', 'Get Norm Class', 'Latest Transfer', ''],
+            ['Purchase Status', 'Balance CIF', 'Get Norm Class', 'Latest Transfer', 'Condition Sheet'],
             # Row 2: Values
             [
                 license_obj.purchase_status or '-',
                 f"{float(license_obj.balance_cif or 0):.2f}",
                 license_obj.get_norm_class or '-',
                 Paragraph(str(license_obj.latest_transfer) if license_obj.latest_transfer else '-', styles['Normal']),
-                ''
+                Paragraph(license_obj.condition_sheet if license_obj.condition_sheet else '-', styles['Normal'])
             ]
         ]
 
@@ -812,6 +812,34 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 ]))
                 elements.append(balance_table)
                 elements.append(Spacer(1, 8))
+
+        # Add Notes Section if notes exist
+        if license_obj.balance_report_notes:
+            notes_header = Table([['Notes']], colWidths=[275*mm])
+            notes_header.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#2c3e50')),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 11),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            elements.append(notes_header)
+
+            notes_content = Table([[Paragraph(license_obj.balance_report_notes, styles['Normal'])]], colWidths=[275*mm])
+            notes_content.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fffacd')),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+            ]))
+            elements.append(notes_content)
 
         # Build PDF
         doc.build(elements)

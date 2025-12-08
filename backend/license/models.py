@@ -92,6 +92,7 @@ class LicenseDetailsModel(AuditModel):
     user_comment = models.TextField(null=True, blank=True)
     condition_sheet = models.TextField(null=True, blank=True)
     user_restrictions = models.TextField(null=True, blank=True)
+    balance_report_notes = models.TextField(null=True, blank=True)
 
     ledger_date = models.DateField(null=True, blank=True)
 

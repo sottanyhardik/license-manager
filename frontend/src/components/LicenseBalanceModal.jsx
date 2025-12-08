@@ -3,6 +3,105 @@ import api from '../api/axios';
 import AsyncSelect from 'react-select/async';
 import { toast } from 'react-toastify';
 
+// Inline Notes Component
+function NotesSection({ licenseId, notes, onUpdate }) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [noteText, setNoteText] = useState(notes);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        setNoteText(notes);
+    }, [notes]);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await api.patch(`/licenses/${licenseId}/`, {
+                balance_report_notes: noteText
+            });
+            onUpdate(noteText);
+            setIsEditing(false);
+            toast.success('Notes saved successfully');
+        } catch (error) {
+            console.error('Error saving notes:', error);
+            toast.error('Failed to save notes');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleCancel = () => {
+        setNoteText(notes);
+        setIsEditing(false);
+    };
+
+    return (
+        <div>
+            {isEditing ? (
+                <div>
+                    <textarea
+                        className="form-control mb-2"
+                        rows="4"
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        placeholder="Enter notes here..."
+                        style={{
+                            fontSize: '0.875rem',
+                            borderColor: '#667eea',
+                            backgroundColor: '#fffacd'
+                        }}
+                    />
+                    <div className="d-flex gap-2">
+                        <button
+                            className="btn btn-sm btn-primary"
+                            onClick={handleSave}
+                            disabled={saving}
+                            style={{
+                                backgroundColor: '#667eea',
+                                borderColor: '#667eea'
+                            }}
+                        >
+                            {saving ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={handleCancel}
+                            disabled={saving}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div
+                    onClick={() => setIsEditing(true)}
+                    style={{
+                        minHeight: '80px',
+                        padding: '0.75rem',
+                        backgroundColor: noteText ? '#fffacd' : '#f8f9fa',
+                        border: '1px solid #dee2e6',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.875rem',
+                        whiteSpace: 'pre-wrap',
+                        transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => {
+                        e.currentTarget.style.borderColor = '#667eea';
+                        e.currentTarget.style.backgroundColor = noteText ? '#fffacd' : '#e9ecef';
+                    }}
+                    onMouseOut={(e) => {
+                        e.currentTarget.style.borderColor = '#dee2e6';
+                        e.currentTarget.style.backgroundColor = noteText ? '#fffacd' : '#f8f9fa';
+                    }}
+                >
+                    {noteText || <span style={{ color: '#6c757d', fontStyle: 'italic' }}>Click to add notes...</span>}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     const [loading, setLoading] = useState(false);
     const [licenseData, setLicenseData] = useState(null);
@@ -315,6 +414,35 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             </tbody>
                                         </table>
                                     </div>
+                                </div>
+
+                                {/* Notes Section */}
+                                <div className="mb-4" style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: '8px',
+                                    padding: '1.5rem',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                                }}>
+                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 style={{
+                                            color: '#2c3e50',
+                                            fontWeight: '600',
+                                            borderBottom: '2px solid #667eea',
+                                            paddingBottom: '0.5rem',
+                                            marginBottom: '0',
+                                            flex: 1
+                                        }}>
+                                            <i className="bi bi-pencil-square me-2"></i>
+                                            Notes
+                                        </h5>
+                                    </div>
+                                    <NotesSection
+                                        licenseId={licenseId}
+                                        notes={licenseData.balance_report_notes || ''}
+                                        onUpdate={(newNotes) => {
+                                            setLicenseData(prev => ({ ...prev, balance_report_notes: newNotes }));
+                                        }}
+                                    />
                                 </div>
 
                                 {/* Export Items */}

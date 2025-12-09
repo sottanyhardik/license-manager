@@ -205,7 +205,9 @@ class ItemReportView(View):
         ]
 
         def create_sheet(workbook, sheet_name, items_list):
-            """Helper function to create a sheet with given items"""
+            """Helper function to create a sheet with given items, grouped by license"""
+            from openpyxl.styles import Border, Side
+
             ws = workbook.create_sheet(title=sheet_name)
 
             # Add headers
@@ -216,35 +218,95 @@ class ItemReportView(View):
                 cell.alignment = header_alignment
 
             # Set column widths
-            ws.column_dimensions['A'].width = 8
-            ws.column_dimensions['B'].width = 18
-            ws.column_dimensions['C'].width = 15
-            ws.column_dimensions['D'].width = 18
-            ws.column_dimensions['E'].width = 12
-            ws.column_dimensions['F'].width = 12
-            ws.column_dimensions['G'].width = 40
-            ws.column_dimensions['H'].width = 25
-            ws.column_dimensions['I'].width = 18
-            ws.column_dimensions['J'].width = 18
-            ws.column_dimensions['K'].width = 30
-            ws.column_dimensions['L'].width = 30
+            ws.column_dimensions['A'].width = 8   # Sr No
+            ws.column_dimensions['B'].width = 18  # License No
+            ws.column_dimensions['C'].width = 15  # License Date
+            ws.column_dimensions['D'].width = 18  # License Expiry Date
+            ws.column_dimensions['E'].width = 12  # Serial Number
+            ws.column_dimensions['F'].width = 12  # HSN Code
+            ws.column_dimensions['G'].width = 40  # Product Description
+            ws.column_dimensions['H'].width = 25  # Item Name
+            ws.column_dimensions['I'].width = 18  # Available Quantity
+            ws.column_dimensions['J'].width = 18  # Available Balance
+            ws.column_dimensions['K'].width = 30  # Notes
+            ws.column_dimensions['L'].width = 30  # Condition Sheet
 
-            # Add data rows
-            for idx, item in enumerate(items_list, start=2):
-                item_names_str = ', '.join([i['name'] for i in item['item_names']])
+            # Group items by license
+            grouped_items = {}
+            for item in items_list:
+                license_id = item['license_id']
+                if license_id not in grouped_items:
+                    grouped_items[license_id] = []
+                grouped_items[license_id].append(item)
 
-                ws.cell(row=idx, column=1, value=idx - 1)
-                ws.cell(row=idx, column=2, value=item['license_number'])
-                ws.cell(row=idx, column=3, value=item['license_date'])
-                ws.cell(row=idx, column=4, value=item['license_expiry_date'])
-                ws.cell(row=idx, column=5, value=item['serial_number'])
-                ws.cell(row=idx, column=6, value=item['hs_code'])
-                ws.cell(row=idx, column=7, value=item['product_description'])
-                ws.cell(row=idx, column=8, value=item_names_str)
-                ws.cell(row=idx, column=9, value=item['available_quantity'])
-                ws.cell(row=idx, column=10, value=item['available_balance'])
-                ws.cell(row=idx, column=11, value=item['notes'])
-                ws.cell(row=idx, column=12, value=item['condition_sheet'])
+            # Define border style for merged cells
+            thin_border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+
+            # Add data rows with merged cells for same license
+            current_row = 2
+            sr_no = 1
+
+            for license_id, license_items in grouped_items.items():
+                row_span = len(license_items)
+                start_row = current_row
+
+                # Get license-level data from first item
+                first_item = license_items[0]
+
+                # Add each item in this license group
+                for item_idx, item in enumerate(license_items):
+                    item_names_str = ', '.join([i['name'] for i in item['item_names']])
+
+                    # License-level columns (only for first row, will be merged)
+                    if item_idx == 0:
+                        ws.cell(row=current_row, column=1, value=sr_no)  # Sr No
+                        ws.cell(row=current_row, column=2, value=item['license_number'])  # License No
+                        ws.cell(row=current_row, column=3, value=item['license_date'])  # License Date
+                        ws.cell(row=current_row, column=4, value=item['license_expiry_date'])  # License Expiry Date
+                        ws.cell(row=current_row, column=10, value=item['available_balance'])  # Available Balance
+                        ws.cell(row=current_row, column=11, value=item['notes'])  # Notes
+                        ws.cell(row=current_row, column=12, value=item['condition_sheet'])  # Condition Sheet
+
+                    # Item-level columns (for each row)
+                    ws.cell(row=current_row, column=5, value=item['serial_number'])  # Serial Number
+                    ws.cell(row=current_row, column=6, value=item['hs_code'])  # HSN Code
+                    ws.cell(row=current_row, column=7, value=item['product_description'])  # Product Description
+                    ws.cell(row=current_row, column=8, value=item_names_str)  # Item Name
+                    ws.cell(row=current_row, column=9, value=item['available_quantity'])  # Available Quantity
+
+                    current_row += 1
+
+                # Merge cells for license-level columns
+                if row_span > 1:
+                    end_row = start_row + row_span - 1
+
+                    # Merge Sr No (column A)
+                    ws.merge_cells(start_row=start_row, start_column=1, end_row=end_row, end_column=1)
+                    # Merge License No (column B)
+                    ws.merge_cells(start_row=start_row, start_column=2, end_row=end_row, end_column=2)
+                    # Merge License Date (column C)
+                    ws.merge_cells(start_row=start_row, start_column=3, end_row=end_row, end_column=3)
+                    # Merge License Expiry Date (column D)
+                    ws.merge_cells(start_row=start_row, start_column=4, end_row=end_row, end_column=4)
+                    # Merge Available Balance (column J)
+                    ws.merge_cells(start_row=start_row, start_column=10, end_row=end_row, end_column=10)
+                    # Merge Notes (column K)
+                    ws.merge_cells(start_row=start_row, start_column=11, end_row=end_row, end_column=11)
+                    # Merge Condition Sheet (column L)
+                    ws.merge_cells(start_row=start_row, start_column=12, end_row=end_row, end_column=12)
+
+                    # Apply vertical center alignment to merged cells
+                    for col in [1, 2, 3, 4, 10, 11, 12]:
+                        cell = ws.cell(row=start_row, column=col)
+                        cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                        cell.border = thin_border
+
+                sr_no += 1
 
             return ws
 

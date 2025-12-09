@@ -191,8 +191,12 @@ def fetch_allotment_details(self, request):
     """
     Fetch allotment details by allotment ID
     Returns: exchange_rate, product_name, port, and item_details
+
+    Excludes items (license items) that are already in the current BOE's item_details
+    to avoid duplicates when fetching from multiple allotments.
     """
     allotment_id = request.query_params.get('allotment_id')
+    boe_id = request.query_params.get('boe_id')  # Current BOE ID (if editing)
 
     if not allotment_id:
         return Response({'error': 'allotment_id is required'}, status=400)
@@ -204,18 +208,33 @@ def fetch_allotment_details(self, request):
             'allotment_details__item__hs_code'
         ).get(id=allotment_id)
 
+        # Get existing license item IDs already in the current BOE (if editing)
+        existing_license_item_ids = set()
+        if boe_id:
+            try:
+                boe = BillOfEntryModel.objects.prefetch_related('item_details').get(id=boe_id)
+                existing_license_item_ids = set(
+                    boe.item_details.values_list('sr_number_id', flat=True)
+                )
+            except BillOfEntryModel.DoesNotExist:
+                pass  # New BOE, no existing items
+
         # Get allotment items (license items linked to this allotment)
         allotment_items = allotment.allotment_details.select_related(
             'item__license', 'item__hs_code'
         ).all()
 
-        # Build item details from allotment items
+        # Build item details from allotment items, excluding items already in BOE
         item_details = []
         exchange_rate = float(allotment.exchange_rate) if allotment.exchange_rate else 0.0
 
         for allot_item in allotment_items:
             license_item = allot_item.item
             if license_item:
+                # Skip if this license item is already in the current BOE
+                if license_item.id in existing_license_item_ids:
+                    continue
+
                 # Use CIF values from allotment_items if available, else calculate
                 cif_fc = float(allot_item.cif_fc) if allot_item.cif_fc else 0.0
                 cif_inr = float(allot_item.cif_inr) if allot_item.cif_inr else (cif_fc * exchange_rate)

@@ -580,6 +580,19 @@ export default function MasterList() {
                                 }
                             ] : entityName === 'allotments' ? [
                                 {
+                                    label: 'Edit',
+                                    icon: 'bi bi-pencil',
+                                    className: 'btn btn-outline-primary',
+                                    onClick: (item) => {
+                                        saveFilterState(entityName, {
+                                            filters: filterParams,
+                                            pagination: { currentPage, pageSize },
+                                            search: ''
+                                        });
+                                        navigate(`/allotments/${item.id}/edit`);
+                                    }
+                                },
+                                {
                                     label: 'Copy',
                                     icon: 'bi bi-copy',
                                     className: 'btn btn-outline-info',
@@ -589,9 +602,16 @@ export default function MasterList() {
                                         }
                                         try {
                                             const response = await api.post(`/allotments/${item.id}/copy/`);
-                                            toast.success('Allotment copied successfully');
-                                            // Refresh the list to show the new copy
-                                            fetchData(currentPage, pageSize, filterParams);
+                                            const newAllotmentId = response.data.id;
+                                            toast.success('Allotment copied successfully. Opening in edit mode...');
+                                            // Save filter state before navigating
+                                            saveFilterState(entityName, {
+                                                filters: filterParams,
+                                                pagination: { currentPage, pageSize },
+                                                search: ''
+                                            });
+                                            // Navigate to edit page of the new copy
+                                            navigate(`/allotments/${newAllotmentId}/edit`);
                                         } catch (err) {
                                             toast.error(err.response?.data?.error || 'Failed to copy allotment');
                                         }
@@ -729,6 +749,19 @@ export default function MasterList() {
                                 }
                             ] : entityName === 'allotments' ? [
                                 {
+                                    label: 'Edit',
+                                    icon: 'bi bi-pencil',
+                                    className: 'btn btn-outline-primary',
+                                    onClick: (item) => {
+                                        saveFilterState(entityName, {
+                                            filters: filterParams,
+                                            pagination: { currentPage, pageSize },
+                                            search: ''
+                                        });
+                                        navigate(`/allotments/${item.id}/edit`);
+                                    }
+                                },
+                                {
                                     label: 'Copy',
                                     icon: 'bi bi-copy',
                                     className: 'btn btn-outline-info',
@@ -738,9 +771,16 @@ export default function MasterList() {
                                         }
                                         try {
                                             const response = await api.post(`/allotments/${item.id}/copy/`);
-                                            toast.success('Allotment copied successfully');
-                                            // Refresh the list to show the new copy
-                                            fetchData(currentPage, pageSize, filterParams);
+                                            const newAllotmentId = response.data.id;
+                                            toast.success('Allotment copied successfully. Opening in edit mode...');
+                                            // Save filter state before navigating
+                                            saveFilterState(entityName, {
+                                                filters: filterParams,
+                                                pagination: { currentPage, pageSize },
+                                                search: ''
+                                            });
+                                            // Navigate to edit page of the new copy
+                                            navigate(`/allotments/${newAllotmentId}/edit`);
                                         } catch (err) {
                                             toast.error(err.response?.data?.error || 'Failed to copy allotment');
                                         }

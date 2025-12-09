@@ -97,10 +97,7 @@ class ItemReportView(View):
             )
         # If 'all', no date or is_active filter applied
 
-        # Filter by min_balance
-        items = items.filter(license__balance_cif__gte=min_balance)
-
-        # Filter by min_avail_qty
+        # Filter by min_avail_qty (can be done in query)
         if min_avail_qty > 0:
             items = items.filter(available_quantity__gte=min_avail_qty)
 
@@ -147,6 +144,10 @@ class ItemReportView(View):
                 available_balance = float(item.available_value_calculated or 0)
             else:
                 available_balance = float(item.license.balance_cif or 0)
+
+            # Apply min_balance filter - check the calculated available_balance
+            if available_balance < min_balance:
+                continue
 
             report_items.append({
                 'id': item.id,

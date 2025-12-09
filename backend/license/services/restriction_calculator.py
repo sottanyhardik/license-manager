@@ -63,7 +63,9 @@ class RestrictionCalculator:
         Returns:
             Restricted CIF as Decimal
         """
-        return total_export_cif * restriction_pct / Decimal('100')
+        # Convert restriction_pct to Decimal to avoid float * Decimal error
+        restriction_pct_decimal = Decimal(str(restriction_pct)) if not isinstance(restriction_pct, Decimal) else restriction_pct
+        return total_export_cif * restriction_pct_decimal / Decimal('100')
 
     @staticmethod
     def calculate_restricted_debits_and_allotments(

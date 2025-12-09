@@ -916,7 +916,9 @@ class LicenseImportItemsModel(models.Model):
 
         # Calculate license CIF value × restriction percentage
         license_cif = self.license._calculate_license_credit()
-        allowed_value = license_cif * (item.restriction_percentage / Decimal("100"))
+        # Convert restriction_percentage to Decimal to avoid float * Decimal error
+        restriction_pct = Decimal(str(item.restriction_percentage)) if not isinstance(item.restriction_percentage, Decimal) else item.restriction_percentage
+        allowed_value = license_cif * (restriction_pct / Decimal("100"))
 
         # Calculate total debited + allotted for all items with same sion_norm_class and restriction_percentage
         # Get all import items in this license that have items with matching restriction

@@ -767,7 +767,22 @@ export default function MasterList() {
                                     },
                                     showIf: (item) => !item.product_name || item.product_name.trim() === ''
                                 }
-                            ] : []}
+                            ] : [
+                                // Default Edit button for all master entities
+                                {
+                                    label: 'Edit',
+                                    icon: 'bi bi-pencil',
+                                    className: 'btn btn-outline-primary',
+                                    onClick: (item) => {
+                                        saveFilterState(entityName, {
+                                            filters: filterParams,
+                                            pagination: { currentPage, pageSize },
+                                            search: ''
+                                        });
+                                        navigate(`/masters/${entityName}/${item.id}/edit`);
+                                    }
+                                }
+                            ]}
                             loading={loading}
                             onDelete={handleDelete}
                             basePath={entityName === 'licenses' ? '/licenses' :

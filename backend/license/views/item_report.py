@@ -140,8 +140,13 @@ class ItemReportView(View):
             # Get item names
             item_names_list = [{"id": i.id, "name": i.name} for i in item.items.all()]
 
-            # Calculate available balance - use license balance_cif
-            available_balance = float(item.license.balance_cif or 0)
+            # Calculate available balance
+            # If is_restricted=True, use available_value (restriction-based calculation)
+            # If is_restricted=False, use license balance_cif
+            if item.is_restricted:
+                available_balance = float(item.available_value_calculated or 0)
+            else:
+                available_balance = float(item.license.balance_cif or 0)
 
             report_items.append({
                 'id': item.id,

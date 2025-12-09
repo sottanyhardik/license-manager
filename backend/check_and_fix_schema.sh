@@ -42,6 +42,26 @@ echo "--------------------------------------------------------------------------
 run_command makemigrations --dry-run --verbosity 2
 
 echo ""
+echo "⚠️  Step 4: Checking for common type mismatch issues..."
+echo "--------------------------------------------------------------------------------"
+echo "Checking restriction_percentage field type..."
+python manage.py dbshell <<EOF
+SELECT
+    table_name,
+    column_name,
+    data_type,
+    numeric_precision,
+    numeric_scale
+FROM information_schema.columns
+WHERE column_name = 'restriction_percentage'
+AND table_schema = 'public';
+EOF
+
+echo ""
+echo "Expected: data_type = 'numeric', precision = 5, scale = 2"
+echo "If type is 'double precision', this needs to be fixed with migration 0028"
+
+echo ""
 echo -e "${YELLOW}Would you like to:${NC}"
 echo "  1) Check only (already done above)"
 echo "  2) Generate missing migrations"

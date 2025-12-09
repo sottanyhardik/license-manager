@@ -221,21 +221,98 @@ operations = [
 
 ## Specific Fix: Float to Decimal Conversion
 
-If you're experiencing float * Decimal errors:
+If you're experiencing `unsupported operand type(s) for *: 'float' and 'decimal.Decimal'` errors:
+
+### Diagnosis:
 
 ```bash
-# 1. Find fields that should be Decimal but are Float
-python manage.py sync_database_schema | grep -i "type mismatch"
+# 1. Check the current database column type for restriction_percentage
+python manage.py dbshell
+```
 
-# 2. Update model field from FloatField to DecimalField:
-# In models.py:
-restriction_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+```sql
+SELECT table_name, column_name, data_type, numeric_precision, numeric_scale
+FROM information_schema.columns
+WHERE column_name = 'restriction_percentage'
+AND table_schema = 'public';
+```
 
-# 3. Generate migration
-python manage.py makemigrations
+**Expected output:**
+- data_type: `numeric`
+- numeric_precision: `5`
+- numeric_scale: `2`
 
-# 4. Apply migration
-python manage.py migrate
+**If you see:**
+- data_type: `double precision`
+
+This means the database column is still a float type, causing the error.
+
+### Solution:
+
+```bash
+# 1. The model is already defined as DecimalField in core/models.py:
+# restriction_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+# 2. Apply migration 0028 to convert database column from float to Decimal:
+cd backend
+python manage.py migrate core 0028
+
+# 3. Verify the change:
+python manage.py dbshell
+```
+
+```sql
+SELECT table_name, column_name, data_type, numeric_precision, numeric_scale
+FROM information_schema.columns
+WHERE column_name = 'restriction_percentage'
+AND table_schema = 'public';
+```
+
+**After migration, you should see:**
+- data_type: `numeric`
+- numeric_precision: `5`
+- numeric_scale: `2`
+
+### Migration Details:
+
+Migration `0028_alter_restriction_percentage_to_decimal.py` contains:
+
+```python
+operations = [
+    migrations.AlterField(
+        model_name='itemnamemodel',
+        name='restriction_percentage',
+        field=models.DecimalField(
+            decimal_places=2,
+            default=Decimal('0'),
+            max_digits=5,
+            validators=[MinValueValidator(Decimal('0'))],
+        ),
+    ),
+]
+```
+
+This will execute SQL similar to:
+```sql
+ALTER TABLE core_itemnamemodel
+ALTER COLUMN restriction_percentage TYPE numeric(5, 2)
+USING restriction_percentage::numeric(5, 2);
+```
+
+### Testing After Fix:
+
+```bash
+# Test Item Pivot Report endpoint
+curl -X POST 'http://localhost:8000/api/reports/item-pivot/generate-report/' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "filters": {
+      "item_names": ["1"],
+      "companies": ["1"]
+    }
+  }'
+
+# Should return JSON report data without float * Decimal error
 ```
 
 ## Getting Help

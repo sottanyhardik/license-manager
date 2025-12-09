@@ -363,8 +363,10 @@ class ItemPivotReportView(View):
         balance_cif = license_obj.balance_cif or Decimal('0')
         for group_name, group_data in restriction_groups.items():
             if group_data['restriction_percentage'] and total_cif > 0:
+                # Convert restriction_percentage to Decimal to avoid float * Decimal error
+                restriction_pct_decimal = Decimal(str(group_data['restriction_percentage']))
                 # Maximum allowed CIF for this restriction group
-                max_allowed_cif = (total_cif * group_data['restriction_percentage']) / Decimal('100')
+                max_allowed_cif = (total_cif * restriction_pct_decimal) / Decimal('100')
                 # Available CIF = max_allowed - debited
                 available_cif = max_allowed_cif - group_data['debited_cif']
                 # Cap at balance_cif - restriction cannot exceed available balance

@@ -580,6 +580,24 @@ export default function MasterList() {
                                 }
                             ] : entityName === 'allotments' ? [
                                 {
+                                    label: 'Copy',
+                                    icon: 'bi bi-copy',
+                                    className: 'btn btn-outline-info',
+                                    onClick: async (item) => {
+                                        if (!window.confirm(`Create a copy of allotment ${item.invoice_number || 'this allotment'}?`)) {
+                                            return;
+                                        }
+                                        try {
+                                            const response = await api.post(`/allotments/${item.id}/copy/`);
+                                            toast.success('Allotment copied successfully');
+                                            // Refresh the list to show the new copy
+                                            fetchData(currentPage, pageSize, filterParams);
+                                        } catch (err) {
+                                            toast.error(err.response?.data?.error || 'Failed to copy allotment');
+                                        }
+                                    }
+                                },
+                                {
                                     label: 'Allocate',
                                     icon: 'bi bi-box-arrow-in-down',
                                     className: 'btn btn-outline-success',
@@ -710,6 +728,24 @@ export default function MasterList() {
                                     }
                                 }
                             ] : entityName === 'allotments' ? [
+                                {
+                                    label: 'Copy',
+                                    icon: 'bi bi-copy',
+                                    className: 'btn btn-outline-info',
+                                    onClick: async (item) => {
+                                        if (!window.confirm(`Create a copy of allotment ${item.invoice_number || 'this allotment'}?`)) {
+                                            return;
+                                        }
+                                        try {
+                                            const response = await api.post(`/allotments/${item.id}/copy/`);
+                                            toast.success('Allotment copied successfully');
+                                            // Refresh the list to show the new copy
+                                            fetchData(currentPage, pageSize, filterParams);
+                                        } catch (err) {
+                                            toast.error(err.response?.data?.error || 'Failed to copy allotment');
+                                        }
+                                    }
+                                },
                                 {
                                     label: 'Allocate',
                                     icon: 'bi bi-box-arrow-in-down',

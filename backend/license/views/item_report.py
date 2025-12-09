@@ -175,7 +175,7 @@ class ItemReportView(View):
         }
 
     def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None):
-        """Export item report to Excel"""
+        """Export item report to Excel with separate sheets for Restricted and Not Restricted items"""
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
         from io import BytesIO
@@ -184,10 +184,13 @@ class ItemReportView(View):
         report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status)
         items = report_data['items']
 
+        # Separate items into restricted and not restricted
+        restricted_items = [item for item in items if item['is_restricted']]
+        not_restricted_items = [item for item in items if not item['is_restricted']]
+
         # Create workbook
         wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Item Report"
+        wb.remove(wb.active)  # Remove default sheet
 
         # Header style
         header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -198,47 +201,64 @@ class ItemReportView(View):
         headers = [
             'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Serial Number',
             'HSN Code', 'Product Description', 'Item Name',
-            'Available Quantity', 'Available Balance', 'Is Restricted', 'Notes', 'Condition Sheet'
+            'Available Quantity', 'Available Balance', 'Notes', 'Condition Sheet'
         ]
 
-        for col_num, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col_num, value=header)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = header_alignment
+        def create_sheet(workbook, sheet_name, items_list):
+            """Helper function to create a sheet with given items"""
+            ws = workbook.create_sheet(title=sheet_name)
 
-        # Set column widths
-        ws.column_dimensions['A'].width = 8
-        ws.column_dimensions['B'].width = 18
-        ws.column_dimensions['C'].width = 15
-        ws.column_dimensions['D'].width = 18
-        ws.column_dimensions['E'].width = 12
-        ws.column_dimensions['F'].width = 12
-        ws.column_dimensions['G'].width = 40
-        ws.column_dimensions['H'].width = 25
-        ws.column_dimensions['I'].width = 18
-        ws.column_dimensions['J'].width = 18
-        ws.column_dimensions['K'].width = 15
-        ws.column_dimensions['L'].width = 30
-        ws.column_dimensions['M'].width = 30
+            # Add headers
+            for col_num, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col_num, value=header)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = header_alignment
 
-        # Data rows
-        for idx, item in enumerate(items, start=2):
-            item_names_str = ', '.join([i['name'] for i in item['item_names']])
+            # Set column widths
+            ws.column_dimensions['A'].width = 8
+            ws.column_dimensions['B'].width = 18
+            ws.column_dimensions['C'].width = 15
+            ws.column_dimensions['D'].width = 18
+            ws.column_dimensions['E'].width = 12
+            ws.column_dimensions['F'].width = 12
+            ws.column_dimensions['G'].width = 40
+            ws.column_dimensions['H'].width = 25
+            ws.column_dimensions['I'].width = 18
+            ws.column_dimensions['J'].width = 18
+            ws.column_dimensions['K'].width = 30
+            ws.column_dimensions['L'].width = 30
 
-            ws.cell(row=idx, column=1, value=idx - 1)
-            ws.cell(row=idx, column=2, value=item['license_number'])
-            ws.cell(row=idx, column=3, value=item['license_date'])
-            ws.cell(row=idx, column=4, value=item['license_expiry_date'])
-            ws.cell(row=idx, column=5, value=item['serial_number'])
-            ws.cell(row=idx, column=6, value=item['hs_code'])
-            ws.cell(row=idx, column=7, value=item['product_description'])
-            ws.cell(row=idx, column=8, value=item_names_str)
-            ws.cell(row=idx, column=9, value=item['available_quantity'])
-            ws.cell(row=idx, column=10, value=item['available_balance'])
-            ws.cell(row=idx, column=11, value='Yes' if item['is_restricted'] else 'No')
-            ws.cell(row=idx, column=12, value=item['notes'])
-            ws.cell(row=idx, column=13, value=item['condition_sheet'])
+            # Add data rows
+            for idx, item in enumerate(items_list, start=2):
+                item_names_str = ', '.join([i['name'] for i in item['item_names']])
+
+                ws.cell(row=idx, column=1, value=idx - 1)
+                ws.cell(row=idx, column=2, value=item['license_number'])
+                ws.cell(row=idx, column=3, value=item['license_date'])
+                ws.cell(row=idx, column=4, value=item['license_expiry_date'])
+                ws.cell(row=idx, column=5, value=item['serial_number'])
+                ws.cell(row=idx, column=6, value=item['hs_code'])
+                ws.cell(row=idx, column=7, value=item['product_description'])
+                ws.cell(row=idx, column=8, value=item_names_str)
+                ws.cell(row=idx, column=9, value=item['available_quantity'])
+                ws.cell(row=idx, column=10, value=item['available_balance'])
+                ws.cell(row=idx, column=11, value=item['notes'])
+                ws.cell(row=idx, column=12, value=item['condition_sheet'])
+
+            return ws
+
+        # Create sheets (Restricted first, then Not Restricted)
+        if restricted_items:
+            create_sheet(wb, "Restricted", restricted_items)
+
+        if not_restricted_items:
+            create_sheet(wb, "Not Restricted", not_restricted_items)
+
+        # If no items at all, create an empty sheet with message
+        if not restricted_items and not not_restricted_items:
+            ws = wb.create_sheet(title="No Data")
+            ws.cell(row=1, column=1, value="No items found matching the filter criteria")
 
         # Save to bytes
         excel_file = BytesIO()

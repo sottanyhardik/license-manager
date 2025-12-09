@@ -97,6 +97,10 @@ class ItemReportView(View):
             )
         # If 'all', no date or is_active filter applied
 
+        # Filter by min_balance using stored available_value field (can be done in query)
+        # This pre-filters before iteration for better performance
+        items = items.filter(available_value__gte=min_balance)
+
         # Filter by min_avail_qty (can be done in query)
         if min_avail_qty > 0:
             items = items.filter(available_quantity__gte=min_avail_qty)
@@ -137,17 +141,12 @@ class ItemReportView(View):
             # Get item names
             item_names_list = [{"id": i.id, "name": i.name} for i in item.items.all()]
 
-            # Calculate available balance
-            # If is_restricted=True, use available_value (restriction-based calculation)
-            # If is_restricted=False, use license balance_cif
-            if item.is_restricted:
-                available_balance = float(item.available_value_calculated or 0)
-            else:
-                available_balance = float(item.license.balance_cif or 0)
-
-            # Apply min_balance filter - check the calculated available_balance
-            if available_balance < min_balance:
-                continue
+            # Use the stored available_value field (updated by balance update task)
+            # This field already contains the correct value:
+            # - For restricted items: restriction-based calculated value
+            # - For non-restricted items: license balance_cif
+            # Note: Make sure to run "Update Balance" in Item Pivot Report to refresh these values
+            available_balance = float(item.available_value or 0)
 
             report_items.append({
                 'id': item.id,

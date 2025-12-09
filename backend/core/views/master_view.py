@@ -220,6 +220,10 @@ class MasterViewSet(viewsets.ModelViewSet):
                 if request:
                     qs = self.apply_advanced_filters(qs, request.query_params, filter_config)
 
+                # Apply distinct() to avoid duplicates when searching/filtering on related fields
+                # This is especially important for models with ManyToMany or reverse ForeignKey relations
+                qs = qs.distinct()
+
                 return qs
 
             def apply_advanced_filters(self, qs, params, filter_config):

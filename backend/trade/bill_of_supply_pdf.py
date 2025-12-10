@@ -34,7 +34,15 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
     # Get company color (default to #800080 purple)
     from_company = trade.from_company
-    company_color = from_company.bill_colour if from_company.bill_colour else '#800080'
+    company_color = '#800080'  # Default purple
+
+    if from_company and from_company.bill_colour:
+        # Ensure color has # prefix
+        color_value = from_company.bill_colour.strip()
+        if color_value:
+            if not color_value.startswith('#'):
+                color_value = '#' + color_value
+            company_color = color_value
 
     doc = SimpleDocTemplate(
         buffer,

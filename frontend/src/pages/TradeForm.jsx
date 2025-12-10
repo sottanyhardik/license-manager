@@ -238,13 +238,13 @@ export default function TradeForm() {
             }
         }
 
-        // Auto-calculate amount based on mode
+        // Auto-calculate amount based on mode (round to whole number .00)
         if (line.mode === "QTY") {
-            line.amount_inr = (parseFloat(line.qty_kg) || 0) * (parseFloat(line.rate_inr_per_kg) || 0);
+            line.amount_inr = Math.round((parseFloat(line.qty_kg) || 0) * (parseFloat(line.rate_inr_per_kg) || 0));
         } else if (line.mode === "CIF_INR") {
-            line.amount_inr = (parseFloat(line.cif_inr) || 0) * ((parseFloat(line.pct) || 0) / 100);
+            line.amount_inr = Math.round((parseFloat(line.cif_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
         } else if (line.mode === "FOB_INR") {
-            line.amount_inr = (parseFloat(line.fob_inr) || 0) * ((parseFloat(line.pct) || 0) / 100);
+            line.amount_inr = Math.round((parseFloat(line.fob_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
         }
 
         setFormData(prev => ({

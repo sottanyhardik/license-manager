@@ -448,8 +448,12 @@ class AllotmentActionViewSet(ViewSet):
 
             # Create the HttpResponse object with PDF headers
             response = HttpResponse(content_type='application/pdf')
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f'Allotment_{allotment.company.name}_{timestamp}.pdf'
+            # Use invoice number in filename if available, otherwise use timestamp
+            if allotment.invoice:
+                filename = f'Allotment-{allotment.invoice}.pdf'
+            else:
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f'Allotment_{allotment.company.name}_{timestamp}.pdf'
             response['Content-Disposition'] = f'inline; filename="{filename}"'
 
             # Create the PDF object using BytesIO buffer

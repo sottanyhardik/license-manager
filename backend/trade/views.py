@@ -284,6 +284,25 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
             "payments_count": trade.payments.count()
         })
 
+    @action(detail=True, methods=['post'], url_path='generate-transfer-letter')
+    def generate_transfer_letter(self, request, pk=None):
+        """
+        Generate transfer letter for Trade transaction.
+
+        Required in request.data:
+        - template_id: ID of the TransferLetterModel template to use
+        - company_name: (optional) Company name override
+        - address_line1: (optional) Address line 1 override
+        - address_line2: (optional) Address line 2 override
+        - include_license_copy: (optional) Boolean, default True
+        - selected_items: (optional) List of line IDs to include
+        - cif_edits: (optional) Dict of line_id -> edited CIF value
+        """
+        from core.utils.transfer_letter import generate_transfer_letter_generic
+
+        trade = self.get_object()
+        return generate_transfer_letter_generic(trade, request, instance_type='trade')
+
 
 # Override the auto-generated viewset
 LicenseTradeViewSet = EnhancedLicenseTradeViewSet

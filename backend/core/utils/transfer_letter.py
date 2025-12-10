@@ -158,12 +158,12 @@ def merge_tl_with_license_copy(tl_pdf_path, license_copy_path, output_path):
 
 def generate_transfer_letter_generic(instance, request, instance_type='allotment'):
     """
-    Generate transfer letter for either Allotment or BOE.
+    Generate transfer letter for Allotment, BOE, or Trade.
 
     Args:
-        instance: AllotmentModel or BillOfEntryModel instance
+        instance: AllotmentModel, BillOfEntryModel, or LicenseTrade instance
         request: DRF request object containing form data
-        instance_type: 'allotment' or 'boe'
+        instance_type: 'allotment', 'boe', or 'trade'
 
     Returns:
         Response with zip file or error message
@@ -219,6 +219,13 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
             # Use BOE number from instance (e.g., "1234567" from bill_of_entry_number)
             boe_number = instance.bill_of_entry_number or instance.id
             prefix = f'TL_BOE_{boe_number}'
+        elif instance_type == 'trade':
+            data = _prepare_trade_data(
+                instance, company_name, address_line1, address_line2, cif_edits, selected_items
+            )
+            # Use trade invoice number or ID
+            trade_ref = instance.invoice_number or instance.id
+            prefix = f'TL_TRADE_{trade_ref}'.replace('/', '_')
         else:
             return Response({
                 'error': f'Invalid instance type: {instance_type}'
@@ -256,6 +263,10 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                 for item in instance.item_details.all():
                     if item.sr_number and item.sr_number.license:
                         unique_licenses.add(item.sr_number.license)
+            elif instance_type == 'trade':
+                for line in instance.lines.all():
+                    if line.sr_number and line.sr_number.license:
+                        unique_licenses.add(line.sr_number.license)
 
             # Create separate merged PDF for each license
             license_copy_map = {}  # Map license_number -> license_copy_path
@@ -436,6 +447,68 @@ def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits
             'exporter_name': license_obj.exporter.name if license_obj.exporter else '',
             'v_allotment_usd': float(cif_fc),
             'boe': f"BE NUMBER: {boe.bill_of_entry_number}"
+        })
+
+    return data
+
+
+def _prepare_trade_data(trade, company_name, address_line1, address_line2, cif_edits, selected_items=None):
+    """
+    Prepare data for Trade transfer letter generation.
+
+    Args:
+        trade: LicenseTrade instance
+        selected_items: List of trade line IDs to include (None = include all)
+    """
+    data = []
+
+    # Determine which company to use based on trade direction
+    if trade.direction == 'PURCHASE':
+        # For purchase, we're buying FROM another company (they're the exporter/seller)
+        default_company = trade.from_company.name if trade.from_company else ''
+        default_address1 = trade.from_addr_line_1 or ''
+        default_address2 = trade.from_addr_line_2 or ''
+    else:  # SALE
+        # For sale, we're selling TO another company (they're the buyer)
+        default_company = trade.to_company.name if trade.to_company else ''
+        default_address1 = trade.to_addr_line_1 or ''
+        default_address2 = trade.to_addr_line_2 or ''
+
+    # Use POST data if provided, otherwise fallback to trade company
+    final_company = company_name if company_name else default_company
+    final_address1 = address_line1 if address_line1 else default_address1
+    final_address2 = address_line2 if address_line2 else default_address2
+
+    for line in trade.lines.all():
+        # Filter by selected items if provided
+        if selected_items and line.id not in selected_items:
+            continue
+
+        license_item = line.sr_number
+        license_obj = license_item.license if license_item else None
+        if not license_obj:
+            continue
+
+        # Get edited CIF value or use original
+        # For trade, we use cif_inr from the line
+        cif_inr = Decimal(cif_edits.get(str(line.id) + '_inr', line.cif_inr))
+        cif_fc = Decimal(cif_edits.get(str(line.id), line.cif_fc))
+
+        data.append({
+            'status': license_obj.purchase_status,
+            'company': final_company,
+            'company_address_1': final_address1,
+            'company_address_2': final_address2,
+            'today': datetime.now().date().strftime("%d/%m/%Y"),
+            'license': license_obj.license_number,
+            'serial_number': license_item.serial_number if license_item else '',
+            'license_date': license_obj.license_date.strftime("%d/%m/%Y") if license_obj.license_date else '',
+            'file_number': license_obj.file_number or '',
+            'quantity': line.qty_kg,
+            'v_allotment_inr': round(float(cif_inr), 2),
+            'exporter_name': license_obj.exporter.name if license_obj.exporter else '',
+            'v_allotment_usd': float(cif_fc),
+            'boe': f"TRADE {trade.direction}: {trade.invoice_number or trade.id}"
         })
 
     return data

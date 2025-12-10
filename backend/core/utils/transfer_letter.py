@@ -231,6 +231,12 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                 'error': f'Invalid instance type: {instance_type}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        # Validate that we have data to process
+        if not data:
+            return Response({
+                'error': 'No valid items found with license information. Please ensure the selected items have license numbers linked.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Create output directory
         dir_name = f'{prefix}_{transfer_letter.name.replace(" ", "_")}'
         file_path = os.path.join(settings.MEDIA_ROOT, dir_name)
@@ -413,6 +419,10 @@ def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits
     """
     data = []
 
+    # Convert selected_items to integers if provided as strings
+    if selected_items:
+        selected_items = [int(item_id) if isinstance(item_id, str) else item_id for item_id in selected_items]
+
     # Use POST data if provided, otherwise fallback to BOE company
     final_company = company_name if company_name else (boe.company.name if boe.company else '')
     final_address1 = address_line1 if address_line1 else ''
@@ -462,6 +472,10 @@ def _prepare_trade_data(trade, company_name, address_line1, address_line2, cif_e
     """
     data = []
 
+    # Convert selected_items to integers if provided as strings
+    if selected_items:
+        selected_items = [int(item_id) if isinstance(item_id, str) else item_id for item_id in selected_items]
+
     # Determine which company to use based on trade direction
     if trade.direction == 'PURCHASE':
         # For purchase, we're buying FROM another company (they're the exporter/seller)
@@ -479,14 +493,20 @@ def _prepare_trade_data(trade, company_name, address_line1, address_line2, cif_e
     final_address1 = address_line1 if address_line1 else default_address1
     final_address2 = address_line2 if address_line2 else default_address2
 
+    skipped_lines = []
     for line in trade.lines.all():
         # Filter by selected items if provided
         if selected_items and line.id not in selected_items:
             continue
 
         license_item = line.sr_number
+        if not license_item:
+            skipped_lines.append(f"Line {line.id}: No sr_number (license item) linked")
+            continue
+
         license_obj = license_item.license if license_item else None
         if not license_obj:
+            skipped_lines.append(f"Line {line.id} (sr_number: {license_item.serial_number}): License item has no parent license")
             continue
 
         # Get edited CIF value or use original
@@ -510,5 +530,11 @@ def _prepare_trade_data(trade, company_name, address_line1, address_line2, cif_e
             'v_allotment_usd': float(cif_fc),
             'boe': f"TRADE {trade.direction}: {trade.invoice_number or trade.id}"
         })
+
+    # Log skipped lines for debugging
+    if skipped_lines:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Trade {trade.id} transfer letter - Skipped lines: {'; '.join(skipped_lines)}")
 
     return data

@@ -94,8 +94,9 @@ export default function TradeTransferLetter({ tradeId: propId, isModal = false, 
                         items={trade.lines?.map(line => ({
                             id: line.id,
                             license_number: line.sr_number_label || '-',
-                            cif_fc: line.cif_fc,
-                            purchase_status: line.purchase_status || 'N/A'
+                            cif_fc: line.cif_fc || 0,
+                            cif_inr: line.cif_inr || 0,
+                            purchase_status: 'N/A'  // Purchase status comes from license, not trade line
                         })) || []}
                         onSuccess={(msg) => setSuccess(msg)}
                         onError={(msg) => setError(msg)}

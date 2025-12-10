@@ -3,6 +3,7 @@ Ledger upload API endpoint for processing DFIA license ledger files.
 """
 import csv
 import io
+import logging
 
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -12,6 +13,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from scripts.parse_ledger import parse_license_data, create_object
+
+logger = logging.getLogger(__name__)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -57,8 +60,12 @@ class LedgerUploadView(APIView):
         # Max file size: 50MB
         MAX_FILE_SIZE = 50 * 1024 * 1024
 
+        logger.info(f"Starting processing of {len(files)} file(s)")
+
         for file_sequence_number, uploaded_file in enumerate(files, start=1):
             try:
+                logger.info(f"Processing file {file_sequence_number}/{len(files)}: {uploaded_file.name}")
+
                 # Validate file type
                 if not uploaded_file.name.endswith('.csv'):
                     all_results.append({
@@ -77,13 +84,19 @@ class LedgerUploadView(APIView):
                     })
                     continue
 
-                # Read file in chunks for large files
+                # Read file in chunks for large files to avoid memory issues
                 file_content = b''
-                for chunk in uploaded_file.chunks():
+                chunk_size = 1024 * 1024  # 1MB chunks
+                for chunk in uploaded_file.chunks(chunk_size=chunk_size):
                     file_content += chunk
 
                 # Decode the uploaded file and wrap it for csv.reader
-                decoded_file = file_content.decode('utf-8-sig')
+                try:
+                    decoded_file = file_content.decode('utf-8-sig')
+                except UnicodeDecodeError:
+                    # Fallback to latin-1 if utf-8 fails
+                    decoded_file = file_content.decode('latin-1')
+
                 decoded_file = decoded_file.replace(': ', '')
                 decoded_file = decoded_file.replace(' ', '')
                 decoded_file = decoded_file.replace(':\xa0', '')
@@ -98,15 +111,27 @@ class LedgerUploadView(APIView):
                         continue
                     rows.append(row)
 
+                logger.info(f"Read {len(rows)} rows from {uploaded_file.name}")
+
                 # Parse the CSV data into license dictionaries
                 dict_list = parse_license_data(rows)
 
+                logger.info(f"Parsed {len(dict_list)} license(s) from {uploaded_file.name}")
+
                 # Create/update license objects
                 created_license_numbers = []
-                for dict_data in dict_list:
-                    license_number = create_object(dict_data)
-                    created_license_numbers.append(license_number)
-                    total_licenses.append(license_number)
+                for idx, dict_data in enumerate(dict_list, start=1):
+                    try:
+                        license_number = create_object(dict_data)
+                        created_license_numbers.append(license_number)
+                        total_licenses.append(license_number)
+
+                        # Log progress for large batches
+                        if idx % 10 == 0:
+                            logger.info(f"Processed {idx}/{len(dict_list)} licenses from {uploaded_file.name}")
+                    except Exception as license_error:
+                        logger.error(f"Error creating license {idx} from {uploaded_file.name}: {str(license_error)}")
+                        # Continue processing other licenses instead of failing the entire file
 
                 all_results.append({
                     'file': uploaded_file.name,
@@ -115,7 +140,10 @@ class LedgerUploadView(APIView):
                     'count': len(created_license_numbers)
                 })
 
+                logger.info(f"Successfully processed {uploaded_file.name}: {len(created_license_numbers)} licenses")
+
             except Exception as e:
+                logger.error(f"Error processing file {uploaded_file.name}: {str(e)}", exc_info=True)
                 all_results.append({
                     'file': uploaded_file.name,
                     'success': False,

@@ -7,6 +7,8 @@ const LedgerUpload = () => {
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentFile, setCurrentFile] = useState(null);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -75,48 +77,53 @@ const LedgerUpload = () => {
 
     setUploading(true);
     setError(null);
-    const uploadResults = [];
+    setUploadProgress(0);
 
     try {
-      for (const file of files) {
-        const formData = new FormData();
+      // Upload all files in a single request for better performance
+      const formData = new FormData();
+      files.forEach(file => {
         formData.append('ledger', file);
+      });
 
-        try {
-          const response = await api.post('/upload-ledger/', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-          });
+      setCurrentFile(`Uploading ${files.length} file(s)...`);
 
-          uploadResults.push({
-            fileName: file.name,
-            success: true,
-            message: response.data.message || 'File processed successfully',
-            licenses: response.data.licenses || [],
-            stats: response.data.stats || {}
-          });
-        } catch (err) {
-          uploadResults.push({
-            fileName: file.name,
-            success: false,
-            error: err.response?.data?.error || err.message || 'Failed to process file'
-          });
-        }
-      }
+      const response = await api.post('/upload-ledger/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 300000, // 5 minutes timeout
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+        },
+      });
 
-      setResults(uploadResults);
+      // Display results
+      setResults([{
+        success: true,
+        message: response.data.message,
+        licenses: response.data.licenses || [],
+        stats: response.data.stats || {},
+        failures: response.data.failures || []
+      }]);
 
       // Clear files after successful upload
-      const hasSuccess = uploadResults.some(r => r.success);
-      if (hasSuccess) {
-        setFiles([]);
-        document.getElementById('file-input').value = '';
-      }
+      setFiles([]);
+      document.getElementById('file-input').value = '';
+      setCurrentFile(null);
+      setUploadProgress(0);
+
     } catch (err) {
-      setError('An unexpected error occurred during upload');
+      setError(
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to process files. Please try again or upload fewer files at once.'
+      );
+      setResults([]);
     } finally {
       setUploading(false);
+      setCurrentFile(null);
     }
   };
 
@@ -248,6 +255,26 @@ const LedgerUpload = () => {
                 </div>
               )}
 
+              {/* Upload Progress */}
+              {uploading && (
+                <div className="mb-4">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <small className="text-muted">{currentFile}</small>
+                    <small className="text-muted">{uploadProgress}%</small>
+                  </div>
+                  <div className="progress" style={{ height: '8px' }}>
+                    <div
+                      className="progress-bar progress-bar-striped progress-bar-animated"
+                      role="progressbar"
+                      style={{ width: `${uploadProgress}%` }}
+                      aria-valuenow={uploadProgress}
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                    ></div>
+                  </div>
+                </div>
+              )}
+
               {/* Upload Button */}
               <div className="d-grid">
                 <button
@@ -280,59 +307,81 @@ const LedgerUpload = () => {
                   Upload Results
                 </h6>
               </div>
-              <div className="card-body p-3" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              <div className="card-body p-3" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 {results.map((result, index) => (
-                  <div
-                    key={index}
-                    className={`alert ${
-                      result.success ? 'alert-success' : 'alert-danger'
-                    } mb-3`}
-                  >
-                    <div className="d-flex align-items-start">
-                      <i className={`bi ${
-                        result.success ? 'bi-check-circle-fill' : 'bi-x-circle-fill'
-                      } fs-4 me-3`}></i>
-                      <div className="flex-grow-1">
-                        <h6 className="alert-heading mb-2">{result.fileName}</h6>
+                  <div key={index}>
+                    <div
+                      className={`alert ${
+                        result.success ? 'alert-success' : 'alert-danger'
+                      } mb-3`}
+                    >
+                      <div className="d-flex align-items-start">
+                        <i className={`bi ${
+                          result.success ? 'bi-check-circle-fill' : 'bi-x-circle-fill'
+                        } fs-4 me-3`}></i>
+                        <div className="flex-grow-1">
+                          {result.success ? (
+                            <>
+                              <p className="mb-2 fw-bold">{result.message}</p>
 
-                        {result.success ? (
-                          <>
-                            <p className="mb-2">{result.message}</p>
-
-                            {result.stats && (
-                              <div className="d-flex gap-3 mb-2">
-                                <small>
-                                  <strong>Licenses:</strong> {result.stats.total_licenses || 0}
-                                </small>
-                                <small>
-                                  <strong>Processed:</strong> {result.stats.files_processed || 0}
-                                </small>
-                                {result.stats.files_failed > 0 && (
-                                  <small>
-                                    <strong>Failed:</strong> {result.stats.files_failed}
+                              {result.stats && (
+                                <div className="d-flex gap-3 mb-3">
+                                  <small className="badge bg-primary">
+                                    <i className="bi bi-file-earmark-check me-1"></i>
+                                    Files: {result.stats.files_processed || 0}
                                   </small>
-                                )}
-                              </div>
-                            )}
+                                  <small className="badge bg-success">
+                                    <i className="bi bi-card-list me-1"></i>
+                                    Licenses: {result.stats.total_licenses || 0}
+                                  </small>
+                                  {result.stats.files_failed > 0 && (
+                                    <small className="badge bg-danger">
+                                      <i className="bi bi-exclamation-triangle me-1"></i>
+                                      Failed: {result.stats.files_failed}
+                                    </small>
+                                  )}
+                                </div>
+                              )}
 
-                            {result.licenses && result.licenses.length > 0 && (
-                              <div>
-                                <small className="d-block mb-1">
-                                  <strong>License Numbers ({result.licenses.length}):</strong>
-                                </small>
-                                <div className="d-flex flex-wrap gap-1">
-                                  {result.licenses.map((license, idx) => (
-                                    <span key={idx} className="badge bg-success">
-                                      {license}
-                                    </span>
+                              {result.failures && result.failures.length > 0 && (
+                                <div className="alert alert-warning mb-2">
+                                  <h6 className="alert-heading">
+                                    <i className="bi bi-exclamation-triangle me-2"></i>
+                                    Failed Files ({result.failures.length})
+                                  </h6>
+                                  {result.failures.map((failure, idx) => (
+                                    <div key={idx} className="mb-1">
+                                      <strong>{failure.file}:</strong> {failure.error}
+                                    </div>
                                   ))}
                                 </div>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <p className="mb-0">{result.error}</p>
-                        )}
+                              )}
+
+                              {result.licenses && result.licenses.length > 0 && (
+                                <div>
+                                  <small className="d-block mb-2 fw-bold">
+                                    <i className="bi bi-card-checklist me-1"></i>
+                                    License Numbers ({result.licenses.length}):
+                                  </small>
+                                  <div className="d-flex flex-wrap gap-1">
+                                    {result.licenses.slice(0, 50).map((license, idx) => (
+                                      <span key={idx} className="badge bg-success">
+                                        {license}
+                                      </span>
+                                    ))}
+                                    {result.licenses.length > 50 && (
+                                      <span className="badge bg-secondary">
+                                        +{result.licenses.length - 50} more
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <p className="mb-0">{result.error}</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

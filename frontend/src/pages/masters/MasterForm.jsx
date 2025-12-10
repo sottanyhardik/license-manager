@@ -728,12 +728,54 @@ export default function MasterForm({
 
         // Handle file/image fields
         if (fieldName.includes("logo") || fieldName.includes("signature") || fieldName.includes("stamp") || fieldName.includes("image")) {
+            const existingFileUrl = typeof value === 'string' && value ? value : null;
+            const hasNewFile = value instanceof File;
+
             return (
-                <input
-                    type="file"
-                    className="form-control"
-                    onChange={(e) => handleChange(fieldName, e.target.files[0])}
-                />
+                <div>
+                    <input
+                        type="file"
+                        className="form-control"
+                        onChange={(e) => handleChange(fieldName, e.target.files[0])}
+                        accept="image/*"
+                    />
+                    {existingFileUrl && !hasNewFile && (
+                        <div className="mt-2">
+                            <small className="text-muted">Current file:</small>
+                            <div className="d-flex align-items-center gap-2 mt-1">
+                                <a
+                                    href={existingFileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btn-sm btn-outline-primary"
+                                >
+                                    <i className="bi bi-eye me-1"></i>
+                                    View Current
+                                </a>
+                                <img
+                                    src={existingFileUrl}
+                                    alt={fieldName}
+                                    style={{
+                                        maxHeight: '60px',
+                                        maxWidth: '100px',
+                                        objectFit: 'contain',
+                                        border: '1px solid #ddd',
+                                        borderRadius: '4px',
+                                        padding: '4px'
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    )}
+                    {hasNewFile && (
+                        <div className="mt-2">
+                            <small className="text-success">
+                                <i className="bi bi-check-circle me-1"></i>
+                                New file selected: {value.name}
+                            </small>
+                        </div>
+                    )}
+                </div>
             );
         }
 

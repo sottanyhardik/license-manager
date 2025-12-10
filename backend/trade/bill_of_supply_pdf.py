@@ -19,21 +19,22 @@ def num_to_words_indian(amount):
         return str(int(amount))
 
 
-def generate_bill_of_supply_pdf(trade):
+def generate_bill_of_supply_pdf(trade, include_signature=True):
     """
     Generate Bill of Supply PDF for SALE transactions matching the purple invoice format.
 
     Args:
         trade: LicenseTrade instance with direction='SALE'
+        include_signature: Boolean - whether to include signature and stamp (default: True)
 
     Returns:
         BytesIO buffer containing the PDF
     """
     buffer = BytesIO()
 
-    # Get company color (default to purple)
+    # Get company color (default to #800080 purple)
     from_company = trade.from_company
-    company_color = from_company.bill_colour if from_company.bill_colour else '#8B4789'
+    company_color = from_company.bill_colour if from_company.bill_colour else '#800080'
 
     doc = SimpleDocTemplate(
         buffer,
@@ -485,58 +486,63 @@ def generate_bill_of_supply_pdf(trade):
     signature_content = [
         Paragraph(f'<font color="{company_color}"><b>Authorised Signatory</b></font>', sig_center_style)]
 
-    # Add signature image if available
-    if from_company.signature:
-        try:
-            from PIL import Image as PILImage
-            sig_img = PILImage.open(from_company.signature.path)
-            sig_width, sig_height = sig_img.size
+    # Only add signature and stamp if include_signature is True
+    if include_signature:
+        # Add signature image if available
+        if from_company.signature:
+            try:
+                from PIL import Image as PILImage
+                sig_img = PILImage.open(from_company.signature.path)
+                sig_width, sig_height = sig_img.size
 
-            # Max dimensions for signature
-            max_sig_width = 1.5 * inch
-            max_sig_height = 0.7 * inch
+                # Max dimensions for signature
+                max_sig_width = 1.5 * inch
+                max_sig_height = 0.7 * inch
 
-            # Calculate aspect ratio
-            sig_aspect = sig_width / sig_height
+                # Calculate aspect ratio
+                sig_aspect = sig_width / sig_height
 
-            if sig_aspect > (max_sig_width / max_sig_height):
-                width = max_sig_width
-                height = max_sig_width / sig_aspect
-            else:
-                height = max_sig_height
-                width = max_sig_height * sig_aspect
+                if sig_aspect > (max_sig_width / max_sig_height):
+                    width = max_sig_width
+                    height = max_sig_width / sig_aspect
+                else:
+                    height = max_sig_height
+                    width = max_sig_height * sig_aspect
 
-            sig_image = Image(from_company.signature.path, width=width, height=height)
-            signature_content.append(sig_image)
-        except:
+                sig_image = Image(from_company.signature.path, width=width, height=height)
+                signature_content.append(sig_image)
+            except:
+                signature_content.append(Spacer(1, 0.5 * inch))
+        else:
             signature_content.append(Spacer(1, 0.5 * inch))
+
+        # Add stamp image if available
+        if from_company.stamp:
+            try:
+                from PIL import Image as PILImage
+                stamp_img = PILImage.open(from_company.stamp.path)
+                stamp_width, stamp_height = stamp_img.size
+
+                # Max dimensions for stamp (square)
+                max_stamp_size = 1.2 * inch
+
+                # Calculate aspect ratio
+                stamp_aspect = stamp_width / stamp_height
+
+                if stamp_aspect > 1:
+                    width = max_stamp_size
+                    height = max_stamp_size / stamp_aspect
+                else:
+                    height = max_stamp_size
+                    width = max_stamp_size * stamp_aspect
+
+                stamp_image = Image(from_company.stamp.path, width=width, height=height)
+                signature_content.append(stamp_image)
+            except:
+                pass
     else:
-        signature_content.append(Spacer(1, 0.5 * inch))
-
-    # Add stamp image if available
-    if from_company.stamp:
-        try:
-            from PIL import Image as PILImage
-            stamp_img = PILImage.open(from_company.stamp.path)
-            stamp_width, stamp_height = stamp_img.size
-
-            # Max dimensions for stamp (square)
-            max_stamp_size = 1.2 * inch
-
-            # Calculate aspect ratio
-            stamp_aspect = stamp_width / stamp_height
-
-            if stamp_aspect > 1:
-                width = max_stamp_size
-                height = max_stamp_size / stamp_aspect
-            else:
-                height = max_stamp_size
-                width = max_stamp_size * stamp_aspect
-
-            stamp_image = Image(from_company.stamp.path, width=width, height=height)
-            signature_content.append(stamp_image)
-        except:
-            pass
+        # Add empty space when signature is not included
+        signature_content.append(Spacer(1, 0.8 * inch))
 
     # Name below signature
     name_center_style = ParagraphStyle('NameStyle', parent=small_style, alignment=TA_CENTER, fontName='Helvetica-Bold')

@@ -199,6 +199,9 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
     def generate_bill_of_supply(self, request, pk=None):
         """
         Generate Bill of Supply PDF for SALE transactions.
+
+        Query Parameters:
+        - include_signature: Boolean (default: true) - include signature and stamp in PDF
         """
         from django.http import HttpResponse
         from trade.bill_of_supply_pdf import generate_bill_of_supply_pdf
@@ -213,11 +216,16 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
             )
 
         try:
-            pdf = generate_bill_of_supply_pdf(trade)
+            # Get query parameter for signature inclusion (default: True)
+            include_signature_param = request.query_params.get('include_signature', 'true').lower()
+            include_signature = include_signature_param in ['true', '1', 'yes']
+
+            pdf = generate_bill_of_supply_pdf(trade, include_signature=include_signature)
 
             # Create response
             response = HttpResponse(pdf, content_type='application/pdf')
-            filename = f"Bill_of_Supply_{trade.invoice_number}_{trade.invoice_date.strftime('%Y%m%d') if trade.invoice_date else 'NA'}.pdf"
+            sig_suffix = "_with_sign" if include_signature else "_without_sign"
+            filename = f"Bill_of_Supply_{trade.invoice_number}_{trade.invoice_date.strftime('%Y%m%d') if trade.invoice_date else 'NA'}{sig_suffix}.pdf"
             response['Content-Disposition'] = f'inline; filename="{filename}"'
 
             return response

@@ -409,7 +409,7 @@ export default function TradeForm() {
         }
     };
 
-    const handleDownloadPDF = async () => {
+    const handleDownloadPDF = async (includeSignature = true) => {
         if (!id) {
             toast.warning("Please save the trade first");
             return;
@@ -423,6 +423,9 @@ export default function TradeForm() {
 
         try {
             const response = await api.get(`/trades/${id}/generate-bill-of-supply/`, {
+                params: {
+                    include_signature: includeSignature
+                },
                 responseType: 'blob'
             });
 
@@ -430,12 +433,14 @@ export default function TradeForm() {
             const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
             const link = document.createElement('a');
             link.href = url;
-            const filename = `Bill_of_Supply_${formData.invoice_number || id}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const signSuffix = includeSignature ? '_with_sign' : '_without_sign';
+            const filename = `Bill_of_Supply_${formData.invoice_number || id}_${new Date().toISOString().split('T')[0]}${signSuffix}.pdf`;
             link.setAttribute('download', filename);
             document.body.appendChild(link);
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
+            toast.success(`Bill of Supply downloaded ${includeSignature ? 'with' : 'without'} signature`);
         } catch (err) {
             toast.error('Failed to download Bill of Supply. Please try again.');
         }
@@ -1018,16 +1023,55 @@ export default function TradeForm() {
                                 <i className="bi bi-file-earmark-text me-1"></i>
                                 Generate Transfer Letter
                             </button>
-                            <button
-                                type="button"
-                                className="btn btn-warning"
-                                onClick={handleDownloadPDF}
-                                disabled={formData.direction !== 'SALE'}
-                                title={formData.direction !== 'SALE' ? 'Bill of Supply only available for SALE transactions' : 'Download Bill of Supply PDF'}
-                            >
-                                <i className="bi bi-file-pdf me-1"></i>
-                                Download Bill of Supply
-                            </button>
+                            <div className="btn-group">
+                                <button
+                                    type="button"
+                                    className="btn btn-warning"
+                                    onClick={() => handleDownloadPDF(true)}
+                                    disabled={formData.direction !== 'SALE'}
+                                    title={formData.direction !== 'SALE' ? 'Bill of Supply only available for SALE transactions' : 'Download Bill of Supply with signature & stamp'}
+                                >
+                                    <i className="bi bi-file-pdf me-1"></i>
+                                    Bill of Supply
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-warning dropdown-toggle dropdown-toggle-split"
+                                    data-bs-toggle="dropdown"
+                                    aria-expanded="false"
+                                    disabled={formData.direction !== 'SALE'}
+                                >
+                                    <span className="visually-hidden">Toggle Dropdown</span>
+                                </button>
+                                <ul className="dropdown-menu">
+                                    <li>
+                                        <a
+                                            className="dropdown-item"
+                                            href="#"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                handleDownloadPDF(true);
+                                            }}
+                                        >
+                                            <i className="bi bi-check-circle me-2"></i>
+                                            With Signature & Stamp
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a
+                                            className="dropdown-item"
+                                            href="#"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                handleDownloadPDF(false);
+                                            }}
+                                        >
+                                            <i className="bi bi-x-circle me-2"></i>
+                                            Without Signature & Stamp
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
                         </>
                     )}
                 </div>

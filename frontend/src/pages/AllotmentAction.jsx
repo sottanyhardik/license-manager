@@ -476,6 +476,26 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         Edit
                     </button>
                     <button
+                        className="btn btn-primary"
+                        onClick={async () => {
+                            if (!window.confirm('Are you sure you want to create a copy of this allotment?')) {
+                                return;
+                            }
+                            try {
+                                const response = await api.post(`/allotment-actions/${id}/copy/`);
+                                toast.success('Allotment copied successfully!');
+                                // Navigate to the new allotment
+                                navigate(`/allotments/${response.data.id}/allocate`);
+                            } catch (err) {
+                                toast.error(err.response?.data?.error || 'Failed to copy allotment');
+                            }
+                        }}
+                        title="Create a copy of this allotment"
+                    >
+                        <i className="bi bi-files me-1"></i>
+                        Copy Allotment
+                    </button>
+                    <button
                         className="btn btn-success"
                         onClick={async () => {
                             try {

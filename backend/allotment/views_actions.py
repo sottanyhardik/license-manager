@@ -621,3 +621,56 @@ class AllotmentActionViewSet(ViewSet):
 
         allotment = get_object_or_404(AllotmentModel.objects.select_related('company'), id=pk)
         return generate_transfer_letter_generic(allotment, request, instance_type='allotment')
+
+    @action(detail=True, methods=['post'], url_path='copy')
+    def copy_allotment(self, request, pk=None):
+        """
+        Create a copy of an allotment with all its details.
+        The copied allotment will have:
+        - Same company, port, item details
+        - Cleared allocated items (allotment_details will be empty)
+        - New creation timestamp
+        """
+        try:
+            # Get the original allotment
+            original = get_object_or_404(
+                AllotmentModel.objects.select_related('company', 'port'),
+                pk=pk
+            )
+
+            # Create a new allotment with same details
+            new_allotment = AllotmentModel.objects.create(
+                company=original.company,
+                port=original.port,
+                type=original.type,
+                item_name=original.item_name,
+                product_name=original.product_name,
+                required_quantity=original.required_quantity,
+                required_value=original.required_value,
+                unit_value_per_unit=original.unit_value_per_unit,
+                contact_person=original.contact_person,
+                contact_number=original.contact_number,
+                invoice=original.invoice,
+                estimated_arrival_date=original.estimated_arrival_date,
+                bl_detail=original.bl_detail,
+                exchange_rate=original.exchange_rate,
+                cif_fc=original.cif_fc,
+                cif_inr=original.cif_inr,
+                is_boe=False,  # New allotment starts as not BOE
+                is_allotted=False,  # New allotment starts as not allotted
+                is_approved=False,  # New allotment starts as not approved
+                created_by=request.user if request.user.is_authenticated else None
+            )
+
+            # Return the new allotment data
+            serializer = AllotmentSerializer(new_allotment)
+            return Response({
+                'id': new_allotment.id,
+                'message': 'Allotment copied successfully',
+                'data': serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({
+                'error': f'Failed to copy allotment: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

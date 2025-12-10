@@ -299,7 +299,12 @@ class ItemPivotReportView(View):
             Dictionary with license data and item quantities
         """
         # Calculate total CIF from export license items (already prefetched)
-        total_cif = sum(item.cif_fc or Decimal('0') for item in license_obj.export_license.all())
+        # Start with Decimal('0') to ensure result is always Decimal type
+        total_cif = Decimal('0')
+        for item in license_obj.export_license.all():
+            # Convert to Decimal to handle cases where database returns float
+            cif_value = Decimal(str(item.cif_fc)) if item.cif_fc is not None else Decimal('0')
+            total_cif += cif_value
 
         # Aggregate quantities by item (sum across all serial numbers)
         item_quantities = defaultdict(lambda: {
@@ -327,12 +332,13 @@ class ItemPivotReportView(View):
 
         for import_item in license_obj.import_license.all():
             for item in import_item.items.all():
-                item_quantities[item.id]['quantity'] += import_item.quantity or DEC_000
-                item_quantities[item.id]['allotted_quantity'] += import_item.allotted_quantity or DEC_000
-                item_quantities[item.id]['debited_quantity'] += import_item.debited_quantity or DEC_000
-                item_quantities[item.id]['available_quantity'] += import_item.available_quantity or DEC_000
-                item_quantities[item.id]['debited_value'] += import_item.debited_value or DEC_0
-                item_quantities[item.id]['cif_value'] += import_item.cif_fc or DEC_0
+                # Convert all numeric fields to Decimal to handle potential float values from database
+                item_quantities[item.id]['quantity'] += Decimal(str(import_item.quantity)) if import_item.quantity is not None else DEC_000
+                item_quantities[item.id]['allotted_quantity'] += Decimal(str(import_item.allotted_quantity)) if import_item.allotted_quantity is not None else DEC_000
+                item_quantities[item.id]['debited_quantity'] += Decimal(str(import_item.debited_quantity)) if import_item.debited_quantity is not None else DEC_000
+                item_quantities[item.id]['available_quantity'] += Decimal(str(import_item.available_quantity)) if import_item.available_quantity is not None else DEC_000
+                item_quantities[item.id]['debited_value'] += Decimal(str(import_item.debited_value)) if import_item.debited_value is not None else DEC_0
+                item_quantities[item.id]['cif_value'] += Decimal(str(import_item.cif_fc)) if import_item.cif_fc is not None else DEC_0
 
                 if import_item.hs_code and not item_quantities[item.id]['hs_code']:
                     item_quantities[item.id]['hs_code'] = import_item.hs_code.hs_code
@@ -353,14 +359,16 @@ class ItemPivotReportView(View):
                     restriction_key = f"{sion_norm}_{restriction_pct}"
                     restriction_groups[restriction_key]['sion_norm_class'] = sion_norm
                     restriction_groups[restriction_key]['restriction_percentage'] = restriction_pct
-                    restriction_groups[restriction_key]['total_cif'] += import_item.cif_fc or DEC_0
-                    restriction_groups[restriction_key]['debited_cif'] += import_item.debited_value or DEC_0
+                    # Convert to Decimal to handle potential float values from database
+                    restriction_groups[restriction_key]['total_cif'] += Decimal(str(import_item.cif_fc)) if import_item.cif_fc is not None else DEC_0
+                    restriction_groups[restriction_key]['debited_cif'] += Decimal(str(import_item.debited_value)) if import_item.debited_value is not None else DEC_0
                     if item.id not in restriction_groups[restriction_key]['item_ids']:
                         restriction_groups[restriction_key]['item_ids'].append(item.id)
 
         # Calculate available CIF within restriction for each group
         # Use stored balance_cif field instead of property to avoid extra queries
-        balance_cif = license_obj.balance_cif or Decimal('0')
+        # Convert to Decimal to handle potential float value from database
+        balance_cif = Decimal(str(license_obj.balance_cif)) if license_obj.balance_cif is not None else Decimal('0')
         for group_name, group_data in restriction_groups.items():
             if group_data['restriction_percentage'] and total_cif > 0:
                 # Convert restriction_percentage to Decimal to avoid float * Decimal error

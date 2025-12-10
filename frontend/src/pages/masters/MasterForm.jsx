@@ -496,6 +496,11 @@ export default function MasterForm({
                 const appendToFormData = (key, value, parentKey = '') => {
                     const fullKey = parentKey ? `${parentKey}.${key}` : key;
 
+                    // Skip empty 'id' fields in nested arrays (for new items)
+                    if (key === 'id' && (value === '' || value === null || value === undefined) && parentKey.includes('[')) {
+                        return; // Don't append empty id fields for nested items
+                    }
+
                     if (value instanceof File) {
                         formDataObj.append(fullKey, value);
                     } else if (Array.isArray(value)) {
@@ -564,6 +569,23 @@ export default function MasterForm({
                                 cleanedFormData[key] = formatDateForAPI(date);
                             }
                         }
+                    }
+                });
+
+                // Clean up nested arrays: remove empty 'id' fields for new items
+                Object.keys(cleanedFormData).forEach(key => {
+                    if (Array.isArray(cleanedFormData[key])) {
+                        cleanedFormData[key] = cleanedFormData[key].map(item => {
+                            if (item && typeof item === 'object') {
+                                const cleanedItem = {...item};
+                                // Remove id if it's empty string, null, or undefined
+                                if (cleanedItem.id === '' || cleanedItem.id === null || cleanedItem.id === undefined) {
+                                    delete cleanedItem.id;
+                                }
+                                return cleanedItem;
+                            }
+                            return item;
+                        });
                     }
                 });
 

@@ -339,14 +339,24 @@ export default function TradeForm() {
                 // Add file
                 formDataObj.append('purchase_invoice_copy', formData.purchase_invoice_copy);
 
-                // Add lines as JSON string
-                formDataObj.append('lines', JSON.stringify(formData.lines));
+                // Add lines as JSON string (clean up empty id fields)
+                const cleanedLines = formData.lines.map(line => {
+                    const cleanedLine = {...line};
+                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
+                        delete cleanedLine.id;
+                    }
+                    return cleanedLine;
+                });
+                formDataObj.append('lines', JSON.stringify(cleanedLines));
 
-                // Add payments as JSON string
-                const paymentsData = formData.payments.map(payment => ({
-                    ...payment,
-                    date: formatDateForAPI(payment.date)
-                }));
+                // Add payments as JSON string (clean up empty id fields)
+                const paymentsData = formData.payments.map(payment => {
+                    const cleanedPayment = {...payment, date: formatDateForAPI(payment.date)};
+                    if (cleanedPayment.id === '' || cleanedPayment.id === null || cleanedPayment.id === undefined) {
+                        delete cleanedPayment.id;
+                    }
+                    return cleanedPayment;
+                });
                 formDataObj.append('payments', JSON.stringify(paymentsData));
 
                 payload = formDataObj;
@@ -357,6 +367,24 @@ export default function TradeForm() {
                 const toCompanyId = typeof formData.to_company === 'object' ? formData.to_company?.id : formData.to_company;
                 const boeId = typeof formData.boe === 'object' ? formData.boe?.id : formData.boe;
 
+                // Clean up lines: remove empty id fields
+                const cleanedLines = formData.lines.map(line => {
+                    const cleanedLine = {...line};
+                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
+                        delete cleanedLine.id;
+                    }
+                    return cleanedLine;
+                });
+
+                // Clean up payments: remove empty id fields
+                const cleanedPayments = formData.payments.map(payment => {
+                    const cleanedPayment = {...payment, date: formatDateForAPI(payment.date)};
+                    if (cleanedPayment.id === '' || cleanedPayment.id === null || cleanedPayment.id === undefined) {
+                        delete cleanedPayment.id;
+                    }
+                    return cleanedPayment;
+                });
+
                 payload = {
                     ...formData,
                     from_company: fromCompanyId,
@@ -364,10 +392,8 @@ export default function TradeForm() {
                     boe: boeId || null,
                     invoice_number: formData.invoice_number?.trim() || '',
                     invoice_date: formatDateForAPI(formData.invoice_date),
-                    payments: formData.payments.map(payment => ({
-                        ...payment,
-                        date: formatDateForAPI(payment.date)
-                    }))
+                    lines: cleanedLines,
+                    payments: cleanedPayments
                 };
             }
 

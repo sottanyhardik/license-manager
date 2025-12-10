@@ -217,7 +217,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     # Header row with purple background
     header_style_center = ParagraphStyle('HeaderStyle', parent=small_style, textColor=colors.white, alignment=TA_CENTER,
                                          fontName='Helvetica-Bold')
-    right_align_style = ParagraphStyle('RightAlign', parent=small_style, alignment=TA_RIGHT)
+    right_align_style = ParagraphStyle('RightAlign', parent=small_style, alignment=TA_RIGHT, wordWrap='LTR')
 
     # Determine the mode from first line (assuming all lines have same mode)
     trade_lines = trade.lines.all()
@@ -263,11 +263,11 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             line_items_data.append([
                 Paragraph(sr_label, small_style),
                 Paragraph('CIF INR', small_style),
-                Paragraph(f"{cif_fc:,.2f}", right_align_style),
-                Paragraph(f"{exc_rate:,.2f}", right_align_style),
-                Paragraph(f"{cif_inr:,.2f}", right_align_style),
-                Paragraph(f"{pct:.2f}", right_align_style),
-                Paragraph(f"{amount:,.2f}", right_align_style)
+                Paragraph(f"<nobr>{cif_fc:,.2f}</nobr>", right_align_style),
+                Paragraph(f"<nobr>{exc_rate:,.2f}</nobr>", right_align_style),
+                Paragraph(f"<nobr>{cif_inr:,.2f}</nobr>", right_align_style),
+                Paragraph(f"<nobr>{pct:.2f}</nobr>", right_align_style),
+                Paragraph(f"<nobr>{amount:,.2f}</nobr>", right_align_style)
             ])
 
         total_amount = float(trade.total_amount) if trade.total_amount else 0
@@ -280,11 +280,11 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         line_items_data.append([
             Paragraph('<b>Total</b>', total_style_left),
             '',
-            Paragraph(f'<b>{total_cif_fc:,.2f}</b>', total_style_right),
+            Paragraph(f'<b><nobr>{total_cif_fc:,.2f}</nobr></b>', total_style_right),
             Paragraph('<b>-</b>', total_style_right),
-            Paragraph(f'<b>{total_cif_inr:,.2f}</b>', total_style_right),
+            Paragraph(f'<b><nobr>{total_cif_inr:,.2f}</nobr></b>', total_style_right),
             Paragraph('<b>-</b>', total_style_right),
-            Paragraph(f'<b>{total_amount:,.2f}</b>', total_style_right)
+            Paragraph(f'<b><nobr>{total_amount:,.2f}</nobr></b>', total_style_right)
         ])
 
         all_line_data = line_items_header + line_items_data
@@ -322,9 +322,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             line_items_data.append([
                 Paragraph(sr_label, small_style),
                 Paragraph('FOB INR', small_style),
-                Paragraph(f"{fob_inr:,.2f}", right_align_style),
-                Paragraph(f"{pct:.2f}", right_align_style),
-                Paragraph(f"{amount:,.2f}", right_align_style)
+                Paragraph(f"<nobr>{fob_inr:,.2f}</nobr>", right_align_style),
+                Paragraph(f"<nobr>{pct:.2f}</nobr>", right_align_style),
+                Paragraph(f"<nobr>{amount:,.2f}</nobr>", right_align_style)
             ])
 
         total_amount = float(trade.total_amount) if trade.total_amount else 0
@@ -337,9 +337,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         line_items_data.append([
             Paragraph('<b>Total</b>', total_style_left),
             '',
-            Paragraph(f'<b>{total_fob_inr:,.2f}</b>', total_style_right),
+            Paragraph(f'<b><nobr>{total_fob_inr:,.2f}</nobr></b>', total_style_right),
             Paragraph('<b>-</b>', total_style_right),
-            Paragraph(f'<b>{total_amount:,.2f}</b>', total_style_right)
+            Paragraph(f'<b><nobr>{total_amount:,.2f}</nobr></b>', total_style_right)
         ])
 
         all_line_data = line_items_header + line_items_data
@@ -376,9 +376,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             line_items_data.append([
                 Paragraph(sr_label, small_style),
                 Paragraph('QTY', small_style),
-                Paragraph(f"{qty:,.4f}", right_align_style),
-                Paragraph(f"{rate:,.2f}", right_align_style),
-                Paragraph(f"{amount:,.2f}", right_align_style)
+                Paragraph(f"<nobr>{qty:,.4f}</nobr>", right_align_style),
+                Paragraph(f"<nobr>{rate:,.2f}</nobr>", right_align_style),
+                Paragraph(f"<nobr>{amount:,.2f}</nobr>", right_align_style)
             ])
 
         total_amount = float(trade.total_amount) if trade.total_amount else 0
@@ -391,9 +391,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         line_items_data.append([
             Paragraph('<b>Total</b>', total_style_left),
             '',
-            Paragraph(f'<b>{total_qty:,.4f}</b>', total_style_right),
+            Paragraph(f'<b><nobr>{total_qty:,.4f}</nobr></b>', total_style_right),
             Paragraph('<b>-</b>', total_style_right),
-            Paragraph(f'<b>{total_amount:,.2f}</b>', total_style_right)
+            Paragraph(f'<b><nobr>{total_amount:,.2f}</nobr></b>', total_style_right)
         ])
 
         all_line_data = line_items_header + line_items_data

@@ -438,6 +438,8 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         ('TOPPADDING', (0, 0), (-1, -1), 8),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        # Prevent word wrapping in numeric columns
+        ('WORDWRAP', (2, 0), (-1, -1), 'LTR'),
     ]))
 
     elements.append(line_items_table)

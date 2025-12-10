@@ -350,7 +350,10 @@ class LicenseTradeLine(models.Model):
         return Decimal("0.00")
 
     def save(self, *args, **kwargs) -> None:
-        self.amount_inr = self.compute_amount()
+        # Don't auto-calculate amount_inr - allow manual entry from frontend
+        # If amount_inr is not set (0 or None), calculate it
+        if not self.amount_inr or self.amount_inr == 0:
+            self.amount_inr = self.compute_amount()
         super().save(*args, **kwargs)
         if self.trade_id:
             # Safe: recompute uses queryset.update(), so no recursion

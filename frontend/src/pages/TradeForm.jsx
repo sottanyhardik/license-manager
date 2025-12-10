@@ -6,6 +6,7 @@ import HybridSelect from "../components/HybridSelect";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import {formatDateForInput} from "../utils/dateFormatter";
+import TransferLetterModal from "../components/TransferLetterModal";
 
 export default function TradeForm() {
     const { id } = useParams();
@@ -29,6 +30,7 @@ export default function TradeForm() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [fieldErrors, setFieldErrors] = useState({});
+    const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
 
     // Helper function to format Date object to YYYY-MM-DD for API
     const formatDateForAPI = (date) => {
@@ -1006,19 +1008,40 @@ export default function TradeForm() {
                         Cancel
                     </button>
                     {isEdit && (
-                        <button
-                            type="button"
-                            className="btn btn-warning"
-                            onClick={handleDownloadPDF}
-                            disabled={formData.direction !== 'SALE'}
-                            title={formData.direction !== 'SALE' ? 'Bill of Supply only available for SALE transactions' : 'Download Bill of Supply PDF'}
-                        >
-                            <i className="bi bi-file-pdf me-1"></i>
-                            Download Bill of Supply
-                        </button>
+                        <>
+                            <button
+                                type="button"
+                                className="btn btn-info"
+                                onClick={() => setShowTransferLetterModal(true)}
+                                title="Generate Transfer Letter"
+                            >
+                                <i className="bi bi-file-earmark-text me-1"></i>
+                                Generate Transfer Letter
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-warning"
+                                onClick={handleDownloadPDF}
+                                disabled={formData.direction !== 'SALE'}
+                                title={formData.direction !== 'SALE' ? 'Bill of Supply only available for SALE transactions' : 'Download Bill of Supply PDF'}
+                            >
+                                <i className="bi bi-file-pdf me-1"></i>
+                                Download Bill of Supply
+                            </button>
+                        </>
                     )}
                 </div>
             </form>
+
+            {/* Transfer Letter Modal */}
+            {isEdit && showTransferLetterModal && (
+                <TransferLetterModal
+                    show={showTransferLetterModal}
+                    onHide={() => setShowTransferLetterModal(false)}
+                    type="trade"
+                    entityId={id}
+                />
+            )}
         </div>
     );
 }

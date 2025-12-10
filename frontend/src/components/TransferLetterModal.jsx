@@ -1,5 +1,6 @@
 import BOETransferLetter from '../pages/BOETransferLetter';
 import AllotmentAction from '../pages/AllotmentAction';
+import TradeTransferLetter from '../pages/TradeTransferLetter';
 
 export default function TransferLetterModal({ show, onHide, type, entityId }) {
     if (!show || !entityId) return null;
@@ -56,6 +57,12 @@ export default function TransferLetterModal({ show, onHide, type, entityId }) {
                         {type === 'boe' ? (
                             <BOETransferLetter
                                 boeId={entityId}
+                                isModal={true}
+                                onClose={onHide}
+                            />
+                        ) : type === 'trade' ? (
+                            <TradeTransferLetter
+                                tradeId={entityId}
                                 isModal={true}
                                 onClose={onHide}
                             />

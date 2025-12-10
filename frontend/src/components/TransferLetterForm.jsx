@@ -151,6 +151,8 @@ export default function TransferLetterForm({
         try {
             const endpoint = instanceType === 'allotment'
                 ? `/allotment-actions/${instanceId}/generate-transfer-letter/`
+                : instanceType === 'trade'
+                ? `/trades/${instanceId}/generate-transfer-letter/`
                 : `/bill-of-entries/${instanceId}/generate-transfer-letter/`;
 
             const response = await api.post(endpoint, requestData, {

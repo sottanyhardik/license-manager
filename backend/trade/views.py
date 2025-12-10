@@ -206,7 +206,8 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
         from django.http import HttpResponse
         from trade.bill_of_supply_pdf import generate_bill_of_supply_pdf
 
-        trade = self.get_object()
+        # Fetch trade with company relationships
+        trade = self.get_queryset().select_related('from_company', 'to_company').get(pk=self.kwargs['pk'])
 
         # Validate that this is a SALE transaction
         if trade.direction != 'SALE':

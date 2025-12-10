@@ -257,13 +257,39 @@ export default function TradeForm() {
             }
         }
 
-        // Auto-calculate amount based on mode (round to whole number .00)
-        if (line.mode === "QTY") {
-            line.amount_inr = Math.round((parseFloat(line.qty_kg) || 0) * (parseFloat(line.rate_inr_per_kg) || 0));
-        } else if (line.mode === "CIF_INR") {
-            line.amount_inr = Math.round((parseFloat(line.cif_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
-        } else if (line.mode === "FOB_INR") {
-            line.amount_inr = Math.round((parseFloat(line.fob_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
+        // Auto-calculate amount or rate based on mode
+        // If amount_inr is being changed, calculate rate (reverse calculation)
+        // Otherwise, calculate amount from rate
+
+        if (field === 'amount_inr') {
+            // Reverse calculation: calculate rate from amount (round to 3 decimals)
+            const amount = parseFloat(line.amount_inr) || 0;
+
+            if (line.mode === "QTY") {
+                const qty = parseFloat(line.qty_kg) || 0;
+                if (qty > 0) {
+                    line.rate_inr_per_kg = Math.round((amount / qty) * 1000) / 1000;
+                }
+            } else if (line.mode === "CIF_INR") {
+                const cif = parseFloat(line.cif_inr) || 0;
+                if (cif > 0) {
+                    line.pct = Math.round((amount / cif * 100) * 1000) / 1000;
+                }
+            } else if (line.mode === "FOB_INR") {
+                const fob = parseFloat(line.fob_inr) || 0;
+                if (fob > 0) {
+                    line.pct = Math.round((amount / fob * 100) * 1000) / 1000;
+                }
+            }
+        } else {
+            // Forward calculation: calculate amount from rate (round to whole number)
+            if (line.mode === "QTY") {
+                line.amount_inr = Math.round((parseFloat(line.qty_kg) || 0) * (parseFloat(line.rate_inr_per_kg) || 0));
+            } else if (line.mode === "CIF_INR") {
+                line.amount_inr = Math.round((parseFloat(line.cif_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
+            } else if (line.mode === "FOB_INR") {
+                line.amount_inr = Math.round((parseFloat(line.fob_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
+            }
         }
 
         setFormData(prev => ({
@@ -1006,11 +1032,12 @@ export default function TradeForm() {
                                     )}
                                     <td>
                                         <input
-                                            type="text"
+                                            type="number"
+                                            step="0.01"
                                             className="form-control form-control-sm text-end fw-bold"
-                                            value={line.amount_inr ? parseFloat(line.amount_inr).toFixed(2) : "0.00"}
-                                            readOnly
-                                            style={{ backgroundColor: '#f8f9fa' }}
+                                            value={line.amount_inr || ""}
+                                            onChange={(e) => handleLineChange(index, 'amount_inr', e.target.value)}
+                                            placeholder="0.00"
                                         />
                                     </td>
                                     <td className="text-center">

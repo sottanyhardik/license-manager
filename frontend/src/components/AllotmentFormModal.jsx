@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import AsyncSelect from 'react-select/async';
+import { extractFormErrors, formatNonFieldErrors, getFieldError, getFieldErrorClass } from '../utils/formErrors';
 
 export default function AllotmentFormModal({ show, onHide, allotmentId = null, mode = 'create', onSuccess, onSaveNavigate }) {
     const [formData, setFormData] = useState({
@@ -22,6 +23,8 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
     });
     const [loading, setLoading] = useState(false);
     const [initialLoad, setInitialLoad] = useState(true);
+    const [fieldErrors, setFieldErrors] = useState({});
+    const [nonFieldErrors, setNonFieldErrors] = useState([]);
 
     useEffect(() => {
         if (show && allotmentId && (mode === 'edit' || mode === 'copy')) {
@@ -143,6 +146,8 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+        setFieldErrors({});
+        setNonFieldErrors([]);
 
         try {
             const payload = {
@@ -181,7 +186,17 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
             }
         } catch (error) {
             console.error('Error saving allotment:', error);
-            toast.error(error.response?.data?.error || 'Failed to save allotment');
+            const { fieldErrors: errors, nonFieldErrors: nonErrors } = extractFormErrors(error);
+            setFieldErrors(errors);
+            setNonFieldErrors(nonErrors);
+
+            if (nonErrors.length > 0) {
+                toast.error(formatNonFieldErrors(nonErrors));
+            } else if (Object.keys(errors).length > 0) {
+                toast.error('Please fix the errors in the form');
+            } else {
+                toast.error('Failed to save allotment');
+            }
         } finally {
             setLoading(false);
         }
@@ -289,6 +304,16 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
                     <form onSubmit={handleSubmit}>
                         <div className="modal-body" style={{ padding: '2rem', backgroundColor: '#f8f9fa' }}>
+                            {/* Non-Field Errors */}
+                            {nonFieldErrors.length > 0 && (
+                                <div className="alert alert-danger mb-3" role="alert">
+                                    <strong><i className="bi bi-exclamation-triangle-fill me-2"></i>ERROR:</strong>
+                                    <div className="mt-1" style={{ textTransform: 'uppercase', fontWeight: '600' }}>
+                                        {formatNonFieldErrors(nonFieldErrors)}
+                                    </div>
+                                </div>
+                            )}
+
                             {initialLoad ? (
                                 <div className="text-center py-5">
                                     <div className="spinner-border" style={{ color: '#667eea' }}></div>
@@ -307,7 +332,13 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                             placeholder="Search company..."
                                             isClearable
                                             required
+                                            className={getFieldError(fieldErrors, 'company') ? 'is-invalid' : ''}
                                         />
+                                        {getFieldError(fieldErrors, 'company') && (
+                                            <div className="invalid-feedback d-block">
+                                                {getFieldError(fieldErrors, 'company')}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="col-md-6">
@@ -333,18 +364,27 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                             placeholder="Search port..."
                                             isClearable
                                             required
+                                            className={getFieldError(fieldErrors, 'port') ? 'is-invalid' : ''}
                                         />
+                                        {getFieldError(fieldErrors, 'port') && (
+                                            <div className="invalid-feedback d-block">
+                                                {getFieldError(fieldErrors, 'port')}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="col-md-6">
                                         <label className="form-label fw-bold">Item Name</label>
                                         <input
                                             type="text"
-                                            className="form-control"
+                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'item_name')}`}
                                             value={formData.item_name}
                                             onChange={(e) => handleChange('item_name', e.target.value)}
                                             placeholder="Enter item name"
                                         />
+                                        {getFieldError(fieldErrors, 'item_name') && (
+                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'item_name')}</div>
+                                        )}
                                     </div>
 
                                     <div className="col-md-6">
@@ -352,11 +392,14 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                         <input
                                             type="number"
                                             step="0.01"
-                                            className="form-control"
+                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'required_quantity')}`}
                                             value={formData.required_quantity}
                                             onChange={(e) => handleChange('required_quantity', e.target.value)}
                                             placeholder="Enter required quantity"
                                         />
+                                        {getFieldError(fieldErrors, 'required_quantity') && (
+                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'required_quantity')}</div>
+                                        )}
                                     </div>
 
                                     <div className="col-md-6">
@@ -364,11 +407,14 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                         <input
                                             type="number"
                                             step="0.01"
-                                            className="form-control"
+                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'cif_inr')}`}
                                             value={formData.cif_inr}
                                             onChange={(e) => handleChange('cif_inr', e.target.value)}
                                             placeholder="Enter CIF INR"
                                         />
+                                        {getFieldError(fieldErrors, 'cif_inr') && (
+                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'cif_inr')}</div>
+                                        )}
                                     </div>
 
                                     <div className="col-md-6">
@@ -376,11 +422,14 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                         <input
                                             type="number"
                                             step="0.01"
-                                            className="form-control"
+                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'exchange_rate')}`}
                                             value={formData.exchange_rate}
                                             onChange={(e) => handleChange('exchange_rate', e.target.value)}
                                             placeholder="Enter exchange rate"
                                         />
+                                        {getFieldError(fieldErrors, 'exchange_rate') && (
+                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'exchange_rate')}</div>
+                                        )}
                                     </div>
 
                                     <div className="col-md-6">
@@ -388,11 +437,14 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                         <input
                                             type="number"
                                             step="0.01"
-                                            className="form-control"
+                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'cif_fc')}`}
                                             value={formData.cif_fc}
                                             onChange={(e) => handleChange('cif_fc', e.target.value)}
                                             placeholder="Enter CIF FC"
                                         />
+                                        {getFieldError(fieldErrors, 'cif_fc') && (
+                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'cif_fc')}</div>
+                                        )}
                                     </div>
 
                                     <div className="col-md-6">
@@ -400,22 +452,28 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                         <input
                                             type="number"
                                             step="0.01"
-                                            className="form-control"
+                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'unit_value_per_unit')}`}
                                             value={formData.unit_value_per_unit}
                                             onChange={(e) => handleChange('unit_value_per_unit', e.target.value)}
                                             placeholder="Enter unit value"
                                         />
+                                        {getFieldError(fieldErrors, 'unit_value_per_unit') && (
+                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'unit_value_per_unit')}</div>
+                                        )}
                                     </div>
 
                                     <div className="col-md-6">
                                         <label className="form-label fw-bold">Invoice</label>
                                         <input
                                             type="text"
-                                            className="form-control"
+                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'invoice')}`}
                                             value={formData.invoice}
                                             onChange={(e) => handleChange('invoice', e.target.value)}
                                             placeholder="Enter invoice"
                                         />
+                                        {getFieldError(fieldErrors, 'invoice') && (
+                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'invoice')}</div>
+                                        )}
                                     </div>
 
                                     <div className="col-md-6">

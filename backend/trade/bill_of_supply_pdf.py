@@ -240,11 +240,11 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         line_items_header = [[
             Paragraph('<b>DFIA Number</b>', header_style_center),
             Paragraph('<b>Mode</b>', header_style_center),
-            Paragraph('<b>CIF (FC)</b>', header_style_center),
-            Paragraph('<b>Exchange Rate</b>', header_style_center),
-            Paragraph('<b>CIF (INR)</b>', header_style_center),
-            Paragraph('<b>Percentage (%)</b>', header_style_center),
-            Paragraph('<b>Amount (INR)</b>', header_style_center)
+            Paragraph('<b>CIF<br/>(FC)</b>', header_style_center),
+            Paragraph('<b>Exchange<br/>Rate</b>', header_style_center),
+            Paragraph('<b>CIF<br/>(INR)</b>', header_style_center),
+            Paragraph('<b>Percentage<br/>(%)</b>', header_style_center),
+            Paragraph('<b>Amount<br/>(INR)</b>', header_style_center)
         ]]
 
         line_items_data = []
@@ -306,9 +306,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         line_items_header = [[
             Paragraph('<b>DFIA Number</b>', header_style_center),
             Paragraph('<b>Mode</b>', header_style_center),
-            Paragraph('<b>FOB (INR)</b>', header_style_center),
-            Paragraph('<b>Percentage (%)</b>', header_style_center),
-            Paragraph('<b>Amount (INR)</b>', header_style_center)
+            Paragraph('<b>FOB<br/>(INR)</b>', header_style_center),
+            Paragraph('<b>Percentage<br/>(%)</b>', header_style_center),
+            Paragraph('<b>Amount<br/>(INR)</b>', header_style_center)
         ]]
 
         line_items_data = []
@@ -361,9 +361,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         line_items_header = [[
             Paragraph('<b>DFIA Number</b>', header_style_center),
             Paragraph('<b>Mode</b>', header_style_center),
-            Paragraph('<b>Quantity (KG)</b>', header_style_center),
-            Paragraph('<b>Rate (INR/KG)</b>', header_style_center),
-            Paragraph('<b>Amount (INR)</b>', header_style_center)
+            Paragraph('<b>Quantity<br/>(KG)</b>', header_style_center),
+            Paragraph('<b>Rate<br/>(INR/KG)</b>', header_style_center),
+            Paragraph('<b>Amount<br/>(INR)</b>', header_style_center)
         ]]
 
         line_items_data = []

@@ -484,8 +484,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             try {
                                 const response = await api.post(`/allotments/${id}/copy/`);
                                 toast.success('Allotment copied successfully!');
-                                // Navigate to the new allotment
-                                navigate(`/allotments/${response.data.id}/allocate`);
+                                // Navigate to edit page of the new allotment
+                                navigate(`/allotments/${response.data.id}/edit`);
                             } catch (err) {
                                 toast.error(err.response?.data?.error || 'Failed to copy allotment');
                             }

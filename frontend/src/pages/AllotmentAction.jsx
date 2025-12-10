@@ -482,7 +482,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 return;
                             }
                             try {
-                                const response = await api.post(`/allotment-actions/${id}/copy/`);
+                                const response = await api.post(`/allotments/${id}/copy/`);
                                 toast.success('Allotment copied successfully!');
                                 // Navigate to the new allotment
                                 navigate(`/allotments/${response.data.id}/allocate`);

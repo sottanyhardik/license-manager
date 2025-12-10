@@ -938,8 +938,8 @@ export default function MasterList() {
                 />
             )}
 
-            {/* Transfer Letter Modal (for BOE) */}
-            {entityName === 'bill-of-entries' && (
+            {/* Transfer Letter Modal (for BOE and Trades) */}
+            {(entityName === 'bill-of-entries' || entityName === 'trades') && (
                 <TransferLetterModal
                     show={showTransferLetterModal}
                     onHide={() => setShowTransferLetterModal(false)}

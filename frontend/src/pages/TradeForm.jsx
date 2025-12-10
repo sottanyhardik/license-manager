@@ -93,10 +93,11 @@ export default function TradeForm() {
         try {
             const { data } = await api.get(`/trades/${id}/`);
 
-            // Parse date fields
+            // Parse date fields (backend returns dd-MM-yyyy format)
             if (data.invoice_date) {
                 const parts = data.invoice_date.split('-');
-                data.invoice_date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), 12, 0, 0);
+                // parts[0] = day, parts[1] = month, parts[2] = year (dd-MM-yyyy)
+                data.invoice_date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]), 12, 0, 0);
             }
 
             // Parse payment dates

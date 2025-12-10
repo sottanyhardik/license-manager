@@ -243,7 +243,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             Paragraph('<b>CIF<br/>(FC)</b>', header_style_center),
             Paragraph('<b>Exchange<br/>Rate</b>', header_style_center),
             Paragraph('<b>CIF<br/>(INR)</b>', header_style_center),
-            Paragraph('<b>Percentage<br/>(%)</b>', header_style_center),
+            Paragraph('<b>%</b>', header_style_center),
             Paragraph('<b>Amount<br/>(INR)</b>', header_style_center)
         ]]
 
@@ -307,7 +307,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             Paragraph('<b>DFIA Number</b>', header_style_center),
             Paragraph('<b>Mode</b>', header_style_center),
             Paragraph('<b>FOB<br/>(INR)</b>', header_style_center),
-            Paragraph('<b>Percentage<br/>(%)</b>', header_style_center),
+            Paragraph('<b>%</b>', header_style_center),
             Paragraph('<b>Amount<br/>(INR)</b>', header_style_center)
         ]]
 

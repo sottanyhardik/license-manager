@@ -525,30 +525,74 @@ export default function MasterList() {
                             lazyLoadNested={false}
                             customActions={entityName === 'trades' ? [
                                 {
-                                    label: 'Invoice PDF',
+                                    label: 'Transfer Letter',
+                                    icon: 'bi bi-file-earmark-text',
+                                    className: 'btn btn-outline-info',
+                                    onClick: (item) => {
+                                        setTransferLetterType('trade');
+                                        setTransferLetterEntityId(item.id);
+                                        setShowTransferLetterModal(true);
+                                    }
+                                },
+                                {
+                                    label: 'Invoice (With Sign)',
                                     icon: 'bi bi-file-pdf',
-                                    className: 'btn btn-outline-danger',
+                                    className: 'btn btn-outline-success',
                                     onClick: async (item) => {
                                         // Only allow for SALE transactions
                                         if (item.direction !== 'SALE') {
-                                            alert('Bill of Supply can only be generated for SALE transactions');
+                                            toast.warning('Bill of Supply can only be generated for SALE transactions');
                                             return;
                                         }
                                         try {
                                             const response = await api.get(`/trades/${item.id}/generate-bill-of-supply/`, {
+                                                params: { include_signature: true },
                                                 responseType: 'blob'
                                             });
                                             const blob = new Blob([response.data], { type: 'application/pdf' });
                                             const url = window.URL.createObjectURL(blob);
                                             const link = document.createElement('a');
                                             link.href = url;
-                                            link.download = `Bill_of_Supply_${item.invoice_number}_${new Date().toISOString().split('T')[0]}.pdf`;
+                                            link.download = `Bill_of_Supply_${item.invoice_number}_${new Date().toISOString().split('T')[0]}_with_sign.pdf`;
                                             document.body.appendChild(link);
                                             link.click();
                                             link.remove();
                                             window.URL.revokeObjectURL(url);
+                                            toast.success('Bill of Supply downloaded with signature');
                                         } catch (err) {
-                                            alert(err.response?.data?.error || 'Failed to generate Bill of Supply PDF');
+                                            toast.error(err.response?.data?.error || 'Failed to generate Bill of Supply PDF');
+                                        }
+                                    },
+                                    // Only show for SALE transactions
+                                    showIf: (item) => item.direction === 'SALE'
+                                },
+                                {
+                                    label: 'Invoice (Without Sign)',
+                                    icon: 'bi bi-file-pdf',
+                                    className: 'btn btn-outline-warning',
+                                    onClick: async (item) => {
+                                        // Only allow for SALE transactions
+                                        if (item.direction !== 'SALE') {
+                                            toast.warning('Bill of Supply can only be generated for SALE transactions');
+                                            return;
+                                        }
+                                        try {
+                                            const response = await api.get(`/trades/${item.id}/generate-bill-of-supply/`, {
+                                                params: { include_signature: false },
+                                                responseType: 'blob'
+                                            });
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            const link = document.createElement('a');
+                                            link.href = url;
+                                            link.download = `Bill_of_Supply_${item.invoice_number}_${new Date().toISOString().split('T')[0]}_without_sign.pdf`;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            link.remove();
+                                            window.URL.revokeObjectURL(url);
+                                            toast.success('Bill of Supply downloaded without signature');
+                                        } catch (err) {
+                                            toast.error(err.response?.data?.error || 'Failed to generate Bill of Supply PDF');
                                         }
                                     },
                                     // Only show for SALE transactions

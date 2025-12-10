@@ -600,7 +600,34 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
                 <div className="card mb-4">
                     <div className="card-body">
-                        <h5 className="mb-3">Allotted Items ({allotment.allotment_details.length})</h5>
+                        <div className="d-flex justify-content-between align-items-center mb-3">
+                            <h5 className="mb-0">Allotted Items ({allotment.allotment_details.length})</h5>
+                            <button
+                                className="btn btn-sm btn-outline-primary"
+                                onClick={() => {
+                                    const headers = ['License', 'Serial', 'Description', 'Exporter', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
+                                    const rows = allotment.allotment_details.map(detail => [
+                                        detail.license_number,
+                                        detail.serial_number,
+                                        detail.product_description,
+                                        detail.exporter,
+                                        detail.license_date,
+                                        detail.license_expiry,
+                                        parseInt(detail.qty || 0).toLocaleString(),
+                                        parseFloat(detail.cif_fc || 0).toFixed(2)
+                                    ]);
+                                    const tsv = [headers.join('\t'), ...rows.map(row => row.join('\t'))].join('\n');
+                                    navigator.clipboard.writeText(tsv).then(() => {
+                                        toast.success('Copied to clipboard!');
+                                    }).catch(() => {
+                                        toast.error('Failed to copy');
+                                    });
+                                }}
+                                title="Copy table data to clipboard"
+                            >
+                                <i className="bi bi-clipboard"></i> Copy
+                            </button>
+                        </div>
                         <div style={{overflowX: 'visible'}}>
                             <table className="table table-sm table-bordered" style={{width: '100%'}}>
                                 <thead className="table-light">

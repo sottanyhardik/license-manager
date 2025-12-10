@@ -597,6 +597,74 @@ export default function MasterList() {
                                     },
                                     // Only show for SALE transactions
                                     showIf: (item) => item.direction === 'SALE'
+                                },
+                                {
+                                    label: 'Copy to Sale',
+                                    icon: 'bi bi-arrow-left-right',
+                                    className: 'btn btn-outline-primary',
+                                    onClick: async (item) => {
+                                        if (!window.confirm(`Create a SALE trade from this PURCHASE trade?`)) {
+                                            return;
+                                        }
+                                        try {
+                                            // Fetch full trade data
+                                            const response = await api.get(`/trades/${item.id}/`);
+                                            const purchaseTrade = response.data;
+
+                                            // Create new SALE trade with swapped companies
+                                            const saleTradeData = {
+                                                direction: 'SALE',
+                                                from_company: purchaseTrade.to_company,  // Swap: purchase TO becomes sale FROM
+                                                to_company: purchaseTrade.from_company,  // Swap: purchase FROM becomes sale TO
+                                                boe: purchaseTrade.boe,
+                                                invoice_number: '',  // Leave empty for user to fill
+                                                invoice_date: new Date().toISOString().split('T')[0],  // Today's date
+                                                remarks: purchaseTrade.remarks || '',
+                                                // Copy company snapshot fields (swapped)
+                                                from_pan: purchaseTrade.to_pan,
+                                                from_gst: purchaseTrade.to_gst,
+                                                from_addr_line_1: purchaseTrade.to_addr_line_1,
+                                                from_addr_line_2: purchaseTrade.to_addr_line_2,
+                                                to_pan: purchaseTrade.from_pan,
+                                                to_gst: purchaseTrade.from_gst,
+                                                to_addr_line_1: purchaseTrade.from_addr_line_1,
+                                                to_addr_line_2: purchaseTrade.from_addr_line_2,
+                                                // Copy lines without IDs (they're new records)
+                                                lines: (purchaseTrade.lines || []).map(line => ({
+                                                    sr_number: line.sr_number,
+                                                    description: line.description,
+                                                    hsn_code: line.hsn_code,
+                                                    mode: line.mode,
+                                                    qty_kg: line.qty_kg,
+                                                    rate_inr_per_kg: line.rate_inr_per_kg,
+                                                    cif_fc: line.cif_fc,
+                                                    exc_rate: line.exc_rate,
+                                                    cif_inr: line.cif_inr,
+                                                    fob_inr: line.fob_inr,
+                                                    pct: line.pct,
+                                                    amount_inr: line.amount_inr
+                                                })),
+                                                payments: []  // Empty payments for new trade
+                                            };
+
+                                            const newResponse = await api.post('/trades/', saleTradeData);
+                                            toast.success('SALE trade created successfully. Opening in edit mode...');
+
+                                            // Save filter state before navigating
+                                            saveFilterState(entityName, {
+                                                filters: filterParams,
+                                                pagination: { currentPage, pageSize },
+                                                search: ''
+                                            });
+
+                                            // Navigate to edit page of the new SALE trade
+                                            navigate(`/trades/${newResponse.data.id}/edit`);
+                                        } catch (err) {
+                                            toast.error(err.response?.data?.error || 'Failed to copy trade to sale');
+                                        }
+                                    },
+                                    // Only show for PURCHASE transactions
+                                    showIf: (item) => item.direction === 'PURCHASE'
                                 }
                             ] : entityName === 'licenses' ? [
                                 {

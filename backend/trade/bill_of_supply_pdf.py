@@ -297,8 +297,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
         all_line_data = line_items_header + line_items_data
         # Total width should be 7.3 inches (same as other tables)
+        # Reduced other columns to give more space to Amount(INR)
         line_items_table = Table(all_line_data,
-                                 colWidths=[2.1 * inch, 0.7 * inch, 1 * inch, 1 * inch, 1 * inch, 0.8 * inch, 0.7 * inch])
+                                 colWidths=[1.9 * inch, 0.6 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 0.7 * inch, 1.4 * inch])
 
     elif billing_mode == 'FOB_INR':
         # FOB_INR Mode: DFIA Number | Mode | FOB (INR) | Percentage (%) | Amount (INR)
@@ -352,7 +353,8 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
         all_line_data = line_items_header + line_items_data
         # Total width should be 7.3 inches (same as other tables)
-        line_items_table = Table(all_line_data, colWidths=[2.5 * inch, 1 * inch, 1.5 * inch, 1 * inch, 1.3 * inch])
+        # Reduced other columns to give more space to Amount(INR)
+        line_items_table = Table(all_line_data, colWidths=[2.3 * inch, 0.8 * inch, 1.3 * inch, 0.8 * inch, 2.1 * inch])
 
     else:  # QTY mode
         # QTY Mode: DFIA Number | Mode | Quantity (KG) | Rate (INR/KG) | Amount (INR)
@@ -406,7 +408,8 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
         all_line_data = line_items_header + line_items_data
         # Total width should be 7.3 inches (same as other tables)
-        line_items_table = Table(all_line_data, colWidths=[2.5 * inch, 1 * inch, 1.5 * inch, 1 * inch, 1.3 * inch])
+        # Reduced other columns to give more space to Amount(INR)
+        line_items_table = Table(all_line_data, colWidths=[2.3 * inch, 0.8 * inch, 1.3 * inch, 0.8 * inch, 2.1 * inch])
 
     line_items_table.setStyle(TableStyle([
         # Header styling
@@ -454,18 +457,29 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     elements.append(Spacer(1, 0.15 * inch))
 
     # Remarks Section
-    remarks_text = f"""
-        <font color="{company_color}"><b>Remark:</b></font><br/>
-        {trade.remarks or 'N/A'}
-    """
+    # Only show BOE details if BOE exists, otherwise leave blank
     if trade.boe:
-        boe_text = f"Bill OF Entry No. {trade.boe.bill_of_entry_number if hasattr(trade.boe, 'bill_of_entry_number') else trade.boe}"
-        boe_date = f"Dated. {trade.boe.bill_of_entry_date if hasattr(trade.boe, 'bill_of_entry_date') else 'N/A'}"
+        boe_number = trade.boe.bill_of_entry_number if hasattr(trade.boe, 'bill_of_entry_number') else str(trade.boe)
+        boe_date = trade.boe.bill_of_entry_date if hasattr(trade.boe, 'bill_of_entry_date') else ''
+
+        # Format date if it's a date object
+        if boe_date:
+            if hasattr(boe_date, 'strftime'):
+                boe_date = boe_date.strftime('%Y-%m-%d')
+            boe_date_text = f"Dated. {boe_date}"
+        else:
+            boe_date_text = ""
+
         remarks_text = f"""
             <font color="{company_color}"><b>Remark:</b></font><br/>
-            {boe_text}<br/>
-            {boe_date}<br/>
-            {trade.remarks or ''}
+            Bill OF Entry No. {boe_number}<br/>
+            {boe_date_text}
+        """
+    else:
+        # Blank remark if no BOE
+        remarks_text = f"""
+            <font color="{company_color}"><b>Remark:</b></font><br/>
+
         """
 
     remarks_para = Paragraph(remarks_text, normal_style)

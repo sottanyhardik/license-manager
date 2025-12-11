@@ -292,7 +292,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         amount = line.amount_inr or 0
         subtotal += amount
 
-        # Get description: license_number - license_date - port_code
+        # Get description: license_number - license_date - port_code (wrapped to 2 lines)
         description = ''
         if line.sr_number and line.sr_number.license:
             lic = line.sr_number.license
@@ -300,13 +300,21 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             license_date = lic.license_date.strftime('%d-%m-%Y') if lic.license_date else ''
             port_code = lic.port.code if lic.port and hasattr(lic.port, 'code') else (lic.port.name if lic.port else '')
 
-            description = f"{license_num}"
+            # Format as: license_num - license_date (line 1)
+            #            port_code (line 2)
+            line1 = f"{license_num}"
             if license_date:
-                description += f" - {license_date}"
+                line1 += f" - {license_date}"
+
             if port_code:
-                description += f" - {port_code}"
+                description = f"{line1}<br/>{port_code}"
+            else:
+                description = line1
         elif line.description:
             description = line.description
+
+        # Wrap description in Paragraph for proper formatting
+        description_para = Paragraph(description, styles['Normal'])
 
         # Build row based on billing mode
         if billing_mode == 'QTY':
@@ -314,34 +322,34 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             total_qty += (line.qty_kg or 0)
             row = [
                 str(idx),
-                description,
+                description_para,
                 line.hsn_code or '',
                 qty_str,
                 f"{line.rate_inr_per_kg:,.2f}" if line.rate_inr_per_kg else "0.00",
-                f"{amount:,.2f}"
+                Paragraph(f"{amount:,.2f}", ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
             ]
         elif billing_mode == 'CIF_INR':
             total_cif_fc += (line.cif_fc or 0)
             total_cif_inr += (line.cif_inr or 0)
             row = [
                 str(idx),
-                description,
+                description_para,
                 line.hsn_code or '',
                 f"{line.cif_fc:,.2f}" if line.cif_fc else "0.00",
                 f"{line.exc_rate:,.2f}" if line.exc_rate else "0.00",
                 f"{line.cif_inr:,.2f}" if line.cif_inr else "0.00",
                 f"{line.pct:.2f}" if line.pct else "0.00",
-                f"{amount:,.2f}"
+                Paragraph(f"{amount:,.2f}", ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
             ]
         else:  # FOB_INR
             total_fob_inr += (line.fob_inr or 0)
             row = [
                 str(idx),
-                description,
+                description_para,
                 line.hsn_code or '',
                 f"{line.fob_inr:,.2f}" if line.fob_inr else "0.00",
                 f"{line.pct:.2f}" if line.pct else "0.00",
-                f"{amount:,.2f}"
+                Paragraph(f"{amount:,.2f}", ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
             ]
 
         items_data.append(row)
@@ -355,7 +363,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     roundoff_row = [''] * col_count
     roundoff_row[1] = Paragraph('<i>Less :</i>', ParagraphStyle('italic', parent=styles['Normal'], fontSize=9))
     roundoff_row[2] = Paragraph('<b><i>Rounding Off</i></b>', ParagraphStyle('italic', parent=styles['Normal'], fontSize=9, fontName='Helvetica-BoldOblique'))
-    roundoff_row[-1] = f"{roundoff_sign}{abs(roundoff):.2f}"
+    roundoff_row[-1] = Paragraph(f"{roundoff_sign}{abs(roundoff):.2f}", ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
     items_data.append(roundoff_row)
 
     # Add empty rows for spacing (min 10 rows total)
@@ -494,42 +502,86 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
     if include_signature and from_company:
         # Add signature/stamp if requested
-        sig_cell = []
-        sig_cell.append(Paragraph(f'<b>for {from_company.name}</b>',
-                                  ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT, spaceAfter=60)))
+        sig_rows = []
+
+        # First row: "for Company Name"
+        sig_rows.append([Paragraph(f'<b>for {from_company.name}</b>',
+                                   ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))])
+
+        # Second row: Signature and Stamp side by side
+        sig_stamp_row = []
 
         # Try to add signature image
-        if hasattr(from_company, 'digital_signature') and from_company.digital_signature:
+        sig_img = None
+        if hasattr(from_company, 'signature') and from_company.signature:
             try:
                 import os
-                sig_path = from_company.digital_signature.path
+                sig_path = from_company.signature.path
                 if os.path.exists(sig_path):
-                    sig_img = Image(sig_path, width=1.5*inch, height=0.75*inch)
-                    sig_cell.append(sig_img)
+                    sig_img = Image(sig_path, width=1.2*inch, height=0.6*inch)
             except Exception as e:
-                # Silently skip if signature image fails
-                pass
+                logger.error(f"Failed to load signature: {e}")
+                sig_img = None
 
-        # Try to add stamp image
+        # Try to add stamp image (100% original size up to max 1.5 inches)
+        stamp_img = None
         if hasattr(from_company, 'stamp') and from_company.stamp:
             try:
                 import os
+                from PIL import Image as PILImage
                 stamp_path = from_company.stamp.path
                 if os.path.exists(stamp_path):
-                    stamp_img = Image(stamp_path, width=1*inch, height=1*inch)
-                    sig_cell.append(stamp_img)
+                    # Get original stamp dimensions
+                    pil_stamp = PILImage.open(stamp_path)
+                    stamp_width, stamp_height = pil_stamp.size
+
+                    # Use original aspect ratio, max size 1.5 inches
+                    max_size = 1.5 * inch
+                    aspect = stamp_height / float(stamp_width)
+
+                    if aspect > 1:
+                        # Taller than wide
+                        display_height = min(max_size, stamp_height)
+                        display_width = display_height / aspect
+                    else:
+                        # Wider than tall or square
+                        display_width = min(max_size, stamp_width)
+                        display_height = display_width * aspect
+
+                    stamp_img = Image(stamp_path, width=display_width, height=display_height)
             except Exception as e:
-                # Silently skip if stamp image fails
-                pass
+                logger.error(f"Failed to load stamp: {e}")
+                stamp_img = None
 
-        sig_cell.append(Paragraph('<b>Authorised Signatory</b>',
-                                  ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT, spaceAfter=10)))
+        # Create horizontal layout for signature and stamp
+        if sig_img and stamp_img:
+            # Both signature and stamp - place side by side
+            sig_stamp_table = Table([[sig_img, stamp_img]], colWidths=[1.5*inch, 1*inch])
+            sig_stamp_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            sig_rows.append([sig_stamp_table])
+        elif sig_img:
+            sig_rows.append([sig_img])
+        elif stamp_img:
+            sig_rows.append([stamp_img])
+        else:
+            # No images, add spacing
+            sig_rows.append([Paragraph('<br/><br/>', styles['Normal'])])
 
-        # Use a nested table for signature cell with minimum height
-        sig_table = Table([[item] for item in sig_cell], colWidths=[page_width*0.3], rowHeights=[20] + [None]*(len(sig_cell)-1))
+        # Last row: "Authorised Signatory"
+        sig_rows.append([Paragraph('<b>Authorised Signatory</b>',
+                                   ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))])
+
+        # Create signature table
+        sig_table = Table(sig_rows, colWidths=[page_width*0.3])
         sig_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
         ]))
         declaration_data[0][1] = sig_table
     else:

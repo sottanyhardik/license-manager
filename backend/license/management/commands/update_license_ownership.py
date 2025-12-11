@@ -22,6 +22,7 @@ APP_ID = "204000000"
 SESSION_ID = "A2B93634A5BD42AB7CD0AC7FE0646FD0"
 CSRF_TOKEN = "4a119454-6bab-40b7-adb3-b042224073e8"
 SLEEP_INTERVAL = 2  # seconds
+BATCH_SIZE = 20  # Number of licenses to send to server in each batch
 
 # Global session for authentication
 auth_token = None
@@ -224,12 +225,11 @@ def save_ownership_locally(dfia, data):
         return False
 
 
-def fetch_and_update_ownership(dfia, update_server=True):
+def fetch_and_update_ownership(dfia):
     """
-    Fetch ownership info from PRC, save locally, and optionally update server.
+    Fetch ownership info from PRC and save locally.
+    Returns tuple: (success, payload_or_none, error_msg_or_none)
     """
-    global auth_token
-
     try:
         # Step 1: Fetch from PRC
         response = fetch_scrip_ownership(
@@ -245,37 +245,78 @@ def fetch_and_update_ownership(dfia, update_server=True):
 
         # Step 2: Save to local database
         saved_locally = save_ownership_locally(dfia, data)
-        local_status = "💾 Saved locally" if saved_locally else "⚠️  Local save failed"
 
-        # Step 3: Upload to server if requested
-        if update_server:
-            payload = build_payload(dfia, data)
+        if not saved_locally:
+            return (False, None, "Local save failed")
 
-            # Add authentication header
-            headers = {}
-            if auth_token:
-                headers['Authorization'] = f'Bearer {auth_token}'
-
-            res = requests.post(SERVER_API, json=payload, headers=headers)
-
-            if res.status_code in [200, 201]:
-                print(f"✅ {dfia.license_number} | {local_status} | 🌐 Synced to server")
-            elif res.status_code == 401:
-                # Retry with re-authentication
-                if authenticate():
-                    headers['Authorization'] = f'Bearer {auth_token}'
-                    res = requests.post(SERVER_API, json=payload, headers=headers)
-                    if res.status_code in [200, 201]:
-                        print(f"✅ {dfia.license_number} | {local_status} | 🌐 Synced to server (retry)")
-                    else:
-                        print(f"❌ {dfia.license_number} | {local_status} | Server error: {res.status_code}")
-            else:
-                print(f"❌ {dfia.license_number} | {local_status} | Server error: {res.status_code}")
-        else:
-            print(f"✅ {dfia.license_number} | {local_status}")
+        # Step 3: Build payload for server
+        payload = build_payload(dfia, data)
+        return (True, payload, None)
 
     except Exception as e:
-        print(f"❌ {dfia.license_number} | Error: {e}")
+        return (False, None, str(e))
+
+
+def bulk_sync_to_server(payloads):
+    """
+    Send all payloads to server in a single batch request.
+    """
+    global auth_token
+
+    if not payloads:
+        return {"success": 0, "failed": 0}
+
+    try:
+        headers = {}
+        if auth_token:
+            headers['Authorization'] = f'Bearer {auth_token}'
+
+        # Send batch request
+        batch_payload = {"licenses": payloads}
+        res = requests.post(
+            f"{SERVER_BASE_URL}/api/license-actions/bulk-update-license-transfer/",
+            json=batch_payload,
+            headers=headers,
+            timeout=300  # 5 minutes for bulk operation
+        )
+
+        if res.status_code in [200, 201]:
+            result = res.json()
+            return {
+                "success": result.get("success", len(payloads)),
+                "failed": result.get("failed", 0),
+                "errors": result.get("errors", [])
+            }
+        elif res.status_code == 401:
+            # Retry with re-authentication
+            if authenticate():
+                headers['Authorization'] = f'Bearer {auth_token}'
+                res = requests.post(
+                    f"{SERVER_BASE_URL}/api/license-actions/bulk-update-license-transfer/",
+                    json=batch_payload,
+                    headers=headers,
+                    timeout=300
+                )
+                if res.status_code in [200, 201]:
+                    result = res.json()
+                    return {
+                        "success": result.get("success", len(payloads)),
+                        "failed": result.get("failed", 0),
+                        "errors": result.get("errors", [])
+                    }
+
+        return {
+            "success": 0,
+            "failed": len(payloads),
+            "errors": [f"Server error: {res.status_code} - {res.text}"]
+        }
+
+    except Exception as e:
+        return {
+            "success": 0,
+            "failed": len(payloads),
+            "errors": [str(e)]
+        }
 
 
 class Command(BaseCommand):
@@ -302,7 +343,7 @@ class Command(BaseCommand):
         self.stdout.write("📋 License Ownership Update Tool")
         self.stdout.write("="*80)
         self.stdout.write(f"Server: {SERVER_BASE_URL}")
-        self.stdout.write(f"Mode: {'LOCAL ONLY' if local_only else 'LOCAL + SERVER SYNC'}")
+        self.stdout.write(f"Mode: {'LOCAL ONLY' if local_only else 'LOCAL + BULK SERVER SYNC'}")
         self.stdout.write("="*80)
 
         # Authenticate with server if syncing
@@ -322,26 +363,100 @@ class Command(BaseCommand):
         self.stdout.write(f"\n🔎 Found {total} licenses to process")
         self.stdout.write("-"*80)
 
-        # Process each license
+        # Process each license and collect payloads
         success_count = 0
         failed_count = 0
+        payloads = []
+        failed_licenses = []
 
         for idx, dfia in enumerate(licenses, 1):
             self.stdout.write(f"\n[{idx}/{total}] Processing {dfia.license_number}...")
             try:
-                fetch_and_update_ownership(dfia, update_server=not local_only)
-                success_count += 1
+                success, payload, error = fetch_and_update_ownership(dfia)
+
+                if success:
+                    self.stdout.write(f"   ✅ Fetched and saved locally")
+                    payloads.append(payload)
+                    success_count += 1
+                else:
+                    self.stdout.write(self.style.ERROR(f"   ❌ Failed: {error}"))
+                    failed_licenses.append((dfia.license_number, error))
+                    failed_count += 1
+
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"    Failed: {e}"))
+                self.stdout.write(self.style.ERROR(f"   ❌ Failed: {e}"))
+                failed_licenses.append((dfia.license_number, str(e)))
                 failed_count += 1
 
             time.sleep(SLEEP_INTERVAL)
 
-        # Summary
+        # Bulk sync to server in batches
+        if not local_only and payloads:
+            self.stdout.write("\n" + "-"*80)
+            self.stdout.write(f"🌐 Syncing {len(payloads)} licenses to server in batches of {BATCH_SIZE}...")
+
+            total_synced = 0
+            total_failed = 0
+            all_errors = []
+
+            # Split payloads into batches of BATCH_SIZE
+            for i in range(0, len(payloads), BATCH_SIZE):
+                batch = payloads[i:i + BATCH_SIZE]
+                batch_num = (i // BATCH_SIZE) + 1
+                total_batches = (len(payloads) + BATCH_SIZE - 1) // BATCH_SIZE
+
+                self.stdout.write(f"\n   📦 Batch {batch_num}/{total_batches} ({len(batch)} licenses)...")
+
+                result = bulk_sync_to_server(batch)
+
+                batch_success = result.get("success", 0)
+                batch_failed = result.get("failed", 0)
+
+                total_synced += batch_success
+                total_failed += batch_failed
+
+                if batch_success > 0:
+                    self.stdout.write(self.style.SUCCESS(
+                        f"      ✅ Synced {batch_success}/{len(batch)} licenses"
+                    ))
+
+                if batch_failed > 0:
+                    self.stdout.write(self.style.ERROR(
+                        f"      ❌ Failed {batch_failed}/{len(batch)} licenses"
+                    ))
+
+                if result.get("errors"):
+                    all_errors.extend(result["errors"])
+
+                # Small delay between batches
+                if i + BATCH_SIZE < len(payloads):
+                    time.sleep(1)
+
+            # Summary of server sync
+            self.stdout.write("\n" + "-"*80)
+            self.stdout.write(f"📊 Server Sync Summary:")
+            self.stdout.write(f"   ✅ Total Synced: {total_synced}")
+            self.stdout.write(f"   ❌ Total Failed: {total_failed}")
+
+            if all_errors:
+                self.stdout.write(f"\n   Errors (first 10):")
+                for error in all_errors[:10]:
+                    self.stdout.write(f"      • {error}")
+
+        # Final Summary
         self.stdout.write("\n" + "="*80)
         self.stdout.write(self.style.SUCCESS("✅ Ownership update complete!"))
-        self.stdout.write(f"📊 Summary:")
-        self.stdout.write(f"   ✅ Success: {success_count}")
-        self.stdout.write(f"   ❌ Failed: {failed_count}")
-        self.stdout.write(f"   📝 Total: {total}")
+        self.stdout.write(f"📊 Final Summary:")
+        self.stdout.write(f"   ✅ Local Success: {success_count}")
+        self.stdout.write(f"   ❌ Local Failed: {failed_count}")
+        self.stdout.write(f"   📝 Total Processed: {total}")
+
+        if not local_only and payloads:
+            self.stdout.write(f"   🌐 Server Synced: {total_synced}/{len(payloads)}")
+
+        if failed_licenses:
+            self.stdout.write(f"\n❌ Failed licenses:")
+            for lic_num, error in failed_licenses[:10]:  # Show first 10
+                self.stdout.write(f"   • {lic_num}: {error}")
+
         self.stdout.write("="*80)

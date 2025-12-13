@@ -572,7 +572,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
         obj = LicenseImportItemsModel.objects.create(license=license_inst, **payload)
         if isinstance(items, Iterable):
-            obj.items.set(items)
+            # Only set items if the import item has no items linked yet
+            if not obj.items.exists():
+                obj.items.set(items)
 
         # Save description to ProductDescriptionModel if both description and hs_code exist
         # Use the converted hs_code from payload (which is now a model instance)
@@ -802,9 +804,11 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                                     setattr(obj, key, value)
                         obj.save()
 
-                        # Update M2M relationship
+                        # Update M2M relationship - only if items is empty
                         if isinstance(items_list, list):
-                            obj.items.set(items_list)
+                            # Only update items if no items are currently linked
+                            if not obj.items.exists():
+                                obj.items.set(items_list)
 
                         # Trigger signal to ensure ItemNameModel items are linked
                         try:
@@ -848,9 +852,11 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                                     setattr(obj, key, value)
                         obj.save()
 
-                        # Update M2M relationship
+                        # Update M2M relationship - only if items is empty
                         if isinstance(items_list, list):
-                            obj.items.set(items_list)
+                            # Only update items if no items are currently linked
+                            if not obj.items.exists():
+                                obj.items.set(items_list)
 
                         # Trigger signal to ensure ItemNameModel items are linked
                         try:

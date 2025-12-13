@@ -235,8 +235,12 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
 
                 if matched:
                     # Link this item (allows multiple items to be linked)
-                    logger.info(f"Linking item {item_name.id} ({item_name.name}) to import item {instance.id}")
-                    instance.items.add(item_name)
+                    # Only add if not already linked
+                    if not instance.items.filter(id=item_name.id).exists():
+                        logger.info(f"Linking item {item_name.id} ({item_name.name}) to import item {instance.id}")
+                        instance.items.add(item_name)
+                    else:
+                        logger.debug(f"Item {item_name.id} already linked to import item {instance.id}")
 
                     # Update is_restricted flag if item has restriction
                     if item_name.restriction_percentage > 0 and not instance.is_restricted:

@@ -473,23 +473,10 @@ class Command(BaseCommand):
                         failed_licenses.append((dfia.license_number, error))
                         failed_count += 1
 
-                        # Check if we should stop on errors
-                        if not skip_errors and "Network error" in error:
-                            self.stdout.write(self.style.ERROR(
-                                "\n⚠️  Network error detected. Use --skip-errors to continue processing."
-                            ))
-                            break
-
                 except Exception as e:
                     self.stdout.write(self.style.ERROR(f"   ❌ Failed: {e}"))
                     failed_licenses.append((dfia.license_number, str(e)))
                     failed_count += 1
-
-                    if not skip_errors:
-                        self.stdout.write(self.style.ERROR(
-                            "\n⚠️  Error detected. Use --skip-errors to continue processing."
-                        ))
-                        break
 
                 time.sleep(SLEEP_INTERVAL)
 
@@ -524,8 +511,15 @@ class Command(BaseCommand):
                 self.stdout.write("-"*80)
 
             # Check if we should stop (error occurred and skip_errors is False)
-            if not skip_errors and failed_count > len(failed_licenses) - 1:
+            # Only break if we encountered an error in this batch
+            if not skip_errors and failed_count > 0 and len(batch_payloads) == 0:
+                # No successful fetches in this batch and skip_errors is False
+                self.stdout.write(self.style.ERROR(
+                    "\n⚠️  No successful fetches in batch. Stopping. Use --skip-errors to continue."
+                ))
                 break
+
+            # Continue to next batch regardless of individual failures if skip_errors is True
 
         # Final Summary
         self.stdout.write("\n" + "="*80)

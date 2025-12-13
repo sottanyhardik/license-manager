@@ -1,3 +1,4 @@
+import os
 import requests
 
 
@@ -7,10 +8,15 @@ def fetch_scrip_ownership(
     iec_number: str,
     app_id: str,
     session_id: str,
-    csrf_token: str
+    csrf_token: str,
+    proxy: str = None
 ):
     """
     Fetch the current ownership and transfer status of a scrip from DGFT.
+
+    Args:
+        proxy: Optional proxy URL (e.g., "http://proxy.example.com:8080" or "socks5://proxy.example.com:1080")
+               If not provided, will check DGFT_PROXY environment variable
     """
     url = "https://www.dgft.gov.in/CP/webHP"
 
@@ -48,6 +54,16 @@ def fetch_scrip_ownership(
         "appId": app_id
     }
 
+    # Get proxy from parameter or environment variable
+    proxy_url = proxy or os.getenv('DGFT_PROXY')
+    proxies = None
+
+    if proxy_url:
+        proxies = {
+            'http': proxy_url,
+            'https': proxy_url
+        }
+
     try:
         response = requests.post(
             url,
@@ -55,9 +71,10 @@ def fetch_scrip_ownership(
             cookies=cookies,
             headers=headers,
             data=data,
-            timeout=15  # Optional: prevent hanging
+            proxies=proxies,
+            timeout=30
         )
-        response.raise_for_status()  # Raise error if HTTP error occurred
+        response.raise_for_status()
         return response
     except requests.RequestException as e:
         print(f"❌ Error fetching scrip ownership: {e}")

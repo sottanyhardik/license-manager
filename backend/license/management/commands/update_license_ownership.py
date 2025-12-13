@@ -18,9 +18,17 @@ SERVER_AUTH_URL = f"{SERVER_BASE_URL}/api/auth/login/"
 SERVER_USERNAME = os.getenv('SERVER_USERNAME', 'admin')
 SERVER_PASSWORD = os.getenv('SERVER_PASSWORD', 'admin@123')
 
+# DGFT API Config
 APP_ID = "204000000"
 SESSION_ID = "A2B93634A5BD42AB7CD0AC7FE0646FD0"
 CSRF_TOKEN = "4a119454-6bab-40b7-adb3-b042224073e8"
+
+# Proxy configuration - set via DGFT_PROXY environment variable
+# Examples:
+#   export DGFT_PROXY="http://proxy.example.com:8080"
+#   export DGFT_PROXY="socks5://127.0.0.1:1080"
+DGFT_PROXY = os.getenv('DGFT_PROXY')
+
 SLEEP_INTERVAL = 2  # seconds
 BATCH_SIZE = 20  # Number of licenses to send to server in each batch
 
@@ -30,10 +38,30 @@ auth_token = None
 
 def fetch_eligible_licenses():
     """
-    Get all licenses with expiry date in the future.
+    Get licenses with:
+    - Expiry date >= 2025-06-01
+    - CIF balance > $200
+    - At least one allotment item with is_boe = False
     """
+    from django.db.models import Q, Exists, OuterRef
+    from allotment.models import AllotmentItems
+
+    # Subquery to check if license has allotment items with is_boe = False
+    # AllotmentItems -> item (LicenseImportItemsModel) -> license (LicenseDetailsModel)
+    has_non_boe_items = Exists(
+        AllotmentItems.objects.filter(
+            item__license=OuterRef('pk'),
+            is_boe=False
+        )
+    )
+
     return LicenseDetailsModel.objects.filter(
-        license_expiry_date__gte="2025-06-01"
+        license_expiry_date__gte="2025-06-01",
+        balance_cif__gt=200,  # CIF balance > $200
+    ).annotate(
+        has_non_boe_allotment=has_non_boe_items
+    ).filter(
+        has_non_boe_allotment=True
     ).order_by("-license_expiry_date")
 
 
@@ -225,36 +253,58 @@ def save_ownership_locally(dfia, data):
         return False
 
 
-def fetch_and_update_ownership(dfia):
+def fetch_and_update_ownership(dfia, max_retries=3, proxy=None):
     """
     Fetch ownership info from PRC and save locally.
     Returns tuple: (success, payload_or_none, error_msg_or_none)
     """
-    try:
-        # Step 1: Fetch from PRC
-        response = fetch_scrip_ownership(
-            scrip_number=dfia.license_number,
-            scrip_issue_date=dfia.license_date.strftime('%d/%m/%Y'),
-            iec_number=dfia.exporter.iec,
-            app_id=APP_ID,
-            session_id=SESSION_ID,
-            csrf_token=CSRF_TOKEN
-        )
+    import requests.exceptions
 
-        data = response.json()
+    for attempt in range(max_retries):
+        try:
+            # Step 1: Fetch from PRC
+            response = fetch_scrip_ownership(
+                scrip_number=dfia.license_number,
+                scrip_issue_date=dfia.license_date.strftime('%d/%m/%Y'),
+                iec_number=dfia.exporter.iec,
+                app_id=APP_ID,
+                session_id=SESSION_ID,
+                csrf_token=CSRF_TOKEN,
+                proxy=proxy
+            )
 
-        # Step 2: Save to local database
-        saved_locally = save_ownership_locally(dfia, data)
+            if response is None:
+                if attempt < max_retries - 1:
+                    time.sleep(5)  # Wait before retry
+                    continue
+                return (False, None, "Failed to fetch from PRC API")
 
-        if not saved_locally:
-            return (False, None, "Local save failed")
+            data = response.json()
 
-        # Step 3: Build payload for server
-        payload = build_payload(dfia, data)
-        return (True, payload, None)
+            # Step 2: Save to local database
+            saved_locally = save_ownership_locally(dfia, data)
 
-    except Exception as e:
-        return (False, None, str(e))
+            if not saved_locally:
+                return (False, None, "Local save failed")
+
+            # Step 3: Build payload for server
+            payload = build_payload(dfia, data)
+            return (True, payload, None)
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            if attempt < max_retries - 1:
+                print(f"   ⚠️  Connection error, retrying ({attempt + 1}/{max_retries})...")
+                time.sleep(5)
+                continue
+            return (False, None, f"Network error after {max_retries} attempts: {str(e)}")
+        except AttributeError as e:
+            if "'NoneType' object has no attribute 'json'" in str(e):
+                return (False, None, "PRC API returned empty response")
+            return (False, None, str(e))
+        except Exception as e:
+            return (False, None, str(e))
+
+    return (False, None, "Max retries exceeded")
 
 
 def bulk_sync_to_server(payloads):
@@ -334,16 +384,40 @@ class Command(BaseCommand):
             default=None,
             help='Limit number of licenses to process',
         )
+        parser.add_argument(
+            '--skip-errors',
+            action='store_true',
+            help='Continue processing even if network errors occur',
+        )
+        parser.add_argument(
+            '--retry-count',
+            type=int,
+            default=3,
+            help='Number of retries for failed API calls (default: 3)',
+        )
+        parser.add_argument(
+            '--proxy',
+            type=str,
+            default=None,
+            help='Proxy URL for DGFT API (e.g., http://proxy:8080 or socks5://127.0.0.1:1080)',
+        )
 
     def handle(self, *args, **options):
         local_only = options['local_only']
         limit = options['limit']
+        skip_errors = options['skip_errors']
+        retry_count = options['retry_count']
+        proxy = options['proxy'] or DGFT_PROXY
 
         self.stdout.write("="*80)
         self.stdout.write("📋 License Ownership Update Tool")
         self.stdout.write("="*80)
         self.stdout.write(f"Server: {SERVER_BASE_URL}")
         self.stdout.write(f"Mode: {'LOCAL ONLY' if local_only else 'LOCAL + BULK SERVER SYNC'}")
+        self.stdout.write(f"Retry Count: {retry_count}")
+        self.stdout.write(f"Skip Errors: {'Yes' if skip_errors else 'No'}")
+        if proxy:
+            self.stdout.write(f"Proxy: {proxy}")
         self.stdout.write("="*80)
 
         # Authenticate with server if syncing
@@ -363,85 +437,95 @@ class Command(BaseCommand):
         self.stdout.write(f"\n🔎 Found {total} licenses to process")
         self.stdout.write("-"*80)
 
-        # Process each license and collect payloads
+        # Process licenses in batches: fetch batch, then sync to server
         success_count = 0
         failed_count = 0
-        payloads = []
+        total_synced = 0
+        total_sync_failed = 0
         failed_licenses = []
+        all_sync_errors = []
 
-        for idx, dfia in enumerate(licenses, 1):
-            self.stdout.write(f"\n[{idx}/{total}] Processing {dfia.license_number}...")
-            try:
-                success, payload, error = fetch_and_update_ownership(dfia)
+        # Process in batches of BATCH_SIZE
+        for batch_start in range(0, total, BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, total)
+            batch_licenses = list(licenses[batch_start:batch_end])
+            batch_num = (batch_start // BATCH_SIZE) + 1
+            total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
 
-                if success:
-                    self.stdout.write(f"   ✅ Fetched and saved locally")
-                    payloads.append(payload)
-                    success_count += 1
-                else:
-                    self.stdout.write(self.style.ERROR(f"   ❌ Failed: {error}"))
-                    failed_licenses.append((dfia.license_number, error))
+            self.stdout.write("\n" + "="*80)
+            self.stdout.write(f"📦 BATCH {batch_num}/{total_batches} - Processing licenses {batch_start + 1} to {batch_end}")
+            self.stdout.write("="*80)
+
+            # Step 1: Fetch and save locally for this batch
+            batch_payloads = []
+
+            for idx, dfia in enumerate(batch_licenses, start=batch_start + 1):
+                self.stdout.write(f"\n[{idx}/{total}] Processing {dfia.license_number}...")
+                try:
+                    success, payload, error = fetch_and_update_ownership(dfia, max_retries=retry_count, proxy=proxy)
+
+                    if success:
+                        self.stdout.write(f"   ✅ Fetched and saved locally")
+                        batch_payloads.append(payload)
+                        success_count += 1
+                    else:
+                        self.stdout.write(self.style.ERROR(f"   ❌ Failed: {error}"))
+                        failed_licenses.append((dfia.license_number, error))
+                        failed_count += 1
+
+                        # Check if we should stop on errors
+                        if not skip_errors and "Network error" in error:
+                            self.stdout.write(self.style.ERROR(
+                                "\n⚠️  Network error detected. Use --skip-errors to continue processing."
+                            ))
+                            break
+
+                except Exception as e:
+                    self.stdout.write(self.style.ERROR(f"   ❌ Failed: {e}"))
+                    failed_licenses.append((dfia.license_number, str(e)))
                     failed_count += 1
 
-            except Exception as e:
-                self.stdout.write(self.style.ERROR(f"   ❌ Failed: {e}"))
-                failed_licenses.append((dfia.license_number, str(e)))
-                failed_count += 1
+                    if not skip_errors:
+                        self.stdout.write(self.style.ERROR(
+                            "\n⚠️  Error detected. Use --skip-errors to continue processing."
+                        ))
+                        break
 
-            time.sleep(SLEEP_INTERVAL)
+                time.sleep(SLEEP_INTERVAL)
 
-        # Bulk sync to server in batches
-        if not local_only and payloads:
-            self.stdout.write("\n" + "-"*80)
-            self.stdout.write(f"🌐 Syncing {len(payloads)} licenses to server in batches of {BATCH_SIZE}...")
+            # Step 2: Sync this batch to server (if not local-only and we have data)
+            if not local_only and batch_payloads:
+                self.stdout.write("\n" + "-"*80)
+                self.stdout.write(f"🌐 Syncing batch {batch_num} ({len(batch_payloads)} licenses) to server...")
 
-            total_synced = 0
-            total_failed = 0
-            all_errors = []
-
-            # Split payloads into batches of BATCH_SIZE
-            for i in range(0, len(payloads), BATCH_SIZE):
-                batch = payloads[i:i + BATCH_SIZE]
-                batch_num = (i // BATCH_SIZE) + 1
-                total_batches = (len(payloads) + BATCH_SIZE - 1) // BATCH_SIZE
-
-                self.stdout.write(f"\n   📦 Batch {batch_num}/{total_batches} ({len(batch)} licenses)...")
-
-                result = bulk_sync_to_server(batch)
+                result = bulk_sync_to_server(batch_payloads)
 
                 batch_success = result.get("success", 0)
                 batch_failed = result.get("failed", 0)
 
                 total_synced += batch_success
-                total_failed += batch_failed
+                total_sync_failed += batch_failed
 
                 if batch_success > 0:
                     self.stdout.write(self.style.SUCCESS(
-                        f"      ✅ Synced {batch_success}/{len(batch)} licenses"
+                        f"   ✅ Successfully synced {batch_success}/{len(batch_payloads)} licenses"
                     ))
 
                 if batch_failed > 0:
                     self.stdout.write(self.style.ERROR(
-                        f"      ❌ Failed {batch_failed}/{len(batch)} licenses"
+                        f"   ❌ Failed to sync {batch_failed}/{len(batch_payloads)} licenses"
                     ))
 
                 if result.get("errors"):
-                    all_errors.extend(result["errors"])
+                    all_sync_errors.extend(result["errors"])
+                    for error in result["errors"][:3]:  # Show first 3 errors for this batch
+                        self.stdout.write(f"      • {error}")
 
-                # Small delay between batches
-                if i + BATCH_SIZE < len(payloads):
-                    time.sleep(1)
+                self.stdout.write("-"*80)
 
-            # Summary of server sync
-            self.stdout.write("\n" + "-"*80)
-            self.stdout.write(f"📊 Server Sync Summary:")
-            self.stdout.write(f"   ✅ Total Synced: {total_synced}")
-            self.stdout.write(f"   ❌ Total Failed: {total_failed}")
-
-            if all_errors:
-                self.stdout.write(f"\n   Errors (first 10):")
-                for error in all_errors[:10]:
-                    self.stdout.write(f"      • {error}")
+            # Check if we should stop (error occurred and skip_errors is False)
+            if not skip_errors and failed_count > len(failed_licenses) - 1:
+                break
 
         # Final Summary
         self.stdout.write("\n" + "="*80)
@@ -449,14 +533,21 @@ class Command(BaseCommand):
         self.stdout.write(f"📊 Final Summary:")
         self.stdout.write(f"   ✅ Local Success: {success_count}")
         self.stdout.write(f"   ❌ Local Failed: {failed_count}")
-        self.stdout.write(f"   📝 Total Processed: {total}")
+        self.stdout.write(f"   📝 Total Processed: {success_count + failed_count}")
 
-        if not local_only and payloads:
-            self.stdout.write(f"   🌐 Server Synced: {total_synced}/{len(payloads)}")
+        if not local_only and total_synced > 0:
+            self.stdout.write(f"   🌐 Server Synced: {total_synced}")
+            if total_sync_failed > 0:
+                self.stdout.write(f"   🌐 Server Failed: {total_sync_failed}")
 
         if failed_licenses:
             self.stdout.write(f"\n❌ Failed licenses:")
             for lic_num, error in failed_licenses[:10]:  # Show first 10
                 self.stdout.write(f"   • {lic_num}: {error}")
+
+        if all_sync_errors:
+            self.stdout.write(f"\n⚠️  Server sync errors (first 10):")
+            for error in all_sync_errors[:10]:
+                self.stdout.write(f"   • {error}")
 
         self.stdout.write("="*80)

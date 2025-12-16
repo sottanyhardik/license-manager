@@ -160,6 +160,9 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
 
         # Update nested item details if provided
         if item_details_data is not None:
+            # Track IDs of items that should exist after update
+            updated_item_ids = []
+
             for item_data in item_details_data:
                 # Get sr_number - handle both object and ID
                 sr_number = item_data.get('sr_number')
@@ -193,24 +196,40 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                         # Update sr_number separately
                         item_instance.sr_number_id = sr_number_id
                         item_instance.save()
+                        updated_item_ids.append(item_id)
                     except RowDetails.DoesNotExist:
                         # If item doesn't exist, use update_or_create to avoid duplicates
                         item_data_clean['sr_number_id'] = sr_number_id
-                        RowDetails.objects.update_or_create(
+                        item_instance, created = RowDetails.objects.update_or_create(
                             bill_of_entry=instance,
                             sr_number_id=sr_number_id,
                             transaction_type=transaction_type,
                             defaults=item_data_clean
                         )
+                        updated_item_ids.append(item_instance.id)
                 else:
                     # No ID provided - use update_or_create to handle duplicates
                     item_data_clean['sr_number_id'] = sr_number_id
-                    RowDetails.objects.update_or_create(
+                    item_instance, created = RowDetails.objects.update_or_create(
                         bill_of_entry=instance,
                         sr_number_id=sr_number_id,
                         transaction_type=transaction_type,
                         defaults=item_data_clean
                     )
+                    updated_item_ids.append(item_instance.id)
+
+            # Delete items that were not in the update list
+            RowDetails.objects.filter(
+                bill_of_entry=instance
+            ).exclude(
+                id__in=updated_item_ids
+            ).delete()
+
+            # Clear cached properties to force recalculation
+            if hasattr(instance, 'item_details_cached'):
+                delattr(instance, 'item_details_cached')
+            if hasattr(instance, 'get_licenses'):
+                delattr(instance, 'get_licenses')
 
         return instance
 

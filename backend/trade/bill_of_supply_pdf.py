@@ -597,8 +597,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         # Set signature in the last row's right column
         declaration_data[-1][1] = sig_table
     else:
+        # No signature/stamp - just show spacing and Authorised Signatory (for Company already in Bank Details row)
         declaration_data[-1][1] = Paragraph(
-            f'<b>for {from_company.name if from_company else ""}</b><br/><br/><br/><br/><br/><br/>'
+            '<br/><br/><br/><br/><br/><br/>'
             '<b>Authorised Signatory</b>',
             ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT)
         )

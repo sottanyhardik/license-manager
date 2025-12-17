@@ -44,11 +44,11 @@ def parse_date_safe(
         return value.date()
 
     if isinstance(value, str):
-        # Try common date formats
+        # Try common date formats - dd-mm-yyyy first (primary format)
         formats = [
-            '%Y-%m-%d',
-            '%d/%m/%Y',
             '%d-%m-%Y',
+            '%d/%m/%Y',
+            '%Y-%m-%d',
             '%Y/%m/%d',
             '%d.%m.%Y',
         ]
@@ -64,21 +64,21 @@ def parse_date_safe(
 
 def format_date(
         value: Union[date, datetime, None],
-        format_str: str = '%Y-%m-%d'
+        format_str: str = '%d-%m-%Y'
 ) -> str:
     """
     Format a date as a string.
-    
+
     Args:
         value: Date to format
-        format_str: Output format string
-        
+        format_str: Output format string (default: '%d-%m-%Y' for dd-mm-yyyy)
+
     Returns:
         Formatted date string or empty string if value is None
-        
+
     Examples:
         >>> format_date(date(2024, 1, 15))
-        '2024-01-15'
+        '15-01-2024'
         >>> format_date(date(2024, 1, 15), '%d/%m/%Y')
         '15/01/2024'
     """
@@ -318,24 +318,24 @@ def get_date_range_from_filter(
 def format_date_range(
         start_date: Union[date, datetime, None],
         end_date: Union[date, datetime, None],
-        format_str: str = '%Y-%m-%d',
+        format_str: str = '%d-%m-%Y',
         separator: str = ' to '
 ) -> str:
     """
     Format a date range as a string.
-    
+
     Args:
         start_date: Start date
         end_date: End date
-        format_str: Format string for dates
+        format_str: Format string for dates (default: '%d-%m-%Y' for dd-mm-yyyy)
         separator: Separator between dates
-        
+
     Returns:
         Formatted date range string
-        
+
     Examples:
         >>> format_date_range(date(2024, 1, 1), date(2024, 12, 31))
-        '2024-01-01 to 2024-12-31'
+        '01-01-2024 to 31-12-2024'
     """
     start_str = format_date(start_date, format_str)
     end_str = format_date(end_date, format_str)

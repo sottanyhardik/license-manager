@@ -23,33 +23,33 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     def get_ledger(self, obj):
         ledger = obj.ledger
         if isinstance(ledger, datetime):
-            return ledger.date().isoformat()
+            return ledger.date().strftime("%d-%m-%Y")
         elif isinstance(ledger, date):
-            return ledger.isoformat()
+            return ledger.strftime("%d-%m-%Y")
         return ledger
 
     def get_license_date(self, obj):
         license_date = obj.license_date
         if isinstance(license_date, datetime):
-            return license_date.date().isoformat()
+            return license_date.date().strftime("%d-%m-%Y")
         elif isinstance(license_date, date):
-            return license_date.isoformat()
+            return license_date.strftime("%d-%m-%Y")
         return license_date
 
     def get_license_expiry(self, obj):
         license_expiry = obj.license_expiry
         if isinstance(license_expiry, datetime):
-            return license_expiry.date().isoformat()
+            return license_expiry.date().strftime("%d-%m-%Y")
         elif isinstance(license_expiry, date):
-            return license_expiry.isoformat()
+            return license_expiry.strftime("%d-%m-%Y")
         return license_expiry
 
     def get_registration_date(self, obj):
         registration_date = obj.registration_date
         if isinstance(registration_date, datetime):
-            return registration_date.date().isoformat()
+            return registration_date.date().strftime("%d-%m-%Y")
         elif isinstance(registration_date, date):
-            return registration_date.isoformat()
+            return registration_date.strftime("%d-%m-%Y")
         return registration_date
 
     class Meta:
@@ -68,7 +68,7 @@ class AllotmentSerializer(serializers.ModelSerializer):
     allotment_details_read = AllotmentItemSerializer(source='allotment_details', many=True, read_only=True)
 
     # Date field handling
-    estimated_arrival_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d")
+    estimated_arrival_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y", input_formats=["%d-%m-%Y", "%Y-%m-%d"])
     created_on = serializers.SerializerMethodField()
     modified_on = serializers.SerializerMethodField()
 
@@ -115,18 +115,18 @@ class AllotmentSerializer(serializers.ModelSerializer):
         if obj.created_on:
             value = obj.created_on
             if isinstance(value, datetime):
-                return value.date().isoformat()
+                return value.strftime("%d-%m-%Y %H:%M")
             elif isinstance(value, date):
-                return value.isoformat()
+                return value.strftime("%d-%m-%Y")
         return None
 
     def get_modified_on(self, obj):
         if obj.modified_on:
             value = obj.modified_on
             if isinstance(value, datetime):
-                return value.date().isoformat()
+                return value.strftime("%d-%m-%Y %H:%M")
             elif isinstance(value, date):
-                return value.isoformat()
+                return value.strftime("%d-%m-%Y")
         return None
 
     class Meta:

@@ -92,8 +92,8 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     items = serializers.PrimaryKeyRelatedField(many=True, queryset=ItemNameModel.objects.all(), required=False)
     items_detail = serializers.SerializerMethodField(read_only=True)
     license_number = serializers.CharField(source="license.license_number", read_only=True)
-    license_date = serializers.DateField(source="license.license_date", read_only=True, format="%Y-%m-%d")
-    license_expiry_date = serializers.DateField(source="license.license_expiry_date", read_only=True, format="%Y-%m-%d")
+    license_date = serializers.DateField(source="license.license_date", read_only=True, format="%d-%m-%Y")
+    license_expiry_date = serializers.DateField(source="license.license_expiry_date", read_only=True, format="%d-%m-%Y")
     notification_number = serializers.CharField(source="license.notification_number", read_only=True)
     exporter_name = serializers.CharField(source="license.exporter.name", read_only=True)
     notes = serializers.CharField(source="license.balance_report_notes", read_only=True, allow_null=True, allow_blank=True)
@@ -276,8 +276,8 @@ class LicenseDocumentSerializer(serializers.ModelSerializer):
 
 
 class LicenseTransferSerializer(serializers.ModelSerializer):
-    transfer_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d",
-                                          input_formats=["%Y-%m-%d"])
+    transfer_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y",
+                                          input_formats=["%d-%m-%Y", "%Y-%m-%d"])
     transfer_initiation_date = serializers.DateTimeField(required=False, allow_null=True)
     transfer_acceptance_date = serializers.DateTimeField(required=False, allow_null=True)
     cbic_response_date = serializers.DateTimeField(required=False, allow_null=True)
@@ -288,7 +288,7 @@ class LicenseTransferSerializer(serializers.ModelSerializer):
 
 
 class LicensePurchaseSerializer(serializers.ModelSerializer):
-    invoice_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d", input_formats=["%Y-%m-%d"])
+    invoice_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y", input_formats=["%d-%m-%Y", "%Y-%m-%d"])
 
     class Meta:
         model = LicensePurchase
@@ -297,12 +297,12 @@ class LicensePurchaseSerializer(serializers.ModelSerializer):
 
 class LicenseDetailsSerializer(serializers.ModelSerializer):
     # Explicit DateFields for model.DateField columns
-    license_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d", input_formats=["%Y-%m-%d"])
-    license_expiry_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d",
-                                                input_formats=["%Y-%m-%d"])
-    registration_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d",
-                                              input_formats=["%Y-%m-%d"])
-    ledger_date = serializers.DateField(required=False, allow_null=True, format="%Y-%m-%d", input_formats=["%Y-%m-%d"])
+    license_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y", input_formats=["%d-%m-%Y", "%Y-%m-%d"])
+    license_expiry_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y",
+                                                input_formats=["%d-%m-%Y", "%Y-%m-%d"])
+    registration_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y",
+                                              input_formats=["%d-%m-%Y", "%Y-%m-%d"])
+    ledger_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y", input_formats=["%d-%m-%Y", "%Y-%m-%d"])
 
     # Annotated fields for FK display
     exporter_name = serializers.CharField(read_only=True, required=False)

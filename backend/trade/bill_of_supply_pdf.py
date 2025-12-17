@@ -93,10 +93,10 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=30,
-        leftMargin=30,
-        topMargin=30,
-        bottomMargin=30
+        rightMargin=20,
+        leftMargin=20,
+        topMargin=20,
+        bottomMargin=15  # Reduced margins to fit content on one page
     )
 
     elements = []
@@ -317,16 +317,19 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         description_para = Paragraph(description, styles['Normal'])
 
         # Build row based on billing mode
+        # Create right-aligned style for numbers
+        right_align_style = ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT)
+
         if billing_mode == 'QTY':
-            qty_str = f"{line.qty_kg:,.3f} $" if line.qty_kg else "0.000 $"
+            qty_str = f"{line.qty_kg:,.3f} Kg" if line.qty_kg else "0.000 Kg"
             total_qty += (line.qty_kg or 0)
             row = [
                 str(idx),
                 description_para,
-                line.hsn_code or '',
-                qty_str,
-                f"{line.rate_inr_per_kg:,.2f}" if line.rate_inr_per_kg else "0.00",
-                Paragraph(f"{amount:,.2f}", ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
+                '47060000',  # Always use fixed HSN code for paper/pulp products
+                Paragraph(qty_str, right_align_style),
+                Paragraph(f"{line.rate_inr_per_kg:,.2f}" if line.rate_inr_per_kg else "0.00", right_align_style),
+                Paragraph(f"{amount:,.2f}", right_align_style)
             ]
         elif billing_mode == 'CIF_INR':
             total_cif_fc += (line.cif_fc or 0)
@@ -334,22 +337,22 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             row = [
                 str(idx),
                 description_para,
-                line.hsn_code or '',
-                f"{line.cif_fc:,.2f}" if line.cif_fc else "0.00",
-                f"{line.exc_rate:,.2f}" if line.exc_rate else "0.00",
-                f"{line.cif_inr:,.2f}" if line.cif_inr else "0.00",
-                f"{line.pct:.2f}" if line.pct else "0.00",
-                Paragraph(f"{amount:,.2f}", ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
+                '47060000',  # Always use fixed HSN code for paper/pulp products
+                Paragraph(f"{line.cif_fc:,.2f}" if line.cif_fc else "0.00", right_align_style),
+                Paragraph(f"{line.exc_rate:,.2f}" if line.exc_rate else "0.00", right_align_style),
+                Paragraph(f"{line.cif_inr:,.2f}" if line.cif_inr else "0.00", right_align_style),
+                Paragraph(f"{line.pct:.2f}" if line.pct else "0.00", right_align_style),
+                Paragraph(f"{amount:,.2f}", right_align_style)
             ]
         else:  # FOB_INR
             total_fob_inr += (line.fob_inr or 0)
             row = [
                 str(idx),
                 description_para,
-                line.hsn_code or '',
-                f"{line.fob_inr:,.2f}" if line.fob_inr else "0.00",
-                f"{line.pct:.2f}" if line.pct else "0.00",
-                Paragraph(f"{amount:,.2f}", ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
+                '47060000',  # Always use fixed HSN code for paper/pulp products
+                Paragraph(f"{line.fob_inr:,.2f}" if line.fob_inr else "0.00", right_align_style),
+                Paragraph(f"{line.pct:.2f}" if line.pct else "0.00", right_align_style),
+                Paragraph(f"{amount:,.2f}", right_align_style)
             ]
 
         items_data.append(row)
@@ -366,23 +369,26 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     roundoff_row[-1] = Paragraph(f"{roundoff_sign}{abs(roundoff):.2f}", ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
     items_data.append(roundoff_row)
 
-    # Add empty rows for spacing (min 10 rows total)
-    while len(items_data) < 12:  # Header + 10 rows minimum
+    # Add empty rows for spacing (min 5 rows total to keep content compact)
+    while len(items_data) < 7:  # Header + 5 rows minimum (reduced from 12 to fit on one page)
         items_data.append([''] * col_count)
 
     # Add total row (dynamic based on mode)
     total_row = [''] * col_count
     total_row[2] = Paragraph('<b>Total</b>', ParagraphStyle('bold', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', alignment=TA_RIGHT))
 
-    if billing_mode == 'QTY':
-        total_row[3] = f"{total_qty:,.3f} $"
-    elif billing_mode == 'CIF_INR':
-        total_row[3] = f"{total_cif_fc:,.2f}"
-        total_row[5] = f"{total_cif_inr:,.2f}"
-    else:  # FOB_INR
-        total_row[3] = f"{total_fob_inr:,.2f}"
+    # Create right-aligned bold style for total numbers with no word wrap
+    bold_right_style = ParagraphStyle('bold_right', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', alignment=TA_RIGHT, wordWrap='LTR', splitLongWords=False)
 
-    total_row[-1] = Paragraph(f'<b>Rs. {rounded_total:,.2f}</b>', ParagraphStyle('bold', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', alignment=TA_RIGHT))
+    if billing_mode == 'QTY':
+        total_row[3] = Paragraph(f"<b>{total_qty:,.3f} Kg</b>", bold_right_style)
+    elif billing_mode == 'CIF_INR':
+        total_row[3] = Paragraph(f"<b>{total_cif_fc:,.2f}</b>", bold_right_style)
+        total_row[5] = Paragraph(f"<b>{total_cif_inr:,.2f}</b>", bold_right_style)
+    else:  # FOB_INR
+        total_row[3] = Paragraph(f"<b>{total_fob_inr:,.2f}</b>", bold_right_style)
+
+    total_row[-1] = Paragraph(f'<b>Rs. {rounded_total:,.2f}</b>', bold_right_style)
     items_data.append(total_row)
 
     # Use full page width for items table - dynamic column widths based on mode
@@ -398,11 +404,11 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     elif billing_mode == 'CIF_INR':
         col_widths = [
             page_width*0.05,   # Sl No
-            page_width*0.25,   # Description
+            page_width*0.24,   # Description
             page_width*0.08,   # HSN
             page_width*0.12,   # CIF FC
             page_width*0.10,   # EXC RT
-            page_width*0.12,   # CIF INR
+            page_width*0.13,   # CIF INR (increased from 0.12)
             page_width*0.10,   # Rate %
             page_width*0.18    # Amount
         ]
@@ -457,15 +463,18 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('LEFTPADDING', (0, 0), (-1, -1), 5),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
     elements.append(footer_table)
 
-    # Bank details (if available)
+    # Prepare Bank Details text
+    bank_details_text = ''
+    has_bank_details = False
     if from_company and (from_company.bank_account_number or from_company.bank_name or from_company.ifsc_code):
+        has_bank_details = True
         bank_details_text = '<b>Bank Details</b><br/>'
         if from_company.bank_name:
             bank_details_text += f'Bank Name: {from_company.bank_name}<br/>'
@@ -474,56 +483,51 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         if from_company.ifsc_code:
             bank_details_text += f'IFSC Code: {from_company.ifsc_code}'
 
-        bank_table = Table([[Paragraph(bank_details_text, styles['Normal'])]], colWidths=[page_width])
-        bank_table.setStyle(TableStyle([
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ]))
-        elements.append(bank_table)
+    # Combined table with Bank Details and Declaration merged
+    # Row 1: Bank Details (left) | for Company (right)
+    # Row 2: Declaration (left) | Signature (right)
 
-    # Declaration and signature
-    declaration_data = [
-        [
-            Paragraph(
-                f"<b>Company's PAN        : {trade.from_pan or 'N/A'}</b><br/><br/>"
-                "<b>Declaration</b><br/>"
-                "We declare that this invoice shows the actual price of the goods described "
-                "and that all particulars are true and correct.",
-                styles['Normal']
-            ),
-            ''
-        ]
-    ]
+    declaration_data = []
+
+    # First row: Bank Details
+    if has_bank_details:
+        declaration_data.append([
+            Paragraph(bank_details_text, styles['Normal']),
+            Paragraph(f'<b>for {from_company.name if from_company else ""}</b>',
+                     ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
+        ])
+
+    # Second row: Declaration
+    left_content = Paragraph(
+        f"<b>Company's PAN        : {trade.from_pan or 'N/A'}</b><br/><br/>"
+        "<b>Declaration</b><br/>"
+        "We declare that this invoice shows the actual price of the goods described "
+        "and that all particulars are true and correct.",
+        styles['Normal']
+    )
+
+    declaration_data.append([left_content, ''])  # Declaration (left) + Signature (right)
 
     if include_signature and from_company:
         # Add signature/stamp if requested
         sig_rows = []
 
-        # First row: "for Company Name"
-        sig_rows.append([Paragraph(f'<b>for {from_company.name}</b>',
-                                   ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))])
-
-        # Second row: Signature and Stamp side by side
+        # First row: Signature and Stamp side by side (removed "for Company Name" as it's now in Bank Details)
         sig_stamp_row = []
 
-        # Try to add signature image
+        # Try to add signature image - bigger size using full space
         sig_img = None
         if hasattr(from_company, 'signature') and from_company.signature:
             try:
                 import os
                 sig_path = from_company.signature.path
                 if os.path.exists(sig_path):
-                    sig_img = Image(sig_path, width=1.2*inch, height=0.6*inch)
+                    sig_img = Image(sig_path, width=1.3*inch, height=0.7*inch)  # Bigger size
             except Exception as e:
                 logger.error(f"Failed to load signature: {e}")
                 sig_img = None
 
-        # Try to add stamp image (100% original size up to max 1.5 inches)
+        # Try to add stamp image - bigger size using full space
         stamp_img = None
         if hasattr(from_company, 'stamp') and from_company.stamp:
             try:
@@ -535,8 +539,8 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
                     pil_stamp = PILImage.open(stamp_path)
                     stamp_width, stamp_height = pil_stamp.size
 
-                    # Use original aspect ratio, max size 1.5 inches
-                    max_size = 1.5 * inch
+                    # Use original aspect ratio, max size 1.0 inch (bigger for full space)
+                    max_size = 1.0 * inch
                     aspect = stamp_height / float(stamp_width)
 
                     if aspect > 1:
@@ -553,14 +557,16 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
                 logger.error(f"Failed to load stamp: {e}")
                 stamp_img = None
 
-        # Create horizontal layout for signature and stamp
+        # Place signature and stamp side by side with bigger sizes
         if sig_img and stamp_img:
-            # Both signature and stamp - place side by side
-            sig_stamp_table = Table([[sig_img, stamp_img]], colWidths=[1.5*inch, 1*inch])
+            # Both inside, side by side - using full width of right column
+            sig_stamp_table = Table([[sig_img, stamp_img]], colWidths=[1.4*inch, 1.1*inch])
             sig_stamp_table.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (0, 0), 'LEFT'),
                 ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 5),
             ]))
             sig_rows.append([sig_stamp_table])
         elif sig_img:
@@ -573,39 +579,63 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
         # Last row: "Authorised Signatory"
         sig_rows.append([Paragraph('<b>Authorised Signatory</b>',
-                                   ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))])
+                                   ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))])
 
-        # Create signature table
-        sig_table = Table(sig_rows, colWidths=[page_width*0.3])
+        # Create signature table - use full width of right column (35% of page)
+        # Remove all internal grid lines to merge vertically
+        sig_table = Table(sig_rows, colWidths=[page_width*0.35])
         sig_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-            ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('VALIGN', (0, 0), (0, 0), 'TOP'),  # First row (for PURPLEHUB) at TOP
+            ('VALIGN', (0, 1), (0, -1), 'MIDDLE'),  # Middle rows (signature/stamp) in MIDDLE
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),  # Add some padding to keep it inside
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('GRID', (0, 0), (-1, -1), 0, colors.white),  # Remove all internal lines
         ]))
-        declaration_data[0][1] = sig_table
+        # Set signature in the last row's right column
+        declaration_data[-1][1] = sig_table
     else:
-        declaration_data[0][1] = Paragraph(
+        declaration_data[-1][1] = Paragraph(
             f'<b>for {from_company.name if from_company else ""}</b><br/><br/><br/><br/><br/><br/>'
             '<b>Authorised Signatory</b>',
             ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT)
         )
 
-    declaration_table = Table(declaration_data, colWidths=[page_width*0.65, page_width*0.35], rowHeights=[2*inch])
-    declaration_table.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('VALIGN', (0, 0), (0, 0), 'TOP'),
-        ('VALIGN', (1, 0), (1, 0), 'BOTTOM'),
+    # Create merged table with dynamic row heights
+    if has_bank_details:
+        row_heights = [0.7*inch, 1.3*inch]  # Row 1: Bank Details (increased to fit all text), Row 2: Declaration (bigger for signature)
+    else:
+        row_heights = [1.3*inch]  # Only Declaration row
+
+    declaration_table = Table(declaration_data, colWidths=[page_width*0.65, page_width*0.35], rowHeights=row_heights)
+
+    # Build style based on number of rows
+    style_list = [
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),  # Outer box
+        ('LINEAFTER', (0, 0), (0, -1), 0.5, colors.black),  # Vertical line between columns
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # All left cells TOP
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('LEFTPADDING', (0, 0), (-1, -1), 5),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-    ]))
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]
+
+    if has_bank_details:
+        # Only add horizontal line below Bank Details in the LEFT column (not the right column with signature)
+        style_list.append(('LINEBELOW', (0, 0), (0, 0), 0.5, colors.black))  # Only left cell
+        # Right column of second row (signature) should be BOTTOM aligned
+        style_list.append(('VALIGN', (1, 1), (1, 1), 'BOTTOM'))
+    else:
+        # Right column (signature) should be BOTTOM aligned
+        style_list.append(('VALIGN', (1, 0), (1, 0), 'BOTTOM'))
+
+    declaration_table.setStyle(TableStyle(style_list))
     elements.append(declaration_table)
 
-    # Footer text
-    elements.append(Spacer(1, 0.1*inch))
+    # Footer text (removed spacer to save space)
     elements.append(Paragraph(
         '<b>This is a Computer Generated Invoice</b>',
         ParagraphStyle('footer', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER)

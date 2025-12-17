@@ -1,4 +1,4 @@
-import {useState, useEffect, useRef} from "react";
+import {useEffect, useRef, useState} from "react";
 import AsyncSelectField from "./AsyncSelectField";
 import Select from "react-select";
 
@@ -17,7 +17,13 @@ import Select from "react-select";
  * - searchFields: array of searchable fields
  * - onFilterChange: callback function(filterParams)
  */
-export default function AdvancedFilter({filterConfig = {}, searchFields = [], onFilterChange, initialFilters = {}, defaultFilters = {}}) {
+export default function AdvancedFilter({
+                                           filterConfig = {},
+                                           searchFields = [],
+                                           onFilterChange,
+                                           initialFilters = {},
+                                           defaultFilters = {}
+                                       }) {
     // Initialize search term from initialFilters if present
     const [searchTerm, setSearchTerm] = useState(initialFilters.search || "");
     // Merge default filters with initial filters - defaultFilters are fallback values
@@ -204,6 +210,44 @@ export default function AdvancedFilter({filterConfig = {}, searchFields = [], on
                 );
 
             case "exact":
+                // Check if this field has choices (dropdown select)
+                if (config.choices && config.choices.length > 0) {
+                    const exactChoiceOptions = config.choices.map(choice => {
+                        if (Array.isArray(choice)) {
+                            return {value: choice[0], label: choice[1]};
+                        }
+                        if (typeof choice === "object") {
+                            return {value: choice.value, label: choice.label};
+                        }
+                        return {value: choice, label: choice};
+                    });
+
+                    // Find currently selected option
+                    const selectedOption = exactChoiceOptions.find(opt => opt.value === filterValues[fieldName]) || null;
+
+                    return (
+                        <div key={fieldName} className="col-md-4">
+                            <label className="form-label">{label}</label>
+                            <Select
+                                options={exactChoiceOptions}
+                                value={selectedOption}
+                                onChange={(selected) => {
+                                    handleFilterChange(fieldName, selected ? selected.value : '');
+                                }}
+                                isClearable
+                                placeholder={`Select ${label.toLowerCase()}`}
+                                styles={{
+                                    control: (base) => ({
+                                        ...base,
+                                        minHeight: "38px",
+                                        borderColor: "#dee2e6"
+                                    })
+                                }}
+                            />
+                        </div>
+                    );
+                }
+
                 // Check if this is a boolean field (starts with is_ or has_)
                 if (fieldName.startsWith("is_") || fieldName.startsWith("has_")) {
                     return (

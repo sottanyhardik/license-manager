@@ -76,6 +76,18 @@ export default function DataTable({
             .replace(/\b\w/g, (char) => char.toUpperCase());
     };
 
+    // Check if column should be right-aligned (numeric/currency columns)
+    const isNumericColumn = (columnName) => {
+        const numericPatterns = [
+            'amount', 'price', 'rate', 'cost', 'total', 'subtotal',
+            'quantity', 'qty', 'weight', 'count', 'number', 'inr',
+            'usd', 'fc', 'cif', 'fob', 'paid', 'due', 'balance',
+            'pct', 'percent', 'exc_rate'
+        ];
+        const lowerColumn = columnName.toLowerCase();
+        return numericPatterns.some(pattern => lowerColumn.includes(pattern));
+    };
+
     const handleCellClick = (item, columnName) => {
         if (inlineEditable.includes(columnName)) {
             setEditingCell({rowId: item.id, columnName});
@@ -152,7 +164,12 @@ export default function DataTable({
                 <thead className="table-light">
                     <tr>
                         {columns.map((column) => (
-                            <th key={column}>{formatColumnName(column)}</th>
+                            <th
+                                key={column}
+                                style={isNumericColumn(column) ? {textAlign: 'right'} : {}}
+                            >
+                                {formatColumnName(column)}
+                            </th>
                         ))}
                         <th className="text-center" style={{width: "150px"}}>
                             Actions
@@ -180,7 +197,10 @@ export default function DataTable({
                                                 handleCellClick(item, column);
                                             }
                                         }}
-                                        style={isEditableField ? {cursor: 'pointer'} : {}}
+                                        style={{
+                                            ...(isEditableField ? {cursor: 'pointer'} : {}),
+                                            ...(isNumericColumn(column) ? {textAlign: 'right'} : {})
+                                        }}
                                         title={isEditableField && typeof value === 'boolean' ? 'Click to toggle' : (isEditableField ? 'Click to edit' : '')}
                                     >
                                         {isCurrentlyEditing ? (

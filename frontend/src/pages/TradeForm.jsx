@@ -180,16 +180,27 @@ export default function TradeForm() {
     };
 
     const handlePrefillInvoiceNumber = async () => {
-        if (!formData.from_company) {
-            toast.warning("Please select From Company first");
+        // For PURCHASE, use to_company (buyer); for SALE, use from_company (seller)
+        const relevantCompany = formData.direction === 'PURCHASE' ? formData.to_company : formData.from_company;
+
+        if (!relevantCompany) {
+            const companyField = formData.direction === 'PURCHASE' ? 'To Company' : 'From Company';
+            toast.warning(`Please select ${companyField} first`);
             return;
         }
+
+        if (!formData.direction) {
+            toast.warning("Please select direction (PURCHASE/SALE) first");
+            return;
+        }
+
         try {
-            // from_company can be either ID or object with id
-            const companyId = typeof formData.from_company === 'object' ? formData.from_company.id : formData.from_company;
-            const { data } = await api.get(`/trades/generate_invoice_number/`, {
+            // Company can be either ID or object with id
+            const companyId = typeof relevantCompany === 'object' ? relevantCompany.id : relevantCompany;
+            const { data } = await api.get(`/trades/prefill-invoice-number/`, {
                 params: {
-                    seller_company_id: companyId,
+                    direction: formData.direction,
+                    company_id: companyId,
                     invoice_date: formatDateForAPI(formData.invoice_date)
                 }
             });
@@ -197,8 +208,9 @@ export default function TradeForm() {
                 ...prev,
                 invoice_number: data.invoice_number || ""
             }));
+            toast.success(`Invoice number generated: ${data.invoice_number}`);
         } catch (err) {
-            toast.error("Failed to generate invoice number");
+            toast.error(err.response?.data?.error || "Failed to generate invoice number");
         }
     };
 
@@ -772,9 +784,22 @@ export default function TradeForm() {
                         type="button"
                         className="btn btn-warning btn-sm"
                         onClick={handlePrefillInvoiceNumber}
-                        disabled={formData.direction !== "SALE"}
-                        title={formData.direction !== "SALE" ? "Only available for SALE transactions" : ""}
+                        disabled={
+                            !formData.direction ||
+                            (formData.direction === 'PURCHASE' && !formData.to_company) ||
+                            (formData.direction === 'SALE' && !formData.from_company)
+                        }
+                        title={
+                            !formData.direction
+                                ? "Select Direction first"
+                                : (formData.direction === 'PURCHASE' && !formData.to_company)
+                                    ? "Select To Company (buyer) for PURCHASE invoice"
+                                    : (formData.direction === 'SALE' && !formData.from_company)
+                                        ? "Select From Company (seller) for SALE invoice"
+                                        : "Generate invoice number: PURCHASE format is P-PREFIX/FY/NNNN, SALE format is PREFIX/FY/NNNN"
+                        }
                     >
+                        <i className="bi bi-magic me-1"></i>
                         Prefill Invoice Number
                     </button>
                     <button

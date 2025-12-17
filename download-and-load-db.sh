@@ -2,7 +2,7 @@
 
 # Script to download database from remote server and load it locally
 
-SERVER_IP="143.110.252.201"
+SERVER_IP="139.59.92.226"
 SERVER_USER="django"
 REMOTE_DB_NAME="lmanagement"
 REMOTE_DB_USER="lmanagement"

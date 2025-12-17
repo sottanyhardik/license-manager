@@ -47,13 +47,83 @@ def indian_fy_label(d):
 
 def company_prefix(name: str) -> str:
     """
-    Build a 3-letter alpha prefix from company name.
-    Example: 'Labdhi Mercantile LLP' -> 'LAB'
+    Build a company prefix from company name.
+    - If 1 word: first 3 letters (e.g., 'Purvaj' -> 'PUR')
+    - If 2 words: first letter of each word (e.g., 'Labdhi Mercantile' -> 'LM')
+    - If 3+ words: first letter of first N words (e.g., 'Labdhi Mercantile LLP' -> 'LML')
     """
     if not name:
         return "INV"
-    letters = re.sub(r"[^A-Za-z]", "", name).upper()
-    return (letters[:3] or "INV")
+
+    # Remove special characters and split into words
+    words = re.sub(r"[^A-Za-z\s]", "", name).upper().split()
+
+    if not words:
+        return "INV"
+
+    if len(words) == 1:
+        # Single word: take first 3 letters
+        return words[0][:3] if len(words[0]) >= 3 else words[0]
+    else:
+        # Multiple words: first letter of each word (up to all words)
+        return ''.join([word[0] for word in words if word])
+
+
+def get_next_invoice_number(direction: str, company_name: str, invoice_date=None) -> str:
+    """
+    Generate the next invoice number in format:
+    - PURCHASE: P-PREFIX/YYYY-YY/NNNN (e.g., P-LM/2025-26/0024)
+    - SALE: PREFIX/YYYY-YY/NNNN (e.g., LM/2025-26/0001)
+
+    Logic:
+    - Finds the highest invoice number in the same financial year
+    - Increments by 1 (skips gaps, e.g., if 17, 19, 83 exist, next is 84, not 18)
+    - Restarts from 0001 for each new financial year
+    - PURCHASE invoices are prefixed with 'P-'
+
+    Args:
+        direction: 'PURCHASE' or 'SALE'
+        company_name: Company name to generate prefix
+        invoice_date: Date to determine financial year (defaults to today)
+
+    Returns:
+        Next invoice number string
+    """
+    from django.db.models import Max
+    import re
+
+    # Get prefix and FY
+    base_prefix = company_prefix(company_name)
+    fy = indian_fy_label(invoice_date)
+
+    # Add P- prefix for PURCHASE direction
+    if direction == 'PURCHASE':
+        prefix = f"P-{base_prefix}"
+    else:
+        prefix = base_prefix
+
+    # Build the pattern for this prefix + FY
+    pattern_prefix = f"{prefix}/{fy}/"
+
+    # Find all invoice numbers with this prefix + FY pattern
+    existing_invoices = LicenseTrade.objects.filter(
+        direction=direction,
+        invoice_number__startswith=pattern_prefix
+    ).values_list('invoice_number', flat=True)
+
+    # Extract the numeric part from each invoice
+    max_number = 0
+    for inv in existing_invoices:
+        match = re.search(r'/(\d+)$', inv)
+        if match:
+            num = int(match.group(1))
+            max_number = max(max_number, num)
+
+    # Next number is max + 1
+    next_number = max_number + 1
+
+    # Format: PREFIX/YYYY-YY/NNNN (4 digits padded)
+    return f"{prefix}/{fy}/{next_number:04d}"
 
 
 # -----------------------------------------------------------------------------
@@ -136,7 +206,7 @@ class LicenseTrade(models.Model):
     )
 
     class Meta:
-        ordering = ["-created_on"]
+        ordering = ["-invoice_date", "-invoice_number", "-created_on"]
         constraints = [
             # A) from_company and to_company must differ (NULLs allowed)
             models.CheckConstraint(

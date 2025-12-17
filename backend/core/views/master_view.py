@@ -640,7 +640,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                         if value is None:
                             row.append("")
                         elif hasattr(value, 'strftime'):  # datetime/date
-                            row.append(value.strftime('%Y-%m-%d %H:%M:%S') if hasattr(value, 'hour') else value.strftime('%Y-%m-%d'))
+                            row.append(value.strftime('%d-%m-%Y %H:%M:%S') if hasattr(value, 'hour') else value.strftime('%d-%m-%Y'))
                         else:
                             row.append(str(value))
 
@@ -709,7 +709,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                         if value is None:
                             row.append("")
                         elif hasattr(value, 'strftime'):
-                            row.append(value.strftime('%Y-%m-%d %H:%M') if hasattr(value, 'hour') else value.strftime('%Y-%m-%d'))
+                            row.append(value.strftime('%d-%m-%Y %H:%M') if hasattr(value, 'hour') else value.strftime('%d-%m-%Y'))
                         else:
                             # Truncate long values
                             str_value = str(value)
@@ -742,7 +742,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                 # Add footer with date
                 elements.append(Spacer(1, 0.3 * inch))
                 footer = Paragraph(
-                    f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                    f"Generated on {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}",
                     styles['Normal']
                 )
                 elements.append(footer)

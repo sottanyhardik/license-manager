@@ -188,7 +188,7 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
                 ]
             }
         },
-        "ordering": ["-invoice_date", "-created_on"]
+        "ordering": ["-invoice_date", "-invoice_number", "-created_on"]
     }
 )
 
@@ -237,35 +237,68 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['get'])
-    def generate_invoice_number(self, request):
-        """Generate next invoice number for SALE"""
+    @action(detail=False, methods=['get'], url_path='prefill-invoice-number')
+    def prefill_invoice_number(self, request):
+        """
+        Generate next invoice number based on direction, company, and invoice date.
+
+        Query Parameters:
+        - direction: 'PURCHASE' or 'SALE' (required)
+        - company_id: Company ID (required)
+        - invoice_date: Invoice date in YYYY-MM-DD or dd-mm-yyyy format (optional, defaults to today)
+
+        Returns:
+        - invoice_number: Generated invoice number in format PREFIX/YYYY-YY/NNNN
+        """
         from datetime import datetime
-        seller_company_id = request.query_params.get('seller_company_id')
+        from trade.models import get_next_invoice_number
+
+        direction = request.query_params.get('direction')
+        company_id = request.query_params.get('company_id')
         invoice_date_str = request.query_params.get('invoice_date')
 
-        if not seller_company_id:
+        # Validate required parameters
+        if not direction:
             return Response(
-                {"error": "seller_company_id is required"},
+                {"error": "direction is required (PURCHASE or SALE)"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Parse invoice_date string to date object
+        if not company_id:
+            return Response(
+                {"error": "company_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate direction
+        if direction not in ['PURCHASE', 'SALE']:
+            return Response(
+                {"error": "direction must be 'PURCHASE' or 'SALE'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Parse invoice_date string to date object (support both formats)
         invoice_date = None
         if invoice_date_str:
             try:
+                # Try YYYY-MM-DD first
                 invoice_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date()
             except ValueError:
-                return Response(
-                    {"error": "Invalid date format. Use YYYY-MM-DD"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                try:
+                    # Try dd-mm-YYYY
+                    invoice_date = datetime.strptime(invoice_date_str, '%d-%m-%Y').date()
+                except ValueError:
+                    return Response(
+                        {"error": "Invalid date format. Use YYYY-MM-DD or dd-mm-yyyy"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
         from core.models import CompanyModel
         try:
-            seller = CompanyModel.objects.get(pk=seller_company_id)
-            invoice_number = LicenseTrade.next_invoice_number(
-                seller_company=seller,
+            company = CompanyModel.objects.get(pk=company_id)
+            invoice_number = get_next_invoice_number(
+                direction=direction,
+                company_name=company.name,
                 invoice_date=invoice_date
             )
             return Response({"invoice_number": invoice_number})

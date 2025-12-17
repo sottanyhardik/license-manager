@@ -103,6 +103,18 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
         return editingCell?.rowId === item.id && editingCell?.columnName === columnName;
     };
 
+    // Check if column should be right-aligned (numeric/currency columns)
+    const isNumericColumn = (columnName) => {
+        const numericPatterns = [
+            'amount', 'price', 'rate', 'cost', 'total', 'subtotal',
+            'quantity', 'qty', 'weight', 'count', 'number', 'inr',
+            'usd', 'fc', 'cif', 'fob', 'paid', 'due', 'balance',
+            'pct', 'percent', 'exc_rate', 'kg'
+        ];
+        const lowerColumn = columnName.toLowerCase();
+        return numericPatterns.some(pattern => lowerColumn.includes(pattern));
+    };
+
     if (loading) {
         return (
             <div className="text-center py-5">
@@ -217,7 +229,10 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                 }
 
                                 return (
-                                    <th key={field.name}>
+                                    <th
+                                        key={field.name}
+                                        style={isNumericColumn(field.name) ? {textAlign: 'right'} : {}}
+                                    >
                                         {field.label || field.name.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
                                     </th>
                                 );
@@ -306,7 +321,10 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                 <tr>
                     <th style={{width: "40px"}}></th>
                     {columns.map((col) => (
-                        <th key={col}>
+                        <th
+                            key={col}
+                            style={isNumericColumn(col) ? {textAlign: 'right'} : {}}
+                        >
                             {col.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
                         </th>
                     ))}
@@ -388,7 +406,10 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                         <td
                                             key={col}
                                             onClick={() => !isCurrentlyEditing && handleCellClick(item, col)}
-                                            style={isEditableField ? {cursor: 'pointer'} : {}}
+                                            style={{
+                                                ...(isEditableField ? {cursor: 'pointer'} : {}),
+                                                ...(isNumericColumn(col) ? {textAlign: 'right'} : {})
+                                            }}
                                             title={isEditableField ? 'Click to edit' : ''}
                                         >
                                             {isCurrentlyEditing ? (

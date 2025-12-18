@@ -1,7 +1,7 @@
 import {useContext} from "react";
 import {Link} from "react-router-dom";
 import {AuthContext} from "../context/AuthContext";
-import {routes, reportEntities, masterEntities} from "../routes/config";
+import {routes, reportEntities, masterEntities, ledgerEntities, commissionEntities} from "../routes/config";
 
 export default function TopNav() {
     const {user, logout, hasRole} = useContext(AuthContext);
@@ -91,6 +91,58 @@ export default function TopNav() {
                                             </Link>
                                         </li>
                                     ))}
+                            </ul>
+                        </li>
+                    )}
+
+                    {/* Ledger Dropdown */}
+                    {hasRole(["admin", "manager", "accounts"]) && (
+                        <li className="nav-item dropdown">
+                            <a
+                                className="nav-link dropdown-toggle"
+                                href="#"
+                                role="button"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                            >
+                                <i className="bi bi-journal-text me-1"></i>
+                                Ledger
+                            </a>
+                            <ul className="dropdown-menu">
+                                {ledgerEntities.map((ledger) => (
+                                    <li key={ledger.path}>
+                                        <Link className="dropdown-item" to={ledger.path}>
+                                            <i className={`bi bi-${ledger.icon} me-2`}></i>
+                                            {ledger.label}
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </li>
+                    )}
+
+                    {/* Commission Dropdown */}
+                    {hasRole(["admin", "manager", "accounts"]) && (
+                        <li className="nav-item dropdown">
+                            <a
+                                className="nav-link dropdown-toggle"
+                                href="#"
+                                role="button"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                            >
+                                <i className="bi bi-percent me-1"></i>
+                                Commission
+                            </a>
+                            <ul className="dropdown-menu">
+                                {commissionEntities.map((commission) => (
+                                    <li key={commission.path}>
+                                        <Link className="dropdown-item" to={commission.path}>
+                                            <i className={`bi bi-${commission.icon} me-2`}></i>
+                                            {commission.label}
+                                        </Link>
+                                    </li>
+                                ))}
                             </ul>
                         </li>
                     )}

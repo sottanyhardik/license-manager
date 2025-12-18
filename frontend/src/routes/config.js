@@ -49,6 +49,74 @@ export const routes = [
     },
 ];
 
+// Ledger entities configuration
+export const ledgerEntities = [
+    {
+        path: "/ledger/chart-of-accounts",
+        label: "Chart of Accounts",
+        icon: "list-columns",
+    },
+    {
+        path: "/ledger/bank-accounts",
+        label: "Bank Accounts",
+        icon: "bank",
+    },
+    {
+        path: "/ledger/journal-entries",
+        label: "Journal Entries",
+        icon: "journal-text",
+    },
+    {
+        path: "/ledger/party-ledger",
+        label: "Party Ledger",
+        icon: "people",
+    },
+    {
+        path: "/ledger/account-ledger",
+        label: "Account Ledger",
+        icon: "list-ul",
+    },
+    {
+        path: "/ledger/reports/balance-sheet",
+        label: "Balance Sheet",
+        icon: "bar-chart",
+    },
+    {
+        path: "/ledger/reports/profit-loss",
+        label: "Profit & Loss",
+        icon: "graph-up",
+    },
+    {
+        path: "/ledger/reports/trial-balance",
+        label: "Trial Balance",
+        icon: "calculator",
+    },
+    {
+        path: "/ledger/reports/outstanding",
+        label: "Outstanding Invoices",
+        icon: "cash-stack",
+    },
+];
+
+// Commission entities configuration
+export const commissionEntities = [
+    {
+        path: "/commissions",
+        label: "Commission List",
+        icon: "percent",
+    },
+    {
+        path: "/commissions/agents",
+        label: "Agents",
+        icon: "person-badge",
+    },
+    {
+        path: "/commissions/calculate",
+        label: "Calculate Commission",
+        icon: "calculator",
+    },
+];
+
 // Master data entities configuration
 export const masterEntities = [
     {

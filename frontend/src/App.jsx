@@ -34,6 +34,17 @@ const TradeForm = lazy(() => import("./pages/TradeForm"));
 const LedgerCSVUpload = lazy(() => import("./pages/LedgerCSVUpload"));
 const LedgerUpload = lazy(() => import("./pages/LedgerUpload"));
 
+// Ledger Module Pages
+const ChartOfAccounts = lazy(() => import("./pages/ledger/ChartOfAccounts"));
+const BankAccounts = lazy(() => import("./pages/ledger/BankAccounts"));
+const JournalEntries = lazy(() => import("./pages/ledger/JournalEntries"));
+const PartyLedger = lazy(() => import("./pages/ledger/PartyLedger"));
+const AccountLedger = lazy(() => import("./pages/ledger/AccountLedger"));
+const BalanceSheet = lazy(() => import("./pages/ledger/BalanceSheet"));
+const ProfitLoss = lazy(() => import("./pages/ledger/ProfitLoss"));
+const TrialBalance = lazy(() => import("./pages/ledger/TrialBalance"));
+const OutstandingInvoices = lazy(() => import("./pages/ledger/OutstandingInvoices"));
+
 export default function App() {
     return (
         <AuthProvider>
@@ -416,6 +427,124 @@ export default function App() {
                                         <AdminLayout>
                                             <Profile/>
                                         </AdminLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            {/* Ledger Module Routes */}
+                            <Route
+                                path="/ledger/chart-of-accounts"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <ChartOfAccounts/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/ledger/bank-accounts"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <BankAccounts/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/ledger/journal-entries"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <JournalEntries/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/ledger/party-ledger"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <PartyLedger/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/ledger/account-ledger"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <AccountLedger/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/ledger/reports/balance-sheet"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <BalanceSheet/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/ledger/reports/profit-loss"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <ProfitLoss/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/ledger/reports/trial-balance"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <TrialBalance/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/ledger/reports/outstanding"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
+                                            <AdminLayout>
+                                                <OutstandingInvoices/>
+                                            </AdminLayout>
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />

@@ -2,7 +2,10 @@
 
 from rest_framework import serializers
 
-from .models import LicenseTrade, LicenseTradeLine, LicenseTradePayment
+from .models import (
+    LicenseTrade, LicenseTradeLine, LicenseTradePayment,
+    ChartOfAccounts, BankAccount, JournalEntry, JournalEntryLine
+)
 
 
 class LicenseTradePaymentSerializer(serializers.ModelSerializer):
@@ -167,3 +170,137 @@ class TradeLineSimpleSerializer(serializers.ModelSerializer):
     class Meta:
         model = LicenseTradeLine
         fields = '__all__'
+
+
+# =============================================================================
+# LEDGER MODULE SERIALIZERS
+# =============================================================================
+
+class ChartOfAccountsSerializer(serializers.ModelSerializer):
+    """Serializer for Chart of Accounts"""
+    parent_name = serializers.CharField(source='parent.__str__', read_only=True)
+    company_name = serializers.CharField(source='linked_company.name', read_only=True)
+    balance = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
+    account_type_display = serializers.CharField(source='get_account_type_display', read_only=True)
+
+    class Meta:
+        model = ChartOfAccounts
+        fields = [
+            'id', 'code', 'name', 'account_type', 'account_type_display',
+            'parent', 'parent_name', 'linked_company', 'company_name',
+            'description', 'is_active', 'balance', 'created_on', 'modified_on'
+        ]
+        read_only_fields = ['balance', 'created_on', 'modified_on']
+
+
+class BankAccountSerializer(serializers.ModelSerializer):
+    """Serializer for Bank Accounts"""
+    ledger_account_name = serializers.CharField(source='ledger_account.__str__', read_only=True)
+    current_balance = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = BankAccount
+        fields = [
+            'id', 'account_name', 'bank_name', 'account_number', 'ifsc_code', 'branch',
+            'ledger_account', 'ledger_account_name', 'opening_balance', 'opening_balance_date',
+            'current_balance', 'is_active', 'created_on', 'modified_on'
+        ]
+        read_only_fields = ['current_balance', 'created_on', 'modified_on']
+
+
+class JournalEntryLineSerializer(serializers.ModelSerializer):
+    """Serializer for Journal Entry Lines"""
+    account_name = serializers.CharField(source='account.__str__', read_only=True)
+    account_code = serializers.CharField(source='account.code', read_only=True)
+
+    class Meta:
+        model = JournalEntryLine
+        fields = [
+            'id', 'account', 'account_name', 'account_code',
+            'debit_amount', 'credit_amount', 'description'
+        ]
+
+
+class JournalEntrySerializer(serializers.ModelSerializer):
+    """Serializer for Journal Entries"""
+    lines = JournalEntryLineSerializer(many=True, required=False)
+    total_debit = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
+    total_credit = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
+    is_balanced = serializers.BooleanField(read_only=True)
+    entry_type_display = serializers.CharField(source='get_entry_type_display', read_only=True)
+    linked_trade_invoice = serializers.CharField(source='linked_trade.invoice_number', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        model = JournalEntry
+        fields = [
+            'id', 'entry_number', 'entry_date', 'entry_type', 'entry_type_display',
+            'linked_trade', 'linked_trade_invoice', 'linked_payment',
+            'narration', 'reference_number', 'is_posted', 'is_auto_generated',
+            'total_debit', 'total_credit', 'is_balanced', 'lines',
+            'created_by', 'created_by_username', 'created_on', 'modified_on'
+        ]
+        read_only_fields = ['total_debit', 'total_credit', 'is_balanced', 'created_on', 'modified_on']
+
+    def create(self, validated_data):
+        """Create journal entry with lines"""
+        lines_data = validated_data.pop('lines', [])
+        journal_entry = JournalEntry.objects.create(**validated_data)
+
+        for line_data in lines_data:
+            JournalEntryLine.objects.create(journal_entry=journal_entry, **line_data)
+
+        return journal_entry
+
+    def update(self, instance, validated_data):
+        """Update journal entry and its lines"""
+        lines_data = validated_data.pop('lines', None)
+
+        # Check if entry is posted
+        if instance.is_posted and not validated_data.get('is_posted', True):
+            # Unposting is allowed
+            pass
+        elif instance.is_posted:
+            raise serializers.ValidationError("Cannot modify posted entries")
+
+        # Update journal entry fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Update lines if provided
+        if lines_data is not None:
+            # Delete existing lines
+            instance.lines.all().delete()
+
+            # Create new lines
+            for line_data in lines_data:
+                JournalEntryLine.objects.create(journal_entry=instance, **line_data)
+
+        return instance
+
+
+class PartyLedgerSerializer(serializers.Serializer):
+    """Serializer for party-wise ledger report"""
+    company_id = serializers.IntegerField()
+    company_name = serializers.CharField()
+    date = serializers.DateField()
+    transaction_type = serializers.CharField()  # SALE, PURCHASE, PAYMENT, RECEIPT, JOURNAL
+    reference_number = serializers.CharField()
+    narration = serializers.CharField()
+    debit = serializers.DecimalField(max_digits=20, decimal_places=2)
+    credit = serializers.DecimalField(max_digits=20, decimal_places=2)
+    balance = serializers.DecimalField(max_digits=20, decimal_places=2)
+
+
+class AccountLedgerSerializer(serializers.Serializer):
+    """Serializer for account-wise ledger report"""
+    account_id = serializers.IntegerField()
+    account_code = serializers.CharField()
+    account_name = serializers.CharField()
+    date = serializers.DateField()
+    entry_number = serializers.CharField()
+    narration = serializers.CharField()
+    debit = serializers.DecimalField(max_digits=20, decimal_places=2)
+    credit = serializers.DecimalField(max_digits=20, decimal_places=2)
+    balance = serializers.DecimalField(max_digits=20, decimal_places=2)

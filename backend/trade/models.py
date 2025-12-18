@@ -466,3 +466,524 @@ def clear_boe_invoice_on_trade_delete(sender, instance, **kwargs):
             instance.boe.invoice_no = None
             instance.boe.invoice_date = None
             instance.boe.save(update_fields=['invoice_no', 'invoice_date'])
+
+
+# =============================================================================
+# LEDGER MODULE - Double Entry Accounting System
+# =============================================================================
+
+class ChartOfAccounts(models.Model):
+    """
+    Chart of Accounts for double-entry bookkeeping.
+    Standard accounting categories with hierarchical structure.
+    """
+    ASSET = 'ASSET'
+    LIABILITY = 'LIABILITY'
+    EQUITY = 'EQUITY'
+    REVENUE = 'REVENUE'
+    EXPENSE = 'EXPENSE'
+
+    ACCOUNT_TYPE_CHOICES = [
+        (ASSET, 'Asset'),
+        (LIABILITY, 'Liability'),
+        (EQUITY, 'Equity'),
+        (REVENUE, 'Revenue'),
+        (EXPENSE, 'Expense'),
+    ]
+
+    code = models.CharField(max_length=20, unique=True, db_index=True, help_text="Account code (e.g., 1000, 2000)")
+    name = models.CharField(max_length=255, help_text="Account name (e.g., Cash, Accounts Receivable)")
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES)
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='sub_accounts')
+
+    # For party accounts (sundry debtors/creditors)
+    linked_company = models.ForeignKey(
+        CompanyModel,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='ledger_accounts',
+        help_text="Link to company for party ledgers"
+    )
+
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_on = models.DateTimeField(auto_now_add=True)
+    modified_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['code', 'name']
+        verbose_name = 'Chart of Account'
+        verbose_name_plural = 'Chart of Accounts'
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+    @property
+    def balance(self):
+        """Calculate current balance from journal entries."""
+        from django.db.models import Sum
+
+        # Get all journal entry lines for this account
+        lines = self.journal_entry_lines.all()
+
+        debits = lines.aggregate(
+            total=Sum('debit_amount')
+        )['total'] or Decimal('0.00')
+
+        credits = lines.aggregate(
+            total=Sum('credit_amount')
+        )['total'] or Decimal('0.00')
+
+        # Assets and Expenses have debit balance (debit - credit)
+        if self.account_type in [self.ASSET, self.EXPENSE]:
+            return q2(debits - credits)
+        # Liabilities, Equity, and Revenue have credit balance (credit - debit)
+        else:
+            return q2(credits - debits)
+
+
+class BankAccount(models.Model):
+    """
+    Bank accounts for cash/bank reconciliation.
+    """
+    account_name = models.CharField(max_length=255, help_text="Account name/label")
+    bank_name = models.CharField(max_length=255)
+    account_number = models.CharField(max_length=100)
+    ifsc_code = models.CharField(max_length=20, blank=True)
+    branch = models.CharField(max_length=255, blank=True)
+
+    # Link to Chart of Accounts
+    ledger_account = models.ForeignKey(
+        ChartOfAccounts,
+        on_delete=models.CASCADE,
+        related_name='bank_accounts',
+        help_text="Link to bank account in chart of accounts"
+    )
+
+    opening_balance = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Opening balance"
+    )
+    opening_balance_date = models.DateField(default=timezone.now)
+
+    is_active = models.BooleanField(default=True)
+    created_on = models.DateTimeField(auto_now_add=True)
+    modified_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['bank_name', 'account_name']
+
+    def __str__(self):
+        return f"{self.bank_name} - {self.account_number}"
+
+    @property
+    def current_balance(self):
+        """Calculate current balance including opening balance and transactions."""
+        return q2(self.opening_balance + self.ledger_account.balance)
+
+
+class JournalEntry(models.Model):
+    """
+    Journal Entry Header for double-entry bookkeeping.
+    Each entry must have balanced debits and credits.
+    """
+    GENERAL = 'GENERAL'
+    SALES = 'SALES'
+    PURCHASE = 'PURCHASE'
+    PAYMENT = 'PAYMENT'
+    RECEIPT = 'RECEIPT'
+    JOURNAL = 'JOURNAL'
+
+    ENTRY_TYPE_CHOICES = [
+        (GENERAL, 'General Entry'),
+        (SALES, 'Sales Entry'),
+        (PURCHASE, 'Purchase Entry'),
+        (PAYMENT, 'Payment Entry'),
+        (RECEIPT, 'Receipt Entry'),
+        (JOURNAL, 'Journal Entry'),
+    ]
+
+    entry_number = models.CharField(max_length=100, unique=True, db_index=True)
+    entry_date = models.DateField(default=timezone.now, db_index=True)
+    entry_type = models.CharField(max_length=20, choices=ENTRY_TYPE_CHOICES, default=GENERAL)
+
+    # Link to trade if auto-generated from trade
+    linked_trade = models.ForeignKey(
+        LicenseTrade,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='journal_entries'
+    )
+
+    # Link to payment if auto-generated from payment
+    linked_payment = models.ForeignKey(
+        LicenseTradePayment,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='journal_entries'
+    )
+
+    narration = models.TextField(help_text="Description of the transaction")
+    reference_number = models.CharField(max_length=100, blank=True, help_text="External reference (invoice, receipt no.)")
+
+    is_posted = models.BooleanField(default=False, help_text="Posted entries cannot be modified")
+    is_auto_generated = models.BooleanField(default=False, help_text="Auto-generated from trades/payments")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='journal_entries_created'
+    )
+    created_on = models.DateTimeField(auto_now_add=True)
+    modified_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-entry_date', '-entry_number']
+        verbose_name = 'Journal Entry'
+        verbose_name_plural = 'Journal Entries'
+
+    def __str__(self):
+        return f"JE#{self.entry_number} - {self.entry_date} - {self.narration[:50]}"
+
+    @property
+    def total_debit(self):
+        """Sum of all debit amounts in this entry."""
+        agg = self.lines.aggregate(total=Sum('debit_amount'))
+        return q2(agg['total'] or 0)
+
+    @property
+    def total_credit(self):
+        """Sum of all credit amounts in this entry."""
+        agg = self.lines.aggregate(total=Sum('credit_amount'))
+        return q2(agg['total'] or 0)
+
+    @property
+    def is_balanced(self):
+        """Check if debits equal credits."""
+        return self.total_debit == self.total_credit
+
+    def validate_balance(self):
+        """Raise error if entry is not balanced."""
+        if not self.is_balanced:
+            raise ValueError(
+                f"Journal entry not balanced: Debit={self.total_debit}, Credit={self.total_credit}"
+            )
+
+    def post(self):
+        """Post the journal entry (make it immutable)."""
+        self.validate_balance()
+        self.is_posted = True
+        self.save(update_fields=['is_posted', 'modified_on'])
+
+    def unpost(self):
+        """Unpost the journal entry (allow modifications)."""
+        if self.is_auto_generated:
+            raise ValueError("Cannot unpost auto-generated entries")
+        self.is_posted = False
+        self.save(update_fields=['is_posted', 'modified_on'])
+
+
+class JournalEntryLine(models.Model):
+    """
+    Journal Entry Lines - individual debit/credit entries.
+    Each line has either debit OR credit (not both).
+    """
+    journal_entry = models.ForeignKey(
+        JournalEntry,
+        on_delete=models.CASCADE,
+        related_name='lines'
+    )
+
+    account = models.ForeignKey(
+        ChartOfAccounts,
+        on_delete=models.PROTECT,
+        related_name='journal_entry_lines'
+    )
+
+    debit_amount = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Debit amount (0 if credit entry)"
+    )
+    credit_amount = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Credit amount (0 if debit entry)"
+    )
+
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        if self.debit_amount > 0:
+            return f"Dr. {self.account.name}: ₹{q2(self.debit_amount)}"
+        else:
+            return f"Cr. {self.account.name}: ₹{q2(self.credit_amount)}"
+
+    def clean(self):
+        """Validate that only one of debit or credit is non-zero."""
+        from django.core.exceptions import ValidationError
+
+        if self.debit_amount > 0 and self.credit_amount > 0:
+            raise ValidationError("Line cannot have both debit and credit amounts")
+
+        if self.debit_amount == 0 and self.credit_amount == 0:
+            raise ValidationError("Line must have either debit or credit amount")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+
+# =============================================================================
+# COMMISSION MODULE
+# =============================================================================
+
+class CommissionAgent(models.Model):
+    """
+    Commission agents/brokers who earn commission on trades
+    """
+    name = models.CharField(max_length=255, unique=True)
+    code = models.CharField(max_length=50, unique=True, help_text="Agent code/ID")
+
+    # Contact details
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
+
+    # Banking details
+    pan = models.CharField(max_length=20, blank=True, help_text="PAN number")
+    bank_name = models.CharField(max_length=255, blank=True)
+    account_number = models.CharField(max_length=100, blank=True)
+    ifsc_code = models.CharField(max_length=20, blank=True)
+
+    # Default commission rates (can be overridden per trade)
+    default_purchase_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Default commission % for purchases"
+    )
+    default_sale_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Default commission % for sales"
+    )
+
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    created_on = models.DateTimeField(auto_now_add=True)
+    modified_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Commission Agent'
+        verbose_name_plural = 'Commission Agents'
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+    @property
+    def total_commission_earned(self):
+        """Total commission earned by this agent"""
+        agg = self.commissions.aggregate(total=Sum('commission_amount'))
+        return q2(agg['total'] or 0)
+
+    @property
+    def total_commission_paid(self):
+        """Total commission paid to this agent"""
+        agg = self.commissions.filter(is_paid=True).aggregate(total=Sum('commission_amount'))
+        return q2(agg['total'] or 0)
+
+    @property
+    def outstanding_commission(self):
+        """Outstanding commission to be paid"""
+        return q2(self.total_commission_earned - self.total_commission_paid)
+
+
+class Commission(models.Model):
+    """
+    Commission record for each trade
+    """
+    trade = models.ForeignKey(
+        LicenseTrade,
+        on_delete=models.CASCADE,
+        related_name='commissions'
+    )
+
+    agent = models.ForeignKey(
+        CommissionAgent,
+        on_delete=models.PROTECT,
+        related_name='commissions'
+    )
+
+    # Commission calculation
+    commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        help_text="Commission rate in %"
+    )
+
+    base_amount = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        help_text="Amount on which commission is calculated"
+    )
+
+    commission_amount = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        help_text="Calculated commission amount"
+    )
+
+    # Payment tracking
+    is_paid = models.BooleanField(default=False)
+    payment_date = models.DateField(null=True, blank=True)
+    payment_reference = models.CharField(max_length=255, blank=True)
+    payment_note = models.TextField(blank=True)
+
+    # Link to journal entry if payment is recorded in ledger
+    payment_journal_entry = models.ForeignKey(
+        'JournalEntry',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='commission_payments'
+    )
+
+    notes = models.TextField(blank=True)
+
+    created_on = models.DateTimeField(auto_now_add=True)
+    modified_on = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='commissions_created'
+    )
+
+    class Meta:
+        ordering = ['-trade__invoice_date', '-created_on']
+        verbose_name = 'Commission'
+        verbose_name_plural = 'Commissions'
+
+    def __str__(self):
+        return f"Commission for {self.trade.invoice_number} - {self.agent.name}"
+
+    def calculate_commission(self):
+        """Calculate commission based on rate and base amount"""
+        self.commission_amount = q2(self.base_amount * self.commission_rate / Decimal('100'))
+
+    def mark_paid(self, payment_date=None, reference='', note=''):
+        """Mark commission as paid"""
+        self.is_paid = True
+        self.payment_date = payment_date or timezone.now().date()
+        self.payment_reference = reference
+        self.payment_note = note
+        self.save(update_fields=['is_paid', 'payment_date', 'payment_reference', 'payment_note', 'modified_on'])
+
+    def save(self, *args, **kwargs):
+        # Auto-calculate commission if not set
+        if not self.commission_amount or self.commission_amount == 0:
+            self.calculate_commission()
+        super().save(*args, **kwargs)
+
+
+class CommissionSlab(models.Model):
+    """
+    Commission slab structure for tiered/progressive commission rates
+    """
+    agent = models.ForeignKey(
+        CommissionAgent,
+        on_delete=models.CASCADE,
+        related_name='commission_slabs'
+    )
+
+    DIRECTION_CHOICES = [
+        ('PURCHASE', 'Purchase'),
+        ('SALE', 'Sale'),
+        ('BOTH', 'Both'),
+    ]
+
+    direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES, default='BOTH')
+
+    # Slab range
+    min_amount = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Minimum transaction amount for this slab"
+    )
+
+    max_amount = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Maximum transaction amount (null = no upper limit)"
+    )
+
+    commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        help_text="Commission rate % for this slab"
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    created_on = models.DateTimeField(auto_now_add=True)
+    modified_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['agent', 'direction', 'min_amount']
+        verbose_name = 'Commission Slab'
+        verbose_name_plural = 'Commission Slabs'
+        constraints = [
+            models.CheckConstraint(
+                name='chk_min_less_than_max',
+                check=Q(max_amount__isnull=True) | Q(max_amount__gt=F('min_amount')),
+            )
+        ]
+
+    def __str__(self):
+        max_str = f"{self.max_amount:,.2f}" if self.max_amount else "∞"
+        return f"{self.agent.name} - {self.direction} - ₹{self.min_amount:,.2f} to ₹{max_str} @ {self.commission_rate}%"
+
+    @staticmethod
+    def get_applicable_rate(agent, direction, amount):
+        """
+        Get applicable commission rate for given agent, direction and amount
+        """
+        slabs = CommissionSlab.objects.filter(
+            agent=agent,
+            is_active=True,
+            min_amount__lte=amount
+        ).filter(
+            Q(direction=direction) | Q(direction='BOTH')
+        ).filter(
+            Q(max_amount__isnull=True) | Q(max_amount__gte=amount)
+        ).order_by('-commission_rate')  # Get highest rate if multiple match
+
+        slab = slabs.first()
+        if slab:
+            return slab.commission_rate
+
+        # Fallback to agent's default rate
+        if direction == 'PURCHASE':
+            return agent.default_purchase_rate
+        else:
+            return agent.default_sale_rate

@@ -326,7 +326,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             row = [
                 str(idx),
                 description_para,
-                '47060000',  # Always use fixed HSN code for paper/pulp products
+                '49070000',  # Always use fixed HSN code for paper/pulp products
                 Paragraph(qty_str, right_align_style),
                 Paragraph(f"{line.rate_inr_per_kg:,.2f}" if line.rate_inr_per_kg else "0.00", right_align_style),
                 Paragraph(f"{amount:,.2f}", right_align_style)
@@ -337,7 +337,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             row = [
                 str(idx),
                 description_para,
-                '47060000',  # Always use fixed HSN code for paper/pulp products
+                '49070000',  # Always use fixed HSN code for paper/pulp products
                 Paragraph(f"{line.cif_fc:,.2f}" if line.cif_fc else "0.00", right_align_style),
                 Paragraph(f"{line.exc_rate:,.2f}" if line.exc_rate else "0.00", right_align_style),
                 Paragraph(f"{line.cif_inr:,.2f}" if line.cif_inr else "0.00", right_align_style),
@@ -349,7 +349,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             row = [
                 str(idx),
                 description_para,
-                '47060000',  # Always use fixed HSN code for paper/pulp products
+                '49070000',  # Always use fixed HSN code for paper/pulp products
                 Paragraph(f"{line.fob_inr:,.2f}" if line.fob_inr else "0.00", right_align_style),
                 Paragraph(f"{line.pct:.2f}" if line.pct else "0.00", right_align_style),
                 Paragraph(f"{amount:,.2f}", right_align_style)

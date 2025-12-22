@@ -5,7 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Sum, Q, F
-from django.db.models.signals import pre_delete
+from django.db.models.signals import pre_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -566,6 +566,26 @@ def clear_boe_invoice_on_trade_delete(sender, instance, **kwargs):
             instance.boe.invoice_no = None
             instance.boe.invoice_date = None
             instance.boe.save(update_fields=['invoice_no', 'invoice_date'])
+
+
+@receiver(post_save, sender=IncentiveTradeLine)
+def update_incentive_license_on_trade_line_save(sender, instance, **kwargs):
+    """
+    When an IncentiveTradeLine is saved, update the related IncentiveLicense sold status.
+    Only update if this is a SALE trade.
+    """
+    if instance.incentive_license and instance.trade.direction == 'SALE':
+        instance.incentive_license.update_sold_status()
+
+
+@receiver(pre_delete, sender=IncentiveTradeLine)
+def update_incentive_license_on_trade_line_delete(sender, instance, **kwargs):
+    """
+    When an IncentiveTradeLine is deleted, update the related IncentiveLicense sold status.
+    Only update if this is a SALE trade.
+    """
+    if instance.incentive_license and instance.trade.direction == 'SALE':
+        instance.incentive_license.update_sold_status()
 
 
 # =============================================================================

@@ -9,53 +9,20 @@ from decimal import Decimal
 
 
 class IncentiveLicenseFilter(filters.FilterSet):
-    """Custom filter for sold status"""
+    """Custom filter for sold status - uses the cached sold_status field"""
     sold_status = filters.ChoiceFilter(
         choices=[
             ('NO', 'No'),
             ('YES', 'Yes'),
             ('PARTIAL', 'Partial'),
         ],
-        method='filter_sold_status',
+        field_name='sold_status',
         label='Sold Status'
     )
 
     class Meta:
         model = IncentiveLicense
-        fields = []
-
-    def filter_sold_status(self, queryset, name, value):
-        """Filter by sold status based on balance"""
-        # Annotate with sold_value
-        queryset = queryset.annotate(
-            sold_value_calc=Sum(
-                'trade_lines__amount_inr',
-                filter=Q(trade_lines__trade__direction='SALE'),
-                output_field=DecimalField(max_digits=15, decimal_places=2)
-            )
-        )
-
-        if value == 'NO':
-            # Not sold: sold_value is NULL or 0
-            return queryset.filter(Q(sold_value_calc__isnull=True) | Q(sold_value_calc=0))
-        elif value == 'YES':
-            # Fully sold: balance <= 0
-            return queryset.annotate(
-                balance_calc=ExpressionWrapper(
-                    F('license_value') - F('sold_value_calc'),
-                    output_field=DecimalField(max_digits=15, decimal_places=2)
-                )
-            ).filter(sold_value_calc__isnull=False, balance_calc__lte=0)
-        elif value == 'PARTIAL':
-            # Partially sold: 0 < balance < license_value
-            return queryset.annotate(
-                balance_calc=ExpressionWrapper(
-                    F('license_value') - F('sold_value_calc'),
-                    output_field=DecimalField(max_digits=15, decimal_places=2)
-                )
-            ).filter(sold_value_calc__isnull=False, sold_value_calc__gt=0, balance_calc__gt=0)
-
-        return queryset
+        fields = ['sold_status']
 
 
 # Create IncentiveLicense ViewSet using MasterViewSet with proper FK enhancement
@@ -72,14 +39,8 @@ class IncentiveLicenseViewSetClass(MasterViewSet):
         sold_status = self.request.query_params.get('sold_status', None)
 
         if sold_status is None:
-            # Default: show only NOT SOLD licenses
-            queryset = queryset.annotate(
-                sold_value_calc=Sum(
-                    'trade_lines__amount_inr',
-                    filter=Q(trade_lines__trade__direction='SALE'),
-                    output_field=DecimalField(max_digits=15, decimal_places=2)
-                )
-            ).filter(Q(sold_value_calc__isnull=True) | Q(sold_value_calc=0))
+            # Default: show only NOT SOLD licenses using the cached field
+            queryset = queryset.filter(sold_status='NO')
         # If sold_status is empty string '', it means "All" - return unfiltered queryset
 
         return queryset

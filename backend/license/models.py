@@ -1346,6 +1346,12 @@ class IncentiveLicense(AuditModel):
         ('MEIS', 'MEIS'),
     )
 
+    SOLD_STATUS_CHOICES = (
+        ('NO', 'Not Sold'),
+        ('PARTIAL', 'Partially Sold'),
+        ('YES', 'Fully Sold'),
+    )
+
     license_type = models.CharField(max_length=10, choices=LICENSE_TYPE_CHOICES, db_index=True)
     license_number = models.CharField(max_length=50, unique=True, db_index=True)
     license_date = models.DateField()
@@ -1360,6 +1366,29 @@ class IncentiveLicense(AuditModel):
         default=DEC_0,
         validators=[MinValueValidator(DEC_0)],
         help_text="Total license value in INR"
+    )
+
+    sold_value = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+        help_text="Total sold value in INR (auto-calculated)"
+    )
+
+    balance_value = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=DEC_0,
+        help_text="Remaining balance in INR (auto-calculated)"
+    )
+
+    sold_status = models.CharField(
+        max_length=10,
+        choices=SOLD_STATUS_CHOICES,
+        default='NO',
+        db_index=True,
+        help_text="Sold status (auto-calculated)"
     )
 
     # Additional fields for tracking
@@ -1377,6 +1406,7 @@ class IncentiveLicense(AuditModel):
             models.Index(fields=['license_date']),
             models.Index(fields=['license_expiry_date']),
             models.Index(fields=['is_active']),
+            models.Index(fields=['sold_status']),
         ]
         verbose_name = "Incentive License"
         verbose_name_plural = "Incentive Licenses"
@@ -1389,26 +1419,53 @@ class IncentiveLicense(AuditModel):
         if self.license_date and not self.license_expiry_date:
             from dateutil.relativedelta import relativedelta
             self.license_expiry_date = self.license_date + relativedelta(years=2)
+
+        # Calculate balance if license_value changed
+        if self.license_value is not None:
+            self.balance_value = self.license_value - self.sold_value
+
         super().save(*args, **kwargs)
 
-    def get_sold_value(self):
-        """Calculate total sold value from all SALE trades using this license"""
+    def update_sold_status(self):
+        """
+        Update sold_value, balance_value, and sold_status based on related trades.
+        Call this method after trade changes.
+        """
         from django.db.models import Sum
         from decimal import Decimal
 
-        # Sum up license_value from all incentive trade lines linked to this license
-        # Only consider SALE trades
+        # Calculate sold value from SALE trades
         sold = self.trade_lines.filter(
             trade__direction='SALE'
         ).aggregate(
             total=Sum('license_value')
         )['total'] or Decimal('0.00')
 
-        return sold
+        self.sold_value = sold
+        self.balance_value = self.license_value - self.sold_value
+
+        # Determine sold status
+        if self.sold_value == Decimal('0.00'):
+            self.sold_status = 'NO'
+        elif self.balance_value <= Decimal('0.00'):
+            self.sold_status = 'YES'
+        else:
+            self.sold_status = 'PARTIAL'
+
+        # Use update() to avoid triggering signals
+        IncentiveLicense.objects.filter(pk=self.pk).update(
+            sold_value=self.sold_value,
+            balance_value=self.balance_value,
+            sold_status=self.sold_status
+        )
+
+    def get_sold_value(self):
+        """Get cached sold value (deprecated - use sold_value field directly)"""
+        return self.sold_value
 
     def get_balance_value(self):
-        """Calculate remaining balance: license_value - sold_value"""
-        return self.license_value - self.get_sold_value()
+        """Get cached balance value (deprecated - use balance_value field directly)"""
+        return self.balance_value
 
 
 # -----------------------------

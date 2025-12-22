@@ -381,6 +381,46 @@ export default function App() {
                                 }
                             />
 
+                            {/* Incentive License CRUD Routes */}
+                            <Route
+                                path="/incentive-licenses"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <MasterList/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/incentive-licenses/create"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <MasterForm/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/incentive-licenses/:id/edit"
+                                element={
+                                    <ProtectedRoute>
+                                        <RoleRoute roles={["admin", "manager"]}>
+                                            <AdminLayout>
+                                                <MasterForm/>
+                                            </AdminLayout>
+                                        </RoleRoute>
+                                    </ProtectedRoute>
+                                }
+                            />
+
                             <Route
                                 path="/ledger-csv-upload"
                                 element={

@@ -12,6 +12,7 @@ from license.views.license_items import LicenseItemViewSet
 from license.views.dashboard import DashboardDataView
 from license.views.ledger_upload import LedgerUploadView
 from license.views_actions import LicenseActionViewSet
+from license.views_incentive import IncentiveLicenseViewSet
 
 router = routers.DefaultRouter()
 router.register(r"licenses", LicenseDetailsViewSet, basename="licenses")
@@ -22,6 +23,7 @@ router.register(r"expiring-licenses", ExpiringLicensesViewSet, basename="expirin
 router.register(r"active-licenses", ActiveLicensesViewSet, basename="active-licenses")
 router.register(r"item-pivot", ItemPivotViewSet, basename="item-pivot")
 router.register(r"item-report", ItemReportViewSet, basename="item-report")
+router.register(r"incentive-licenses", IncentiveLicenseViewSet, basename="incentive-licenses")
 
 urlpatterns = [
     # Specific paths must come BEFORE router.urls to avoid conflicts

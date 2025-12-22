@@ -1333,6 +1333,85 @@ class LicenseTransferModel(models.Model):
 
 
 # -----------------------------
+# Incentive License (RODTEP/ROSTL/MEIS)
+# -----------------------------
+class IncentiveLicense(AuditModel):
+    """
+    Model for incentive-based licenses: RODTEP, ROSTL, MEIS
+    These licenses have a standard 2-year validity from license date.
+    """
+    LICENSE_TYPE_CHOICES = (
+        ('RODTEP', 'RODTEP'),
+        ('ROSTL', 'ROSTL'),
+        ('MEIS', 'MEIS'),
+    )
+
+    license_type = models.CharField(max_length=10, choices=LICENSE_TYPE_CHOICES, db_index=True)
+    license_number = models.CharField(max_length=50, unique=True, db_index=True)
+    license_date = models.DateField()
+    license_expiry_date = models.DateField(help_text="Auto-calculated as 2 years from license date")
+
+    exporter = models.ForeignKey("core.CompanyModel", on_delete=models.CASCADE, related_name="incentive_licenses")
+    port_code = models.ForeignKey("core.PortModel", on_delete=models.CASCADE, related_name="incentive_licenses")
+
+    license_value = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+        help_text="Total license value in INR"
+    )
+
+    # Additional fields for tracking
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(null=True, blank=True)
+
+    admin_search_fields = ("license_number", "exporter__name")
+
+    class Meta:
+        ordering = ("-license_date", "license_number")
+        indexes = [
+            models.Index(fields=['license_number']),
+            models.Index(fields=['license_type']),
+            models.Index(fields=['exporter', 'license_date']),
+            models.Index(fields=['license_date']),
+            models.Index(fields=['license_expiry_date']),
+            models.Index(fields=['is_active']),
+        ]
+        verbose_name = "Incentive License"
+        verbose_name_plural = "Incentive Licenses"
+
+    def __str__(self) -> str:
+        return f"{self.license_type} - {self.license_number}"
+
+    def save(self, *args, **kwargs):
+        """Auto-calculate expiry date as 2 years from license date"""
+        if self.license_date and not self.license_expiry_date:
+            from dateutil.relativedelta import relativedelta
+            self.license_expiry_date = self.license_date + relativedelta(years=2)
+        super().save(*args, **kwargs)
+
+    def get_sold_value(self):
+        """Calculate total sold value from all SALE trades using this license"""
+        from django.db.models import Sum
+        from decimal import Decimal
+
+        # Sum up license_value from all incentive trade lines linked to this license
+        # Only consider SALE trades
+        sold = self.trade_lines.filter(
+            trade__direction='SALE'
+        ).aggregate(
+            total=Sum('license_value')
+        )['total'] or Decimal('0.00')
+
+        return sold
+
+    def get_balance_value(self):
+        """Calculate remaining balance: license_value - sold_value"""
+        return self.license_value - self.get_sold_value()
+
+
+# -----------------------------
 # License Purchase (unchanged but Decimal-safe)
 # -----------------------------
 class LicensePurchase(AuditModel):

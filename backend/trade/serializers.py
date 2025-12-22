@@ -3,7 +3,7 @@
 from rest_framework import serializers
 
 from .models import (
-    LicenseTrade, LicenseTradeLine, LicenseTradePayment,
+    LicenseTrade, LicenseTradeLine, IncentiveTradeLine, LicenseTradePayment,
     ChartOfAccounts, BankAccount, JournalEntry, JournalEntryLine
 )
 
@@ -53,9 +53,26 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         return float(obj.compute_amount())
 
 
+class IncentiveTradeLineSerializer(serializers.ModelSerializer):
+    """Serializer for incentive trade line items"""
+    id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    incentive_license_label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IncentiveTradeLine
+        fields = ('id', 'incentive_license', 'incentive_license_label', 'license_value', 'rate_pct', 'amount_inr')
+
+    def get_incentive_license_label(self, obj):
+        """Return formatted incentive license label"""
+        if obj.incentive_license:
+            return f"{obj.incentive_license.license_type} - {obj.incentive_license.license_number}"
+        return None
+
+
 class LicenseTradeSerializer(serializers.ModelSerializer):
     """Nested serializer for LicenseTrade with lines and payments"""
     lines = LicenseTradeLineSerializer(many=True, required=False)
+    incentive_lines = IncentiveTradeLineSerializer(many=True, required=False)
     payments = LicenseTradePaymentSerializer(many=True, required=False)
 
     # Display fields
@@ -63,10 +80,18 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     to_company_label = serializers.CharField(source='to_company.name', read_only=True)
     boe_label = serializers.CharField(source='boe.boe_number', read_only=True, allow_null=True)
     direction_label = serializers.CharField(source='get_direction_display', read_only=True)
+    license_type_label = serializers.CharField(source='get_license_type_display', read_only=True)
+    incentive_license_label = serializers.SerializerMethodField()
 
     # Computed fields
     paid_or_received = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
     due_amount = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
+
+    def get_incentive_license_label(self, obj):
+        """Return incentive license display label"""
+        if obj.incentive_license:
+            return f"{obj.incentive_license.license_type} - {obj.incentive_license.license_number}"
+        return None
 
     class Meta:
         model = LicenseTrade
@@ -75,6 +100,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Create trade with nested lines and payments"""
         lines_data = validated_data.pop('lines', [])
+        incentive_lines_data = validated_data.pop('incentive_lines', [])
         payments_data = validated_data.pop('payments', [])
 
         # Create trade header
@@ -83,10 +109,15 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         # Snapshot party details
         trade.snapshot_parties()
 
-        # Create lines
+        # Create lines (DFIA)
         for line_data in lines_data:
             line_data.pop('id', None)  # Remove temp ID
             LicenseTradeLine.objects.create(trade=trade, **line_data)
+
+        # Create incentive lines (RODTEP/ROSTL/MEIS)
+        for line_data in incentive_lines_data:
+            line_data.pop('id', None)  # Remove temp ID
+            IncentiveTradeLine.objects.create(trade=trade, **line_data)
 
         # Create payments
         for payment_data in payments_data:
@@ -109,6 +140,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         from core.helpers import _sync_nested
 
         lines_data = validated_data.pop('lines', None)
+        incentive_lines_data = validated_data.pop('incentive_lines', None)
         payments_data = validated_data.pop('payments', None)
 
         # Track old BOE before update to clear invoice_no if BOE changes
@@ -122,12 +154,22 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         # Snapshot party details if companies changed
         instance.snapshot_parties()
 
-        # Sync nested lines if provided
+        # Sync nested lines if provided (DFIA)
         if lines_data is not None:
             _sync_nested(
                 instance,
                 LicenseTradeLine,
                 lines_data,
+                fk_field='trade',
+                treat_empty_list_as_delete=False
+            )
+
+        # Sync nested incentive lines if provided (RODTEP/ROSTL/MEIS)
+        if incentive_lines_data is not None:
+            _sync_nested(
+                instance,
+                IncentiveTradeLine,
+                incentive_lines_data,
                 fk_field='trade',
                 treat_empty_list_as_delete=False
             )

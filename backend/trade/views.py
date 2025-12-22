@@ -29,6 +29,10 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
                 "type": "exact",
                 "choices": LicenseTrade.DIR_CHOICES
             },
+            "license_type": {
+                "type": "exact",
+                "choices": LicenseTrade.LICENSE_TYPE_CHOICES
+            },
             "from_company": {
                 "type": "fk",
                 "fk_endpoint": "/masters/companies/",
@@ -44,22 +48,31 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
                 "fk_endpoint": "/bill-of-entries/",
                 "label_field": "boe_number"
             },
+            "incentive_license": {
+                "type": "fk",
+                "fk_endpoint": "/incentive-licenses/",
+                "label_field": "license_number"
+            },
             "invoice_date": {
                 "type": "date_range"
             }
         },
         "list_display": [
             "direction",
+            "license_type",
             "invoice_number",
             "invoice_date",
             "from_company_label",
             "to_company_label",
+            "incentive_license_label",
             "total_amount",
             "paid_or_received",
             "due_amount"
         ],
         "form_fields": [
             "direction",
+            "license_type",
+            "incentive_license",
             "boe",
             "from_company",
             "to_company",
@@ -71,10 +84,12 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
         "fk_endpoint_overrides": {
             "from_company": "/masters/companies/",
             "to_company": "/masters/companies/",
-            "boe": "/bill-of-entries/"
+            "boe": "/bill-of-entries/",
+            "incentive_license": "/incentive-licenses/"
         },
         "nested_list_display": {
             "lines": ["sr_number_label", "mode", "qty_kg", "rate_inr_per_kg", "cif_fc", "exc_rate", "cif_inr", "fob_inr", "pct", "amount_inr"],
+            "incentive_lines": ["incentive_license_label", "license_value", "rate_pct", "amount_inr"],
             "payments": ["date", "amount", "note"]
         },
         "nested_field_defs": {
@@ -154,6 +169,46 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
                         "type": "number",
                         "label": "Percentage (%)",
                         "step": "0.001"
+                    },
+                    {
+                        "name": "amount_inr",
+                        "type": "number",
+                        "label": "Amount (INR)",
+                        "step": "0.01",
+                        "readonly": True
+                    }
+                ]
+            },
+            "incentive_lines": {
+                "label": "Incentive License Lines",
+                "fields": [
+                    {
+                        "name": "incentive_license",
+                        "type": "fk",
+                        "label": "Incentive License",
+                        "fk_endpoint": "/incentive-licenses/",
+                        "label_field": "license_number",
+                        "required": True
+                    },
+                    {
+                        "name": "incentive_license_label",
+                        "type": "text",
+                        "label": "License",
+                        "read_only": True
+                    },
+                    {
+                        "name": "license_value",
+                        "type": "number",
+                        "label": "License Value (INR)",
+                        "step": "0.01",
+                        "required": True
+                    },
+                    {
+                        "name": "rate_pct",
+                        "type": "number",
+                        "label": "Rate (%)",
+                        "step": "0.001",
+                        "required": True
                     },
                     {
                         "name": "amount_inr",

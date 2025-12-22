@@ -239,10 +239,27 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     elements.append(header_table)
 
     # Determine billing mode from first line (assuming all lines use same mode)
-    billing_mode = trade.lines.first().mode if trade.lines.exists() else 'QTY'
+    # For INCENTIVE license type, use simplified table structure
+    is_incentive = trade.license_type == 'INCENTIVE'
 
-    # Items table - dynamic headers based on billing mode
-    if billing_mode == 'QTY':
+    if not is_incentive:
+        billing_mode = trade.lines.first().mode if trade.lines.exists() else 'QTY'
+    else:
+        billing_mode = None  # Not applicable for incentive
+
+    # Items table - dynamic headers based on billing mode or incentive type
+    if is_incentive:
+        # INCENTIVE mode: Sl No | Description | HSN | License Value | Rate % | Amount
+        header_row = [
+            Paragraph('<b>Sl<br/>No.</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Description of Goods</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>HSN/SAC</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>License Value</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Rate %</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Amount</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
+        ]
+        col_count = 6
+    elif billing_mode == 'QTY':
         # QTY mode: Sl No | Description | HSN | Quantity | Rate per KG | Amount
         header_row = [
             Paragraph('<b>Sl<br/>No.</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
@@ -286,76 +303,129 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     total_cif_fc = 0
     total_cif_inr = 0
     total_fob_inr = 0
+    total_license_value = 0
 
-    for idx, line in enumerate(trade.lines.all(), start=1):
-        # Calculate amount
-        amount = line.amount_inr or 0
-        subtotal += amount
+    # Create right-aligned style for numbers
+    right_align_style = ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT)
 
-        # Get description: license_number - license_date - port_code (wrapped to 2 lines)
-        description = ''
-        if line.sr_number and line.sr_number.license:
-            lic = line.sr_number.license
-            license_num = lic.license_number or 'Unknown'
-            license_date = lic.license_date.strftime('%d-%m-%Y') if lic.license_date else ''
-            port_code = lic.port.code if lic.port and hasattr(lic.port, 'code') else (lic.port.name if lic.port else '')
+    if is_incentive:
+        # Iterate over incentive lines
+        for idx, line in enumerate(trade.incentive_lines.all(), start=1):
+            # Calculate amount
+            amount = line.amount_inr or 0
+            subtotal += amount
+            total_license_value += (line.license_value or 0)
 
-            # Format as: license_num - license_date (line 1)
-            #            port_code (line 2)
-            line1 = f"{license_num}"
-            if license_date:
-                line1 += f" - {license_date}"
+            # Get description from incentive license: License Type - License Number - License Date - Port Code Name - Exporter IEC
+            description = ''
+            if line.incentive_license:
+                lic = line.incentive_license
+                parts = []
 
-            if port_code:
-                description = f"{line1}<br/>{port_code}"
-            else:
-                description = line1
-        elif line.description:
-            description = line.description
+                # License Type
+                if lic.license_type:
+                    parts.append(lic.license_type)
 
-        # Wrap description in Paragraph for proper formatting
-        description_para = Paragraph(description, styles['Normal'])
+                # License Number
+                if lic.license_number:
+                    parts.append(lic.license_number)
 
-        # Build row based on billing mode
-        # Create right-aligned style for numbers
-        right_align_style = ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT)
+                # License Date
+                if lic.license_date:
+                    parts.append(lic.license_date.strftime('%d-%m-%Y'))
 
-        if billing_mode == 'QTY':
-            qty_str = f"{line.qty_kg:,.3f} Kg" if line.qty_kg else "0.000 Kg"
-            total_qty += (line.qty_kg or 0)
+                # Port Code Name
+                if lic.port_code:
+                    port_name = lic.port_code.name if hasattr(lic.port_code, 'name') else str(lic.port_code)
+                    parts.append(port_name)
+
+                # Exporter IEC (from exporter company)
+                if lic.exporter and hasattr(lic.exporter, 'iec'):
+                    parts.append(lic.exporter.iec)
+
+                description = ' - '.join(parts)
+
+            # Wrap description in Paragraph for proper formatting
+            description_para = Paragraph(description, styles['Normal'])
+
             row = [
                 str(idx),
+                description_para,
+                '99819',  # HSN code for services
+                Paragraph(f"{line.license_value:,.2f}" if line.license_value else "0.00", right_align_style),
+                Paragraph(f"{line.rate_pct:.2f}" if line.rate_pct else "0.00", right_align_style),
+                Paragraph(f"{amount:,.2f}", right_align_style)
+            ]
+
+            items_data.append(row)
+    else:
+        # Iterate over regular DFIA lines
+        for idx, line in enumerate(trade.lines.all(), start=1):
+            # Calculate amount
+            amount = line.amount_inr or 0
+            subtotal += amount
+
+            # Get description: license_number - license_date - port_code (wrapped to 2 lines)
+            description = ''
+            if line.sr_number and line.sr_number.license:
+                lic = line.sr_number.license
+                license_num = lic.license_number or 'Unknown'
+                license_date = lic.license_date.strftime('%d-%m-%Y') if lic.license_date else ''
+                port_code = lic.port.code if lic.port and hasattr(lic.port, 'code') else (lic.port.name if lic.port else '')
+
+                # Format as: license_num - license_date (line 1)
+                #            port_code (line 2)
+                line1 = f"{license_num}"
+                if license_date:
+                    line1 += f" - {license_date}"
+
+                if port_code:
+                    description = f"{line1}<br/>{port_code}"
+                else:
+                    description = line1
+            elif line.description:
+                description = line.description
+
+            # Wrap description in Paragraph for proper formatting
+            description_para = Paragraph(description, styles['Normal'])
+
+            # Build row based on billing mode
+            if billing_mode == 'QTY':
+                qty_str = f"{line.qty_kg:,.3f} Kg" if line.qty_kg else "0.000 Kg"
+                total_qty += (line.qty_kg or 0)
+                row = [
+                    str(idx),
                 description_para,
                 '49070000',  # Always use fixed HSN code for paper/pulp products
                 Paragraph(qty_str, right_align_style),
                 Paragraph(f"{line.rate_inr_per_kg:,.2f}" if line.rate_inr_per_kg else "0.00", right_align_style),
-                Paragraph(f"{amount:,.2f}", right_align_style)
-            ]
-        elif billing_mode == 'CIF_INR':
-            total_cif_fc += (line.cif_fc or 0)
-            total_cif_inr += (line.cif_inr or 0)
-            row = [
-                str(idx),
-                description_para,
-                '49070000',  # Always use fixed HSN code for paper/pulp products
-                Paragraph(f"{line.cif_fc:,.2f}" if line.cif_fc else "0.00", right_align_style),
-                Paragraph(f"{line.exc_rate:,.2f}" if line.exc_rate else "0.00", right_align_style),
-                Paragraph(f"{line.cif_inr:,.2f}" if line.cif_inr else "0.00", right_align_style),
-                Paragraph(f"{line.pct:.2f}" if line.pct else "0.00", right_align_style),
-                Paragraph(f"{amount:,.2f}", right_align_style)
-            ]
-        else:  # FOB_INR
-            total_fob_inr += (line.fob_inr or 0)
-            row = [
-                str(idx),
-                description_para,
-                '49070000',  # Always use fixed HSN code for paper/pulp products
-                Paragraph(f"{line.fob_inr:,.2f}" if line.fob_inr else "0.00", right_align_style),
-                Paragraph(f"{line.pct:.2f}" if line.pct else "0.00", right_align_style),
-                Paragraph(f"{amount:,.2f}", right_align_style)
-            ]
+                    Paragraph(f"{amount:,.2f}", right_align_style)
+                ]
+            elif billing_mode == 'CIF_INR':
+                total_cif_fc += (line.cif_fc or 0)
+                total_cif_inr += (line.cif_inr or 0)
+                row = [
+                    str(idx),
+                    description_para,
+                    '49070000',  # Always use fixed HSN code for paper/pulp products
+                    Paragraph(f"{line.cif_fc:,.2f}" if line.cif_fc else "0.00", right_align_style),
+                    Paragraph(f"{line.exc_rate:,.2f}" if line.exc_rate else "0.00", right_align_style),
+                    Paragraph(f"{line.cif_inr:,.2f}" if line.cif_inr else "0.00", right_align_style),
+                    Paragraph(f"{line.pct:.2f}" if line.pct else "0.00", right_align_style),
+                    Paragraph(f"{amount:,.2f}", right_align_style)
+                ]
+            else:  # FOB_INR
+                total_fob_inr += (line.fob_inr or 0)
+                row = [
+                    str(idx),
+                    description_para,
+                    '49070000',  # Always use fixed HSN code for paper/pulp products
+                    Paragraph(f"{line.fob_inr:,.2f}" if line.fob_inr else "0.00", right_align_style),
+                    Paragraph(f"{line.pct:.2f}" if line.pct else "0.00", right_align_style),
+                    Paragraph(f"{amount:,.2f}", right_align_style)
+                ]
 
-        items_data.append(row)
+            items_data.append(row)
 
     # Calculate roundoff
     rounded_total = round(subtotal)
@@ -380,7 +450,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     # Create right-aligned bold style for total numbers with no word wrap
     bold_right_style = ParagraphStyle('bold_right', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', alignment=TA_RIGHT, wordWrap='LTR', splitLongWords=False)
 
-    if billing_mode == 'QTY':
+    if is_incentive:
+        total_row[3] = Paragraph(f"<b>{total_license_value:,.2f}</b>", bold_right_style)
+    elif billing_mode == 'QTY':
         total_row[3] = Paragraph(f"<b>{total_qty:,.3f} Kg</b>", bold_right_style)
     elif billing_mode == 'CIF_INR':
         total_row[3] = Paragraph(f"<b>{total_cif_fc:,.2f}</b>", bold_right_style)
@@ -392,7 +464,16 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     items_data.append(total_row)
 
     # Use full page width for items table - dynamic column widths based on mode
-    if billing_mode == 'QTY':
+    if is_incentive:
+        col_widths = [
+            page_width*0.05,   # Sl No
+            page_width*0.40,   # Description (wider for license info)
+            page_width*0.10,   # HSN
+            page_width*0.15,   # License Value
+            page_width*0.10,   # Rate %
+            page_width*0.20    # Amount
+        ]
+    elif billing_mode == 'QTY':
         col_widths = [
             page_width*0.05,   # Sl No
             page_width*0.40,   # Description (wider for license info)

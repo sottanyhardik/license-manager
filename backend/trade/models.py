@@ -135,7 +135,33 @@ class LicenseTrade(models.Model):
     DIR_SALE = "SALE"
     DIR_CHOICES = ((DIR_PURCHASE, "Purchase"), (DIR_SALE, "Sale"))
 
+    LICENSE_TYPE_DFIA = "DFIA"
+    LICENSE_TYPE_INCENTIVE = "INCENTIVE"
+    LICENSE_TYPE_CHOICES = (
+        (LICENSE_TYPE_DFIA, "DFIA License"),
+        (LICENSE_TYPE_INCENTIVE, "Incentive License"),
+    )
+
     direction = models.CharField(max_length=10, choices=DIR_CHOICES, db_index=True)
+
+    # License type selection
+    license_type = models.CharField(
+        max_length=20,
+        choices=LICENSE_TYPE_CHOICES,
+        default=LICENSE_TYPE_DFIA,
+        db_index=True,
+        help_text="Type of license to use for this trade"
+    )
+
+    # Incentive License (if license_type is INCENTIVE)
+    incentive_license = models.ForeignKey(
+        "license.IncentiveLicense",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="trades",
+        help_text="Incentive License (RODTEP/ROSTL/MEIS) - used when license_type is INCENTIVE"
+    )
 
     # Optional: one BOE can be referenced by many trades
     boe = models.ForeignKey(
@@ -248,10 +274,15 @@ class LicenseTrade(models.Model):
 
     def recompute_totals(self) -> None:
         """
-        Recompute subtotal, roundoff, and total from lines and
+        Recompute subtotal, roundoff, and total from lines (or incentive_lines) and
         persist via queryset.update() to avoid triggering save() again.
         """
-        agg = self.lines.aggregate(total=Sum("amount_inr"))
+        # Choose the correct lines based on license_type
+        if self.license_type == self.LICENSE_TYPE_INCENTIVE:
+            agg = self.incentive_lines.aggregate(total=Sum("amount_inr"))
+        else:
+            agg = self.lines.aggregate(total=Sum("amount_inr"))
+
         subtotal = q2(agg["total"] or 0)
         nearest_rupee = subtotal.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
         roundoff = q2(nearest_rupee - subtotal)
@@ -427,6 +458,75 @@ class LicenseTradeLine(models.Model):
         super().save(*args, **kwargs)
         if self.trade_id:
             # Safe: recompute uses queryset.update(), so no recursion
+            self.trade.recompute_totals()
+
+
+# -----------------------------------------------------------------------------
+# IncentiveTradeLine (for RODTEP/ROSTL/MEIS licenses)
+# -----------------------------------------------------------------------------
+class IncentiveTradeLine(models.Model):
+    """
+    Trade line for Incentive Licenses (RODTEP/ROSTL/MEIS).
+    Simplified structure: license + value + rate% = amount
+    """
+    trade = models.ForeignKey(
+        LicenseTrade,
+        on_delete=models.CASCADE,
+        related_name="incentive_lines",
+        db_index=True
+    )
+
+    incentive_license = models.ForeignKey(
+        "license.IncentiveLicense",
+        on_delete=models.PROTECT,
+        related_name="trade_lines",
+        help_text="The incentive license being traded"
+    )
+
+    # License value in INR (auto-filled from license, can be edited)
+    license_value = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="License value in INR"
+    )
+
+    # Billing rate as percentage
+    rate_pct = models.DecimalField(
+        max_digits=9,
+        decimal_places=3,
+        default=Decimal("0.000"),
+        help_text="Billing rate as percentage"
+    )
+
+    # Result amount
+    amount_inr = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Calculated amount = license_value × rate_pct / 100"
+    )
+
+    created_on = models.DateTimeField(auto_now_add=True, db_index=True)
+    modified_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"IncentiveLine[{self.id}] {self.incentive_license} → ₹{self.amount_inr}"
+
+    def compute_amount(self) -> Decimal:
+        """Calculate amount from license_value and rate_pct"""
+        return q2(q2(self.license_value) * (q2(self.rate_pct) / Decimal("100")))
+
+    def save(self, *args, **kwargs) -> None:
+        # Auto-calculate amount_inr if not manually set
+        if not self.amount_inr or self.amount_inr == 0:
+            self.amount_inr = self.compute_amount()
+        super().save(*args, **kwargs)
+        if self.trade_id:
+            # Recompute trade totals
             self.trade.recompute_totals()
 
 

@@ -339,6 +339,50 @@ export default function AdvancedFilter({
                     </div>
                 );
 
+            case "button_group":
+                // Button group filter (e.g., All | Yes | No | Incomplete)
+                const buttonGroupChoices = config.choices?.map(choice => {
+                    if (Array.isArray(choice)) {
+                        return {value: choice[0], label: choice[1]};
+                    }
+                    if (typeof choice === "object") {
+                        return {value: choice.value, label: choice.label};
+                    }
+                    return {value: choice, label: choice};
+                }) || [];
+
+                return (
+                    <div key={fieldName} className="col-md-6">
+                        <label className="form-label d-block">{label}</label>
+                        <div className="btn-group" role="group">
+                            {buttonGroupChoices.map((choice, idx) => (
+                                <div key={idx}>
+                                    <input
+                                        type="radio"
+                                        className="btn-check"
+                                        name={`${fieldName}-options`}
+                                        id={`${fieldName}-${choice.value || 'all'}`}
+                                        checked={filterValues[fieldName] === choice.value || (!filterValues[fieldName] && choice.value === '')}
+                                        onChange={() => handleFilterChange(fieldName, choice.value)}
+                                    />
+                                    <label
+                                        className={`btn btn-outline-${
+                                            choice.value === '' ? 'secondary' :
+                                            choice.value === 'YES' ? 'danger' :
+                                            choice.value === 'NO' ? 'success' :
+                                            choice.value === 'PARTIAL' ? 'warning' :
+                                            'secondary'
+                                        }`}
+                                        htmlFor={`${fieldName}-${choice.value || 'all'}`}
+                                    >
+                                        {choice.label}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+
             case "choice":
                 // Choice field filter with static multi-select
                 const choiceOptions = config.choices?.map(choice => {

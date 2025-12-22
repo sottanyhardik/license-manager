@@ -40,6 +40,14 @@ export const routes = [
         icon: "arrow-left-right",
     },
     {
+        path: "/incentive-licenses",
+        label: "Incentive Licenses",
+        component: "MasterList",
+        protected: true,
+        roles: ["admin", "manager"],
+        icon: "award",
+    },
+    {
         path: "/settings",
         label: "Settings",
         component: "Settings",

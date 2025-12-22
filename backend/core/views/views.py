@@ -196,6 +196,18 @@ def enhance_config_with_fk(model_cls, config=None):
     if nested_defs:
         cfg["nested_field_defs"] = nested_defs
 
+    # Also update filter_config for FK fields to include endpoint information
+    filter_config = dict(cfg.get("filter", {}))
+    for fk_name, fk_meta in field_meta.items():
+        # If this FK field is in filter_config and has type 'fk', add endpoint info
+        if fk_name in filter_config and filter_config[fk_name].get("type") == "fk":
+            filter_config[fk_name]["fk_endpoint"] = fk_meta.get("endpoint")
+            filter_config[fk_name]["endpoint"] = fk_meta.get("endpoint")
+            filter_config[fk_name]["label_field"] = fk_meta.get("label_field")
+
+    if filter_config:
+        cfg["filter"] = filter_config
+
     return cfg
 
 

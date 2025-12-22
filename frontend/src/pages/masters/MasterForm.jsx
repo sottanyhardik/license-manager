@@ -33,7 +33,8 @@ export default function MasterForm({
         (location.pathname.includes('/licenses') ? 'licenses' : null) ||
         (location.pathname.includes('/allotments') ? 'allotments' : null) ||
         (location.pathname.includes('/bill-of-entries') ? 'bill-of-entries' : null) ||
-        (location.pathname.includes('/trades') ? 'trades' : null);
+        (location.pathname.includes('/trades') ? 'trades' : null) ||
+        (location.pathname.includes('/incentive-licenses') ? 'incentive-licenses' : null);
     const recordId = propRecordId || id;
     const isEdit = Boolean(recordId);
 
@@ -113,14 +114,25 @@ export default function MasterForm({
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
                 apiPath = `/${entityName}/`;
+            } else if (entityName === 'incentive-licenses') {
+                apiPath = `/incentive-licenses/`;
             } else {
                 apiPath = `/masters/${entityName}/`;
             }
 
+            console.log('[MasterForm] Fetching metadata from:', apiPath, 'for entity:', entityName);
+
             // Use GET to fetch metadata (custom structure with form_fields, field_meta, etc.)
             const {data} = await api.get(apiPath);
+
+            console.log('[MasterForm] Metadata response:', {
+                form_fields: data.form_fields,
+                field_meta_keys: Object.keys(data.field_meta || {}),
+                full_response_keys: Object.keys(data)
+            });
+
             setMetadata({
-                form_fields: data.form_fields || [],
+                form_fields: data.form_fields || data.fields || [],
                 nested_field_defs: data.nested_field_defs || {},
                 field_meta: data.field_meta || {}
             });
@@ -141,7 +153,9 @@ export default function MasterForm({
                 }
             }
         } catch (err) {
-            toast.error("Failed to load form metadata");
+            console.error('[MasterForm] Error fetching metadata:', err);
+            console.error('[MasterForm] Error response:', err.response?.data);
+            toast.error("Failed to load form metadata: " + (err.response?.data?.detail || err.message));
         }
     };
 
@@ -151,6 +165,8 @@ export default function MasterForm({
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
                 apiPath = `/${entityName}/${recordId}/`;
+            } else if (entityName === 'incentive-licenses') {
+                apiPath = `/incentive-licenses/${recordId}/`;
             } else {
                 apiPath = `/masters/${entityName}/${recordId}/`;
             }
@@ -186,6 +202,18 @@ export default function MasterForm({
             try {
                 const licenseDate = new Date(value);
                 licenseDate.setFullYear(licenseDate.getFullYear() + 1);
+                const expiryDate = licenseDate.toISOString().split('T')[0];
+                updates.license_expiry_date = expiryDate;
+            } catch (err) {
+                // Silently fail for date calculation errors
+            }
+        }
+
+        // Auto-calculate license_expiry_date for incentive licenses (2 years from license_date)
+        if (field === "license_date" && value && entityName === "incentive-licenses") {
+            try {
+                const licenseDate = new Date(value);
+                licenseDate.setFullYear(licenseDate.getFullYear() + 2);
                 const expiryDate = licenseDate.toISOString().split('T')[0];
                 updates.license_expiry_date = expiryDate;
             } catch (err) {
@@ -468,6 +496,8 @@ export default function MasterForm({
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
                 apiPath = `/${entityName}/`;
+            } else if (entityName === 'incentive-licenses') {
+                apiPath = `/incentive-licenses/`;
             } else {
                 apiPath = `/masters/${entityName}/`;
             }
@@ -633,6 +663,8 @@ export default function MasterForm({
                 redirectPath = `/bill-of-entries`;
             } else if (entityName === 'trades') {
                 redirectPath = `/trades`;
+            } else if (entityName === 'incentive-licenses') {
+                redirectPath = '/incentive-licenses';
             } else {
                 redirectPath = `/masters/${entityName}`;
             }

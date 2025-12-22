@@ -31,7 +31,8 @@ export default function MasterList() {
         (location.pathname.startsWith('/licenses') ? 'licenses' : null) ||
         (location.pathname.startsWith('/allotments') ? 'allotments' : null) ||
         (location.pathname.startsWith('/bill-of-entries') ? 'bill-of-entries' : null) ||
-        (location.pathname.startsWith('/trades') ? 'trades' : null);
+        (location.pathname.startsWith('/trades') ? 'trades' : null) ||
+        (location.pathname.startsWith('/incentive-licenses') ? 'incentive-licenses' : null);
     const [data, setData] = useState([]);
     const [metadata, setMetadata] = useState({});
     const [loading, setLoading] = useState(true);
@@ -105,6 +106,8 @@ export default function MasterList() {
                 let apiPath;
                 if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
                     apiPath = `/${entityName}/`;
+                } else if (entityName === 'incentive-licenses') {
+                    apiPath = `/incentive-licenses/`;
                 } else {
                     apiPath = `/masters/${entityName}/`;
                 }
@@ -794,7 +797,59 @@ export default function MasterList() {
                         <DataTable
                             data={data}
                             columns={metadata.list_display || []}
-                            customCellRender={entityName === 'licenses' ? {
+                            getRowStyle={entityName === 'incentive-licenses' ? (item) => {
+                                const soldStatus = item.sold_status;
+                                if (soldStatus === 'YES') {
+                                    // Fully sold - Light Red
+                                    return { backgroundColor: '#ffcccc' };
+                                } else if (soldStatus === 'PARTIAL') {
+                                    // Partially sold - Yellow
+                                    return { backgroundColor: '#ffffcc' };
+                                }
+                                // Not sold - No background color (default white)
+                                return {};
+                            } : null}
+                            customCellRender={entityName === 'incentive-licenses' ? {
+                                sold_status: (item, value) => {
+                                    if (value === 'YES') {
+                                        return (
+                                            <span className="badge" style={{
+                                                backgroundColor: '#dc3545',
+                                                color: 'white',
+                                                padding: '6px 12px',
+                                                fontSize: '0.85rem',
+                                                fontWeight: '500'
+                                            }}>
+                                                Yes
+                                            </span>
+                                        );
+                                    } else if (value === 'PARTIAL') {
+                                        return (
+                                            <span className="badge" style={{
+                                                backgroundColor: '#ffc107',
+                                                color: '#000',
+                                                padding: '6px 12px',
+                                                fontSize: '0.85rem',
+                                                fontWeight: '500'
+                                            }}>
+                                                Partial
+                                            </span>
+                                        );
+                                    } else {
+                                        return (
+                                            <span className="badge" style={{
+                                                backgroundColor: '#28a745',
+                                                color: 'white',
+                                                padding: '6px 12px',
+                                                fontSize: '0.85rem',
+                                                fontWeight: '500'
+                                            }}>
+                                                No
+                                            </span>
+                                        );
+                                    }
+                                }
+                            } : entityName === 'licenses' ? {
                                 license_number: (item, value) => (
                                     <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
                                         <span style={{ fontWeight: '500' }}>{value || '-'}</span>

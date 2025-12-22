@@ -14,6 +14,7 @@ import {formatDate} from "../utils/dateFormatter";
  * - basePath: base URL path for edit links (e.g., "/masters/companies")
  * - inlineEditable: array of field names that can be edited inline
  * - onInlineUpdate: callback function(itemId, fieldName, newValue) - called when inline edit is saved
+ * - getRowStyle: callback function(item) - returns style object for row background color
  */
 export default function DataTable({
     data = [],
@@ -25,7 +26,8 @@ export default function DataTable({
     basePath = "",
     inlineEditable = [],
     onInlineUpdate,
-    customCellRender = {}
+    customCellRender = {},
+    getRowStyle = null
 }) {
     const [editingCell, setEditingCell] = useState(null); // {rowId, columnName}
     const [editValue, setEditValue] = useState("");
@@ -178,7 +180,7 @@ export default function DataTable({
                 </thead>
                 <tbody>
                     {data.map((item, index) => (
-                        <tr key={item.id || index}>
+                        <tr key={item.id || index} style={getRowStyle ? getRowStyle(item) : {}}>
                             {columns.map((column) => {
                                 // Convert head__name to head_name for annotated fields
                                 const fieldKey = column.replace(/__/g, '_');

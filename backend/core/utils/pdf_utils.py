@@ -206,8 +206,8 @@ class BusinessPDFExporter:
             cell_style = ParagraphStyle(
                 'CellText',
                 parent=self.styles['Normal'],
-                fontSize=8,
-                leading=10,
+                fontSize=7,
+                leading=9,
                 textColor=colors.black,
                 wordWrap='CJK'
             )
@@ -233,23 +233,23 @@ class BusinessPDFExporter:
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8eaf6')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('FONTSIZE', (0, 0), (-1, 0), 7),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
-            ('TOPPADDING', (0, 0), (-1, 0), 7),
-            ('LEFTPADDING', (0, 0), (-1, 0), 4),
-            ('RIGHTPADDING', (0, 0), (-1, 0), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+            ('TOPPADDING', (0, 0), (-1, 0), 5),
+            ('LEFTPADDING', (0, 0), (-1, 0), 3),
+            ('RIGHTPADDING', (0, 0), (-1, 0), 3),
 
             # Data rows styling
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('FONTSIZE', (0, 1), (-1, -1), 6),
             ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-            ('LEFTPADDING', (0, 1), (-1, -1), 4),
-            ('RIGHTPADDING', (0, 1), (-1, -1), 4),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('LEFTPADDING', (0, 1), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 1), (-1, -1), 3),
 
             # Grid and borders - light clean lines
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),

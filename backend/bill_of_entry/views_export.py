@@ -123,11 +123,11 @@ def add_grouped_export_action(viewset_class):
             # Create single consolidated table for entire company
             sr_no = 1
 
-            # Table header - 17 columns (added Exchange Rate)
+            # Table header - 18 columns (added Exporter and Exchange Rate)
             table_data = [[
                 'Sr\nNo', 'BOE\nNumber', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
                 'Unit\nPrice ($)', 'Value\n($)', 'Exchange\nRate', 'Total CIF\nINR', 'Item\nName', 'Invoice',
-                'License\nNo.', 'License\nDate', 'License\nPort', 'Item\nSr.',
+                'Exporter', 'License\nNo.', 'License\nDate', 'License\nPort', 'Item\nSr.',
                 'BOE\nQty.', 'BOE\n$.', 'BOE\nCIF'
             ]]
 
@@ -157,7 +157,8 @@ def add_grouped_export_action(viewset_class):
                             pdf_exporter.format_number(boe['total_inr']),
                             boe['product_name'],  # Use the product_name from boe data
                             boe['invoice_no'],
-                            first_detail['license_no'],
+                            first_detail['exporter_name'],  # Exporter name
+                            first_detail['license_no'],     # License number only
                             first_detail['license_date'],
                             first_detail['license_port'],
                             first_detail['item_sr_no'],
@@ -171,7 +172,8 @@ def add_grouped_export_action(viewset_class):
                             table_data.append([
                                 '', '', '', '', '', '', '', '', '',  # Empty main BOE info columns
                                 '', '',  # Item Name, Invoice
-                                detail['license_no'],
+                                detail['exporter_name'],  # Exporter name
+                                detail['license_no'],     # License number only
                                 detail['license_date'],
                                 detail['license_port'],
                                 detail['item_sr_no'],
@@ -188,7 +190,7 @@ def add_grouped_export_action(viewset_class):
                     company_total_inr += boe['total_inr']
                     company_total_fc += boe['total_fc']
 
-                # Add port totals row (17 columns now) - properly aligned
+                # Add port totals row (18 columns now) - properly aligned
                 table_data.append([
                     '',  # Sr No
                     '',  # BOE Number
@@ -201,6 +203,7 @@ def add_grouped_export_action(viewset_class):
                     pdf_exporter.format_number(port_total_inr),  # Total CIF INR
                     '',  # Item Name
                     '',  # Invoice
+                    '',  # Exporter
                     '',  # License No.
                     '',  # License Date
                     '',  # License Port
@@ -210,35 +213,36 @@ def add_grouped_export_action(viewset_class):
                     ''   # BOE CIF
                 ])
 
-            # Create table with column widths (17 columns) - optimized to fit A4 landscape with small margins
+            # Create table with column widths (18 columns) - optimized to fit A4 landscape with small margins
             from reportlab.lib.units import inch
             col_widths = [
-                0.32 * inch,  # Sr No
-                0.68 * inch,  # BOE Number
-                0.6 * inch,   # BOE Date
-                0.55 * inch,  # Port
-                0.6 * inch,   # Quantity (KGS)
-                0.55 * inch,  # Unit Price ($)
-                0.68 * inch,  # Value ($)
-                0.55 * inch,  # Exchange Rate
-                0.8 * inch,   # Total CIF INR
-                0.8 * inch,   # Item Name
-                0.6 * inch,   # Invoice
-                0.78 * inch,  # License No.
-                0.6 * inch,   # License Date
-                0.55 * inch,  # License Port
-                0.42 * inch,  # Item Sr.
-                0.55 * inch,  # BOE Qty.
-                0.6 * inch,   # BOE $.
-                0.7 * inch    # BOE CIF
-            ]  # Total: ~10.93 inches
+                0.28 * inch,  # Sr No
+                0.6 * inch,   # BOE Number
+                0.52 * inch,  # BOE Date
+                0.48 * inch,  # Port
+                0.52 * inch,  # Quantity (KGS)
+                0.48 * inch,  # Unit Price ($)
+                0.6 * inch,   # Value ($)
+                0.48 * inch,  # Exchange Rate
+                0.72 * inch,  # Total CIF INR
+                0.7 * inch,   # Item Name
+                0.52 * inch,  # Invoice
+                0.75 * inch,  # Exporter
+                0.68 * inch,  # License No.
+                0.52 * inch,  # License Date
+                0.48 * inch,  # License Port
+                0.35 * inch,  # Item Sr.
+                0.48 * inch,  # BOE Qty.
+                0.52 * inch,  # BOE $.
+                0.6 * inch    # BOE CIF
+            ]  # Total: ~10.78 inches
 
             table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1)
 
-            # Apply number column alignment for columns: 4, 5, 6, 7, 8, 14, 15, 16, 17 (0-indexed)
+            # Apply number column alignment for columns: 4, 5, 6, 7, 8, 15, 16, 17, 18 (0-indexed)
             from reportlab.platypus import TableStyle
             additional_styles = []
-            for col_idx in [4, 5, 6, 7, 8, 14, 15, 16]:
+            for col_idx in [4, 5, 6, 7, 8, 15, 16, 17]:
                 additional_styles.append(
                     ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
                 )
@@ -532,9 +536,19 @@ def add_grouped_export_action(viewset_class):
             license_details = []
             for detail in boe.item_details.all():
                 license_obj = detail.sr_number.license if detail.sr_number else None
+
+                # Store exporter name and license number separately
+                if license_obj:
+                    exporter_name = license_obj.exporter.name if license_obj.exporter else '--'
+                    license_number = license_obj.license_number
+                else:
+                    exporter_name = '--'
+                    license_number = '--'
+
                 license_details.append({
-                    'license_no': license_obj.license_number if license_obj else '--',
-                    'license_port': license_obj.port.code if license_obj else '--',
+                    'exporter_name': exporter_name,
+                    'license_no': license_number,
+                    'license_port': license_obj.port.code if (license_obj and license_obj.port) else '--',
                     'license_date': license_obj.license_date.strftime('%d-%m-%Y') if license_obj else '--',
                     'item_sr_no': str(detail.sr_number.serial_number) if detail.sr_number else '--',
                     'qty': float(detail.qty or 0),

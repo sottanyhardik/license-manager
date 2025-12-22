@@ -15,6 +15,8 @@ export default function TradeForm() {
 
     const [formData, setFormData] = useState({
         direction: "PURCHASE",
+        license_type: "DFIA",
+        incentive_license: null,
         from_company: null,
         to_company: null,
         boe: null,
@@ -23,7 +25,8 @@ export default function TradeForm() {
         remarks: "",
         purchase_invoice_copy: null,
         lines: [],
-        payments: []
+        payments: [],
+        incentive_lines: [] // New field for incentive license lines
     });
 
     const [billingMode, setBillingMode] = useState("CIF_INR");
@@ -132,6 +135,11 @@ export default function TradeForm() {
             if (data.lines && data.lines.length > 0) {
                 setBillingMode(data.lines[0].mode);
             }
+
+            // Ensure incentive_lines is initialized
+            if (!data.incentive_lines) {
+                data.incentive_lines = [];
+            }
         } catch (err) {
             setError("Failed to load trade");
         }
@@ -232,6 +240,80 @@ export default function TradeForm() {
                 pct: billingMode === "CIF_INR" ? 7.9 : billingMode === "FOB_INR" ? 7.9 : 0,
                 amount_inr: 0
             }]
+        }));
+    };
+
+    const handleAddIncentiveLine = () => {
+        setFormData(prev => ({
+            ...prev,
+            incentive_lines: [...prev.incentive_lines, {
+                incentive_license: null,
+                license_value: 0,
+                rate_pct: 0,
+                amount_inr: 0
+            }]
+        }));
+    };
+
+    const handleRemoveIncentiveLine = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            incentive_lines: prev.incentive_lines.filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleIncentiveLineChange = async (index, field, value) => {
+        const updatedLines = [...formData.incentive_lines];
+        updatedLines[index][field] = value;
+
+        const line = updatedLines[index];
+
+        // If incentive license is selected, fetch full details and auto-fill license_value
+        if (field === 'incentive_license' && value) {
+            console.log('Selected incentive license ID:', value);
+            try {
+                // Fetch the full license details from API
+                const { data } = await api.get(`/incentive-licenses/${value}/`);
+                console.log('Fetched incentive license data:', data);
+
+                // Store the full object for reference
+                line.incentive_license = data;
+
+                // Auto-fill license_value from fetched data
+                line.license_value = parseFloat(data.license_value) || 0;
+                console.log('Auto-filled license_value:', line.license_value);
+
+                // Trigger recalculation of amount if rate is already set
+                if (line.rate_pct > 0) {
+                    const licenseValue = parseFloat(line.license_value) || 0;
+                    const ratePct = parseFloat(line.rate_pct) || 0;
+                    line.amount_inr = Math.round(licenseValue * (ratePct / 100));
+                }
+            } catch (err) {
+                console.error('Failed to fetch incentive license details:', err);
+                toast.error('Failed to fetch license details');
+            }
+        }
+
+        // Auto-calculate amount from license_value and rate_pct
+        if (field === 'license_value' || field === 'rate_pct') {
+            const licenseValue = parseFloat(line.license_value) || 0;
+            const ratePct = parseFloat(line.rate_pct) || 0;
+            line.amount_inr = Math.round(licenseValue * (ratePct / 100));
+        }
+
+        // If amount is changed, reverse calculate rate_pct
+        if (field === 'amount_inr') {
+            const licenseValue = parseFloat(line.license_value) || 0;
+            const amount = parseFloat(line.amount_inr) || 0;
+            if (licenseValue > 0) {
+                line.rate_pct = Math.round((amount / licenseValue * 100) * 1000) / 1000;
+            }
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            incentive_lines: updatedLines
         }));
     };
 
@@ -338,6 +420,9 @@ export default function TradeForm() {
     };
 
     const calculateTotal = () => {
+        if (formData.license_type === "INCENTIVE") {
+            return formData.incentive_lines.reduce((sum, line) => sum + (parseFloat(line.amount_inr) || 0), 0);
+        }
         return formData.lines.reduce((sum, line) => sum + (parseFloat(line.amount_inr) || 0), 0);
     };
 
@@ -406,6 +491,20 @@ export default function TradeForm() {
                 });
                 formDataObj.append('lines', JSON.stringify(cleanedLines));
 
+                // Add incentive_lines as JSON string (clean up empty id fields)
+                const cleanedIncentiveLines = formData.incentive_lines.map(line => {
+                    const cleanedLine = {...line};
+                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
+                        delete cleanedLine.id;
+                    }
+                    // Extract incentive_license ID if it's an object
+                    if (cleanedLine.incentive_license && typeof cleanedLine.incentive_license === 'object') {
+                        cleanedLine.incentive_license = cleanedLine.incentive_license.id;
+                    }
+                    return cleanedLine;
+                });
+                formDataObj.append('incentive_lines', JSON.stringify(cleanedIncentiveLines));
+
                 // Add payments as JSON string (clean up empty id fields)
                 const paymentsData = formData.payments.map(payment => {
                     const cleanedPayment = {...payment, date: formatDateForAPI(payment.date)};
@@ -433,6 +532,19 @@ export default function TradeForm() {
                     return cleanedLine;
                 });
 
+                // Clean up incentive_lines: remove empty id fields and extract IDs
+                const cleanedIncentiveLines = formData.incentive_lines.map(line => {
+                    const cleanedLine = {...line};
+                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
+                        delete cleanedLine.id;
+                    }
+                    // Extract incentive_license ID if it's an object
+                    if (cleanedLine.incentive_license && typeof cleanedLine.incentive_license === 'object') {
+                        cleanedLine.incentive_license = cleanedLine.incentive_license.id;
+                    }
+                    return cleanedLine;
+                });
+
                 // Clean up payments: remove empty id fields
                 const cleanedPayments = formData.payments.map(payment => {
                     const cleanedPayment = {...payment, date: formatDateForAPI(payment.date)};
@@ -450,6 +562,7 @@ export default function TradeForm() {
                     invoice_number: formData.invoice_number?.trim() || '',
                     invoice_date: formatDateForAPI(formData.invoice_date),
                     lines: cleanedLines,
+                    incentive_lines: cleanedIncentiveLines,
                     payments: cleanedPayments
                 };
             }
@@ -559,7 +672,7 @@ export default function TradeForm() {
             )}
 
             <form onSubmit={handleSubmit}>
-                {/* Direction Selector */}
+                {/* Transaction Type Selector */}
                 <div className="card mb-4">
                     <div className="card-body">
                         <div className="row">
@@ -856,75 +969,124 @@ export default function TradeForm() {
                     </div>
                 </div>
 
-                {/* Billing Mode - Matching Screenshot */}
-                <div className="mb-3">
-                    <label className="form-label fw-bold">Billing Mode</label>
-                    <div className="d-flex gap-4">
-                        <div className="form-check">
-                            <input
-                                className="form-check-input"
-                                type="radio"
-                                name="billingMode"
-                                id="modeQTY"
-                                value="QTY"
-                                checked={billingMode === "QTY"}
-                                onChange={(e) => {
-                                    setBillingMode(e.target.value);
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
-                                    }));
-                                }}
-                            />
-                            <label className="form-check-label" htmlFor="modeQTY">
-                                By KG
-                            </label>
+                {/* License Type - Placed before Billing Mode */}
+                <div className="card mb-4">
+                    <div className="card-body">
+                        <div className="row">
+                            <div className="col-md-12">
+                                <label className="form-label fw-bold">License Type <span className="text-danger">*</span></label>
+                                <div className="d-flex gap-4">
+                                    <div className="form-check">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="license_type"
+                                            id="licenseTypeDFIA"
+                                            value="DFIA"
+                                            checked={formData.license_type === "DFIA"}
+                                            onChange={(e) => setFormData(prev => ({
+                                                ...prev,
+                                                license_type: e.target.value,
+                                                incentive_license: null // Clear incentive license when switching to DFIA
+                                            }))}
+                                        />
+                                        <label className="form-check-label" htmlFor="licenseTypeDFIA">
+                                            DFIA License
+                                        </label>
+                                    </div>
+                                    <div className="form-check">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="license_type"
+                                            id="licenseTypeIncentive"
+                                            value="INCENTIVE"
+                                            checked={formData.license_type === "INCENTIVE"}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, license_type: e.target.value }))}
+                                        />
+                                        <label className="form-check-label" htmlFor="licenseTypeIncentive">
+                                            Incentive License (RODTEP/ROSTL/MEIS)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="form-check">
-                            <input
-                                className="form-check-input"
-                                type="radio"
-                                name="billingMode"
-                                id="modeCIF"
-                                value="CIF_INR"
-                                checked={billingMode === "CIF_INR"}
-                                onChange={(e) => {
-                                    setBillingMode(e.target.value);
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
-                                    }));
-                                }}
-                            />
-                            <label className="form-check-label" htmlFor="modeCIF">
-                                By CIF INR (%)
-                            </label>
-                        </div>
-                        <div className="form-check">
-                            <input
-                                className="form-check-input"
-                                type="radio"
-                                name="billingMode"
-                                id="modeFOB"
-                                value="FOB_INR"
-                                checked={billingMode === "FOB_INR"}
-                                onChange={(e) => {
-                                    setBillingMode(e.target.value);
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
-                                    }));
-                                }}
-                            />
-                            <label className="form-check-label" htmlFor="modeFOB">
-                                By FOB INR (%)
-                            </label>
-                        </div>
+
                     </div>
                 </div>
 
-                {/* Trade Lines Table - Matching Screenshot */}
-                <div className="table-responsive mb-3">
+                {/* Conditional rendering based on license type */}
+                {formData.license_type === "DFIA" && (
+                    <>
+                        {/* Billing Mode - Only for DFIA */}
+                        <div className="mb-3">
+                            <label className="form-label fw-bold">Billing Mode</label>
+                            <div className="d-flex gap-4">
+                                <div className="form-check">
+                                    <input
+                                        className="form-check-input"
+                                        type="radio"
+                                        name="billingMode"
+                                        id="modeQTY"
+                                        value="QTY"
+                                        checked={billingMode === "QTY"}
+                                        onChange={(e) => {
+                                            setBillingMode(e.target.value);
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
+                                            }));
+                                        }}
+                                    />
+                                    <label className="form-check-label" htmlFor="modeQTY">
+                                        By KG
+                                    </label>
+                                </div>
+                                <div className="form-check">
+                                    <input
+                                        className="form-check-input"
+                                        type="radio"
+                                        name="billingMode"
+                                        id="modeCIF"
+                                        value="CIF_INR"
+                                        checked={billingMode === "CIF_INR"}
+                                        onChange={(e) => {
+                                            setBillingMode(e.target.value);
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
+                                            }));
+                                        }}
+                                    />
+                                    <label className="form-check-label" htmlFor="modeCIF">
+                                        By CIF INR (%)
+                                    </label>
+                                </div>
+                                <div className="form-check">
+                                    <input
+                                        className="form-check-input"
+                                        type="radio"
+                                        name="billingMode"
+                                        id="modeFOB"
+                                        value="FOB_INR"
+                                        checked={billingMode === "FOB_INR"}
+                                        onChange={(e) => {
+                                            setBillingMode(e.target.value);
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
+                                            }));
+                                        }}
+                                    />
+                                    <label className="form-check-label" htmlFor="modeFOB">
+                                        By FOB INR (%)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Trade Lines Table - For DFIA */}
+                        <div className="table-responsive mb-3">
                     <table className="table table-bordered table-sm">
                         <thead className="table-light">
                             <tr>
@@ -1092,6 +1254,102 @@ export default function TradeForm() {
                 >
                     Add Row
                 </button>
+                    </>
+                )}
+
+                {/* Incentive License Lines Table - Only for INCENTIVE */}
+                {formData.license_type === "INCENTIVE" && (
+                    <>
+                        <div className="table-responsive mb-3">
+                            <table className="table table-bordered table-sm">
+                                <thead className="table-light">
+                                    <tr>
+                                        <th style={{ width: "5%" }}>#</th>
+                                        <th style={{ width: "40%" }}>Incentive License</th>
+                                        <th style={{ width: "20%" }}>License Value (INR)</th>
+                                        <th style={{ width: "15%" }}>Rate (%)</th>
+                                        <th style={{ width: "15%" }}>Amount</th>
+                                        <th style={{ width: "5%" }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {formData.incentive_lines.map((line, index) => (
+                                        <tr key={index}>
+                                            <td className="text-center">{index + 1}</td>
+                                            <td>
+                                                <HybridSelect
+                                                    fieldMeta={{
+                                                        endpoint: "/incentive-licenses/",
+                                                        label_field: "license_number"
+                                                    }}
+                                                    value={line.incentive_license}
+                                                    onChange={(val) => handleIncentiveLineChange(index, 'incentive_license', val)}
+                                                    isClearable={true}
+                                                    placeholder="Select Incentive License..."
+                                                    formatLabel={(option) =>
+                                                        `${option.license_type} - ${option.license_number} (${option.exporter_name || 'N/A'})`
+                                                    }
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    className="form-control form-control-sm text-end"
+                                                    value={line.license_value || ""}
+                                                    onChange={(e) => handleIncentiveLineChange(index, 'license_value', parseFloat(e.target.value) || 0)}
+                                                    step="0.01"
+                                                    placeholder="0.00"
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    className="form-control form-control-sm text-end"
+                                                    value={line.rate_pct || ""}
+                                                    onChange={(e) => handleIncentiveLineChange(index, 'rate_pct', parseFloat(e.target.value) || 0)}
+                                                    step="0.001"
+                                                    placeholder="0.000"
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    className="form-control form-control-sm text-end fw-bold"
+                                                    value={line.amount_inr || ""}
+                                                    onChange={(e) => handleIncentiveLineChange(index, 'amount_inr', e.target.value)}
+                                                    placeholder="0.00"
+                                                />
+                                            </td>
+                                            <td className="text-center">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-danger btn-sm"
+                                                    onClick={() => handleRemoveIncentiveLine(index)}
+                                                >
+                                                    <i className="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    <tr className="table-secondary fw-bold">
+                                        <td colSpan={4} className="text-end">Total</td>
+                                        <td className="text-end">{calculateTotal().toFixed(2)}</td>
+                                        <td></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <button
+                            type="button"
+                            className="btn btn-warning mb-4"
+                            onClick={handleAddIncentiveLine}
+                        >
+                            Add Row
+                        </button>
+                    </>
+                )}
 
                 {/* Action Buttons - Matching Screenshot */}
                 <div className="d-flex gap-2 mb-4">

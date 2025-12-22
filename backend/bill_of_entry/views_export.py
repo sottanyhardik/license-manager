@@ -304,7 +304,7 @@ def add_grouped_export_action(viewset_class):
         row = 1
 
         # Title
-        ws.merge_cells(f'A{row}:P{row}')
+        ws.merge_cells(f'A{row}:R{row}')
         cell = ws[f'A{row}']
         cell.value = "Bill of Entry Report"
         cell.font = Font(bold=True, size=16, color="1e3a8a")
@@ -324,7 +324,7 @@ def add_grouped_export_action(viewset_class):
                        for product in license_dict.values()
                        for port in product.values()
                        for boe in port)
-        ws.merge_cells(f'A{row}:P{row}')
+        ws.merge_cells(f'A{row}:R{row}')
         cell = ws[f'A{row}']
         cell.value = f"Total INR: ₹{total_inr:,.2f}    Total FC: ${total_fc:,.2f}    {datetime.now().strftime('%d-%m-%Y')}"
         cell.alignment = Alignment(horizontal='center')
@@ -333,7 +333,7 @@ def add_grouped_export_action(viewset_class):
         # Process each company (sorted alphabetically)
         for company_name, license_dict in sorted(grouped_data.items()):
             # Company header
-            ws.merge_cells(f'A{row}:P{row}')
+            ws.merge_cells(f'A{row}:R{row}')
             cell = ws[f'A{row}']
             cell.value = company_name
             cell.font = Font(bold=True, size=14, color="FFFFFF")
@@ -351,16 +351,16 @@ def add_grouped_export_action(viewset_class):
                 # Process each product (Item) within license
                 for product_name, ports_dict in products_dict.items():
                     # Product subheader
-                    ws.merge_cells(f'A{row}:P{row}')
+                    ws.merge_cells(f'A{row}:R{row}')
                     cell = ws[f'A{row}']
                     cell.value = f"Item: {product_name}"
                     cell.font = Font(bold=True, size=11, color="3b82f6")
                     row += 1
 
-                # Table headers (17 columns - added Exchange Rate)
+                # Table headers (18 columns - added Exporter and Exchange Rate)
                 headers = ['Sr No', 'BOE Number', 'BOE Date', 'Port', 'Quantity (KGS)', 'Unit Price ($)', 'Value ($)',
-                           'Exchange Rate', 'Total CIF INR', 'Item Name', 'Invoice', 'License No.', 'BOE Date', 'BOE Port',
-                           'Item Sr.', 'BOE Qty.', 'BOE $.', 'BOE CIF']
+                           'Exchange Rate', 'Total CIF INR', 'Item Name', 'Invoice', 'Exporter', 'License No.', 'License Date',
+                           'License Port', 'Item Sr.', 'BOE Qty.', 'BOE $.', 'BOE CIF']
 
                 # Write headers
                 for col_idx, header in enumerate(headers, 1):
@@ -383,7 +383,7 @@ def add_grouped_export_action(viewset_class):
                             first_detail = boe['license_details'][0]
                             unit_price = boe['total_fc'] / boe['total_quantity'] if boe['total_quantity'] > 0 else 0
 
-                            # Main BOE row (17 columns)
+                            # Main BOE row (18 columns - added Exporter)
                             data = [
                                 sr_no,
                                 boe['boe_number'],
@@ -396,7 +396,8 @@ def add_grouped_export_action(viewset_class):
                                 round(boe['total_inr'], 2),  # Total CIF INR
                                 product_name,
                                 boe['invoice_no'],
-                                first_detail['license_no'],
+                                first_detail['exporter_name'],  # Exporter
+                                first_detail['license_no'],     # License No.
                                 first_detail['license_date'],
                                 first_detail['license_port'],
                                 first_detail['item_sr_no'],
@@ -409,22 +410,23 @@ def add_grouped_export_action(viewset_class):
                                 cell = ws.cell(row=row, column=col_idx, value=value)
                                 cell.border = border
                                 cell.alignment = Alignment(horizontal='center', vertical='center')
-                                if col_idx in [4, 5, 6, 7, 8, 15, 16, 17]:  # Number columns (updated for exchange rate)
+                                if col_idx in [5, 6, 7, 8, 9, 17, 18, 19]:  # Number columns (updated indices)
                                     cell.alignment = Alignment(horizontal='right', vertical='center')
-                                    if col_idx in [5, 6, 16]:  # USD columns
+                                    if col_idx in [6, 7, 18]:  # USD columns
                                         cell.number_format = '#,##0.00'
-                                    elif col_idx in [8, 17]:  # INR columns
+                                    elif col_idx in [9, 19]:  # INR columns
                                         cell.number_format = '₹#,##0.00'
-                                    elif col_idx == 7:  # Exchange Rate column
+                                    elif col_idx == 8:  # Exchange Rate column
                                         cell.number_format = '#,##0.00'
                             row += 1
 
                             # Additional license detail rows
                             for detail in boe['license_details'][1:]:
                                 data = [
-                                    '', '', '', '', '', '', '', '', '',  # Empty main BOE columns (added one for exchange rate)
+                                    '', '', '', '', '', '', '', '', '',  # Empty main BOE columns
                                     '', '',  # Item Name, Invoice
-                                    detail['license_no'],
+                                    detail['exporter_name'],  # Exporter
+                                    detail['license_no'],     # License No.
                                     detail['license_date'],
                                     detail['license_port'],
                                     detail['item_sr_no'],
@@ -437,9 +439,9 @@ def add_grouped_export_action(viewset_class):
                                     cell = ws.cell(row=row, column=col_idx, value=value)
                                     cell.border = border
                                     cell.alignment = Alignment(horizontal='center', vertical='center')
-                                    if col_idx in [15, 16, 17]:  # Updated column indices
+                                    if col_idx in [17, 18, 19]:  # Updated column indices
                                         cell.alignment = Alignment(horizontal='right', vertical='center')
-                                        if col_idx in [16, 17]:  # Updated column indices
+                                        if col_idx in [18, 19]:  # Updated column indices
                                             cell.number_format = '#,##0.00'
                                 row += 1
 

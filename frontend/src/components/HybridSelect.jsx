@@ -23,7 +23,8 @@ export default function HybridSelect({
     isClearable = true,
     isDisabled = false,
     staticOptions = null,
-    className = ""
+    className = "",
+    formatLabel: customFormatLabel = null  // Accept custom formatLabel prop
 }) {
     // Determine if we should use AsyncSelect or static Select
     const useAsync = Boolean(fieldMeta.endpoint || fieldMeta.fk_endpoint);
@@ -35,7 +36,7 @@ export default function HybridSelect({
         const labelField = fieldMeta.label_field || "name";
 
         // Custom label formatter based on field type
-        const formatLabel = (item) => {
+        const defaultFormatLabel = (item) => {
             // Special handling for hs_code - show hs_code field instead of id
             if (endpoint.includes("hs-code")) {
                 return item.hs_code || item.name || item.id;
@@ -49,6 +50,9 @@ export default function HybridSelect({
             // Default: use labelField
             return item[labelField] || item.name || item.id;
         };
+
+        // Use custom formatLabel if provided, otherwise use default
+        const formatLabel = customFormatLabel || defaultFormatLabel;
 
         return (
             <AsyncSelectField

@@ -332,15 +332,9 @@ export default function TradeForm() {
         const line = updatedLines[index];
         line.mode = billingMode; // Update mode to current billing mode
 
-        // Calculate CIF_INR from CIF_FC and Exchange Rate if available
-        if ((field === 'cif_fc' || field === 'exc_rate') && line.cif_fc && line.exc_rate) {
+        // Calculate CIF_INR from CIF_FC and Exchange Rate if available (only in CIF_INR mode)
+        if (line.mode === "CIF_INR" && (field === 'cif_fc' || field === 'exc_rate') && line.cif_fc && line.exc_rate) {
             line.cif_inr = parseFloat((parseFloat(line.cif_fc) * parseFloat(line.exc_rate)).toFixed(2));
-        }
-
-        // Calculate FOB_INR from CIF_INR (FOB = CIF in this context, as we don't have separate FOB values from BOE)
-        // If you have a specific formula for FOB, update this logic
-        if (field === 'cif_inr' || (field === 'cif_fc' || field === 'exc_rate')) {
-            line.fob_inr = line.cif_inr;
         }
 
         // If license item (sr_number) is selected and we're in CIF/FOB mode, get quantity from license item
@@ -1102,11 +1096,13 @@ export default function TradeForm() {
                                 )}
                                 {billingMode === "FOB_INR" && (
                                     <>
+                                        <th style={{ width: "10%" }}>CIF $</th>
                                         <th style={{ width: "10%" }}>FOB INR</th>
                                     </>
                                 )}
                                 {billingMode === "QTY" && (
                                     <>
+                                        <th style={{ width: "10%" }}>CIF $</th>
                                         <th style={{ width: "10%" }}>Qty (KG)</th>
                                         <th style={{ width: "10%" }}>Rate (INR/KG)</th>
                                     </>
@@ -1177,6 +1173,15 @@ export default function TradeForm() {
                                                 <input
                                                     type="number"
                                                     className="form-control form-control-sm text-end"
+                                                    value={line.cif_fc || ""}
+                                                    onChange={(e) => handleLineChange(index, 'cif_fc', parseFloat(e.target.value) || 0)}
+                                                    step="0.01"
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    className="form-control form-control-sm text-end"
                                                     value={line.fob_inr || ""}
                                                     onChange={(e) => handleLineChange(index, 'fob_inr', parseFloat(e.target.value) || 0)}
                                                     step="0.01"
@@ -1186,6 +1191,15 @@ export default function TradeForm() {
                                     )}
                                     {billingMode === "QTY" && (
                                         <>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    className="form-control form-control-sm text-end"
+                                                    value={line.cif_fc || ""}
+                                                    onChange={(e) => handleLineChange(index, 'cif_fc', parseFloat(e.target.value) || 0)}
+                                                    step="0.01"
+                                                />
+                                            </td>
                                             <td>
                                                 <input
                                                     type="number"
@@ -1239,7 +1253,7 @@ export default function TradeForm() {
                                 </tr>
                             ))}
                             <tr className="table-secondary fw-bold">
-                                <td colSpan={billingMode === "QTY" ? 5 : (billingMode === "CIF_INR" ? 6 : 4)} className="text-end">Total</td>
+                                <td colSpan={billingMode === "QTY" ? 6 : (billingMode === "CIF_INR" ? 6 : 5)} className="text-end">Total</td>
                                 <td className="text-end">{calculateTotal().toFixed(2)}</td>
                                 <td></td>
                             </tr>

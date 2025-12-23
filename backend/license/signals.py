@@ -299,3 +299,20 @@ def update_license_on_boe_item_change(sender, instance, **kwargs):
     if hasattr(instance, 'sr_number') and instance.sr_number:
         if hasattr(instance.sr_number, 'license') and instance.sr_number.license:
             update_license_flags(instance.sr_number.license)
+
+
+# Signals for balance updates on Trade Line items
+@receiver(post_save, sender='trade.LicenseTradeLine')
+@receiver(post_delete, sender='trade.LicenseTradeLine')
+def update_license_on_trade_line_change(sender, instance, **kwargs):
+    """
+    Update license flags when trade lines are added/modified/deleted.
+    This ensures balance_cif is updated when trade CIF changes.
+    """
+    if kwargs.get('raw', False):
+        return
+
+    # Get the license from the trade line via sr_number (LicenseImportItemsModel)
+    if hasattr(instance, 'sr_number') and instance.sr_number:
+        if hasattr(instance.sr_number, 'license') and instance.sr_number.license:
+            update_license_flags(instance.sr_number.license)

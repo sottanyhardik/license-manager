@@ -7,7 +7,7 @@ This module centralizes all balance calculation logic for:
 - Available values for allocation
 """
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Tuple, Optional
 
 from django.db.models import Sum, DecimalField, Value
@@ -15,6 +15,11 @@ from django.db.models.functions import Coalesce
 
 from core.constants import DEC_0, DEBIT
 from core.utils.decimal_utils import to_decimal
+
+
+def quantize_2dp(value: Decimal) -> Decimal:
+    """Quantize decimal to 2 decimal places."""
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 class LicenseBalanceCalculator:
@@ -96,46 +101,79 @@ class LicenseBalanceCalculator:
             DEC_0,
         )
 
+    @staticmethod
+    def calculate_trade(license_obj) -> Decimal:
+        """
+        Calculate total trade CIF $ for license.
+        Only counts trade lines where:
+        1. Trade is linked to a BOE that has NO invoice, OR
+        2. Trade is NOT linked to any BOE at all
+
+        Args:
+            license_obj: LicenseDetailsModel instance
+
+        Returns:
+            Total trade CIF as Decimal
+        """
+        from django.db.models import Q
+        from trade.models import LicenseTradeLine
+
+        return to_decimal(
+            LicenseTradeLine.objects.filter(
+                sr_number__license=license_obj
+            ).filter(
+                Q(trade__boe__isnull=True) | Q(trade__boe__invoice_no__isnull=True) | Q(trade__boe__invoice_no='')
+            ).aggregate(
+                total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
+            )["total"],
+            DEC_0,
+        )
+
     @classmethod
     def calculate_balance(cls, license_obj) -> Decimal:
         """
         Calculate final balance for license.
-        
-        Formula: Credit - (Debit + Allotment)
-        
+
+        Formula: Credit - (Debit + Allotment + Trade)
+
         Args:
             license_obj: LicenseDetailsModel instance
-            
+
         Returns:
-            Final balance as Decimal (minimum 0)
+            Final balance as Decimal (minimum 0), quantized to 2 decimal places
         """
         credit = cls.calculate_credit(license_obj)
         debit = cls.calculate_debit(license_obj)
         allotment = cls.calculate_allotment(license_obj)
+        trade = cls.calculate_trade(license_obj)
 
-        balance = credit - (debit + allotment)
+        balance = credit - (debit + allotment + trade)
+        balance = quantize_2dp(balance)
         return balance if balance >= DEC_0 else DEC_0
 
     @classmethod
     def calculate_all_components(cls, license_obj) -> Dict[str, Decimal]:
         """
         Calculate all balance components at once.
-        
+
         Args:
             license_obj: LicenseDetailsModel instance
-            
+
         Returns:
-            Dictionary with credit, debit, allotment, and balance
+            Dictionary with credit, debit, allotment, trade, and balance (all quantized to 2dp)
         """
         credit = cls.calculate_credit(license_obj)
         debit = cls.calculate_debit(license_obj)
         allotment = cls.calculate_allotment(license_obj)
-        balance = credit - (debit + allotment)
+        trade = cls.calculate_trade(license_obj)
+        balance = credit - (debit + allotment + trade)
+        balance = quantize_2dp(balance)
 
         return {
-            'credit': credit,
-            'debit': debit,
-            'allotment': allotment,
+            'credit': quantize_2dp(credit),
+            'debit': quantize_2dp(debit),
+            'allotment': quantize_2dp(allotment),
+            'trade': quantize_2dp(trade),
             'balance': balance if balance >= DEC_0 else DEC_0,
         }
 

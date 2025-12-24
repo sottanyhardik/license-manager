@@ -48,6 +48,14 @@ export const routes = [
         icon: "award",
     },
     {
+        path: "/license-ledger",
+        label: "License Ledger",
+        component: "LicenseLedger",
+        protected: true,
+        roles: ["admin", "manager", "accounts"],
+        icon: "journal-text",
+    },
+    {
         path: "/settings",
         label: "Settings",
         component: "Settings",

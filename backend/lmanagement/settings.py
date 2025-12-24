@@ -140,7 +140,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ---------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [
-    BASE_DIR / "backend/static",
     BASE_DIR.parent / "frontend" / "dist" / "assets",  # React build assets
 ]
 STATIC_ROOT = BASE_DIR / "staticfiles"

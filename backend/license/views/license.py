@@ -519,18 +519,21 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 Paragraph(license_obj.exporter.name if license_obj.exporter else '-', styles['Normal']),
                 Paragraph(license_obj.port.name if license_obj.port else '-', styles['Normal'])
             ],
-            # Row 2: Headers
-            ['Purchase Status', 'Balance CIF', 'Get Norm Class', 'Latest Transfer'],
+            # Row 2: Headers (spanning to match 5 columns)
+            ['Purchase Status', 'Balance CIF', 'Get Norm Class', '', 'Latest Transfer'],
             # Row 2: Values
             [
                 license_obj.purchase_status or '-',
                 f"{float(license_obj.balance_cif or 0):.2f}",
                 license_obj.get_norm_class or '-',
+                '',
                 Paragraph(str(license_obj.latest_transfer) if license_obj.latest_transfer else '-', styles['Normal'])
             ]
         ]
 
-        header_table = Table(header_data, colWidths=[35*mm, 30*mm, 35*mm, 180*mm])
+        # Landscape A4 is ~277mm wide, with margins = ~257mm usable width
+        # Split into 5 columns: 50mm, 35mm, 40mm, 70mm, 62mm = 257mm
+        header_table = Table(header_data, colWidths=[50*mm, 35*mm, 40*mm, 70*mm, 62*mm])
         header_table.setStyle(TableStyle([
             # Row 1 header
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),

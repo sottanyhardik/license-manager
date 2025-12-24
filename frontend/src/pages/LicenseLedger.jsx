@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import api from '../api/axios';
 
 export default function LicenseLedger() {
     const navigate = useNavigate();
@@ -88,11 +88,9 @@ export default function LicenseLedger() {
     };
 
     const handleViewDetails = (license) => {
-        if (license.license_type === 'DFIA') {
-            navigate(`/licenses/${license.id}`);
-        } else {
-            navigate(`/incentive-licenses/${license.id}`);
-        }
+        navigate(`/license-ledger/${license.id}`, {
+            state: { license_type: license.license_type }
+        });
     };
 
     const handleCreateTrade = (license) => {
@@ -137,13 +135,30 @@ export default function LicenseLedger() {
                                 </div>
                                 <hr />
                                 <div className="row">
-                                    <div className="col-6">
+                                    <div className="col-4">
                                         <p className="mb-1 text-muted small">Sold (USD)</p>
                                         <p className="h5 text-danger">${summary.dfia.sold_value_usd.toLocaleString()}</p>
                                     </div>
-                                    <div className="col-6">
-                                        <p className="mb-1 text-muted small">Available Balance (USD)</p>
+                                    <div className="col-4">
+                                        <p className="mb-1 text-muted small">Available (USD)</p>
                                         <p className="h5 text-success">${summary.dfia.balance_value_usd.toLocaleString()}</p>
+                                    </div>
+                                    <div className="col-4">
+                                        <p className="mb-1 text-muted small">Profit/Loss</p>
+                                        <p className={`h5 ${summary.dfia.profit_loss_inr >= 0 ? 'text-success' : 'text-danger'}`}>
+                                            ₹{summary.dfia.profit_loss_inr.toLocaleString()}
+                                        </p>
+                                    </div>
+                                </div>
+                                <hr />
+                                <div className="row">
+                                    <div className="col-6">
+                                        <p className="mb-1 text-muted small">Total Purchase (₹)</p>
+                                        <p className="text-warning fw-bold">₹{summary.dfia.purchase_amount_inr.toLocaleString()}</p>
+                                    </div>
+                                    <div className="col-6">
+                                        <p className="mb-1 text-muted small">Total Sale (₹)</p>
+                                        <p className="text-info fw-bold">₹{summary.dfia.sale_amount_inr.toLocaleString()}</p>
                                     </div>
                                 </div>
                             </div>
@@ -167,13 +182,30 @@ export default function LicenseLedger() {
                                 </div>
                                 <hr />
                                 <div className="row">
-                                    <div className="col-6">
+                                    <div className="col-4">
                                         <p className="mb-1 text-muted small">Sold (INR)</p>
                                         <p className="h5 text-danger">₹{summary.incentive.sold_value_inr.toLocaleString()}</p>
                                     </div>
-                                    <div className="col-6">
-                                        <p className="mb-1 text-muted small">Available Balance (INR)</p>
+                                    <div className="col-4">
+                                        <p className="mb-1 text-muted small">Available (INR)</p>
                                         <p className="h5 text-success">₹{summary.incentive.balance_value_inr.toLocaleString()}</p>
+                                    </div>
+                                    <div className="col-4">
+                                        <p className="mb-1 text-muted small">Profit/Loss</p>
+                                        <p className={`h5 ${summary.incentive.profit_loss_inr >= 0 ? 'text-success' : 'text-danger'}`}>
+                                            ₹{summary.incentive.profit_loss_inr.toLocaleString()}
+                                        </p>
+                                    </div>
+                                </div>
+                                <hr />
+                                <div className="row">
+                                    <div className="col-6">
+                                        <p className="mb-1 text-muted small">Total Purchase (₹)</p>
+                                        <p className="text-warning fw-bold">₹{summary.incentive.purchase_amount_inr.toLocaleString()}</p>
+                                    </div>
+                                    <div className="col-6">
+                                        <p className="mb-1 text-muted small">Total Sale (₹)</p>
+                                        <p className="text-info fw-bold">₹{summary.incentive.sale_amount_inr.toLocaleString()}</p>
                                     </div>
                                 </div>
                             </div>
@@ -265,6 +297,9 @@ export default function LicenseLedger() {
                                     <th className="text-end">Total Value</th>
                                     <th className="text-end">Sold Value</th>
                                     <th className="text-end">Available Balance</th>
+                                    <th className="text-end">Purchase (₹)</th>
+                                    <th className="text-end">Sale (₹)</th>
+                                    <th className="text-end">Profit/Loss</th>
                                     <th className="text-center">Status</th>
                                     <th className="text-center">Actions</th>
                                 </tr>
@@ -272,7 +307,7 @@ export default function LicenseLedger() {
                             <tbody>
                                 {loading ? (
                                     <tr>
-                                        <td colSpan="10" className="text-center py-4">
+                                        <td colSpan="13" className="text-center py-4">
                                             <div className="spinner-border text-primary" role="status">
                                                 <span className="visually-hidden">Loading...</span>
                                             </div>
@@ -280,7 +315,7 @@ export default function LicenseLedger() {
                                     </tr>
                                 ) : licenses.length === 0 ? (
                                     <tr>
-                                        <td colSpan="10" className="text-center py-4 text-muted">
+                                        <td colSpan="13" className="text-center py-4 text-muted">
                                             No licenses found matching your criteria
                                         </td>
                                     </tr>
@@ -310,6 +345,15 @@ export default function LicenseLedger() {
                                             <td className="text-end text-success fw-bold">
                                                 {formatCurrency(license.balance_value, license.currency)}
                                             </td>
+                                            <td className="text-end text-warning">
+                                                ₹{(license.purchase_amount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </td>
+                                            <td className="text-end text-info">
+                                                ₹{(license.sale_amount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </td>
+                                            <td className={`text-end fw-bold ${(license.profit_loss || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
+                                                {(license.profit_loss || 0) >= 0 ? '+' : ''}₹{(license.profit_loss || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                            </td>
                                             <td className="text-center">
                                                 {getSoldStatusBadge(license.sold_status)}
                                             </td>
@@ -317,9 +361,9 @@ export default function LicenseLedger() {
                                                 <button
                                                     className="btn btn-sm btn-outline-primary me-1"
                                                     onClick={() => handleViewDetails(license)}
-                                                    title="View Details"
+                                                    title="View Ledger Details"
                                                 >
-                                                    <i className="bi bi-eye"></i>
+                                                    <i className="bi bi-journal-text"></i>
                                                 </button>
                                                 {license.balance_value > 0 && (
                                                     <button

@@ -34,6 +34,7 @@ const TradeForm = lazy(() => import("./pages/TradeForm"));
 const LedgerCSVUpload = lazy(() => import("./pages/LedgerCSVUpload"));
 const LedgerUpload = lazy(() => import("./pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("./pages/LicenseLedger"));
+const LicenseLedgerDetail = lazy(() => import("./pages/LicenseLedgerDetail"));
 
 // Ledger Module Pages
 const ChartOfAccounts = lazy(() => import("./pages/ledger/ChartOfAccounts"));
@@ -454,6 +455,17 @@ export default function App() {
                                     <ProtectedRoute>
                                         <AdminLayout>
                                             <LicenseLedger/>
+                                        </AdminLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/license-ledger/:id"
+                                element={
+                                    <ProtectedRoute>
+                                        <AdminLayout>
+                                            <LicenseLedgerDetail/>
                                         </AdminLayout>
                                     </ProtectedRoute>
                                 }

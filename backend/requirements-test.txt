@@ -1,0 +1,23 @@
+# Test Dependencies for License Manager
+# Install with: pip install -r requirements-test.txt
+
+# Include production dependencies
+-r requirements.txt
+
+# Testing Framework
+pytest==8.3.4
+pytest-django==4.9.0
+pytest-cov==6.0.0
+pytest-xdist==3.6.1  # Parallel test execution
+
+# API Testing
+requests==2.32.3
+
+# Fake Data Generation
+faker==33.1.0
+
+# Code Quality
+flake8==7.1.1
+
+# Coverage Reporting
+coverage[toml]==7.6.10

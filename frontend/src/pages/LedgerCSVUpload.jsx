@@ -1,27 +1,37 @@
 import React, { useState } from 'react';
 import api from '../api/axios';
+import { useFileUpload } from '../hooks';
 
 const LedgerCSVUpload = () => {
-  const [file, setFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
   const [showTemplate, setShowTemplate] = useState(false);
   const [templateInfo, setTemplateInfo] = useState(null);
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      if (!selectedFile.name.endsWith('.csv')) {
-        setError('Please select a CSV file');
-        setFile(null);
-        return;
+  // Use the useFileUpload hook for single file upload
+  const {
+    files,
+    uploading,
+    results,
+    error,
+    handleFileChange,
+    handleUpload,
+    removeFile,
+  } = useFileUpload({
+    endpoint: '/api/licenses/ledger-csv-upload/',
+    fileFieldName: 'file',
+    multiple: false, // Single file mode
+    accept: '.csv',
+    onSuccess: (results) => {
+      // Clear file input after successful upload
+      const fileInput = document.getElementById('file-input');
+      if (fileInput && results.some(r => r.success)) {
+        fileInput.value = '';
       }
-      setFile(selectedFile);
-      setError(null);
-      setResult(null);
-    }
-  };
+    },
+  });
+
+  // Single file reference (for UI display)
+  const file = files && files.length > 0 ? files[0] : null;
+  const result = results && results.length > 0 ? results[0] : null;
 
   const fetchTemplateInfo = async () => {
     try {
@@ -29,7 +39,7 @@ const LedgerCSVUpload = () => {
       setTemplateInfo(response.data);
       setShowTemplate(true);
     } catch (err) {
-      setError('Failed to fetch template information');
+      // Error handled by hook
     }
   };
 
@@ -49,38 +59,6 @@ const LedgerCSVUpload = () => {
     a.download = 'ledger_template.csv';
     a.click();
     window.URL.revokeObjectURL(url);
-  };
-
-  const handleUpload = async () => {
-    if (!file) {
-      setError('Please select a file');
-      return;
-    }
-
-    setUploading(true);
-    setError(null);
-    setResult(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const response = await api.post('/api/licenses/ledger-csv-upload/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      setResult(response.data);
-      setFile(null);
-      // Reset file input
-      document.getElementById('file-input').value = '';
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to upload file');
-      setResult(err.response?.data);
-    } finally {
-      setUploading(false);
-    }
   };
 
   return (
@@ -188,7 +166,7 @@ const LedgerCSVUpload = () => {
               </div>
               <button
                 onClick={() => {
-                  setFile(null);
+                  removeFile(0);
                   document.getElementById('file-input').value = '';
                 }}
                 className="text-red-600 hover:text-red-800"
@@ -233,44 +211,57 @@ const LedgerCSVUpload = () => {
         )}
 
         {/* Success Result */}
-        {result && !error && (
+        {result && result.success && (
           <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <i className="bi bi-check-circle text-green-600" style={{fontSize: '1.25rem'}}></i>
               <div className="flex-1">
-                <h3 className="font-semibold text-green-900">{result.message}</h3>
-                <div className="mt-3 space-y-2 text-sm">
-                  <p className="text-green-700">
-                    ✓ Successfully processed: <span className="font-semibold">{result.success_count}</span> rows
-                  </p>
-                  {result.error_count > 0 && (
-                    <p className="text-red-600">
-                      ✗ Errors: <span className="font-semibold">{result.error_count}</span> rows
+                <h3 className="font-semibold text-green-900">{result.message || result.data?.message}</h3>
+                {result.data && (
+                  <div className="mt-3 space-y-2 text-sm">
+                    <p className="text-green-700">
+                      ✓ Successfully processed: <span className="font-semibold">{result.data.success_count}</span> rows
                     </p>
-                  )}
-                  {result.warning_count > 0 && (
-                    <p className="text-yellow-600">
-                      ⚠ Warnings: <span className="font-semibold">{result.warning_count}</span>
-                    </p>
-                  )}
-                </div>
+                    {result.data.error_count > 0 && (
+                      <p className="text-red-600">
+                        ✗ Errors: <span className="font-semibold">{result.data.error_count}</span> rows
+                      </p>
+                    )}
+                    {result.data.warning_count > 0 && (
+                      <p className="text-yellow-600">
+                        ⚠ Warnings: <span className="font-semibold">{result.data.warning_count}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
 
-                {result.errors && result.errors.length > 0 && (
+                {result.data?.errors && result.data.errors.length > 0 && (
                   <div className="mt-4">
                     <h4 className="font-semibold text-red-900 mb-2">Errors:</h4>
                     <div className="bg-white rounded p-3 max-h-60 overflow-y-auto">
-                      {result.errors.map((err, idx) => (
+                      {result.data.errors.map((err, idx) => (
                         <div key={idx} className="text-sm text-red-700 py-2 border-b last:border-b-0">
                           <span className="font-semibold">Row {err.row}:</span> {err.error}
                         </div>
                       ))}
                     </div>
-                    {result.note && (
-                      <p className="text-sm text-gray-600 mt-2">{result.note}</p>
+                    {result.data.note && (
+                      <p className="text-sm text-gray-600 mt-2">{result.data.note}</p>
                     )}
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Result */}
+        {result && !result.success && (
+          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+            <i className="bi bi-exclamation-circle text-red-600" style={{fontSize: '1.25rem'}}></i>
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-900">Upload Failed</h3>
+              <p className="text-red-700 text-sm mt-1">{result.error}</p>
             </div>
           </div>
         )}

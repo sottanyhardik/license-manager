@@ -1,171 +1,35 @@
-import React, { useState } from 'react';
-import api from '../api/axios';
+import React from 'react';
+import { useFileUpload } from '../hooks';
 
 const LedgerUpload = () => {
-  const [files, setFiles] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [results, setResults] = useState([]);
-  const [error, setError] = useState(null);
-  const [dragActive, setDragActive] = useState(false);
-  const [fileProgress, setFileProgress] = useState({});
-  const [currentFileIndex, setCurrentFileIndex] = useState(0);
-
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-    const droppedFiles = Array.from(e.dataTransfer.files).filter(
-      file => file.name.endsWith('.csv')
-    );
-
-    const validFiles = droppedFiles.filter(file => file.size <= MAX_FILE_SIZE);
-    const oversizedFiles = droppedFiles.filter(file => file.size > MAX_FILE_SIZE);
-
-    if (oversizedFiles.length > 0) {
-      setError(`${oversizedFiles.length} file(s) exceed the 50MB size limit and were not added`);
-    }
-
-    if (validFiles.length > 0) {
-      setFiles(validFiles);
-      if (!oversizedFiles.length) {
-        setError(null);
+  const {
+    files,
+    uploading,
+    results,
+    error,
+    dragActive,
+    fileProgress,
+    handleDrag,
+    handleDrop,
+    handleFileChange,
+    handleUpload,
+    formatFileSize,
+    removeFile,
+  } = useFileUpload({
+    endpoint: '/upload-ledger/',
+    fileFieldName: 'ledger',
+    multiple: true,
+    accept: '.csv',
+    maxFileSize: 50 * 1024 * 1024, // 50MB
+    timeout: 300000, // 5 minutes
+    onSuccess: (results) => {
+      // Clear file input after successful upload
+      const fileInput = document.getElementById('file-input');
+      if (fileInput && results.some(r => r.success)) {
+        fileInput.value = '';
       }
-      setResults([]);
-    } else if (!oversizedFiles.length) {
-      setError('Please drop CSV files only');
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-    const selectedFiles = Array.from(e.target.files);
-
-    const validFiles = selectedFiles.filter(file => file.size <= MAX_FILE_SIZE);
-    const oversizedFiles = selectedFiles.filter(file => file.size > MAX_FILE_SIZE);
-
-    if (oversizedFiles.length > 0) {
-      setError(`${oversizedFiles.length} file(s) exceed the 50MB size limit and were not added`);
-    } else {
-      setError(null);
-    }
-
-    setFiles(validFiles);
-    setResults([]);
-  };
-
-  const removeFile = (index) => {
-    setFiles(files.filter((_, i) => i !== index));
-  };
-
-  const handleUpload = async () => {
-    if (files.length === 0) {
-      setError('Please select at least one file');
-      return;
-    }
-
-    setUploading(true);
-    setError(null);
-    setResults([]);
-    setFileProgress({});
-    setCurrentFileIndex(0);
-
-    const uploadResults = [];
-
-    try {
-      // Upload files one by one
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        setCurrentFileIndex(i + 1);
-
-        // Initialize progress for this file
-        setFileProgress(prev => ({
-          ...prev,
-          [i]: { name: file.name, progress: 0, status: 'uploading' }
-        }));
-
-        try {
-          const formData = new FormData();
-          formData.append('ledger', file);
-
-          const response = await api.post('/upload-ledger/', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-            timeout: 300000, // 5 minutes timeout
-            onUploadProgress: (progressEvent) => {
-              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-              setFileProgress(prev => ({
-                ...prev,
-                [i]: { ...prev[i], progress: percentCompleted }
-              }));
-            },
-          });
-
-          // Mark as completed
-          setFileProgress(prev => ({
-            ...prev,
-            [i]: { ...prev[i], progress: 100, status: 'completed' }
-          }));
-
-          uploadResults.push({
-            fileName: file.name,
-            success: true,
-            message: response.data.message || 'File processed successfully',
-            licenses: response.data.licenses || [],
-            stats: response.data.stats || {}
-          });
-
-        } catch (err) {
-          // Mark as failed
-          setFileProgress(prev => ({
-            ...prev,
-            [i]: { ...prev[i], progress: 0, status: 'failed' }
-          }));
-
-          uploadResults.push({
-            fileName: file.name,
-            success: false,
-            error: err.response?.data?.error || err.message || 'Failed to process file'
-          });
-        }
-      }
-
-      setResults(uploadResults);
-
-      // Clear files after successful upload
-      const hasSuccess = uploadResults.some(r => r.success);
-      if (hasSuccess) {
-        setFiles([]);
-        document.getElementById('file-input').value = '';
-      }
-
-    } catch (err) {
-      setError('An unexpected error occurred during upload');
-    } finally {
-      setUploading(false);
-      setCurrentFileIndex(0);
-    }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
+    },
+  });
 
   return (
     <div className="container-fluid p-4">
@@ -293,7 +157,7 @@ const LedgerUpload = () => {
                   <div className="mb-3">
                     <h6 className="mb-2">
                       <i className="bi bi-cloud-upload me-2"></i>
-                      Uploading Files ({currentFileIndex} / {files.length})
+                      Uploading Files
                     </h6>
                   </div>
                   {Object.entries(fileProgress).map(([index, fileData]) => (

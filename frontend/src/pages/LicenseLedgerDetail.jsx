@@ -241,6 +241,58 @@ export default function LicenseLedgerDetail() {
                                     );
                                 })}
                             </tbody>
+                            <tfoot className="table-secondary">
+                                <tr>
+                                    <td colSpan="2" className="text-end fw-bold">Total:</td>
+                                    {isDFIA && <td></td>}
+                                    {isDFIA && (
+                                        <>
+                                            <td className="text-end fw-bold">
+                                                {formatIndianNumber(
+                                                    ledger.transactions.reduce((sum, t) => sum + (t.debit_cif || 0), 0),
+                                                    2
+                                                )}
+                                            </td>
+                                            <td className="text-end fw-bold border-end">
+                                                {formatIndianNumber(
+                                                    ledger.transactions.reduce((sum, t) => sum + (t.credit_cif || 0), 0),
+                                                    2
+                                                )}
+                                            </td>
+                                        </>
+                                    )}
+                                    {!isDFIA && (
+                                        <>
+                                            <td className="text-end fw-bold">
+                                                {formatIndianNumber(
+                                                    ledger.transactions.reduce((sum, t) => sum + (t.debit_license_value || 0), 0),
+                                                    2
+                                                )}
+                                            </td>
+                                            <td className="text-end fw-bold border-end">
+                                                {formatIndianNumber(
+                                                    ledger.transactions.reduce((sum, t) => sum + (t.credit_license_value || 0), 0),
+                                                    2
+                                                )}
+                                            </td>
+                                        </>
+                                    )}
+                                    <td></td>
+                                    <td className="text-end fw-bold">
+                                        {formatCurrency(
+                                            ledger.transactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0),
+                                            'INR'
+                                        )}
+                                    </td>
+                                    <td className="text-end fw-bold border-end">
+                                        {formatCurrency(
+                                            ledger.transactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0),
+                                            'INR'
+                                        )}
+                                    </td>
+                                    <td colSpan="2"></td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
@@ -271,11 +323,23 @@ export default function LicenseLedgerDetail() {
                             <div className="col-md-3">
                                 <p className="text-muted small mb-1">Total Profit/Loss</p>
                                 <h4 className={
-                                    ledger.transactions.reduce((sum, t) => sum + (t.profit_loss || 0), 0) >= 0
-                                        ? 'text-success' : 'text-danger'
+                                    (() => {
+                                        // Get the last sale transaction's profit_loss (it's cumulative)
+                                        const salesTransactions = ledger.transactions.filter(t => t.type === 'SALE');
+                                        const lastProfit = salesTransactions.length > 0
+                                            ? salesTransactions[salesTransactions.length - 1].profit_loss
+                                            : 0;
+                                        return lastProfit >= 0 ? 'text-success' : 'text-danger';
+                                    })()
                                 }>
                                     {formatCurrency(
-                                        ledger.transactions.reduce((sum, t) => sum + (t.profit_loss || 0), 0),
+                                        (() => {
+                                            // Get the last sale transaction's profit_loss (it's cumulative)
+                                            const salesTransactions = ledger.transactions.filter(t => t.type === 'SALE');
+                                            return salesTransactions.length > 0
+                                                ? salesTransactions[salesTransactions.length - 1].profit_loss
+                                                : 0;
+                                        })(),
                                         'INR'
                                     )}
                                 </h4>

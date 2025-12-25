@@ -337,6 +337,15 @@ export default function TradeForm() {
             line.cif_inr = parseFloat((parseFloat(line.cif_fc) * parseFloat(line.exc_rate)).toFixed(2));
         }
 
+        // Auto-calculate Exchange Rate from CIF INR and CIF $ if both exist (only in CIF_INR mode)
+        if (line.mode === "CIF_INR" && (field === 'cif_inr' || field === 'cif_fc') && line.cif_inr && line.cif_fc) {
+            const cifInr = parseFloat(line.cif_inr) || 0;
+            const cifFc = parseFloat(line.cif_fc) || 0;
+            if (cifFc > 0) {
+                line.exc_rate = Math.round((cifInr / cifFc) * 100) / 100;
+            }
+        }
+
         // If license item (sr_number) is selected and we're in CIF/FOB mode, get quantity from license item
         if (field === 'sr_number' && value && (line.mode === "CIF_INR" || line.mode === "FOB_INR")) {
             // The sr_number is the license import item object with quantity
@@ -481,6 +490,8 @@ export default function TradeForm() {
                     if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
                         delete cleanedLine.id;
                     }
+                    // Always set HSN code to 49070000
+                    cleanedLine.hsn_code = '49070000';
                     return cleanedLine;
                 });
                 formDataObj.append('lines', JSON.stringify(cleanedLines));
@@ -523,6 +534,8 @@ export default function TradeForm() {
                     if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
                         delete cleanedLine.id;
                     }
+                    // Always set HSN code to 49070000
+                    cleanedLine.hsn_code = '49070000';
                     return cleanedLine;
                 });
 
@@ -1135,8 +1148,8 @@ export default function TradeForm() {
                                         <input
                                             type="text"
                                             className="form-control form-control-sm"
-                                            value={line.hsn_code || "49070000"}
-                                            onChange={(e) => handleLineChange(index, 'hsn_code', e.target.value)}
+                                            value="49070000"
+                                            readOnly
                                         />
                                     </td>
                                     {billingMode === "CIF_INR" && (

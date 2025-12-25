@@ -316,9 +316,10 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             transactions = []
             running_balance = 0
 
-            # Track purchase rates for profit/loss calculation
+            # Track purchase and sales amounts for profit/loss calculation
             total_purchase_cif = 0
             total_purchase_amount = 0
+            total_sales_amount = 0  # Track total sales amount for simple profit calculation
 
             # Get all trades and sort by date
             all_trans = []
@@ -422,12 +423,10 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
                 else:  # SALE
                     running_balance -= total_cif_usd
+                    total_sales_amount += total_amount
 
-                    # Calculate profit/loss using weighted average purchase rate
-                    # If there's no purchase cost (original license), profit = sale amount
-                    avg_purchase_rate = total_purchase_amount / total_purchase_cif if total_purchase_cif > 0 else 0
-                    purchase_cost = total_cif_usd * avg_purchase_rate
-                    profit_loss = total_amount - purchase_cost if total_purchase_amount > 0 else total_amount
+                    # Calculate cumulative profit: Total Sales So Far - Total Purchase Amount
+                    cumulative_profit = total_sales_amount - total_purchase_amount
 
                     transactions.append({
                         'date': trans_date,
@@ -444,7 +443,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         'debit_amount': 0,
                         'credit_amount': total_amount,  # Sale amount is credit (revenue)
                         'balance': round(running_balance, 2),
-                        'profit_loss': round(profit_loss, 2),
+                        'profit_loss': round(cumulative_profit, 2),  # Show cumulative profit
                     })
 
             return Response({
@@ -471,6 +470,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             # Track purchase rates for profit/loss calculation
             total_purchase_value = 0
             total_purchase_amount = 0
+            total_sales_amount = 0  # Track total sales amount for simple profit calculation
             is_first_transaction = True
 
             # Get all trades that have THIS specific incentive license in their incentive_lines
@@ -533,12 +533,10 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
                 else:  # SALE
                     running_balance -= license_value
+                    total_sales_amount += amount
 
-                    # Calculate profit/loss using weighted average purchase rate (as percentage)
-                    avg_purchase_rate_pct = (
-                            total_purchase_amount / total_purchase_value * 100) if total_purchase_value > 0 else 0
-                    purchase_cost = license_value * avg_purchase_rate_pct / 100
-                    profit_loss = amount - purchase_cost
+                    # Calculate cumulative profit: Total Sales So Far - Total Purchase Amount
+                    cumulative_profit = total_sales_amount - total_purchase_amount
 
                     transactions.append({
                         'date': trade.invoice_date or timezone.now().date(),
@@ -553,7 +551,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         'debit_amount': 0,
                         'credit_amount': amount,  # Sale amount is credit
                         'balance': round(running_balance, 2),
-                        'profit_loss': round(profit_loss, 2),
+                        'profit_loss': round(cumulative_profit, 2),  # Show cumulative profit
                     })
                     is_first_transaction = False
 

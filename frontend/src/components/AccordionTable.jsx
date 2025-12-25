@@ -218,8 +218,8 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                     if (mode === 'CIF_INR' && ['qty_kg', 'fob_inr', 'rate_inr_per_kg'].includes(field.name)) {
                                         return null;
                                     }
-                                    // For FOB_INR mode: hide qty_kg, cif_fc, exc_rate, cif_inr, rate_inr_per_kg headers
-                                    if (mode === 'FOB_INR' && ['qty_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'rate_inr_per_kg'].includes(field.name)) {
+                                    // For FOB_INR mode: hide qty_kg, exc_rate, cif_inr, rate_inr_per_kg headers
+                                    if (mode === 'FOB_INR' && ['qty_kg', 'exc_rate', 'cif_inr', 'rate_inr_per_kg'].includes(field.name)) {
                                         return null;
                                     }
                                     // For QTY mode: hide cif_fc, exc_rate, cif_inr, fob_inr, pct headers
@@ -250,8 +250,8 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                         if (mode === 'CIF_INR' && ['qty_kg', 'fob_inr', 'rate_inr_per_kg'].includes(field.name)) {
                                             return null;
                                         }
-                                        // For FOB_INR mode: show only fob_inr (hide qty_kg, cif_fc, exc_rate, cif_inr, rate_inr_per_kg)
-                                        if (mode === 'FOB_INR' && ['qty_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'rate_inr_per_kg'].includes(field.name)) {
+                                        // For FOB_INR mode: show cif_fc and fob_inr (hide qty_kg, exc_rate, cif_inr, rate_inr_per_kg)
+                                        if (mode === 'FOB_INR' && ['qty_kg', 'exc_rate', 'cif_inr', 'rate_inr_per_kg'].includes(field.name)) {
                                             return null;
                                         }
                                         // For QTY mode: show only qty_kg, rate_inr_per_kg (hide cif_fc, exc_rate, cif_inr, fob_inr)

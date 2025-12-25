@@ -325,7 +325,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             for trade in trades:
                 all_trans.append((trade.direction, trade.invoice_date or timezone.now().date(), trade))
 
-            all_trans.sort(key=lambda x: (x[1], x[0] == 'PURCHASE'))  # Purchases first on same date
+            all_trans.sort(key=lambda x: (x[1], x[0] != 'PURCHASE'))  # Purchases first on same date
 
             # If there are no trades but there's an opening balance, add it first
             if len(all_trans) == 0 and float(license.opening_balance or 0) > 0:

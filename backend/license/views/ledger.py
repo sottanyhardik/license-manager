@@ -340,8 +340,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     'particular': f'Opening Balance - Original DFIA License',
                     'invoice_number': license.license_number,
                     'cif_usd': opening_cif,
+                    'debit_cif': opening_cif,  # Opening balance is debit
+                    'credit_cif': 0,
                     'rate': 0,
                     'amount': 0,
+                    'debit_amount': 0,
+                    'credit_amount': 0,
                     'balance': round(running_balance, 2),
                     'profit_loss': 0,
                 })
@@ -388,8 +392,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'particular': f'Opening Balance - Purchase from {trans_obj.from_company.name if trans_obj.from_company else "N/A"}',
                             'invoice_number': trans_obj.invoice_number or '',
                             'cif_usd': total_cif_usd,
+                            'debit_cif': total_cif_usd,  # Purchase is debit (asset increases)
+                            'credit_cif': 0,
                             'rate': round(rate, 2),
                             'amount': total_amount,
+                            'debit_amount': total_amount,  # Purchase amount is debit (cost)
+                            'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
                         })
@@ -402,8 +410,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
                             'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
                             'cif_usd': total_cif_usd,
+                            'debit_cif': total_cif_usd,  # Purchase is debit (asset increases)
+                            'credit_cif': 0,
                             'rate': round(rate, 2),
                             'amount': total_amount,
+                            'debit_amount': total_amount,  # Purchase amount is debit (cost)
+                            'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
                         })
@@ -425,8 +437,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
                         'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
                         'cif_usd': total_cif_usd,
+                        'debit_cif': 0,
+                        'credit_cif': total_cif_usd,  # Sale is credit (asset decreases)
                         'rate': round(rate, 2),
                         'amount': total_amount,
+                        'debit_amount': 0,
+                        'credit_amount': total_amount,  # Sale amount is credit (revenue)
                         'balance': round(running_balance, 2),
                         'profit_loss': round(profit_loss, 2),
                     })
@@ -488,8 +504,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'particular': f'Opening Balance - Purchase from {trade.from_company.name if trade.from_company else "N/A"}',
                             'invoice_number': trade.invoice_number or '',
                             'license_value': license_value,
+                            'debit_license_value': license_value,  # Purchase is debit
+                            'credit_license_value': 0,
                             'rate': round(rate_pct, 3),
                             'amount': amount,
+                            'debit_amount': amount,  # Purchase amount is debit
+                            'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
                         })
@@ -501,8 +521,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'particular': f'Purchase {license.license_type} - {trade.from_company.name if trade.from_company else "N/A"}',
                             'invoice_number': trade.invoice_number or '',
                             'license_value': license_value,
+                            'debit_license_value': license_value,  # Purchase is debit
+                            'credit_license_value': 0,
                             'rate': round(rate_pct, 3),
                             'amount': amount,
+                            'debit_amount': amount,  # Purchase amount is debit
+                            'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
                         })
@@ -522,8 +546,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         'particular': f'{license.license_type} Sale - {trade.to_company.name if trade.to_company else "N/A"}',
                         'invoice_number': trade.invoice_number or '',
                         'license_value': license_value,
+                        'debit_license_value': 0,
+                        'credit_license_value': license_value,  # Sale is credit
                         'rate': round(rate_pct, 3),
                         'amount': amount,
+                        'debit_amount': 0,
+                        'credit_amount': amount,  # Sale amount is credit
                         'balance': round(running_balance, 2),
                         'profit_loss': round(profit_loss, 2),
                     })

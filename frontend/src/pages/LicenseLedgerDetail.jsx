@@ -154,15 +154,21 @@ export default function LicenseLedgerDetail() {
                         <table className="table table-hover table-striped mb-0">
                             <thead className="table-dark sticky-top">
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Particular</th>
-                                    {isDFIA && <th>Item Name</th>}
-                                    {isDFIA && <th className="text-end">CIF $</th>}
-                                    {!isDFIA && <th className="text-end">License Value</th>}
-                                    <th className="text-end">Rate</th>
-                                    <th className="text-end">Amount (₹)</th>
-                                    <th className="text-end">Balance</th>
-                                    <th className="text-end">Profit/Loss</th>
+                                    <th rowSpan="2">Date</th>
+                                    <th rowSpan="2">Particular</th>
+                                    {isDFIA && <th rowSpan="2">Item Name</th>}
+                                    {isDFIA && <th colSpan="2" className="text-center border-end">CIF $</th>}
+                                    {!isDFIA && <th colSpan="2" className="text-center border-end">License Value</th>}
+                                    <th rowSpan="2" className="text-end">Rate</th>
+                                    <th colSpan="2" className="text-center border-end">Amount (₹)</th>
+                                    <th rowSpan="2" className="text-end">Balance</th>
+                                    <th rowSpan="2" className="text-end">Profit/Loss</th>
+                                </tr>
+                                <tr>
+                                    <th className="text-end">Debit</th>
+                                    <th className="text-end border-end">Credit</th>
+                                    <th className="text-end">Debit</th>
+                                    <th className="text-end border-end">Credit</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -188,20 +194,33 @@ export default function LicenseLedgerDetail() {
                                             </td>
                                             {isDFIA && <td><small>{txn.items || '-'}</small></td>}
                                             {isDFIA && (
-                                                <td className="text-end">
-                                                    {txn.cif_usd ? formatIndianNumber(txn.cif_usd, 2) : '-'}
-                                                </td>
+                                                <>
+                                                    <td className="text-end">
+                                                        {txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '-'}
+                                                    </td>
+                                                    <td className="text-end border-end">
+                                                        {txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : '-'}
+                                                    </td>
+                                                </>
                                             )}
                                             {!isDFIA && (
-                                                <td className="text-end">
-                                                    {txn.license_value ? formatIndianNumber(txn.license_value, 2) : '-'}
-                                                </td>
+                                                <>
+                                                    <td className="text-end">
+                                                        {txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '-'}
+                                                    </td>
+                                                    <td className="text-end border-end">
+                                                        {txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : '-'}
+                                                    </td>
+                                                </>
                                             )}
                                             <td className="text-end">
                                                 {txn.rate ? formatIndianNumber(txn.rate, 2) : '-'}
                                             </td>
                                             <td className="text-end">
-                                                {txn.amount ? formatCurrency(txn.amount, 'INR') : '-'}
+                                                {txn.debit_amount ? formatCurrency(txn.debit_amount, 'INR') : '-'}
+                                            </td>
+                                            <td className="text-end border-end">
+                                                {txn.credit_amount ? formatCurrency(txn.credit_amount, 'INR') : '-'}
                                             </td>
                                             <td className="text-end fw-bold">
                                                 {formatIndianNumber(txn.balance, 2)}

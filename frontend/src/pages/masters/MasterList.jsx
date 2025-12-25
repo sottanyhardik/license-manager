@@ -193,18 +193,25 @@ export default function MasterList() {
             // Check if we should restore filters from previous session
             const shouldRestore = shouldRestoreFilters();
             const restored = shouldRestore ? restoreFilterState(entityName) : null;
+            const defaultFilters = getDefaultFilters();
 
             if (restored) {
-                // Restore previous filter state
-                setFilterParams(restored.filters);
+                // Merge restored filters with default filters
+                // For incentive-licenses, ensure sold_status is always set (use default if not in restored)
+                const mergedFilters = {
+                    ...restored.filters,
+                    ...Object.fromEntries(
+                        Object.entries(defaultFilters).filter(([key]) => !(key in restored.filters))
+                    )
+                };
+                setFilterParams(mergedFilters);
                 setCurrentPage(restored.pagination?.currentPage || 1);
                 setPageSize(restored.pagination?.pageSize || 25);
                 backendDefaultsApplied.current = true;
-                fetchData(restored.pagination?.currentPage || 1, restored.pagination?.pageSize || 25, restored.filters);
+                fetchData(restored.pagination?.currentPage || 1, restored.pagination?.pageSize || 25, mergedFilters);
             } else {
                 // Use default filters
                 setCurrentPage(1);
-                const defaultFilters = getDefaultFilters();
                 setFilterParams(defaultFilters);
                 backendDefaultsApplied.current = true;
                 fetchData(1, 25, defaultFilters);

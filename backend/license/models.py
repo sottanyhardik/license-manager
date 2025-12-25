@@ -38,8 +38,7 @@ from core.models import PurchaseStatus, SchemeCode, NotificationNumber  # kept f
 # -----------------------------
 # Import centralized utilities
 # -----------------------------
-from core.utils.decimal_utils import to_decimal as _to_decimal
-from license.helper import round_down  # assume this accepts Decimal and returns Decimal
+from core.utils.decimal_utils import to_decimal as _to_decimal, round_decimal_down as round_down
 
 _D = Decimal  # shorthand
 

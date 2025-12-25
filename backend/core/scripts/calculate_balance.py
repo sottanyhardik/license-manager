@@ -1,7 +1,7 @@
 from django.db.models import Sum
 
 from core.constants import N2015
-from license.helper import round_down
+from core.utils.decimal_utils import round_decimal_down as round_down
 
 
 def calculate_available_quantity(instance):

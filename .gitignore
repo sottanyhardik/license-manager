@@ -22,6 +22,11 @@ db.sqlite3
 media/
 staticfiles/
 
+# Database backups and sensitive data
+*.sql
+*.csv
+remote_db_backup_*.sql
+
 # Node
 node_modules/
 dist/

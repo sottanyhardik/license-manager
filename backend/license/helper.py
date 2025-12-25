@@ -1,44 +1,5 @@
 from django.db.models import Sum
 
-from core.constants import DEBIT
-
-
-def calculate(self):
-    """
-    DEPRECATED: Use ItemBalanceCalculator.calculate_item_credit_debit() instead.
-    This function is kept for backward compatibility.
-    """
-    from license.services.balance_calculator import ItemBalanceCalculator
-    return ItemBalanceCalculator.calculate_item_credit_debit(self)
-
-
-def round_down(n, decimals=0):
-    """
-    DEPRECATED: Use round_decimal_down() from core.utils.decimal_utils instead.
-    This function is kept for backward compatibility.
-    """
-    from core.utils.decimal_utils import round_decimal_down
-    return round_decimal_down(n, decimals)
-
-
-def check_license():
-    """
-    DEPRECATED: Use LicenseValidationService.update_license_flags() instead.
-    This function is kept for backward compatibility but updated to use services.
-    """
-    from license.models import LicenseDetailsModel
-    from license.services.validation_service import LicenseValidationService
-
-    for license in LicenseDetailsModel.objects.all():
-        # Use service to update flags
-        flags = LicenseValidationService.update_license_flags(license)
-
-        # Apply flags to model
-        for flag_name, flag_value in flags.items():
-            setattr(license, flag_name, flag_value)
-
-        license.save()
-
 
 def item_wise_debiting(dfia, item_head, item_name=None):
     dict_list = []

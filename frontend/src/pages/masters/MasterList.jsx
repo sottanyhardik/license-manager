@@ -45,7 +45,7 @@ export default function MasterList() {
     const [hasNext, setHasNext] = useState(false);
     const [hasPrevious, setHasPrevious] = useState(false);
 
-    // Filter state with default filters for allotments and bill-of-entries
+    // Filter state with default filters for allotments, bill-of-entries, and incentive-licenses
     const getDefaultFilters = () => {
         if (entityName === 'allotments') {
             return {
@@ -57,6 +57,11 @@ export default function MasterList() {
         if (entityName === 'bill-of-entries') {
             return {
                 is_invoice: 'False'
+            };
+        }
+        if (entityName === 'incentive-licenses') {
+            return {
+                sold_status: ''  // Empty string = "All" (shows both sold and unsold)
             };
         }
         return {};

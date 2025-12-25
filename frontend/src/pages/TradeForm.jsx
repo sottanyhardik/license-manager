@@ -1126,6 +1126,9 @@ export default function TradeForm() {
                                             onChange={(val) => handleLineChange(index, 'sr_number', val)}
                                             isClearable={true}
                                             placeholder="Select License SR..."
+                                            formatLabel={(option) =>
+                                                option.label || `SR ${option.sr_number || option.id}`
+                                            }
                                         />
                                     </td>
                                     <td>
@@ -1293,7 +1296,7 @@ export default function TradeForm() {
                                             <td>
                                                 <HybridSelect
                                                     fieldMeta={{
-                                                        endpoint: "/incentive-licenses/",
+                                                        endpoint: "/incentive-licenses/?sold_status=",
                                                         label_field: "license_number"
                                                     }}
                                                     value={line.incentive_license}

@@ -276,8 +276,8 @@ export default function TradeForm() {
                 const { data } = await api.get(`/incentive-licenses/${value}/`);
                 console.log('Fetched incentive license data:', data);
 
-                // Store the full object for reference
-                line.incentive_license = data;
+                // Keep the ID as the value (don't replace with full object)
+                // line.incentive_license is already set to 'value' on line 267
 
                 // Auto-fill license_value from fetched data
                 line.license_value = parseFloat(data.license_value) || 0;

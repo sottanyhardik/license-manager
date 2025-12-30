@@ -44,6 +44,7 @@ export const useFileUpload = (options = {}) => {
     accept = '.csv',
     maxFileSize = 50 * 1024 * 1024, // 50MB default
     fileFieldName = 'file', // Field name for FormData
+    uploadMode = 'sequential', // 'sequential' or 'batch' (all files in one request)
     onSuccess,
     onError,
     onFileAdded,
@@ -210,21 +211,22 @@ export const useFileUpload = (options = {}) => {
 
     const uploadResults = [];
 
-    // Upload files sequentially
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      setCurrentFileIndex(i + 1);
+    if (uploadMode === 'batch') {
+      // Upload all files in a single request
+      const formData = new FormData();
+      files.forEach(file => {
+        formData.append(fileFieldName, file);
+      });
 
-      // Initialize progress for this file
-      setFileProgress(prev => ({
-        ...prev,
-        [i]: { name: file.name, progress: 0, status: 'uploading' }
-      }));
+      // Initialize progress for all files
+      files.forEach((file, i) => {
+        setFileProgress(prev => ({
+          ...prev,
+          [i]: { name: file.name, progress: 0, status: 'uploading' }
+        }));
+      });
 
       try {
-        const formData = new FormData();
-        formData.append(fileFieldName, file);
-
         const response = await api.post(endpoint, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
           timeout,
@@ -232,45 +234,116 @@ export const useFileUpload = (options = {}) => {
             const percentCompleted = Math.round(
               (progressEvent.loaded * 100) / progressEvent.total
             );
-            setFileProgress(prev => ({
-              ...prev,
-              [i]: { ...prev[i], progress: percentCompleted }
-            }));
+            // Update all files with same progress
+            files.forEach((file, i) => {
+              setFileProgress(prev => ({
+                ...prev,
+                [i]: { ...prev[i], progress: percentCompleted }
+              }));
+            });
           },
         });
 
-        // Mark as completed
-        setFileProgress(prev => ({
-          ...prev,
-          [i]: { ...prev[i], progress: 100, status: 'completed' }
-        }));
+        // Mark all as completed
+        files.forEach((file, i) => {
+          setFileProgress(prev => ({
+            ...prev,
+            [i]: { ...prev[i], progress: 100, status: 'completed' }
+          }));
+        });
 
         uploadResults.push({
-          fileName: file.name,
+          fileName: files.length > 1 ? `${files.length} files` : files[0].name,
           success: true,
-          message: response.data.message || 'File processed successfully',
+          message: response.data.message || 'Files processed successfully',
           licenses: response.data.licenses || [],
           stats: response.data.stats || {},
           data: response.data,
         });
 
       } catch (err) {
-        // Mark as failed
-        setFileProgress(prev => ({
-          ...prev,
-          [i]: { ...prev[i], progress: 0, status: 'failed' }
-        }));
+        // Mark all as failed
+        files.forEach((file, i) => {
+          setFileProgress(prev => ({
+            ...prev,
+            [i]: { ...prev[i], progress: 0, status: 'failed' }
+          }));
+        });
 
         const errorMsg = err.response?.data?.error
           || err.response?.data?.detail
           || err.message
-          || 'Failed to process file';
+          || 'Failed to process files';
 
         uploadResults.push({
-          fileName: file.name,
+          fileName: files.length > 1 ? `${files.length} files` : files[0].name,
           success: false,
           error: errorMsg
         });
+      }
+    } else {
+      // Upload files sequentially (original behavior)
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setCurrentFileIndex(i + 1);
+
+        // Initialize progress for this file
+        setFileProgress(prev => ({
+          ...prev,
+          [i]: { name: file.name, progress: 0, status: 'uploading' }
+        }));
+
+        try {
+          const formData = new FormData();
+          formData.append(fileFieldName, file);
+
+          const response = await api.post(endpoint, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout,
+            onUploadProgress: (progressEvent) => {
+              const percentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
+              setFileProgress(prev => ({
+                ...prev,
+                [i]: { ...prev[i], progress: percentCompleted }
+              }));
+            },
+          });
+
+          // Mark as completed
+          setFileProgress(prev => ({
+            ...prev,
+            [i]: { ...prev[i], progress: 100, status: 'completed' }
+          }));
+
+          uploadResults.push({
+            fileName: file.name,
+            success: true,
+            message: response.data.message || 'File processed successfully',
+            licenses: response.data.licenses || [],
+            stats: response.data.stats || {},
+            data: response.data,
+          });
+
+        } catch (err) {
+          // Mark as failed
+          setFileProgress(prev => ({
+            ...prev,
+            [i]: { ...prev[i], progress: 0, status: 'failed' }
+          }));
+
+          const errorMsg = err.response?.data?.error
+            || err.response?.data?.detail
+            || err.message
+            || 'Failed to process file';
+
+          uploadResults.push({
+            fileName: file.name,
+            success: false,
+            error: errorMsg
+          });
+        }
       }
     }
 
@@ -291,8 +364,9 @@ export const useFileUpload = (options = {}) => {
       }
     }
 
+    const failedCount = uploadResults.filter(r => !r.success).length;
+
     if (hasFailure) {
-      const failedCount = uploadResults.filter(r => !r.success).length;
       toast.error(`${failedCount} file(s) failed to upload`);
 
       if (onError) {

@@ -19,6 +19,7 @@ const LedgerUpload = () => {
   } = useFileUpload({
     endpoint: '/upload-ledger/',
     fileFieldName: 'ledger',
+    uploadMode: 'sequential', // Send files one by one
     multiple: true,
     accept: '.csv',
     maxFileSize: 50 * 1024 * 1024, // 50MB

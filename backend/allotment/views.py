@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.permissions import AllotmentPermission
 from allotment.models import AllotmentModel
 from allotment.serializers import AllotmentSerializer
 from allotment.views_export import add_grouped_export_action
@@ -137,6 +138,9 @@ AllotmentViewSet = MasterViewSet.create_viewset(
 
 # Add grouped export functionality
 AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)
+
+# Add permission classes
+AllotmentViewSet.permission_classes = [AllotmentPermission]
 
 # Add default filters and performance optimizations
 original_get_queryset = AllotmentViewSet.get_queryset

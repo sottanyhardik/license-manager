@@ -57,7 +57,7 @@ export default function Sidebar() {
                     ))}
 
                 {/* Reports Dropdown */}
-                {hasRole(["admin", "manager"]) && (
+                {hasRole(["REPORT_VIEWER", "LICENSE_MANAGER", "TRADE_MANAGER", "ALLOTMENT_MANAGER", "BOE_MANAGER", "INCENTIVE_LICENSE_MANAGER"]) && (
                     <li className="nav-item mb-1">
                         <button
                             className={`nav-link text-white w-100 text-start d-flex align-items-center justify-content-between ${isActive("/reports") ? "active" : ""}`}
@@ -123,7 +123,7 @@ export default function Sidebar() {
                 )}
 
                 {/* Masters Dropdown */}
-                {hasRole(["admin", "manager"]) && (
+                {hasRole(["USER_MANAGER", "LICENSE_MANAGER", "TRADE_MANAGER", "ALLOTMENT_MANAGER", "BOE_MANAGER", "INCENTIVE_LICENSE_MANAGER"]) && (
                     <li className="nav-item mb-1">
                         <button
                             className={`nav-link text-white w-100 text-start d-flex align-items-center justify-content-between ${isActive("/masters") ? "active" : ""}`}

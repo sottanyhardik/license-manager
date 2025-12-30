@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 
+from accounts.permissions import TradePermission
 from core.views import MasterViewSet
 from .models import LicenseTrade, LicenseTradeLine, LicenseTradePayment
 from .serializers import (
@@ -246,6 +247,9 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
         "ordering": ["-invoice_date", "-invoice_number", "-created_on"]
     }
 )
+
+# Add permission classes
+LicenseTradeViewSet.permission_classes = [TradePermission]
 
 
 # Add custom actions to TradeViewSet

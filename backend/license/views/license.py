@@ -2,6 +2,7 @@
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.permissions import LicensePermission
 from core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, \
     NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
@@ -163,6 +164,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     - is_expired: True when license_expiry_date < today, False when license_expiry_date >= today
     - is_null: True when balance_cif < 200, False when balance_cif >= 200
     """
+    permission_classes = [LicensePermission]
     lookup_value_regex = '[^/]+'  # Allow both numbers and strings
 
     def get_object(self):

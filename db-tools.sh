@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-REMOTE_SERVER="django@139.59.92.226"
+REMOTE_SERVER="django@143.110.252.201"
 REMOTE_DB_NAME="lmanagement"
 REMOTE_DB_USER="lmanagement"
 REMOTE_DB_PASS="lmanagement"
@@ -206,14 +206,31 @@ sync_db() {
     BACKUP_FILE="remote_db_backup_$(date +%Y%m%d_%H%M%S).sql"
     mkdir -p "$BACKUP_DIR"
 
-    print_info "Step 1/2: Downloading database..."
-    ssh $REMOTE_SERVER "PGPASSWORD='$REMOTE_DB_PASS' pg_dump -U $REMOTE_DB_USER -d $REMOTE_DB_NAME -F p -f /tmp/$BACKUP_FILE"
-    scp $REMOTE_SERVER:/tmp/$BACKUP_FILE "$BACKUP_DIR/$BACKUP_FILE" > /dev/null 2>&1
+    print_info "Step 1/3: Creating backup on remote server..."
+    ssh $REMOTE_SERVER "PGPASSWORD='$REMOTE_DB_PASS' pg_dump -U $REMOTE_DB_USER -d $REMOTE_DB_NAME -F c -Z 6 -f /tmp/$BACKUP_FILE"
+
+    if [ $? -ne 0 ]; then
+        print_error "Failed to create backup on remote server"
+        exit 1
+    fi
+    print_success "Remote backup created"
+
+    print_info "Step 2/3: Downloading database..."
+    scp -C $REMOTE_SERVER:/tmp/$BACKUP_FILE "$BACKUP_DIR/$BACKUP_FILE"
+
+    if [ $? -ne 0 ]; then
+        print_error "Failed to download backup"
+        ssh $REMOTE_SERVER "rm /tmp/$BACKUP_FILE" 2>/dev/null
+        exit 1
+    fi
+
+    local size=$(du -h "$BACKUP_DIR/$BACKUP_FILE" | cut -f1)
+    print_success "Downloaded $size to $BACKUP_DIR/$BACKUP_FILE"
+
     ssh $REMOTE_SERVER "rm /tmp/$BACKUP_FILE"
-    print_success "Downloaded to $BACKUP_DIR/$BACKUP_FILE"
 
     echo ""
-    print_info "Step 2/2: Restoring to local database..."
+    print_info "Step 3/3: Restoring to local database..."
 
     # Warning
     echo -e "${RED}⚠️  This will DELETE all local data${NC}"
@@ -224,15 +241,34 @@ sync_db() {
     fi
 
     # Restore
+    print_info "Stopping Django server..."
     pkill -f "python.*manage.py runserver" 2>/dev/null || true
+
+    print_info "Recreating database..."
     psql -U hardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;" 2>/dev/null
     psql -U hardiksottany -d postgres -c "CREATE DATABASE $LOCAL_DB_NAME OWNER $LOCAL_DB_USER;" 2>/dev/null
-    PGPASSWORD="$LOCAL_DB_PASS" psql -U $LOCAL_DB_USER -d $LOCAL_DB_NAME -f "$BACKUP_DIR/$BACKUP_FILE" > /dev/null 2>&1
 
+    if [ $? -ne 0 ]; then
+        print_error "Failed to recreate database"
+        exit 1
+    fi
+
+    print_info "Restoring backup (this may take a while)..."
+    PGPASSWORD="$LOCAL_DB_PASS" pg_restore -U $LOCAL_DB_USER -d $LOCAL_DB_NAME -j 4 --no-owner --no-acl "$BACKUP_DIR/$BACKUP_FILE" 2>/dev/null
+
+    if [ $? -ne 0 ]; then
+        print_error "Failed to restore backup"
+        exit 1
+    fi
+    print_success "Database restored"
+
+    print_info "Running migrations..."
     cd backend
     python manage.py migrate --noinput > /dev/null 2>&1
     cd ..
+    print_success "Migrations complete"
 
+    echo ""
     print_success "Database synced successfully!"
     echo ""
     print_info "Backup saved: $BACKUP_DIR/$BACKUP_FILE"

@@ -6,6 +6,41 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
+class Role(models.Model):
+    """
+    Role model for RBAC system
+    """
+    ROLE_CODES = [
+        ('LICENSE_MANAGER', 'License Manager'),
+        ('LICENSE_VIEWER', 'License Viewer'),
+        ('ALLOTMENT_VIEWER', 'Allotment Viewer'),
+        ('ALLOTMENT_MANAGER', 'Allotment Manager'),
+        ('BOE_VIEWER', 'Bill of Entry Viewer'),
+        ('BOE_MANAGER', 'Bill of Entry Manager'),
+        ('TRADE_VIEWER', 'Trade Viewer'),
+        ('TRADE_MANAGER', 'Trade Manager'),
+        ('INCENTIVE_LICENSE_MANAGER', 'Incentive License Manager'),
+        ('INCENTIVE_LICENSE_VIEWER', 'Incentive License Viewer'),
+        ('USER_MANAGER', 'User Manager'),
+        ('REPORT_VIEWER', 'Report Viewer'),
+    ]
+
+    code = models.CharField(max_length=50, unique=True, choices=ROLE_CODES)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("role")
+        verbose_name_plural = _("roles")
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
@@ -60,12 +95,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
 
-    ROLE_CHOICES = [
-        ('admin', 'Admin'),
-        ('manager', 'Manager'),
-        ('accounts', 'Accounts'),
-    ]
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='accounts')
+    # Many-to-Many relationship with Role model
+    roles = models.ManyToManyField(
+        Role,
+        verbose_name=_('roles'),
+        blank=True,
+        related_name='users',
+        help_text=_('The roles assigned to this user.')
+    )
 
     # Override group & permission related_names so they don't clash with auth.User if present
     groups = models.ManyToManyField(
@@ -103,3 +140,21 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_short_name(self):
         return self.username or self.email
+
+    def has_role(self, role_code):
+        """Check if user has a specific role"""
+        if self.is_superuser:
+            return True
+        return self.roles.filter(code=role_code, is_active=True).exists()
+
+    def has_any_role(self, role_codes):
+        """Check if user has any of the specified roles"""
+        if self.is_superuser:
+            return True
+        return self.roles.filter(code__in=role_codes, is_active=True).exists()
+
+    def get_role_codes(self):
+        """Get list of role codes assigned to the user"""
+        if self.is_superuser:
+            return [code for code, _ in Role.ROLE_CODES]
+        return list(self.roles.filter(is_active=True).values_list('code', flat=True))

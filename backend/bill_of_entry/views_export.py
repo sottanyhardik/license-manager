@@ -102,8 +102,8 @@ def add_grouped_export_action(viewset_class):
                     f"Total CIF (INR): {pdf_exporter.format_number(total_inr)}")
         pdf_exporter.add_title(elements, subtitle=subtitle)
 
-        # Process each company (sorted alphabetically)
-        for company_name, license_dict in sorted(grouped_data.items()):
+        # Process each company (sorted alphabetically, None values last)
+        for company_name, license_dict in sorted(grouped_data.items(), key=lambda x: (x[0] is None, x[0] or '')):
             # Company header
             pdf_exporter.add_company_header(elements, company_name)
 
@@ -330,8 +330,8 @@ def add_grouped_export_action(viewset_class):
         cell.alignment = Alignment(horizontal='center')
         row += 2
 
-        # Process each company (sorted alphabetically)
-        for company_name, license_dict in sorted(grouped_data.items()):
+        # Process each company (sorted alphabetically, None values last)
+        for company_name, license_dict in sorted(grouped_data.items(), key=lambda x: (x[0] is None, x[0] or '')):
             # Company header
             ws.merge_cells(f'A{row}:R{row}')
             cell = ws[f'A{row}']

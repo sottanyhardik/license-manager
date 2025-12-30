@@ -7,12 +7,14 @@ from .views import (
     LogoutView,
     MeView,
     PasswordResetRequestView,
-    PasswordResetConfirmView
+    PasswordResetConfirmView,
+    UserManagementViewSet,
+    RoleViewSet
 )
-from .views.user_management import UserManagementViewSet
 
 router = DefaultRouter()
 router.register(r'users', UserManagementViewSet, basename='user')
+router.register(r'roles', RoleViewSet, basename='role')
 
 urlpatterns = [
     path("login/", LoginView.as_view(), name="api-login"),
@@ -23,6 +25,6 @@ urlpatterns = [
     path("password-reset/", PasswordResetRequestView.as_view(), name="password_reset_request"),
     path("password-reset-confirm/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
 
-    # User management routes
+    # User management and role routes
     path("", include(router.urls)),
 ]

@@ -3,6 +3,7 @@ from django.db.models import Q
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.permissions import BillOfEntryPermission
 from bill_of_entry.models import BillOfEntryModel
 from bill_of_entry.serializers import BillOfEntrySerializer
 from bill_of_entry.views_export import add_grouped_export_action
@@ -183,6 +184,9 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
 
 # Add grouped export functionality
 BillOfEntryViewSet = add_grouped_export_action(BillOfEntryViewSet)
+
+# Add permission classes
+BillOfEntryViewSet.permission_classes = [BillOfEntryPermission]
 
 
 # Add custom action to fetch allotment details

@@ -1,6 +1,8 @@
 # license/views_incentive.py
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Case, When, Value, CharField
 from django_filters import rest_framework as filters
+
+from accounts.permissions import IncentiveLicensePermission
 from core.views.master_view import MasterViewSet
 from core.views.views import enhance_config_with_fk
 from license.models import IncentiveLicense
@@ -28,6 +30,7 @@ class IncentiveLicenseFilter(filters.FilterSet):
 # Create IncentiveLicense ViewSet using MasterViewSet with proper FK enhancement
 class IncentiveLicenseViewSetClass(MasterViewSet):
     """Custom ViewSet for IncentiveLicense with sold status filtering"""
+    permission_classes = [IncentiveLicensePermission]
     filterset_class = IncentiveLicenseFilter
 
     def get_queryset(self):

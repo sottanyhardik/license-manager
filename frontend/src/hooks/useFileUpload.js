@@ -43,6 +43,7 @@ export const useFileUpload = (options = {}) => {
     multiple = true,
     accept = '.csv',
     maxFileSize = 50 * 1024 * 1024, // 50MB default
+    fileFieldName = 'file', // Field name for FormData
     onSuccess,
     onError,
     onFileAdded,
@@ -222,7 +223,7 @@ export const useFileUpload = (options = {}) => {
 
       try {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append(fileFieldName, file);
 
         const response = await api.post(endpoint, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -248,6 +249,8 @@ export const useFileUpload = (options = {}) => {
           fileName: file.name,
           success: true,
           message: response.data.message || 'File processed successfully',
+          licenses: response.data.licenses || [],
+          stats: response.data.stats || {},
           data: response.data,
         });
 

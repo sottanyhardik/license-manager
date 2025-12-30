@@ -4,7 +4,7 @@ export const routes = [
         label: "Dashboard",
         component: "Dashboard",
         protected: true,
-        roles: ["admin", "manager", "accounts"],
+        roles: [], // All authenticated users can access dashboard
         icon: "speedometer2",
     },
     {
@@ -12,7 +12,7 @@ export const routes = [
         label: "Licenses",
         component: "LicensePage",
         protected: true,
-        roles: ["admin", "manager"],
+        roles: ["LICENSE_MANAGER", "LICENSE_VIEWER"],
         icon: "file-earmark-text",
     },
     {
@@ -20,7 +20,7 @@ export const routes = [
         label: "Allotments",
         component: "AllotmentPage",
         protected: true,
-        roles: ["admin", "manager"],
+        roles: ["ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER"],
         icon: "box-seam",
     },
     {
@@ -28,7 +28,7 @@ export const routes = [
         label: "Bill of Entry",
         component: "MasterList",
         protected: true,
-        roles: ["admin", "manager"],
+        roles: ["BOE_MANAGER", "BOE_VIEWER"],
         icon: "receipt",
     },
     {
@@ -36,7 +36,7 @@ export const routes = [
         label: "Trade In & Out",
         component: "MasterList",
         protected: true,
-        roles: ["admin", "manager"],
+        roles: ["TRADE_MANAGER", "TRADE_VIEWER"],
         icon: "arrow-left-right",
     },
     {
@@ -44,7 +44,7 @@ export const routes = [
         label: "Incentive Licenses",
         component: "MasterList",
         protected: true,
-        roles: ["admin", "manager"],
+        roles: ["INCENTIVE_LICENSE_MANAGER", "INCENTIVE_LICENSE_VIEWER"],
         icon: "award",
     },
     {
@@ -52,7 +52,7 @@ export const routes = [
         label: "License Ledger",
         component: "LicenseLedger",
         protected: true,
-        roles: ["admin", "manager", "accounts"],
+        roles: ["TRADE_VIEWER", "TRADE_MANAGER", "LICENSE_MANAGER"],
         icon: "journal-text",
     },
     {
@@ -60,7 +60,7 @@ export const routes = [
         label: "Settings",
         component: "Settings",
         protected: true,
-        roles: ["admin"],
+        roles: ["USER_MANAGER"],
         icon: "gear",
     },
 ];

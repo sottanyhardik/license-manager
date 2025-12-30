@@ -6,21 +6,27 @@ import api from "../api/axios";
 export default function Settings() {
     const navigate = useNavigate();
     const [users, setUsers] = useState([]);
+    const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [showRoleModal, setShowRoleModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
+    const [selectedUserForRoles, setSelectedUserForRoles] = useState(null);
+    const [selectedRoles, setSelectedRoles] = useState([]);
+
     const [formData, setFormData] = useState({
         username: "",
         email: "",
         first_name: "",
         last_name: "",
-        role: "accounts",
+        role_ids: [],
         password: "",
         is_active: true
     });
 
     useEffect(() => {
         loadUsers();
+        loadRoles();
     }, []);
 
     const loadUsers = async () => {
@@ -34,6 +40,15 @@ export default function Settings() {
         }
     };
 
+    const loadRoles = async () => {
+        try {
+            const response = await api.get("auth/roles/");
+            setRoles(response.data);
+        } catch (error) {
+            toast.error("Failed to load roles");
+        }
+    };
+
     const handleOpenModal = (user = null) => {
         if (user) {
             setEditingUser(user);
@@ -42,7 +57,7 @@ export default function Settings() {
                 email: user.email || "",
                 first_name: user.first_name || "",
                 last_name: user.last_name || "",
-                role: user.role,
+                role_ids: user.roles ? user.roles.map(r => r.id) : [],
                 password: "",
                 is_active: user.is_active
             });
@@ -53,7 +68,7 @@ export default function Settings() {
                 email: "",
                 first_name: "",
                 last_name: "",
-                role: "accounts",
+                role_ids: [],
                 password: "",
                 is_active: true
             });
@@ -64,6 +79,48 @@ export default function Settings() {
     const handleCloseModal = () => {
         setShowModal(false);
         setEditingUser(null);
+    };
+
+    const handleOpenRoleModal = (user) => {
+        setSelectedUserForRoles(user);
+        setSelectedRoles(user.roles ? user.roles.map(r => r.id) : []);
+        setShowRoleModal(true);
+    };
+
+    const handleCloseRoleModal = () => {
+        setShowRoleModal(false);
+        setSelectedUserForRoles(null);
+        setSelectedRoles([]);
+    };
+
+    const handleToggleRole = (roleId) => {
+        setSelectedRoles(prev =>
+            prev.includes(roleId)
+                ? prev.filter(id => id !== roleId)
+                : [...prev, roleId]
+        );
+    };
+
+    const handleSaveRoles = async () => {
+        try {
+            await api.post(`auth/users/${selectedUserForRoles.id}/assign-roles/`, {
+                role_ids: selectedRoles
+            });
+            toast.success("Roles updated successfully");
+            handleCloseRoleModal();
+            loadUsers();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || "Failed to update roles");
+        }
+    };
+
+    const handleToggleFormRole = (roleId) => {
+        setFormData(prev => ({
+            ...prev,
+            role_ids: prev.role_ids.includes(roleId)
+                ? prev.role_ids.filter(id => id !== roleId)
+                : [...prev.role_ids, roleId]
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -160,7 +217,7 @@ export default function Settings() {
                                 <th>Username</th>
                                 <th>Email</th>
                                 <th>Name</th>
-                                <th>Role</th>
+                                <th>Roles</th>
                                 <th>Status</th>
                                 <th>Date Joined</th>
                                 <th>Actions</th>
@@ -169,17 +226,33 @@ export default function Settings() {
                             <tbody>
                             {users.map((user) => (
                                 <tr key={user.id}>
-                                    <td>{user.username}</td>
+                                    <td>
+                                        {user.username}
+                                        {user.is_superuser && (
+                                            <span className="badge bg-danger ms-2">Superuser</span>
+                                        )}
+                                    </td>
                                     <td>{user.email || "-"}</td>
                                     <td>{user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : "-"}</td>
                                     <td>
-                      <span className={`badge ${
-                          user.role === 'admin' ? 'bg-danger' :
-                              user.role === 'manager' ? 'bg-primary' :
-                                  'bg-info'
-                      }`}>
-                        {user.role}
-                      </span>
+                                        {user.is_superuser ? (
+                                            <span className="badge bg-danger">All Permissions</span>
+                                        ) : user.roles && user.roles.length > 0 ? (
+                                            <>
+                                                {user.roles.slice(0, 2).map((role, idx) => (
+                                                    <span key={idx} className="badge bg-info me-1 mb-1">
+                                                        {role.name}
+                                                    </span>
+                                                ))}
+                                                {user.roles.length > 2 && (
+                                                    <span className="badge bg-secondary">
+                                                        +{user.roles.length - 2} more
+                                                    </span>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <span className="text-muted">No roles</span>
+                                        )}
                                     </td>
                                     <td>
                       <span className={`badge ${user.is_active ? 'bg-success' : 'bg-secondary'}`}>
@@ -189,14 +262,23 @@ export default function Settings() {
                                     <td>{new Date(user.date_joined).toLocaleDateString()}</td>
                                     <td>
                                         <button
+                                            className="btn btn-sm btn-outline-info me-2"
+                                            onClick={() => handleOpenRoleModal(user)}
+                                            title="Manage Roles"
+                                        >
+                                            <i className="bi bi-person-badge"></i>
+                                        </button>
+                                        <button
                                             className="btn btn-sm btn-outline-primary me-2"
                                             onClick={() => handleOpenModal(user)}
+                                            title="Edit User"
                                         >
                                             <i className="bi bi-pencil"></i>
                                         </button>
                                         <button
                                             className="btn btn-sm btn-outline-danger"
                                             onClick={() => handleDelete(user.id)}
+                                            title="Delete User"
                                         >
                                             <i className="bi bi-trash"></i>
                                         </button>
@@ -209,9 +291,10 @@ export default function Settings() {
                 </div>
             </div>
 
+            {/* User Create/Edit Modal */}
             {showModal && (
                 <div className="modal show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
-                    <div className="modal-dialog">
+                    <div className="modal-dialog modal-lg">
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">{editingUser ? 'Edit User' : 'Add User'}</h5>
@@ -219,56 +302,47 @@ export default function Settings() {
                             </div>
                             <form onSubmit={handleSubmit}>
                                 <div className="modal-body">
-                                    <div className="mb-3">
-                                        <label className="form-label">Username *</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            value={formData.username}
-                                            onChange={(e) => setFormData({...formData, username: e.target.value})}
-                                            required
-                                            disabled={editingUser !== null}
-                                        />
+                                    <div className="row">
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">Username *</label>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                value={formData.username}
+                                                onChange={(e) => setFormData({...formData, username: e.target.value})}
+                                                required
+                                                disabled={editingUser !== null}
+                                            />
+                                        </div>
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">Email</label>
+                                            <input
+                                                type="email"
+                                                className="form-control"
+                                                value={formData.email}
+                                                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="mb-3">
-                                        <label className="form-label">Email</label>
-                                        <input
-                                            type="email"
-                                            className="form-control"
-                                            value={formData.email}
-                                            onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                        />
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label">First Name</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            value={formData.first_name}
-                                            onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-                                        />
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label">Last Name</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            value={formData.last_name}
-                                            onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-                                        />
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label">Role *</label>
-                                        <select
-                                            className="form-select"
-                                            value={formData.role}
-                                            onChange={(e) => setFormData({...formData, role: e.target.value})}
-                                            required
-                                        >
-                                            <option value="admin">Admin</option>
-                                            <option value="manager">Manager</option>
-                                            <option value="accounts">Accounts</option>
-                                        </select>
+                                    <div className="row">
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">First Name</label>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                value={formData.first_name}
+                                                onChange={(e) => setFormData({...formData, first_name: e.target.value})}
+                                            />
+                                        </div>
+                                        <div className="col-md-6 mb-3">
+                                            <label className="form-label">Last Name</label>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                value={formData.last_name}
+                                                onChange={(e) => setFormData({...formData, last_name: e.target.value})}
+                                            />
+                                        </div>
                                     </div>
                                     <div className="mb-3">
                                         <label className="form-label">
@@ -283,6 +357,27 @@ export default function Settings() {
                                             onChange={(e) => setFormData({...formData, password: e.target.value})}
                                             required={!editingUser}
                                         />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">Roles</label>
+                                        <div className="border rounded p-3" style={{maxHeight: '200px', overflowY: 'auto'}}>
+                                            {roles.map(role => (
+                                                <div key={role.id} className="form-check mb-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="form-check-input"
+                                                        id={`role-${role.id}`}
+                                                        checked={formData.role_ids.includes(role.id)}
+                                                        onChange={() => handleToggleFormRole(role.id)}
+                                                    />
+                                                    <label className="form-check-label" htmlFor={`role-${role.id}`}>
+                                                        <strong>{role.name}</strong>
+                                                        <br/>
+                                                        <small className="text-muted">{role.description}</small>
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                     <div className="mb-3 form-check">
                                         <input
@@ -306,6 +401,79 @@ export default function Settings() {
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Role Assignment Modal */}
+            {showRoleModal && selectedUserForRoles && (
+                <div className="modal show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                    <div className="modal-dialog modal-lg">
+                        <div className="modal-content">
+                            <div className="modal-header bg-dark text-white">
+                                <h5 className="modal-title">
+                                    <i className="bi bi-person-badge me-2"></i>
+                                    Chosen roles
+                                    {selectedUserForRoles.is_superuser && (
+                                        <span className="badge bg-danger ms-2">Superuser</span>
+                                    )}
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={handleCloseRoleModal}></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="mb-3">
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Filter"
+                                    />
+                                </div>
+                                <div style={{maxHeight: '400px', overflowY: 'auto'}}>
+                                    {roles.map(role => (
+                                        <div
+                                            key={role.id}
+                                            className={`p-3 mb-2 border rounded cursor-pointer ${
+                                                selectedRoles.includes(role.id) ? 'bg-light' : ''
+                                            }`}
+                                            style={{cursor: 'pointer'}}
+                                            onClick={() => handleToggleRole(role.id)}
+                                        >
+                                            <div className="d-flex align-items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    className="form-check-input me-3"
+                                                    checked={selectedRoles.includes(role.id)}
+                                                    onChange={() => {}}
+                                                    style={{cursor: 'pointer'}}
+                                                />
+                                                <div>
+                                                    <strong>{role.name}</strong>
+                                                    <br/>
+                                                    <small className="text-muted">{role.description}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="text-center mt-3">
+                                    <button
+                                        className="btn btn-link text-danger"
+                                        onClick={() => setSelectedRoles([])}
+                                    >
+                                        <i className="bi bi-x-circle me-1"></i>
+                                        Remove all
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={handleCloseRoleModal}>
+                                    Cancel
+                                </button>
+                                <button type="button" className="btn btn-primary" onClick={handleSaveRoles}>
+                                    Save Changes
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -202,12 +202,22 @@ export default function Profile() {
 
                             <div className="row mb-3">
                                 <div className="col-md-4">
-                                    <strong>Role:</strong>
+                                    <strong>Roles:</strong>
                                 </div>
                                 <div className="col-md-8">
-                                    <span className="badge bg-info text-capitalize">
-                                        {user.role || "viewer"}
-                                    </span>
+                                    {user.is_superuser ? (
+                                        <span className="badge bg-danger me-1">
+                                            Superuser (All Permissions)
+                                        </span>
+                                    ) : user.roles && user.roles.length > 0 ? (
+                                        user.roles.map((role, index) => (
+                                            <span key={index} className="badge bg-info me-1 mb-1">
+                                                {role.name}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <em className="text-muted">No roles assigned</em>
+                                    )}
                                 </div>
                             </div>
 

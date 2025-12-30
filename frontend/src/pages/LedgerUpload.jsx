@@ -15,6 +15,7 @@ const LedgerUpload = () => {
     handleUpload,
     formatFileSize,
     removeFile,
+    clearFiles,
   } = useFileUpload({
     endpoint: '/upload-ledger/',
     fileFieldName: 'ledger',
@@ -107,7 +108,7 @@ const LedgerUpload = () => {
                     <button
                       className="btn btn-sm btn-outline-danger"
                       onClick={() => {
-                        setFiles([]);
+                        clearFiles();
                         document.getElementById('file-input').value = '';
                       }}
                       disabled={uploading}

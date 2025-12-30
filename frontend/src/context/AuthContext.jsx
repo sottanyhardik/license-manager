@@ -59,9 +59,18 @@ export const AuthProvider = ({children}) => {
         window.location.href = "/login";
     };
 
-    const hasRole = (roles) => {
-        if (!user || !roles || roles.length === 0) return true;
-        return roles.includes(user.role);
+    const hasRole = (roleCodes) => {
+        if (!user || !roleCodes || roleCodes.length === 0) return true;
+
+        // Superuser has all permissions
+        if (user.is_superuser) return true;
+
+        // Check if user has any of the required role codes
+        if (user.role_codes && user.role_codes.length > 0) {
+            return roleCodes.some(code => user.role_codes.includes(code));
+        }
+
+        return false;
     };
 
     return (

@@ -56,22 +56,6 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'base_name': 'PHOSPHORIC ACID',
-                'norms': ['A3627'],
-                'filters': [
-                    Q(hs_code__hs_code__startswith='28092010') |
-                    Q(description__icontains='Phosphoric Acid')
-                ]
-            },
-            {
-                'base_name': 'ARSENIC TRIOXIDE',
-                'norms': ['A3627'],
-                'filters': [
-                    Q(hs_code__hs_code__startswith='28112920') |
-                    Q(description__icontains='Arsenic Trioxide')
-                ]
-            },
-            {
                 'base_name': 'RUTILE',
                 'norms': ['A3627'],
                 'filters': [

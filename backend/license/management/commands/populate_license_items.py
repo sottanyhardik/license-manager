@@ -65,6 +65,7 @@ class Command(BaseCommand):
                      Q(description__icontains='Rutile') |
                      Q(description__icontains='Formers'))
                     & ~Q(description__icontains='other than')
+                    & ~Q(description__icontains='Titanium Dioxide')
                 ]
             },
             {

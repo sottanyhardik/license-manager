@@ -225,7 +225,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
     return False
 
 
-def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=None):
+def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=None, additional_context=None):
     """
     Generate transfer letters from DOCX template and convert to PDF.
 
@@ -235,6 +235,7 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
         path: Output directory path
         transfer_letter_name: Name for the transfer letter files
         be_number: Optional BOE number
+        additional_context: Optional dict of additional context variables (e.g., {'todays_date': '31/12/2025'})
     """
     # Create output directory if it doesn't exist
     os.makedirs(path, exist_ok=True)
@@ -244,6 +245,10 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
     # Generate a transfer letter for each data item
     for idx, context in enumerate(data, start=1):
         try:
+            # Merge additional context if provided
+            if additional_context:
+                context = {**context, **additional_context}
+
             # DOCX template processing
             doc = DocxTemplate(tl_path)
             doc.render(context)

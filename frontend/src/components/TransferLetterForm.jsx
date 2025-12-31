@@ -22,7 +22,8 @@ export default function TransferLetterForm({
         addressLine1: "",
         addressLine2: "",
         template: null,
-        cifEdits: {}
+        cifEdits: {},
+        includeTodaysDate: false
     });
     const [companyOptions, setCompanyOptions] = useState([]);
     const [generating, setGenerating] = useState(null); // null | 'with_copy' | 'without_copy'
@@ -145,7 +146,8 @@ export default function TransferLetterForm({
             template_id: transferLetterData.template?.value || transferLetterData.template,
             cif_edits: filteredCifEdits,
             include_license_copy: includeLicenseCopy,
-            selected_items: selectedItems
+            selected_items: selectedItems,
+            include_todays_date: transferLetterData.includeTodaysDate
         };
 
         try {
@@ -244,6 +246,21 @@ export default function TransferLetterForm({
                             isClearable={true}
                             isDisabled={disabled}
                         />
+                    </div>
+                    <div className="col-md-6 d-flex align-items-end">
+                        <div className="form-check">
+                            <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id="includeTodaysDate"
+                                checked={transferLetterData.includeTodaysDate}
+                                onChange={(e) => setTransferLetterData(prev => ({...prev, includeTodaysDate: e.target.checked}))}
+                                disabled={disabled}
+                            />
+                            <label className="form-check-label" htmlFor="includeTodaysDate">
+                                Include Today's Date ({new Date().toLocaleDateString('en-GB')})
+                            </label>
+                        </div>
                     </div>
                 </div>
 

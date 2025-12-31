@@ -177,6 +177,7 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
         cif_edits = request.data.get('cif_edits', {})
         include_license_copy = request.data.get('include_license_copy', True)  # Default: True (with license copy)
         selected_items = request.data.get('selected_items', [])  # List of item IDs to include
+        include_todays_date = request.data.get('include_todays_date', False)  # Include today's date in template
 
         if not template_id:
             return Response({
@@ -250,11 +251,19 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
         # Generate transfer letters
         from allotment.scripts.aro import generate_tl_software
+
+        # Add today's date to context if requested
+        additional_context = {}
+        if include_todays_date:
+            from datetime import datetime
+            additional_context['todays_date'] = datetime.now().strftime('%d/%m/%Y')
+
         generate_tl_software(
             data=data,
             tl_path=tl_path,
             path=file_path,
-            transfer_letter_name=transfer_letter.name.replace(' ', '_')
+            transfer_letter_name=transfer_letter.name.replace(' ', '_'),
+            additional_context=additional_context
         )
 
         # Only include license copy if requested

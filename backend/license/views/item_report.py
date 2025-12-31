@@ -75,12 +75,22 @@ class ItemReportView(View):
         today = date.today()
 
         # Base query - all import items with licenses
+        from django.db.models import Prefetch
+        from license.models import LicenseTransferModel
+
+        # Prefetch only the latest transfer for each license
+        latest_transfer_prefetch = Prefetch(
+            'license__transfers',
+            queryset=LicenseTransferModel.objects.select_related('from_company', 'to_company').order_by('-transfer_date', '-transfer_initiation_date'),
+            to_attr='latest_transfers'
+        )
+
         items = LicenseImportItemsModel.objects.select_related(
             'license',
             'license__exporter',
             'license__current_owner',
             'hs_code'
-        ).prefetch_related('items')
+        ).prefetch_related('items', latest_transfer_prefetch)
 
         # Apply license status filter
         if license_status == 'active':
@@ -149,6 +159,12 @@ class ItemReportView(View):
             # Note: Make sure to run "Update Balance" in Item Pivot Report to refresh these values
             available_balance = float(item.available_value or 0)
 
+            # Get latest transfer information
+            latest_transfer_info = None
+            if hasattr(item.license, 'latest_transfers') and item.license.latest_transfers:
+                latest_transfer = item.license.latest_transfers[0]
+                latest_transfer_info = str(latest_transfer)  # Uses the __str__ method which formats it nicely
+
             report_items.append({
                 'id': item.id,
                 'license_id': item.license.id,
@@ -157,7 +173,7 @@ class ItemReportView(View):
                 'license_expiry_date': item.license.license_expiry_date.isoformat() if item.license.license_expiry_date else None,
                 'exporter_name': item.license.exporter.name if item.license.exporter else None,
                 'current_owner': item.license.current_owner.name if item.license.current_owner else None,
-                'file_transfer_status': item.license.file_transfer_status or None,
+                'latest_transfer': latest_transfer_info,
                 'hs_code': item.hs_code.hs_code if item.hs_code else None,
                 'product_description': item.description or '',
                 'item_names': item_names_list,
@@ -277,13 +293,8 @@ class ItemReportView(View):
 m                         ws.cell(row=current_row, column=11, value=item['available_balance'])  # Available Balance
                         ws.cell(row=current_row, column=12, value=item['notes'])  # Notes
                         ws.cell(row=current_row, column=13, value=item['condition_sheet'])  # Condition Sheet
-                        # Transfer Status - combine current_owner and file_transfer_status
-                        transfer_status = []
-                        if item['current_owner']:
-                            transfer_status.append(item['current_owner'])
-                        if item['file_transfer_status']:
-                            transfer_status.append(item['file_transfer_status'])
-                        ws.cell(row=current_row, column=14, value=' - '.join(transfer_status) if transfer_status else '')  # Transfer Status
+                        # Transfer Status - use latest_transfer
+                        ws.cell(row=current_row, column=14, value=item.get('latest_transfer', ''))  # Transfer Status
 
                     # Item-level columns (for each row)
                     ws.cell(row=current_row, column=6, value=item['serial_number'])  # Serial Number

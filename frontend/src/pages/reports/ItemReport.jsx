@@ -923,22 +923,11 @@ export default function ItemReport() {
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
                                                                         backgroundColor: '#f8f9fa',
-                                                                        fontSize: '0.80rem',
-                                                                        lineHeight: '1.3'
+                                                                        fontSize: '0.85rem',
+                                                                        lineHeight: '1.4'
                                                                     }}>
-                                                                        {firstItem.current_owner && firstItem.file_transfer_status ? (
-                                                                            <div>
-                                                                                <div style={{fontWeight: '600'}} className="mb-1">
-                                                                                    {firstItem.current_owner}
-                                                                                </div>
-                                                                                <div className="text-muted" style={{fontSize: '0.75rem'}}>
-                                                                                    {firstItem.file_transfer_status}
-                                                                                </div>
-                                                                            </div>
-                                                                        ) : firstItem.current_owner ? (
-                                                                            <div style={{fontWeight: '600'}}>{firstItem.current_owner}</div>
-                                                                        ) : firstItem.file_transfer_status ? (
-                                                                            <div className="text-muted">{firstItem.file_transfer_status}</div>
+                                                                        {firstItem.latest_transfer ? (
+                                                                            <div>{firstItem.latest_transfer}</div>
                                                                         ) : (
                                                                             <span className="text-muted">-</span>
                                                                         )}

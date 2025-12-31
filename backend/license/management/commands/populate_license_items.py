@@ -39,10 +39,45 @@ class Command(BaseCommand):
                 'filters': [Q(description__icontains='Titanium Dioxide') & Q(description__icontains='other than')]
             },
             {
+                'base_name': 'SILICA',
+                'norms': ['A3627'],
+                'filters': [
+                    Q(hs_code__hs_code__startswith='28110000') &
+                    Q(description__icontains='Silica') &
+                    ~Q(description__icontains='Fumed Silica')
+                ]
+            },
+            {
+                'base_name': 'BORAX',
+                'norms': ['A3627'],
+                'filters': [
+                    Q(hs_code__hs_code__startswith='28401900') |
+                    Q(description__icontains='Borax')
+                ]
+            },
+            {
+                'base_name': 'PHOSPHORIC ACID',
+                'norms': ['A3627'],
+                'filters': [
+                    Q(hs_code__hs_code__startswith='28092010') |
+                    Q(description__icontains='Phosphoric Acid')
+                ]
+            },
+            {
+                'base_name': 'ARSENIC TRIOXIDE',
+                'norms': ['A3627'],
+                'filters': [
+                    Q(hs_code__hs_code__startswith='28112920') |
+                    Q(description__icontains='Arsenic Trioxide')
+                ]
+            },
+            {
                 'base_name': 'RUTILE',
                 'norms': ['A3627'],
                 'filters': [
-                    (Q(description__icontains='Glass Formers') |
+                    (Q(hs_code__hs_code__startswith='32061190') |
+                     Q(hs_code__hs_code__startswith='32061110') |
+                     Q(description__icontains='Glass Formers') |
                      Q(description__icontains='Rutile') |
                      Q(description__icontains='Formers'))
                     & ~Q(description__icontains='other than')

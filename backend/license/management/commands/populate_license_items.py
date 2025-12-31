@@ -36,7 +36,7 @@ class Command(BaseCommand):
             {
                 'base_name': 'TITANIUM DIOXIDE',
                 'norms': ['A3627'],
-                'filters': [Q(description__icontains='Titanium Dioxide')]
+                'filters': [Q(description__icontains='Titanium Dioxide') & Q(description__icontains='other than')]
             },
             {
                 'base_name': 'RUTILE',
@@ -45,7 +45,7 @@ class Command(BaseCommand):
                     (Q(description__icontains='Glass Formers') |
                      Q(description__icontains='Rutile') |
                      Q(description__icontains='Formers'))
-                    & ~Q(description__icontains='Titanium Dioxide')
+                    & ~Q(description__icontains='other than')
                 ]
             },
             {
@@ -67,9 +67,12 @@ class Command(BaseCommand):
                 'base_name': 'PP',
                 'norms': ['A3627'],
                 'filters': [
-                    Q(hs_code__hs_code__startswith='39021000') |
-                    Q(description__icontains='Polypropylene') |
-                    Q(description__icontains='pp granules')
+                    (Q(hs_code__hs_code__startswith='39021000') |
+                     Q(description__icontains='Polypropylene') |
+                     Q(description__icontains='pp granules')) &
+                    ~Q(description__icontains='7607') &
+                    ~Q(description__icontains='ALUMINIUM FOIL') &
+                    ~Q(hs_code__hs_code__startswith='7607')
                 ]
             },
 
@@ -268,7 +271,11 @@ class Command(BaseCommand):
             {
                 'base_name': 'SUGAR',
                 'norms': ['E1', 'E5'],
-                'filters': [Q(description__icontains='sugar')]
+                'filters': [
+                    Q(description__icontains='sugar') |
+                    Q(description__icontains='1701') |
+                    Q(hs_code__hs_code__startswith='1701')
+                ]
             },
             {
                 'base_name': 'WHEAT GLUTEN',
@@ -542,8 +549,11 @@ class Command(BaseCommand):
                 'base_name': 'PAPER BOARD',
                 'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
-                    Q(description__icontains="Paper Board") |
-                    Q(description__icontains="PAPPER BOARD")
+                    (Q(description__icontains="Paper Board") |
+                     Q(description__icontains="PAPPER BOARD")) &
+                    ~Q(description__icontains='7607') &
+                    ~Q(description__icontains='ALUMINIUM FOIL') &
+                    ~Q(hs_code__hs_code__startswith='7607')
                 ]
             },
             {
@@ -551,13 +561,21 @@ class Command(BaseCommand):
                 'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
                     Q(description__icontains="PAPER") &
-                    ~Q(description__icontains="BOARD")
+                    ~Q(description__icontains="BOARD") &
+                    ~Q(description__icontains='7607') &
+                    ~Q(description__icontains='ALUMINIUM FOIL') &
+                    ~Q(hs_code__hs_code__startswith='7607')
                 ]
             },
             {
                 'base_name': 'BOPP',
                 'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
-                'filters': [Q(description__icontains="BOPP")]
+                'filters': [
+                    Q(description__icontains="BOPP") &
+                    ~Q(description__icontains='7607') &
+                    ~Q(description__icontains='ALUMINIUM FOIL') &
+                    ~Q(hs_code__hs_code__startswith='7607')
+                ]
             },
             {
                 'base_name': 'PP',
@@ -570,9 +588,9 @@ class Command(BaseCommand):
                      (Q(description__icontains='PP ') &
                       (Q(hs_code__hs_code__startswith='39') |
                        Q(hs_code__hs_code__startswith='48')))) &
-                    (~Q(description__icontains='7607') |
-                     ~Q(description__icontains='ALUMINIUM FOIL') |
-                     ~Q(hs_code__hs_code__startswith='7607'))
+                    ~Q(description__icontains='7607') &
+                    ~Q(description__icontains='ALUMINIUM FOIL') &
+                    ~Q(hs_code__hs_code__startswith='7607')
                 ]
             },
             {

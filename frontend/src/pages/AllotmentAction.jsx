@@ -625,17 +625,21 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <button
                                 className="btn btn-sm btn-outline-primary"
                                 onClick={() => {
-                                    const headers = ['License', 'Serial', 'Description', 'Exporter', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
-                                    const rows = allotment.allotment_details.map(detail => [
-                                        detail.license_number,
-                                        detail.serial_number,
-                                        detail.product_description,
-                                        detail.exporter,
-                                        detail.license_date,
-                                        detail.license_expiry,
-                                        parseInt(detail.qty || 0).toLocaleString(),
-                                        parseFloat(detail.cif_fc || 0).toFixed(2)
-                                    ]);
+                                    const headers = ['License', 'Serial', 'Description', 'Exporter', 'Transfer Status', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
+                                    const rows = allotment.allotment_details.map(detail => {
+                                        const transferInfo = [detail.current_owner, detail.file_transfer_status].filter(Boolean).join(' - ') || '-';
+                                        return [
+                                            detail.license_number,
+                                            detail.serial_number,
+                                            detail.product_description,
+                                            detail.exporter,
+                                            transferInfo,
+                                            detail.license_date,
+                                            detail.license_expiry,
+                                            parseInt(detail.qty || 0).toLocaleString(),
+                                            parseFloat(detail.cif_fc || 0).toFixed(2)
+                                        ];
+                                    });
                                     const tsv = [headers.join('\t'), ...rows.map(row => row.join('\t'))].join('\n');
                                     navigator.clipboard.writeText(tsv).then(() => {
                                         toast.success('Copied to clipboard!');
@@ -655,12 +659,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <th style={{minWidth: '120px', whiteSpace: 'nowrap'}}>License</th>
                                     <th style={{minWidth: '70px', whiteSpace: 'nowrap'}}>Serial</th>
                                     <th style={{minWidth: '300px'}}>Description</th>
-                                    <th style={{minWidth: '250px'}}>Exporter</th>
-                                    <th style={{minWidth: '110px', whiteSpace: 'nowrap'}}>License Date</th>
-                                    <th style={{minWidth: '110px', whiteSpace: 'nowrap'}}>Expiry Date</th>
-                                    <th style={{minWidth: '120px', whiteSpace: 'nowrap', textAlign: 'right'}}>Allotted Qty</th>
-                                    <th style={{minWidth: '130px', whiteSpace: 'nowrap', textAlign: 'right'}}>Allotted Value</th>
-                                    <th style={{minWidth: '100px', whiteSpace: 'nowrap'}}>Action</th>
+                                    <th style={{minWidth: '200px'}}>Exporter</th>
+                                    <th style={{minWidth: '180px'}}>Transfer<br/>Status</th>
+                                    <th style={{minWidth: '100px'}}>License<br/>Date</th>
+                                    <th style={{minWidth: '100px'}}>Expiry<br/>Date</th>
+                                    <th style={{minWidth: '100px', textAlign: 'right'}}>Allotted<br/>Qty</th>
+                                    <th style={{minWidth: '110px', textAlign: 'right'}}>Allotted<br/>Value</th>
+                                    <th style={{minWidth: '80px', whiteSpace: 'nowrap'}}>Action</th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -670,6 +675,24 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         <td style={{whiteSpace: 'nowrap'}}>{detail.serial_number}</td>
                                         <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
                                         <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
+                                        <td style={{wordWrap: 'break-word', whiteSpace: 'normal', fontSize: '0.80rem', lineHeight: '1.3'}}>
+                                            {detail.current_owner && detail.file_transfer_status ? (
+                                                <div>
+                                                    <div className="mb-1" style={{fontWeight: '600'}}>
+                                                        {detail.current_owner}
+                                                    </div>
+                                                    <div className="text-muted" style={{fontSize: '0.75rem'}}>
+                                                        {detail.file_transfer_status}
+                                                    </div>
+                                                </div>
+                                            ) : detail.current_owner ? (
+                                                <div style={{fontWeight: '600'}}>{detail.current_owner}</div>
+                                            ) : detail.file_transfer_status ? (
+                                                <div className="text-muted">{detail.file_transfer_status}</div>
+                                            ) : (
+                                                <span className="text-muted">-</span>
+                                            )}
+                                        </td>
                                         <td style={{whiteSpace: 'nowrap', fontSize: '0.85rem'}}>{detail.license_date}</td>
                                         <td style={{whiteSpace: 'nowrap', fontSize: '0.85rem'}}>{detail.license_expiry}</td>
                                         <td className="text-end" style={{whiteSpace: 'nowrap'}}>{parseInt(detail.qty || 0).toLocaleString()}</td>
@@ -693,7 +716,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </tbody>
                                 <tfoot className="table-secondary">
                                 <tr>
-                                    <th colSpan="6" className="text-end">Total:</th>
+                                    <th colSpan="7" className="text-end">Total:</th>
                                     <th className="text-end">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
                                     <th className="text-end">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
                                     <th></th>

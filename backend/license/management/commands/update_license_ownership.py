@@ -401,6 +401,12 @@ class Command(BaseCommand):
             default=None,
             help='Proxy URL for DGFT API (e.g., http://proxy:8080 or socks5://127.0.0.1:1080)',
         )
+        parser.add_argument(
+            '--licenses',
+            type=str,
+            default=None,
+            help='Comma-separated list of specific license numbers to process',
+        )
 
     def handle(self, *args, **options):
         local_only = options['local_only']
@@ -408,6 +414,7 @@ class Command(BaseCommand):
         skip_errors = options['skip_errors']
         retry_count = options['retry_count']
         proxy = options['proxy'] or DGFT_PROXY
+        license_numbers_str = options['licenses']
 
         self.stdout.write("="*80)
         self.stdout.write("📋 License Ownership Update Tool")
@@ -418,6 +425,8 @@ class Command(BaseCommand):
         self.stdout.write(f"Skip Errors: {'Yes' if skip_errors else 'No'}")
         if proxy:
             self.stdout.write(f"Proxy: {proxy}")
+        if license_numbers_str:
+            self.stdout.write(f"Specific Licenses: {license_numbers_str}")
         self.stdout.write("="*80)
 
         # Authenticate with server if syncing
@@ -428,10 +437,23 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING("Continuing in LOCAL ONLY mode..."))
                 local_only = True
 
-        # Fetch licenses
-        licenses = fetch_eligible_licenses()
-        if limit:
-            licenses = licenses[:limit]
+        # Fetch licenses - either specific ones or eligible ones
+        if license_numbers_str:
+            # Process specific license numbers
+            license_numbers = [ln.strip() for ln in license_numbers_str.split(',')]
+            licenses = LicenseDetailsModel.objects.filter(license_number__in=license_numbers)
+
+            # Check which licenses were not found
+            found_numbers = set(licenses.values_list('license_number', flat=True))
+            missing_numbers = set(license_numbers) - found_numbers
+            if missing_numbers:
+                self.stdout.write(self.style.WARNING(
+                    f"\n⚠️  Licenses not found: {', '.join(sorted(missing_numbers))}"
+                ))
+        else:
+            licenses = fetch_eligible_licenses()
+            if limit:
+                licenses = licenses[:limit]
 
         total = licenses.count()
         self.stdout.write(f"\n🔎 Found {total} licenses to process")

@@ -19,6 +19,8 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     file_number = serializers.CharField(read_only=True, required=False)
     port_code = serializers.CharField(read_only=True, required=False, source='port_code.name')
     purchase_status = serializers.CharField(source='item.license.purchase_status', read_only=True)
+    current_owner = serializers.CharField(source='item.license.current_owner.name', read_only=True, allow_null=True)
+    file_transfer_status = serializers.CharField(source='item.license.file_transfer_status', read_only=True, allow_null=True)
 
     def get_ledger(self, obj):
         ledger = obj.ledger
@@ -59,7 +61,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
             'serial_number', 'ledger', 'product_description', 'license_number',
             'license_date', 'exporter', 'license_expiry', 'registration_number',
             'registration_date', 'notification_number', 'file_number', 'port_code',
-            'purchase_status'
+            'purchase_status', 'current_owner', 'file_transfer_status'
         ]
 
 

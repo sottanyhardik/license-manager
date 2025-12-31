@@ -554,7 +554,7 @@ class Command(BaseCommand):
                 'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
                     Q(hs_code__hs_code__startswith='4801') &
-                    Q(description__icontains="BOARD") &
+                    (Q(description__icontains="BOARD") | Q(description__icontains="4801")) &
                     ~Q(description__icontains='7607') &
                     ~Q(description__icontains='ALUMINIUM FOIL') &
                     ~Q(hs_code__hs_code__startswith='7607') &
@@ -566,7 +566,7 @@ class Command(BaseCommand):
                 'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
                     Q(hs_code__hs_code__startswith='4801') &
-                    Q(description__icontains="PAPER") &
+                    (Q(description__icontains="PAPER") | Q(description__icontains="4801")) &
                     ~Q(description__icontains="BOARD") &
                     ~Q(description__icontains='7607') &
                     ~Q(description__icontains='ALUMINIUM FOIL') &

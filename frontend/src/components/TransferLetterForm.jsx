@@ -23,7 +23,7 @@ export default function TransferLetterForm({
         addressLine2: "",
         template: null,
         cifEdits: {},
-        includeTodaysDate: false
+        includeTodaysDate: true  // Always include today's date by default
     });
     const [companyOptions, setCompanyOptions] = useState([]);
     const [generating, setGenerating] = useState(null); // null | 'with_copy' | 'without_copy'
@@ -248,19 +248,10 @@ export default function TransferLetterForm({
                         />
                     </div>
                     <div className="col-md-6 d-flex align-items-end">
-                        <div className="form-check">
-                            <input
-                                className="form-check-input"
-                                type="checkbox"
-                                id="includeTodaysDate"
-                                checked={transferLetterData.includeTodaysDate}
-                                onChange={(e) => setTransferLetterData(prev => ({...prev, includeTodaysDate: e.target.checked}))}
-                                disabled={disabled}
-                            />
-                            <label className="form-check-label" htmlFor="includeTodaysDate">
-                                Include Today's Date ({new Date().toLocaleDateString('en-GB')})
-                            </label>
-                        </div>
+                        <small className="text-muted">
+                            <i className="bi bi-info-circle me-1"></i>
+                            Today's date ({new Date().toLocaleDateString('en-GB')}) will be included automatically
+                        </small>
                     </div>
                 </div>
 

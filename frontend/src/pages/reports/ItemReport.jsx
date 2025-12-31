@@ -692,7 +692,6 @@ export default function ItemReport() {
                                             }}>Expiry Date
                                             </th>
                                             <th style={{minWidth: '200px'}}>Exporter Name</th>
-                                            <th style={{minWidth: '250px'}}>Transfer Status</th>
                                             <th style={{minWidth: '100px'}}>Serial No</th>
                                             <th style={{minWidth: '100px'}}>HSN Code</th>
                                             <th style={{minWidth: '250px'}}>Product Description</th>
@@ -702,6 +701,7 @@ export default function ItemReport() {
                                             <th className="text-center" style={{minWidth: '120px'}}>Is Restricted</th>
                                             <th style={{minWidth: '200px'}}>Notes</th>
                                             <th style={{minWidth: '200px'}}>Condition Sheet</th>
+                                            <th style={{minWidth: '250px'}}>Transfer Status</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -786,29 +786,6 @@ export default function ItemReport() {
                                                                         verticalAlign: 'middle',
                                                                         backgroundColor: '#f8f9fa'
                                                                     }}>{firstItem.exporter_name || '-'}</td>
-                                                                    <td rowSpan={rowSpan} style={{
-                                                                        verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa',
-                                                                        fontSize: '0.80rem',
-                                                                        lineHeight: '1.3'
-                                                                    }}>
-                                                                        {firstItem.current_owner && firstItem.file_transfer_status ? (
-                                                                            <div>
-                                                                                <div style={{fontWeight: '600'}} className="mb-1">
-                                                                                    {firstItem.current_owner}
-                                                                                </div>
-                                                                                <div className="text-muted" style={{fontSize: '0.75rem'}}>
-                                                                                    {firstItem.file_transfer_status}
-                                                                                </div>
-                                                                            </div>
-                                                                        ) : firstItem.current_owner ? (
-                                                                            <div style={{fontWeight: '600'}}>{firstItem.current_owner}</div>
-                                                                        ) : firstItem.file_transfer_status ? (
-                                                                            <div className="text-muted">{firstItem.file_transfer_status}</div>
-                                                                        ) : (
-                                                                            <span className="text-muted">-</span>
-                                                                        )}
-                                                                    </td>
                                                                 </>
                                                             )}
                                                             <td className="text-center"
@@ -943,6 +920,29 @@ export default function ItemReport() {
                                                                             </div>
                                                                         )}
                                                                     </td>
+                                                                    <td rowSpan={rowSpan} style={{
+                                                                        verticalAlign: 'middle',
+                                                                        backgroundColor: '#f8f9fa',
+                                                                        fontSize: '0.80rem',
+                                                                        lineHeight: '1.3'
+                                                                    }}>
+                                                                        {firstItem.current_owner && firstItem.file_transfer_status ? (
+                                                                            <div>
+                                                                                <div style={{fontWeight: '600'}} className="mb-1">
+                                                                                    {firstItem.current_owner}
+                                                                                </div>
+                                                                                <div className="text-muted" style={{fontSize: '0.75rem'}}>
+                                                                                    {firstItem.file_transfer_status}
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : firstItem.current_owner ? (
+                                                                            <div style={{fontWeight: '600'}}>{firstItem.current_owner}</div>
+                                                                        ) : firstItem.file_transfer_status ? (
+                                                                            <div className="text-muted">{firstItem.file_transfer_status}</div>
+                                                                        ) : (
+                                                                            <span className="text-muted">-</span>
+                                                                        )}
+                                                                    </td>
                                                                 </>
                                                             )}
                                                         </tr>
@@ -977,7 +977,7 @@ export default function ItemReport() {
                                                     return Object.values(uniqueLicenses).reduce((sum, val) => sum + val, 0).toFixed(2);
                                                 })()}
                                             </td>
-                                            <td colSpan="3"></td>
+                                            <td colSpan="4"></td>
                                         </tr>
                                         </tfoot>
                                     </table>

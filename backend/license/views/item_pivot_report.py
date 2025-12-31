@@ -309,10 +309,12 @@ class ItemPivotReportView(View):
         # Calculate Alloted CIF from DFIA allotments that don't have BOE
         from allotment.models import AllotmentItems
         alloted_cif = Decimal('0')
+        # Get allotment items for this license where allotment is marked as allotted
+        # and is NOT linked to any bill_of_entry (meaning no BOE exists for this allotment)
         allotment_items = AllotmentItems.objects.filter(
             item__license=license_obj,
-            allotment__is_boe=False,
-            allotment__is_allotted=True
+            allotment__is_allotted=True,
+            allotment__bill_of_entry__isnull=True  # No BOE linked to this allotment
         ).select_related('allotment')
 
         for allot_item in allotment_items:

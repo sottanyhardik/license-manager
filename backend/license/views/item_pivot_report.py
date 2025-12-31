@@ -306,6 +306,18 @@ class ItemPivotReportView(View):
             cif_value = Decimal(str(item.cif_fc)) if item.cif_fc is not None else Decimal('0')
             total_cif += cif_value
 
+        # Calculate Alloted CIF from DFIA allotments that don't have BOE
+        from allotment.models import AllotmentItems
+        alloted_cif = Decimal('0')
+        allotment_items = AllotmentItems.objects.filter(
+            item__license=license_obj,
+            allotment__is_boe=False,
+            allotment__is_allotted=True
+        ).select_related('allotment')
+
+        for allot_item in allotment_items:
+            alloted_cif += Decimal(str(allot_item.cif_fc)) if allot_item.cif_fc is not None else Decimal('0')
+
         # Aggregate quantities by item (sum across all serial numbers)
         item_quantities = defaultdict(lambda: {
             'quantity': Decimal('0.000'),
@@ -411,6 +423,7 @@ class ItemPivotReportView(View):
             'port': str(license_obj.port) if license_obj.port else '',
             'notification_number': notification_display,
             'total_cif': float(total_cif),
+            'alloted_cif': float(alloted_cif),
             'balance_cif': float(balance_cif),  # Reuse already calculated balance
             'balance_report_notes': license_obj.balance_report_notes or '',
             'condition_sheet': license_obj.condition_sheet or '',

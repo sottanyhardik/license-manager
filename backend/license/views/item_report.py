@@ -290,7 +290,7 @@ class ItemReportView(View):
                         ws.cell(row=current_row, column=3, value=item['license_date'])  # License Date
                         ws.cell(row=current_row, column=4, value=item['license_expiry_date'])  # License Expiry Date
                         ws.cell(row=current_row, column=5, value=item['exporter_name'])  # Exporter Name
-m                         ws.cell(row=current_row, column=11, value=item['available_balance'])  # Available Balance
+                        ws.cell(row=current_row, column=11, value=item['available_balance'])  # Available Balance
                         ws.cell(row=current_row, column=12, value=item['notes'])  # Notes
                         ws.cell(row=current_row, column=13, value=item['condition_sheet'])  # Condition Sheet
                         # Transfer Status - use latest_transfer

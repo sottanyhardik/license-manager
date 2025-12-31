@@ -689,6 +689,14 @@ export default function ItemPivotReport() {
                                                             left: '750px',
                                                             zIndex: 11,
                                                             backgroundColor: '#f8f9fa',
+                                                            minWidth: '100px'
+                                                        }}>Alloted CIF
+                                                        </th>
+                                                        <th className="text-end" style={{
+                                                            position: 'sticky',
+                                                            left: '850px',
+                                                            zIndex: 11,
+                                                            backgroundColor: '#f8f9fa',
                                                             minWidth: '110px',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid #dee2e6'
@@ -885,9 +893,15 @@ export default function ItemPivotReport() {
                                                                 zIndex: 1,
                                                                 backgroundColor: '#fff'
                                                             }}>{license.total_cif.toFixed(2)}</td>
-                                                            <td className="text-end fw-semibold text-success" style={{
+                                                            <td className="text-end fw-semibold text-info" style={{
                                                                 position: 'sticky',
                                                                 left: '750px',
+                                                                zIndex: 1,
+                                                                backgroundColor: '#fff'
+                                                            }}>{(license.alloted_cif || 0).toFixed(2)}</td>
+                                                            <td className="text-end fw-semibold text-success" style={{
+                                                                position: 'sticky',
+                                                                left: '850px',
                                                                 zIndex: 1,
                                                                 backgroundColor: '#fff',
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -1025,9 +1039,17 @@ export default function ItemPivotReport() {
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + lic.total_cif, 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-end text-success" style={{
+                                                        <td className="text-end text-info" style={{
                                                             position: 'sticky',
                                                             left: '750px',
+                                                            zIndex: 1,
+                                                            backgroundColor: '#fff3cd'
+                                                        }}>
+                                                            {licenses.reduce((sum, lic) => sum + (lic.alloted_cif || 0), 0).toFixed(2)}
+                                                        </td>
+                                                        <td className="text-end text-success" style={{
+                                                            position: 'sticky',
+                                                            left: '850px',
                                                             zIndex: 1,
                                                             backgroundColor: '#fff3cd',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',

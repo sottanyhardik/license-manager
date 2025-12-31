@@ -553,23 +553,25 @@ class Command(BaseCommand):
                 'base_name': 'PAPER BOARD',
                 'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
-                    (Q(description__icontains="Paper Board") |
-                     Q(description__icontains="PAPPER BOARD") |
-                     (Q(hs_code__hs_code__startswith='4801') & Q(description__icontains="BOARD"))) &
+                    Q(hs_code__hs_code__startswith='4801') &
+                    Q(description__icontains="BOARD") &
                     ~Q(description__icontains='7607') &
                     ~Q(description__icontains='ALUMINIUM FOIL') &
-                    ~Q(hs_code__hs_code__startswith='7607')
+                    ~Q(hs_code__hs_code__startswith='7607') &
+                    ~Q(hs_code__hs_code__startswith='39')
                 ]
             },
             {
                 'base_name': 'PAPER & PAPER',
                 'norms': ['COMMON', 'E1', 'E5', 'E132', 'E126'],
                 'filters': [
-                    ((Q(description__icontains="PAPER") & ~Q(description__icontains="BOARD")) |
-                     (Q(hs_code__hs_code__startswith='4801') & Q(description__icontains="PAPER") & ~Q(description__icontains="BOARD"))) &
+                    Q(hs_code__hs_code__startswith='4801') &
+                    Q(description__icontains="PAPER") &
+                    ~Q(description__icontains="BOARD") &
                     ~Q(description__icontains='7607') &
                     ~Q(description__icontains='ALUMINIUM FOIL') &
-                    ~Q(hs_code__hs_code__startswith='7607')
+                    ~Q(hs_code__hs_code__startswith='7607') &
+                    ~Q(hs_code__hs_code__startswith='39')
                 ]
             },
             {

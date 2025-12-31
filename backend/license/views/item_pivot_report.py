@@ -759,7 +759,7 @@ class ItemPivotReportView(View):
                     worksheet.append([])
 
                     # Headers
-                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Balance CIF']
+                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Alloted CIF', 'Balance CIF']
                     item_headers = []
                     for item in items_with_data:
                         item_name = item['name']
@@ -798,6 +798,7 @@ class ItemPivotReportView(View):
                             lic['license_expiry_date'],
                             lic['exporter'],
                             lic['total_cif'],
+                            lic['alloted_cif'],
                             lic['balance_cif']
                         ]
 
@@ -829,6 +830,10 @@ class ItemPivotReportView(View):
                     total_cif_cell = WriteOnlyCell(worksheet, value=sum(l['total_cif'] for l in licenses_list))
                     total_cif_cell.font = Font(bold=True)
                     totals_row.append(total_cif_cell)
+
+                    alloted_cif_cell = WriteOnlyCell(worksheet, value=sum(l['alloted_cif'] for l in licenses_list))
+                    alloted_cif_cell.font = Font(bold=True)
+                    totals_row.append(alloted_cif_cell)
 
                     balance_cif_cell = WriteOnlyCell(worksheet, value=sum(l['balance_cif'] for l in licenses_list))
                     balance_cif_cell.font = Font(bold=True)

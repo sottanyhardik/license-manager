@@ -422,12 +422,11 @@ def _prepare_allotment_data(allotment, company_name, address_line1, address_line
 def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits, selected_items=None):
     """
     Prepare data for BOE transfer letter generation.
+    Groups items by license number and sums CIF values for duplicates.
 
     Args:
         selected_items: List of item_detail IDs to include (None = include all)
     """
-    data = []
-
     # Convert selected_items to integers if provided as strings
     if selected_items:
         selected_items = [int(item_id) if isinstance(item_id, str) else item_id for item_id in selected_items]
@@ -436,6 +435,9 @@ def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits
     final_company = company_name if company_name else (boe.company.name if boe.company else '')
     final_address1 = address_line1 if address_line1 else ''
     final_address2 = address_line2 if address_line2 else ''
+
+    # Group by license number to merge duplicates
+    license_groups = {}
 
     for item in boe.item_details.all():
         # Filter by selected items if provided
@@ -451,22 +453,38 @@ def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits
         cif_fc = Decimal(cif_edits.get(str(item.id), item.cif_fc))
         cif_inr = Decimal(cif_edits.get(str(item.id) + '_inr', item.cif_inr))
 
-        data.append({
-            'status': license_obj.purchase_status,
-            'company': final_company,
-            'company_address_1': final_address1,
-            'company_address_2': final_address2,
-            'today': datetime.now().date().strftime("%d/%m/%Y"),
-            'license': license_obj.license_number,
-            'serial_number': license_item.serial_number if license_item else '',
-            'license_date': license_obj.license_date.strftime("%d/%m/%Y") if license_obj.license_date else '',
-            'file_number': license_obj.file_number or '',
-            'quantity': item.qty,
-            'v_allotment_inr': round(float(cif_inr), 2),
-            'exporter_name': license_obj.exporter.name if license_obj.exporter else '',
-            'v_allotment_usd': float(cif_fc),
-            'boe': f"BE NUMBER: {boe.bill_of_entry_number}"
-        })
+        license_number = license_obj.license_number
+
+        # If license already exists, sum the CIF values
+        if license_number in license_groups:
+            license_groups[license_number]['v_allotment_usd'] += float(cif_fc)
+            license_groups[license_number]['v_allotment_inr'] += float(cif_inr)
+            license_groups[license_number]['quantity'] += item.qty
+        else:
+            # Create new entry
+            license_groups[license_number] = {
+                'status': license_obj.purchase_status,
+                'company': final_company,
+                'company_address_1': final_address1,
+                'company_address_2': final_address2,
+                'today': datetime.now().date().strftime("%d/%m/%Y"),
+                'license': license_number,
+                'serial_number': license_item.serial_number if license_item else '',
+                'license_date': license_obj.license_date.strftime("%d/%m/%Y") if license_obj.license_date else '',
+                'file_number': license_obj.file_number or '',
+                'quantity': item.qty,
+                'v_allotment_inr': float(cif_inr),
+                'exporter_name': license_obj.exporter.name if license_obj.exporter else '',
+                'v_allotment_usd': float(cif_fc),
+                'boe': f"BE NUMBER: {boe.bill_of_entry_number}"
+            }
+
+    # Convert to list and round the final CIF values
+    data = []
+    for entry in license_groups.values():
+        entry['v_allotment_inr'] = round(entry['v_allotment_inr'], 2)
+        entry['v_allotment_usd'] = round(entry['v_allotment_usd'], 2)
+        data.append(entry)
 
     return data
 

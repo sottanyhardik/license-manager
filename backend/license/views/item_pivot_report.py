@@ -453,6 +453,11 @@ class ItemPivotReportView(View):
                         restriction_value = float(restriction_pct)
                         available_cif = group['available_cif']
 
+                # Calculate unit price for RUTILE (cif_value / available_quantity)
+                unit_price = None
+                if item_name == 'RUTILE - A3627' and item_data['available_quantity'] > 0:
+                    unit_price = float(item_data['cif_value'] / item_data['available_quantity'])
+
                 row_data['items'][item_name] = {
                     'hs_code': item_data['hs_code'],
                     'description': item_data['description'],
@@ -462,6 +467,7 @@ class ItemPivotReportView(View):
                     'available_quantity': float(item_data['available_quantity']),
                     'restriction': restriction_value,
                     'restriction_value': float(available_cif),
+                    'unit_price': unit_price,
                 }
             else:
                 row_data['items'][item_name] = {
@@ -473,6 +479,7 @@ class ItemPivotReportView(View):
                     'available_quantity': 0,
                     'restriction': None,
                     'restriction_value': 0,
+                    'unit_price': None,
                 }
 
         return row_data
@@ -526,14 +533,15 @@ class ItemPivotReportView(View):
                     # Build headers
                     base_headers = [
                         'Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter',
-                        'Total CIF', 'Balance CIF'
+                        'Total CIF', 'Alloted CIF', 'Balance CIF'
                     ]
 
-                    # Add item columns (HSN Code, Product Description, Total QTY, Debited QTY, Available QTY, Restriction %, Restriction Value)
+                    # Add item columns (HSN Code, Product Description, Total QTY, Debited QTY, Available QTY, Restriction %, Restriction Value, Unit Price for RUTILE)
                     item_headers = []
                     for item in report_data['items']:
                         item_name = item['name']
                         has_restriction = item.get('has_restriction', False)
+                        is_rutile = item_name == 'RUTILE - A3627'
 
                         headers = [
                             f"{item_name} HSN Code",
@@ -549,6 +557,9 @@ class ItemPivotReportView(View):
                                 f"{item_name} Restriction %",
                                 f"{item_name} Restriction Value"
                             ])
+
+                        if is_rutile:
+                            headers.append(f"{item_name} Unit Price")
 
                         item_headers.extend(headers)
 
@@ -575,12 +586,14 @@ class ItemPivotReportView(View):
                         row_data.append(license_data['license_expiry_date'])
                         row_data.append(license_data['exporter'])
                         row_data.append(license_data['total_cif'])
+                        row_data.append(license_data['alloted_cif'])
                         row_data.append(license_data['balance_cif'])
 
                         # Item columns
                         for item in report_data['items']:
                             item_name = item['name']
                             has_restriction = item.get('has_restriction', False)
+                            is_rutile = item_name == 'RUTILE - A3627'
                             item_data = license_data['items'].get(item_name, {
                                 'hs_code': '',
                                 'description': '',
@@ -589,7 +602,8 @@ class ItemPivotReportView(View):
                                 'debited_quantity': 0,
                                 'available_quantity': 0,
                                 'restriction': None,
-                                'restriction_value': 0
+                                'restriction_value': 0,
+                                'unit_price': None
                             })
 
                             row_data.append(item_data.get('hs_code', ''))
@@ -605,6 +619,11 @@ class ItemPivotReportView(View):
                                 row_data.append(restriction_val if restriction_val else '')
                                 restriction_value = item_data.get('restriction_value', 0)
                                 row_data.append(restriction_value if restriction_value else '')
+
+                            # Add unit price column for RUTILE
+                            if is_rutile:
+                                unit_price = item_data.get('unit_price')
+                                row_data.append(unit_price if unit_price else '')
 
                         # Append row to worksheet
                         worksheet.append(row_data)
@@ -636,6 +655,7 @@ class ItemPivotReportView(View):
                     for item in report_data['items']:
                         item_name = item['name']
                         has_restriction = item.get('has_restriction', False)
+                        is_rutile = item_name == 'RUTILE - A3627'
 
                         total_qty = sum(
                             lic['items'].get(item_name, {}).get('quantity', 0)
@@ -685,6 +705,10 @@ class ItemPivotReportView(View):
                             restriction_cell = WriteOnlyCell(worksheet, value=total_restriction_val)
                             restriction_cell.font = Font(bold=True)
                             totals_row.append(restriction_cell)
+
+                        # Add unit price column for RUTILE (leave empty in totals)
+                        if is_rutile:
+                            totals_row.append(None)
 
                     worksheet.append(totals_row)
 
@@ -779,6 +803,7 @@ class ItemPivotReportView(View):
                     for item in items_with_data:
                         item_name = item['name']
                         has_restriction = item.get('has_restriction', False)
+                        is_rutile = item_name == 'RUTILE - A3627'
                         headers = [
                             f"{item_name} HSN Code",
                             f"{item_name} Product Description",
@@ -792,6 +817,8 @@ class ItemPivotReportView(View):
                                 f"{item_name} Restriction %",
                                 f"{item_name} Restriction Value"
                             ])
+                        if is_rutile:
+                            headers.append(f"{item_name} Unit Price")
                         item_headers.extend(headers)
 
                     all_headers = base_headers + item_headers
@@ -820,6 +847,7 @@ class ItemPivotReportView(View):
                         for item in items_with_data:
                             item_name = item['name']
                             has_restriction = item.get('has_restriction', False)
+                            is_rutile = item_name == 'RUTILE - A3627'
                             item_data = lic['items'].get(item_name, {})
                             row_data.extend([
                                 item_data.get('hs_code', ''),
@@ -834,6 +862,8 @@ class ItemPivotReportView(View):
                                     item_data.get('restriction'),
                                     item_data.get('restriction_value', 0)
                                 ])
+                            if is_rutile:
+                                row_data.append(item_data.get('unit_price', ''))
 
                         worksheet.append(row_data)
 
@@ -857,6 +887,7 @@ class ItemPivotReportView(View):
                     for item in items_with_data:
                         item_name = item['name']
                         has_restriction = item.get('has_restriction', False)
+                        is_rutile = item_name == 'RUTILE - A3627'
                         totals_row.extend([None, None])  # HSN, Description
                         for qty_type in ['quantity', 'allotted_quantity', 'debited_quantity', 'available_quantity']:
                             total = sum(l['items'].get(item_name, {}).get(qty_type, 0) for l in licenses_list)
@@ -869,6 +900,8 @@ class ItemPivotReportView(View):
                             cell = WriteOnlyCell(worksheet, value=total_restriction)
                             cell.font = Font(bold=True)
                             totals_row.append(cell)
+                        if is_rutile:
+                            totals_row.append(None)  # Unit Price (leave empty in totals)
 
                     worksheet.append(totals_row)
 

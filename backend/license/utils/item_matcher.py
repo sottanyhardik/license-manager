@@ -366,14 +366,6 @@ def get_item_filters():
             ]
         },
         {
-            'base_name': 'VEGETABLE SHORTENING',
-            'norms': ['E5'],
-            'filters': [
-                Q(description__icontains="vegetable shortening") |
-                Q(description__icontains="rbd palm oil")
-            ]
-        },
-        {
             'base_name': 'OLIVE OIL',
             'norms': ['E5', 'E126'],
             'filters': [
@@ -483,6 +475,14 @@ def get_item_filters():
                 Q(description__icontains='Fruit Flavour') |
                 Q(description__icontains="2009") |
                 Q(hs_code__hs_code__startswith='2009')
+            ]
+        },
+        {
+            'base_name': 'FRUIT COCKTAILS',
+            'norms': ['E1'],
+            'filters': [
+                Q(description__icontains="2008") |
+                Q(hs_code__hs_code__startswith='2008')
             ]
         },
         {

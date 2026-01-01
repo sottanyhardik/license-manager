@@ -59,13 +59,11 @@ class Command(BaseCommand):
                 'base_name': 'RUTILE',
                 'norms': ['A3627'],
                 'filters': [
-                    (Q(hs_code__hs_code__startswith='32061190') |
-                     Q(hs_code__hs_code__startswith='32061110') |
+                    (Q(hs_code__hs_code__startswith='3206') |
                      Q(description__icontains='Glass Formers') |
                      Q(description__icontains='Rutile') |
                      Q(description__icontains='Formers'))
-                    & ~Q(description__icontains='other than')
-                    & ~Q(description__icontains='Titanium Dioxide')
+                    & Q(description__icontains='borax')
                 ]
             },
             {

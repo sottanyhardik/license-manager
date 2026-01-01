@@ -491,20 +491,11 @@ def get_item_filters():
             'norms': ['E1', 'E5', 'E126', 'E132'],
             'filters': [
                 Q(description__icontains="relevant food flavour") |
+                Q(description__icontains="Relevant Food Grade Flavours") |
                 Q(description__icontains="FOOD FLAVOUR") |
                 Q(description__icontains="relevant (food flour") |
                 Q(description__icontains="Flavouring Agent") |
-                Q(description__icontains="FOOD FLAVOURS") |
-                Q(description__icontains="Flavours") |
-                Q(description__icontains="Cardamom") |
-                Q(description__icontains="0802") |
-                Q(description__icontains="0806") |
-                Q(description__icontains="0908") |
-                Q(description__icontains='0904') |
-                Q(hs_code__hs_code__startswith='0802') |
-                Q(hs_code__hs_code__startswith='0806') |
-                Q(hs_code__hs_code__startswith='0904') |
-                Q(hs_code__hs_code__startswith='0908')
+                Q(description__icontains="Cardamom")
             ]
         },
         {
@@ -521,6 +512,7 @@ def get_item_filters():
             'norms': ['E1'],
             'filters': [
                 Q(description__icontains="other confectionery ingredients") |
+                Q(description__icontains="FRUIT FLAVOURS") |
                 Q(description__icontains="nut & nut products") |
                 Q(description__icontains="Fruits and Nuts Product") |
                 Q(description__icontains="0908") |

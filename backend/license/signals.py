@@ -75,59 +75,19 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
     if not license_norm_classes:
         return
 
-    # Get all ItemNameModel items that match the license norm classes
-    from core.models import ItemNameModel
-    from django.db.models import Q
+    # Use the shared item matcher utility for consistent matching logic
+    from license.utils.item_matcher import match_import_item_to_items
 
-    matching_items = ItemNameModel.objects.filter(
-        sion_norm_class__norm_class__in=license_norm_classes
-    )
+    # For each import item in the license, find and link matching ItemNameModel items
+    for import_item in instance.import_license.all():
+        # Skip if items are already linked
+        if import_item.items.exists():
+            continue
 
-    if not matching_items.exists():
-        return
+        matching_items = match_import_item_to_items(import_item, license_norm_classes)
 
-    # For each ItemNameModel, find and link matching import items
-    for item_name in matching_items:
-        # Extract base name for matching:
-        # Always use just the first word to avoid overly specific matches
-        # e.g., "FOOD FLAVOUR - E126" → "FOOD" (matches "Food Additives")
-        # e.g., "PICKLE 3% Restriction" → "PICKLE"
-        base_name = item_name.name.split()[0] if item_name.name.split() else item_name.name
-
-        # Build filter based on description/HS code patterns
-        description_filter = Q(description__icontains=base_name)
-
-        # Find matching import items for this license
-        matching_imports = instance.import_license.filter(description_filter)
-
-        # For short names (<=3 chars), filter out false matches using word boundary check
-        import re
-        if len(base_name) <= 3:
-            pattern = r'\b' + re.escape(base_name) + r'\b'
-            # Further filter to only include items where base_name is a standalone word
-            matching_imports = [
-                imp for imp in matching_imports
-                if re.search(pattern, imp.description, re.IGNORECASE)
-            ]
-
-        # Special HS code validation for PP items
-        # PP should only match if HS code starts with 3902 (Polypropylene)
-        if base_name.upper() == 'PP':
-            matching_imports = [
-                imp for imp in matching_imports
-                if imp.hs_code and imp.hs_code.hs_code.startswith('3902')
-            ]
-
-        # Special logic for PICKLE items
-        # If description contains "Food Additives for Pickles", exclude (FOOD FLAVOUR should match instead)
-        if base_name.upper() == 'PICKLE':
-            matching_imports = [
-                imp for imp in matching_imports
-                if not ('food additive' in imp.description.lower() and 'for pickle' in imp.description.lower())
-            ]
-
-        # Link this ItemNameModel to matching import items
-        for import_item in matching_imports:
+        # Link all matching ItemNameModel items
+        for item_name in matching_items:
             # Add item if not already linked
             if not import_item.items.filter(id=item_name.id).exists():
                 import_item.items.add(item_name)
@@ -185,69 +145,28 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
         logger.info(f"License norm classes: {license_norm_classes}")
 
         if license_norm_classes and instance.description:
-            from core.models import ItemNameModel
-            from django.db.models import Q
+            # Use the shared item matcher utility for consistent matching logic
+            from license.utils.item_matcher import match_import_item_to_items
 
-            # Get all ItemNameModel items that match the license norm classes
-            matching_items = ItemNameModel.objects.filter(
-                sion_norm_class__norm_class__in=license_norm_classes
-            )
+            matching_items = match_import_item_to_items(instance, license_norm_classes)
 
-            logger.info(f"Found {matching_items.count()} matching items for norm classes {license_norm_classes}")
+            logger.info(f"Found {matching_items.count()} matching items using comprehensive filters")
 
-            # Try to match and link items based on description
             # Link ALL matching items (not just one) since multiple items can be valid
             for item_name in matching_items:
-                # Extract base name for matching:
-                # Always use just the first word to avoid overly specific matches
-                # e.g., "FOOD FLAVOUR - E126" → "FOOD" (matches "Food Additives")
-                # e.g., "PICKLE 3% Restriction" → "PICKLE"
-                # e.g., "OLIVE OIL - E126" → "OLIVE" (will still match "Olive Oil")
-                base_name = item_name.name.split()[0] if item_name.name.split() else item_name.name
-
-                logger.debug(f"Checking if '{base_name}' in '{instance.description}'")
-
-                # Use word boundary matching for short names (<=3 chars) to avoid false matches
-                # e.g., "PP" should not match "approved", only "PP " or " PP" or standalone "PP"
-                import re
-                if len(base_name) <= 3:
-                    # Use word boundary regex for short names
-                    pattern = r'\b' + re.escape(base_name) + r'\b'
-                    matched = bool(re.search(pattern, instance.description, re.IGNORECASE))
+                # Only add if not already linked
+                if not instance.items.filter(id=item_name.id).exists():
+                    logger.info(f"Linking item {item_name.id} ({item_name.name}) to import item {instance.id}")
+                    instance.items.add(item_name)
                 else:
-                    # For longer names, simple substring match is fine
-                    matched = base_name.lower() in instance.description.lower()
+                    logger.debug(f"Item {item_name.id} already linked to import item {instance.id}")
 
-                # Special HS code validation for PP items
-                # PP should only match if HS code starts with 3902 (Polypropylene)
-                if matched and base_name.upper() == 'PP':
-                    hs_code = instance.hs_code.hs_code if instance.hs_code else ''
-                    if not hs_code.startswith('3902'):
-                        logger.debug(f"Skipping PP for item {instance.id}: HS code {hs_code} does not start with 3902")
-                        matched = False
-
-                # Special logic for PICKLE items
-                # If description contains "Food Additives for Pickles", match FOOD FLAVOUR not PICKLE
-                if matched and base_name.upper() == 'PICKLE':
-                    if 'food additive' in instance.description.lower() and 'for pickle' in instance.description.lower():
-                        logger.debug(f"Skipping PICKLE for item {instance.id}: 'Food Additives for Pickles' should match FOOD FLAVOUR")
-                        matched = False
-
-                if matched:
-                    # Link this item (allows multiple items to be linked)
-                    # Only add if not already linked
-                    if not instance.items.filter(id=item_name.id).exists():
-                        logger.info(f"Linking item {item_name.id} ({item_name.name}) to import item {instance.id}")
-                        instance.items.add(item_name)
-                    else:
-                        logger.debug(f"Item {item_name.id} already linked to import item {instance.id}")
-
-                    # Update is_restricted flag if item has restriction
-                    if item_name.restriction_percentage > 0 and not instance.is_restricted:
-                        logger.info(
-                            f"Setting is_restricted=True for import item {instance.id} (restriction: {item_name.restriction_percentage}%)")
-                        instance.is_restricted = True
-                        instance.save(update_fields=['is_restricted'])
+                # Update is_restricted flag if item has restriction
+                if item_name.restriction_percentage > 0 and not instance.is_restricted:
+                    logger.info(
+                        f"Setting is_restricted=True for import item {instance.id} (restriction: {item_name.restriction_percentage}%)")
+                    instance.is_restricted = True
+                    instance.save(update_fields=['is_restricted'])
         else:
             if not license_norm_classes:
                 logger.warning(f"No license norm classes found for license {instance.license.id}")

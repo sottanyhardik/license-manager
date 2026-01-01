@@ -815,6 +815,13 @@ export default function ItemPivotReport() {
                                                                         </th>
                                                                     </>
                                                                 )}
+                                                                {item.name === 'RUTILE - A3627' && (
+                                                                    <th className="text-end" style={{
+                                                                        minWidth: '100px',
+                                                                        fontSize: '0.85rem'
+                                                                    }}>Unit Price
+                                                                    </th>
+                                                                )}
                                                             </React.Fragment>
                                                         ))}
                                                     </tr>
@@ -951,6 +958,11 @@ export default function ItemPivotReport() {
                                                                                     {itemData.restriction_value ? itemData.restriction_value.toFixed(2) : '-'}
                                                                                 </td>
                                                                             </>
+                                                                        )}
+                                                                        {item.name === 'RUTILE - A3627' && (
+                                                                            <td className={`text-end ${hasData ? 'bg-light fw-semibold text-warning' : ''}`}>
+                                                                                {itemData.unit_price ? itemData.unit_price.toFixed(4) : '-'}
+                                                                            </td>
                                                                         )}
                                                                     </React.Fragment>
                                                                 );
@@ -1102,6 +1114,9 @@ export default function ItemPivotReport() {
                                                                                 {totalRestrictionVal > 0 ? totalRestrictionVal.toFixed(2) : '-'}
                                                                             </td>
                                                                         </>
+                                                                    )}
+                                                                    {item.name === 'RUTILE - A3627' && (
+                                                                        <td className="text-muted">-</td>
                                                                     )}
                                                                 </React.Fragment>
                                                             );

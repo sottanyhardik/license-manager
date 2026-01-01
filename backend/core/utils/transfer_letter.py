@@ -373,11 +373,18 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 def _prepare_allotment_data(allotment, company_name, address_line1, address_line2, cif_edits, selected_items=None):
     """
     Prepare data for allotment transfer letter generation.
+    Groups items by license number and sums CIF values for duplicates.
 
     Args:
         selected_items: List of allotment_detail IDs to include (None = include all)
     """
-    data = []
+    # Use POST data if provided, otherwise fallback to allotment company
+    final_company = company_name if company_name else (allotment.company.name if allotment.company else '')
+    final_address1 = address_line1 if address_line1 else ''
+    final_address2 = address_line2 if address_line2 else ''
+
+    # Group by license number to merge duplicates
+    license_groups = {}
 
     for allotment_item in allotment.allotment_details.all():
         # Filter by selected items if provided
@@ -394,27 +401,38 @@ def _prepare_allotment_data(allotment, company_name, address_line1, address_line
         cif_fc = Decimal(cif_edits.get(str(allotment_item.id), allotment_item.cif_fc))
         cif_inr = cif_fc * Decimal(allotment.exchange_rate or 1)
 
-        # Use POST data if provided, otherwise fallback to allotment company
-        final_company = company_name if company_name else (allotment.company.name if allotment.company else '')
-        final_address1 = address_line1 if address_line1 else ''
-        final_address2 = address_line2 if address_line2 else ''
+        license_number = license.license_number
 
-        data.append({
-            'status': license.purchase_status,
-            'company': final_company,
-            'company_address_1': final_address1,
-            'company_address_2': final_address2,
-            'today': datetime.now().date().strftime("%d/%m/%Y"),
-            'license': license.license_number,
-            'serial_number': license_item.serial_number,
-            'license_date': license.license_date.strftime("%d/%m/%Y") if license.license_date else '',
-            'file_number': license.file_number or '',
-            'quantity': allotment_item.qty,
-            'v_allotment_inr': round(float(cif_inr), 2),
-            'exporter_name': license.exporter.name if license.exporter else '',
-            'v_allotment_usd': float(cif_fc),
-            'boe': f"ALLOTMENT ID: {allotment.id}"
-        })
+        # If license already exists, sum the CIF values
+        if license_number in license_groups:
+            license_groups[license_number]['v_allotment_usd'] += float(cif_fc)
+            license_groups[license_number]['v_allotment_inr'] += float(cif_inr)
+            license_groups[license_number]['quantity'] += allotment_item.qty
+        else:
+            # Create new entry
+            license_groups[license_number] = {
+                'status': license.purchase_status,
+                'company': final_company,
+                'company_address_1': final_address1,
+                'company_address_2': final_address2,
+                'today': datetime.now().date().strftime("%d/%m/%Y"),
+                'license': license_number,
+                'serial_number': license_item.serial_number,
+                'license_date': license.license_date.strftime("%d/%m/%Y") if license.license_date else '',
+                'file_number': license.file_number or '',
+                'quantity': allotment_item.qty,
+                'v_allotment_inr': float(cif_inr),
+                'exporter_name': license.exporter.name if license.exporter else '',
+                'v_allotment_usd': float(cif_fc),
+                'boe': f"ALLOTMENT ID: {allotment.id}"
+            }
+
+    # Convert to list and round the final CIF values
+    data = []
+    for entry in license_groups.values():
+        entry['v_allotment_inr'] = round(entry['v_allotment_inr'], 2)
+        entry['v_allotment_usd'] = round(entry['v_allotment_usd'], 2)
+        data.append(entry)
 
     return data
 

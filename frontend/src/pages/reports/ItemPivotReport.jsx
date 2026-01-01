@@ -761,6 +761,12 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '750px',
                                                             zIndex: 11,
+                                                            backgroundColor: '#e2e3e5'
+                                                        }}></th>
+                                                        <th style={{
+                                                            position: 'sticky',
+                                                            left: '850px',
+                                                            zIndex: 11,
                                                             backgroundColor: '#e2e3e5',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid #dee2e6'

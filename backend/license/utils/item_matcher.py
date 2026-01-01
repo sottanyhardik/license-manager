@@ -482,6 +482,7 @@ def get_item_filters():
             'norms': ['E1'],
             'filters': [
                 Q(description__icontains="2008") |
+                Q(description__icontains="Fruit Cocktail") |
                 Q(hs_code__hs_code__startswith='2008')
             ]
         },

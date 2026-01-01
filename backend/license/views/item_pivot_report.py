@@ -164,8 +164,8 @@ class ItemPivotReportView(View):
         for license_obj in valid_licenses:
             for import_item in license_obj.import_license.all():
                 for item in import_item.items.all():
-                    # Only add items with valid names, that are active, and not hidden from pivot
-                    if item and item.name and item.is_active and not item.hide_in_pivot:
+                    # Only add items with valid names and that are active (is_active=False hides from pivot)
+                    if item and item.name and item.is_active:
                         # If filtering by norm, only include items matching that norm
                         if sion_norm:
                             if item.sion_norm_class and item.sion_norm_class.norm_class == sion_norm:

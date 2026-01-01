@@ -72,7 +72,7 @@ class Command(BaseCommand):
                     'base_name': base_name,
                     'norm': norm,
                     'filters': definition['filters'],
-                    'hide_in_pivot': definition.get('hide_in_pivot', False)
+                    'is_active': definition.get('is_active', True)
                 })
 
         created_count = 0
@@ -82,13 +82,13 @@ class Command(BaseCommand):
         for item_data in items_to_create:
             item_name = item_data['name']
             norm = item_data['norm']
-            hide_in_pivot = item_data.get('hide_in_pivot', False)
+            is_active = item_data.get('is_active', True)
 
             if not dry_run:
                 # Get or create the item
                 item, created = ItemNameModel.objects.get_or_create(name=item_name)
 
-                # Set sion_norm_class and hide_in_pivot for all items
+                # Set sion_norm_class and is_active for all items
                 needs_update = False
                 update_fields = []
 
@@ -102,10 +102,10 @@ class Command(BaseCommand):
                     self.stdout.write(
                         self.style.WARNING(f"  ! Norm class '{norm}' not found in database for {item_name}"))
 
-                # Set hide_in_pivot flag
-                if item.hide_in_pivot != hide_in_pivot:
-                    item.hide_in_pivot = hide_in_pivot
-                    update_fields.append('hide_in_pivot')
+                # Set is_active flag (False hides from pivot report)
+                if item.is_active != is_active:
+                    item.is_active = is_active
+                    update_fields.append('is_active')
                     needs_update = True
 
                 if needs_update:
@@ -114,7 +114,7 @@ class Command(BaseCommand):
 
                 if created:
                     created_count += 1
-                    self.stdout.write(f"  + Created: {item_name} (norm: {norm}, hide_in_pivot: {hide_in_pivot})")
+                    self.stdout.write(f"  + Created: {item_name} (norm: {norm}, is_active: {is_active})")
                 else:
                     existing_count += 1
             else:

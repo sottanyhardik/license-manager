@@ -177,7 +177,7 @@ def get_item_filters():
                 Q(description__icontains='0806') |
                 Q(hs_code__hs_code__startswith='0806')
             ],
-            'hide_in_pivot': True
+            'is_active': False
         },
         {
             'base_name': 'WALNUT',
@@ -186,7 +186,7 @@ def get_item_filters():
                 Q(description__icontains='0802') |
                 Q(hs_code__hs_code__startswith='0802')
             ],
-            'hide_in_pivot': True
+            'is_active': False
         },
         {
             'base_name': 'CARDAMOM',
@@ -195,7 +195,7 @@ def get_item_filters():
                 Q(description__icontains='0908') |
                 Q(hs_code__hs_code__startswith='0908')
             ],
-            'hide_in_pivot': True
+            'is_active': False
         },
         {
             'base_name': 'RBD PALMOLEIN OIL',
@@ -204,7 +204,7 @@ def get_item_filters():
                 Q(description__icontains='1510') |
                 Q(hs_code__hs_code__startswith='1510')
             ],
-            'hide_in_pivot': True
+            'is_active': False
         },
         {
             'base_name': 'OLIVE OIL',

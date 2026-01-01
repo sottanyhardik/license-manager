@@ -230,10 +230,6 @@ class ItemNameModel(AuditModel):
         validators=[MinValueValidator(1)],
         help_text="Display order in reports (lower numbers appear first). Must be unique per norm class."
     )
-    hide_in_pivot = models.BooleanField(
-        default=False,
-        help_text="Hide this item from Item Pivot Report"
-    )
 
     class Meta:
         ordering = ['display_order', 'group__name', 'name']

@@ -435,6 +435,19 @@ class ItemPivotReportView(View):
             'items': {}
         }
 
+        # Calculate unit price for RUTILE - A3627 (Balance CIF / Total Balance QTY of RUTILE)
+        rutile_unit_price = None
+        rutile_total_balance_qty = Decimal('0')
+
+        # Sum up all RUTILE available quantities
+        for item_id, item_name in all_items:
+            if item_name == 'RUTILE - A3627' and item_id in item_quantities:
+                rutile_total_balance_qty += item_quantities[item_id]['available_quantity']
+
+        # Calculate unit price if we have RUTILE balance qty
+        if rutile_total_balance_qty > 0:
+            rutile_unit_price = float(balance_cif / rutile_total_balance_qty)
+
         # Add item columns
         for item_id, item_name in all_items:
             if item_id in item_quantities:
@@ -453,10 +466,8 @@ class ItemPivotReportView(View):
                         restriction_value = float(restriction_pct)
                         available_cif = group['available_cif']
 
-                # Calculate unit price for RUTILE (cif_value / available_quantity)
-                unit_price = None
-                if item_name == 'RUTILE - A3627' and item_data['available_quantity'] > 0:
-                    unit_price = float(item_data['cif_value'] / item_data['available_quantity'])
+                # Use pre-calculated unit price for RUTILE
+                unit_price = rutile_unit_price if item_name == 'RUTILE - A3627' else None
 
                 row_data['items'][item_name] = {
                     'hs_code': item_data['hs_code'],

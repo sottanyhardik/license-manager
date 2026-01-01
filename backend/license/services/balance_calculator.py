@@ -105,9 +105,11 @@ class LicenseBalanceCalculator:
     def calculate_trade(license_obj) -> Decimal:
         """
         Calculate total trade CIF $ for license.
-        Only counts trade lines where:
+        Only counts SALE trade lines where:
         1. Trade is linked to a BOE that has NO invoice, OR
         2. Trade is NOT linked to any BOE at all
+
+        NOTE: Only SALE trades debit the license. PURCHASE trades add to the license (already counted in allotments).
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -120,7 +122,8 @@ class LicenseBalanceCalculator:
 
         return to_decimal(
             LicenseTradeLine.objects.filter(
-                sr_number__license=license_obj
+                sr_number__license=license_obj,
+                trade__direction='SALE'  # Only count SALE trades that debit the license
             ).filter(
                 Q(trade__boe__isnull=True) | Q(trade__boe__invoice_no__isnull=True) | Q(trade__boe__invoice_no='')
             ).aggregate(

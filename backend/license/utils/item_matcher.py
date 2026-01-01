@@ -511,16 +511,16 @@ def get_item_filters():
             'base_name': 'OTHER CONFECTIONERY INGREDIENTS',
             'norms': ['E1'],
             'filters': [
-                Q(description__icontains="other confectionery ingredients") |
-                Q(description__icontains="FRUIT FLAVOURS") |
-                Q(description__icontains="nut & nut products") |
-                Q(description__icontains="Fruits and Nuts Product") |
-                Q(description__icontains="0908") |
-                Q(description__icontains="0802") |
-                Q(description__icontains="0806") |
-                Q(hs_code__hs_code__startswith='0908') |
-                Q(hs_code__hs_code__startswith='0802') |
-                Q(hs_code__hs_code__startswith='0806')
+                Q(Q(description__icontains="other") | Q(description__icontains="other confectionery ingredients") |
+                  Q(description__icontains="FRUIT FLAVOURS") |
+                  Q(description__icontains="nut & nut products") |
+                  Q(description__icontains="Fruits and Nuts Product")) &
+                Q(Q(description__icontains="0908") |
+                  Q(description__icontains="0802") |
+                  Q(description__icontains="0806") |
+                  Q(hs_code__hs_code__startswith='0908') |
+                  Q(hs_code__hs_code__startswith='0802') |
+                  Q(hs_code__hs_code__startswith='0806'))
             ]
         },
         {

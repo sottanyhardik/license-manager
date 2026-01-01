@@ -111,7 +111,7 @@ class RestrictionCalculator:
                 restricted_allotments += to_decimal(
                     AllotmentItems.objects.filter(
                         item=import_item,
-                        allotment__bill_of_entry__bill_of_entry_number__isnull=True
+                        allotment__bill_of_entry__isnull=True
                     ).aggregate(
                         total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
                     )["total"],

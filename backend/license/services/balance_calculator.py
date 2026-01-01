@@ -241,7 +241,7 @@ class ItemBalanceCalculator:
         allotment = to_decimal(
             AllotmentItems.objects.filter(
                 item=import_item,
-                allotment__bill_of_entry__bill_of_entry_number__isnull=True
+                allotment__bill_of_entry__isnull=True
             ).aggregate(
                 Sum('cif_fc')
             )['cif_fc__sum'],
@@ -298,7 +298,7 @@ class ItemBalanceCalculator:
         allotted = to_decimal(
             AllotmentItems.objects.filter(
                 item=import_item,
-                allotment__bill_of_entry__bill_of_entry_number__isnull=True
+                allotment__bill_of_entry__isnull=True
             ).aggregate(
                 Sum('qty')
             )['qty__sum'],

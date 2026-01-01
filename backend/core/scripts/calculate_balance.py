@@ -23,7 +23,7 @@ def calculate_debited_quantity(instance):
 
 def calculate_allotted_quantity(instance):
     allotted = instance.allotment_details.filter(
-        allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+        allotment__bill_of_entry__isnull=True,
         allotment__type='AT'
     ).aggregate(Sum('qty'))['qty__sum'] or 0
     return round(float(allotted), 2) or 0.0
@@ -36,7 +36,7 @@ def calculate_debited_value(instance):
 
 
 def calculate_allotted_value(instance):
-    value = instance.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+    value = instance.allotment_details.filter(allotment__bill_of_entry__isnull=True,
                                               allotment__type='AT').aggregate(
         Sum('cif_fc'))['cif_fc__sum'] or 0
     return round(float(value), 2)

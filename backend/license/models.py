@@ -376,7 +376,7 @@ class LicenseDetailsModel(AuditModel):
                 AllotmentItems.objects.filter(
                     item__license=self,
                     allotment__company=567,
-                    allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+                    allotment__bill_of_entry__isnull=True,
                 ).aggregate(total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"],
                 DEC_000,
             )
@@ -844,7 +844,7 @@ class LicenseImportItemsModel(models.Model):
             debited = _to_decimal(self.item_details.filter(transaction_type=DEBIT).aggregate(
                 total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"], DEC_000)
             allotted = _to_decimal(
-                self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True).aggregate(
+                self.allotment_details.filter(allotment__bill_of_entry__isnull=True).aggregate(
                     total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()))["total"], DEC_000)
             avail = total - (debited + allotted)
             return avail if avail >= DEC_000 else DEC_000
@@ -862,7 +862,7 @@ class LicenseImportItemsModel(models.Model):
         return _to_decimal(
             AllotmentItems.objects.filter(
                 item=self,
-                allotment__bill_of_entry__bill_of_entry_number__isnull=True
+                allotment__bill_of_entry__isnull=True
             ).aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
             DEC_0,
         )
@@ -1124,7 +1124,7 @@ class LicenseImportItemsModel(models.Model):
     def total_debited_cif_fc(self) -> Decimal:
         debited = _to_decimal(self.item_details.filter(transaction_type=DEBIT).aggregate(
             total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
-        alloted = _to_decimal(self.allotment_details.filter(allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+        alloted = _to_decimal(self.allotment_details.filter(allotment__bill_of_entry__isnull=True,
                                                             allotment__type=ARO).aggregate(
             total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"], DEC_0)
         total = debited + alloted

@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-REMOTE_SERVER="django@143.110.252.201"
+REMOTE_SERVER="django@139.59.92.226"
 REMOTE_DB_NAME="lmanagement"
 REMOTE_DB_USER="lmanagement"
 REMOTE_DB_PASS="lmanagement"

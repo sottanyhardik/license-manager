@@ -219,7 +219,7 @@ class Command(BaseCommand):
             a_agg = (
                 AllotmentItems.objects.filter(
                     item=row,
-                    allotment__bill_of_entry__bill_of_entry_number__isnull=True,
+                    allotment__bill_of_entry__isnull=True,
                 ).aggregate(qty=Sum("qty"), cif=Sum("cif_fc"))
                 or {}
             )

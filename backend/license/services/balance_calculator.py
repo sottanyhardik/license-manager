@@ -82,10 +82,10 @@ class LicenseBalanceCalculator:
     def calculate_allotment(license_obj) -> Decimal:
         """
         Calculate total allotment (non-BOE) for license.
-        
+
         Args:
             license_obj: LicenseDetailsModel instance
-            
+
         Returns:
             Total allotment CIF as Decimal
         """
@@ -94,7 +94,7 @@ class LicenseBalanceCalculator:
         return to_decimal(
             AllotmentItems.objects.filter(
                 item__license=license_obj,
-                allotment__bill_of_entry__bill_of_entry_number__isnull=True
+                allotment__bill_of_entry__isnull=True
             ).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
             )["total"],

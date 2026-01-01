@@ -171,6 +171,42 @@ def get_item_filters():
             ]
         },
         {
+            'base_name': 'RAISIN',
+            'norms': ['E1', 'E5', 'E126', 'E132'],
+            'filters': [
+                Q(description__icontains='0806') |
+                Q(hs_code__hs_code__startswith='0806')
+            ],
+            'hide_in_pivot': True
+        },
+        {
+            'base_name': 'WALNUT',
+            'norms': ['E1', 'E5', 'E126', 'E132'],
+            'filters': [
+                Q(description__icontains='0802') |
+                Q(hs_code__hs_code__startswith='0802')
+            ],
+            'hide_in_pivot': True
+        },
+        {
+            'base_name': 'CARDAMOM',
+            'norms': ['E1', 'E5', 'E126', 'E132'],
+            'filters': [
+                Q(description__icontains='0908') |
+                Q(hs_code__hs_code__startswith='0908')
+            ],
+            'hide_in_pivot': True
+        },
+        {
+            'base_name': 'RBD PALMOLEIN OIL',
+            'norms': ['E1'],
+            'filters': [
+                Q(description__icontains='1510') |
+                Q(hs_code__hs_code__startswith='1510')
+            ],
+            'hide_in_pivot': True
+        },
+        {
             'base_name': 'OLIVE OIL',
             'norms': ['E126'],
             'filters': [Q(description__icontains='olive')]

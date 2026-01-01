@@ -71,7 +71,8 @@ class Command(BaseCommand):
                     'name': item_name,
                     'base_name': base_name,
                     'norm': norm,
-                    'filters': definition['filters']
+                    'filters': definition['filters'],
+                    'hide_in_pivot': definition.get('hide_in_pivot', False)
                 })
 
         created_count = 0
@@ -81,25 +82,39 @@ class Command(BaseCommand):
         for item_data in items_to_create:
             item_name = item_data['name']
             norm = item_data['norm']
+            hide_in_pivot = item_data.get('hide_in_pivot', False)
 
             if not dry_run:
                 # Get or create the item
                 item, created = ItemNameModel.objects.get_or_create(name=item_name)
 
-                # Set sion_norm_class for all items
+                # Set sion_norm_class and hide_in_pivot for all items
+                needs_update = False
+                update_fields = []
+
                 try:
                     norm_class_obj = SionNormClassModel.objects.get(norm_class=norm)
                     if item.sion_norm_class != norm_class_obj:
                         item.sion_norm_class = norm_class_obj
-                        item.save(update_fields=['sion_norm_class'])
-                        updated_count += 1
+                        update_fields.append('sion_norm_class')
+                        needs_update = True
                 except SionNormClassModel.DoesNotExist:
                     self.stdout.write(
                         self.style.WARNING(f"  ! Norm class '{norm}' not found in database for {item_name}"))
 
+                # Set hide_in_pivot flag
+                if item.hide_in_pivot != hide_in_pivot:
+                    item.hide_in_pivot = hide_in_pivot
+                    update_fields.append('hide_in_pivot')
+                    needs_update = True
+
+                if needs_update:
+                    item.save(update_fields=update_fields)
+                    updated_count += 1
+
                 if created:
                     created_count += 1
-                    self.stdout.write(f"  + Created: {item_name} (norm: {norm})")
+                    self.stdout.write(f"  + Created: {item_name} (norm: {norm}, hide_in_pivot: {hide_in_pivot})")
                 else:
                     existing_count += 1
             else:

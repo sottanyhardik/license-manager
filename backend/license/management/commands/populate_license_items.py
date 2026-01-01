@@ -1,5 +1,6 @@
 # license/management/commands/populate_license_items.py
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 
 from core.models import ItemNameModel, SionNormClassModel
 from license.models import LicenseImportItemsModel

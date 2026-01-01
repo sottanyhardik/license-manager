@@ -478,11 +478,11 @@ def get_item_filters():
             ]
         },
         {
-            'base_name': 'FRUIT COCKTAILS',
+            'base_name': 'FRUIT COCKTAIL',
             'norms': ['E1'],
             'filters': [
                 Q(description__icontains="2008") |
-                Q(description__icontains="Fruit Cocktail") |
+                Q(description__icontains="Fruit") |
                 Q(hs_code__hs_code__startswith='2008')
             ]
         },

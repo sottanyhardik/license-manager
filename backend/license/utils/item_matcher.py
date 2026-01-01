@@ -490,12 +490,12 @@ def get_item_filters():
             'base_name': 'FOOD FLAVOUR',
             'norms': ['E1', 'E5', 'E126', 'E132'],
             'filters': [
-                Q(description__icontains="relevant food flavour") |
-                Q(description__icontains="Relevant Food Grade Flavours") |
-                Q(description__icontains="FOOD FLAVOUR") |
-                Q(description__icontains="relevant (food flour") |
-                Q(description__icontains="Flavouring Agent") |
-                Q(description__icontains="Cardamom") &
+                Q(Q(description__icontains="relevant food flavour") |
+                  Q(description__icontains="Relevant Food Grade Flavours") |
+                  Q(description__icontains="FOOD FLAVOUR") |
+                  Q(description__icontains="relevant (food flour") |
+                  Q(description__icontains="Flavouring Agent") |
+                  Q(description__icontains="Cardamom")) &
                 Q(Q(description__icontains="0908") |
                   Q(description__icontains="0802") |
                   Q(description__icontains="0806") |

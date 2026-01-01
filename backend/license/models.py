@@ -166,9 +166,8 @@ class LicenseDetailsModel(AuditModel):
 
     @cached_property
     def opening_balance(self) -> Decimal:
-        total = self.export_license.aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))[
-            "total"]
-        return _to_decimal(total, DEC_0)
+        """Total export CIF (credit). Uses centralized service."""
+        return self._calculate_license_credit()
 
     @cached_property
     def opening_fob(self) -> Decimal:
@@ -185,19 +184,13 @@ class LicenseDetailsModel(AuditModel):
 
     @property
     def get_total_debit(self) -> Decimal:
-        total = \
-            self.import_license.aggregate(
-                total=Coalesce(Sum("debited_value"), Value(DEC_0), output_field=DecimalField()))[
-                "total"]
-        return _to_decimal(total, DEC_0)
+        """Total BOE debit. Uses centralized service."""
+        return self._calculate_license_debit()
 
     @property
     def get_total_allotment(self) -> Decimal:
-        total = \
-            self.import_license.aggregate(
-                total=Coalesce(Sum("allotted_value"), Value(DEC_0), output_field=DecimalField()))[
-                "total"]
-        return _to_decimal(total, DEC_0)
+        """Total allotment (no BOE). Uses centralized service."""
+        return self._calculate_license_allotment()
 
     def _calculate_license_credit(self) -> Decimal:
         """Calculate total credit using centralized service"""
@@ -213,6 +206,11 @@ class LicenseDetailsModel(AuditModel):
         """Calculate total allotment using centralized service"""
         from license.services.balance_calculator import LicenseBalanceCalculator
         return LicenseBalanceCalculator.calculate_allotment(self)
+
+    def _calculate_license_trade(self) -> Decimal:
+        """Calculate total trade (no invoice) using centralized service"""
+        from license.services.balance_calculator import LicenseBalanceCalculator
+        return LicenseBalanceCalculator.calculate_trade(self)
 
     @property
     def get_balance_cif(self) -> Decimal:

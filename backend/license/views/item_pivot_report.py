@@ -444,9 +444,11 @@ class ItemPivotReportView(View):
             if item_name == 'RUTILE - A3627' and item_id in item_quantities:
                 rutile_total_balance_qty += item_quantities[item_id]['available_quantity']
 
-        # Calculate unit price if we have RUTILE balance qty
-        if rutile_total_balance_qty > 0:
+        # Calculate unit price if we have RUTILE balance qty >= 10, otherwise set to 0
+        if rutile_total_balance_qty >= 10:
             rutile_unit_price = float(balance_cif / rutile_total_balance_qty)
+        elif rutile_total_balance_qty > 0:
+            rutile_unit_price = 0.0
 
         # Add item columns
         for item_id, item_name in all_items:

@@ -495,7 +495,14 @@ def get_item_filters():
                 Q(description__icontains="FOOD FLAVOUR") |
                 Q(description__icontains="relevant (food flour") |
                 Q(description__icontains="Flavouring Agent") |
-                Q(description__icontains="Cardamom")
+                Q(description__icontains="Cardamom") &
+                Q(Q(description__icontains="0908") |
+                  Q(description__icontains="0802") |
+                  Q(description__icontains="0806") |
+                  Q(hs_code__hs_code__startswith='0908') |
+                  Q(hs_code__hs_code__startswith='0802') |
+                  Q(hs_code__hs_code__startswith='0806')) &
+                ~Q(description__icontains="other")
             ]
         },
         {

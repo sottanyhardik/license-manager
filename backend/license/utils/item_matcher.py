@@ -488,6 +488,19 @@ def get_item_filters():
         },
         {
             'base_name': 'FOOD FLAVOUR',
+            'norms': ['E126'],
+            'filters': [
+                Q(Q(description__icontains="0908") |
+                  Q(description__icontains="0802") |
+                  Q(description__icontains="0806") |
+                  Q(hs_code__hs_code__startswith='0908') |
+                  Q(hs_code__hs_code__startswith='0802') |
+                  Q(hs_code__hs_code__startswith='0806'))
+            ]
+        },
+
+        {
+            'base_name': 'FOOD FLAVOUR',
             'norms': ['E1', 'E5', 'E126', 'E132'],
             'filters': [
                 Q(Q(description__icontains="relevant food flavour") |

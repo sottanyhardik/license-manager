@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-REMOTE_SERVER="django@139.59.92.226"
+REMOTE_SERVER="django@143.110.252.201"
 REMOTE_DB_NAME="lmanagement"
 REMOTE_DB_USER="lmanagement"
 REMOTE_DB_PASS="lmanagement"
@@ -267,6 +267,15 @@ sync_db() {
     python manage.py migrate --noinput > /dev/null 2>&1
     cd ..
     print_success "Migrations complete"
+
+    print_info "Syncing media files..."
+    rsync -avz --delete $REMOTE_SERVER:/home/django/license-manager/backend/media/ ./backend/media/
+
+    if [ $? -eq 0 ]; then
+        print_success "Media files synced"
+    else
+        print_error "Failed to sync media files"
+    fi
 
     echo ""
     print_success "Database synced successfully!"

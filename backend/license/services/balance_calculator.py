@@ -59,10 +59,13 @@ class LicenseBalanceCalculator:
     def calculate_debit(license_obj) -> Decimal:
         """
         Calculate total debit (BOE transactions) for license.
-        
+
+        Only counts BOE RowDetails where the BOE is NOT linked to a trade.
+        BOEs linked to trades are counted separately in calculate_trade().
+
         Args:
             license_obj: LicenseDetailsModel instance
-            
+
         Returns:
             Total debit CIF as Decimal
         """
@@ -71,7 +74,8 @@ class LicenseBalanceCalculator:
         return to_decimal(
             RowDetails.objects.filter(
                 sr_number__license=license_obj,
-                transaction_type=DEBIT
+                transaction_type=DEBIT,
+                bill_of_entry__licensetrade__isnull=True  # Exclude BOEs linked to trades
             ).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
             )["total"],
@@ -82,6 +86,8 @@ class LicenseBalanceCalculator:
     def calculate_allotment(license_obj) -> Decimal:
         """
         Calculate total allotment (non-BOE) for license.
+
+        Only counts allotments where bill_of_entry is NULL (not yet converted to BOE).
 
         Args:
             license_obj: LicenseDetailsModel instance
@@ -105,9 +111,9 @@ class LicenseBalanceCalculator:
     def calculate_trade(license_obj) -> Decimal:
         """
         Calculate total trade CIF $ for license.
-        Only counts SALE trade lines where:
-        1. Trade is linked to a BOE that has NO invoice, OR
-        2. Trade is NOT linked to any BOE at all
+
+        Counts ALL SALE trade lines, regardless of BOE status.
+        BOEs linked to trades are excluded from calculate_debit() to avoid double-counting.
 
         NOTE: Only SALE trades debit the license. PURCHASE trades add to the license (already counted in allotments).
 
@@ -117,15 +123,12 @@ class LicenseBalanceCalculator:
         Returns:
             Total trade CIF as Decimal
         """
-        from django.db.models import Q
         from trade.models import LicenseTradeLine
 
         return to_decimal(
             LicenseTradeLine.objects.filter(
                 sr_number__license=license_obj,
                 trade__direction='SALE'  # Only count SALE trades that debit the license
-            ).filter(
-                Q(trade__boe__isnull=True) | Q(trade__boe__invoice_no__isnull=True) | Q(trade__boe__invoice_no='')
             ).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
             )["total"],
@@ -240,7 +243,7 @@ class ItemBalanceCalculator:
                 DEC_0
             )
 
-        # Add allotments to debit
+        # Add allotments to debit (only non-BOE allotments)
         allotment = to_decimal(
             AllotmentItems.objects.filter(
                 item=import_item,
@@ -297,7 +300,7 @@ class ItemBalanceCalculator:
             DEC_0
         )
 
-        # Sum allotted quantities
+        # Sum allotted quantities (only non-BOE allotments)
         allotted = to_decimal(
             AllotmentItems.objects.filter(
                 item=import_item,

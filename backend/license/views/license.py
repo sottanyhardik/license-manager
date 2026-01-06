@@ -407,10 +407,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 })
 
             # Find Allotment usage through AllotmentItems
-            # Only show allotments where is_boe=False (not yet converted to BOE)
+            # Only show allotments where bill_of_entry is NULL (not yet converted to BOE)
             allotment_items = AllotmentItems.objects.filter(
                 item_id=item_id,
-                allotment__is_boe=False
+                allotment__bill_of_entry__isnull=True
             ).select_related(
                 'allotment',
                 'allotment__company'
@@ -742,10 +742,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     elements.append(Spacer(1, 5))
 
                 # Allotments
-                # Only show allotments where is_boe=False (not yet converted to BOE)
+                # Only show allotments where bill_of_entry is NULL (not yet converted to BOE)
                 allotments = AllotmentItems.objects.filter(
                     item_id=item.id,
-                    allotment__is_boe=False
+                    allotment__bill_of_entry__isnull=True
                 ).select_related('allotment', 'allotment__company')
 
                 if allotments.exists():

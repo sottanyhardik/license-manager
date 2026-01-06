@@ -111,6 +111,18 @@ def update_license_on_export_item_change(sender, instance, created, **kwargs):
         update_license_flags(instance.license)
 
 
+@receiver(post_delete, sender=LicenseExportItemModel)
+def update_license_on_export_item_delete(sender, instance, **kwargs):
+    """
+    Update license flags when export items are deleted.
+    """
+    if kwargs.get('raw', False):
+        return
+
+    if instance.license:
+        update_license_flags(instance.license)
+
+
 # Signals for balance updates on import items
 @receiver(post_save, sender=LicenseImportItemsModel)
 def update_license_on_import_item_change(sender, instance, created, **kwargs):

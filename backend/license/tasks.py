@@ -11,15 +11,17 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def update_items():
-    """Update balance values for license items (legacy task)"""
+    """Update balance values for license items (optimized - now synchronous)"""
+    from core.scripts.calculate_balance import update_balance_values
+
     current_date = datetime.now()
     date_90_days_ago = current_date - timedelta(days=90)
     items = LicenseImportItemsModel.objects.filter(
         license__license_expiry_date__gte=date_90_days_ago
     ).order_by('license__license_expiry_date', 'license__license_date')
+
     for item in items:
-        from bill_of_entry.tasks import update_balance_values_task
-        update_balance_values_task(item.id)
+        update_balance_values(item)
 
 
 @shared_task(bind=True)

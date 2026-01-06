@@ -3,8 +3,8 @@ import datetime
 from django.db.models import Q
 
 from bill_of_entry.models import BillOfEntryModel, RowDetails
-from bill_of_entry.tasks import update_balance_values_task
 from core.models import CompanyModel, PortModel
+from core.scripts.calculate_balance import update_balance_values
 from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
 
 
@@ -272,7 +272,9 @@ def create_object(data_dict):
             credit_row.append(data)
     bulk_get_or_create_boe(debit_row)
     bulk_get_or_create_boe(credit_row)
-    [update_balance_values_task.delay(import_item.id) for import_item in license.import_license.all()]
+    # Update balances (synchronous for faster response)
+    for import_item in license.import_license.all():
+        update_balance_values(import_item)
     return license.license_number
 
 

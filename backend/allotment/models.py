@@ -304,19 +304,29 @@ class AllotmentItems(AuditModel):
 # -----------------------------
 # Signals — Stock Update
 # -----------------------------
-def _schedule_update_balance(item_id: int) -> None:
-    """Schedule update_balance_values_task after transaction commit (safe for tests)."""
+def _update_balance_sync(item_id: int) -> None:
+    """Update balance values synchronously (faster than Celery task)."""
+    try:
+        from license.models import LicenseImportItemsModel
+        from core.scripts.calculate_balance import update_balance_values
 
+        item = LicenseImportItemsModel.objects.get(id=item_id)
+        update_balance_values(item)
+    except Exception:
+        # swallow exceptions to avoid failing DB writes
+        pass
+
+
+@receiver(post_save, sender=AllotmentItems, dispatch_uid="update_stock")
+def update_stock(sender, instance, **kwargs):
+    """Update stock balance synchronously after save."""
+    item = instance.item
+    if not item:
+        return
+
+    # Update immediately instead of scheduling a task
     def _job():
-        try:
-            from bill_of_entry.tasks import update_balance_values_task
-            try:
-                update_balance_values_task.delay(item_id)
-            except Exception:
-                update_balance_values_task(item_id)
-        except Exception:
-            # swallow exceptions to avoid failing DB writes
-            pass
+        _update_balance_sync(item.id)
 
     try:
         transaction.on_commit(_job)
@@ -325,19 +335,19 @@ def _schedule_update_balance(item_id: int) -> None:
         _job()
 
 
-@receiver(post_save, sender=AllotmentItems, dispatch_uid="update_stock")
-def update_stock(sender, instance, **kwargs):
-    """Schedule background balance update after save."""
-    item = instance.item
-    if not item:
-        return
-    _schedule_update_balance(item.id)
-
-
 @receiver(post_delete, sender=AllotmentItems)
 def delete_stock(sender, instance, **kwargs):
-    """Schedule background balance update after delete."""
+    """Update stock balance synchronously after delete."""
     item = instance.item
     if not item:
         return
-    _schedule_update_balance(item.id)
+
+    # Update immediately instead of scheduling a task
+    def _job():
+        _update_balance_sync(item.id)
+
+    try:
+        transaction.on_commit(_job)
+    except Exception:
+        # fallback immediate invocation in environments without on_commit
+        _job()

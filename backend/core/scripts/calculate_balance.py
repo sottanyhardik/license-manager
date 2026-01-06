@@ -1,45 +1,85 @@
-from django.db.models import Sum
+from django.db.models import Sum, Q
 
 from core.constants import N2015
 from core.utils.decimal_utils import round_decimal_down as round_down
 
 
-def calculate_available_quantity(instance):
+def _get_aggregated_values(instance):
+    """
+    Perform all aggregate queries in a single pass to improve performance.
+    Returns a dict with all calculated values.
+
+    This replaces 6 separate database queries with just 2 queries.
+    """
+    # Single query for all item_details aggregations
+    item_agg = instance.item_details.aggregate(
+        debited_qty=Sum('qty', filter=Q(transaction_type='D')),
+        debited_value=Sum('cif_fc', filter=Q(transaction_type='D'))
+    )
+
+    # Single query for all allotment_details aggregations
+    allot_agg = instance.allotment_details.aggregate(
+        aro_qty=Sum('qty', filter=Q(allotment__type='ARO')),
+        aro_value=Sum('cif_fc', filter=Q(allotment__type='ARO')),
+        allotted_qty=Sum('qty', filter=Q(
+            allotment__bill_of_entry__isnull=True,
+            allotment__type='AT'
+        )),
+        allotted_value=Sum('cif_fc', filter=Q(
+            allotment__bill_of_entry__isnull=True,
+            allotment__type='AT'
+        ))
+    )
+
+    return {
+        'debited_qty': float(item_agg['debited_qty'] or 0),
+        'debited_value': float(item_agg['debited_value'] or 0),
+        'aro_qty': float(allot_agg['aro_qty'] or 0),
+        'aro_value': float(allot_agg['aro_value'] or 0),
+        'allotted_qty': float(allot_agg['allotted_qty'] or 0),
+        'allotted_value': float(allot_agg['allotted_value'] or 0)
+    }
+
+
+def calculate_available_quantity(instance, agg_values=None):
+    if agg_values is None:
+        agg_values = _get_aggregated_values(instance)
+
     credit = float(instance.quantity or 0)
     first_item = instance.items.first() if instance.items.exists() else None
     # Check if first item has restrictions (sion_norm_class and restriction_percentage)
     if first_item and first_item.sion_norm_class and first_item.restriction_percentage > 0:
         if instance.old_quantity or instance.license.notification_number == N2015:
             credit = float(instance.old_quantity or instance.quantity or 0)
-    value = round_down(credit - calculate_debited_quantity(instance) - calculate_allotted_quantity(instance), 0)
+
+    debited = agg_values['debited_qty'] + agg_values['aro_qty']
+    allotted = agg_values['allotted_qty']
+    value = round_down(credit - debited - allotted, 0)
     return max(round(value, 2), 0)
 
 
-def calculate_debited_quantity(instance):
-    debited = instance.item_details.filter(transaction_type='D').aggregate(sum=Sum('qty'))['sum'] or 0
-    allotted = instance.allotment_details.filter(allotment__type='ARO').aggregate(sum=Sum('qty'))['sum'] or 0
-    return round(float(debited) + float(allotted), 2)
+def calculate_debited_quantity(instance, agg_values=None):
+    if agg_values is None:
+        agg_values = _get_aggregated_values(instance)
+    return round(agg_values['debited_qty'] + agg_values['aro_qty'], 2)
 
 
-def calculate_allotted_quantity(instance):
-    allotted = instance.allotment_details.filter(
-        allotment__bill_of_entry__isnull=True,
-        allotment__type='AT'
-    ).aggregate(Sum('qty'))['qty__sum'] or 0
-    return round(float(allotted), 2) or 0.0
+def calculate_allotted_quantity(instance, agg_values=None):
+    if agg_values is None:
+        agg_values = _get_aggregated_values(instance)
+    return round(agg_values['allotted_qty'], 2)
 
 
-def calculate_debited_value(instance):
-    debited = instance.item_details.filter(transaction_type='D').aggregate(sum=Sum('cif_fc'))['sum'] or 0
-    allotted = instance.allotment_details.filter(allotment__type='ARO').aggregate(sum=Sum('cif_fc'))['sum'] or 0
-    return round(float(debited) + float(allotted), 2)
+def calculate_debited_value(instance, agg_values=None):
+    if agg_values is None:
+        agg_values = _get_aggregated_values(instance)
+    return round(agg_values['debited_value'] + agg_values['aro_value'], 2)
 
 
-def calculate_allotted_value(instance):
-    value = instance.allotment_details.filter(allotment__bill_of_entry__isnull=True,
-                                              allotment__type='AT').aggregate(
-        Sum('cif_fc'))['cif_fc__sum'] or 0
-    return round(float(value), 2)
+def calculate_allotted_value(instance, agg_values=None):
+    if agg_values is None:
+        agg_values = _get_aggregated_values(instance)
+    return round(agg_values['allotted_value'], 2)
 
 
 def calculate_available_value(instance):
@@ -77,12 +117,15 @@ def calculate_available_value(instance):
 def update_balance_values(item):
     from decimal import Decimal
 
+    # OPTIMIZATION: Get all aggregated values in just 2 queries instead of 6
+    agg_values = _get_aggregated_values(item)
+
     values = {
-        'available_quantity': calculate_available_quantity(item),
-        'debited_quantity': calculate_debited_quantity(item),
-        'allotted_quantity': calculate_allotted_quantity(item),
-        'allotted_value': calculate_allotted_value(item),
-        'debited_value': calculate_debited_value(item),
+        'available_quantity': calculate_available_quantity(item, agg_values),
+        'debited_quantity': calculate_debited_quantity(item, agg_values),
+        'allotted_quantity': calculate_allotted_quantity(item, agg_values),
+        'allotted_value': calculate_allotted_value(item, agg_values),
+        'debited_value': calculate_debited_value(item, agg_values),
         'available_value': calculate_available_value(item),
     }
 

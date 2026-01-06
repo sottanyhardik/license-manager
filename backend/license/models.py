@@ -17,7 +17,8 @@ from django.utils.functional import cached_property
 
 from allotment.models import AllotmentItems
 from bill_of_entry.models import RowDetails
-from bill_of_entry.tasks import update_balance_values_task
+# Removed: from bill_of_entry.tasks import update_balance_values_task
+# Now using direct synchronous balance updates for better performance
 from core.constants import (
     DEC_0,
     DEC_000,
@@ -1252,16 +1253,21 @@ class LicenseInwardOutwardModel(models.Model):
 @receiver(post_save, sender=LicenseImportItemsModel)
 def update_balance(sender, instance, **kwargs):
     """
-    After an import item is saved, schedule async update of derived balances.
-    Use transaction.on_commit so the async task sees committed DB state.
+    After an import item is saved, update derived balances synchronously.
+    Use transaction.on_commit so the update sees committed DB state.
     """
-    try:
-        transaction.on_commit(lambda: update_balance_values_task.delay(instance.id))
-    except Exception:
+    from core.scripts.calculate_balance import update_balance_values
+
+    def _job():
         try:
-            update_balance_values_task(instance.id)
+            update_balance_values(instance)
         except Exception:
             pass
+
+    try:
+        transaction.on_commit(_job)
+    except Exception:
+        _job()
 
     # Auto-tag blank items using a predefined filter list (lazy import)
     try:

@@ -12,8 +12,8 @@ from django.db import transaction
 from django.db.models import Q
 
 from bill_of_entry.models import BillOfEntryModel, RowDetails
-from bill_of_entry.tasks import update_balance_values_task
 from core.models import CompanyModel, PortModel
+from core.scripts.calculate_balance import update_balance_values
 from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
 
 
@@ -233,9 +233,9 @@ class LedgerProcessor:
         if debit_txns:
             LedgerProcessor._process_boe_items(license, debit_txns, license_items)
 
-        # Update balances
+        # Update balances (synchronous for faster response)
         for import_item in license.import_license.all():
-            update_balance_values_task.delay(import_item.id)
+            update_balance_values(import_item)
 
         return license.license_number
 

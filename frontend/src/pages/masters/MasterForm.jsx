@@ -744,6 +744,11 @@ export default function MasterForm({
             value = (fieldMeta.type === "m2m" || fieldMeta.type === "fk_multi") ? [] : "";
         }
 
+        // Check if field has error
+        const fieldError = fieldErrors[fieldName];
+        const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
+        const errorClass = hasError ? 'is-invalid' : '';
+
         // Handle date fields with DatePicker
         if (fieldMeta.type === "date" || fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
             return (
@@ -752,7 +757,7 @@ export default function MasterForm({
                         selected={parseDate(value)}
                         onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
-                        className="form-control"
+                        className={`form-control ${errorClass}`}
                         wrapperClassName="w-100 d-block"
                         placeholderText="Select date"
                         isClearable
@@ -789,7 +794,7 @@ export default function MasterForm({
                 <div>
                     <input
                         type="file"
-                        className="form-control"
+                        className={`form-control ${errorClass}`}
                         onChange={(e) => handleChange(fieldName, e.target.files[0])}
                         accept="image/*"
                     />
@@ -857,7 +862,7 @@ export default function MasterForm({
         if (fieldName.includes("address") || fieldName.includes("description") || fieldName.includes("note")) {
             return (
                 <textarea
-                    className="form-control"
+                    className={`form-control ${errorClass}`}
                     rows="3"
                     value={value}
                     onChange={(e) => handleChange(fieldName, e.target.value)}
@@ -871,7 +876,7 @@ export default function MasterForm({
                 <input
                     type="number"
                     step={fieldMeta.step || "0.01"}
-                    className="form-control"
+                    className={`form-control ${errorClass}`}
                     value={value}
                     onChange={(e) => handleChange(fieldName, e.target.value)}
                 />
@@ -882,7 +887,7 @@ export default function MasterForm({
         return (
             <input
                 type="text"
-                className="form-control"
+                className={`form-control ${errorClass}`}
                 value={value}
                 onChange={(e) => handleChange(fieldName, e.target.value)}
             />
@@ -923,7 +928,13 @@ export default function MasterForm({
                         <div className="card-body">
                             {error && (
                                 <div className="alert alert-danger">
-                                    {error}
+                                    <strong>
+                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                        Validation Error
+                                    </strong>
+                                    <div className="mt-2" style={{whiteSpace: 'pre-wrap'}}>
+                                        {error}
+                                    </div>
                                 </div>
                             )}
 
@@ -954,6 +965,9 @@ export default function MasterForm({
                                         const label = fieldMeta.label || field.replace(/_/g, " ");
                                         const helpText = fieldMeta.help_text;
 
+                                        const fieldError = fieldErrors[field];
+                                        const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
+
                                         return (
                                             <div key={field} className={`${colClass}`}>
                                                 <div className="form-group-material">
@@ -962,7 +976,12 @@ export default function MasterForm({
                                                         {fieldMeta.required && <span className="text-danger">*</span>}
                                                     </label>
                                                     {renderField(field)}
-                                                    {helpText && (
+                                                    {hasError && (
+                                                        <div className="invalid-feedback d-block">
+                                                            {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
+                                                        </div>
+                                                    )}
+                                                    {helpText && !hasError && (
                                                         <small className="form-text text-muted d-block mt-1">
                                                             {helpText}
                                                         </small>

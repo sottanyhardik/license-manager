@@ -240,7 +240,6 @@ export default function TransferLetterForm({
                             value={transferLetterData.template}
                             onChange={(selectedTemplate) => setTransferLetterData(prev => ({...prev, template: selectedTemplate}))}
                             loadOptions={loadTransferLetterOptions}
-                            defaultOptions
                             cacheOptions
                             placeholder="Select Transfer Letter Template..."
                             isClearable={true}

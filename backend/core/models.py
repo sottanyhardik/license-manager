@@ -362,6 +362,9 @@ class TransferLetterModel(AuditModel):
     name = models.CharField(max_length=255)
     tl = models.FileField(upload_to='tl')
 
+    class Meta:
+        ordering = ['name', 'id']
+
     def __str__(self):
         return self.name
 

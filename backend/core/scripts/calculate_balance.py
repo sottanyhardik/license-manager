@@ -46,7 +46,14 @@ def calculate_available_quantity(instance, agg_values=None):
         agg_values = _get_aggregated_values(instance)
 
     credit = float(instance.quantity or 0)
-    first_item = instance.items.first() if instance.items.exists() else None
+
+    # Use prefetched data if available, otherwise query
+    try:
+        items = list(instance.items.all())  # Use prefetched data
+        first_item = items[0] if items else None
+    except Exception:
+        first_item = instance.items.first() if instance.items.exists() else None
+
     # Check if first item has restrictions (sion_norm_class and restriction_percentage)
     if first_item and first_item.sion_norm_class and first_item.restriction_percentage > 0:
         if instance.old_quantity or instance.license.notification_number == N2015:

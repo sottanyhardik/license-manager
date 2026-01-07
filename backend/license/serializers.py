@@ -168,11 +168,20 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         """
         Calculate available quantity at runtime.
         Formula: quantity - debited_quantity - allotted_quantity
+        Uses instance cache to avoid recalculating.
         """
+        # Use cached value if available
+        cache_key = f'_cached_available_quantity_{obj.id}'
+        if hasattr(obj, cache_key):
+            return getattr(obj, cache_key)
+
         from core.scripts.calculate_balance import calculate_available_quantity
         try:
             result = calculate_available_quantity(obj)
-            return float(result) if result is not None else 0.0
+            value = float(result) if result is not None else 0.0
+            # Cache on instance
+            setattr(obj, cache_key, value)
+            return value
         except Exception as e:
             # Fallback: Manual calculation if helper function fails
             import logging
@@ -184,7 +193,9 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                 debited = self.get_debited_quantity(obj)
                 allotted = self.get_allotted_quantity(obj)
                 available = quantity - debited - allotted
-                return max(available, 0.0)
+                value = max(available, 0.0)
+                setattr(obj, cache_key, value)
+                return value
             except Exception:
                 return 0.0
 
@@ -201,11 +212,18 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         """
         Calculate debited quantity at runtime.
         Includes BOE debits + ARO allotments (treated as debits).
+        Uses instance cache to avoid recalculating.
         """
+        cache_key = f'_cached_debited_quantity_{obj.id}'
+        if hasattr(obj, cache_key):
+            return getattr(obj, cache_key)
+
         from core.scripts.calculate_balance import calculate_debited_quantity
         try:
             result = calculate_debited_quantity(obj)
-            return float(result) if result is not None else 0.0
+            value = float(result) if result is not None else 0.0
+            setattr(obj, cache_key, value)
+            return value
         except Exception:
             return 0.0
 
@@ -213,11 +231,18 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         """
         Calculate debited value at runtime.
         Includes BOE debits + ARO allotments (treated as debits).
+        Uses instance cache to avoid recalculating.
         """
+        cache_key = f'_cached_debited_value_{obj.id}'
+        if hasattr(obj, cache_key):
+            return getattr(obj, cache_key)
+
         from core.scripts.calculate_balance import calculate_debited_value
         try:
             result = calculate_debited_value(obj)
-            return float(result) if result is not None else 0.0
+            value = float(result) if result is not None else 0.0
+            setattr(obj, cache_key, value)
+            return value
         except Exception:
             return 0.0
 
@@ -225,11 +250,18 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         """
         Calculate allotted quantity at runtime.
         Only includes AT allotments without BOE.
+        Uses instance cache to avoid recalculating.
         """
+        cache_key = f'_cached_allotted_quantity_{obj.id}'
+        if hasattr(obj, cache_key):
+            return getattr(obj, cache_key)
+
         from core.scripts.calculate_balance import calculate_allotted_quantity
         try:
             result = calculate_allotted_quantity(obj)
-            return float(result) if result is not None else 0.0
+            value = float(result) if result is not None else 0.0
+            setattr(obj, cache_key, value)
+            return value
         except Exception:
             return 0.0
 
@@ -237,11 +269,18 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         """
         Calculate allotted value at runtime.
         Only includes AT allotments without BOE.
+        Uses instance cache to avoid recalculating.
         """
+        cache_key = f'_cached_allotted_value_{obj.id}'
+        if hasattr(obj, cache_key):
+            return getattr(obj, cache_key)
+
         from core.scripts.calculate_balance import calculate_allotted_value
         try:
             result = calculate_allotted_value(obj)
-            return float(result) if result is not None else 0.0
+            value = float(result) if result is not None else 0.0
+            setattr(obj, cache_key, value)
+            return value
         except Exception:
             return 0.0
 

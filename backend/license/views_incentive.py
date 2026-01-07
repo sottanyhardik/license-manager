@@ -34,17 +34,11 @@ class IncentiveLicenseViewSetClass(MasterViewSet):
     filterset_class = IncentiveLicenseFilter
 
     def get_queryset(self):
-        """Override to add default filter for not sold licenses"""
+        """Return all incentive licenses without default filtering"""
         queryset = super().get_queryset()
 
-        # By default (when sold_status is None), show only NOT SOLD licenses
-        # When sold_status is empty string '', it means "All" - show everything
-        sold_status = self.request.query_params.get('sold_status', None)
-
-        if sold_status is None:
-            # Default: show only NOT SOLD licenses using the cached field
-            queryset = queryset.filter(sold_status='NO')
-        # If sold_status is empty string '', it means "All" - return unfiltered queryset
+        # No default filter - show all licenses
+        # Users can optionally filter by sold_status using the FilterSet
 
         return queryset
 

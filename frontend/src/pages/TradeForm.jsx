@@ -129,16 +129,45 @@ export default function TradeForm() {
                 }));
             }
 
+            // Ensure incentive_lines is initialized
+            if (!data.incentive_lines) {
+                data.incentive_lines = [];
+            }
+
+            // For edit mode: if incentive_lines exist and have incentive_license IDs,
+            // fetch the full license objects so HybridSelect can display them
+            // Gracefully handle deleted/missing licenses
+            if (data.incentive_lines && data.incentive_lines.length > 0) {
+                const enrichedLines = await Promise.all(
+                    data.incentive_lines.map(async (line) => {
+                        if (line.incentive_license && typeof line.incentive_license === 'number') {
+                            try {
+                                const { data: licenseData } = await api.get(`/incentive-licenses/${line.incentive_license}/`);
+                                return {
+                                    ...line,
+                                    incentive_license: licenseData.id // Keep as ID for HybridSelect
+                                };
+                            } catch (err) {
+                                // License was deleted or doesn't exist
+                                console.warn(`Incentive license ${line.incentive_license} not found (may have been deleted)`);
+                                return {
+                                    ...line,
+                                    incentive_license: null, // Clear the invalid reference
+                                    _deletedLicenseNote: `Previously linked to license ID ${line.incentive_license} (deleted)`
+                                };
+                            }
+                        }
+                        return line;
+                    })
+                );
+                data.incentive_lines = enrichedLines;
+            }
+
             setFormData(data);
 
             // Set billing mode from first line if exists
             if (data.lines && data.lines.length > 0) {
                 setBillingMode(data.lines[0].mode);
-            }
-
-            // Ensure incentive_lines is initialized
-            if (!data.incentive_lines) {
-                data.incentive_lines = [];
             }
         } catch (err) {
             setError("Failed to load trade");
@@ -1309,7 +1338,7 @@ export default function TradeForm() {
                                             <td>
                                                 <HybridSelect
                                                     fieldMeta={{
-                                                        endpoint: "/incentive-licenses/?sold_status=",
+                                                        endpoint: "/incentive-licenses/",
                                                         label_field: "license_number"
                                                     }}
                                                     value={line.incentive_license}

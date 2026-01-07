@@ -75,7 +75,7 @@ class LicenseBalanceCalculator:
             RowDetails.objects.filter(
                 sr_number__license=license_obj,
                 transaction_type=DEBIT,
-                bill_of_entry__licensetrade__isnull=True  # Exclude BOEs linked to trades
+                bill_of_entry__license_trades__isnull=True  # Exclude BOEs linked to trades
             ).aggregate(
                 total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
             )["total"],

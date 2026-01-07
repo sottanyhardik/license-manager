@@ -10,10 +10,14 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Configuration
-REMOTE_SERVER="django@143.110.252.201"
+# Server configurations (using indexed arrays for compatibility)
+SERVER_NAMES=("Global" "Labdhi")
+SERVER_HOSTS=("django@143.110.252.201" "django@139.59.92.226")
+
+# Database configurations (common for all servers)
 REMOTE_DB_NAME="lmanagement"
 REMOTE_DB_USER="lmanagement"
 REMOTE_DB_PASS="lmanagement"
@@ -21,6 +25,9 @@ LOCAL_DB_NAME="lmanagement"
 LOCAL_DB_USER="lmanagement"
 LOCAL_DB_PASS="lmanagement"
 BACKUP_DIR="./backups"
+
+# Selected server (will be set by user)
+REMOTE_SERVER=""
 
 print_header() {
     echo -e "\n${BLUE}================================================${NC}"
@@ -38,6 +45,41 @@ print_error() {
 
 print_info() {
     echo -e "${BLUE}→ $1${NC}"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+# Function: Select server
+select_server() {
+    print_header "🖥️  Select Remote Server"
+
+    echo -e "${CYAN}Available servers:${NC}"
+    echo ""
+
+    # Display all servers with index
+    for i in "${!SERVER_NAMES[@]}"; do
+        local display_num=$((i + 1))
+        echo -e "  ${CYAN}[$display_num]${NC} ${SERVER_NAMES[$i]} - ${SERVER_HOSTS[$i]}"
+    done
+
+    echo ""
+    read -p "Select server [1-${#SERVER_NAMES[@]}]: " selection
+
+    # Validate selection
+    if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt "${#SERVER_NAMES[@]}" ]; then
+        print_error "Invalid selection"
+        exit 1
+    fi
+
+    # Set selected server (array is 0-indexed, user input is 1-indexed)
+    local index=$((selection - 1))
+    REMOTE_SERVER="${SERVER_HOSTS[$index]}"
+    local selected_name="${SERVER_NAMES[$index]}"
+
+    print_success "Selected: $selected_name ($REMOTE_SERVER)"
+    echo ""
 }
 
 show_usage() {
@@ -294,16 +336,19 @@ COMMAND=$1
 
 case $COMMAND in
     backup)
+        select_server
         mkdir -p "$BACKUP_DIR"
         backup_remote_db
         ;;
     download)
+        select_server
         download_db
         ;;
     restore)
         restore_db $2
         ;;
     sync)
+        select_server
         sync_db
         ;;
     *)

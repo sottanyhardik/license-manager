@@ -35,7 +35,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         hs_code: "",
         is_expired: "false",
         is_restricted: "all",
-        purchase_status: "",
+        purchase_status: "GE,GO,SM,MI",  // GE Purchase, GE Operating, SM Purchase, Conversion
         license_status: "active",
         item_names: ""
     });
@@ -55,6 +55,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     useEffect(() => {
         fetchNotificationOptions();
         fetchAvailableItemNames();
+        // Fetch allotment info first to get item_name
+        fetchAllotmentInfo();
     }, []);
 
     // Set description from allotment item_name on first load
@@ -79,6 +81,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     }, [id, search, filters, isFirstLoad, allotment?.item_name]);
 
     useEffect(() => {
+        // Skip pagination fetch if we're still on first load waiting for description filter
+        if (isFirstLoad && !allotment?.item_name) {
+            return;
+        }
         fetchData(pagination.currentPage);
     }, [pagination.currentPage]);
 
@@ -112,6 +118,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         }
     };
 
+    const fetchAllotmentInfo = async () => {
+        try {
+            // Fetch just the allotment info without available items
+            const {data} = await api.get(`/allotments/${id}/`);
+            setAllotment(data);
+        } catch (err) {
+            setError(err.response?.data?.detail || "Failed to load allotment info");
+        }
+    };
+
     const fetchData = async (page = 1) => {
         // Use initialLoading only on first load, tableLoading for subsequent loads
         if (allotment === null) {
@@ -132,6 +148,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     params[key] = filters[key];
                 }
             });
+
+            console.log('Fetching with params:', params);
+            console.log('Current filters:', filters);
 
             const {data} = await api.get(`/allotment-actions/${id}/available-licenses/`, {
                 params
@@ -750,14 +769,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 <div className="card-body">
                     <div className="d-flex justify-content-between align-items-center mb-3">
                         <h5 className="mb-0">Available License Items</h5>
-                        <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Search licenses..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            style={{width: "300px"}}
-                        />
                     </div>
 
                     {/* Show success/error messages near the table for better visibility */}
@@ -779,6 +790,46 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     <div className="card mb-3 bg-light">
                         <div className="card-body">
                             <div className="row g-3">
+                                <div className="col-md-12">
+                                    <label className="form-label">Filter By Item Name</label>
+                                    <Select
+                                        isMulti
+                                        value={filters.item_names ? filters.item_names.split(',').map(id => {
+                                            const item = availableItemNames.find(i => i.value === parseInt(id));
+                                            return item || {value: id, label: id};
+                                        }) : []}
+                                        onChange={(selected) => setFilters({...filters, item_names: selected ? selected.map(s => s.value).join(',') : ''})}
+                                        options={availableItemNames}
+                                        placeholder="All Item Names"
+                                        className="basic-multi-select"
+                                        classNamePrefix="select"
+                                    />
+                                </div>
+                                <div className="col-md-3">
+                                    <label className="form-label">Norm Class</label>
+                                    <HybridSelect
+                                        fieldMeta={{endpoint: "/masters/sion-classes/", label_field: "norm_class"}}
+                                        value={filters.norm_class}
+                                        onChange={(value) => setFilters({...filters, norm_class: value})}
+                                        placeholder="All Norm Classes"
+                                        isClearable={true}
+                                    />
+                                </div>
+                                <div className="col-md-3">
+                                    <label className="form-label">Notification Number</label>
+                                    <select
+                                        className="form-control form-control-sm"
+                                        value={filters.notification_number}
+                                        onChange={(e) => setFilters({...filters, notification_number: e.target.value})}
+                                    >
+                                        <option value="">All</option>
+                                        {notificationOptions.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.display_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                                 <div className="col-md-3">
                                     <label className="form-label">License Number</label>
                                     <input
@@ -810,30 +861,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     />
                                 </div>
                                 <div className="col-md-3">
-                                    <label className="form-label">Notification Number</label>
-                                    <select
-                                        className="form-control form-control-sm"
-                                        value={filters.notification_number}
-                                        onChange={(e) => setFilters({...filters, notification_number: e.target.value})}
-                                    >
-                                        <option value="">All</option>
-                                        {notificationOptions.map((option) => (
-                                            <option key={option.value} value={option.value}>
-                                                {option.display_name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <label className="form-label">Exclude Exporter</label>
+                                    <HybridSelect
+                                        fieldMeta={{endpoint: "/masters/companies/", label_field: "name"}}
+                                        value={filters.exclude_exporter}
+                                        onChange={(value) => setFilters({...filters, exclude_exporter: value})}
+                                        placeholder="None"
+                                        isClearable={true}
+                                    />
                                 </div>
-                                    <div className="col-md-3">
-                                        <label className="form-label">Norm Class</label>
-                                        <HybridSelect
-                                            fieldMeta={{endpoint: "/masters/sion-classes/", label_field: "norm_class"}}
-                                            value={filters.norm_class}
-                                            onChange={(value) => setFilters({...filters, norm_class: value})}
-                                            placeholder="All Norm Classes"
-                                            isClearable={true}
-                                        />
-                                    </div>
                                     <div className="col-md-3">
                                         <label className="form-label">HS Code</label>
                                         <input
@@ -938,31 +974,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <option value="expiring_soon">Expiring Soon</option>
                                         </select>
                                     </div>
-                                    <div className="col-md-3">
-                                        <label className="form-label">Exclude Exporter</label>
-                                        <HybridSelect
-                                            fieldMeta={{endpoint: "/masters/companies/", label_field: "name"}}
-                                            value={filters.exclude_exporter}
-                                            onChange={(value) => setFilters({...filters, exclude_exporter: value})}
-                                            placeholder="None"
-                                            isClearable={true}
-                                        />
-                                    </div>
-                                    <div className="col-md-12">
-                                        <label className="form-label">Filter by Item Name</label>
-                                        <Select
-                                            isMulti
-                                            value={filters.item_names ? filters.item_names.split(',').map(id => {
-                                                const item = availableItemNames.find(i => i.value === parseInt(id));
-                                                return item || {value: id, label: id};
-                                            }) : []}
-                                            onChange={(selected) => setFilters({...filters, item_names: selected ? selected.map(s => s.value).join(',') : ''})}
-                                            options={availableItemNames}
-                                            placeholder="All Item Names"
-                                            className="basic-multi-select"
-                                            classNamePrefix="select"
-                                        />
-                                    </div>
                                     <div className="col-md-12 mt-2">
                                         <button
                                             className="btn btn-sm btn-secondary"
@@ -980,7 +991,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 hs_code: "",
                                                 is_expired: "false",
                                                 is_restricted: "all",
-                                                purchase_status: "",
+                                                purchase_status: "GE,GO,SM,MI",
                                                 license_status: "active",
                                                 item_names: ""
                                             })}

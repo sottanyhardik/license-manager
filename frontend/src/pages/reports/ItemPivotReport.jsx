@@ -413,6 +413,8 @@ export default function ItemPivotReport() {
                                             value={minBalance}
                                             onChange={(e) => setMinBalance(parseInt(e.target.value))}
                                         >
+                                            <option value="-999999">All (Including Negative)</option>
+                                            <option value="0">₹ 0 or Above</option>
                                             <option value="100">₹ 100</option>
                                             <option value="200">₹ 200</option>
                                             <option value="500">₹ 500</option>

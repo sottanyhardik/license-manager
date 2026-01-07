@@ -27,7 +27,28 @@ export default function ItemReport() {
     const [togglingRestriction, setTogglingRestriction] = useState({});
 
     useEffect(() => {
-        loadAvailableItems();
+        let isMounted = true;
+
+        const fetchItems = async () => {
+            try {
+                const response = await api.get('item-report/available-items/');
+                const items = response.data || [];
+                if (isMounted) {
+                    setAvailableItems(items.map(item => ({value: item.id, label: item.name})));
+                }
+            } catch (error) {
+                console.error('Failed to load available items:', error);
+                if (isMounted) {
+                    setAvailableItems([]);
+                }
+            }
+        };
+
+        fetchItems();
+
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     useEffect(() => {
@@ -38,17 +59,6 @@ export default function ItemReport() {
             setReportData(null);
         }
     }, [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus]);
-
-    const loadAvailableItems = async () => {
-        try {
-            const response = await api.get('item-report/available-items/');
-            const items = response.data || [];
-            setAvailableItems(items.map(item => ({value: item.id, label: item.name})));
-        } catch (error) {
-            console.error('Failed to load available items:', error);
-            setAvailableItems([]);
-        }
-    };
 
     const loadReport = async () => {
         setLoading(true);

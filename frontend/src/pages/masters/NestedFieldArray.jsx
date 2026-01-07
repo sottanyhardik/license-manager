@@ -157,17 +157,31 @@ export default function NestedFieldArray({
             const currentOption = fieldValue ? {value: fieldValue, label: fieldValue} : null;
 
             const handleDescriptionChange = (selected) => {
+                const newArray = [...value];
+
                 if (selected) {
-                    // Update description
-                    handleChange(index, field.name, selected.value);
+                    // Update description and optionally auto-fill hs_code in a single update
+                    const updates = {
+                        [field.name]: selected.value
+                    };
 
                     // Auto-fill hs_code if available and current hs_code is empty
                     if (selected.hsCode && !item.hs_code) {
-                        handleChange(index, "hs_code", selected.hsCode);
+                        updates.hs_code = selected.hsCode;
                     }
+
+                    newArray[index] = {
+                        ...newArray[index],
+                        ...updates
+                    };
                 } else {
-                    handleChange(index, field.name, "");
+                    newArray[index] = {
+                        ...newArray[index],
+                        [field.name]: ""
+                    };
                 }
+
+                onChange(newArray);
             };
 
             return (

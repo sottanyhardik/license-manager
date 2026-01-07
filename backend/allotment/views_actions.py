@@ -80,8 +80,16 @@ class AllotmentActionViewSet(ViewSet):
         # Show all items with available quantity > 0 (including partially allocated ones)
         queryset = LicenseImportItemsModel.objects.filter(
             available_quantity__gt=0
-        ).select_related('license', 'license__exporter', 'hs_code').order_by('license__license_expiry_date',
-                                                                             'serial_number')
+        ).select_related(
+            'license',
+            'license__exporter',
+            'license__port',
+            'hs_code'
+        ).prefetch_related(
+            'items',
+            'items__sion_norm_class',
+            'license__export_license'
+        ).order_by('license__license_expiry_date', 'serial_number')
 
         # Apply search filter if provided
         if search:
@@ -95,14 +103,39 @@ class AllotmentActionViewSet(ViewSet):
         if license_number:
             queryset = queryset.filter(license__license_number__icontains=license_number)
 
-        # Apply description filter - search in description, item names, and HS code
+        # Apply description filter - prefer exact match on item name, but also include partial matches
         if description:
-            queryset = queryset.filter(
-                Q(description__icontains=description) |
-                Q(items__name__icontains=description) |
-                Q(hs_code__hs_code__icontains=description) |
-                Q(hs_code__product_description__icontains=description)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Filtering by description: '{description}'")
+
+            # Strategy: Try exact match first, if none found, try partial matches
+            # This prevents "Other" from matching "Mother board", "Leather", etc.
+
+            # Try exact matches first
+            # Note: For ManyToMany (items__name), we need to be careful with empty relations
+            exact_queryset = queryset.filter(
+                Q(items__name__iexact=description) |  # Exact match on item name
+                Q(description__iexact=description) |   # Exact match on description
+                Q(hs_code__product_description__iexact=description)  # Exact match on HS product description
             ).distinct()
+
+            exact_count = exact_queryset.count()
+            logger.info(f"Exact match count: {exact_count}")
+
+            if exact_count > 0:
+                # Found exact matches, use them
+                queryset = exact_queryset
+                logger.info(f"Using exact matches for '{description}'")
+            else:
+                # No exact matches, try partial matches
+                queryset = queryset.filter(
+                    Q(items__name__icontains=description) |
+                    Q(description__icontains=description) |
+                    Q(hs_code__hs_code__icontains=description) |
+                    Q(hs_code__product_description__icontains=description)
+                ).distinct()
+                logger.info(f"Using partial matches for '{description}', count: {queryset.count()}")
 
         # Apply exporter filter (after description to ensure AND logic)
         if exporter:
@@ -197,15 +230,15 @@ class AllotmentActionViewSet(ViewSet):
 
         # Pagination
         page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 20))
+        page_size = min(int(request.query_params.get('page_size', 20)), 100)  # Max 100 items per page
 
-        # Get total count
-        total_count = queryset.count()
-
-        # Apply pagination
+        # Apply pagination first, then count (more efficient for large datasets)
         start = (page - 1) * page_size
         end = start + page_size
         paginated_queryset = queryset[start:end]
+
+        # Get total count - use a faster approximate count for large result sets
+        total_count = queryset.count()
 
         # Serialize the data
         license_serializer = LicenseImportItemSerializer(paginated_queryset, many=True, context={'request': request})

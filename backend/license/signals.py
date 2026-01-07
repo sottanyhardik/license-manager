@@ -8,13 +8,64 @@ from django.utils import timezone
 from license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 
 
+def _update_all_import_items_available_value(license_instance):
+    """
+    Update available_value for ALL import items in a license.
+
+    This ensures that when any item gets debited/allotted/traded:
+    - Item A gets debited → license.balance_cif decreases
+    - Items B, C, D also get their available_value updated to reflect new balance
+
+    For non-restricted items: available_value = license.balance_cif (shared)
+    For restricted items: available_value calculated based on restriction percentage
+
+    IMPORTANT: Uses bulk update to avoid triggering signals and infinite recursion.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Get all import items for this license
+        import_items = license_instance.import_license.all()
+
+        if not import_items.exists():
+            return
+
+        # Update available_value for each import item using the centralized property
+        updates_made = 0
+        for item in import_items:
+            try:
+                # Use available_value_calculated property for accurate calculation
+                new_available_value = item.available_value_calculated
+
+                # Only update if value changed (optimization)
+                if item.available_value != new_available_value:
+                    # CRITICAL: Use update() instead of save() to avoid triggering signals
+                    # This prevents infinite recursion: update_license_flags → save item → signal → update_license_flags
+                    LicenseImportItemsModel.objects.filter(pk=item.pk).update(
+                        available_value=new_available_value
+                    )
+                    updates_made += 1
+            except Exception as e:
+                logger.error(f"Error updating available_value for import item {item.id}: {e}")
+                continue
+
+        if updates_made > 0:
+            logger.info(f"Updated available_value for {updates_made} import items in license {license_instance.license_number}")
+
+    except Exception as e:
+        logger.error(f"Error updating import items for license {license_instance.id}: {e}")
+
+
 def update_license_flags(license_instance):
     """
     Helper function to update is_null, is_expired flags and balance_cif for a license.
+    Also updates available_value for ALL import items when balance changes.
     This is critical for dashboard accuracy - it recalculates balance_cif on every change.
     """
     needs_update = False
     update_fields = {}
+    balance_changed = False
 
     # Update is_expired based on license_expiry_date
     # BUSINESS RULE: Expired = expiry date < today
@@ -31,6 +82,7 @@ def update_license_flags(license_instance):
         # Update balance_cif field (stored value for fast dashboard queries)
         if license_instance.balance_cif != balance:
             needs_update = True
+            balance_changed = True
             update_fields['balance_cif'] = balance
 
         # Update is_null based on balance
@@ -47,6 +99,11 @@ def update_license_flags(license_instance):
     # Save if any fields changed (use update to avoid triggering signal again)
     if needs_update and update_fields:
         LicenseDetailsModel.objects.filter(pk=license_instance.pk).update(**update_fields)
+
+    # CRITICAL: Update available_value for ALL import items when balance changes
+    # This ensures that when Item A gets debited, Items B, C, D also get updated
+    if balance_changed:
+        _update_all_import_items_available_value(license_instance)
 
 
 @receiver(post_save, sender=LicenseDetailsModel)

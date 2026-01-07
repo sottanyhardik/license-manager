@@ -812,6 +812,8 @@ class LicenseImportItemsModel(models.Model):
         indexes = [
             models.Index(fields=["license"]),
             models.Index(fields=["hs_code"]),
+            models.Index(fields=["available_quantity"]),  # Optimize queries filtering by available_quantity > 0
+            models.Index(fields=["available_value"]),  # Optimize queries filtering by available_value
         ]
 
     def __str__(self) -> str:
@@ -931,11 +933,11 @@ class LicenseImportItemsModel(models.Model):
 
         for import_item in same_restriction_items:
             total_debited += import_item._calculate_item_debit()
-            # Only count allotments that don't have BOE (is_boe=False)
+            # Only count allotments that don't have BOE (bill_of_entry IS NULL)
             allotted_no_boe = _to_decimal(
                 AllotmentItems.objects.filter(
                     item=import_item,
-                    is_boe=False
+                    allotment__bill_of_entry__isnull=True
                 ).aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
                 DEC_0,
             )
@@ -977,7 +979,9 @@ class LicenseImportItemsModel(models.Model):
 
         if has_restriction_pct:
             # This item has restrictions, use restriction calculation
-            return restriction_balance
+            # BUT: Cannot exceed license-level balance (if license only has 151.86, restricted item can't show 1367.07)
+            license_balance = self.license.get_balance_cif
+            return min(restriction_balance, license_balance)
 
         # PRIORITY 3: Check if business logic applies: all other items have zero CIF and this is serial_number 1
         if self.serial_number == 1:
@@ -1046,9 +1050,12 @@ class LicenseImportItemsModel(models.Model):
         if self.is_restricted or has_item_restrictions:
             # Use restriction-based calculation
             restriction_balance = self._calculate_head_restriction_balance()
-            # Only return restriction balance if it's valid (> 0 or has actual restrictions)
+            # Only return restriction balance if it's valid (>= 0)
             if restriction_balance >= DEC_0:
-                return restriction_balance
+                # CRITICAL: Cannot exceed license-level balance
+                # If license only has 151.86, restricted item can't use 1367.07
+                license_balance = self.license.balance_cif
+                return min(restriction_balance, license_balance)
             # Fallback to license balance if restriction calculation returns invalid
             return self.license.balance_cif
         else:
@@ -1094,14 +1101,14 @@ class LicenseImportItemsModel(models.Model):
     @cached_property
     def sorted_allotment_list(self) -> Dict[str, Any]:
         dict_list = []
-        data = self.allotment_details.filter(is_boe=False).order_by("allotment__company", "allotment__modified_on")
+        data = self.allotment_details.filter(allotment__bill_of_entry__isnull=True).order_by("allotment__company", "allotment__modified_on")
         company_names = data.order_by("allotment__company", "allotment__modified_on",
                                       "allotment__unit_value_per_unit").values_list("allotment__company__name",
                                                                                     flat=True).distinct()
         for company in company_names:
             if not company:
                 continue
-            company_data = data.filter(allotment__company__name=company, is_boe=False)
+            company_data = data.filter(allotment__company__name=company)
             dict_list.append({
                 "company": company,
                 "data_list": company_data,

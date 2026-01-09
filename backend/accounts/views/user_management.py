@@ -4,15 +4,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 
-from ..serializers import UserManagementSerializer, UserRoleAssignmentSerializer
+from ..serializers import UserManagementSerializer
 from ..permissions import UserManagementPermission
 
 User = get_user_model()
 
 
 class UserManagementViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing users (USER_MANAGER role or superuser)"""
-    queryset = User.objects.prefetch_related('roles').all().order_by('-date_joined')
+    """ViewSet for managing users (superuser only)"""
+    queryset = User.objects.all().order_by('-date_joined')
     serializer_class = UserManagementSerializer
     permission_classes = [UserManagementPermission]
 
@@ -26,33 +26,3 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         user.set_password(password)
         user.save()
         return Response({'message': 'Password reset successfully'}, status=status.HTTP_200_OK)
-
-    @action(detail=True, methods=['post'], url_path='assign-roles')
-    def assign_roles(self, request, pk=None):
-        """Assign roles to a user"""
-        user = self.get_object()
-        serializer = UserRoleAssignmentSerializer(data={'user_id': user.id, 'role_ids': request.data.get('role_ids', [])})
-
-        if serializer.is_valid():
-            user.roles.set(serializer.validated_data['role_ids'])
-            return Response({
-                'message': 'Roles assigned successfully',
-                'roles': user.get_role_codes()
-            }, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=True, methods=['post'], url_path='remove-roles')
-    def remove_roles(self, request, pk=None):
-        """Remove roles from a user"""
-        user = self.get_object()
-        role_ids = request.data.get('role_ids', [])
-
-        if not role_ids:
-            return Response({'error': 'role_ids is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        user.roles.remove(*role_ids)
-        return Response({
-            'message': 'Roles removed successfully',
-            'roles': user.get_role_codes()
-        }, status=status.HTTP_200_OK)

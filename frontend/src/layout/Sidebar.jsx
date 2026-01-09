@@ -4,7 +4,6 @@ import {AuthContext} from "../context/AuthContext";
 import {masterEntities, routes, reportEntities} from "../routes/config";
 
 export default function Sidebar() {
-    const {hasRole} = useContext(AuthContext);
     const location = useLocation();
     const [mastersOpen, setMastersOpen] = useState(false);
     const [reportsOpen, setReportsOpen] = useState(false);
@@ -27,7 +26,7 @@ export default function Sidebar() {
 
             <ul className="nav flex-column">
                 {routes
-                    .filter((r) => !r.protected || hasRole(r.roles))
+                    .filter((r) => !r.protected)
                     .map((r) => (
                         <li key={r.path} className="nav-item mb-1">
                             <Link
@@ -57,8 +56,7 @@ export default function Sidebar() {
                     ))}
 
                 {/* Reports Dropdown */}
-                {hasRole(["REPORT_VIEWER", "LICENSE_MANAGER", "TRADE_MANAGER", "ALLOTMENT_MANAGER", "BOE_MANAGER", "INCENTIVE_LICENSE_MANAGER"]) && (
-                    <li className="nav-item mb-1">
+                <li className="nav-item mb-1">
                         <button
                             className={`nav-link text-white w-100 text-start d-flex align-items-center justify-content-between ${isActive("/reports") ? "active" : ""}`}
                             onClick={() => setReportsOpen(!reportsOpen)}
@@ -120,11 +118,9 @@ export default function Sidebar() {
                             </ul>
                         )}
                     </li>
-                )}
 
                 {/* Masters Dropdown */}
-                {hasRole(["USER_MANAGER", "LICENSE_MANAGER", "TRADE_MANAGER", "ALLOTMENT_MANAGER", "BOE_MANAGER", "INCENTIVE_LICENSE_MANAGER"]) && (
-                    <li className="nav-item mb-1">
+                <li className="nav-item mb-1">
                         <button
                             className={`nav-link text-white w-100 text-start d-flex align-items-center justify-content-between ${isActive("/masters") ? "active" : ""}`}
                             onClick={() => setMastersOpen(!mastersOpen)}
@@ -186,7 +182,6 @@ export default function Sidebar() {
                             </ul>
                         )}
                     </li>
-                )}
             </ul>
         </div>
     );

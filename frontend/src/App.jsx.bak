@@ -95,11 +95,11 @@ export default function App() {
                                 path="/licenses"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterList/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -108,11 +108,11 @@ export default function App() {
                                 path="/licenses/create"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -121,11 +121,11 @@ export default function App() {
                                 path="/licenses/:id/edit"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -135,11 +135,11 @@ export default function App() {
                                 path="/allotments"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterList/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -148,11 +148,11 @@ export default function App() {
                                 path="/allotments/create"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -161,11 +161,11 @@ export default function App() {
                                 path="/allotments/:id/edit"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -174,11 +174,11 @@ export default function App() {
                                 path="/allotments/:id/allocate"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <AllotmentAction/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -189,11 +189,11 @@ export default function App() {
                                 path="/reports/parle/sion-e1"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <SionE1/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -202,11 +202,11 @@ export default function App() {
                                 path="/reports/parle/sion-e5"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <SionE5/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -215,11 +215,11 @@ export default function App() {
                                 path="/reports/parle/sion-e126"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <SionE126/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -228,11 +228,11 @@ export default function App() {
                                 path="/reports/parle/sion-e132"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <SionE132/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -241,11 +241,11 @@ export default function App() {
                                 path="/reports/expiring-licenses"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ExpiringLicenses/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -254,11 +254,11 @@ export default function App() {
                                 path="/reports/active-licenses"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ActiveLicenses/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -267,11 +267,11 @@ export default function App() {
                                 path="/reports/item-pivot"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ItemPivotReport/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -280,11 +280,11 @@ export default function App() {
                                 path="/reports/item-report"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ItemReport/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -294,11 +294,11 @@ export default function App() {
                                 path="/bill-of-entries"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterList/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -307,11 +307,11 @@ export default function App() {
                                 path="/bill-of-entries/create"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -320,11 +320,11 @@ export default function App() {
                                 path="/bill-of-entries/:id/edit"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -333,11 +333,11 @@ export default function App() {
                                 path="/bill-of-entries/:id/generate-transfer-letter"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <BOETransferLetter/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -347,11 +347,11 @@ export default function App() {
                                 path="/trades"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterList/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -360,11 +360,11 @@ export default function App() {
                                 path="/trades/create"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <TradeForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -373,11 +373,11 @@ export default function App() {
                                 path="/trades/:id/edit"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <TradeForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -387,11 +387,11 @@ export default function App() {
                                 path="/incentive-licenses"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterList/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -400,11 +400,11 @@ export default function App() {
                                 path="/incentive-licenses/create"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -413,11 +413,11 @@ export default function App() {
                                 path="/incentive-licenses/:id/edit"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -426,11 +426,11 @@ export default function App() {
                                 path="/ledger-csv-upload"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <LedgerCSVUpload/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -439,11 +439,11 @@ export default function App() {
                                 path="/ledger-upload"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <LedgerUpload/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -474,11 +474,11 @@ export default function App() {
                                 path="/settings"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin"]}>
                                             <AdminLayout>
                                                 <Settings/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -499,11 +499,11 @@ export default function App() {
                                 path="/ledger/chart-of-accounts"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ChartOfAccounts/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -512,11 +512,11 @@ export default function App() {
                                 path="/ledger/bank-accounts"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <BankAccounts/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -525,11 +525,11 @@ export default function App() {
                                 path="/ledger/journal-entries"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <JournalEntries/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -538,11 +538,11 @@ export default function App() {
                                 path="/ledger/party-ledger"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <PartyLedger/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -551,11 +551,11 @@ export default function App() {
                                 path="/ledger/account-ledger"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <AccountLedger/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -564,11 +564,11 @@ export default function App() {
                                 path="/ledger/reports/balance-sheet"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <BalanceSheet/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -577,11 +577,11 @@ export default function App() {
                                 path="/ledger/reports/profit-loss"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <ProfitLoss/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -590,11 +590,11 @@ export default function App() {
                                 path="/ledger/reports/trial-balance"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <TrialBalance/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -603,11 +603,11 @@ export default function App() {
                                 path="/ledger/reports/outstanding"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager", "accounts"]}>
                                             <AdminLayout>
                                                 <OutstandingInvoices/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -617,11 +617,11 @@ export default function App() {
                                 path="/masters/:entity"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterList/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -630,11 +630,11 @@ export default function App() {
                                 path="/masters/:entity/create"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />
@@ -643,11 +643,11 @@ export default function App() {
                                 path="/masters/:entity/:id/edit"
                                 element={
                                     <ProtectedRoute>
-                                        
+                                        <RoleRoute roles={["admin", "manager"]}>
                                             <AdminLayout>
                                                 <MasterForm/>
                                             </AdminLayout>
-                                        
+                                        </RoleRoute>
                                     </ProtectedRoute>
                                 }
                             />

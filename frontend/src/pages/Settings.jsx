@@ -6,27 +6,21 @@ import api from "../api/axios";
 export default function Settings() {
     const navigate = useNavigate();
     const [users, setUsers] = useState([]);
-    const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
-    const [showRoleModal, setShowRoleModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
-    const [selectedUserForRoles, setSelectedUserForRoles] = useState(null);
-    const [selectedRoles, setSelectedRoles] = useState([]);
 
     const [formData, setFormData] = useState({
         username: "",
         email: "",
         first_name: "",
         last_name: "",
-        role_ids: [],
         password: "",
         is_active: true
     });
 
     useEffect(() => {
         loadUsers();
-        loadRoles();
     }, []);
 
     const loadUsers = async () => {
@@ -40,15 +34,6 @@ export default function Settings() {
         }
     };
 
-    const loadRoles = async () => {
-        try {
-            const response = await api.get("auth/roles/");
-            setRoles(response.data);
-        } catch (error) {
-            toast.error("Failed to load roles");
-        }
-    };
-
     const handleOpenModal = (user = null) => {
         if (user) {
             setEditingUser(user);
@@ -57,7 +42,6 @@ export default function Settings() {
                 email: user.email || "",
                 first_name: user.first_name || "",
                 last_name: user.last_name || "",
-                role_ids: user.roles ? user.roles.map(r => r.id) : [],
                 password: "",
                 is_active: user.is_active
             });
@@ -68,7 +52,6 @@ export default function Settings() {
                 email: "",
                 first_name: "",
                 last_name: "",
-                role_ids: [],
                 password: "",
                 is_active: true
             });
@@ -79,48 +62,6 @@ export default function Settings() {
     const handleCloseModal = () => {
         setShowModal(false);
         setEditingUser(null);
-    };
-
-    const handleOpenRoleModal = (user) => {
-        setSelectedUserForRoles(user);
-        setSelectedRoles(user.roles ? user.roles.map(r => r.id) : []);
-        setShowRoleModal(true);
-    };
-
-    const handleCloseRoleModal = () => {
-        setShowRoleModal(false);
-        setSelectedUserForRoles(null);
-        setSelectedRoles([]);
-    };
-
-    const handleToggleRole = (roleId) => {
-        setSelectedRoles(prev =>
-            prev.includes(roleId)
-                ? prev.filter(id => id !== roleId)
-                : [...prev, roleId]
-        );
-    };
-
-    const handleSaveRoles = async () => {
-        try {
-            await api.post(`auth/users/${selectedUserForRoles.id}/assign-roles/`, {
-                role_ids: selectedRoles
-            });
-            toast.success("Roles updated successfully");
-            handleCloseRoleModal();
-            loadUsers();
-        } catch (error) {
-            toast.error(error.response?.data?.detail || "Failed to update roles");
-        }
-    };
-
-    const handleToggleFormRole = (roleId) => {
-        setFormData(prev => ({
-            ...prev,
-            role_ids: prev.role_ids.includes(roleId)
-                ? prev.role_ids.filter(id => id !== roleId)
-                : [...prev.role_ids, roleId]
-        }));
     };
 
     const handleSubmit = async (e) => {
@@ -217,7 +158,6 @@ export default function Settings() {
                                 <th>Username</th>
                                 <th>Email</th>
                                 <th>Name</th>
-                                <th>Roles</th>
                                 <th>Status</th>
                                 <th>Date Joined</th>
                                 <th>Actions</th>
@@ -235,39 +175,12 @@ export default function Settings() {
                                     <td>{user.email || "-"}</td>
                                     <td>{user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : "-"}</td>
                                     <td>
-                                        {user.is_superuser ? (
-                                            <span className="badge bg-danger">All Permissions</span>
-                                        ) : user.roles && user.roles.length > 0 ? (
-                                            <>
-                                                {user.roles.slice(0, 2).map((role, idx) => (
-                                                    <span key={idx} className="badge bg-info me-1 mb-1">
-                                                        {role.name}
-                                                    </span>
-                                                ))}
-                                                {user.roles.length > 2 && (
-                                                    <span className="badge bg-secondary">
-                                                        +{user.roles.length - 2} more
-                                                    </span>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <span className="text-muted">No roles</span>
-                                        )}
-                                    </td>
-                                    <td>
                       <span className={`badge ${user.is_active ? 'bg-success' : 'bg-secondary'}`}>
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
                                     </td>
                                     <td>{new Date(user.date_joined).toLocaleDateString()}</td>
                                     <td>
-                                        <button
-                                            className="btn btn-sm btn-outline-info me-2"
-                                            onClick={() => handleOpenRoleModal(user)}
-                                            title="Manage Roles"
-                                        >
-                                            <i className="bi bi-person-badge"></i>
-                                        </button>
                                         <button
                                             className="btn btn-sm btn-outline-primary me-2"
                                             onClick={() => handleOpenModal(user)}

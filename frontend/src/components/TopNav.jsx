@@ -4,7 +4,7 @@ import {AuthContext} from "../context/AuthContext";
 import {routes, reportEntities, masterEntities, ledgerEntities, commissionEntities} from "../routes/config";
 
 export default function TopNav() {
-    const {user, logout, hasRole} = useContext(AuthContext);
+    const {user, logout} = useContext(AuthContext);
 
     return (
         <nav className="navbar navbar-expand-lg navbar-dark px-3" style={{
@@ -32,7 +32,7 @@ export default function TopNav() {
                 {/* Left Links */}
                 <ul className="navbar-nav me-auto mb-2 mb-lg-0">
                     {routes
-                        .filter((r) => !r.protected || hasRole(r.roles))
+                        .filter((r) => !r.protected)
                         .map((r) => (
                             <li className="nav-item" key={r.path}>
                                 <Link className="nav-link" to={r.path}>
@@ -42,8 +42,7 @@ export default function TopNav() {
                         ))}
 
                     {/* Reports Dropdown */}
-                    {hasRole(["admin", "manager", "accounts"]) && (
-                        <li className="nav-item dropdown">
+                    <li className="nav-item dropdown">
                             <a
                                 className="nav-link dropdown-toggle"
                                 href="#"
@@ -65,11 +64,9 @@ export default function TopNav() {
                                 ))}
                             </ul>
                         </li>
-                    )}
 
                     {/* Masters Dropdown */}
-                    {hasRole(["admin", "manager"]) && (
-                        <li className="nav-item dropdown">
+                    <li className="nav-item dropdown">
                             <a
                                 className="nav-link dropdown-toggle"
                                 href="#"
@@ -93,7 +90,6 @@ export default function TopNav() {
                                     ))}
                             </ul>
                         </li>
-                    )}
 
                 </ul>
 

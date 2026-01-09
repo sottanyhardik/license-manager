@@ -8,13 +8,11 @@ from .views import (
     MeView,
     PasswordResetRequestView,
     PasswordResetConfirmView,
-    UserManagementViewSet,
-    RoleViewSet
+    UserManagementViewSet
 )
 
 router = DefaultRouter()
 router.register(r'users', UserManagementViewSet, basename='user')
-router.register(r'roles', RoleViewSet, basename='role')
 
 urlpatterns = [
     path("login/", LoginView.as_view(), name="api-login"),

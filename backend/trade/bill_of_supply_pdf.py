@@ -1,11 +1,12 @@
 # trade/bill_of_supply_pdf.py
 from io import BytesIO
+
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Image
 
 
 def num_to_words_indian(amount):
@@ -125,7 +126,8 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     logger = logging.getLogger(__name__)
 
     if from_company:
-        logger.info(f"Company: {from_company.name}, Has logo attr: {hasattr(from_company, 'logo')}, Logo value: {from_company.logo if hasattr(from_company, 'logo') else 'N/A'}")
+        logger.info(
+            f"Company: {from_company.name}, Has logo attr: {hasattr(from_company, 'logo')}, Logo value: {from_company.logo if hasattr(from_company, 'logo') else 'N/A'}")
 
         if hasattr(from_company, 'logo') and from_company.logo:
             try:
@@ -169,7 +171,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         # Create table with logo on left, title in center
         logo_title_table = Table([
             [logo_img, Paragraph('<b>Bill of Supply</b>', title_style), '']
-        ], colWidths=[page_width*0.25, page_width*0.5, page_width*0.25])
+        ], colWidths=[page_width * 0.25, page_width * 0.5, page_width * 0.25])
         logo_title_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             ('ALIGN', (1, 0), (1, 0), 'CENTER'),
@@ -225,7 +227,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         ]
     ]
 
-    header_table = Table(header_data, colWidths=[page_width*0.7, page_width*0.15, page_width*0.15])
+    header_table = Table(header_data, colWidths=[page_width * 0.7, page_width * 0.15, page_width * 0.15])
     header_table.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -251,47 +253,73 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     if is_incentive:
         # INCENTIVE mode: Sl No | Description | HSN | License Value | Rate % | Amount
         header_row = [
-            Paragraph('<b>Sl<br/>No.</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Description of Goods</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>HSN/SAC</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>License Value</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Rate %</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Amount</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
+            Paragraph('<b>Sl<br/>No.</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Description of Goods</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>HSN/SAC</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>License Value</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Rate %</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Amount</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
         ]
         col_count = 6
     elif billing_mode == 'QTY':
         # QTY mode: Sl No | Description | HSN | Quantity | Rate per KG | Amount
         header_row = [
-            Paragraph('<b>Sl<br/>No.</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Description of Goods</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>HSN/SAC</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Quantity</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Rate per KG</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Amount</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
+            Paragraph('<b>Sl<br/>No.</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Description of Goods</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>HSN/SAC</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Quantity</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Rate per KG</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Amount</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
         ]
         col_count = 6
     elif billing_mode == 'CIF_INR':
         # CIF mode: Sl No | Description | HSN | CIF FC | EXC RT | CIF INR | Rate % | Amount
         header_row = [
-            Paragraph('<b>Sl<br/>No.</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Description of Goods</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>HSN/SAC</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>CIF FC</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>EXC RT</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>CIF INR</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Rate %</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Amount</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
+            Paragraph('<b>Sl<br/>No.</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Description of Goods</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>HSN/SAC</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>CIF FC</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>EXC RT</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>CIF INR</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Rate %</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Amount</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
         ]
         col_count = 8
     else:  # FOB_INR
         # FOB mode: Sl No | Description | HSN | FOB INR | Rate % | Amount
         header_row = [
-            Paragraph('<b>Sl<br/>No.</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Description of Goods</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>HSN/SAC</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>FOB INR</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Rate %</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>Amount</b>', ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
+            Paragraph('<b>Sl<br/>No.</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Description of Goods</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>HSN/SAC</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>FOB INR</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Rate %</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
+            Paragraph('<b>Amount</b>',
+                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
         ]
         col_count = 6
 
@@ -351,7 +379,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             row = [
                 str(idx),
                 description_para,
-                '99819',  # HSN code for services
+                '480700',  # HSN code for services
                 Paragraph(f"{line.license_value:,.2f}" if line.license_value else "0.00", right_align_style),
                 Paragraph(f"{line.rate_pct:.2f}" if line.rate_pct else "0.00", right_align_style),
                 Paragraph(f"{amount:,.2f}", right_align_style)
@@ -371,7 +399,8 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
                 lic = line.sr_number.license
                 license_num = lic.license_number or 'Unknown'
                 license_date = lic.license_date.strftime('%d-%m-%Y') if lic.license_date else ''
-                port_code = lic.port.code if lic.port and hasattr(lic.port, 'code') else (lic.port.name if lic.port else '')
+                port_code = lic.port.code if lic.port and hasattr(lic.port, 'code') else (
+                    lic.port.name if lic.port else '')
 
                 # Format as: license_num - license_date (line 1)
                 #            port_code (line 2)
@@ -395,10 +424,10 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
                 total_qty += (line.qty_kg or 0)
                 row = [
                     str(idx),
-                description_para,
-                '49070000',  # Always use fixed HSN code for paper/pulp products
-                Paragraph(qty_str, right_align_style),
-                Paragraph(f"{line.rate_inr_per_kg:,.2f}" if line.rate_inr_per_kg else "0.00", right_align_style),
+                    description_para,
+                    '49070000',  # Always use fixed HSN code for paper/pulp products
+                    Paragraph(qty_str, right_align_style),
+                    Paragraph(f"{line.rate_inr_per_kg:,.2f}" if line.rate_inr_per_kg else "0.00", right_align_style),
                     Paragraph(f"{amount:,.2f}", right_align_style)
                 ]
             elif billing_mode == 'CIF_INR':
@@ -435,8 +464,11 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     roundoff_sign = '(-)' if roundoff < 0 else ''
     roundoff_row = [''] * col_count
     roundoff_row[1] = Paragraph('<i>Less :</i>', ParagraphStyle('italic', parent=styles['Normal'], fontSize=9))
-    roundoff_row[2] = Paragraph('<b><i>Rounding Off</i></b>', ParagraphStyle('italic', parent=styles['Normal'], fontSize=9, fontName='Helvetica-BoldOblique'))
-    roundoff_row[-1] = Paragraph(f"{roundoff_sign}{abs(roundoff):.2f}", ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
+    roundoff_row[2] = Paragraph('<b><i>Rounding Off</i></b>',
+                                ParagraphStyle('italic', parent=styles['Normal'], fontSize=9,
+                                               fontName='Helvetica-BoldOblique'))
+    roundoff_row[-1] = Paragraph(f"{roundoff_sign}{abs(roundoff):.2f}",
+                                 ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
     items_data.append(roundoff_row)
 
     # Add empty rows for spacing (min 5 rows total to keep content compact)
@@ -445,10 +477,13 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
     # Add total row (dynamic based on mode)
     total_row = [''] * col_count
-    total_row[2] = Paragraph('<b>Total</b>', ParagraphStyle('bold', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', alignment=TA_RIGHT))
+    total_row[2] = Paragraph('<b>Total</b>',
+                             ParagraphStyle('bold', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold',
+                                            alignment=TA_RIGHT))
 
     # Create right-aligned bold style for total numbers with no word wrap
-    bold_right_style = ParagraphStyle('bold_right', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', alignment=TA_RIGHT, wordWrap='LTR', splitLongWords=False)
+    bold_right_style = ParagraphStyle('bold_right', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold',
+                                      alignment=TA_RIGHT, wordWrap='LTR', splitLongWords=False)
 
     if is_incentive:
         total_row[3] = Paragraph(f"<b>{total_license_value:,.2f}</b>", bold_right_style)
@@ -466,41 +501,41 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     # Use full page width for items table - dynamic column widths based on mode
     if is_incentive:
         col_widths = [
-            page_width*0.05,   # Sl No
-            page_width*0.40,   # Description (wider for license info)
-            page_width*0.10,   # HSN
-            page_width*0.15,   # License Value
-            page_width*0.10,   # Rate %
-            page_width*0.20    # Amount
+            page_width * 0.05,  # Sl No
+            page_width * 0.40,  # Description (wider for license info)
+            page_width * 0.10,  # HSN
+            page_width * 0.15,  # License Value
+            page_width * 0.10,  # Rate %
+            page_width * 0.20  # Amount
         ]
     elif billing_mode == 'QTY':
         col_widths = [
-            page_width*0.05,   # Sl No
-            page_width*0.40,   # Description (wider for license info)
-            page_width*0.10,   # HSN
-            page_width*0.15,   # Quantity
-            page_width*0.15,   # Rate per KG
-            page_width*0.15    # Amount
+            page_width * 0.05,  # Sl No
+            page_width * 0.40,  # Description (wider for license info)
+            page_width * 0.10,  # HSN
+            page_width * 0.15,  # Quantity
+            page_width * 0.15,  # Rate per KG
+            page_width * 0.15  # Amount
         ]
     elif billing_mode == 'CIF_INR':
         col_widths = [
-            page_width*0.05,   # Sl No
-            page_width*0.24,   # Description
-            page_width*0.08,   # HSN
-            page_width*0.12,   # CIF FC
-            page_width*0.10,   # EXC RT
-            page_width*0.13,   # CIF INR (increased from 0.12)
-            page_width*0.10,   # Rate %
-            page_width*0.18    # Amount
+            page_width * 0.05,  # Sl No
+            page_width * 0.24,  # Description
+            page_width * 0.08,  # HSN
+            page_width * 0.12,  # CIF FC
+            page_width * 0.10,  # EXC RT
+            page_width * 0.13,  # CIF INR (increased from 0.12)
+            page_width * 0.10,  # Rate %
+            page_width * 0.18  # Amount
         ]
     else:  # FOB_INR
         col_widths = [
-            page_width*0.05,   # Sl No
-            page_width*0.38,   # Description
-            page_width*0.10,   # HSN
-            page_width*0.20,   # FOB INR
-            page_width*0.10,   # Rate %
-            page_width*0.17    # Amount
+            page_width * 0.05,  # Sl No
+            page_width * 0.38,  # Description
+            page_width * 0.10,  # HSN
+            page_width * 0.20,  # FOB INR
+            page_width * 0.10,  # Rate %
+            page_width * 0.17  # Amount
         ]
 
     items_table = Table(items_data, colWidths=col_widths)
@@ -513,10 +548,10 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Sl No center
         ('ALIGN', (2, 0), (2, -1), 'CENTER'),  # HSN center
-        ('ALIGN', (3, 0), (3, -1), 'RIGHT'),   # Quantity right
-        ('ALIGN', (4, 0), (4, -1), 'RIGHT'),   # Rate right
+        ('ALIGN', (3, 0), (3, -1), 'RIGHT'),  # Quantity right
+        ('ALIGN', (4, 0), (4, -1), 'RIGHT'),  # Rate right
         ('ALIGN', (5, 0), (5, -1), 'CENTER'),  # per center
-        ('ALIGN', (6, 0), (6, -1), 'RIGHT'),   # Amount right
+        ('ALIGN', (6, 0), (6, -1), 'RIGHT'),  # Amount right
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
@@ -535,11 +570,12 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     footer_data = [
         [
             Paragraph(f'<b>Amount Chargeable (in words)</b><br/>INR {amount_words} Only', styles['Normal']),
-            Paragraph('<b>E. & O.E</b>', ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
+            Paragraph('<b>E. & O.E</b>',
+                      ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
         ]
     ]
 
-    footer_table = Table(footer_data, colWidths=[page_width*0.8, page_width*0.2])
+    footer_table = Table(footer_data, colWidths=[page_width * 0.8, page_width * 0.2])
     footer_table.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -575,7 +611,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         declaration_data.append([
             Paragraph(bank_details_text, styles['Normal']),
             Paragraph(f'<b>for {from_company.name if from_company else ""}</b>',
-                     ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
+                      ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
         ])
 
     # Second row: Declaration
@@ -603,7 +639,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
                 import os
                 sig_path = from_company.signature.path
                 if os.path.exists(sig_path):
-                    sig_img = Image(sig_path, width=1.3*inch, height=0.7*inch)  # Bigger size
+                    sig_img = Image(sig_path, width=1.3 * inch, height=0.7 * inch)  # Bigger size
             except Exception as e:
                 logger.error(f"Failed to load signature: {e}")
                 sig_img = None
@@ -641,7 +677,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         # Place signature and stamp side by side with bigger sizes
         if sig_img and stamp_img:
             # Both inside, side by side - using full width of right column
-            sig_stamp_table = Table([[sig_img, stamp_img]], colWidths=[1.4*inch, 1.1*inch])
+            sig_stamp_table = Table([[sig_img, stamp_img]], colWidths=[1.4 * inch, 1.1 * inch])
             sig_stamp_table.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (0, 0), 'LEFT'),
                 ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
@@ -664,7 +700,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
         # Create signature table - use full width of right column (35% of page)
         # Remove all internal grid lines to merge vertically
-        sig_table = Table(sig_rows, colWidths=[page_width*0.35])
+        sig_table = Table(sig_rows, colWidths=[page_width * 0.35])
         sig_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (0, 0), 'TOP'),  # First row (for PURPLEHUB) at TOP
@@ -687,11 +723,13 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
     # Create merged table with dynamic row heights
     if has_bank_details:
-        row_heights = [0.7*inch, 1.3*inch]  # Row 1: Bank Details (increased to fit all text), Row 2: Declaration (bigger for signature)
+        row_heights = [0.7 * inch,
+                       1.3 * inch]  # Row 1: Bank Details (increased to fit all text), Row 2: Declaration (bigger for signature)
     else:
-        row_heights = [1.3*inch]  # Only Declaration row
+        row_heights = [1.3 * inch]  # Only Declaration row
 
-    declaration_table = Table(declaration_data, colWidths=[page_width*0.65, page_width*0.35], rowHeights=row_heights)
+    declaration_table = Table(declaration_data, colWidths=[page_width * 0.65, page_width * 0.35],
+                              rowHeights=row_heights)
 
     # Build style based on number of rows
     style_list = [

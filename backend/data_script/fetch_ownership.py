@@ -22,16 +22,18 @@ def fetch_scrip_ownership(
 
     headers = {
         "Accept": "*/*",
+        "Accept-Language": "en-GB,en;q=0.9",
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
         "Referer": "https://www.dgft.gov.in/CP/?opt=adnavce-authorisation",
         "Origin": "https://www.dgft.gov.in",
         "X-Requested-With": "XMLHttpRequest",
         "DNT": "1",
+        "Priority": "u=1, i",
         "Sec-Fetch-Site": "same-origin",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Dest": "empty",
-        "Sec-CH-UA": '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
+        "Sec-CH-UA": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
         "Sec-CH-UA-Platform": '"macOS"',
         "Sec-CH-UA-Mobile": "?0"
     }

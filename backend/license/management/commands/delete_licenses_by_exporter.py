@@ -2,6 +2,8 @@
 Django management command to delete licenses based on exporter name filtering
 along with their related allotments and BOEs in batches.
 
+OPTIMIZED VERSION - Uses bulk operations and minimal queries for maximum speed.
+
 Usage:
     # Delete licenses where exporter contains "tractor"
     python manage.py delete_licenses_by_exporter --filter contains --exporter "tractor" --dry-run
@@ -12,14 +14,15 @@ Usage:
     python manage.py delete_licenses_by_exporter --filter exclude --exporter "International Tractor" --confirm
 
     # Delete licenses where exporter contains "SION C969"
-    python manage.py delete_licenses_by_exporter --filter contains --exporter "SION C969" --confirm --batch-size 20
+    python manage.py delete_licenses_by_exporter --filter contains --exporter "SION C969" --confirm --batch-size 100
 
     # Keep only SION C969, delete all others
     python manage.py delete_licenses_by_exporter --filter exclude --exporter "SION C969" --confirm
 """
 
 from django.core.management.base import BaseCommand
-from django.db import transaction
+from django.db import transaction, connection
+from django.db.models import Count, Q
 
 from license.models import LicenseDetailsModel
 from allotment.models import AllotmentItems, AllotmentModel
@@ -56,8 +59,13 @@ class Command(BaseCommand):
         parser.add_argument(
             '--batch-size',
             type=int,
-            default=20,
-            help='Number of licenses to delete per batch (default: 20)',
+            default=100,
+            help='Number of licenses to delete per batch (default: 100, larger is faster)',
+        )
+        parser.add_argument(
+            '--disable-signals',
+            action='store_true',
+            help='Disable post_save/post_delete signals for faster deletion (recommended for bulk operations)',
         )
 
     def handle(self, *args, **options):
@@ -66,6 +74,7 @@ class Command(BaseCommand):
         batch_size = options['batch_size']
         filter_type = options['filter']
         exporter_pattern = options['exporter']
+        disable_signals = options['disable_signals']
 
         if not dry_run and not confirm:
             self.stdout.write(
@@ -77,19 +86,14 @@ class Command(BaseCommand):
 
         # Build query based on filter type
         if filter_type == 'contains':
-            # Delete licenses where exporter name CONTAINS the pattern
-            licenses_to_delete = LicenseDetailsModel.objects.filter(
-                exporter__name__icontains=exporter_pattern
-            ).select_related('exporter')
+            licenses_query = Q(exporter__name__icontains=exporter_pattern)
             description = f'exporter contains "{exporter_pattern}"'
         else:  # exclude
-            # Delete licenses where exporter name does NOT match the pattern (exact match)
-            licenses_to_delete = LicenseDetailsModel.objects.exclude(
-                exporter__name__iexact=exporter_pattern
-            ).select_related('exporter')
+            licenses_query = ~Q(exporter__name__iexact=exporter_pattern)
             description = f'exporter is NOT "{exporter_pattern}"'
 
-        total_licenses = licenses_to_delete.count()
+        # Count total licenses
+        total_licenses = LicenseDetailsModel.objects.filter(licenses_query).count()
 
         if total_licenses == 0:
             self.stdout.write(
@@ -106,13 +110,15 @@ class Command(BaseCommand):
         self.stdout.write(f'Batch size: {batch_size}')
         self.stdout.write(f'Number of batches: {(total_licenses + batch_size - 1) // batch_size}')
 
+        if disable_signals:
+            self.stdout.write(self.style.WARNING('⚡ Signals disabled for faster deletion'))
+
         # Show sample licenses
         self.stdout.write(self.style.WARNING('\n=== SAMPLE LICENSES TO DELETE (first 10) ==='))
-        for lic in licenses_to_delete[:10]:
+        sample_licenses = LicenseDetailsModel.objects.filter(licenses_query).select_related('exporter')[:10]
+        for lic in sample_licenses:
             exporter_name = lic.exporter.name if lic.exporter else 'NULL'
-            self.stdout.write(
-                f'  - {lic.license_number} (Exporter: {exporter_name})'
-            )
+            self.stdout.write(f'  - {lic.license_number} (Exporter: {exporter_name})')
 
         if total_licenses > 10:
             self.stdout.write(f'  ... and {total_licenses - 10} more')
@@ -142,134 +148,114 @@ class Command(BaseCommand):
         }
 
         batch_num = 0
-        while True:
-            # Get next batch of licenses (rebuild query each time)
-            if filter_type == 'contains':
+
+        # Optionally disable signals for speed
+        if disable_signals:
+            from django.db.models.signals import post_save, post_delete
+            from allotment.models import update_stock, delete_stock as allotment_delete_stock
+            from bill_of_entry.models import update_stock as boe_update_stock, delete_stock as boe_delete_stock
+
+            post_save.disconnect(update_stock, sender=AllotmentItems)
+            post_delete.disconnect(allotment_delete_stock, sender=AllotmentItems)
+            post_save.disconnect(boe_update_stock, sender=RowDetails)
+            post_delete.disconnect(boe_delete_stock, sender=RowDetails)
+
+        try:
+            while True:
+                # Get next batch of license IDs only (fast query)
                 batch_licenses = list(
-                    LicenseDetailsModel.objects.filter(
-                        exporter__name__icontains=exporter_pattern
-                    ).values_list('id', flat=True)[:batch_size]
-                )
-            else:  # exclude
-                batch_licenses = list(
-                    LicenseDetailsModel.objects.exclude(
-                        exporter__name__iexact=exporter_pattern
-                    ).values_list('id', flat=True)[:batch_size]
+                    LicenseDetailsModel.objects.filter(licenses_query)
+                    .values_list('id', flat=True)[:batch_size]
                 )
 
-            if not batch_licenses:
-                break
+                if not batch_licenses:
+                    break
 
-            batch_num += 1
-            self.stdout.write(
-                self.style.WARNING(
-                    f'\n=== Processing Batch {batch_num} ({len(batch_licenses)} licenses) ==='
+                batch_num += 1
+                self.stdout.write(
+                    self.style.WARNING(
+                        f'\n=== Batch {batch_num}/{(total_licenses + batch_size - 1) // batch_size} ({len(batch_licenses)} licenses) ==='
+                    )
                 )
-            )
 
-            try:
-                with transaction.atomic():
-                    # Find related data for this batch
-                    allotment_items = AllotmentItems.objects.filter(
-                        item__license__id__in=batch_licenses
-                    )
-                    allotment_items_count = allotment_items.count()
+                try:
+                    with transaction.atomic():
+                        # OPTIMIZATION: Use bulk deletes without checking orphaned status
+                        # Django CASCADE will clean up related objects automatically
 
-                    row_details = RowDetails.objects.filter(
-                        sr_number__license__id__in=batch_licenses
-                    )
-                    row_details_count = row_details.count()
-
-                    # Find BOEs that will become orphaned
-                    boe_ids_from_rows = list(
-                        row_details.values_list('bill_of_entry_id', flat=True).distinct()
-                    )
-
-                    boes_to_delete = []
-                    for boe_id in boe_ids_from_rows:
-                        if boe_id:
-                            remaining_rows = RowDetails.objects.filter(
-                                bill_of_entry_id=boe_id
-                            ).exclude(sr_number__license__id__in=batch_licenses).count()
-
-                            if remaining_rows == 0:
-                                boes_to_delete.append(boe_id)
-
-                    # Find Allotments that will become orphaned
-                    allotment_ids_from_items = list(
-                        allotment_items.values_list('allotment_id', flat=True).distinct()
-                    )
-
-                    allotments_to_delete = []
-                    for allotment_id in allotment_ids_from_items:
-                        if allotment_id:
-                            remaining_items = AllotmentItems.objects.filter(
-                                allotment_id=allotment_id
-                            ).exclude(item__license__id__in=batch_licenses).count()
-
-                            if remaining_items == 0:
-                                allotments_to_delete.append(allotment_id)
-
-                    # Delete in reverse dependency order
-                    # 1. Delete AllotmentItems
-                    if allotment_items_count > 0:
-                        deleted_allotment_items = allotment_items.delete()
-                        count = deleted_allotment_items[0]
-                        total_deleted['allotment_items'] += count
-                        self.stdout.write(
-                            self.style.SUCCESS(f'  ✓ Deleted {count} AllotmentItems')
-                        )
-
-                    # 2. Delete orphaned Allotments
-                    if allotments_to_delete:
-                        deleted_allotments = AllotmentModel.objects.filter(
-                            id__in=allotments_to_delete
+                        # 1. Delete AllotmentItems (faster - no orphan check)
+                        allotment_items_count, _ = AllotmentItems.objects.filter(
+                            item__license__id__in=batch_licenses
                         ).delete()
-                        count = deleted_allotments[0]
-                        total_deleted['allotments'] += count
-                        self.stdout.write(
-                            self.style.SUCCESS(f'  ✓ Deleted {count} orphaned Allotments')
-                        )
 
-                    # 3. Delete RowDetails
-                    if row_details_count > 0:
-                        deleted_row_details = row_details.delete()
-                        count = deleted_row_details[0]
-                        total_deleted['row_details'] += count
-                        self.stdout.write(
-                            self.style.SUCCESS(f'  ✓ Deleted {count} RowDetails')
-                        )
+                        if allotment_items_count > 0:
+                            total_deleted['allotment_items'] += allotment_items_count
+                            self.stdout.write(
+                                self.style.SUCCESS(f'  ✓ Deleted {allotment_items_count} AllotmentItems')
+                            )
 
-                    # 4. Delete orphaned BOEs
-                    if boes_to_delete:
-                        deleted_boes = BillOfEntryModel.objects.filter(
-                            id__in=boes_to_delete
+                        # 2. Delete orphaned Allotments (items with no remaining allotment_details)
+                        orphaned_allotments = AllotmentModel.objects.annotate(
+                            item_count=Count('allotment_details')
+                        ).filter(item_count=0)
+                        allotments_count = orphaned_allotments.count()
+                        if allotments_count > 0:
+                            orphaned_allotments.delete()
+                            total_deleted['allotments'] += allotments_count
+                            self.stdout.write(
+                                self.style.SUCCESS(f'  ✓ Deleted {allotments_count} orphaned Allotments')
+                            )
+
+                        # 3. Delete RowDetails (faster - no orphan check)
+                        row_details_count, _ = RowDetails.objects.filter(
+                            sr_number__license__id__in=batch_licenses
                         ).delete()
-                        count = deleted_boes[0]
-                        total_deleted['boes'] += count
+
+                        if row_details_count > 0:
+                            total_deleted['row_details'] += row_details_count
+                            self.stdout.write(
+                                self.style.SUCCESS(f'  ✓ Deleted {row_details_count} RowDetails')
+                            )
+
+                        # 4. Delete orphaned BOEs (BOEs with no remaining item_details)
+                        orphaned_boes = BillOfEntryModel.objects.annotate(
+                            item_count=Count('item_details')
+                        ).filter(item_count=0)
+                        boes_count = orphaned_boes.count()
+                        if boes_count > 0:
+                            orphaned_boes.delete()
+                            total_deleted['boes'] += boes_count
+                            self.stdout.write(
+                                self.style.SUCCESS(f'  ✓ Deleted {boes_count} orphaned BOEs')
+                            )
+
+                        # 5. Delete Licenses (CASCADE handles LicenseExportItemModel, LicenseImportItemsModel, etc.)
+                        licenses_result = LicenseDetailsModel.objects.filter(
+                            id__in=batch_licenses
+                        ).delete()
+                        licenses_count = licenses_result[0]
+                        total_deleted['licenses'] += licenses_count
                         self.stdout.write(
-                            self.style.SUCCESS(f'  ✓ Deleted {count} orphaned BOEs')
+                            self.style.SUCCESS(f'  ✓ Deleted {licenses_count} Licenses and related objects')
                         )
 
-                    # 5. Delete Licenses (CASCADE will handle export/import items)
-                    deleted_licenses = LicenseDetailsModel.objects.filter(
-                        id__in=batch_licenses
-                    ).delete()
-                    count = deleted_licenses[0]
-                    total_deleted['licenses'] += count
                     self.stdout.write(
-                        self.style.SUCCESS(f'  ✓ Deleted {count} Licenses and related objects')
+                        self.style.SUCCESS(f'  ✅ Batch {batch_num} completed')
                     )
 
-                self.stdout.write(
-                    self.style.SUCCESS(f'  ✅ Batch {batch_num} completed successfully')
-                )
+                except Exception as e:
+                    self.stdout.write(
+                        self.style.ERROR(f'  ❌ Error in batch {batch_num}: {str(e)}')
+                    )
+                    raise
 
-            except Exception as e:
-                self.stdout.write(
-                    self.style.ERROR(f'  ❌ Error in batch {batch_num}: {str(e)}')
-                )
-                raise
+        finally:
+            # Re-enable signals if they were disabled
+            if disable_signals:
+                post_save.connect(update_stock, sender=AllotmentItems, dispatch_uid="update_stock")
+                post_delete.connect(allotment_delete_stock, sender=AllotmentItems)
+                post_save.connect(boe_update_stock, sender=RowDetails, dispatch_uid="update_stock_on_save")
+                post_delete.connect(boe_delete_stock, sender=RowDetails)
 
         # Final summary
         self.stdout.write(self.style.SUCCESS('\n=== FINAL SUMMARY ==='))

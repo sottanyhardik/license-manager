@@ -1,6 +1,5 @@
 import {Link, useLocation} from "react-router-dom";
-import {useContext, useState} from "react";
-import {AuthContext} from "../context/AuthContext";
+import {useState} from "react";
 import {masterEntities, routes, reportEntities} from "../routes/config";
 
 export default function Sidebar() {

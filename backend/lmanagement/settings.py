@@ -19,7 +19,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-this-in-production")
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost,139.59.92.226,labdhi.duckdns.org,143.110.252.201,license-manager.duckdns.org").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS",
+                          "127.0.0.1,localhost,139.59.92.226,labdhi.duckdns.org,143.110.252.201,license-manager.duckdns.org,license-tractor.duckdns.org").split(
+    ",")
 
 # HTTPS Settings
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

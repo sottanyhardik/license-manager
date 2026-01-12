@@ -271,27 +271,6 @@ export default function Settings() {
                                             required={!editingUser}
                                         />
                                     </div>
-                                    <div className="mb-3">
-                                        <label className="form-label">Roles</label>
-                                        <div className="border rounded p-3" style={{maxHeight: '200px', overflowY: 'auto'}}>
-                                            {roles.map(role => (
-                                                <div key={role.id} className="form-check mb-2">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="form-check-input"
-                                                        id={`role-${role.id}`}
-                                                        checked={formData.role_ids.includes(role.id)}
-                                                        onChange={() => handleToggleFormRole(role.id)}
-                                                    />
-                                                    <label className="form-check-label" htmlFor={`role-${role.id}`}>
-                                                        <strong>{role.name}</strong>
-                                                        <br/>
-                                                        <small className="text-muted">{role.description}</small>
-                                                    </label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
                                     <div className="mb-3 form-check">
                                         <input
                                             type="checkbox"
@@ -319,78 +298,6 @@ export default function Settings() {
                 </div>
             )}
 
-            {/* Role Assignment Modal */}
-            {showRoleModal && selectedUserForRoles && (
-                <div className="modal show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
-                    <div className="modal-dialog modal-lg">
-                        <div className="modal-content">
-                            <div className="modal-header bg-dark text-white">
-                                <h5 className="modal-title">
-                                    <i className="bi bi-person-badge me-2"></i>
-                                    Chosen roles
-                                    {selectedUserForRoles.is_superuser && (
-                                        <span className="badge bg-danger ms-2">Superuser</span>
-                                    )}
-                                </h5>
-                                <button type="button" className="btn-close btn-close-white" onClick={handleCloseRoleModal}></button>
-                            </div>
-                            <div className="modal-body">
-                                <div className="mb-3">
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        placeholder="Filter"
-                                    />
-                                </div>
-                                <div style={{maxHeight: '400px', overflowY: 'auto'}}>
-                                    {roles.map(role => (
-                                        <div
-                                            key={role.id}
-                                            className={`p-3 mb-2 border rounded cursor-pointer ${
-                                                selectedRoles.includes(role.id) ? 'bg-light' : ''
-                                            }`}
-                                            style={{cursor: 'pointer'}}
-                                            onClick={() => handleToggleRole(role.id)}
-                                        >
-                                            <div className="d-flex align-items-center">
-                                                <input
-                                                    type="checkbox"
-                                                    className="form-check-input me-3"
-                                                    checked={selectedRoles.includes(role.id)}
-                                                    onChange={() => {}}
-                                                    style={{cursor: 'pointer'}}
-                                                />
-                                                <div>
-                                                    <strong>{role.name}</strong>
-                                                    <br/>
-                                                    <small className="text-muted">{role.description}</small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="text-center mt-3">
-                                    <button
-                                        className="btn btn-link text-danger"
-                                        onClick={() => setSelectedRoles([])}
-                                    >
-                                        <i className="bi bi-x-circle me-1"></i>
-                                        Remove all
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-secondary" onClick={handleCloseRoleModal}>
-                                    Cancel
-                                </button>
-                                <button type="button" className="btn btn-primary" onClick={handleSaveRoles}>
-                                    Save Changes
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

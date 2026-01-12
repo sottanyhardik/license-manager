@@ -230,6 +230,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://labdhi.duckdns.org",  # Production domain (Labdhi)
     "http://143.110.252.201:8000",  # Server IP
     "https://license-manager.duckdns.org",  # Production domain with SSL
+    "https://license-tractor.duckdns.org",  # Production domain (Tractor)
 ]
 
 # Allow cookies (credentials) across origins when frontend sends withCredentials
@@ -275,6 +276,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://labdhi.duckdns.org",
     "http://143.110.252.201:8000",
     "https://license-manager.duckdns.org",
+    "https://license-tractor.duckdns.org",
 ]
 
 # ---------------------------------------------------------------------

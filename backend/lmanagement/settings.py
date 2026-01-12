@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-this-in-production")
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS",
-                          "127.0.0.1,localhost,139.59.92.226,labdhi.duckdns.org,143.110.252.201,license-manager.duckdns.org,178.128.58.219,license-tractor.duckdns.org").split(
+                          "127.0.0.1,localhost,139.59.92.226,labdhi.duckdns.org,143.110.252.201,license-manager.duckdns.org,178.128.58.219,165.232.185.220,license-tractor.duckdns.org").split(
     ",")
 
 # HTTPS Settings
@@ -230,6 +230,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://labdhi.duckdns.org",  # Production domain (Labdhi)
     "http://143.110.252.201:8000",  # Server IP
     "https://license-manager.duckdns.org",  # Production domain with SSL
+    "http://165.232.185.220",  # Tractor server IP (HTTP)
+    "https://165.232.185.220",  # Tractor server IP (HTTPS)
     "https://license-tractor.duckdns.org",  # Production domain (Tractor)
 ]
 
@@ -276,6 +278,8 @@ CSRF_TRUSTED_ORIGINS = [
     "https://labdhi.duckdns.org",
     "http://143.110.252.201:8000",
     "https://license-manager.duckdns.org",
+    "http://165.232.185.220",
+    "https://165.232.185.220",
     "https://license-tractor.duckdns.org",
 ]
 

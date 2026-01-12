@@ -150,15 +150,62 @@ class Command(BaseCommand):
         batch_num = 0
 
         # Optionally disable signals for speed
+        disconnected_signals = []
         if disable_signals:
-            from django.db.models.signals import post_save, post_delete
+            from django.db.models.signals import post_save, post_delete, pre_delete, pre_save
             from allotment.models import update_stock, delete_stock as allotment_delete_stock
             from bill_of_entry.models import update_stock as boe_update_stock, delete_stock as boe_delete_stock
 
+            # Disable allotment signals
             post_save.disconnect(update_stock, sender=AllotmentItems)
             post_delete.disconnect(allotment_delete_stock, sender=AllotmentItems)
+            disconnected_signals.append(('post_save', update_stock, AllotmentItems))
+            disconnected_signals.append(('post_delete', allotment_delete_stock, AllotmentItems))
+
+            # Disable BOE signals
             post_save.disconnect(boe_update_stock, sender=RowDetails)
             post_delete.disconnect(boe_delete_stock, sender=RowDetails)
+            disconnected_signals.append(('post_save', boe_update_stock, RowDetails))
+            disconnected_signals.append(('post_delete', boe_delete_stock, RowDetails))
+
+            # Disable ALL license signals for maximum speed
+            try:
+                from license.signals import (
+                    auto_fetch_import_items,
+                    update_license_on_export_item_change,
+                    update_license_on_export_item_delete,
+                    update_license_on_import_item_change,
+                    update_license_on_import_item_delete,
+                    update_license_on_allotment_item_change,
+                    update_license_on_boe_item_change,
+                    update_license_on_trade_line_change,
+                )
+
+                # Disconnect license-related signals
+                post_save.disconnect(auto_fetch_import_items, sender=LicenseDetailsModel)
+                post_save.disconnect(update_license_on_export_item_change, sender='license.LicenseExportItemModel')
+                post_delete.disconnect(update_license_on_export_item_delete, sender='license.LicenseExportItemModel')
+                post_save.disconnect(update_license_on_import_item_change, sender='license.LicenseImportItemsModel')
+                post_delete.disconnect(update_license_on_import_item_delete, sender='license.LicenseImportItemsModel')
+                post_save.disconnect(update_license_on_allotment_item_change, sender='allotment.AllotmentItems')
+                post_delete.disconnect(update_license_on_allotment_item_change, sender='allotment.AllotmentItems')
+                post_save.disconnect(update_license_on_boe_item_change, sender='bill_of_entry.RowDetails')
+                post_delete.disconnect(update_license_on_boe_item_change, sender='bill_of_entry.RowDetails')
+                post_save.disconnect(update_license_on_trade_line_change, sender='trade.LicenseTradeLine')
+                post_delete.disconnect(update_license_on_trade_line_change, sender='trade.LicenseTradeLine')
+
+                self.stdout.write(self.style.SUCCESS('  ✓ Disabled all license balance update signals'))
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f'  ⚠ Could not disable some license signals: {e}'))
+
+            # Disable allotment signals from allotment/signals.py
+            try:
+                from allotment.signals import update_is_allotted_on_save, update_is_allotted_on_delete
+                post_save.disconnect(update_is_allotted_on_save, sender=AllotmentItems)
+                pre_delete.disconnect(update_is_allotted_on_delete, sender=AllotmentItems)
+                self.stdout.write(self.style.SUCCESS('  ✓ Disabled allotment is_allotted signals'))
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f'  ⚠ Could not disable allotment signals: {e}'))
 
         try:
             while True:
@@ -252,10 +299,52 @@ class Command(BaseCommand):
         finally:
             # Re-enable signals if they were disabled
             if disable_signals:
+                from django.db.models.signals import post_save, post_delete, pre_delete
+                from allotment.models import update_stock, delete_stock as allotment_delete_stock
+                from bill_of_entry.models import update_stock as boe_update_stock, delete_stock as boe_delete_stock
+
+                # Re-enable allotment and BOE signals
                 post_save.connect(update_stock, sender=AllotmentItems, dispatch_uid="update_stock")
                 post_delete.connect(allotment_delete_stock, sender=AllotmentItems)
                 post_save.connect(boe_update_stock, sender=RowDetails, dispatch_uid="update_stock_on_save")
                 post_delete.connect(boe_delete_stock, sender=RowDetails)
+
+                # Re-enable license signals
+                try:
+                    from license.signals import (
+                        auto_fetch_import_items,
+                        update_license_on_export_item_change,
+                        update_license_on_export_item_delete,
+                        update_license_on_import_item_change,
+                        update_license_on_import_item_delete,
+                        update_license_on_allotment_item_change,
+                        update_license_on_boe_item_change,
+                        update_license_on_trade_line_change,
+                    )
+
+                    post_save.connect(auto_fetch_import_items, sender=LicenseDetailsModel)
+                    post_save.connect(update_license_on_export_item_change, sender='license.LicenseExportItemModel')
+                    post_delete.connect(update_license_on_export_item_delete, sender='license.LicenseExportItemModel')
+                    post_save.connect(update_license_on_import_item_change, sender='license.LicenseImportItemsModel')
+                    post_delete.connect(update_license_on_import_item_delete, sender='license.LicenseImportItemsModel')
+                    post_save.connect(update_license_on_allotment_item_change, sender='allotment.AllotmentItems')
+                    post_delete.connect(update_license_on_allotment_item_change, sender='allotment.AllotmentItems')
+                    post_save.connect(update_license_on_boe_item_change, sender='bill_of_entry.RowDetails')
+                    post_delete.connect(update_license_on_boe_item_change, sender='bill_of_entry.RowDetails')
+                    post_save.connect(update_license_on_trade_line_change, sender='trade.LicenseTradeLine')
+                    post_delete.connect(update_license_on_trade_line_change, sender='trade.LicenseTradeLine')
+                except Exception:
+                    pass
+
+                # Re-enable allotment signals
+                try:
+                    from allotment.signals import update_is_allotted_on_save, update_is_allotted_on_delete
+                    post_save.connect(update_is_allotted_on_save, sender=AllotmentItems)
+                    pre_delete.connect(update_is_allotted_on_delete, sender=AllotmentItems)
+                except Exception:
+                    pass
+
+                self.stdout.write(self.style.SUCCESS('\n✓ Re-enabled all signals'))
 
         # Final summary
         self.stdout.write(self.style.SUCCESS('\n=== FINAL SUMMARY ==='))

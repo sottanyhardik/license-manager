@@ -972,36 +972,23 @@ class ItemPivotViewSet(viewsets.ViewSet):
     def available_norms(self, request):
         """
         Get list of all active norm classes with their descriptions.
-        Returns array of objects with norm_class and description, including conversion norms (E1, E5, E126, E132).
+        Returns only norms that are marked as active (is_active=True) in SionNormClassModel.
         """
         try:
-            # Define conversion norm classes
-            CONVERSION_NORMS = ['E1', 'E5', 'E126', 'E132']
-
-            # Get all active SION norm classes from the database
+            # Get only active SION norm classes from the database
             from core.models import SionNormClassModel
             active_norms_data = SionNormClassModel.objects.filter(
                 is_active=True
-            ).values('norm_class', 'description')
+            ).values('norm_class', 'description').order_by('norm_class')
 
             # Build result with norm_class and description
-            norms_dict = {}
-            for norm in active_norms_data:
-                norms_dict[norm['norm_class']] = {
+            result = [
+                {
                     'norm_class': norm['norm_class'],
                     'description': norm['description'] or ''
                 }
-
-            # Add conversion norms if not already present
-            for conv_norm in CONVERSION_NORMS:
-                if conv_norm not in norms_dict:
-                    norms_dict[conv_norm] = {
-                        'norm_class': conv_norm,
-                        'description': ''
-                    }
-
-            # Sort by norm_class and return as array
-            result = sorted(norms_dict.values(), key=lambda x: x['norm_class'])
+                for norm in active_norms_data
+            ]
 
             return Response(result)
         except Exception as e:

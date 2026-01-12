@@ -1,16 +1,25 @@
 """
-Django management command to delete licenses where exporter name CONTAINS "tractor"
+Django management command to delete licenses based on exporter name filtering
 along with their related allotments and BOEs in batches.
 
 Usage:
-    python manage.py delete_tractor_licenses --dry-run
-    python manage.py delete_tractor_licenses --confirm
-    python manage.py delete_tractor_licenses --confirm --batch-size 20
+    # Delete licenses where exporter contains "tractor"
+    python manage.py delete_licenses_by_exporter --filter contains --exporter "tractor" --dry-run
+    python manage.py delete_licenses_by_exporter --filter contains --exporter "tractor" --confirm
+
+    # Delete licenses where exporter is NOT "International Tractor" (keep only International Tractor)
+    python manage.py delete_licenses_by_exporter --filter exclude --exporter "International Tractor" --dry-run
+    python manage.py delete_licenses_by_exporter --filter exclude --exporter "International Tractor" --confirm
+
+    # Delete licenses where exporter contains "SION C969"
+    python manage.py delete_licenses_by_exporter --filter contains --exporter "SION C969" --confirm --batch-size 20
+
+    # Keep only SION C969, delete all others
+    python manage.py delete_licenses_by_exporter --filter exclude --exporter "SION C969" --confirm
 """
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import Count, Q
 
 from license.models import LicenseDetailsModel
 from allotment.models import AllotmentItems, AllotmentModel
@@ -18,9 +27,22 @@ from bill_of_entry.models import BillOfEntryModel, RowDetails
 
 
 class Command(BaseCommand):
-    help = 'Delete all licenses where exporter name contains "tractor" along with related allotments and BOEs'
+    help = 'Delete licenses based on exporter name filtering along with related allotments and BOEs'
 
     def add_arguments(self, parser):
+        parser.add_argument(
+            '--filter',
+            type=str,
+            required=True,
+            choices=['contains', 'exclude'],
+            help='Filter type: "contains" deletes matching licenses, "exclude" keeps only matching licenses',
+        )
+        parser.add_argument(
+            '--exporter',
+            type=str,
+            required=True,
+            help='Exporter name or pattern to filter by (case-insensitive)',
+        )
         parser.add_argument(
             '--dry-run',
             action='store_true',
@@ -42,6 +64,8 @@ class Command(BaseCommand):
         dry_run = options['dry_run']
         confirm = options['confirm']
         batch_size = options['batch_size']
+        filter_type = options['filter']
+        exporter_pattern = options['exporter']
 
         if not dry_run and not confirm:
             self.stdout.write(
@@ -51,23 +75,33 @@ class Command(BaseCommand):
             )
             return
 
-        # Find licenses where exporter name CONTAINS "tractor" (case-insensitive)
-        licenses_to_delete = LicenseDetailsModel.objects.filter(
-            exporter__name__icontains='tractor'
-        ).select_related('exporter')
+        # Build query based on filter type
+        if filter_type == 'contains':
+            # Delete licenses where exporter name CONTAINS the pattern
+            licenses_to_delete = LicenseDetailsModel.objects.filter(
+                exporter__name__icontains=exporter_pattern
+            ).select_related('exporter')
+            description = f'exporter contains "{exporter_pattern}"'
+        else:  # exclude
+            # Delete licenses where exporter name does NOT match the pattern (exact match)
+            licenses_to_delete = LicenseDetailsModel.objects.exclude(
+                exporter__name__iexact=exporter_pattern
+            ).select_related('exporter')
+            description = f'exporter is NOT "{exporter_pattern}"'
 
         total_licenses = licenses_to_delete.count()
 
         if total_licenses == 0:
             self.stdout.write(
                 self.style.SUCCESS(
-                    'No licenses found where exporter contains "tractor"'
+                    f'No licenses found where {description}'
                 )
             )
             return
 
         # Display total count
         self.stdout.write(self.style.WARNING('\n=== DELETION SUMMARY ==='))
+        self.stdout.write(f'Filter: {description}')
         self.stdout.write(f'Total licenses to delete: {total_licenses}')
         self.stdout.write(f'Batch size: {batch_size}')
         self.stdout.write(f'Number of batches: {(total_licenses + batch_size - 1) // batch_size}')
@@ -109,12 +143,19 @@ class Command(BaseCommand):
 
         batch_num = 0
         while True:
-            # Get next batch of licenses
-            batch_licenses = list(
-                LicenseDetailsModel.objects.filter(
-                    exporter__name__icontains='tractor'
-                ).values_list('id', flat=True)[:batch_size]
-            )
+            # Get next batch of licenses (rebuild query each time)
+            if filter_type == 'contains':
+                batch_licenses = list(
+                    LicenseDetailsModel.objects.filter(
+                        exporter__name__icontains=exporter_pattern
+                    ).values_list('id', flat=True)[:batch_size]
+                )
+            else:  # exclude
+                batch_licenses = list(
+                    LicenseDetailsModel.objects.exclude(
+                        exporter__name__iexact=exporter_pattern
+                    ).values_list('id', flat=True)[:batch_size]
+                )
 
             if not batch_licenses:
                 break
@@ -232,6 +273,7 @@ class Command(BaseCommand):
 
         # Final summary
         self.stdout.write(self.style.SUCCESS('\n=== FINAL SUMMARY ==='))
+        self.stdout.write(f'Filter used: {description}')
         self.stdout.write(f'Total Licenses deleted: {total_deleted["licenses"]}')
         self.stdout.write(f'Total AllotmentItems deleted: {total_deleted["allotment_items"]}')
         self.stdout.write(f'Total Allotments deleted: {total_deleted["allotments"]}')
@@ -239,6 +281,6 @@ class Command(BaseCommand):
         self.stdout.write(f'Total BOEs deleted: {total_deleted["boes"]}')
         self.stdout.write(
             self.style.SUCCESS(
-                '\n✅ Successfully deleted all licenses where exporter contains "tractor"'
+                f'\n✅ Successfully deleted all licenses where {description}'
             )
         )

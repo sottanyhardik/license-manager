@@ -39,29 +39,14 @@ auth_token = None
 def fetch_eligible_licenses():
     """
     Get licenses with:
-    - Expiry date >= 2025-06-01
-    - CIF balance > $200
-    - At least one allotment item with is_boe = False
+    - Expiry date > today (not expired)
     """
-    from django.db.models import Q, Exists, OuterRef
-    from allotment.models import AllotmentItems
+    from datetime import date
 
-    # Subquery to check if license has allotment items with is_boe = False
-    # AllotmentItems -> item (LicenseImportItemsModel) -> license (LicenseDetailsModel)
-    has_non_boe_items = Exists(
-        AllotmentItems.objects.filter(
-            item__license=OuterRef('pk'),
-            is_boe=False
-        )
-    )
+    today = date.today()
 
     return LicenseDetailsModel.objects.filter(
-        license_expiry_date__gte="2025-06-01",
-        balance_cif__gt=200,  # CIF balance > $200
-    ).annotate(
-        has_non_boe_allotment=has_non_boe_items
-    ).filter(
-        has_non_boe_allotment=True
+        license_expiry_date__gt=today
     ).order_by("-license_expiry_date")
 
 

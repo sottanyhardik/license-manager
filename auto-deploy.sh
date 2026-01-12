@@ -187,8 +187,9 @@ echo -e "\${GREEN}✅ Static files collected\${NC}"
 echo -e "\${GREEN}✅ Services restarted\${NC}"
 echo ""
 echo -e "\${BLUE}🌐 Application URLs:\${NC}"
-echo -e "   → http://139.59.92.226"
-echo -e "   → https://labdhi.duckdns.org"
+echo -e "   → http://143.110.252.201 (license-manager.duckdns.org)"
+echo -e "   → http://139.59.92.226 (labdhi.duckdns.org)"
+echo -e "   → http://165.232.185.220 (license-tractor.duckdns.org)"
 echo ""
 
 echo -e "\${BLUE}→ Final service status check...\${NC}"
@@ -303,7 +304,8 @@ else
     print_success "All servers deployed successfully!"
     echo ""
     print_info "Application URLs:"
-    print_info "   → http://143.110.252.201"
-    print_info "   → http://139.59.92.226"
+    print_info "   → http://143.110.252.201 (license-manager.duckdns.org)"
+    print_info "   → http://139.59.92.226 (labdhi.duckdns.org)"
+    print_info "   → http://165.232.185.220 (license-tractor.duckdns.org)"
     exit 0
 fi

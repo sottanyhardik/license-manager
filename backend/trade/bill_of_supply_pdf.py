@@ -379,7 +379,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             row = [
                 str(idx),
                 description_para,
-                '480700',  # HSN code for services
+                '4907',  # HSN code for services
                 Paragraph(f"{line.license_value:,.2f}" if line.license_value else "0.00", right_align_style),
                 Paragraph(f"{line.rate_pct:.2f}" if line.rate_pct else "0.00", right_align_style),
                 Paragraph(f"{amount:,.2f}", right_align_style)

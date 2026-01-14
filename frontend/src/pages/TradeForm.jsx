@@ -928,6 +928,58 @@ export default function TradeForm() {
                     </div>
                 </div>
 
+                {/* Purchase Invoice Copy Upload - Only for PURCHASE direction */}
+                {formData.direction === "PURCHASE" && (
+                    <div className="row mb-3">
+                        <div className="col-md-6">
+                            <label className="form-label">Purchase Invoice Copy (optional)</label>
+                            <input
+                                type="file"
+                                className="form-control"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    setFormData(prev => ({ ...prev, purchase_invoice_copy: file || null }));
+                                }}
+                            />
+                            <small className="text-muted">Accepted formats: PDF, JPG, PNG (Max 10MB)</small>
+
+                            {/* Show existing file if editing and file exists */}
+                            {isEdit && formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
+                                <div className="mt-2">
+                                    <a
+                                        href={formData.purchase_invoice_copy}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-sm btn-outline-primary"
+                                    >
+                                        <i className="bi bi-file-earmark-pdf me-1"></i>
+                                        View Current Invoice Copy
+                                    </a>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-danger ms-2"
+                                        onClick={() => setFormData(prev => ({ ...prev, purchase_invoice_copy: null }))}
+                                    >
+                                        <i className="bi bi-trash me-1"></i>
+                                        Remove
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Show selected file name if new file selected */}
+                            {formData.purchase_invoice_copy instanceof File && (
+                                <div className="mt-2">
+                                    <span className="badge bg-success">
+                                        <i className="bi bi-check-circle me-1"></i>
+                                        {formData.purchase_invoice_copy.name}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className="mb-3">
                     <button
                         type="button"

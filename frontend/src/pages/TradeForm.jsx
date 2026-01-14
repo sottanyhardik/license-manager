@@ -757,7 +757,7 @@ export default function TradeForm() {
                             <div className="card-body">
                                 <button
                                     type="button"
-                                    className="btn btn-warning btn-sm mb-3"
+                                    className="btn btn-warning btn-sm mb-3 text-white"
                                     onClick={handlePrefillFromCompany}
                                 >
                                     Prefill From Company details
@@ -833,7 +833,7 @@ export default function TradeForm() {
                             <div className="card-body">
                                 <button
                                     type="button"
-                                    className="btn btn-warning btn-sm mb-3"
+                                    className="btn btn-warning btn-sm mb-3 text-white"
                                     onClick={handlePrefillToCompany}
                                 >
                                     Prefill To Company details
@@ -983,7 +983,7 @@ export default function TradeForm() {
                 <div className="mb-3">
                     <button
                         type="button"
-                        className="btn btn-warning btn-sm"
+                        className="btn btn-warning btn-sm text-white"
                         onClick={handlePrefillInvoiceNumber}
                         disabled={
                             !formData.direction ||
@@ -1005,7 +1005,7 @@ export default function TradeForm() {
                     </button>
                     <button
                         type="button"
-                        className="btn btn-warning btn-sm ms-2"
+                        className="btn btn-warning btn-sm ms-2 text-white"
                         onClick={handlePrefillFromBOE}
                         disabled={!formData.boe}
                     >

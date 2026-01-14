@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from 'react-toastify';
 import api from "../api/axios";
@@ -34,6 +34,7 @@ export default function TradeForm() {
     const [error, setError] = useState("");
     const [fieldErrors, setFieldErrors] = useState({});
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
+    const isInitialLoadRef = useRef(true);
 
     // Helper function to format Date object to YYYY-MM-DD for API
     const formatDateForAPI = (date) => {
@@ -81,16 +82,20 @@ export default function TradeForm() {
     useEffect(() => {
         if (isEdit) {
             fetchTrade();
+        } else {
+            // In create mode, mark initial load as complete immediately
+            isInitialLoadRef.current = false;
         }
     }, [isEdit, id]);
 
-    // Auto-prefill from BOE when BOE is selected
+    // Auto-prefill from BOE when BOE is selected (works in both create and edit mode)
+    // Skip during initial load to prevent overwriting existing trade data
     useEffect(() => {
-        if (formData.boe && !isEdit) {
-            // Only auto-prefill in create mode, not edit mode
+        if (formData.boe && !isInitialLoadRef.current) {
             handlePrefillFromBOE();
         }
-    }, [formData.boe, isEdit, handlePrefillFromBOE]);
+    }, [formData.boe, handlePrefillFromBOE]);
+
 
     const fetchTrade = async () => {
         try {
@@ -169,50 +174,55 @@ export default function TradeForm() {
             if (data.lines && data.lines.length > 0) {
                 setBillingMode(data.lines[0].mode);
             }
+
+            // Mark initial load as complete to enable BOE auto-prefill
+            isInitialLoadRef.current = false;
         } catch (err) {
             setError("Failed to load trade");
         }
     };
 
-    const handlePrefillFromCompany = async () => {
-        if (!formData.from_company) {
-            toast.warning("Please select From Company first");
-            return;
-        }
-        try {
-            // from_company can be either ID or object with id
-            const companyId = typeof formData.from_company === 'object' ? formData.from_company.id : formData.from_company;
-            const { data } = await api.get(`/masters/companies/${companyId}/`);
-            setFormData(prev => ({
-                ...prev,
-                from_pan: data.pan || "",
-                from_gst: data.gst_number || "",
-                from_addr_line_1: data.address_line_1 || "",
-                from_addr_line_2: data.address_line_2 || ""
-            }));
-        } catch (err) {
-            toast.error("Failed to fetch company details");
+    const handleFromCompanyChange = async (val) => {
+        setFormData(prev => ({ ...prev, from_company: val }));
+
+        // Auto-fetch company details
+        if (val) {
+            try {
+                const companyId = typeof val === 'object' ? val.id : val;
+                const { data } = await api.get(`/masters/companies/${companyId}/`);
+                setFormData(prev => ({
+                    ...prev,
+                    from_company: val,
+                    from_pan: data.pan || "",
+                    from_gst: data.gst_number || "",
+                    from_addr_line_1: data.address_line_1 || "",
+                    from_addr_line_2: data.address_line_2 || ""
+                }));
+            } catch (err) {
+                toast.error("Failed to fetch company details");
+            }
         }
     };
 
-    const handlePrefillToCompany = async () => {
-        if (!formData.to_company) {
-            toast.warning("Please select To Company first");
-            return;
-        }
-        try {
-            // to_company can be either ID or object with id
-            const companyId = typeof formData.to_company === 'object' ? formData.to_company.id : formData.to_company;
-            const { data } = await api.get(`/masters/companies/${companyId}/`);
-            setFormData(prev => ({
-                ...prev,
-                to_pan: data.pan || "",
-                to_gst: data.gst_number || "",
-                to_addr_line_1: data.address_line_1 || "",
-                to_addr_line_2: data.address_line_2 || ""
-            }));
-        } catch (err) {
-            toast.error("Failed to fetch company details");
+    const handleToCompanyChange = async (val) => {
+        setFormData(prev => ({ ...prev, to_company: val }));
+
+        // Auto-fetch company details
+        if (val) {
+            try {
+                const companyId = typeof val === 'object' ? val.id : val;
+                const { data } = await api.get(`/masters/companies/${companyId}/`);
+                setFormData(prev => ({
+                    ...prev,
+                    to_company: val,
+                    to_pan: data.pan || "",
+                    to_gst: data.gst_number || "",
+                    to_addr_line_1: data.address_line_1 || "",
+                    to_addr_line_2: data.address_line_2 || ""
+                }));
+            } catch (err) {
+                toast.error("Failed to fetch company details");
+            }
         }
     };
 
@@ -678,6 +688,43 @@ export default function TradeForm() {
         }
     };
 
+    const handleDownloadPurchaseInvoice = async (includeSignature = true) => {
+        if (!id) {
+            toast.warning("Please save the trade first");
+            return;
+        }
+
+        // Check if this is a PURCHASE transaction
+        if (formData.direction !== 'PURCHASE') {
+            toast.warning("Purchase Invoice can only be generated for PURCHASE transactions");
+            return;
+        }
+
+        try {
+            const response = await api.get(`/trades/${id}/generate-purchase-invoice/`, {
+                params: {
+                    include_signature: includeSignature
+                },
+                responseType: 'blob'
+            });
+
+            // Create blob link to download
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            const signSuffix = includeSignature ? '_with_sign' : '_without_sign';
+            const filename = `Purchase_Invoice_${formData.invoice_number || id}_${new Date().toISOString().split('T')[0]}${signSuffix}.pdf`;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            toast.success(`Purchase Invoice downloaded ${includeSignature ? 'with' : 'without'} signature`);
+        } catch (err) {
+            toast.error('Failed to download Purchase Invoice. Please try again.');
+        }
+    };
+
     return (
         <div className="container-fluid mt-4">
             <nav aria-label="breadcrumb" className="mb-3">
@@ -755,14 +802,6 @@ export default function TradeForm() {
                     <div className="col-md-6">
                         <div className="card">
                             <div className="card-body">
-                                <button
-                                    type="button"
-                                    className="btn btn-warning btn-sm mb-3"
-                                    onClick={handlePrefillFromCompany}
-                                >
-                                    Prefill From Company details
-                                </button>
-
                                 <h6>From Company Snapshot</h6>
 
                                 <div className="mb-3">
@@ -773,7 +812,7 @@ export default function TradeForm() {
                                             label_field: "name"
                                         }}
                                         value={formData.from_company}
-                                        onChange={(val) => setFormData(prev => ({ ...prev, from_company: val }))}
+                                        onChange={handleFromCompanyChange}
                                         isClearable={false}
                                         placeholder="Search and select company..."
                                     />
@@ -831,14 +870,6 @@ export default function TradeForm() {
                     <div className="col-md-6">
                         <div className="card">
                             <div className="card-body">
-                                <button
-                                    type="button"
-                                    className="btn btn-warning btn-sm mb-3"
-                                    onClick={handlePrefillToCompany}
-                                >
-                                    Prefill To Company details
-                                </button>
-
                                 <h6>To Company Snapshot</h6>
 
                                 <div className="mb-3">
@@ -849,7 +880,7 @@ export default function TradeForm() {
                                             label_field: "name"
                                         }}
                                         value={formData.to_company}
-                                        onChange={(val) => setFormData(prev => ({ ...prev, to_company: val }))}
+                                        onChange={handleToCompanyChange}
                                         isClearable={false}
                                         placeholder="Search and select company..."
                                     />
@@ -907,15 +938,37 @@ export default function TradeForm() {
                 {/* Invoice Details Section - Matching Screenshot Layout */}
                 <div className="row mb-3">
                     <div className="col-md-6">
-                        <label className="form-label">Invoice Number (optional)</label>
-                        <div className="d-flex gap-2">
-                            <input
-                                type="text"
-                                className="form-control"
-                                value={formData.invoice_number || ""}
-                                onChange={(e) => setFormData(prev => ({ ...prev, invoice_number: e.target.value }))}
-                            />
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                            <label className="form-label mb-0">Invoice Number (optional)</label>
+                            <button
+                                type="button"
+                                className="btn btn-warning btn-sm"
+                                onClick={handlePrefillInvoiceNumber}
+                                disabled={
+                                    !formData.direction ||
+                                    (formData.direction === 'PURCHASE' && !formData.to_company) ||
+                                    (formData.direction === 'SALE' && !formData.from_company)
+                                }
+                                title={
+                                    !formData.direction
+                                        ? "Select Direction first"
+                                        : (formData.direction === 'PURCHASE' && !formData.to_company)
+                                            ? "Select To Company (buyer) for PURCHASE invoice"
+                                            : (formData.direction === 'SALE' && !formData.from_company)
+                                                ? "Select From Company (seller) for SALE invoice"
+                                                : "Generate invoice number: PURCHASE format is P-PREFIX/FY/NNNN, SALE format is PREFIX/FY/NNNN"
+                                }
+                            >
+                                <i className="bi bi-magic me-1"></i>
+                                Prefill Invoice Number
+                            </button>
                         </div>
+                        <input
+                            type="text"
+                            className="form-control"
+                            value={formData.invoice_number || ""}
+                            onChange={(e) => setFormData(prev => ({ ...prev, invoice_number: e.target.value }))}
+                        />
                     </div>
                     <div className="col-md-6">
                         <label className="form-label">Invoice Date</label>
@@ -980,72 +1033,42 @@ export default function TradeForm() {
                     </div>
                 )}
 
-                <div className="mb-3">
-                    <button
-                        type="button"
-                        className="btn btn-warning btn-sm"
-                        onClick={handlePrefillInvoiceNumber}
-                        disabled={
-                            !formData.direction ||
-                            (formData.direction === 'PURCHASE' && !formData.to_company) ||
-                            (formData.direction === 'SALE' && !formData.from_company)
-                        }
-                        title={
-                            !formData.direction
-                                ? "Select Direction first"
-                                : (formData.direction === 'PURCHASE' && !formData.to_company)
-                                    ? "Select To Company (buyer) for PURCHASE invoice"
-                                    : (formData.direction === 'SALE' && !formData.from_company)
-                                        ? "Select From Company (seller) for SALE invoice"
-                                        : "Generate invoice number: PURCHASE format is P-PREFIX/FY/NNNN, SALE format is PREFIX/FY/NNNN"
-                        }
-                    >
-                        <i className="bi bi-magic me-1"></i>
-                        Prefill Invoice Number
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-warning btn-sm ms-2"
-                        onClick={handlePrefillFromBOE}
-                        disabled={!formData.boe}
-                    >
-                        Prefill from BOE
-                    </button>
-                </div>
 
                 {/* BOE and Remarks */}
                 <div className="row mb-4">
-                    <div className="col-md-6">
-                        <label className="form-label">BOE (optional)</label>
-                        <HybridSelect
-                            fieldMeta={{
-                                endpoint: (() => {
-                                    // In create mode: only show BOEs without invoice
-                                    if (!isEdit) {
-                                        return "/bill-of-entries/?invoice_no__isnull=true";
-                                    }
-                                    // In edit mode: show BOEs without invoice OR current BOE OR BOEs with current invoice
-                                    const currentBoeId = formData.boe ? (typeof formData.boe === 'object' ? formData.boe.id : formData.boe) : null;
-                                    const currentInvoice = formData.invoice_number ? encodeURIComponent(formData.invoice_number) : null;
+                    {formData.direction !== 'PURCHASE' && (
+                        <div className="col-md-6">
+                            <label className="form-label">BOE (optional)</label>
+                            <HybridSelect
+                                fieldMeta={{
+                                    endpoint: (() => {
+                                        // In create mode: only show BOEs without invoice
+                                        if (!isEdit) {
+                                            return "/bill-of-entries/?invoice_no__isnull=true";
+                                        }
+                                        // In edit mode: show BOEs without invoice OR current BOE OR BOEs with current invoice
+                                        const currentBoeId = formData.boe ? (typeof formData.boe === 'object' ? formData.boe.id : formData.boe) : null;
+                                        const currentInvoice = formData.invoice_number ? encodeURIComponent(formData.invoice_number) : null;
 
-                                    let endpoint = "/bill-of-entries/?available_for_trade=true";
-                                    if (currentBoeId) {
-                                        endpoint += `&current_boe=${currentBoeId}`;
-                                    }
-                                    if (currentInvoice) {
-                                        endpoint += `&current_invoice=${currentInvoice}`;
-                                    }
-                                    return endpoint;
-                                })(),
-                                label_field: "bill_of_entry_number"
-                            }}
-                            value={formData.boe}
-                            onChange={(val) => setFormData(prev => ({ ...prev, boe: val }))}
-                            isClearable={true}
-                            placeholder="Search and select BOE (without invoice)..."
-                        />
-                    </div>
-                    <div className="col-md-6">
+                                        let endpoint = "/bill-of-entries/?available_for_trade=true";
+                                        if (currentBoeId) {
+                                            endpoint += `&current_boe=${currentBoeId}`;
+                                        }
+                                        if (currentInvoice) {
+                                            endpoint += `&current_invoice=${currentInvoice}`;
+                                        }
+                                        return endpoint;
+                                    })(),
+                                    label_field: "bill_of_entry_number"
+                                }}
+                                value={formData.boe}
+                                onChange={(val) => setFormData(prev => ({ ...prev, boe: val }))}
+                                isClearable={true}
+                                placeholder="Search and select BOE (without invoice)..."
+                            />
+                        </div>
+                    )}
+                    <div className={formData.direction === 'PURCHASE' ? 'col-md-12' : 'col-md-6'}>
                         <label className="form-label">Remarks</label>
                         <textarea
                             className="form-control"
@@ -1181,22 +1204,18 @@ export default function TradeForm() {
                                 <th style={{ width: "3%" }}>#</th>
                                 <th style={{ width: "20%" }}>License (SR)</th>
                                 <th style={{ width: "10%" }}>HSN</th>
+                                <th style={{ width: "10%" }}>CIF $</th>
                                 {billingMode === "CIF_INR" && (
                                     <>
-                                        <th style={{ width: "10%" }}>CIF $</th>
                                         <th style={{ width: "8%" }}>Exch Rate</th>
                                         <th style={{ width: "10%" }}>CIF INR</th>
                                     </>
                                 )}
                                 {billingMode === "FOB_INR" && (
-                                    <>
-                                        <th style={{ width: "10%" }}>CIF $</th>
-                                        <th style={{ width: "10%" }}>FOB INR</th>
-                                    </>
+                                    <th style={{ width: "10%" }}>FOB INR</th>
                                 )}
                                 {billingMode === "QTY" && (
                                     <>
-                                        <th style={{ width: "10%" }}>CIF $</th>
                                         <th style={{ width: "10%" }}>Qty (KG)</th>
                                         <th style={{ width: "10%" }}>Rate (INR/KG)</th>
                                     </>
@@ -1233,17 +1252,17 @@ export default function TradeForm() {
                                             readOnly
                                         />
                                     </td>
+                                    <td>
+                                        <input
+                                            type="number"
+                                            className="form-control form-control-sm text-end"
+                                            value={line.cif_fc || ""}
+                                            onChange={(e) => handleLineChange(index, 'cif_fc', parseFloat(e.target.value) || 0)}
+                                            step="0.01"
+                                        />
+                                    </td>
                                     {billingMode === "CIF_INR" && (
                                         <>
-                                            <td>
-                                                <input
-                                                    type="number"
-                                                    className="form-control form-control-sm text-end"
-                                                    value={line.cif_fc || ""}
-                                                    onChange={(e) => handleLineChange(index, 'cif_fc', parseFloat(e.target.value) || 0)}
-                                                    step="0.01"
-                                                />
-                                            </td>
                                             <td>
                                                 <input
                                                     type="number"
@@ -1265,38 +1284,18 @@ export default function TradeForm() {
                                         </>
                                     )}
                                     {billingMode === "FOB_INR" && (
-                                        <>
-                                            <td>
-                                                <input
-                                                    type="number"
-                                                    className="form-control form-control-sm text-end"
-                                                    value={line.cif_fc || ""}
-                                                    onChange={(e) => handleLineChange(index, 'cif_fc', parseFloat(e.target.value) || 0)}
-                                                    step="0.01"
-                                                />
-                                            </td>
-                                            <td>
-                                                <input
-                                                    type="number"
-                                                    className="form-control form-control-sm text-end"
-                                                    value={line.fob_inr || ""}
-                                                    onChange={(e) => handleLineChange(index, 'fob_inr', parseFloat(e.target.value) || 0)}
-                                                    step="0.01"
-                                                />
-                                            </td>
-                                        </>
+                                        <td>
+                                            <input
+                                                type="number"
+                                                className="form-control form-control-sm text-end"
+                                                value={line.fob_inr || ""}
+                                                onChange={(e) => handleLineChange(index, 'fob_inr', parseFloat(e.target.value) || 0)}
+                                                step="0.01"
+                                            />
+                                        </td>
                                     )}
                                     {billingMode === "QTY" && (
                                         <>
-                                            <td>
-                                                <input
-                                                    type="number"
-                                                    className="form-control form-control-sm text-end"
-                                                    value={line.cif_fc || ""}
-                                                    onChange={(e) => handleLineChange(index, 'cif_fc', parseFloat(e.target.value) || 0)}
-                                                    step="0.01"
-                                                />
-                                            </td>
                                             <td>
                                                 <input
                                                     type="number"
@@ -1489,55 +1488,104 @@ export default function TradeForm() {
                                 <i className="bi bi-file-earmark-text me-1"></i>
                                 Generate Transfer Letter
                             </button>
-                            <div className="btn-group">
-                                <button
-                                    type="button"
-                                    className="btn btn-warning"
-                                    onClick={() => handleDownloadPDF(true)}
-                                    disabled={formData.direction !== 'SALE'}
-                                    title={formData.direction !== 'SALE' ? 'Bill of Supply only available for SALE transactions' : 'Download Bill of Supply with signature & stamp'}
-                                >
-                                    <i className="bi bi-file-pdf me-1"></i>
-                                    Bill of Supply
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-warning dropdown-toggle dropdown-toggle-split"
-                                    data-bs-toggle="dropdown"
-                                    aria-expanded="false"
-                                    disabled={formData.direction !== 'SALE'}
-                                >
-                                    <span className="visually-hidden">Toggle Dropdown</span>
-                                </button>
-                                <ul className="dropdown-menu">
-                                    <li>
-                                        <a
-                                            className="dropdown-item"
-                                            href="#"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                handleDownloadPDF(true);
-                                            }}
-                                        >
-                                            <i className="bi bi-check-circle me-2"></i>
-                                            With Signature & Stamp
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a
-                                            className="dropdown-item"
-                                            href="#"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                handleDownloadPDF(false);
-                                            }}
-                                        >
-                                            <i className="bi bi-x-circle me-2"></i>
-                                            Without Signature & Stamp
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
+                            {formData.direction === 'SALE' && (
+                                <div className="btn-group">
+                                    <button
+                                        type="button"
+                                        className="btn btn-warning"
+                                        onClick={() => handleDownloadPDF(true)}
+                                        title="Download Bill of Supply with signature & stamp"
+                                    >
+                                        <i className="bi bi-file-pdf me-1"></i>
+                                        Bill of Supply
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-warning dropdown-toggle dropdown-toggle-split"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false"
+                                    >
+                                        <span className="visually-hidden">Toggle Dropdown</span>
+                                    </button>
+                                    <ul className="dropdown-menu">
+                                        <li>
+                                            <a
+                                                className="dropdown-item"
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    handleDownloadPDF(true);
+                                                }}
+                                            >
+                                                <i className="bi bi-check-circle me-2"></i>
+                                                With Signature & Stamp
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a
+                                                className="dropdown-item"
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    handleDownloadPDF(false);
+                                                }}
+                                            >
+                                                <i className="bi bi-x-circle me-2"></i>
+                                                Without Signature & Stamp
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            )}
+                            {formData.direction === 'PURCHASE' && (
+                                <div className="btn-group">
+                                    <button
+                                        type="button"
+                                        className="btn btn-success"
+                                        onClick={() => handleDownloadPurchaseInvoice(true)}
+                                        title="Download Purchase Invoice with signature & stamp"
+                                    >
+                                        <i className="bi bi-file-pdf me-1"></i>
+                                        Purchase Invoice
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-success dropdown-toggle dropdown-toggle-split"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false"
+                                    >
+                                        <span className="visually-hidden">Toggle Dropdown</span>
+                                    </button>
+                                    <ul className="dropdown-menu">
+                                        <li>
+                                            <a
+                                                className="dropdown-item"
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    handleDownloadPurchaseInvoice(true);
+                                                }}
+                                            >
+                                                <i className="bi bi-check-circle me-2"></i>
+                                                With Signature & Stamp
+                                            </a>
+                                        </li>
+                                        {formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
+                                            <li>
+                                                <a
+                                                    className="dropdown-item"
+                                                    href={formData.purchase_invoice_copy}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                >
+                                                    <i className="bi bi-file-earmark-pdf me-2"></i>
+                                                    Original Invoice Copy
+                                                </a>
+                                            </li>
+                                        )}
+                                    </ul>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>

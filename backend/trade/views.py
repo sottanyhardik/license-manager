@@ -296,6 +296,48 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=True, methods=['get'], url_path='generate-purchase-invoice')
+    def generate_purchase_invoice(self, request, pk=None):
+        """
+        Generate Purchase Invoice PDF for PURCHASE transactions.
+
+        Query Parameters:
+        - include_signature: Boolean (default: true) - include signature and stamp in PDF
+        """
+        from django.http import HttpResponse
+        from trade.purchase_invoice_pdf import generate_purchase_invoice_pdf
+
+        # Fetch trade with company relationships
+        trade = self.get_queryset().select_related('from_company', 'to_company').get(pk=self.kwargs['pk'])
+
+        # Validate that this is a PURCHASE transaction
+        if trade.direction != 'PURCHASE':
+            return Response(
+                {"error": "Purchase Invoice can only be generated for PURCHASE transactions"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Get query parameter for signature inclusion (default: True)
+            include_signature_param = request.query_params.get('include_signature', 'true').lower()
+            include_signature = include_signature_param in ['true', '1', 'yes']
+
+            pdf = generate_purchase_invoice_pdf(trade, include_signature=include_signature)
+
+            # Create response
+            response = HttpResponse(pdf, content_type='application/pdf')
+            sig_suffix = "_with_sign" if include_signature else "_without_sign"
+            filename = f"Purchase_Invoice_{trade.invoice_number}_{trade.invoice_date.strftime('%Y%m%d') if trade.invoice_date else 'NA'}{sig_suffix}.pdf"
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
+
+            return response
+
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to generate PDF: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=False, methods=['get'], url_path='prefill-invoice-number')
     def prefill_invoice_number(self, request):
         """

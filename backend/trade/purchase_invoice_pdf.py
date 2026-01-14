@@ -1,4 +1,4 @@
-# trade/bill_of_supply_pdf.py
+# trade/purchase_invoice_pdf.py
 from io import BytesIO
 
 from reportlab.lib import colors
@@ -64,12 +64,12 @@ def num_to_words_indian(amount):
         return str(int(amount))
 
 
-def generate_bill_of_supply_pdf(trade, include_signature=True):
+def generate_purchase_invoice_pdf(trade, include_signature=True):
     """
-    Generate Bill of Supply PDF for SALE transactions.
+    Generate Purchase Invoice PDF for PURCHASE transactions.
 
     Args:
-        trade: LicenseTrade instance with direction='SALE'
+        trade: LicenseTrade instance with direction='PURCHASE'
         include_signature: Boolean - whether to include signature and stamp (default: True)
 
     Returns:
@@ -78,11 +78,11 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     buffer = BytesIO()
 
     # Get company color (default to black)
-    from_company = trade.from_company
+    to_company = trade.to_company
     company_color = colors.black
 
-    if from_company and from_company.bill_colour:
-        color_value = from_company.bill_colour.strip()
+    if to_company and to_company.bill_colour:
+        color_value = to_company.bill_colour.strip()
         if color_value:
             if not color_value.startswith('#'):
                 color_value = '#' + color_value
@@ -97,7 +97,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         rightMargin=20,
         leftMargin=20,
         topMargin=20,
-        bottomMargin=15  # Reduced margins to fit content on one page
+        bottomMargin=15
     )
 
     elements = []
@@ -125,13 +125,13 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     import logging
     logger = logging.getLogger(__name__)
 
-    if from_company:
+    if to_company:
         logger.info(
-            f"Company: {from_company.name}, Has logo attr: {hasattr(from_company, 'logo')}, Logo value: {from_company.logo if hasattr(from_company, 'logo') else 'N/A'}")
+            f"Company: {to_company.name}, Has logo attr: {hasattr(to_company, 'logo')}, Logo value: {to_company.logo if hasattr(to_company, 'logo') else 'N/A'}")
 
-        if hasattr(from_company, 'logo') and from_company.logo:
+        if hasattr(to_company, 'logo') and to_company.logo:
             try:
-                logo_path = from_company.logo.path
+                logo_path = to_company.logo.path
                 logger.info(f"Logo path: {logo_path}, Exists: {os.path.exists(logo_path)}")
 
                 if os.path.exists(logo_path):
@@ -165,12 +165,12 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         else:
             logger.info("Company has no logo or logo field is empty")
     else:
-        logger.warning("No from_company found")
+        logger.warning("No to_company found")
 
     if logo_img:
         # Create table with logo on left, title in center
         logo_title_table = Table([
-            [logo_img, Paragraph('<b>Bill of Supply</b>', title_style), '']
+            [logo_img, Paragraph('<b>Purchase Invoice</b>', title_style), '']
         ], colWidths=[page_width * 0.25, page_width * 0.5, page_width * 0.25])
         logo_title_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
@@ -180,27 +180,10 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         elements.append(logo_title_table)
     else:
         # Just title without logo
-        elements.append(Paragraph('<b>Bill of Supply</b>', title_style))
+        elements.append(Paragraph('<b>Purchase Invoice</b>', title_style))
 
-    # Header table (Seller info + Invoice details)
-    from_addr = []
-    if from_company:
-        from_addr.append(f'<b>{from_company.name}</b>')
-        if trade.from_addr_line_1:
-            from_addr.append(trade.from_addr_line_1)
-        if trade.from_addr_line_2:
-            from_addr.append(trade.from_addr_line_2)
-        if trade.from_gst:
-            from_addr.append(f'GSTIN/UIN: {trade.from_gst}')
-        # Extract state from address
-        if 'Maharashtra' in (trade.from_addr_line_2 or ''):
-            from_addr.append('State Name : Maharashtra, Code : 27')
-        # Add contact if available
-        if hasattr(from_company, 'phone') and from_company.phone:
-            from_addr.append(f'Contact : {from_company.phone}')
-
+    # Header table (Buyer info + Invoice details)
     to_addr = []
-    to_company = trade.to_company
     if to_company:
         to_addr.append(f'<b>{to_company.name}</b>')
         if trade.to_addr_line_1:
@@ -208,21 +191,38 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         if trade.to_addr_line_2:
             to_addr.append(trade.to_addr_line_2)
         if trade.to_gst:
-            to_addr.append(f'GSTIN/UIN       : {trade.to_gst}')
-        if trade.to_pan:
-            to_addr.append(f'PAN/IT No        : {trade.to_pan}')
+            to_addr.append(f'GSTIN/UIN: {trade.to_gst}')
+        # Extract state from address
+        if 'Maharashtra' in (trade.to_addr_line_2 or ''):
+            to_addr.append('State Name : Maharashtra, Code : 27')
+        # Add contact if available
+        if hasattr(to_company, 'phone') and to_company.phone:
+            to_addr.append(f'Contact : {to_company.phone}')
+
+    from_addr = []
+    from_company = trade.from_company
+    if from_company:
+        from_addr.append(f'<b>{from_company.name}</b>')
+        if trade.from_addr_line_1:
+            from_addr.append(trade.from_addr_line_1)
+        if trade.from_addr_line_2:
+            from_addr.append(trade.from_addr_line_2)
+        if trade.from_gst:
+            from_addr.append(f'GSTIN/UIN       : {trade.from_gst}')
+        if trade.from_pan:
+            from_addr.append(f'PAN/IT No        : {trade.from_pan}')
 
     # Format invoice date
     invoice_date_str = trade.invoice_date.strftime('%d-%b-%y') if trade.invoice_date else ''
 
     header_data = [
         [
-            Paragraph('<br/>'.join(from_addr), styles['Normal']),
+            Paragraph('<br/>'.join(to_addr), styles['Normal']),
             Paragraph(f'<b>Invoice No.</b><br/>{trade.invoice_number or ""}', styles['Normal']),
             Paragraph(f'<b>Dated</b><br/>{invoice_date_str}', styles['Normal'])
         ],
         [
-            Paragraph('<b>Buyer (Bill to)</b><br/>' + '<br/>'.join(to_addr), styles['Normal']),
+            Paragraph('<b>Seller (Bill from)</b><br/>' + '<br/>'.join(from_addr), styles['Normal']),
             '', ''
         ]
     ]
@@ -231,7 +231,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     header_table.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('SPAN', (0, 1), (-1, 1)),  # Span buyer row
+        ('SPAN', (0, 1), (-1, 1)),  # Span seller row
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('LEFTPADDING', (0, 0), (-1, -1), 5),
         ('RIGHTPADDING', (0, 0), (-1, -1), 5),
@@ -268,15 +268,13 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         ]
         col_count = 6
     elif billing_mode == 'QTY':
-        # QTY mode: Sl No | Description | HSN | CIF FC | Quantity | Rate per KG | Amount
+        # QTY mode: Sl No | Description | HSN | Quantity | Rate per KG | Amount
         header_row = [
             Paragraph('<b>Sl<br/>No.</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
             Paragraph('<b>Description of Goods</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
             Paragraph('<b>HSN/SAC</b>',
-                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>CIF FC</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
             Paragraph('<b>Quantity</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
@@ -285,7 +283,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             Paragraph('<b>Amount</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
         ]
-        col_count = 7
+        col_count = 6
     elif billing_mode == 'CIF_INR':
         # CIF mode: Sl No | Description | HSN | CIF FC | EXC RT | CIF INR | Rate % | Amount
         header_row = [
@@ -308,15 +306,13 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         ]
         col_count = 8
     else:  # FOB_INR
-        # FOB mode: Sl No | Description | HSN | CIF FC | FOB INR | Rate % | Amount
+        # FOB mode: Sl No | Description | HSN | FOB INR | Rate % | Amount
         header_row = [
             Paragraph('<b>Sl<br/>No.</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
             Paragraph('<b>Description of Goods</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
             Paragraph('<b>HSN/SAC</b>',
-                      ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
-            Paragraph('<b>CIF FC</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
             Paragraph('<b>FOB INR</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER)),
@@ -325,7 +321,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             Paragraph('<b>Amount</b>',
                       ParagraphStyle('center', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
         ]
-        col_count = 7
+        col_count = 6
 
     items_data = [header_row]
 
@@ -426,12 +422,10 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             if billing_mode == 'QTY':
                 qty_str = f"{line.qty_kg:,.3f} Kg" if line.qty_kg else "0.000 Kg"
                 total_qty += (line.qty_kg or 0)
-                total_cif_fc += (line.cif_fc or 0)
                 row = [
                     str(idx),
                     description_para,
                     '49070000',  # Always use fixed HSN code for paper/pulp products
-                    Paragraph(f"{line.cif_fc:,.2f}" if line.cif_fc else "0.00", right_align_style),
                     Paragraph(qty_str, right_align_style),
                     Paragraph(f"{line.rate_inr_per_kg:,.2f}" if line.rate_inr_per_kg else "0.00", right_align_style),
                     Paragraph(f"{amount:,.2f}", right_align_style)
@@ -451,12 +445,10 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
                 ]
             else:  # FOB_INR
                 total_fob_inr += (line.fob_inr or 0)
-                total_cif_fc += (line.cif_fc or 0)
                 row = [
                     str(idx),
                     description_para,
                     '49070000',  # Always use fixed HSN code for paper/pulp products
-                    Paragraph(f"{line.cif_fc:,.2f}" if line.cif_fc else "0.00", right_align_style),
                     Paragraph(f"{line.fob_inr:,.2f}" if line.fob_inr else "0.00", right_align_style),
                     Paragraph(f"{line.pct:.2f}" if line.pct else "0.00", right_align_style),
                     Paragraph(f"{amount:,.2f}", right_align_style)
@@ -480,7 +472,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     items_data.append(roundoff_row)
 
     # Add empty rows for spacing (min 5 rows total to keep content compact)
-    while len(items_data) < 7:  # Header + 5 rows minimum (reduced from 12 to fit on one page)
+    while len(items_data) < 7:  # Header + 5 rows minimum
         items_data.append([''] * col_count)
 
     # Add total row (dynamic based on mode)
@@ -496,14 +488,12 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     if is_incentive:
         total_row[3] = Paragraph(f"<b>{total_license_value:,.2f}</b>", bold_right_style)
     elif billing_mode == 'QTY':
-        total_row[3] = Paragraph(f"<b>{total_cif_fc:,.2f}</b>", bold_right_style)
-        total_row[4] = Paragraph(f"<b>{total_qty:,.3f} Kg</b>", bold_right_style)
+        total_row[3] = Paragraph(f"<b>{total_qty:,.3f} Kg</b>", bold_right_style)
     elif billing_mode == 'CIF_INR':
         total_row[3] = Paragraph(f"<b>{total_cif_fc:,.2f}</b>", bold_right_style)
         total_row[5] = Paragraph(f"<b>{total_cif_inr:,.2f}</b>", bold_right_style)
     else:  # FOB_INR
-        total_row[3] = Paragraph(f"<b>{total_cif_fc:,.2f}</b>", bold_right_style)
-        total_row[4] = Paragraph(f"<b>{total_fob_inr:,.2f}</b>", bold_right_style)
+        total_row[3] = Paragraph(f"<b>{total_fob_inr:,.2f}</b>", bold_right_style)
 
     total_row[-1] = Paragraph(f'<b>Rs. {rounded_total:,.2f}</b>', bold_right_style)
     items_data.append(total_row)
@@ -521,11 +511,10 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     elif billing_mode == 'QTY':
         col_widths = [
             page_width * 0.05,  # Sl No
-            page_width * 0.32,  # Description (wider for license info)
-            page_width * 0.08,  # HSN
-            page_width * 0.13,  # CIF FC
-            page_width * 0.13,  # Quantity
-            page_width * 0.14,  # Rate per KG
+            page_width * 0.40,  # Description (wider for license info)
+            page_width * 0.10,  # HSN
+            page_width * 0.15,  # Quantity
+            page_width * 0.15,  # Rate per KG
             page_width * 0.15  # Amount
         ]
     elif billing_mode == 'CIF_INR':
@@ -535,17 +524,16 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             page_width * 0.08,  # HSN
             page_width * 0.12,  # CIF FC
             page_width * 0.10,  # EXC RT
-            page_width * 0.13,  # CIF INR (increased from 0.12)
+            page_width * 0.13,  # CIF INR
             page_width * 0.10,  # Rate %
             page_width * 0.18  # Amount
         ]
     else:  # FOB_INR
         col_widths = [
             page_width * 0.05,  # Sl No
-            page_width * 0.30,  # Description
-            page_width * 0.08,  # HSN
-            page_width * 0.13,  # CIF FC
-            page_width * 0.17,  # FOB INR
+            page_width * 0.38,  # Description
+            page_width * 0.10,  # HSN
+            page_width * 0.20,  # FOB INR
             page_width * 0.10,  # Rate %
             page_width * 0.17  # Amount
         ]
@@ -579,28 +567,9 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     # Amount in words and footer
     amount_words = num_to_words_indian(rounded_total)
 
-    # Build footer text with BOE information if available
-    footer_text = f'<b>Amount Chargeable (in words)</b><br/>INR {amount_words} Only'
-
-    # Add BOE information if BOE exists
-    if trade.boe:
-        boe_number = trade.boe.bill_of_entry_number if hasattr(trade.boe, 'bill_of_entry_number') else str(trade.boe)
-        boe_date = ''
-        if hasattr(trade.boe, 'boe_date') and trade.boe.boe_date:
-            boe_date = trade.boe.boe_date.strftime('%d-%m-%Y')
-
-        boe_info = f'<br/><b>BOE:</b> {boe_number}'
-        if boe_date:
-            boe_info += f' <b>Date:</b> {boe_date}'
-        footer_text += boe_info
-
-    # Add trade remarks if available
-    if trade.remarks:
-        footer_text += f'<br/><b>Remarks:</b> {trade.remarks}'
-
     footer_data = [
         [
-            Paragraph(footer_text, styles['Normal']),
+            Paragraph(f'<b>Amount Chargeable (in words)</b><br/>INR {amount_words} Only', styles['Normal']),
             Paragraph('<b>E. & O.E</b>',
                       ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
         ]
@@ -618,12 +587,12 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     ]))
     elements.append(footer_table)
 
-    # Prepare Bank Details text
+    # Prepare Bank Details text (for seller's bank details in purchase invoice)
     bank_details_text = ''
     has_bank_details = False
     if from_company and (from_company.bank_account_number or from_company.bank_name or from_company.ifsc_code):
         has_bank_details = True
-        bank_details_text = '<b>Bank Details</b><br/>'
+        bank_details_text = '<b>Seller Bank Details</b><br/>'
         if from_company.bank_name:
             bank_details_text += f'Bank Name: {from_company.bank_name}<br/>'
         if from_company.bank_account_number:
@@ -632,62 +601,56 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             bank_details_text += f'IFSC Code: {from_company.ifsc_code}'
 
     # Combined table with Bank Details and Declaration merged
-    # Row 1: Bank Details (left) | for Company (right)
-    # Row 2: Declaration (left) | Signature (right)
-
     declaration_data = []
 
-    # First row: Bank Details
+    # First row: Bank Details (if available)
     if has_bank_details:
         declaration_data.append([
             Paragraph(bank_details_text, styles['Normal']),
-            Paragraph(f'<b>for {from_company.name if from_company else ""}</b>',
+            Paragraph(f'<b>for {to_company.name if to_company else ""}</b>',
                       ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_RIGHT))
         ])
 
     # Second row: Declaration
     left_content = Paragraph(
-        f"<b>Company's PAN        : {trade.from_pan or 'N/A'}</b><br/><br/>"
+        f"<b>Company's PAN        : {trade.to_pan or 'N/A'}</b><br/><br/>"
         "<b>Declaration</b><br/>"
         "We declare that this invoice shows the actual price of the goods described "
         "and that all particulars are true and correct.",
         styles['Normal']
     )
 
-    declaration_data.append([left_content, ''])  # Declaration (left) + Signature (right)
+    declaration_data.append([left_content, ''])
 
-    if include_signature and from_company:
+    if include_signature and to_company:
         # Add signature/stamp if requested
         sig_rows = []
 
-        # First row: Signature and Stamp side by side (removed "for Company Name" as it's now in Bank Details)
-        sig_stamp_row = []
-
-        # Try to add signature image - bigger size using full space
+        # Try to add signature image
         sig_img = None
-        if hasattr(from_company, 'signature') and from_company.signature:
+        if hasattr(to_company, 'signature') and to_company.signature:
             try:
                 import os
-                sig_path = from_company.signature.path
+                sig_path = to_company.signature.path
                 if os.path.exists(sig_path):
-                    sig_img = Image(sig_path, width=1.3 * inch, height=0.7 * inch)  # Bigger size
+                    sig_img = Image(sig_path, width=1.3 * inch, height=0.7 * inch)
             except Exception as e:
                 logger.error(f"Failed to load signature: {e}")
                 sig_img = None
 
-        # Try to add stamp image - bigger size using full space
+        # Try to add stamp image
         stamp_img = None
-        if hasattr(from_company, 'stamp') and from_company.stamp:
+        if hasattr(to_company, 'stamp') and to_company.stamp:
             try:
                 import os
                 from PIL import Image as PILImage
-                stamp_path = from_company.stamp.path
+                stamp_path = to_company.stamp.path
                 if os.path.exists(stamp_path):
                     # Get original stamp dimensions
                     pil_stamp = PILImage.open(stamp_path)
                     stamp_width, stamp_height = pil_stamp.size
 
-                    # Use original aspect ratio, max size 1.0 inch (bigger for full space)
+                    # Use original aspect ratio, max size 1.0 inch
                     max_size = 1.0 * inch
                     aspect = stamp_height / float(stamp_width)
 
@@ -705,9 +668,8 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
                 logger.error(f"Failed to load stamp: {e}")
                 stamp_img = None
 
-        # Place signature and stamp side by side with bigger sizes
+        # Place signature and stamp side by side
         if sig_img and stamp_img:
-            # Both inside, side by side - using full width of right column
             sig_stamp_table = Table([[sig_img, stamp_img]], colWidths=[1.4 * inch, 1.1 * inch])
             sig_stamp_table.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (0, 0), 'LEFT'),
@@ -722,30 +684,26 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
         elif stamp_img:
             sig_rows.append([stamp_img])
         else:
-            # No images, add spacing
             sig_rows.append([Paragraph('<br/><br/>', styles['Normal'])])
 
         # Last row: "Authorised Signatory"
         sig_rows.append([Paragraph('<b>Authorised Signatory</b>',
                                    ParagraphStyle('right', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))])
 
-        # Create signature table - use full width of right column (35% of page)
-        # Remove all internal grid lines to merge vertically
+        # Create signature table
         sig_table = Table(sig_rows, colWidths=[page_width * 0.35])
         sig_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-            ('VALIGN', (0, 0), (0, 0), 'TOP'),  # First row (for PURPLEHUB) at TOP
-            ('VALIGN', (0, 1), (0, -1), 'MIDDLE'),  # Middle rows (signature/stamp) in MIDDLE
-            ('LEFTPADDING', (0, 0), (-1, -1), 3),  # Add some padding to keep it inside
+            ('VALIGN', (0, 0), (0, 0), 'TOP'),
+            ('VALIGN', (0, 1), (0, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
             ('RIGHTPADDING', (0, 0), (-1, -1), 3),
             ('TOPPADDING', (0, 0), (-1, -1), 3),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('GRID', (0, 0), (-1, -1), 0, colors.white),  # Remove all internal lines
+            ('GRID', (0, 0), (-1, -1), 0, colors.white),
         ]))
-        # Set signature in the last row's right column
         declaration_data[-1][1] = sig_table
     else:
-        # No signature/stamp - just show spacing and Authorised Signatory (for Company already in Bank Details row)
         declaration_data[-1][1] = Paragraph(
             '<br/><br/><br/><br/><br/><br/>'
             '<b>Authorised Signatory</b>',
@@ -754,19 +712,18 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
     # Create merged table with dynamic row heights
     if has_bank_details:
-        row_heights = [0.7 * inch,
-                       1.3 * inch]  # Row 1: Bank Details (increased to fit all text), Row 2: Declaration (bigger for signature)
+        row_heights = [0.7 * inch, 1.3 * inch]
     else:
-        row_heights = [1.3 * inch]  # Only Declaration row
+        row_heights = [1.3 * inch]
 
     declaration_table = Table(declaration_data, colWidths=[page_width * 0.65, page_width * 0.35],
                               rowHeights=row_heights)
 
     # Build style based on number of rows
     style_list = [
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),  # Outer box
-        ('LINEAFTER', (0, 0), (0, -1), 0.5, colors.black),  # Vertical line between columns
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # All left cells TOP
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
+        ('LINEAFTER', (0, 0), (0, -1), 0.5, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('LEFTPADDING', (0, 0), (-1, -1), 3),
         ('RIGHTPADDING', (0, 0), (-1, -1), 3),
@@ -775,18 +732,15 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     ]
 
     if has_bank_details:
-        # Only add horizontal line below Bank Details in the LEFT column (not the right column with signature)
-        style_list.append(('LINEBELOW', (0, 0), (0, 0), 0.5, colors.black))  # Only left cell
-        # Right column of second row (signature) should be BOTTOM aligned
+        style_list.append(('LINEBELOW', (0, 0), (0, 0), 0.5, colors.black))
         style_list.append(('VALIGN', (1, 1), (1, 1), 'BOTTOM'))
     else:
-        # Right column (signature) should be BOTTOM aligned
         style_list.append(('VALIGN', (1, 0), (1, 0), 'BOTTOM'))
 
     declaration_table.setStyle(TableStyle(style_list))
     elements.append(declaration_table)
 
-    # Footer text (removed spacer to save space)
+    # Footer text
     elements.append(Paragraph(
         '<b>This is a Computer Generated Invoice</b>',
         ParagraphStyle('footer', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER)

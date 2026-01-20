@@ -1262,8 +1262,21 @@ def update_balance(sender, instance, **kwargs):
     """
     After an import item is saved, update derived balances synchronously.
     Use transaction.on_commit so the update sees committed DB state.
+
+    Guards against infinite recursion by checking if balance fields changed.
     """
     from core.scripts.calculate_balance import update_balance_values
+
+    # Prevent infinite recursion: only update if non-balance fields changed
+    update_fields = kwargs.get('update_fields')
+    if update_fields is not None:
+        balance_fields = {
+            'available_quantity', 'debited_quantity', 'allotted_quantity',
+            'allotted_value', 'debited_value', 'available_value'
+        }
+        # If ONLY balance fields were updated, skip to prevent recursion
+        if set(update_fields).issubset(balance_fields):
+            return
 
     def _job():
         try:

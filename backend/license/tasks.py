@@ -734,3 +734,158 @@ def cleanup_old_task_records():
         'cutoff_time': cutoff_time.isoformat(),
         'timestamp': datetime.now().isoformat()
     }
+
+
+@shared_task(bind=True)
+def process_ledger_file_async(self, file_content, file_name):
+    """
+    Process ledger file asynchronously, one license at a time.
+    This prevents timeouts during large file uploads.
+
+    Args:
+        file_content: Decoded CSV content (string)
+        file_name: Original filename
+
+    Returns:
+        dict with processing results
+    """
+    import csv
+    import io
+    import sys
+    from scripts.parse_ledger import parse_license_data, create_object
+
+    task_id = self.request.id
+    logger.info(f"Starting async ledger processing: task_id={task_id}, file={file_name}")
+    start_time = datetime.now()
+
+    # Increase recursion limit temporarily for this task
+    old_recursion_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(3000)
+
+    # Update task state
+    self.update_state(
+        state='PROGRESS',
+        meta={
+            'current': 0,
+            'total': 0,
+            'status': 'Parsing CSV file...',
+            'processed_licenses': [],
+            'failed_licenses': []
+        }
+    )
+
+    try:
+        # Parse CSV
+        csvfile = io.StringIO(file_content)
+        reader = csv.reader(csvfile)
+
+        # Read all rows
+        rows = []
+        for row in reader:
+            if not any(field.strip() for field in row):
+                continue
+            rows.append(row)
+
+        logger.info(f"Read {len(rows)} rows from {file_name}")
+
+        # Parse into license dictionaries
+        dict_list = parse_license_data(rows)
+        total_licenses = len(dict_list)
+
+        logger.info(f"Parsed {total_licenses} license(s) from {file_name}")
+
+        # Update state with total count
+        self.update_state(
+            state='PROGRESS',
+            meta={
+                'current': 0,
+                'total': total_licenses,
+                'status': f'Processing {total_licenses} licenses...',
+                'processed_licenses': [],
+                'failed_licenses': []
+            }
+        )
+
+        # Process licenses one by one
+        processed_licenses = []
+        failed_licenses = []
+
+        for idx, dict_data in enumerate(dict_list, start=1):
+            license_no = dict_data.get('lic_no', 'Unknown')
+            try:
+                logger.info(f"Processing license {idx}/{total_licenses}: {license_no}")
+                license_number = create_object(dict_data)
+                processed_licenses.append({
+                    'license_number': license_number,
+                    'index': idx
+                })
+
+                # Update progress
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'current': idx,
+                        'total': total_licenses,
+                        'status': f'Processed {idx}/{total_licenses} licenses',
+                        'processed_licenses': [l['license_number'] for l in processed_licenses],
+                        'failed_licenses': failed_licenses
+                    }
+                )
+
+                logger.info(f"Successfully processed license {idx}/{total_licenses}: {license_number}")
+
+            except RecursionError as rec_error:
+                error_msg = f"Recursion error (maximum depth exceeded)"
+                failed_licenses.append({
+                    'index': idx,
+                    'error': error_msg,
+                    'license_data': license_no
+                })
+                logger.error(f"RecursionError for license {license_no} at index {idx}: {error_msg}", exc_info=True)
+                # Continue processing other licenses
+
+            except Exception as license_error:
+                error_msg = str(license_error)
+                failed_licenses.append({
+                    'index': idx,
+                    'error': error_msg,
+                    'license_data': license_no
+                })
+                logger.error(f"Error creating license {license_no} at index {idx}: {error_msg}", exc_info=True)
+                # Continue processing other licenses
+
+        elapsed = (datetime.now() - start_time).total_seconds()
+
+        result = {
+            'status': 'SUCCESS',
+            'file_name': file_name,
+            'total_licenses': total_licenses,
+            'processed_count': len(processed_licenses),
+            'failed_count': len(failed_licenses),
+            'processed_licenses': [l['license_number'] for l in processed_licenses],
+            'failed_licenses': failed_licenses,
+            'elapsed_seconds': elapsed,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        logger.info(f"Ledger processing complete: {result}")
+        return result
+
+    except Exception as e:
+        error_msg = f"Failed to process ledger file: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+
+        # Update state to FAILURE
+        self.update_state(
+            state='FAILURE',
+            meta={
+                'error': str(e),
+                'exc_type': type(e).__name__
+            }
+        )
+
+        # Re-raise to mark task as failed
+        raise
+    finally:
+        # Restore original recursion limit
+        sys.setrecursionlimit(old_recursion_limit)

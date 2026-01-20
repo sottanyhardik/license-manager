@@ -95,8 +95,19 @@ def parse_license_data(rows):
     return dict_list
 
 
-def bulk_get_or_create_license_items(type_credit_list, license):
-    """Bulk create or update license import items."""
+def bulk_get_or_create_license_items(type_credit_list, license, skip_signals=False):
+    """
+    Bulk create or update license import items.
+
+    Args:
+        type_credit_list: List of credit transactions
+        license: License object
+        skip_signals: If True, temporarily disable post_save signals during bulk operations
+    """
+    from django.db.models.signals import post_save, post_delete
+    from license.models import update_balance
+    from license.signals import update_license_on_import_item_change, update_license_on_import_item_delete
+
     license_import_list = [
         LicenseImportItemsModel(
             license=license,
@@ -107,6 +118,7 @@ def bulk_get_or_create_license_items(type_credit_list, license):
         )
         for item in type_credit_list
     ]
+
     with transaction.atomic():
         existing_items = LicenseImportItemsModel.objects.filter(
             Q(license=license) &
@@ -124,8 +136,23 @@ def bulk_get_or_create_license_items(type_credit_list, license):
                 update_item.cif_fc = item.cif_fc
                 update_item.cif_inr = item.cif_inr
                 update_items.append(update_item)
-        LicenseImportItemsModel.objects.bulk_create(new_items)
-        LicenseImportItemsModel.objects.bulk_update(update_items, ['quantity', 'cif_fc', 'cif_inr'])
+
+        # Disable signals if requested (for bulk ledger upload)
+        if skip_signals:
+            post_save.disconnect(update_balance, sender=LicenseImportItemsModel)
+            post_save.disconnect(update_license_on_import_item_change, sender=LicenseImportItemsModel)
+            post_delete.disconnect(update_license_on_import_item_delete, sender=LicenseImportItemsModel)
+
+        try:
+            LicenseImportItemsModel.objects.bulk_create(new_items)
+            LicenseImportItemsModel.objects.bulk_update(update_items, ['quantity', 'cif_fc', 'cif_inr'])
+        finally:
+            # Re-enable signals
+            if skip_signals:
+                post_save.connect(update_balance, sender=LicenseImportItemsModel)
+                post_save.connect(update_license_on_import_item_change, sender=LicenseImportItemsModel)
+                post_delete.connect(update_license_on_import_item_delete, sender=LicenseImportItemsModel)
+
         existing_items = LicenseImportItemsModel.objects.filter(
             Q(license=license) &
             Q(serial_number__in=[item.serial_number for item in license_import_list])
@@ -192,8 +219,17 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
     }
 
 
-def bulk_get_or_create_boe(boe_row):
-    """Bulk create or update BOE row details."""
+def bulk_get_or_create_boe(boe_row, skip_signals=False):
+    """
+    Bulk create or update BOE row details.
+
+    Args:
+        boe_row: List of row data to process
+        skip_signals: If True, temporarily disable post_save signals during bulk operations
+    """
+    from django.db.models.signals import post_save, post_delete
+    from bill_of_entry.models import update_stock, delete_stock
+
     row_details_list = [
         RowDetails(
             bill_of_entry=item['boe'],
@@ -204,6 +240,7 @@ def bulk_get_or_create_boe(boe_row):
             qty=item['qty']
         ) for item in boe_row
     ]
+
     with transaction.atomic():
         existing_rows = RowDetails.objects.filter(
             Q(bill_of_entry__in=[row.bill_of_entry for row in row_details_list]),
@@ -226,8 +263,20 @@ def bulk_get_or_create_boe(boe_row):
                 update_row.cif_fc = row.cif_fc
                 update_row.qty = row.qty
                 update_rows.append(update_row)
-        RowDetails.objects.bulk_create(new_rows)
-        RowDetails.objects.bulk_update(update_rows, ['cif_inr', 'cif_fc', 'qty'])
+
+        # Disable signals if requested (for bulk ledger upload)
+        if skip_signals:
+            post_save.disconnect(update_stock, sender=RowDetails, dispatch_uid="update_stock_on_save")
+            post_delete.disconnect(delete_stock, sender=RowDetails)
+
+        try:
+            RowDetails.objects.bulk_create(new_rows)
+            RowDetails.objects.bulk_update(update_rows, ['cif_inr', 'cif_fc', 'qty'])
+        finally:
+            # Re-enable signals
+            if skip_signals:
+                post_save.connect(update_stock, sender=RowDetails, dispatch_uid="update_stock_on_save")
+                post_delete.connect(delete_stock, sender=RowDetails)
 
 
 def create_object(data_dict):
@@ -285,8 +334,8 @@ def create_object(data_dict):
         elif data['type'] == 'D':
             type_debit_list.append(data)
 
-    # Create license items
-    license_sr_dict = bulk_get_or_create_license_items(type_credit_list, license)
+    # Create license items (disable signals during bulk operations)
+    license_sr_dict = bulk_get_or_create_license_items(type_credit_list, license, skip_signals=True)
     existing_entry_map = bulk_get_or_create_boe_details(type_debit_list, existing_ports)
 
     # Create row details
@@ -302,10 +351,11 @@ def create_object(data_dict):
             data['boe'] = None
             credit_row.append(data)
 
-    bulk_get_or_create_boe(debit_row)
-    bulk_get_or_create_boe(credit_row)
+    # Disable signals during bulk operations to avoid firing 100+ times
+    bulk_get_or_create_boe(debit_row, skip_signals=True)
+    bulk_get_or_create_boe(credit_row, skip_signals=True)
 
-    # Trigger balance updates (synchronous for faster response)
+    # Trigger balance updates ONCE at the end for all items
     for import_item in license.import_license.all():
         update_balance_values(import_item)
 

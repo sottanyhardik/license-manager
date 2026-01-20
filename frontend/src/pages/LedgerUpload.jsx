@@ -1,7 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFileUpload } from '../hooks';
+import axios from 'axios';
 
 const LedgerUpload = () => {
+  const [asyncTasks, setAsyncTasks] = useState([]);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [useAsyncMode, setUseAsyncMode] = useState(true);
+
   const {
     files,
     uploading,
@@ -12,26 +18,219 @@ const LedgerUpload = () => {
     handleDrag,
     handleDrop,
     handleFileChange,
-    handleUpload,
+    handleUpload: originalHandleUpload,
     formatFileSize,
     removeFile,
     clearFiles,
   } = useFileUpload({
     endpoint: '/upload-ledger/',
     fileFieldName: 'ledger',
-    uploadMode: 'sequential', // Send files one by one
+    uploadMode: 'sequential',
     multiple: true,
     accept: '.csv',
     maxFileSize: 50 * 1024 * 1024, // 50MB
-    timeout: 300000, // 5 minutes
+    timeout: 300000,
     onSuccess: (results) => {
-      // Clear file input after successful upload
       const fileInput = document.getElementById('file-input');
       if (fileInput && results.some(r => r.success)) {
         fileInput.value = '';
       }
     },
   });
+
+  // Handle async upload with task tracking
+  const handleAsyncUpload = async () => {
+    if (files.length === 0) return;
+
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('ledger', file);
+    });
+    formData.append('async', 'true');
+
+    try {
+      const response = await axios.post('/api/upload-ledger/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (response.data.tasks) {
+        setAsyncTasks(response.data.tasks);
+        setShowTaskModal(true);
+        clearFiles();
+        document.getElementById('file-input').value = '';
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+    }
+  };
+
+  const handleUpload = () => {
+    if (useAsyncMode) {
+      handleAsyncUpload();
+    } else {
+      originalHandleUpload();
+    }
+  };
+
+  // Task Status Modal Component
+  const TaskStatusModal = ({ tasks, show, onHide }) => {
+    const [taskStatuses, setTaskStatuses] = useState({});
+
+    useEffect(() => {
+      if (!show || tasks.length === 0) return;
+
+      const intervals = tasks.map((task) => {
+        return setInterval(async () => {
+          try {
+            const response = await axios.get(`/api/ledger-task-status/${task.task_id}/`);
+            setTaskStatuses((prev) => ({
+              ...prev,
+              [task.task_id]: response.data,
+            }));
+
+            // Stop polling if task is complete
+            if (response.data.state === 'SUCCESS' || response.data.state === 'FAILURE') {
+              clearInterval(intervals.find(i => i === interval));
+            }
+          } catch (err) {
+            console.error('Error fetching task status:', err);
+          }
+        }, 2000); // Poll every 2 seconds
+      });
+
+      return () => {
+        intervals.forEach(clearInterval);
+      };
+    }, [tasks, show]);
+
+    if (!show) return null;
+
+    return (
+      <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal-dialog modal-lg modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">
+                <i className="bi bi-gear-fill me-2 spinner-border spinner-border-sm"></i>
+                Processing Ledger Files
+              </h5>
+              <button type="button" className="btn-close" onClick={onHide}></button>
+            </div>
+            <div className="modal-body">
+              {tasks.map((task) => {
+                const status = taskStatuses[task.task_id];
+                const isComplete = status?.state === 'SUCCESS';
+                const isFailed = status?.state === 'FAILURE';
+                const isProgress = status?.state === 'PROGRESS';
+
+                return (
+                  <div key={task.task_id} className="card mb-3">
+                    <div className="card-body">
+                      <div className="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                          <h6 className="mb-1">
+                            <i className="bi bi-file-earmark-text me-2"></i>
+                            {task.file}
+                          </h6>
+                          <small className="text-muted">Task ID: {task.task_id}</small>
+                        </div>
+                        <span className={`badge ${
+                          isComplete ? 'bg-success' :
+                          isFailed ? 'bg-danger' :
+                          'bg-primary'
+                        }`}>
+                          {status?.state || 'QUEUED'}
+                        </span>
+                      </div>
+
+                      {isProgress && status && (
+                        <>
+                          <div className="progress mb-2" style={{ height: '20px' }}>
+                            <div
+                              className="progress-bar progress-bar-striped progress-bar-animated"
+                              style={{
+                                width: `${(status.current / status.total) * 100}%`
+                              }}
+                            >
+                              {status.current} / {status.total}
+                            </div>
+                          </div>
+                          <p className="mb-2 small text-muted">{status.status}</p>
+
+                          {status.processed_licenses?.length > 0 && (
+                            <div className="mb-2">
+                              <small className="fw-bold">Processed Licenses ({status.processed_licenses.length}):</small>
+                              <div className="d-flex flex-wrap gap-1 mt-1">
+                                {status.processed_licenses.slice(-5).map((license, idx) => (
+                                  <span key={idx} className="badge bg-success bg-opacity-75">
+                                    {license}
+                                  </span>
+                                ))}
+                                {status.processed_licenses.length > 5 && (
+                                  <span className="badge bg-secondary">
+                                    +{status.processed_licenses.length - 5} more
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {status.failed_licenses?.length > 0 && (
+                            <div className="alert alert-danger alert-sm mb-0">
+                              <small className="fw-bold">Failed: {status.failed_licenses.length}</small>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {isComplete && status?.result && (
+                        <div className="alert alert-success mb-0">
+                          <div className="d-flex justify-content-between align-items-center">
+                            <div>
+                              <i className="bi bi-check-circle-fill me-2"></i>
+                              <strong>Completed Successfully</strong>
+                            </div>
+                            <span className="badge bg-success">
+                              {status.result.processed_count} licenses
+                            </span>
+                          </div>
+                          {status.result.failed_count > 0 && (
+                            <div className="mt-2 text-warning">
+                              <i className="bi bi-exclamation-triangle me-1"></i>
+                              {status.result.failed_count} license(s) failed
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {isFailed && status && (
+                        <div className="alert alert-danger mb-0">
+                          <i className="bi bi-x-circle-fill me-2"></i>
+                          <strong>Failed:</strong> {status.error}
+                        </div>
+                      )}
+
+                      {!status && (
+                        <div className="text-muted">
+                          <i className="bi bi-hourglass-split me-2"></i>
+                          Waiting to start...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={onHide}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="container-fluid p-4">
@@ -44,7 +243,27 @@ const LedgerUpload = () => {
           </h4>
           <p className="text-muted mb-0">Upload DFIA license ledger files in CSV format</p>
         </div>
+        <div className="form-check form-switch">
+          <input
+            className="form-check-input"
+            type="checkbox"
+            id="asyncModeSwitch"
+            checked={useAsyncMode}
+            onChange={(e) => setUseAsyncMode(e.target.checked)}
+          />
+          <label className="form-check-label" htmlFor="asyncModeSwitch">
+            <i className="bi bi-lightning-charge-fill me-1"></i>
+            Async Mode {useAsyncMode ? '(No Timeout)' : '(May Timeout)'}
+          </label>
+        </div>
       </div>
+
+      {/* Task Status Modal */}
+      <TaskStatusModal
+        tasks={asyncTasks}
+        show={showTaskModal}
+        onHide={() => setShowTaskModal(false)}
+      />
 
       <div className="row g-3">
         {/* Main Upload Card */}

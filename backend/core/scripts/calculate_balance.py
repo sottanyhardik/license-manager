@@ -91,8 +91,10 @@ def calculate_allotted_value(instance, agg_values=None):
 
 def calculate_available_value(instance):
     from license.models import LicenseImportItemsModel
+    from license.services.balance_calculator import LicenseBalanceCalculator
 
-    available_value = instance.license.get_balance_cif
+    # Use the centralized calculator directly to avoid recursion through properties
+    available_value = LicenseBalanceCalculator.calculate_balance(instance.license)
     balance_value = available_value
 
     # Business Logic: If all items OTHER THAN serial_number = 1 have CIF = 0,
@@ -111,7 +113,7 @@ def calculate_available_value(instance):
 
         # If all other items have zero CIF, and this is serial_number 1
         if all_others_zero_cif and instance.serial_number == 1:
-            # Return the license's balance_cif
+            # Return the license's balance_cif (use stored value to avoid recursion)
             return round(float(instance.license.balance_cif or 0), 2)
 
     # NOTE: This logic is now handled by available_value_calculated property in the model
@@ -154,8 +156,12 @@ def update_balance_values(item):
         is_changed = True
 
     # If any values have been changed, save the item
+    # Use update_fields to only save changed fields and avoid triggering full model validation
     if is_changed:
-        item.save()
+        item.save(update_fields=[
+            'available_quantity', 'debited_quantity', 'allotted_quantity',
+            'allotted_value', 'debited_value', 'available_value'
+        ])
 
     # Check and update license is_null if balance_cif < 100
     if item.license:

@@ -346,16 +346,21 @@ def add_grouped_export_action(viewset_class):
             company_total_inr = 0
             company_total_fc = 0
 
-            # Process each license serial within company
+            # Merge all products into a single table (group by product name only, ignore license serial)
+            merged_products = defaultdict(lambda: defaultdict(list))
             for license_serial, products_dict in license_dict.items():
-                # Process each product (Item) within license
                 for product_name, ports_dict in products_dict.items():
-                    # Product subheader
-                    ws.merge_cells(f'A{row}:R{row}')
-                    cell = ws[f'A{row}']
-                    cell.value = f"Item: {product_name}"
-                    cell.font = Font(bold=True, size=11, color="3b82f6")
-                    row += 1
+                    for port_code, boe_list in ports_dict.items():
+                        merged_products[product_name][port_code].extend(boe_list)
+
+            # Process each product (Item) within company
+            for product_name, ports_dict in merged_products.items():
+                # Product subheader
+                ws.merge_cells(f'A{row}:S{row}')
+                cell = ws[f'A{row}']
+                cell.value = f"Item: {product_name}"
+                cell.font = Font(bold=True, size=11, color="3b82f6")
+                row += 1
 
                 # Table headers (18 columns - added Exporter and Exchange Rate)
                 headers = ['Sr No', 'BOE Number', 'BOE Date', 'Port', 'Quantity (KGS)', 'Unit Price ($)', 'Value ($)',
@@ -409,8 +414,9 @@ def add_grouped_export_action(viewset_class):
                             for col_idx, value in enumerate(data, 1):
                                 cell = ws.cell(row=row, column=col_idx, value=value)
                                 cell.border = border
-                                cell.alignment = Alignment(horizontal='center', vertical='center')
-                                if col_idx in [5, 6, 7, 8, 9, 17, 18, 19]:  # Number columns (updated indices)
+                                if col_idx == 12:  # Exporter column - wrap text and top align
+                                    cell.alignment = Alignment(horizontal='center', vertical='top', wrap_text=True)
+                                elif col_idx in [5, 6, 7, 8, 9, 17, 18, 19]:  # Number columns (updated indices)
                                     cell.alignment = Alignment(horizontal='right', vertical='center')
                                     if col_idx in [6, 7, 18]:  # USD columns
                                         cell.number_format = '#,##0.00'
@@ -418,6 +424,14 @@ def add_grouped_export_action(viewset_class):
                                         cell.number_format = '₹#,##0.00'
                                     elif col_idx == 8:  # Exchange Rate column
                                         cell.number_format = '#,##0.00'
+                                else:
+                                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                            # Set row height based on exporter name length
+                            exporter_name = first_detail['exporter_name']
+                            if exporter_name and len(exporter_name) > 20:
+                                ws.row_dimensions[row].height = max(30, len(exporter_name) / 2)
+
                             row += 1
 
                             # Additional license detail rows
@@ -438,11 +452,20 @@ def add_grouped_export_action(viewset_class):
                                 for col_idx, value in enumerate(data, 1):
                                     cell = ws.cell(row=row, column=col_idx, value=value)
                                     cell.border = border
-                                    cell.alignment = Alignment(horizontal='center', vertical='center')
-                                    if col_idx in [17, 18, 19]:  # Updated column indices
+                                    if col_idx == 12:  # Exporter column - wrap text and top align
+                                        cell.alignment = Alignment(horizontal='center', vertical='top', wrap_text=True)
+                                    elif col_idx in [17, 18, 19]:  # Updated column indices
                                         cell.alignment = Alignment(horizontal='right', vertical='center')
                                         if col_idx in [18, 19]:  # Updated column indices
                                             cell.number_format = '#,##0.00'
+                                    else:
+                                        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                                # Set row height for additional detail rows with long exporter names
+                                exporter_name_detail = detail['exporter_name']
+                                if exporter_name_detail and len(exporter_name_detail) > 20:
+                                    ws.row_dimensions[row].height = max(30, len(exporter_name_detail) / 2)
+
                                 row += 1
 
                         sr_no += 1
@@ -455,12 +478,12 @@ def add_grouped_export_action(viewset_class):
 
                 # Product totals
                 ws.cell(row=row, column=3, value="Total").font = Font(bold=True)
-                ws.cell(row=row, column=4, value=int(product_total_qty)).font = Font(bold=True)
-                ws.cell(row=row, column=4).number_format = '#,##0'
-                ws.cell(row=row, column=6, value=round(product_total_value, 2)).font = Font(bold=True)
-                ws.cell(row=row, column=6).number_format = '#,##0.00'
-                ws.cell(row=row, column=7, value=round(product_total_inr, 2)).font = Font(bold=True)
-                ws.cell(row=row, column=7).number_format = '₹#,##0.00'
+                ws.cell(row=row, column=5, value=int(product_total_qty)).font = Font(bold=True)
+                ws.cell(row=row, column=5).number_format = '#,##0'
+                ws.cell(row=row, column=7, value=round(product_total_value, 2)).font = Font(bold=True)
+                ws.cell(row=row, column=7).number_format = '#,##0.00'
+                ws.cell(row=row, column=9, value=round(product_total_inr, 2)).font = Font(bold=True)
+                ws.cell(row=row, column=9).number_format = '₹#,##0.00'
                 row += 2
 
             # Add grand total after all products
@@ -470,15 +493,15 @@ def add_grouped_export_action(viewset_class):
             cell.fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
-            ws.cell(row=row, column=4, value=int(company_total_qty)).font = Font(bold=True, size=11)
-            ws.cell(row=row, column=4).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
-            ws.cell(row=row, column=4).alignment = Alignment(horizontal='right', vertical='center')
-            ws.cell(row=row, column=4).number_format = '#,##0'
+            ws.cell(row=row, column=5, value=int(company_total_qty)).font = Font(bold=True, size=11)
+            ws.cell(row=row, column=5).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
+            ws.cell(row=row, column=5).alignment = Alignment(horizontal='right', vertical='center')
+            ws.cell(row=row, column=5).number_format = '#,##0'
 
-            ws.cell(row=row, column=6, value=round(company_total_fc, 2)).font = Font(bold=True, size=11)
-            ws.cell(row=row, column=6).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
-            ws.cell(row=row, column=6).alignment = Alignment(horizontal='right', vertical='center')
-            ws.cell(row=row, column=6).number_format = '#,##0.00'
+            ws.cell(row=row, column=7, value=round(company_total_fc, 2)).font = Font(bold=True, size=11)
+            ws.cell(row=row, column=7).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
+            ws.cell(row=row, column=7).alignment = Alignment(horizontal='right', vertical='center')
+            ws.cell(row=row, column=7).number_format = '#,##0.00'
 
             ws.merge_cells(f'H{row}:I{row}')
             cell = ws.cell(row=row, column=8, value=f"CIF INR: ₹{company_total_inr:,.2f}")

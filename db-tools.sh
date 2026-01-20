@@ -310,6 +310,10 @@ sync_db() {
     cd ..
     print_success "Migrations complete"
 
+    print_info "Removing TL_ALLOT_* and TL_BOE_* files/folders from remote server..."
+    ssh $REMOTE_SERVER "cd /home/django/license-manager/backend/media && rm -rf TL_ALLOT_*.zip TL_ALLOT_*/ TL_BOE_*.zip TL_BOE_*/"
+    print_success "TL_ALLOT_* and TL_BOE_* files/folders removed from server"
+
     print_info "Syncing media files..."
     rsync -avz --delete $REMOTE_SERVER:/home/django/license-manager/backend/media/ ./backend/media/
 

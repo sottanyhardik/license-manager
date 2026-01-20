@@ -208,7 +208,7 @@ class ItemPivotReportView(View):
                     # For conversion licenses in E1, E5, E126, E132
                     if norm_class == 'E5':
                         # E5 Conversion: split by Parle vs Others
-                        exporter_name = license_obj.exporter.name if license_obj.exporter else ''
+                        exporter_name = (license_obj.exporter.name or '') if license_obj.exporter else ''
                         if 'PARLE' in exporter_name.upper():
                             notification_key = f"{notification} - Conversion - Parle"
                         else:
@@ -219,7 +219,7 @@ class ItemPivotReportView(View):
 
                 elif norm_class == 'E5':
                     # E5 non-conversion: split by Parle vs Others
-                    exporter_name = license_obj.exporter.name if license_obj.exporter else ''
+                    exporter_name = (license_obj.exporter.name or '') if license_obj.exporter else ''
                     if 'PARLE' in exporter_name.upper():
                         notification_key = f"{notification} - Parle"
                     else:

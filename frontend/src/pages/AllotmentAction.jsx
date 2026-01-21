@@ -5,6 +5,7 @@ import Select from "react-select";
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import TransferLetterForm from "../components/TransferLetterForm";
+import {useBackButton} from "../hooks/useBackButton";
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
     const {id: paramId} = useParams();
@@ -51,6 +52,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [deletingItems, setDeletingItems] = useState({});
+
+    // Enable browser back button support with filter preservation
+    useBackButton('allotments', !isModal);
 
     useEffect(() => {
         fetchNotificationOptions();

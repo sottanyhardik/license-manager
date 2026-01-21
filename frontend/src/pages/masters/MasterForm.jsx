@@ -9,6 +9,8 @@ import "react-datepicker/dist/react-datepicker.css";
 import {markNewItemCreated} from "../../utils/filterPersistence";
 import {formatDateForInput} from "../../utils/dateFormatter";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
+import {navigateToList} from "../../utils/navigationUtils";
+import {useBackButton} from "../../hooks/useBackButton";
 
 /**
  * Generic Master Form for Create/Edit
@@ -48,6 +50,9 @@ export default function MasterForm({
     const [updatedFields, setUpdatedFields] = useState({}); // Track updated fields for highlighting
     const [showBalanceModal, setShowBalanceModal] = useState(false); // License balance modal state
     const [savedLicenseId, setSavedLicenseId] = useState(null); // Store saved license ID for modal
+
+    // Enable browser back button support with filter preservation
+    useBackButton(entityName, !isModal);
 
     // Helper function to parse date from YYYY-MM-DD to Date object
     const parseDate = (dateString) => {
@@ -1335,29 +1340,14 @@ export default function MasterForm({
                                                 return;
                                             }
 
-                                            // Set flag to restore filters when canceling
-                                            sessionStorage.setItem('allotmentListFilters', JSON.stringify({
-                                                returnTo: 'list',
-                                                timestamp: new Date().getTime()
-                                            }));
-
-                                            if (entityName === 'licenses') {
-                                                navigate('/licenses');
-                                            } else if (entityName === 'allotments') {
-                                                navigate('/allotments');
-                                            } else if (entityName === 'bill-of-entries') {
-                                                navigate('/bill-of-entries');
-                                            } else if (entityName === 'trades') {
-                                                navigate('/trades');
-                                            } else {
-                                                navigate(`/masters/${entityName}`);
-                                            }
+                                            // Navigate back to list with filter restoration
+                                            navigateToList(navigate, entityName, { preserveFilters: true });
                                         }}
                                         disabled={saving}
                                         style={{ padding: '12px 24px', fontWeight: '500' }}
                                     >
-                                        <i className="bi bi-x-circle me-2"></i>
-                                        Cancel
+                                        <i className="bi bi-arrow-left me-2"></i>
+                                        Back to List
                                     </button>
                                 </div>
                             </form>

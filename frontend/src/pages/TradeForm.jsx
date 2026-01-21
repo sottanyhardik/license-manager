@@ -7,6 +7,8 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import {formatDateForInput} from "../utils/dateFormatter";
 import TransferLetterModal from "../components/TransferLetterModal";
+import {navigateToList} from "../utils/navigationUtils";
+import {useBackButton} from "../hooks/useBackButton";
 
 export default function TradeForm() {
     const { id } = useParams();
@@ -35,6 +37,9 @@ export default function TradeForm() {
     const [fieldErrors, setFieldErrors] = useState({});
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
     const isInitialLoadRef = useRef(true);
+
+    // Enable browser back button support with filter preservation
+    useBackButton('trades');
 
     // Helper function to format Date object to YYYY-MM-DD for API
     const formatDateForAPI = (date) => {
@@ -1528,9 +1533,10 @@ export default function TradeForm() {
                     <button
                         type="button"
                         className="btn btn-secondary"
-                        onClick={() => navigate("/trades")}
+                        onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}
                     >
-                        Cancel
+                        <i className="bi bi-arrow-left me-2"></i>
+                        Back to Trades
                     </button>
                     {isEdit && (
                         <>

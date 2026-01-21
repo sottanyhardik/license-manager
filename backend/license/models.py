@@ -1020,9 +1020,12 @@ class LicenseImportItemsModel(models.Model):
 
         Business Logic:
         1. If cif_inr is 0.01: Return 0.01 directly (special marker value)
-        2. If is_restricted=True OR items have restriction_percentage > 0: Calculate based on item's restriction (2%, 3%, 5%, 10% etc.)
+        2. If is_restricted=True: Calculate based on item's restriction (2%, 3%, 5%, 10% etc.)
            Formula: (License Export CIF × restriction_percentage / 100) - (debits + allotments for this restriction)
         3. Otherwise: Use license.balance_cif (shared across all non-restricted items)
+
+        IMPORTANT: The is_restricted flag is authoritative. If is_restricted=False, always use license balance
+        even if linked items have restriction_percentage > 0.
 
         This property should be used EVERYWHERE in the project:
         - Frontend display
@@ -1040,14 +1043,10 @@ class LicenseImportItemsModel(models.Model):
         if self.cif_inr == Decimal("0.01") or self.cif_fc == Decimal("0.01"):
             return Decimal("0.01")
 
-        # Check if this import item has any linked items with restrictions
-        has_item_restrictions = self.items.filter(
-            sion_norm_class__isnull=False,
-            restriction_percentage__gt=DEC_0
-        ).exists()
-
-        # Use restriction calculation if is_restricted=True OR items have restrictions
-        if self.is_restricted or has_item_restrictions:
+        # Use restriction calculation ONLY if is_restricted=True
+        # The is_restricted flag is the authoritative source - if it's False,
+        # use license balance even if linked items have restrictions
+        if self.is_restricted:
             # Use restriction-based calculation
             restriction_balance = self._calculate_head_restriction_balance()
             # Only return restriction balance if it's valid (>= 0)

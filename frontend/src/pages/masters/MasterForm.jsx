@@ -471,11 +471,203 @@ export default function MasterForm({
         }
     };
 
+    // Frontend validation function
+    const validateForm = () => {
+        const errors = {};
+        const requiredFields = [];
+
+        // Collect required fields from metadata
+        if (metadata.form_fields) {
+            metadata.form_fields.forEach(fieldName => {
+                const fieldMeta = metadata.field_meta?.[fieldName] || {};
+                if (fieldMeta.required) {
+                    requiredFields.push({
+                        name: fieldName,
+                        label: fieldMeta.label || fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                    });
+                }
+            });
+        }
+
+        // Validate required fields
+        requiredFields.forEach(field => {
+            const value = formData[field.name];
+            if (value === null || value === undefined || value === '') {
+                errors[field.name] = [`${field.label} is required`];
+            }
+        });
+
+        // License-specific validations
+        if (entityName === 'licenses') {
+            // Validate license number format
+            if (formData.license_number && !/^[A-Z0-9/-]+$/.test(formData.license_number)) {
+                errors.license_number = ['License number can only contain uppercase letters, numbers, hyphens, and slashes'];
+            }
+
+            // Validate dates
+            if (formData.license_date && formData.license_expiry_date) {
+                const licenseDate = new Date(formData.license_date);
+                const expiryDate = new Date(formData.license_expiry_date);
+                if (expiryDate <= licenseDate) {
+                    errors.license_expiry_date = ['Expiry date must be after license date'];
+                }
+            }
+
+            // Validate export items
+            if (formData.export_license && Array.isArray(formData.export_license)) {
+                const exportErrors = [];
+                formData.export_license.forEach((item, index) => {
+                    const itemErrors = {};
+
+                    if (!item.hs_code) {
+                        itemErrors.hs_code = ['HS Code is required'];
+                    }
+                    if (!item.description || item.description.trim() === '') {
+                        itemErrors.description = ['Description is required'];
+                    }
+                    if (!item.net_quantity || parseFloat(item.net_quantity) <= 0) {
+                        itemErrors.net_quantity = ['Net quantity must be greater than 0'];
+                    }
+                    if (!item.unit) {
+                        itemErrors.unit = ['Unit is required'];
+                    }
+
+                    if (Object.keys(itemErrors).length > 0) {
+                        exportErrors[index] = itemErrors;
+                    }
+                });
+                if (exportErrors.length > 0) {
+                    errors.export_license = exportErrors;
+                }
+            }
+
+            // Validate import items
+            if (formData.import_license && Array.isArray(formData.import_license)) {
+                const importErrors = [];
+                formData.import_license.forEach((item, index) => {
+                    const itemErrors = {};
+
+                    if (!item.hs_code) {
+                        itemErrors.hs_code = ['HS Code is required'];
+                    }
+                    if (!item.description || item.description.trim() === '') {
+                        itemErrors.description = ['Description is required'];
+                    }
+                    if (!item.serial_number && item.serial_number !== 0) {
+                        itemErrors.serial_number = ['Serial number is required'];
+                    }
+                    if (!item.unit) {
+                        itemErrors.unit = ['Unit is required'];
+                    }
+
+                    if (Object.keys(itemErrors).length > 0) {
+                        importErrors[index] = itemErrors;
+                    }
+                });
+                if (importErrors.length > 0) {
+                    errors.import_license = importErrors;
+                }
+            }
+
+            // Validate documents (if adding new ones)
+            if (formData.license_documents && Array.isArray(formData.license_documents)) {
+                const docErrors = [];
+                formData.license_documents.forEach((doc, index) => {
+                    const itemErrors = {};
+
+                    // Only validate if file is provided (new document)
+                    if (doc.file && doc.file instanceof File) {
+                        if (!doc.type || doc.type.trim() === '') {
+                            itemErrors.type = ['Document type is required'];
+                        }
+                    }
+
+                    if (Object.keys(itemErrors).length > 0) {
+                        docErrors[index] = itemErrors;
+                    }
+                });
+                if (docErrors.length > 0) {
+                    errors.license_documents = docErrors;
+                }
+            }
+        }
+
+        return errors;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSaving(true);
         setError("");
         setFieldErrors({});
+
+        // Frontend validation
+        const validationErrors = validateForm();
+        if (Object.keys(validationErrors).length > 0) {
+            setFieldErrors(validationErrors);
+
+            // Build user-friendly error messages
+            const errorMessages = [];
+            const fieldNameMap = {
+                'license_number': 'License Number',
+                'license_date': 'License Date',
+                'license_expiry_date': 'License Expiry Date',
+                'exporter': 'Exporter',
+                'port': 'Port',
+                'export_license': 'Export Items',
+                'import_license': 'Import Items',
+                'license_documents': 'Documents',
+                'hs_code': 'HS Code',
+                'description': 'Description',
+                'quantity': 'Quantity',
+                'serial_number': 'Serial Number',
+                'type': 'Type',
+                'file': 'File',
+                'net_quantity': 'Net Quantity',
+                'norm_class': 'Norm Class',
+                'unit': 'Unit'
+            };
+
+            Object.entries(validationErrors).forEach(([field, fieldErrors]) => {
+                const friendlyName = fieldNameMap[field] || field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+                if (Array.isArray(fieldErrors)) {
+                    // Check if it's an array of error objects (nested items)
+                    if (fieldErrors.some(item => item && typeof item === 'object')) {
+                        fieldErrors.forEach((itemErrors, index) => {
+                            if (itemErrors && typeof itemErrors === 'object') {
+                                Object.entries(itemErrors).forEach(([subField, subErrors]) => {
+                                    const subName = fieldNameMap[subField] || subField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                    const message = Array.isArray(subErrors) ? subErrors.join(', ') : subErrors;
+                                    errorMessages.push(`${friendlyName} #${index + 1} - ${subName}: ${message}`);
+                                });
+                            }
+                        });
+                    } else {
+                        // Simple array of error strings
+                        errorMessages.push(`${friendlyName}: ${fieldErrors.join(', ')}`);
+                    }
+                } else if (typeof fieldErrors === 'string') {
+                    errorMessages.push(`${friendlyName}: ${fieldErrors}`);
+                }
+            });
+
+            const errorMsg = 'Please fix the following errors:\n\n' + errorMessages.join('\n');
+            setError(errorMsg);
+            toast.error('Please fix validation errors before submitting');
+
+            // Scroll to first error
+            setTimeout(() => {
+                const firstErrorField = document.querySelector('.is-invalid');
+                if (firstErrorField) {
+                    firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstErrorField.focus();
+                }
+            }, 100);
+
+            setSaving(false);
+            return;
+        }
 
         try {
             // DEBUG: Log license_documents before sending
@@ -583,6 +775,13 @@ export default function MasterForm({
                 // Use regular JSON for non-file data
                 // Clean up date fields
                 const cleanedFormData = {...formData};
+
+                // Remove audit fields (should never be sent from frontend)
+                delete cleanedFormData.created_on;
+                delete cleanedFormData.created_by;
+                delete cleanedFormData.modified_on;
+                delete cleanedFormData.modified_by;
+
                 Object.keys(cleanedFormData).forEach(key => {
                     if (key.includes('date') || key.includes('_at') || key.includes('_on')) {
                         const value = cleanedFormData[key];
@@ -670,12 +869,54 @@ export default function MasterForm({
             }
             navigate(redirectPath);
         } catch (err) {
+            console.error('Save error:', err.response?.data);
+
             // Handle field-level errors
             if (err.response?.data && typeof err.response.data === 'object') {
                 setFieldErrors(err.response.data);
 
-                // Create a user-friendly error message
+                // Create a user-friendly error message with better field names
                 const errorMessages = [];
+                const fieldNameMap = {
+                    'license_number': 'License Number',
+                    'license_date': 'License Date',
+                    'license_expiry_date': 'License Expiry Date',
+                    'exporter': 'Exporter',
+                    'port': 'Port',
+                    'export_license': 'Export Items',
+                    'import_license': 'Import Items',
+                    'license_documents': 'Documents',
+                    'hs_code': 'HS Code',
+                    'description': 'Description',
+                    'quantity': 'Quantity',
+                    'serial_number': 'Serial Number',
+                    'type': 'Type',
+                    'file': 'File',
+                    'net_quantity': 'Net Quantity',
+                    'norm_class': 'Norm Class',
+                    'unit': 'Unit',
+                    'cif_fc': 'CIF (FC)',
+                    'cif_inr': 'CIF (INR)'
+                };
+
+                // Helper function to get friendly field name
+                const getFriendlyFieldName = (fieldPath) => {
+                    // Handle nested paths like export_license[0].hs_code
+                    const match = fieldPath.match(/^(\w+)(?:\[(\d+)\])?\.?(\w+)?/);
+                    if (match) {
+                        const [, mainField, index, subField] = match;
+                        const mainName = fieldNameMap[mainField] || mainField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+                        if (index !== undefined && subField) {
+                            const subName = fieldNameMap[subField] || subField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                            return `${mainName} #${parseInt(index) + 1} - ${subName}`;
+                        } else if (index !== undefined) {
+                            return `${mainName} #${parseInt(index) + 1}`;
+                        }
+                        return mainName;
+                    }
+                    return fieldNameMap[fieldPath] || fieldPath.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                };
 
                 // Helper function to process errors recursively
                 const processErrors = (errors, fieldPath = '') => {
@@ -684,22 +925,23 @@ export default function MasterForm({
                             if (typeof error === 'object' && error !== null) {
                                 // Handle nested field errors (like license_documents[0].type)
                                 if (error.non_field_errors) {
-                                    errorMessages.push(`${fieldPath}: ${error.non_field_errors.join(', ')}`);
+                                    const friendlyName = getFriendlyFieldName(`${fieldPath}[${index}]`);
+                                    errorMessages.push(`${friendlyName}: ${error.non_field_errors.join(', ')}`);
                                 }
                                 Object.entries(error).forEach(([key, value]) => {
                                     if (key !== 'non_field_errors') {
-                                        const nestedPath = fieldPath ? `${fieldPath}[${index}].${key}` : `${key}[${index}]`;
+                                        const nestedPath = `${fieldPath}[${index}].${key}`;
                                         processErrors(value, nestedPath);
                                     }
                                 });
                             } else if (typeof error === 'string') {
-                                const displayPath = fieldPath || 'Form';
-                                errorMessages.push(`${displayPath}: ${error}`);
+                                const friendlyName = getFriendlyFieldName(fieldPath);
+                                errorMessages.push(`${friendlyName}: ${error}`);
                             }
                         });
                     } else if (typeof errors === 'string') {
-                        const displayPath = fieldPath || 'Form';
-                        errorMessages.push(`${displayPath}: ${errors}`);
+                        const friendlyName = getFriendlyFieldName(fieldPath);
+                        errorMessages.push(`${friendlyName}: ${errors}`);
                     } else if (typeof errors === 'object' && errors !== null) {
                         Object.entries(errors).forEach(([key, value]) => {
                             const nestedPath = fieldPath ? `${fieldPath}.${key}` : key;
@@ -721,10 +963,19 @@ export default function MasterForm({
                 });
 
                 const errorMsg = errorMessages.length > 0
-                    ? errorMessages.join('\n')
+                    ? 'Please fix the following errors:\n\n' + errorMessages.join('\n')
                     : "Validation errors occurred. Please check the form.";
                 setError(errorMsg);
-                toast.error(errorMsg);
+                toast.error('Validation failed. Please check the form for errors.');
+
+                // Scroll to first error
+                setTimeout(() => {
+                    const firstErrorField = document.querySelector('.is-invalid');
+                    if (firstErrorField) {
+                        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        firstErrorField.focus();
+                    }
+                }, 100);
             } else {
                 const errorMsg = err.response?.data?.detail || "Failed to save record";
                 setError(errorMsg);

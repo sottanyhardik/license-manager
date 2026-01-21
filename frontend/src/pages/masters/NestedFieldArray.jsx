@@ -125,7 +125,16 @@ export default function NestedFieldArray({
         // Check if this field was recently updated
         const fieldPath = `${fieldKey}.${index}.${field.name}`;
         const isHighlighted = updatedFields[fieldPath];
-        const highlightClass = isHighlighted ? "border-warning border-2 bg-warning bg-opacity-10" : "";
+
+        // Check if this field has an error
+        const itemErrors = errors[index] || {};
+        const fieldError = itemErrors[field.name];
+        const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
+
+        // Apply appropriate class - error takes precedence over highlight
+        const highlightClass = hasError
+            ? "is-invalid border-danger"
+            : (isHighlighted ? "border-warning border-2 bg-warning bg-opacity-10" : "");
 
         // Special handling for description field in import_license - show autocomplete and auto-fill hs_code
         if (fieldKey === "import_license" && field.name === "description") {
@@ -198,10 +207,11 @@ export default function NestedFieldArray({
                         className="react-select-sm"
                         classNamePrefix="react-select"
                         styles={{
-                            control: (base) => ({
+                            control: (base, state) => ({
                                 ...base,
                                 minHeight: "34px",
-                                borderColor: "#dee2e6"
+                                borderColor: hasError ? "#dc3545" : (isHighlighted ? "#ffc107" : "#dee2e6"),
+                                boxShadow: hasError ? "0 0 0 0.2rem rgba(220, 53, 69, 0.25)" : (state.isFocused ? "0 0 0 0.2rem rgba(13, 110, 253, 0.25)" : "none")
                             }),
                             menu: (base) => ({
                                 ...base,
@@ -306,10 +316,11 @@ export default function NestedFieldArray({
                         className="react-select-sm"
                         classNamePrefix="react-select"
                         styles={{
-                            control: (base) => ({
+                            control: (base, state) => ({
                                 ...base,
                                 minHeight: "34px",
-                                borderColor: "#dee2e6"
+                                borderColor: hasError ? "#dc3545" : (isHighlighted ? "#ffc107" : "#dee2e6"),
+                                boxShadow: hasError ? "0 0 0 0.2rem rgba(220, 53, 69, 0.25)" : (state.isFocused ? "0 0 0 0.2rem rgba(13, 110, 253, 0.25)" : "none")
                             }),
                             menu: (base) => ({
                                 ...base,

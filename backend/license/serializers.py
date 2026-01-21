@@ -442,6 +442,118 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
         return data
 
+    def validate(self, data):
+        """
+        Object-level validation with specific error messages.
+        """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from rest_framework.exceptions import ValidationError
+        import re
+
+        errors = {}
+
+        # Validate license_number format
+        if 'license_number' in data and data['license_number']:
+            license_number = data['license_number']
+            if not re.match(r'^[A-Z0-9/-]+$', license_number):
+                errors['license_number'] = ['License number can only contain uppercase letters, numbers, hyphens, and slashes']
+
+        # Validate license_number uniqueness
+        if 'license_number' in data and data['license_number']:
+            license_number = data['license_number']
+            existing = LicenseDetailsModel.objects.filter(license_number=license_number)
+            # Exclude current instance when updating
+            if self.instance:
+                existing = existing.exclude(pk=self.instance.pk)
+            if existing.exists():
+                errors['license_number'] = ['License with this license number already exists']
+
+        # Validate dates
+        if data.get('license_date') and data.get('license_expiry_date'):
+            if data['license_expiry_date'] <= data['license_date']:
+                errors['license_expiry_date'] = ['License expiry date must be after license date']
+
+        # Validate export items
+        if 'export_license' in data and data['export_license']:
+            export_errors = []
+            for index, item in enumerate(data['export_license']):
+                item_errors = {}
+
+                if not item.get('hs_code'):
+                    item_errors['hs_code'] = ['HS Code is required for export item']
+
+                if not item.get('description') or not item.get('description').strip():
+                    item_errors['description'] = ['Description is required for export item']
+
+                net_qty = item.get('net_quantity')
+                if net_qty is None or net_qty == '' or (isinstance(net_qty, (int, float)) and net_qty <= 0):
+                    item_errors['net_quantity'] = ['Net quantity must be greater than 0']
+
+                if not item.get('unit'):
+                    item_errors['unit'] = ['Unit is required for export item']
+
+                if item_errors:
+                    export_errors.append(item_errors)
+                else:
+                    export_errors.append(None)
+
+            # Only add to errors if there are actual errors (not all None)
+            if any(e for e in export_errors):
+                errors['export_license'] = export_errors
+
+        # Validate import items
+        if 'import_license' in data and data['import_license']:
+            import_errors = []
+            for index, item in enumerate(data['import_license']):
+                item_errors = {}
+
+                if not item.get('hs_code'):
+                    item_errors['hs_code'] = ['HS Code is required for import item']
+
+                if not item.get('description') or not item.get('description').strip():
+                    item_errors['description'] = ['Description is required for import item']
+
+                serial_number = item.get('serial_number')
+                if serial_number is None or serial_number == '':
+                    item_errors['serial_number'] = ['Serial number is required for import item']
+
+                if not item.get('unit'):
+                    item_errors['unit'] = ['Unit is required for import item']
+
+                if item_errors:
+                    import_errors.append(item_errors)
+                else:
+                    import_errors.append(None)
+
+            # Only add to errors if there are actual errors (not all None)
+            if any(e for e in import_errors):
+                errors['import_license'] = import_errors
+
+        # Validate documents
+        if 'license_documents' in data and data['license_documents']:
+            doc_errors = []
+            for index, doc in enumerate(data['license_documents']):
+                item_errors = {}
+
+                # Only validate new documents (with file object)
+                if doc.get('file') and not isinstance(doc.get('file'), str):
+                    if not doc.get('type') or not doc.get('type').strip():
+                        item_errors['type'] = ['Document type is required']
+
+                if item_errors:
+                    doc_errors.append(item_errors)
+                else:
+                    doc_errors.append(None)
+
+            # Only add to errors if there are actual errors (not all None)
+            if any(e for e in doc_errors):
+                errors['license_documents'] = doc_errors
+
+        if errors:
+            raise ValidationError(errors)
+
+        return data
+
     def get_get_balance_cif(self, obj):
         """Return balance_cif field directly instead of computing it."""
         # Use the model field directly, not the computed property
@@ -781,10 +893,13 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         obj = LicenseExportItemModel.objects.create(license=instance, **e)
                         processed_ids.add(obj.id)
 
-                # Delete items that are no longer in the payload
-                for item_id, item in existing_items.items():
-                    if item_id not in processed_ids:
-                        item.delete()
+                # Only delete items if we actually received export data in the payload
+                # This prevents accidental deletion when frontend doesn't send nested data
+                if len(exports) > 0:
+                    # Delete items that are no longer in the payload
+                    for item_id, item in existing_items.items():
+                        if item_id not in processed_ids:
+                            item.delete()
 
         if imports is not None:
             from django.db import transaction
@@ -942,10 +1057,13 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                             product_description=description
                         )
 
-                # Delete items that are no longer in the payload
-                for item in existing_items:
-                    if item.id not in processed_ids:
-                        item.delete()
+                # Only delete items if we actually received import data in the payload
+                # This prevents accidental deletion when frontend doesn't send nested data
+                if len(imports) > 0:
+                    # Delete items that are no longer in the payload
+                    for item in existing_items:
+                        if item.id not in processed_ids:
+                            item.delete()
 
         if docs is not None:
             from django.db import transaction
@@ -1005,10 +1123,13 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         else:
                             logger.warning(f"  -> Skipped creating document: validation failed")
 
-                # Delete documents that were removed from the form (not in payload)
-                for item_id, item in existing_items.items():
-                    if item_id not in processed_ids:
-                        item.delete()
+                # Only delete documents if we actually received document data in the payload
+                # This prevents accidental deletion when frontend doesn't send nested data
+                if len(docs) > 0:
+                    # Delete documents that were removed from the form (not in payload)
+                    for item_id, item in existing_items.items():
+                        if item_id not in processed_ids:
+                            item.delete()
 
         if transfers is not None:
             from django.db import transaction

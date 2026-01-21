@@ -479,15 +479,19 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             for index, item in enumerate(data['export_license']):
                 item_errors = {}
 
-                if not item.get('hs_code'):
-                    item_errors['hs_code'] = ['HS Code is required for export item']
+                # HS Code is not required for export items (can be blank)
+                # Removed: if not item.get('hs_code'):
+                #     item_errors['hs_code'] = ['HS Code is required for export item']
 
                 if not item.get('description') or not item.get('description').strip():
                     item_errors['description'] = ['Description is required for export item']
 
+                # Net quantity can be 0 or greater (including 0)
                 net_qty = item.get('net_quantity')
-                if net_qty is None or net_qty == '' or (isinstance(net_qty, (int, float)) and net_qty <= 0):
-                    item_errors['net_quantity'] = ['Net quantity must be greater than 0']
+                if net_qty is None or net_qty == '':
+                    item_errors['net_quantity'] = ['Net quantity is required']
+                elif isinstance(net_qty, (int, float)) and net_qty < 0:
+                    item_errors['net_quantity'] = ['Net quantity cannot be negative']
 
                 if not item.get('unit'):
                     item_errors['unit'] = ['Unit is required for export item']

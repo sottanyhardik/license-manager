@@ -524,15 +524,21 @@ export default function MasterForm({
                 formData.export_license.forEach((item, index) => {
                     const itemErrors = {};
 
-                    if (!item.hs_code) {
-                        itemErrors.hs_code = ['HS Code is required'];
-                    }
+                    // HS Code is not required for export items (can be blank)
+                    // Removed: if (!item.hs_code) { itemErrors.hs_code = ['HS Code is required']; }
+
                     if (!item.description || item.description.trim() === '') {
                         itemErrors.description = ['Description is required'];
                     }
-                    if (!item.net_quantity || parseFloat(item.net_quantity) <= 0) {
-                        itemErrors.net_quantity = ['Net quantity must be greater than 0'];
+
+                    // Net quantity can be 0 or greater (including 0)
+                    const netQty = parseFloat(item.net_quantity);
+                    if (item.net_quantity === '' || item.net_quantity === null || item.net_quantity === undefined) {
+                        itemErrors.net_quantity = ['Net quantity is required'];
+                    } else if (isNaN(netQty) || netQty < 0) {
+                        itemErrors.net_quantity = ['Net quantity cannot be negative'];
                     }
+
                     if (!item.unit) {
                         itemErrors.unit = ['Unit is required'];
                     }

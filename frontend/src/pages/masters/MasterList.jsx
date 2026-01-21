@@ -162,6 +162,21 @@ export default function MasterList() {
         backendDefaultsApplied.current = false;
         pendingRequestRef.current = null;
 
+        // Clear filters from other entities to prevent cross-contamination
+        // This ensures each entity starts fresh unless explicitly restoring its own filters
+        const allEntities = ['licenses', 'allotments', 'trades', 'bill-of-entries', 'incentive-licenses'];
+        allEntities.forEach(entity => {
+            if (entity !== entityName) {
+                try {
+                    sessionStorage.removeItem(`${entity}ListFilters`);
+                    // Also clear the filter state key used by filterPersistence
+                    sessionStorage.removeItem(`filterState_${entity}`);
+                } catch (error) {
+                    // Silently handle error
+                }
+            }
+        });
+
         // Parse URL query parameters
         const urlParams = new URLSearchParams(location.search);
         const urlFilters = {};
@@ -555,6 +570,7 @@ export default function MasterList() {
 
             {/* Filters */}
             <AdvancedFilter
+                key={entityName} // Force remount when entity changes to clear search and filters
                 filterConfig={metadata.filter_config || {}}
                 searchFields={metadata.search_fields || []}
                 onFilterChange={handleFilterChange}

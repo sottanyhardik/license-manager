@@ -393,7 +393,18 @@ export default function ItemReport() {
                                 Filters
                             </h5>
                             {hasActiveFilters && (
-                                <button className="btn btn-sm btn-outline-secondary" onClick={handleClearFilters} style={{ fontWeight: '500' }}>
+                                <button
+                                    className="btn btn-sm"
+                                    onClick={handleClearFilters}
+                                    style={{
+                                        backgroundColor: '#6c757d',
+                                        border: 'none',
+                                        color: 'white',
+                                        fontWeight: '500',
+                                        padding: '6px 16px',
+                                        borderRadius: '6px'
+                                    }}
+                                >
                                     <i className="bi bi-x-circle me-1"></i>
                                     Clear Filters
                                 </button>

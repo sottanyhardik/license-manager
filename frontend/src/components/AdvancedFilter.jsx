@@ -117,7 +117,8 @@ export default function AdvancedFilter({
 
     const handleResetFilters = () => {
         setSearchTerm("");
-        setFilterValues({});
+        // Reset to default filters instead of empty object
+        setFilterValues(defaultFilters);
     };
 
     const renderFilterField = (fieldName, config) => {

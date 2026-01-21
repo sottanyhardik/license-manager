@@ -515,10 +515,13 @@ export default function LicenseLedger() {
                                             </td>
                                             <td className="text-center" style={{ padding: '16px', verticalAlign: 'middle' }}>
                                                 <button
-                                                    className="btn btn-sm btn-outline-primary me-2"
+                                                    className="btn btn-sm me-2"
                                                     onClick={() => handleViewDetails(license)}
                                                     title="View Ledger Details"
                                                     style={{
+                                                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                                        border: '1px solid rgba(102, 126, 234, 0.3)',
+                                                        color: '#667eea',
                                                         padding: '6px 12px',
                                                         borderRadius: '6px',
                                                         fontSize: '0.85rem',

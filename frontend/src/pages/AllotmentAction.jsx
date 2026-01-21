@@ -645,50 +645,56 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 const balanceValue = requiredValue - allotedValue;
 
                 return (
-                    <div className="card mb-4">
-                        <div className="card-body">
-                            <h5 className="card-title mb-3">Allotment Details - {allotment.item_name}</h5>
-                            <div className="row">
-                                <div className="col-md-2">
-                                    <div className="mb-2">
-                                        <small className="text-muted d-block">Unit Price</small>
-                                        <strong className="text-info">{unitPrice.toFixed(3)}</strong>
+                    <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                        <div className="card-body" style={{ padding: '24px' }}>
+                            <h5 className="card-title mb-4" style={{ fontWeight: '600', color: '#333' }}>
+                                <i className="bi bi-info-circle me-2" style={{ color: '#667eea' }}></i>
+                                Allotment Details - {allotment.item_name}
+                            </h5>
+                            <div className="row g-3">
+                                <div className="col-md-3 col-lg-2">
+                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #17a2b8' }}>
+                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Unit Price</small>
+                                        <strong style={{ fontSize: '1.1rem', color: '#17a2b8' }}>{unitPrice.toFixed(3)}</strong>
                                     </div>
                                 </div>
-                                <div className="col-md-2">
-                                    <div className="mb-2">
-                                        <small className="text-muted d-block">Required Quantity</small>
-                                        <strong>{requiredQty.toLocaleString()}</strong>
+                                <div className="col-md-3 col-lg-2">
+                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #6c757d' }}>
+                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Required Quantity</small>
+                                        <strong style={{ fontSize: '1.1rem', color: '#333' }}>{requiredQty.toLocaleString()}</strong>
                                     </div>
                                 </div>
-                                <div className="col-md-2">
-                                    <div className="mb-2">
-                                        <small className="text-muted d-block">Required Value</small>
-                                        <strong>{requiredValue.toFixed(2)}</strong>
+                                <div className="col-md-3 col-lg-2">
+                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #6c757d' }}>
+                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Required Value</small>
+                                        <strong style={{ fontSize: '1.1rem', color: '#333' }}>{requiredValue.toFixed(2)}</strong>
                                     </div>
                                 </div>
-                                <div className="col-md-2">
-                                    <div className="mb-2">
-                                        <small className="text-muted d-block">Allotted Quantity</small>
-                                        <strong className="text-success">{allotedQty.toLocaleString()}</strong>
+                                <div className="col-md-3 col-lg-2">
+                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #28a745' }}>
+                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Allotted Quantity</small>
+                                        <strong style={{ fontSize: '1.1rem', color: '#28a745' }}>{allotedQty.toLocaleString()}</strong>
                                     </div>
                                 </div>
-                                <div className="col-md-2">
-                                    <div className="mb-2">
-                                        <small className="text-muted d-block">Allotted Value</small>
-                                        <strong className="text-success">{allotedValue.toFixed(2)}</strong>
+                                <div className="col-md-3 col-lg-2">
+                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #28a745' }}>
+                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Allotted Value</small>
+                                        <strong style={{ fontSize: '1.1rem', color: '#28a745' }}>{allotedValue.toFixed(2)}</strong>
                                     </div>
                                 </div>
-                                <div className="col-md-2">
-                                    <div className="mb-2">
-                                        <small className="text-muted d-block">Balance Quantity</small>
-                                        <strong className="text-primary">{balanceQty.toLocaleString()}</strong>
+                                <div className="col-md-3 col-lg-2">
+                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #667eea' }}>
+                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Balance Quantity</small>
+                                        <strong style={{ fontSize: '1.1rem', color: '#667eea' }}>{balanceQty.toLocaleString()}</strong>
                                     </div>
                                 </div>
-                                <div className="col-md-2">
-                                    <div className="mb-2">
-                                        <small className="text-muted d-block">Balance Value</small>
-                                        <strong className="text-primary">{balanceValue.toFixed(2)} <small className="text-muted">(+$20 buffer)</small></strong>
+                                <div className="col-md-3 col-lg-2">
+                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #667eea' }}>
+                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Balance Value</small>
+                                        <strong style={{ fontSize: '1.1rem', color: '#667eea' }}>
+                                            {balanceValue.toFixed(2)}
+                                            <small className="text-muted d-block" style={{ fontSize: '0.65rem', fontWeight: '400' }}>(+$20 buffer)</small>
+                                        </strong>
                                     </div>
                                 </div>
                             </div>
@@ -699,12 +705,23 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
             {/* Allotted Items Table */}
             {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
-                <div className="card mb-4">
-                    <div className="card-body">
+                <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                    <div className="card-body" style={{ padding: '24px' }}>
                         <div className="d-flex justify-content-between align-items-center mb-3">
-                            <h5 className="mb-0">Allotted Items ({allotment.allotment_details.length})</h5>
+                            <h5 className="mb-0" style={{ fontWeight: '600', color: '#333' }}>
+                                <i className="bi bi-check-square me-2" style={{ color: '#28a745' }}></i>
+                                Allotted Items ({allotment.allotment_details.length})
+                            </h5>
                             <button
-                                className="btn btn-sm btn-outline-primary"
+                                className="btn btn-sm"
+                                style={{
+                                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                    border: '1px solid rgba(102, 126, 234, 0.3)',
+                                    color: '#667eea',
+                                    fontWeight: '500',
+                                    padding: '6px 16px',
+                                    borderRadius: '6px'
+                                }}
                                 onClick={() => {
                                     const headers = ['License', 'Serial', 'Description', 'Exporter', 'Transfer Status', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
                                     const rows = allotment.allotment_details.map(detail => {
@@ -733,20 +750,20 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <i className="bi bi-clipboard"></i> Copy
                             </button>
                         </div>
-                        <div style={{overflowX: 'visible'}}>
-                            <table className="table table-sm table-bordered" style={{width: '100%'}}>
-                                <thead className="table-light">
+                        <div style={{overflowX: 'auto', borderRadius: '8px'}}>
+                            <table className="table table-sm table-hover" style={{width: '100%', marginBottom: '0'}}>
+                                <thead style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
                                 <tr>
-                                    <th style={{minWidth: '120px', whiteSpace: 'nowrap'}}>License</th>
-                                    <th style={{minWidth: '70px', whiteSpace: 'nowrap'}}>Serial</th>
-                                    <th style={{minWidth: '300px'}}>Description</th>
-                                    <th style={{minWidth: '200px'}}>Exporter</th>
-                                    <th style={{minWidth: '180px'}}>Transfer<br/>Status</th>
-                                    <th style={{minWidth: '100px'}}>License<br/>Date</th>
-                                    <th style={{minWidth: '100px'}}>Expiry<br/>Date</th>
-                                    <th style={{minWidth: '100px', textAlign: 'right'}}>Allotted<br/>Qty</th>
-                                    <th style={{minWidth: '110px', textAlign: 'right'}}>Allotted<br/>Value</th>
-                                    <th style={{minWidth: '80px', whiteSpace: 'nowrap'}}>Action</th>
+                                    <th style={{minWidth: '120px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>License</th>
+                                    <th style={{minWidth: '70px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Serial</th>
+                                    <th style={{minWidth: '300px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Description</th>
+                                    <th style={{minWidth: '200px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Exporter</th>
+                                    <th style={{minWidth: '180px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Transfer<br/>Status</th>
+                                    <th style={{minWidth: '100px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>License<br/>Date</th>
+                                    <th style={{minWidth: '100px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Expiry<br/>Date</th>
+                                    <th style={{minWidth: '100px', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allotted<br/>Qty</th>
+                                    <th style={{minWidth: '110px', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allotted<br/>Value</th>
+                                    <th style={{minWidth: '80px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Action</th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -827,30 +844,33 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 </div>
             )}
 
-            <div className="card mb-4">
-                <div className="card-body">
+            <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                <div className="card-body" style={{ padding: '24px' }}>
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h5 className="mb-0">Available License Items</h5>
+                        <h5 className="mb-0" style={{ fontWeight: '600', color: '#333' }}>
+                            <i className="bi bi-list-check me-2" style={{ color: '#667eea' }}></i>
+                            Available License Items
+                        </h5>
                     </div>
 
                     {/* Show success/error messages near the table for better visibility */}
                     {error && (
-                        <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                        <div className="alert alert-danger alert-dismissible fade show" role="alert" style={{ borderRadius: '8px' }}>
                             <i className="bi bi-exclamation-triangle-fill me-2"></i>
                             {error}
                             <button type="button" className="btn-close" onClick={() => setError("")}></button>
                         </div>
                     )}
                     {success && (
-                        <div className="alert alert-success alert-dismissible fade show" role="alert">
+                        <div className="alert alert-success alert-dismissible fade show" role="alert" style={{ borderRadius: '8px' }}>
                             <i className="bi bi-check-circle-fill me-2"></i>
                             {success}
                             <button type="button" className="btn-close" onClick={() => setSuccess("")}></button>
                         </div>
                     )}
 
-                    <div className="card mb-3 bg-light">
-                        <div className="card-body">
+                    <div className="card mb-3 border-0 shadow-sm" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                        <div className="card-body" style={{ padding: '20px' }}>
                             <div className="row g-3">
                                 <div className="col-md-12">
                                     <label className="form-label">Filter By Item Name</label>
@@ -1038,7 +1058,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     </div>
                                     <div className="col-md-12 mt-2">
                                         <button
-                                            className="btn btn-sm btn-secondary"
+                                            className="btn btn-sm"
+                                            style={{
+                                                backgroundColor: '#6c757d',
+                                                border: 'none',
+                                                color: 'white',
+                                                fontWeight: '500',
+                                                padding: '8px 20px',
+                                                borderRadius: '6px'
+                                            }}
                                             onClick={() => setFilters({
                                                 description: "",
                                                 exporter: "",
@@ -1058,6 +1086,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 item_names: ""
                                             })}
                                         >
+                                            <i className="bi bi-x-circle me-1"></i>
                                             Clear Filters
                                         </button>
                                     </div>
@@ -1065,26 +1094,26 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </div>
                         </div>
 
-                    <div className="table-responsive">
-                        <table className="table table-sm table-hover" style={{fontSize: '0.875rem'}}>
-                            <thead className="sticky-top" style={{backgroundColor: 'var(--surface-color)', zIndex: 10}}>
+                    <div className="table-responsive" style={{ borderRadius: '8px', overflow: 'hidden' }}>
+                        <table className="table table-sm table-hover" style={{fontSize: '0.875rem', marginBottom: '0'}}>
+                            <thead className="sticky-top" style={{backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6', zIndex: 10}}>
                             <tr>
-                                <th style={{minWidth: '100px'}}>License</th>
-                                <th style={{minWidth: '50px'}}>Serial</th>
-                                <th style={{minWidth: '90px'}}>HS Code</th>
-                                <th style={{minWidth: '200px'}}>Description</th>
-                                <th style={{minWidth: '150px'}}>Exporter</th>
-                                <th style={{minWidth: '90px'}}>Notification</th>
-                                <th style={{minWidth: '150px'}}>Item Name</th>
-                                <th style={{minWidth: '80px', textAlign: 'center'}}>Is Restricted</th>
-                                <th style={{minWidth: '100px', textAlign: 'right'}}>Avail Qty</th>
-                                <th style={{minWidth: '110px', textAlign: 'right'}}>Avail CIF FC</th>
-                                <th style={{minWidth: '80px', textAlign: 'right'}}>Average</th>
-                                <th style={{minWidth: '90px'}}>Expiry</th>
-                                <th style={{minWidth: '150px'}}>Notes</th>
-                                <th style={{minWidth: '150px'}}>Allocate Qty</th>
-                                <th style={{minWidth: '150px'}}>Allocate Value</th>
-                                <th style={{minWidth: '130px', position: 'sticky', right: 0, backgroundColor: 'var(--surface-color)', zIndex: 5}}>Action</th>
+                                <th style={{minWidth: '100px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>License</th>
+                                <th style={{minWidth: '50px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Serial</th>
+                                <th style={{minWidth: '90px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>HS Code</th>
+                                <th style={{minWidth: '200px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Description</th>
+                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Exporter</th>
+                                <th style={{minWidth: '90px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Notification</th>
+                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Item Name</th>
+                                <th style={{minWidth: '80px', textAlign: 'center', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Is Restricted</th>
+                                <th style={{minWidth: '100px', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Avail Qty</th>
+                                <th style={{minWidth: '110px', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Avail CIF FC</th>
+                                <th style={{minWidth: '80px', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Average</th>
+                                <th style={{minWidth: '90px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Expiry</th>
+                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Notes</th>
+                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Qty</th>
+                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Value</th>
+                                <th style={{minWidth: '130px', position: 'sticky', right: 0, backgroundColor: '#f8f9fa', zIndex: 5, fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Action</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -1174,12 +1203,22 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 </button>
                                             </div>
                                         </td>
-                                        <td style={{position: 'sticky', right: 0, backgroundColor: 'var(--surface-color)', zIndex: 4}}>
+                                        <td style={{position: 'sticky', right: 0, backgroundColor: 'white', zIndex: 4}}>
                                             <button
-                                                className="btn btn-primary btn-sm w-100"
+                                                className="btn btn-sm w-100"
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                    border: 'none',
+                                                    color: 'white',
+                                                    fontWeight: '500',
+                                                    fontSize: '0.8rem',
+                                                    whiteSpace: 'nowrap',
+                                                    padding: '6px 12px',
+                                                    borderRadius: '6px',
+                                                    opacity: (!currentAllocation || parseFloat(currentAllocation.qty) <= 0 || saving[item.id]) ? 0.6 : 1
+                                                }}
                                                 onClick={() => handleConfirmAllot(item)}
                                                 disabled={!currentAllocation || parseFloat(currentAllocation.qty) <= 0 || saving[item.id]}
-                                                style={{fontSize: '0.8rem', whiteSpace: 'nowrap'}}
                                             >
                                                 {saving[item.id] ? (
                                                     <>
@@ -1218,8 +1257,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                     {/* Pagination */}
                     {pagination.totalPages > 1 && (
-                        <div className="d-flex justify-content-between align-items-center mt-3">
-                            <div className="text-muted">
+                        <div className="d-flex justify-content-between align-items-center mt-3 pt-3" style={{ borderTop: '1px solid #dee2e6' }}>
+                            <div className="text-muted" style={{ fontSize: '0.9rem' }}>
                                 Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1} to {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)} of {pagination.totalItems} items
                             </div>
                             <nav>
@@ -1227,6 +1266,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <li className={`page-item ${pagination.currentPage === 1 ? 'disabled' : ''}`}>
                                         <button
                                             className="page-link"
+                                            style={{
+                                                borderRadius: '6px 0 0 6px',
+                                                fontWeight: '500'
+                                            }}
                                             onClick={() => setPagination(prev => ({...prev, currentPage: prev.currentPage - 1}))}
                                             disabled={pagination.currentPage === 1}
                                         >
@@ -1245,6 +1288,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 <li key={pageNum} className={`page-item ${pagination.currentPage === pageNum ? 'active' : ''}`}>
                                                     <button
                                                         className="page-link"
+                                                        style={{
+                                                            background: pagination.currentPage === pageNum ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+                                                            border: pagination.currentPage === pageNum ? 'none' : '1px solid #dee2e6',
+                                                            color: pagination.currentPage === pageNum ? 'white' : '#667eea',
+                                                            fontWeight: '500'
+                                                        }}
                                                         onClick={() => setPagination(prev => ({...prev, currentPage: pageNum}))}
                                                     >
                                                         {pageNum}
@@ -1262,6 +1311,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <li className={`page-item ${pagination.currentPage === pagination.totalPages ? 'disabled' : ''}`}>
                                         <button
                                             className="page-link"
+                                            style={{
+                                                borderRadius: '0 6px 6px 0',
+                                                fontWeight: '500'
+                                            }}
                                             onClick={() => setPagination(prev => ({...prev, currentPage: prev.currentPage + 1}))}
                                             disabled={pagination.currentPage === pagination.totalPages}
                                         >

@@ -409,42 +409,76 @@ export default function MasterList() {
         .join(" ");
 
     return (
-        <div className="container-fluid mt-4">
-            {/* Breadcrumb */}
-            <nav aria-label="breadcrumb" className="mb-3">
-                <ol className="breadcrumb">
-                    <li className="breadcrumb-item">
-                        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }}>Home</a>
-                    </li>
-                    <li className="breadcrumb-item active" aria-current="page">
-                        {entityTitle}
-                    </li>
-                </ol>
-            </nav>
-
-            {/* Header */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2>{entityTitle}</h2>
-                <div className="btn-group">
+        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+            {/* Professional Header with Gradient */}
+            <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                padding: '32px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                color: 'white',
+                marginBottom: '24px'
+            }}>
+                <div className="d-flex justify-content-between align-items-center flex-wrap">
+                    <div>
+                        {/* Breadcrumb */}
+                        <div style={{ marginBottom: '12px', opacity: '0.9' }}>
+                            <a
+                                href="/"
+                                onClick={(e) => { e.preventDefault(); navigate('/'); }}
+                                style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
+                            >
+                                <i className="bi bi-house-door me-2"></i>Home
+                            </a>
+                            <span className="mx-2">/</span>
+                            <span style={{ fontSize: '0.9rem' }}>{entityTitle}</span>
+                        </div>
+                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
+                            <i className="bi bi-grid-3x3-gap me-3"></i>
+                            {entityTitle}
+                        </h1>
+                    </div>
+                    <div className="btn-group" style={{ marginTop: '12px' }}>
                     <button
-                        className="btn btn-outline-success"
+                        className="btn"
                         onClick={() => handleExport('xlsx')}
                         title="Export to Excel"
+                        style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                            border: '1px solid rgba(255, 255, 255, 0.3)',
+                            color: 'white',
+                            fontWeight: '500',
+                            backdropFilter: 'blur(10px)'
+                        }}
                     >
                         <i className="bi bi-file-earmark-excel me-1"></i>
                         Excel
                     </button>
                     <button
-                        className="btn btn-outline-danger"
+                        className="btn"
                         onClick={() => handleExport('pdf')}
                         title="Export to PDF"
+                        style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                            border: '1px solid rgba(255, 255, 255, 0.3)',
+                            color: 'white',
+                            fontWeight: '500',
+                            backdropFilter: 'blur(10px)'
+                        }}
                     >
                         <i className="bi bi-file-earmark-pdf me-1"></i>
                         PDF
                     </button>
                     {entityName === 'bill-of-entries' && (
                         <button
-                            className="btn btn-outline-info"
+                            className="btn"
+                            style={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                color: 'white',
+                                fontWeight: '500',
+                                backdropFilter: 'blur(10px)'
+                            }}
                             onClick={async () => {
                                 if (!window.confirm('This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?')) {
                                     return;
@@ -483,7 +517,14 @@ export default function MasterList() {
                             entityName === 'allotments' ? '/allotments/create' :
                             entityName === 'trades' ? '/trades/create' :
                             `/masters/${entityName}/create`}
-                        className="btn btn-primary"
+                        className="btn"
+                        style={{
+                            fontWeight: '600',
+                            backgroundColor: 'white',
+                            border: '2px solid white',
+                            color: '#667eea',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                        }}
                         onClick={() => {
                             // Save current filter state before navigating to create
                             saveFilterState(entityName, {
@@ -496,6 +537,7 @@ export default function MasterList() {
                         <i className="bi bi-plus-circle me-2"></i>
                         Add New
                     </Link>
+                </div>
                 </div>
             </div>
 
@@ -521,8 +563,8 @@ export default function MasterList() {
             />
 
             {/* Table */}
-            <div className="card">
-                <div className="card-body">
+            <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                <div className="card-body" style={{ padding: '24px' }}>
                     {/* Use AccordionTable for entities with nested fields (except licenses and allotments), regular DataTable for others */}
                     {metadata.nested_field_defs && Object.keys(metadata.nested_field_defs).length > 0 && entityName !== 'licenses' && entityName !== 'allotments' ? (
                         <AccordionTable

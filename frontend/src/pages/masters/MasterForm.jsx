@@ -1166,17 +1166,26 @@ export default function MasterForm({
     }
 
     return (
-        <div className="container mt-4">
+        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+            {/* Professional Header with Gradient */}
+            <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                padding: '32px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                color: 'white',
+                marginBottom: '24px'
+            }}>
+                <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
+                    <i className={`bi ${isEdit ? 'bi-pencil-square' : 'bi-plus-circle'} me-3`}></i>
+                    {isEdit ? "Edit" : "Create"} {entityTitle}
+                </h1>
+            </div>
+
             <div className="row">
                 <div className="col-lg-12 mx-auto">
-                    <div className="card">
-                        <div className="card-header bg-primary text-white">
-                            <h4 className="mb-0">
-                                {isEdit ? "Edit" : "Create"} {entityTitle}
-                            </h4>
-                        </div>
-
-                        <div className="card-body">
+                    <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                        <div className="card-body" style={{ padding: '32px' }}>
                             {error && (
                                 <div className="alert alert-danger">
                                     <strong>
@@ -1220,20 +1229,33 @@ export default function MasterForm({
                                         const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
 
                                         return (
-                                            <div key={field} className={`${colClass}`}>
+                                            <div key={field} className={`${colClass} mb-3`}>
                                                 <div className="form-group-material">
-                                                    <label className="form-label">
+                                                    <label className="form-label" style={{
+                                                        fontWeight: '500',
+                                                        color: '#374151',
+                                                        marginBottom: '8px',
+                                                        fontSize: '0.875rem'
+                                                    }}>
                                                         {label}
-                                                        {fieldMeta.required && <span className="text-danger">*</span>}
+                                                        {fieldMeta.required && <span className="text-danger ms-1">*</span>}
                                                     </label>
                                                     {renderField(field)}
                                                     {hasError && (
-                                                        <div className="invalid-feedback d-block">
+                                                        <div className="invalid-feedback d-block" style={{
+                                                            fontSize: '0.8rem',
+                                                            marginTop: '6px'
+                                                        }}>
+                                                            <i className="bi bi-exclamation-circle me-1"></i>
                                                             {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
                                                         </div>
                                                     )}
                                                     {helpText && !hasError && (
-                                                        <small className="form-text text-muted d-block mt-1">
+                                                        <small className="form-text d-block mt-1" style={{
+                                                            color: '#6b7280',
+                                                            fontSize: '0.75rem'
+                                                        }}>
+                                                            <i className="bi bi-info-circle me-1"></i>
                                                             {helpText}
                                                         </small>
                                                     )}
@@ -1242,7 +1264,7 @@ export default function MasterForm({
                                         );
                                     })}
                                 </div>
-                                <hr/>
+                                <hr style={{ margin: '32px 0', border: 'none', borderTop: '2px solid #e5e7eb' }}/>
                                 {/* Nested Fields */}
                                 {/* Don't show nested fields for allotments in form - use action page instead */}
                                 {entityName !== 'allotments' && Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
@@ -1261,11 +1283,18 @@ export default function MasterForm({
                                     />
                                 ))}
                                 {/* Action Buttons */}
-                                <div className="mt-4">
+                                <div className="mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
                                     <button
                                         type="submit"
                                         className="btn btn-primary me-2"
                                         disabled={saving}
+                                        style={{
+                                            padding: '12px 32px',
+                                            fontWeight: '600',
+                                            fontSize: '1rem',
+                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                            border: 'none'
+                                        }}
                                     >
                                         {saving ? (
                                             <>
@@ -1290,6 +1319,7 @@ export default function MasterForm({
                                                 setShowBalanceModal(true);
                                             }}
                                             disabled={saving}
+                                            style={{ padding: '12px 24px', fontWeight: '500' }}
                                         >
                                             <i className="bi bi-eye me-2"></i>
                                             View Balance
@@ -1298,7 +1328,7 @@ export default function MasterForm({
 
                                     <button
                                         type="button"
-                                        className="btn btn-secondary"
+                                        className="btn btn-outline-secondary"
                                         onClick={() => {
                                             if (isModal && onClose) {
                                                 onClose();
@@ -1324,7 +1354,9 @@ export default function MasterForm({
                                             }
                                         }}
                                         disabled={saving}
+                                        style={{ padding: '12px 24px', fontWeight: '500' }}
                                     >
+                                        <i className="bi bi-x-circle me-2"></i>
                                         Cancel
                                     </button>
                                 </div>

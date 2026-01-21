@@ -233,28 +233,40 @@ const LedgerUpload = () => {
   };
 
   return (
-    <div className="container-fluid p-4">
-      {/* Page Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h4 className="mb-1">
-            <i className="bi bi-file-earmark-spreadsheet me-2"></i>
-            Ledger Upload
-          </h4>
-          <p className="text-muted mb-0">Upload DFIA license ledger files in CSV format</p>
-        </div>
-        <div className="form-check form-switch">
-          <input
-            className="form-check-input"
-            type="checkbox"
-            id="asyncModeSwitch"
-            checked={useAsyncMode}
-            onChange={(e) => setUseAsyncMode(e.target.checked)}
-          />
-          <label className="form-check-label" htmlFor="asyncModeSwitch">
-            <i className="bi bi-lightning-charge-fill me-1"></i>
-            Async Mode {useAsyncMode ? '(No Timeout)' : '(May Timeout)'}
-          </label>
+    <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+      {/* Professional Header with Gradient */}
+      <div style={{
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        padding: '32px',
+        borderRadius: '12px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+        color: 'white',
+        marginBottom: '24px'
+      }}>
+        <div className="d-flex justify-content-between align-items-center flex-wrap">
+          <div>
+            <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '8px' }}>
+              <i className="bi bi-file-earmark-spreadsheet me-3"></i>
+              Ledger Upload
+            </h1>
+            <p style={{ fontSize: '1rem', marginBottom: '0', opacity: '0.95' }}>
+              Upload DFIA license ledger files in CSV format
+            </p>
+          </div>
+          <div className="form-check form-switch" style={{ marginTop: '12px' }}>
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="asyncModeSwitch"
+              checked={useAsyncMode}
+              onChange={(e) => setUseAsyncMode(e.target.checked)}
+              style={{ width: '3rem', height: '1.5rem', cursor: 'pointer' }}
+            />
+            <label className="form-check-label" htmlFor="asyncModeSwitch" style={{ paddingLeft: '8px', fontSize: '0.95rem', cursor: 'pointer' }}>
+              <i className="bi bi-lightning-charge-fill me-1"></i>
+              Async Mode {useAsyncMode ? '(No Timeout)' : '(May Timeout)'}
+            </label>
+          </div>
         </div>
       </div>
 
@@ -268,8 +280,8 @@ const LedgerUpload = () => {
       <div className="row g-3">
         {/* Main Upload Card */}
         <div className="col-lg-8">
-          <div className="card">
-            <div className="card-body p-4">
+          <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+            <div className="card-body" style={{ padding: '32px' }}>
               {/* Drop Zone */}
               <div
                 className={`border-2 border-dashed rounded p-5 text-center mb-4 ${

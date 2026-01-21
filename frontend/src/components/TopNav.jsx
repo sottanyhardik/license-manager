@@ -7,16 +7,31 @@ export default function TopNav() {
     const {user, logout} = useContext(AuthContext);
 
     return (
-        <nav className="navbar navbar-expand-lg navbar-dark px-3" style={{
-            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        <nav className="navbar navbar-expand-lg navbar-dark px-4" style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            padding: '16px 24px'
         }}>
             <Link className="navbar-brand fw-bold" to="/" style={{
-                fontSize: '1.25rem',
-                letterSpacing: '0.5px'
+                fontSize: '1.3rem',
+                letterSpacing: '0.5px',
+                display: 'flex',
+                alignItems: 'center'
             }}>
-                <i className="bi bi-shield-check me-2" style={{color: '#3b82f6'}}></i>
-                License Manager
+                <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '10px',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: '12px',
+                    backdropFilter: 'blur(10px)'
+                }}>
+                    <i className="bi bi-shield-check" style={{color: 'white', fontSize: '1.2rem'}}></i>
+                </div>
+                <span>License Manager</span>
             </Link>
 
             <button
@@ -97,20 +112,37 @@ export default function TopNav() {
                 {user && (
                     <div className="dropdown">
                         <button
-                            className="btn btn-primary dropdown-toggle"
+                            className="btn dropdown-toggle"
                             type="button"
                             data-bs-toggle="dropdown"
+                            style={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                color: 'white',
+                                fontWeight: '500',
+                                padding: '8px 20px',
+                                backdropFilter: 'blur(10px)'
+                            }}
                         >
+                            <i className="bi bi-person-circle me-2"></i>
                             {user.username}
                         </button>
-                        <ul className="dropdown-menu dropdown-menu-end">
+                        <ul className="dropdown-menu dropdown-menu-end" style={{
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            border: 'none',
+                            marginTop: '8px'
+                        }}>
                             <li>
-                                <Link className="dropdown-item" to="/profile">
+                                <Link className="dropdown-item" to="/profile" style={{ padding: '10px 20px' }}>
+                                    <i className="bi bi-person me-2"></i>
                                     Profile
                                 </Link>
                             </li>
+                            <li><hr className="dropdown-divider" /></li>
                             <li>
-                                <button className="dropdown-item text-danger" onClick={logout}>
+                                <button className="dropdown-item text-danger" onClick={logout} style={{ padding: '10px 20px' }}>
+                                    <i className="bi bi-box-arrow-right me-2"></i>
                                     Logout
                                 </button>
                             </li>

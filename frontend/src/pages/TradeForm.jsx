@@ -727,22 +727,42 @@ export default function TradeForm() {
     };
 
     return (
-        <div className="container-fluid mt-4">
-            <nav aria-label="breadcrumb" className="mb-3">
-                <ol className="breadcrumb">
-                    <li className="breadcrumb-item">
-                        <a href="#" onClick={(e) => { e.preventDefault(); navigate('/'); }}>Home</a>
-                    </li>
-                    <li className="breadcrumb-item">
-                        <a href="#" onClick={(e) => { e.preventDefault(); navigate('/trades'); }}>Trades</a>
-                    </li>
-                    <li className="breadcrumb-item active" aria-current="page">
+        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+            {/* Professional Header with Gradient */}
+            <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                padding: '32px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                color: 'white',
+                marginBottom: '24px'
+            }}>
+                <div>
+                    <div style={{ marginBottom: '12px', opacity: '0.9' }}>
+                        <a
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
+                            style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
+                        >
+                            <i className="bi bi-house-door me-2"></i>Home
+                        </a>
+                        <span className="mx-2">/</span>
+                        <a
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); navigate('/trades'); }}
+                            style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
+                        >
+                            Trades
+                        </a>
+                        <span className="mx-2">/</span>
+                        <span style={{ fontSize: '0.9rem' }}>{isEdit ? "Edit Trade" : "Create Trade"}</span>
+                    </div>
+                    <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
+                        <i className={`bi ${isEdit ? 'bi-pencil-square' : 'bi-plus-circle'} me-3`}></i>
                         {isEdit ? "Edit Trade" : "Create Trade"}
-                    </li>
-                </ol>
-            </nav>
-
-            <h2>{isEdit ? "Edit Trade" : "Create Trade"}</h2>
+                    </h1>
+                </div>
+            </div>
 
             {error && (
                 <div className="alert alert-danger alert-dismissible fade show">
@@ -757,8 +777,8 @@ export default function TradeForm() {
 
             <form onSubmit={handleSubmit}>
                 {/* Transaction Type Selector */}
-                <div className="card mb-4">
-                    <div className="card-body">
+                <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                    <div className="card-body" style={{ padding: '24px' }}>
                         <div className="row">
                             <div className="col-md-12">
                                 <label className="form-label fw-bold">Transaction Type <span className="text-danger">*</span></label>

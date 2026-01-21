@@ -105,52 +105,93 @@ export default function Settings() {
     }
 
     return (
-        <div className="container-fluid mt-4 px-4">
-            <nav aria-label="breadcrumb" className="mb-3">
-                <ol className="breadcrumb">
-                    <li className="breadcrumb-item">
-                        <a href="/" onClick={(e) => {
-                            e.preventDefault();
-                            navigate('/');
-                        }}>Home</a>
-                    </li>
-                    <li className="breadcrumb-item active" aria-current="page">Settings</li>
-                </ol>
-            </nav>
-
-            <h1 className="mb-4">Settings</h1>
+        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+            {/* Professional Header with Gradient */}
+            <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                padding: '32px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                color: 'white',
+                marginBottom: '24px'
+            }}>
+                <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div style={{ marginBottom: '12px', opacity: '0.9' }}>
+                            <a
+                                href="/"
+                                onClick={(e) => { e.preventDefault(); navigate('/'); }}
+                                style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
+                            >
+                                <i className="bi bi-house-door me-2"></i>Home
+                            </a>
+                            <span className="mx-2">/</span>
+                            <span style={{ fontSize: '0.9rem' }}>Settings</span>
+                        </div>
+                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
+                            <i className="bi bi-gear me-3"></i>
+                            Settings
+                        </h1>
+                    </div>
+                </div>
+            </div>
 
             {/* Ledger Upload Section */}
-            <div className="card shadow-sm mb-4">
-                <div className="card-header bg-primary text-white">
-                    <h5 className="mb-0">
-                        <i className="bi bi-file-earmark-spreadsheet me-2"></i>
-                        Ledger Upload
-                    </h5>
-                </div>
-                <div className="card-body">
-                    <p className="text-muted mb-3">Upload license ledger files to update the system</p>
-                    <button
-                        className="btn btn-primary"
-                        onClick={() => navigate('/ledger-upload')}
-                    >
-                        <i className="bi bi-upload me-2"></i>
-                        Go to Ledger Upload
-                    </button>
+            <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                <div className="card-body" style={{ padding: '24px' }}>
+                    <div className="d-flex align-items-start">
+                        <div style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: '20px',
+                            boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)'
+                        }}>
+                            <i className="bi bi-file-earmark-spreadsheet text-white" style={{ fontSize: '1.5rem' }}></i>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <h5 style={{ fontWeight: '600', marginBottom: '8px', color: '#2c3e50' }}>Ledger Upload</h5>
+                            <p className="text-muted mb-3" style={{ fontSize: '0.9rem' }}>Upload license ledger files to update the system</p>
+                            <button
+                                className="btn btn-success"
+                                onClick={() => navigate('/ledger-upload')}
+                                style={{ padding: '10px 24px', fontWeight: '500' }}
+                            >
+                                <i className="bi bi-upload me-2"></i>
+                                Go to Ledger Upload
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             {/* User Management Section */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2>User Management</h2>
-                <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+                <h3 style={{ fontWeight: '600', color: '#2c3e50', marginBottom: '0' }}>
+                    <i className="bi bi-people me-2"></i>
+                    User Management
+                </h3>
+                <button
+                    className="btn btn-primary"
+                    onClick={() => handleOpenModal()}
+                    style={{
+                        padding: '10px 24px',
+                        fontWeight: '500',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        border: 'none'
+                    }}
+                >
                     <i className="bi bi-plus-circle me-2"></i>
                     Add User
                 </button>
             </div>
 
-            <div className="card shadow-sm">
-                <div className="card-body">
+            <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                <div className="card-body" style={{ padding: '24px' }}>
                     <div className="table-responsive">
                         <table className="table table-hover">
                             <thead>

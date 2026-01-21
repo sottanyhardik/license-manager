@@ -323,74 +323,83 @@ export default function ItemReport() {
     const itemNameOptions = availableItems;
 
     return (
-        <div className="container-fluid px-3 py-3" style={{backgroundColor: '#f8f9fa', minHeight: '100vh'}}>
-            {/* Header Section */}
-            <div className="row mb-4">
-                <div className="col-12">
-                    <div className="card shadow-sm border-0">
-                        <div className="card-body">
-                            <div className="d-flex justify-content-between align-items-center flex-wrap">
-                                <div className="mb-2 mb-md-0">
-                                    <h2 className="mb-1">
-                                        <i className="bi bi-list-ul me-2 text-primary"></i>
-                                        Item Report
-                                    </h2>
-                                    <p className="text-muted mb-0 small">
-                                        {reportData && (
-                                            <>
-                                                <i className="bi bi-calendar-event me-1"></i>
-                                                Report Date: {reportData.report_date}
-                                                <span className="mx-2">•</span>
-                                                <i className="bi bi-box-seam me-1"></i>
-                                                Total Items: {reportData.total_items}
-                                            </>
-                                        )}
-                                    </p>
-                                </div>
-                                <div className="d-flex gap-2">
-                                    <button
-                                        className="btn btn-success"
-                                        onClick={handleExport}
-                                        disabled={downloading || selectedItemNames.length === 0}
-                                    >
-                                        {downloading ? (
-                                            <>
-                                                <span className="spinner-border spinner-border-sm me-2" role="status"
-                                                      aria-hidden="true"></span>
-                                                Downloading...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <i className="bi bi-file-earmark-excel me-2"></i>
-                                                Export to Excel
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+        <div className="container-fluid" style={{backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px'}}>
+            {/* Professional Header with Gradient */}
+            <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                padding: '32px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                color: 'white',
+                marginBottom: '24px'
+            }}>
+                <div className="d-flex justify-content-between align-items-center flex-wrap">
+                    <div>
+                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '8px' }}>
+                            <i className="bi bi-list-ul me-3"></i>
+                            Item Report
+                        </h1>
+                        <p style={{ fontSize: '0.95rem', marginBottom: '0', opacity: '0.95' }}>
+                            {reportData && (
+                                <>
+                                    <i className="bi bi-calendar-event me-1"></i>
+                                    Report Date: {reportData.report_date}
+                                    <span className="mx-2">•</span>
+                                    <i className="bi bi-box-seam me-1"></i>
+                                    Total Items: {reportData.total_items}
+                                </>
+                            )}
+                        </p>
                     </div>
+                    <button
+                        className="btn"
+                        onClick={handleExport}
+                        disabled={downloading || selectedItemNames.length === 0}
+                        style={{
+                            backgroundColor: 'white',
+                            border: '2px solid white',
+                            color: '#667eea',
+                            fontWeight: '600',
+                            padding: '10px 24px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                            marginTop: '12px'
+                        }}
+                    >
+                        {downloading ? (
+                            <>
+                                <span className="spinner-border spinner-border-sm me-2" role="status"
+                                      aria-hidden="true"></span>
+                                Downloading...
+                            </>
+                        ) : (
+                            <>
+                                <i className="bi bi-file-earmark-excel me-2"></i>
+                                Export to Excel
+                            </>
+                        )}
+                    </button>
                 </div>
             </div>
 
             {/* Filters Section */}
             <div className="row mb-4">
                 <div className="col-12">
-                    <div className="card shadow-sm border-0">
+                    <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
                         <div
-                            className="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
-                            <h5 className="mb-0">
+                            className="card-header bg-white border-bottom d-flex justify-content-between align-items-center"
+                            style={{ padding: '20px 24px', borderRadius: '12px 12px 0 0' }}>
+                            <h5 className="mb-0" style={{ fontWeight: '600', color: '#2c3e50' }}>
                                 <i className="bi bi-sliders me-2"></i>
                                 Filters
                             </h5>
                             {hasActiveFilters && (
-                                <button className="btn btn-sm btn-outline-secondary" onClick={handleClearFilters}>
+                                <button className="btn btn-sm btn-outline-secondary" onClick={handleClearFilters} style={{ fontWeight: '500' }}>
                                     <i className="bi bi-x-circle me-1"></i>
                                     Clear Filters
                                 </button>
                             )}
                         </div>
-                        <div className="card-body">
+                        <div className="card-body" style={{ padding: '24px' }}>
                             <div className="row g-3">
                                 <div className="col-lg-2 col-md-6">
                                     <label className="form-label fw-bold mb-2">

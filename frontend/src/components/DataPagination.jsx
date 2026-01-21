@@ -76,13 +76,19 @@ export default function DataPagination({
     };
 
     return (
-        <div className="d-flex justify-content-between align-items-center mt-3">
+        <div className="d-flex justify-content-between align-items-center mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
             {/* Page Size Selector */}
             <div className="d-flex align-items-center">
-                <label className="me-2 mb-0">Show:</label>
+                <label className="me-2 mb-0" style={{ fontSize: '0.9rem', fontWeight: '500', color: '#6b7280' }}>Show:</label>
                 <select
                     className="form-select form-select-sm"
-                    style={{width: "auto"}}
+                    style={{
+                        width: "auto",
+                        borderRadius: '8px',
+                        border: '1px solid #d1d5db',
+                        padding: '6px 12px',
+                        fontWeight: '500'
+                    }}
                     value={pageSize}
                     onChange={handlePageSizeChange}
                 >
@@ -90,7 +96,7 @@ export default function DataPagination({
                         <option key={size} value={size}>{size}</option>
                     ))}
                 </select>
-                <span className="ms-2 text-muted">per page</span>
+                <span className="ms-2" style={{ fontSize: '0.9rem', color: '#6b7280' }}>per page</span>
             </div>
 
             {/* Pagination Controls */}
@@ -102,6 +108,12 @@ export default function DataPagination({
                             className="page-link"
                             onClick={() => handlePageChange(currentPage - 1)}
                             disabled={!hasPrevious}
+                            style={{
+                                borderRadius: '8px 0 0 8px',
+                                fontWeight: '500',
+                                padding: '8px 12px',
+                                border: '1px solid #d1d5db'
+                            }}
                         >
                             <i className="bi bi-chevron-left"></i>
                         </button>
@@ -112,19 +124,30 @@ export default function DataPagination({
                         if (page === "...") {
                             return (
                                 <li key={`ellipsis-${index}`} className="page-item disabled">
-                                    <span className="page-link">...</span>
+                                    <span className="page-link" style={{ border: '1px solid #d1d5db', padding: '8px 12px' }}>...</span>
                                 </li>
                             );
                         }
 
+                        const isActive = currentPage === page;
                         return (
                             <li
                                 key={page}
-                                className={`page-item ${currentPage === page ? "active" : ""}`}
+                                className={`page-item ${isActive ? "active" : ""}`}
                             >
                                 <button
                                     className="page-link"
                                     onClick={() => handlePageChange(page)}
+                                    style={{
+                                        fontWeight: '500',
+                                        padding: '8px 12px',
+                                        border: '1px solid #d1d5db',
+                                        ...(isActive && {
+                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                            borderColor: '#667eea',
+                                            color: 'white'
+                                        })
+                                    }}
                                 >
                                     {page}
                                 </button>
@@ -138,6 +161,12 @@ export default function DataPagination({
                             className="page-link"
                             onClick={() => handlePageChange(currentPage + 1)}
                             disabled={!hasNext}
+                            style={{
+                                borderRadius: '0 8px 8px 0',
+                                fontWeight: '500',
+                                padding: '8px 12px',
+                                border: '1px solid #d1d5db'
+                            }}
                         >
                             <i className="bi bi-chevron-right"></i>
                         </button>
@@ -146,7 +175,7 @@ export default function DataPagination({
             </nav>
 
             {/* Page Info */}
-            <div className="text-muted">
+            <div style={{ fontSize: '0.9rem', fontWeight: '500', color: '#6b7280' }}>
                 Page {currentPage} of {totalPages}
             </div>
         </div>

@@ -471,13 +471,33 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     if (initialLoading) return <div className="p-4">Loading...</div>;
 
     return (
-        <div style={{height: isModal ? '100%' : 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
-            <div className="d-flex justify-content-between align-items-center mb-3" style={{flexShrink: 0}}>
-                {!isModal && <h2 className="mb-0">Allocate License Items</h2>}
-                <div className="d-flex gap-2" style={{marginLeft: isModal ? 'auto' : '0'}}>
-                    <button
-                        className="btn btn-info"
-                        onClick={() => {
+        <div style={{
+            height: isModal ? '100%' : 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: isModal ? 'transparent' : '#f8f9fa',
+            padding: isModal ? '0' : '24px',
+            minHeight: isModal ? 'auto' : '100vh'
+        }}>
+            {!isModal && (
+                <div style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    padding: '32px',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                    color: 'white',
+                    marginBottom: '24px',
+                    flexShrink: 0
+                }}>
+                    <div className="d-flex justify-content-between align-items-center flex-wrap">
+                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
+                            <i className="bi bi-diagram-3 me-3"></i>
+                            Allocate License Items
+                        </h1>
+                        <div className="btn-group" style={{ marginTop: '12px' }}>
+                            <button
+                                className="btn"
+                                onClick={() => {
                             if (isModal && onClose) {
                                 // In modal mode, close the allocation modal and navigate to edit page
                                 onClose();
@@ -490,12 +510,19 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             navigate(`/allotments/${id}/edit`);
                         }}
                         title="Edit Allotment"
+                        style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                            border: '1px solid rgba(255, 255, 255, 0.3)',
+                            color: 'white',
+                            fontWeight: '500',
+                            backdropFilter: 'blur(10px)'
+                        }}
                     >
                         <i className="bi bi-pencil-square me-1"></i>
                         Edit
                     </button>
                     <button
-                        className="btn btn-primary"
+                        className="btn"
                         onClick={async () => {
                             if (!window.confirm('Are you sure you want to create a copy of this allotment?')) {
                                 return;
@@ -510,12 +537,19 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             }
                         }}
                         title="Create a copy of this allotment"
+                        style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                            border: '1px solid rgba(255, 255, 255, 0.3)',
+                            color: 'white',
+                            fontWeight: '500',
+                            backdropFilter: 'blur(10px)'
+                        }}
                     >
                         <i className="bi bi-files me-1"></i>
                         Copy Allotment
                     </button>
                     <button
-                        className="btn btn-success"
+                        className="btn"
                         onClick={async () => {
                             try {
                                 const response = await api.get(`/allotment-actions/${id}/generate-pdf/`, {
@@ -534,18 +568,32 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             }
                         }}
                         title="Download Allotment PDF"
+                        style={{
+                            backgroundColor: 'white',
+                            border: '2px solid white',
+                            color: '#667eea',
+                            fontWeight: '600',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                        }}
                     >
                         <i className="bi bi-file-pdf me-1"></i>
                         Download PDF
                     </button>
                     {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
                         <button
-                            className="btn btn-warning"
+                            className="btn"
                             onClick={() => {
                                 // Scroll to transfer letter section
                                 document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' });
                             }}
                             title="Generate Transfer Letter"
+                            style={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                color: 'white',
+                                fontWeight: '500',
+                                backdropFilter: 'blur(10px)'
+                            }}
                         >
                             <i className="bi bi-file-earmark-text me-1"></i>
                             Transfer Letter
@@ -553,7 +601,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     )}
                     {!isModal && (
                         <button
-                            className="btn btn-secondary"
+                            className="btn"
                             onClick={() => {
                                 // Store a flag to indicate we're returning to list
                                 sessionStorage.setItem('allotmentListFilters', JSON.stringify({
@@ -562,12 +610,22 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 }));
                                 navigate('/allotments');
                             }}
+                            style={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                color: 'white',
+                                fontWeight: '500',
+                                backdropFilter: 'blur(10px)'
+                            }}
                         >
+                            <i className="bi bi-arrow-left me-1"></i>
                             Back to Allotments
                         </button>
                     )}
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Scrollable content area */}
             <div style={{flex: 1, overflowY: 'auto', paddingRight: '8px'}}>

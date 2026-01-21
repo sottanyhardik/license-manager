@@ -307,78 +307,100 @@ export default function ItemPivotReport() {
 
 
     return (
-        <div className="container-fluid px-3 py-3" style={{backgroundColor: '#f8f9fa', minHeight: '100vh'}}>
-            {/* Header Section */}
-            <div className="row mb-4">
-                <div className="col-12">
-                    <div className="card shadow-sm border-0">
-                        <div className="card-body">
-                            <div className="d-flex justify-content-between align-items-center flex-wrap">
-                                <div className="mb-2 mb-md-0">
-                                    <h2 className="mb-1">
-                                        <i className="bi bi-table me-2 text-primary"></i>
-                                        Item Pivot Report
-                                    </h2>
-                                    <p className="text-muted mb-0 small">
-                                        {reportData && (
-                                            <>
-                                                <i className="bi bi-calendar-event me-1"></i>
-                                                Report Date: {reportData.report_date}
-                                                <span className="mx-2">•</span>
-                                            </>
-                                        )}
-                                        <i className="bi bi-tag-fill me-1"></i>
-                                        Active Norm: {activeNormTab || 'None Selected'}
-                                        {reportData && (
-                                            <>
-                                                <span className="mx-2">•</span>
-                                                <i className="bi bi-bell me-1"></i>
-                                                {getTotalNotificationCount()} Notifications
-                                                <span className="mx-2">•</span>
-                                                <i className="bi bi-file-text me-1"></i>
-                                                {getTotalLicenseCount()} Licenses
-                                            </>
-                                        )}
-                                    </p>
-                                </div>
-                                <div className="d-flex gap-2">
-                                    <button
-                                        className="btn btn-outline-primary"
-                                        onClick={() => setFiltersCollapsed(!filtersCollapsed)}
-                                    >
-                                        <i className={`bi bi-funnel${hasActiveFilters ? '-fill' : ''} me-2`}></i>
-                                        {filtersCollapsed ? 'Show' : 'Hide'} Filters
-                                        {hasActiveFilters && <span className="badge bg-primary ms-2">Active</span>}
-                                    </button>
-                                    <button
-                                        className="btn btn-warning"
-                                        onClick={handleUpdateBalance}
-                                        title="Update balance_cif, is_active, is_expired, and restrictions. Runs in background."
-                                    >
-                                        <i className="bi bi-arrow-clockwise me-2"></i>
-                                        Update Balance
-                                    </button>
-                                    <button
-                                        className="btn btn-success"
-                                        onClick={handleExport}
-                                        disabled={downloading}
-                                    >
-                                        {downloading ? (
-                                            <>
-                                                <span className="spinner-border spinner-border-sm me-2" role="status"
-                                                      aria-hidden="true"></span>
-                                                Downloading...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <i className="bi bi-file-earmark-excel me-2"></i>
-                                                Export to Excel
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+        <div className="container-fluid" style={{backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px'}}>
+            {/* Professional Header with Gradient */}
+            <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                padding: '32px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                color: 'white',
+                marginBottom: '24px'
+            }}>
+                <div className="d-flex justify-content-between align-items-center flex-wrap">
+                    <div>
+                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '8px' }}>
+                            <i className="bi bi-table me-3"></i>
+                            Item Pivot Report
+                        </h1>
+                        <p style={{ fontSize: '0.95rem', marginBottom: '0', opacity: '0.95' }}>
+                            {reportData && (
+                                <>
+                                    <i className="bi bi-calendar-event me-1"></i>
+                                    Report Date: {reportData.report_date}
+                                    <span className="mx-2">•</span>
+                                </>
+                            )}
+                            <i className="bi bi-tag-fill me-1"></i>
+                            Active Norm: {activeNormTab || 'None Selected'}
+                            {reportData && (
+                                <>
+                                    <span className="mx-2">•</span>
+                                    <i className="bi bi-bell me-1"></i>
+                                    {getTotalNotificationCount()} Notifications
+                                    <span className="mx-2">•</span>
+                                    <i className="bi bi-file-text me-1"></i>
+                                    {getTotalLicenseCount()} Licenses
+                                </>
+                            )}
+                        </p>
+                    </div>
+                    <div className="btn-group" style={{ marginTop: '12px' }}>
+                        <button
+                            className="btn"
+                            onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+                            style={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                color: 'white',
+                                fontWeight: '500',
+                                backdropFilter: 'blur(10px)'
+                            }}
+                        >
+                            <i className={`bi bi-funnel${hasActiveFilters ? '-fill' : ''} me-2`}></i>
+                            {filtersCollapsed ? 'Show' : 'Hide'} Filters
+                            {hasActiveFilters && <span className="badge bg-light text-dark ms-2">Active</span>}
+                        </button>
+                        <button
+                            className="btn"
+                            onClick={handleUpdateBalance}
+                            title="Update balance_cif, is_active, is_expired, and restrictions. Runs in background."
+                            style={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                color: 'white',
+                                fontWeight: '500',
+                                backdropFilter: 'blur(10px)'
+                            }}
+                        >
+                            <i className="bi bi-arrow-clockwise me-2"></i>
+                            Update Balance
+                        </button>
+                        <button
+                            className="btn"
+                            onClick={handleExport}
+                            disabled={downloading}
+                            style={{
+                                backgroundColor: 'white',
+                                border: '2px solid white',
+                                color: '#667eea',
+                                fontWeight: '600',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                            }}
+                        >
+                            {downloading ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status"
+                                          aria-hidden="true"></span>
+                                    Downloading...
+                                </>
+                            ) : (
+                                <>
+                                    <i className="bi bi-file-earmark-excel me-2"></i>
+                                    Export to Excel
+                                </>
+                            )}
+                        </button>
                     </div>
                 </div>
             </div>

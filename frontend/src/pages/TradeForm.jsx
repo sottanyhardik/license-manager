@@ -227,17 +227,18 @@ export default function TradeForm() {
     };
 
     const handlePrefillInvoiceNumber = async () => {
-        // For PURCHASE, use to_company (buyer); for SALE, use from_company (seller)
-        const relevantCompany = formData.direction === 'PURCHASE' ? formData.to_company : formData.from_company;
+        // For PURCHASE/COMMISSION_PURCHASE, use to_company (buyer); for SALE/COMMISSION_SALE, use from_company (seller)
+        const isPurchaseType = formData.direction === 'PURCHASE' || formData.direction === 'COMMISSION_PURCHASE';
+        const relevantCompany = isPurchaseType ? formData.to_company : formData.from_company;
 
         if (!relevantCompany) {
-            const companyField = formData.direction === 'PURCHASE' ? 'To Company' : 'From Company';
+            const companyField = isPurchaseType ? 'To Company' : 'From Company';
             toast.warning(`Please select ${companyField} first`);
             return;
         }
 
         if (!formData.direction) {
-            toast.warning("Please select direction (PURCHASE/SALE) first");
+            toast.warning("Please select transaction type first");
             return;
         }
 
@@ -759,9 +760,9 @@ export default function TradeForm() {
                 <div className="card mb-4">
                     <div className="card-body">
                         <div className="row">
-                            <div className="col-md-6">
+                            <div className="col-md-12">
                                 <label className="form-label fw-bold">Transaction Type <span className="text-danger">*</span></label>
-                                <div className="d-flex gap-4">
+                                <div className="d-flex gap-4 flex-wrap">
                                     <div className="form-check">
                                         <input
                                             className="form-check-input"
@@ -788,6 +789,34 @@ export default function TradeForm() {
                                         />
                                         <label className="form-check-label" htmlFor="directionSale">
                                             Sale (Trade Out)
+                                        </label>
+                                    </div>
+                                    <div className="form-check">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="direction"
+                                            id="directionCommissionPurchase"
+                                            value="COMMISSION_PURCHASE"
+                                            checked={formData.direction === "COMMISSION_PURCHASE"}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
+                                        />
+                                        <label className="form-check-label" htmlFor="directionCommissionPurchase">
+                                            Commission Purchase
+                                        </label>
+                                    </div>
+                                    <div className="form-check">
+                                        <input
+                                            className="form-check-input"
+                                            type="radio"
+                                            name="direction"
+                                            id="directionCommissionSale"
+                                            value="COMMISSION_SALE"
+                                            checked={formData.direction === "COMMISSION_SALE"}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
+                                        />
+                                        <label className="form-check-label" htmlFor="directionCommissionSale">
+                                            Commission Sale
                                         </label>
                                     </div>
                                 </div>
@@ -946,17 +975,23 @@ export default function TradeForm() {
                                 onClick={handlePrefillInvoiceNumber}
                                 disabled={
                                     !formData.direction ||
-                                    (formData.direction === 'PURCHASE' && !formData.to_company) ||
-                                    (formData.direction === 'SALE' && !formData.from_company)
+                                    ((formData.direction === 'PURCHASE' || formData.direction === 'COMMISSION_PURCHASE') && !formData.to_company) ||
+                                    ((formData.direction === 'SALE' || formData.direction === 'COMMISSION_SALE') && !formData.from_company)
                                 }
                                 title={
                                     !formData.direction
-                                        ? "Select Direction first"
-                                        : (formData.direction === 'PURCHASE' && !formData.to_company)
-                                            ? "Select To Company (buyer) for PURCHASE invoice"
-                                            : (formData.direction === 'SALE' && !formData.from_company)
-                                                ? "Select From Company (seller) for SALE invoice"
-                                                : "Generate invoice number: PURCHASE format is P-PREFIX/FY/NNNN, SALE format is PREFIX/FY/NNNN"
+                                        ? "Select Transaction Type first"
+                                        : ((formData.direction === 'PURCHASE' || formData.direction === 'COMMISSION_PURCHASE') && !formData.to_company)
+                                            ? "Select To Company (buyer) for PURCHASE/COMMISSION_PURCHASE invoice"
+                                            : ((formData.direction === 'SALE' || formData.direction === 'COMMISSION_SALE') && !formData.from_company)
+                                                ? "Select From Company (seller) for SALE/COMMISSION_SALE invoice"
+                                                : formData.direction === 'PURCHASE'
+                                                    ? "Generate invoice number: P-PREFIX/FY/NNNN"
+                                                    : formData.direction === 'SALE'
+                                                        ? "Generate invoice number: PREFIX/FY/NNNN"
+                                                        : formData.direction === 'COMMISSION_PURCHASE'
+                                                            ? "Generate invoice number: COM-P-PREFIX/FY/NNNN"
+                                                            : "Generate invoice number: COM-PREFIX/FY/NNNN"
                                 }
                             >
                                 <i className="bi bi-magic me-1"></i>

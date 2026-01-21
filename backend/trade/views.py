@@ -344,12 +344,16 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
         Generate next invoice number based on direction, company, and invoice date.
 
         Query Parameters:
-        - direction: 'PURCHASE' or 'SALE' (required)
+        - direction: 'PURCHASE', 'SALE', 'COMMISSION_PURCHASE', or 'COMMISSION_SALE' (required)
         - company_id: Company ID (required)
         - invoice_date: Invoice date in YYYY-MM-DD or dd-mm-yyyy format (optional, defaults to today)
 
         Returns:
-        - invoice_number: Generated invoice number in format PREFIX/YYYY-YY/NNNN
+        - invoice_number: Generated invoice number in format:
+          PURCHASE: P-PREFIX/YYYY-YY/NNNN
+          SALE: PREFIX/YYYY-YY/NNNN
+          COMMISSION_PURCHASE: COM-P-PREFIX/YYYY-YY/NNNN
+          COMMISSION_SALE: COM-PREFIX/YYYY-YY/NNNN
         """
         from datetime import datetime
         from trade.models import get_next_invoice_number
@@ -361,7 +365,7 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
         # Validate required parameters
         if not direction:
             return Response(
-                {"error": "direction is required (PURCHASE or SALE)"},
+                {"error": "direction is required (PURCHASE, SALE, COMMISSION_PURCHASE, or COMMISSION_SALE)"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -372,9 +376,9 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
             )
 
         # Validate direction
-        if direction not in ['PURCHASE', 'SALE']:
+        if direction not in ['PURCHASE', 'SALE', 'COMMISSION_PURCHASE', 'COMMISSION_SALE']:
             return Response(
-                {"error": "direction must be 'PURCHASE' or 'SALE'"},
+                {"error": "direction must be 'PURCHASE', 'SALE', 'COMMISSION_PURCHASE', or 'COMMISSION_SALE'"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

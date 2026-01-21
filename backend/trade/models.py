@@ -74,15 +74,18 @@ def get_next_invoice_number(direction: str, company_name: str, invoice_date=None
     Generate the next invoice number in format:
     - PURCHASE: P-PREFIX/YYYY-YY/NNNN (e.g., P-LM/2025-26/0024)
     - SALE: PREFIX/YYYY-YY/NNNN (e.g., LM/2025-26/0001)
+    - COMMISSION_PURCHASE: COM-P-PREFIX/YYYY-YY/NNNN (e.g., COM-P-LM/2025-26/0001)
+    - COMMISSION_SALE: COM-PREFIX/YYYY-YY/NNNN (e.g., COM-LM/2025-26/0001)
 
     Logic:
     - Finds the highest invoice number in the same financial year
     - Increments by 1 (skips gaps, e.g., if 17, 19, 83 exist, next is 84, not 18)
     - Restarts from 0001 for each new financial year
     - PURCHASE invoices are prefixed with 'P-'
+    - COMMISSION invoices are prefixed with 'COM-' (and 'COM-P-' for commission purchase)
 
     Args:
-        direction: 'PURCHASE' or 'SALE'
+        direction: 'PURCHASE', 'SALE', 'COMMISSION_PURCHASE', or 'COMMISSION_SALE'
         company_name: Company name to generate prefix
         invoice_date: Date to determine financial year (defaults to today)
 
@@ -96,10 +99,14 @@ def get_next_invoice_number(direction: str, company_name: str, invoice_date=None
     base_prefix = company_prefix(company_name)
     fy = indian_fy_label(invoice_date)
 
-    # Add P- prefix for PURCHASE direction
+    # Add prefixes based on direction
     if direction == 'PURCHASE':
         prefix = f"P-{base_prefix}"
-    else:
+    elif direction == 'COMMISSION_PURCHASE':
+        prefix = f"COM-P-{base_prefix}"
+    elif direction == 'COMMISSION_SALE':
+        prefix = f"COM-{base_prefix}"
+    else:  # SALE
         prefix = base_prefix
 
     # Build the pattern for this prefix + FY
@@ -133,7 +140,14 @@ class LicenseTrade(models.Model):
     """Trade header (Purchase / Sale). Invoice-level details & totals only."""
     DIR_PURCHASE = "PURCHASE"
     DIR_SALE = "SALE"
-    DIR_CHOICES = ((DIR_PURCHASE, "Purchase"), (DIR_SALE, "Sale"))
+    DIR_COMMISSION_PURCHASE = "COMMISSION_PURCHASE"
+    DIR_COMMISSION_SALE = "COMMISSION_SALE"
+    DIR_CHOICES = (
+        (DIR_PURCHASE, "Purchase"),
+        (DIR_SALE, "Sale"),
+        (DIR_COMMISSION_PURCHASE, "Commission Purchase"),
+        (DIR_COMMISSION_SALE, "Commission Sale"),
+    )
 
     LICENSE_TYPE_DFIA = "DFIA"
     LICENSE_TYPE_INCENTIVE = "INCENTIVE"
@@ -142,7 +156,7 @@ class LicenseTrade(models.Model):
         (LICENSE_TYPE_INCENTIVE, "Incentive License"),
     )
 
-    direction = models.CharField(max_length=10, choices=DIR_CHOICES, db_index=True)
+    direction = models.CharField(max_length=20, choices=DIR_CHOICES, db_index=True)
 
     # License type selection
     license_type = models.CharField(
@@ -1036,10 +1050,12 @@ class CommissionSlab(models.Model):
     DIRECTION_CHOICES = [
         ('PURCHASE', 'Purchase'),
         ('SALE', 'Sale'),
+        ('COMMISSION_PURCHASE', 'Commission Purchase'),
+        ('COMMISSION_SALE', 'Commission Sale'),
         ('BOTH', 'Both'),
     ]
 
-    direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES, default='BOTH')
+    direction = models.CharField(max_length=20, choices=DIRECTION_CHOICES, default='BOTH')
 
     # Slab range
     min_amount = models.DecimalField(
@@ -1103,7 +1119,7 @@ class CommissionSlab(models.Model):
             return slab.commission_rate
 
         # Fallback to agent's default rate
-        if direction == 'PURCHASE':
+        if direction in ('PURCHASE', 'COMMISSION_PURCHASE'):
             return agent.default_purchase_rate
         else:
             return agent.default_sale_rate

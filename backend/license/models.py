@@ -70,8 +70,13 @@ def license_path(instance, filename):
 # License Header
 # -----------------------------
 class LicenseDetailsModel(AuditModel):
-    purchase_status = models.CharField(
-        choices=LICENCE_PURCHASE_CHOICES, max_length=2, default=GE
+    purchase_status = models.ForeignKey(
+        'core.PurchaseStatus',
+        on_delete=models.PROTECT,
+        related_name='licenses',
+        help_text='Purchase status for this license',
+        null=True,
+        blank=True
     )
     scheme_code = models.CharField(choices=SCHEME_CODE_CHOICES, max_length=10, default=SCHEME_CODE_CHOICES[0][0])
     notification_number = models.CharField(
@@ -879,7 +884,7 @@ class LicenseImportItemsModel(models.Model):
         from core.constants import N2009, CO
 
         # Check exception: 098/2009 OR Conversion - restrictions do not apply
-        if self.license and (self.license.notification_number == N2009 or self.license.purchase_status == CO):
+        if self.license and (self.license.notification_number == N2009 or (self.license.purchase_status and self.license.purchase_status.code == CO)):
             return DEC_0  # No restriction applies
 
         # Get all item names linked to this import item

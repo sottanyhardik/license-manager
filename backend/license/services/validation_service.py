@@ -34,7 +34,7 @@ class LicenseValidationService:
         errors = []
 
         # Check purchase status
-        if license_obj.purchase_status != GE:
+        if not license_obj.purchase_status or license_obj.purchase_status.code != GE:
             errors.append("License purchase status is not GE (Goods Exported)")
 
         # Check expiry date
@@ -303,7 +303,7 @@ class LicenseValidationService:
         flags['is_expired'] = is_date_expired(license_obj.license_expiry_date)
 
         # Check if active
-        if license_obj.purchase_status != GE:
+        if not license_obj.purchase_status or license_obj.purchase_status.code != GE:
             flags['is_active'] = False
         elif flags['is_expired'] or flags['is_null'] or license_obj.is_au:
             flags['is_active'] = False

@@ -6,7 +6,7 @@ from .models import (
     HeadSIONNormsModel, SionNormClassModel,
     SIONExportModel, SIONImportModel,
     ProductDescriptionModel, UnitPriceModel, ItemNameModel, ItemHeadModel, ItemGroupModel,
-    TransferLetterModel, SionNormNote, SionNormCondition, ExchangeRateModel
+    TransferLetterModel, SionNormNote, SionNormCondition, ExchangeRateModel, PurchaseStatus
 )
 
 
@@ -247,3 +247,11 @@ class ExchangeRateSerializer(AuditSerializerMixin):
         from .models import ExchangeRateModel
         active_rate = ExchangeRateModel.get_active_rate()
         return obj.id == active_rate.id if active_rate else False
+
+
+# ---- Purchase Status ----
+class PurchaseStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PurchaseStatus
+        fields = ['id', 'code', 'label', 'is_active', 'display_order']
+        read_only_fields = ['id']

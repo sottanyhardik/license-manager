@@ -74,7 +74,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "export_license__norm_class": {"type": "fk", "fk_endpoint": "/masters/sion-classes/",
                                            "label_field": "norm_class"},
             "notification_number": {"type": "choice", "choices": list(NOTIFICATION_NORM_CHOICES)},
-            "purchase_status": {"type": "choice", "choices": list(LICENCE_PURCHASE_CHOICES_ACTIVE)},
+            "purchase_status": {"type": "fk", "fk_endpoint": "/masters/purchase-statuses/", "label_field": "label", "filter_params": {"is_active": "true"}},
             "license_date": {"type": "date_range"},
             "license_expiry_date": {"type": "date_range"},
             "balance_cif": {"type": "range"},
@@ -84,7 +84,8 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
         "default_filters": {
             "is_expired": "False",
             "is_null": "False",
-            "purchase_status": "GE,NP,SM,CO"
+            # Purchase status: Will be converted to IDs in get_queryset
+            "purchase_status__code__in": "GE,NP,SM,CO"
         },
         "list_display": [
             "license_number",
@@ -92,7 +93,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "license_expiry_date",
             "exporter__name",
             "port__name",
-            "purchase_status",
+            "purchase_status_label",
             "balance_cif",
             "latest_transfer",
             "get_norm_class"
@@ -137,8 +138,10 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
                 "label_field": "name"
             },
             "purchase_status": {
-                "type": "select",
-                "choices": list(LICENCE_PURCHASE_CHOICES)
+                "type": "fk",
+                "fk_endpoint": "/masters/purchase-statuses/",
+                "label_field": "label",
+                "filter_params": {"is_active": "true"}
             },
             "scheme_code": {
                 "type": "select",
@@ -310,10 +313,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         # Handle purchase_status filter - apply default if not provided
         purchase_status_value = params.get('purchase_status')
+        purchase_status_code_value = params.get('purchase_status__code__in')
 
-        # If purchase_status not provided or empty, apply default
-        if not purchase_status_value or purchase_status_value == "":
-            purchase_status_value = default_filters.get('purchase_status')
+        # If purchase_status not provided or empty, apply default (using code lookup)
+        if not purchase_status_value and not purchase_status_code_value:
+            purchase_status_code_value = default_filters.get('purchase_status__code__in')
 
         # Call parent method for remaining filters (exclude is_expired and is_null from parent processing)
         # Create a new QueryDict-like object without is_expired and is_null
@@ -323,9 +327,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             if key not in ('is_expired', 'is_null'):
                 filtered_params[key] = value
 
-        # Add purchase_status default if needed
-        if purchase_status_value and 'purchase_status' not in filtered_params:
-            filtered_params['purchase_status'] = purchase_status_value
+        # Add purchase_status__code__in default if needed
+        if purchase_status_code_value and 'purchase_status__code__in' not in filtered_params and 'purchase_status' not in filtered_params:
+            filtered_params['purchase_status__code__in'] = purchase_status_code_value
 
         # Create a copy of filter_config without is_expired and is_null
         filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null')}

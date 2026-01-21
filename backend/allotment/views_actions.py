@@ -330,7 +330,7 @@ class AllotmentActionViewSet(ViewSet):
                     is_exception = (
                         license_item.license and (
                             license_item.license.notification_number == "098/2009" or
-                            license_item.license.purchase_status == "CO"
+                            (license_item.license.purchase_status and license_item.license.purchase_status.code == "CO")
                         )
                     )
 

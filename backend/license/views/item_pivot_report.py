@@ -201,7 +201,7 @@ class ItemPivotReportView(View):
 
                 # Define conversion norms
                 conversion_norms = ['E1', 'E5', 'E126', 'E132']
-                is_conversion = license_obj.purchase_status == CO
+                is_conversion = license_obj.purchase_status and license_obj.purchase_status.code == CO
 
                 # Build notification key based on norm class and purchase status
                 if norm_class in conversion_norms and is_conversion:

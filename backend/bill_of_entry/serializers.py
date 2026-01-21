@@ -11,7 +11,7 @@ class RowDetailsSerializer(serializers.ModelSerializer):
     license_number = serializers.CharField(source='sr_number.license.license_number', read_only=True)
     item_description = serializers.CharField(source='sr_number.description', read_only=True)
     hs_code = serializers.CharField(source='sr_number.hs_code.hs_code', read_only=True)
-    purchase_status = serializers.CharField(source='sr_number.license.purchase_status', read_only=True)
+    purchase_status = serializers.CharField(source='sr_number.license.purchase_status.code', read_only=True)
 
     class Meta:
         model = RowDetails

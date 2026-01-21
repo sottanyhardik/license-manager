@@ -347,6 +347,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     # Annotated fields for FK display
     exporter_name = serializers.CharField(read_only=True, required=False)
     port_name = serializers.CharField(read_only=True, required=False)
+    purchase_status_code = serializers.SerializerMethodField()
+    purchase_status_label = serializers.SerializerMethodField()
 
     # Property fields
     latest_transfer = serializers.CharField(read_only=True, required=False)
@@ -646,6 +648,14 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     def get_has_copy(self, obj):
         """Check if license has License Copy documents"""
         return obj.license_documents.filter(type='LICENSE COPY').exists()
+
+    def get_purchase_status_code(self, obj):
+        """Get purchase status code for display"""
+        return obj.purchase_status.code if obj.purchase_status else None
+
+    def get_purchase_status_label(self, obj):
+        """Get purchase status label for display"""
+        return obj.purchase_status.label if obj.purchase_status else None
 
     # helper for M2M items in import rows
     def _calculate_import_quantity(self, license_inst, hs_code_id):

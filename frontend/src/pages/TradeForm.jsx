@@ -854,8 +854,8 @@ export default function TradeForm() {
                 <div className="row mb-4">
                     {/* From Company */}
                     <div className="col-md-6">
-                        <div className="card">
-                            <div className="card-body">
+                        <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                            <div className="card-body" style={{ padding: '20px' }}>
                                 <h6>From Company Snapshot</h6>
 
                                 <div className="mb-3">
@@ -922,8 +922,8 @@ export default function TradeForm() {
 
                     {/* To Company */}
                     <div className="col-md-6">
-                        <div className="card">
-                            <div className="card-body">
+                        <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                            <div className="card-body" style={{ padding: '20px' }}>
                                 <h6>To Company Snapshot</h6>
 
                                 <div className="mb-3">
@@ -1141,8 +1141,8 @@ export default function TradeForm() {
                 </div>
 
                 {/* License Type - Placed before Billing Mode */}
-                <div className="card mb-4">
-                    <div className="card-body">
+                <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                    <div className="card-body" style={{ padding: '24px' }}>
                         <div className="row">
                             <div className="col-md-12">
                                 <label className="form-label fw-bold">License Type <span className="text-danger">*</span></label>

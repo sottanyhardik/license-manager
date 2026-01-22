@@ -835,7 +835,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         items={allotment.allotment_details.map(detail => ({
                             id: detail.id,
                             license_number: detail.license_number || '-',
-                            cif_fc: detail.cif_fc,
+                            cif_fc: detail.cif_fc || 0,
                             purchase_status: detail.purchase_status || 'N/A'
                         }))}
                         onSuccess={(msg) => setSuccess(msg)}

@@ -23,6 +23,19 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     sr_number_label = serializers.SerializerMethodField()
     computed_amount = serializers.SerializerMethodField()
 
+    def to_internal_value(self, data):
+        """Remove empty string fields to prevent overwriting existing values with zeros"""
+        # Create a copy to avoid modifying the original data
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+
+        # Remove fields with empty strings so they don't override existing values
+        fields_to_check = ['qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct', 'amount_inr']
+        for field in fields_to_check:
+            if field in data and data[field] == '':
+                del data[field]
+
+        return super().to_internal_value(data)
+
     class Meta:
         model = LicenseTradeLine
         fields = (

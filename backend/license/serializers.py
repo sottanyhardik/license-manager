@@ -53,6 +53,7 @@ class LicenseExportItemSerializer(serializers.ModelSerializer):
     norm_class_detail = SionNormClassNestedSerializer(source='norm_class', read_only=True)
     norm_class_label = serializers.SerializerMethodField()
     item_label = serializers.SerializerMethodField()
+    unit = serializers.CharField(required=False, allow_blank=True, default='kg')
 
     class Meta:
         model = LicenseExportItemModel

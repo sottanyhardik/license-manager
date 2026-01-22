@@ -1094,7 +1094,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </div>
                         </div>
 
-                    <div className="table-responsive" style={{ borderRadius: '8px', overflow: 'hidden' }}>
+                    <div className="table-responsive" style={{ borderRadius: '8px', maxHeight: '600px', overflowY: 'auto', overflowX: 'auto' }}>
                         <table className="table table-sm table-hover" style={{fontSize: '0.875rem', marginBottom: '0'}}>
                             <thead className="sticky-top" style={{backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6', zIndex: 10}}>
                             <tr>
@@ -1111,8 +1111,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <th style={{minWidth: '80px', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Average</th>
                                 <th style={{minWidth: '90px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Expiry</th>
                                 <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Notes</th>
-                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Qty</th>
-                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Value</th>
+                                <th style={{minWidth: '160px', width: '160px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Qty</th>
+                                <th style={{minWidth: '160px', width: '160px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Value</th>
                                 <th style={{minWidth: '130px', position: 'sticky', right: 0, backgroundColor: '#f8f9fa', zIndex: 5, fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Action</th>
                             </tr>
                             </thead>
@@ -1154,8 +1154,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         </td>
                                         <td style={{fontSize: '0.8rem'}}>{item.license_expiry_date}</td>
                                         <td style={{fontSize: '0.8rem', maxWidth: '200px', whiteSpace: 'normal'}}>{item.notes || '-'}</td>
-                                        <td>
-                                            <div className="input-group input-group-sm" style={{minWidth: '140px'}}>
+                                        <td style={{width: '160px'}}>
+                                            <div className="input-group input-group-sm" style={{width: '100%'}}>
                                                 <input
                                                     type="number"
                                                     className="form-control form-control-sm"
@@ -1166,7 +1166,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                     min="0"
                                                     max={maxAllocation.qty}
                                                     title={`Max allowed: ${maxAllocation.qty} (with $20 buffer)`}
-                                                    style={{fontSize: '0.8rem'}}
+                                                    style={{fontSize: '0.8rem', width: '80px'}}
                                                 />
                                                 <button
                                                     className="btn btn-outline-secondary btn-sm"
@@ -1179,8 +1179,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 </button>
                                             </div>
                                         </td>
-                                        <td>
-                                            <div className="input-group input-group-sm" style={{minWidth: '140px'}}>
+                                        <td style={{width: '160px'}}>
+                                            <div className="input-group input-group-sm" style={{width: '100%'}}>
                                                 <input
                                                     type="number"
                                                     className="form-control form-control-sm"
@@ -1190,7 +1190,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                     step="0.01"
                                                     min="0"
                                                     title={`Max allowed: ${maxAllocation.value.toFixed(2)} (with $20 buffer)`}
-                                                    style={{fontSize: '0.8rem'}}
+                                                    style={{fontSize: '0.8rem', width: '80px'}}
                                                 />
                                                 <button
                                                     className="btn btn-outline-secondary btn-sm"

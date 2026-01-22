@@ -78,20 +78,32 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     # Display fields
     from_company_label = serializers.CharField(source='from_company.name', read_only=True)
     to_company_label = serializers.CharField(source='to_company.name', read_only=True)
+    from_company = serializers.CharField(source='from_company.name', read_only=True)
+    to_company = serializers.CharField(source='to_company.name', read_only=True)
     boe_label = serializers.CharField(source='boe.boe_number', read_only=True, allow_null=True)
     direction_label = serializers.CharField(source='get_direction_display', read_only=True)
     license_type_label = serializers.CharField(source='get_license_type_display', read_only=True)
-    incentive_license_label = serializers.SerializerMethodField()
+    incentive_license = serializers.SerializerMethodField()
 
     # Computed fields
     paid_or_received = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
     due_amount = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
 
-    def get_incentive_license_label(self, obj):
-        """Return incentive license display label"""
-        if obj.incentive_license:
-            return f"{obj.incentive_license.license_type} - {obj.incentive_license.license_number}"
-        return None
+    def get_incentive_license(self, obj):
+        """Return all license numbers (DFIA and Incentive) comma-separated"""
+        license_numbers = set()
+
+        # Get DFIA license numbers from trade lines
+        for line in obj.lines.all():
+            if line.sr_number and line.sr_number.license:
+                license_numbers.add(line.sr_number.license.license_number)
+
+        # Get Incentive license numbers from incentive_lines
+        for line in obj.incentive_lines.all():
+            if line.incentive_license:
+                license_numbers.add(line.incentive_license.license_number)
+
+        return ', '.join(sorted(license_numbers)) if license_numbers else None
 
     class Meta:
         model = LicenseTrade

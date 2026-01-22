@@ -165,11 +165,12 @@ def custom_get_queryset_with_defaults(self):
     action = getattr(self, 'action', None)
     kwargs = getattr(self, 'kwargs', {})
 
-    if action in ['retrieve', 'update', 'partial_update', 'destroy'] or 'pk' in kwargs:
+    # For detail views (retrieve, update, delete), skip all default filters
+    if action in ['retrieve', 'update', 'partial_update', 'destroy'] or kwargs.get('pk'):
         # For detail views, return all records without default filters
         return qs
 
-    # Handle is_boe filter
+    # Handle is_boe filter (only for list views)
     is_boe_param = params.get('is_boe', '')
 
     if is_boe_param == 'false_or_current':

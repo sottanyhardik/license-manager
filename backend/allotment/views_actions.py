@@ -203,7 +203,7 @@ class AllotmentActionViewSet(ViewSet):
         if purchase_status:
             status_list = [s.strip() for s in purchase_status.split(',') if s.strip()]
             if status_list:
-                queryset = queryset.filter(license__purchase_status__in=status_list)
+                queryset = queryset.filter(license__purchase_status__code__in=status_list)
 
         # Apply license_status filter
         if license_status and license_status.lower() != 'all':

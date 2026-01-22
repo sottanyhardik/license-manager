@@ -13,6 +13,15 @@ from license.serializers import LicenseDetailsSerializer, LicenseExportItemSeria
 from license.views.active_dfia_report import add_active_dfia_report_action
 from license.views.license_report import add_license_report_action
 
+
+# Helper function to get default purchase status IDs from codes
+def get_default_purchase_status_ids():
+    """Convert default purchase status codes to IDs"""
+    from core.models import PurchaseStatus
+    default_codes = ['GE', 'MI', 'CO']  # GE Purchase, GE Operating, Conversion
+    ids = list(PurchaseStatus.objects.filter(code__in=default_codes).values_list('id', flat=True))
+    return ','.join(map(str, ids)) if ids else ''
+
 # Nested field definitions for LicenseDetails
 license_nested_field_defs = {
     "export_license": [
@@ -84,8 +93,6 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
         "default_filters": {
             "is_expired": "False",
             "is_null": "False",
-            # Purchase status: Will be converted to IDs in get_queryset
-            "purchase_status__code__in": "GE,NP,SM,CO"
         },
         "list_display": [
             "license_number",
@@ -169,6 +176,18 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     """
     permission_classes = [LicensePermission]
     lookup_value_regex = '[^/]+'  # Allow both numbers and strings
+
+    def list(self, request, *args, **kwargs):
+        """Override list to add dynamic purchase_status default to metadata"""
+        response = super().list(request, *args, **kwargs)
+
+        # Add purchase_status default to metadata if present
+        if isinstance(response.data, dict) and 'default_filters' in response.data:
+            default_ps_ids = get_default_purchase_status_ids()
+            if default_ps_ids:
+                response.data['default_filters']['purchase_status'] = default_ps_ids
+
+        return response
 
     def get_object(self):
         """
@@ -311,27 +330,21 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 # Show non-null licenses: balance_cif >= 200
                 qs = qs.filter(balance_cif__gte=200)
 
-        # Handle purchase_status filter - apply default if not provided
-        purchase_status_value = params.get('purchase_status')
-        purchase_status_code_value = params.get('purchase_status__code__in')
-
-        # If purchase_status not provided or empty, apply default (using code lookup)
-        if not purchase_status_value and not purchase_status_code_value:
-            purchase_status_code_value = default_filters.get('purchase_status__code__in')
-
-        # Call parent method for remaining filters (exclude is_expired and is_null from parent processing)
-        # Create a new QueryDict-like object without is_expired and is_null
+        # Call parent method for remaining filters (exclude is_expired and is_null)
+        # Create a new QueryDict-like object
         from django.http import QueryDict
         filtered_params = QueryDict(mutable=True)
         for key, value in params.items():
             if key not in ('is_expired', 'is_null'):
-                filtered_params[key] = value
+                # Handle array format for purchase_status
+                if key == 'purchase_status[]':
+                    # Frontend sends purchase_status[] for multi-select
+                    for val in params.getlist(key):
+                        filtered_params.appendlist('purchase_status[]', val)
+                else:
+                    filtered_params[key] = value
 
-        # Add purchase_status__code__in default if needed
-        if purchase_status_code_value and 'purchase_status__code__in' not in filtered_params and 'purchase_status' not in filtered_params:
-            filtered_params['purchase_status__code__in'] = purchase_status_code_value
-
-        # Create a copy of filter_config without is_expired and is_null
+        # Create a copy of filter_config without custom-handled fields
         filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null')}
 
         # Call parent method with filtered params and config

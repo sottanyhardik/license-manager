@@ -562,7 +562,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
                                 const link = document.createElement('a');
                                 link.href = url;
-                                link.setAttribute('download', `Allotment_${allotment?.company_name || id}_${new Date().toISOString().split('T')[0]}.pdf`);
+                                link.setAttribute('download', `Allotment - ${allotment?.invoice || id}.pdf`);
                                 document.body.appendChild(link);
                                 link.click();
                                 link.remove();

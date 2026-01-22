@@ -245,9 +245,11 @@ export default function MasterList() {
         const hardcodedDefaults = getDefaultFilters();
 
         // Only update UI state if we have backend defaults and no hardcoded defaults
-        // Don't refetch - backend already applied them
         if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
             setFilterParams(backendDefaults);
+            backendDefaultsApplied.current = true;
+            // Fetch data with the default filters
+            fetchData(1, pageSize, backendDefaults);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [metadata.default_filters]);

@@ -63,9 +63,9 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
             "license_type",
             "invoice_number",
             "invoice_date",
-            "from_company_label",
-            "to_company_label",
-            "incentive_license_label",
+            "from_company",
+            "to_company",
+            "incentive_license",
             "total_amount",
             "paid_or_received",
             "due_amount"

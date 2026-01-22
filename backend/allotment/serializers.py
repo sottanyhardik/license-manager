@@ -18,7 +18,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     notification_number = serializers.CharField(read_only=True, required=False)
     file_number = serializers.CharField(read_only=True, required=False)
     port_code = serializers.CharField(read_only=True, required=False, source='port_code.name')
-    purchase_status = serializers.CharField(source='item.license.purchase_status.code', read_only=True)
+    purchase_status = serializers.SerializerMethodField()
     current_owner = serializers.CharField(source='item.license.current_owner.name', read_only=True, allow_null=True)
     file_transfer_status = serializers.CharField(source='item.license.file_transfer_status', read_only=True, allow_null=True)
 
@@ -53,6 +53,12 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
         elif isinstance(registration_date, date):
             return registration_date.strftime("%d-%m-%Y")
         return registration_date
+
+    def get_purchase_status(self, obj):
+        """Get purchase status code safely"""
+        if obj.item and obj.item.license and obj.item.license.purchase_status:
+            return obj.item.license.purchase_status.code
+        return None
 
     class Meta:
         model = AllotmentItems

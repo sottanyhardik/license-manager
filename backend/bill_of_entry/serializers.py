@@ -11,7 +11,13 @@ class RowDetailsSerializer(serializers.ModelSerializer):
     license_number = serializers.CharField(source='sr_number.license.license_number', read_only=True)
     item_description = serializers.CharField(source='sr_number.description', read_only=True)
     hs_code = serializers.CharField(source='sr_number.hs_code.hs_code', read_only=True)
-    purchase_status = serializers.CharField(source='sr_number.license.purchase_status.code', read_only=True)
+    purchase_status = serializers.SerializerMethodField()
+
+    def get_purchase_status(self, obj):
+        """Get purchase status code safely"""
+        if obj.sr_number and obj.sr_number.license and obj.sr_number.license.purchase_status:
+            return obj.sr_number.license.purchase_status.code
+        return None
 
     class Meta:
         model = RowDetails

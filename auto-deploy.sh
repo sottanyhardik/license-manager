@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 SERVER_USER="django"
 SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
-BRANCH="develop"
+BRANCH="feature-4.4"
 PASSWORD="admin"
 
 print_header() {

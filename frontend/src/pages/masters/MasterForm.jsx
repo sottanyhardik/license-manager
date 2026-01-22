@@ -539,9 +539,7 @@ export default function MasterForm({
                         itemErrors.net_quantity = ['Net quantity cannot be negative'];
                     }
 
-                    if (!item.unit) {
-                        itemErrors.unit = ['Unit is required'];
-                    }
+                    // Unit is not required for export items (has default value 'kg' in backend)
 
                     if (Object.keys(itemErrors).length > 0) {
                         exportErrors[index] = itemErrors;

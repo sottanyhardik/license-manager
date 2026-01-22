@@ -72,10 +72,22 @@ class LicenseExportItemSerializer(serializers.ModelSerializer):
             return obj.item.name
         return None
 
+    def validate_unit(self, value):
+        """Ensure unit has a default value if not provided or empty"""
+        if not value or value.strip() == '':
+            return 'kg'  # Default unit
+        return value
+
     def create(self, validated_data):
+        # Ensure unit has default if not provided
+        if 'unit' not in validated_data or not validated_data.get('unit'):
+            validated_data['unit'] = 'kg'
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
+        # Ensure unit has default if not provided
+        if 'unit' not in validated_data or not validated_data.get('unit'):
+            validated_data['unit'] = 'kg'
         return super().update(instance, validated_data)
 
     def to_representation(self, instance):

@@ -826,6 +826,10 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         except (ValueError, HSCodeModel.DoesNotExist):
                             e['hs_code'] = None
 
+                # Ensure unit field has default value if not provided or empty
+                if 'unit' not in e or not e.get('unit') or (isinstance(e.get('unit'), str) and e.get('unit').strip() == ''):
+                    e['unit'] = 'kg'
+
                 LicenseExportItemModel.objects.create(license=instance, **e)
 
             # Create import items - signal is called inside _create_import_item
@@ -892,6 +896,10 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                     for field in ['fob_fc', 'fob_inr', 'fob_exchange_rate', 'value_addition', 'cif_fc', 'cif_inr']:
                         if field in e and e[field] == '':
                             e[field] = None
+
+                    # Ensure unit field has default value if not provided or empty
+                    if 'unit' not in e or not e.get('unit') or (isinstance(e.get('unit'), str) and e.get('unit').strip() == ''):
+                        e['unit'] = 'kg'
 
                     if item_id and item_id in existing_items:
                         # Update existing item by ID

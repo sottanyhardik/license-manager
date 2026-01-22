@@ -411,7 +411,7 @@ def _prepare_allotment_data(allotment, company_name, address_line1, address_line
         else:
             # Create new entry
             license_groups[license_number] = {
-                'status': license.purchase_status,
+                'status': license.purchase_status.code if license.purchase_status else '',
                 'company': final_company,
                 'company_address_1': final_address1,
                 'company_address_2': final_address2,
@@ -481,7 +481,7 @@ def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits
         else:
             # Create new entry
             license_groups[license_number] = {
-                'status': license_obj.purchase_status,
+                'status': license_obj.purchase_status.code if license_obj.purchase_status else '',
                 'company': final_company,
                 'company_address_1': final_address1,
                 'company_address_2': final_address2,
@@ -560,7 +560,7 @@ def _prepare_trade_data(trade, company_name, address_line1, address_line2, cif_e
         cif_fc = Decimal(cif_edits.get(str(line.id), line.cif_fc))
 
         data.append({
-            'status': license_obj.purchase_status,
+            'status': license_obj.purchase_status.code if license_obj.purchase_status else '',
             'company': final_company,
             'company_address_1': final_address1,
             'company_address_2': final_address2,

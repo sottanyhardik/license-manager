@@ -495,8 +495,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 elif isinstance(net_qty, (int, float)) and net_qty < 0:
                     item_errors['net_quantity'] = ['Net quantity cannot be negative']
 
-                if not item.get('unit'):
-                    item_errors['unit'] = ['Unit is required for export item']
+                # Unit is not required for export items (has default value 'kg' in model)
 
                 if item_errors:
                     export_errors.append(item_errors)

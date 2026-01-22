@@ -86,7 +86,7 @@ class ItemPivotReportView(View):
         # Base query - licenses with required purchase status
         # Note: Don't filter by is_active here as it may exclude expired licenses
         licenses = LicenseDetailsModel.objects.filter(
-            purchase_status__in=[GE, MI, IP, SM, CO]
+            purchase_status__code__in=[GE, MI, IP, SM, CO]
         )
 
         # Apply license status filter

@@ -3,6 +3,38 @@
 from django.db import migrations
 
 
+def rename_index_if_exists(apps, schema_editor):
+    """Rename index only if it exists (it was removed in 0016 when field changed to FK)"""
+    # Check if old index exists
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT indexname FROM pg_indexes
+            WHERE tablename = 'license_licensedetailsmodel'
+            AND indexname = 'license_lic_purchas_97c381_idx'
+        """)
+        if cursor.fetchone():
+            # Index exists, rename it
+            cursor.execute("""
+                ALTER INDEX license_lic_purchas_97c381_idx
+                RENAME TO license_lic_purchas_dadd94_idx
+            """)
+
+
+def reverse_rename(apps, schema_editor):
+    """Reverse the rename"""
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT indexname FROM pg_indexes
+            WHERE tablename = 'license_licensedetailsmodel'
+            AND indexname = 'license_lic_purchas_dadd94_idx'
+        """)
+        if cursor.fetchone():
+            cursor.execute("""
+                ALTER INDEX license_lic_purchas_dadd94_idx
+                RENAME TO license_lic_purchas_97c381_idx
+            """)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,9 +42,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='licensedetailsmodel',
-            new_name='license_lic_purchas_dadd94_idx',
-            old_name='license_lic_purchas_97c381_idx',
-        ),
+        migrations.RunPython(rename_index_if_exists, reverse_rename),
     ]

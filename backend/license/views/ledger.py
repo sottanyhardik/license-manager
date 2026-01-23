@@ -373,6 +373,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 total_amount = 0
                 items_desc = []
 
+                sion_norms = []  # Collect SION norms for this transaction
                 for line in trans_obj.lines.all():
                     # Only include lines that reference THIS specific license
                     if line.sr_number and line.sr_number.license_id != license.id:
@@ -389,8 +390,17 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     total_cif_usd += cif_usd
                     total_amount += float(line.amount_inr or 0)
 
-                    if line.sr_number and line.sr_number.items and line.sr_number.items.name:
-                        items_desc.append(line.sr_number.items.name)
+                    # Collect item names and SION norms
+                    if line.sr_number:
+                        # Get all items linked to this sr_number (import item)
+                        for item in line.sr_number.items.all():
+                            if item.name:
+                                items_desc.append(item.name)
+                            # Collect SION norm class if available
+                            if item.sion_norm_class:
+                                sion_norm = item.sion_norm_class.norm_class
+                                if sion_norm and sion_norm not in sion_norms:
+                                    sion_norms.append(sion_norm)
 
                 # Calculate rate and update balance
                 rate = total_amount / total_cif_usd if total_cif_usd > 0 else 0
@@ -424,6 +434,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'particular': f'Purchase DFIA - {trans_obj.from_company.name if trans_obj.from_company else "N/A"}',
                             'invoice_number': trans_obj.invoice_number or '',
                             'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
+                            'sion_norms': ', '.join(sion_norms) if sion_norms else '',
                             'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
                             'cif_usd': total_cif_usd,
                             'debit_cif': total_cif_usd,  # Purchase is debit (asset increases)
@@ -449,6 +460,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         'particular': f'DFIA Sale - {trans_obj.to_company.name if trans_obj.to_company else "N/A"}',
                         'invoice_number': trans_obj.invoice_number or '',
                         'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
+                        'sion_norms': ', '.join(sion_norms) if sion_norms else '',
                         'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
                         'cif_usd': total_cif_usd,
                         'debit_cif': 0,

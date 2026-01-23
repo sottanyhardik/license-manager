@@ -124,6 +124,32 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         model = LicenseTrade
         fields = '__all__'
 
+    def to_representation(self, instance):
+        """Customize output representation to include nested company and BOE objects"""
+        data = super().to_representation(instance)
+
+        # Replace company IDs with nested objects for frontend display
+        if instance.from_company:
+            data['from_company'] = {
+                'id': instance.from_company.id,
+                'name': instance.from_company.name,
+            }
+
+        if instance.to_company:
+            data['to_company'] = {
+                'id': instance.to_company.id,
+                'name': instance.to_company.name,
+            }
+
+        # Replace BOE ID with nested object for frontend display
+        if instance.boe:
+            data['boe'] = {
+                'id': instance.boe.id,
+                'bill_of_entry_number': instance.boe.bill_of_entry_number,
+            }
+
+        return data
+
     def create(self, validated_data):
         """Create trade with nested lines and payments"""
         lines_data = validated_data.pop('lines', [])

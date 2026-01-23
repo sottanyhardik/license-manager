@@ -305,12 +305,16 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         if license_type == 'DFIA':
             try:
                 # Check if pk looks like a license number (contains leading zeros or letters)
-                # If pk is numeric and doesn't have leading zeros, treat as ID
+                # If pk is numeric and doesn't have leading zeros, treat as ID first
                 if pk.isdigit() and not pk.startswith('0'):
-                    # Pure numeric without leading zero - likely an ID
-                    license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=int(pk))
+                    # Pure numeric without leading zero - try as ID first
+                    try:
+                        license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=int(pk))
+                    except LicenseDetailsModel.DoesNotExist:
+                        # Fallback: try as license_number if ID lookup fails
+                        license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
                 else:
-                    # Contains leading zeros or non-numeric characters - treat as license_number
+                    # Contains leading zeros or non-numeric characters - treat as license_number first
                     try:
                         license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
                     except LicenseDetailsModel.DoesNotExist:
@@ -489,12 +493,16 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         else:  # INCENTIVE
             try:
                 # Check if pk looks like a license number (contains leading zeros or letters)
-                # If pk is numeric and doesn't have leading zeros, treat as ID
+                # If pk is numeric and doesn't have leading zeros, treat as ID first
                 if pk.isdigit() and not pk.startswith('0'):
-                    # Pure numeric without leading zero - likely an ID
-                    license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
+                    # Pure numeric without leading zero - try as ID first
+                    try:
+                        license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
+                    except IncentiveLicense.DoesNotExist:
+                        # Fallback: try as license_number if ID lookup fails
+                        license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
                 else:
-                    # Contains leading zeros or non-numeric characters - treat as license_number
+                    # Contains leading zeros or non-numeric characters - treat as license_number first
                     try:
                         license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
                     except IncentiveLicense.DoesNotExist:

@@ -510,6 +510,7 @@ export default function TradeForm() {
                 const boeId = typeof formData.boe === 'object' ? formData.boe?.id : formData.boe;
 
                 formDataObj.append('direction', formData.direction);
+                formDataObj.append('license_type', formData.license_type);
                 if (fromCompanyId) formDataObj.append('from_company', fromCompanyId);
                 if (toCompanyId) formDataObj.append('to_company', toCompanyId);
                 if (boeId) formDataObj.append('boe', boeId);
@@ -616,12 +617,25 @@ export default function TradeForm() {
                 });
 
                 payload = {
-                    ...formData,
+                    // Only include writable fields, not read-only display fields
+                    direction: formData.direction,
+                    license_type: formData.license_type,
                     from_company: fromCompanyId,
                     to_company: toCompanyId,
                     boe: boeId || null,
                     invoice_number: formData.invoice_number?.trim() || '',
                     invoice_date: formatDateForAPI(formData.invoice_date),
+                    remarks: formData.remarks || '',
+                    // Company snapshot fields
+                    from_pan: formData.from_pan || '',
+                    from_gst: formData.from_gst || '',
+                    from_addr_line_1: formData.from_addr_line_1 || '',
+                    from_addr_line_2: formData.from_addr_line_2 || '',
+                    to_pan: formData.to_pan || '',
+                    to_gst: formData.to_gst || '',
+                    to_addr_line_1: formData.to_addr_line_1 || '',
+                    to_addr_line_2: formData.to_addr_line_2 || '',
+                    // Nested data
                     lines: cleanedLines,
                     incentive_lines: cleanedIncentiveLines,
                     payments: cleanedPayments

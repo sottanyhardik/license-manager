@@ -99,7 +99,8 @@ export default function TradeForm() {
         if (formData.boe && !isInitialLoadRef.current) {
             handlePrefillFromBOE();
         }
-    }, [formData.boe, handlePrefillFromBOE]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.boe]);
 
 
     const fetchTrade = async () => {
@@ -529,11 +530,15 @@ export default function TradeForm() {
                 // Add file
                 formDataObj.append('purchase_invoice_copy', formData.purchase_invoice_copy);
 
-                // Add lines as JSON string (clean up empty id fields)
+                // Add lines as JSON string (clean up empty id fields and extract sr_number ID)
                 const cleanedLines = formData.lines.map(line => {
                     const cleanedLine = {...line};
                     if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
                         delete cleanedLine.id;
+                    }
+                    // Extract sr_number ID if it's an object
+                    if (cleanedLine.sr_number && typeof cleanedLine.sr_number === 'object') {
+                        cleanedLine.sr_number = cleanedLine.sr_number.id;
                     }
                     // Always set HSN code to 49070000
                     cleanedLine.hsn_code = '49070000';
@@ -573,11 +578,15 @@ export default function TradeForm() {
                 const toCompanyId = typeof formData.to_company === 'object' ? formData.to_company?.id : formData.to_company;
                 const boeId = typeof formData.boe === 'object' ? formData.boe?.id : formData.boe;
 
-                // Clean up lines: remove empty id fields
+                // Clean up lines: remove empty id fields and extract sr_number ID
                 const cleanedLines = formData.lines.map(line => {
                     const cleanedLine = {...line};
                     if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
                         delete cleanedLine.id;
+                    }
+                    // Extract sr_number ID if it's an object
+                    if (cleanedLine.sr_number && typeof cleanedLine.sr_number === 'object') {
+                        cleanedLine.sr_number = cleanedLine.sr_number.id;
                     }
                     // Always set HSN code to 49070000
                     cleanedLine.hsn_code = '49070000';

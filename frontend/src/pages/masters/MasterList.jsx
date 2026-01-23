@@ -296,7 +296,7 @@ export default function MasterList() {
                 await boeApi.deleteBOE(item.id);
             } else {
                 let apiPath;
-                if (entityName === 'licenses' || entityName === 'trades') {
+                if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades' || entityName === 'incentive-licenses') {
                     apiPath = `/${entityName}/${item.id}/`;
                 } else {
                     apiPath = `/masters/${entityName}/${item.id}/`;

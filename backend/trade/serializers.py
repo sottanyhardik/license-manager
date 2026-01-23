@@ -28,6 +28,10 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         # Create a copy to avoid modifying the original data
         data = data.copy() if hasattr(data, 'copy') else dict(data)
 
+        # Extract sr_number ID if it's an object (from frontend HybridSelect)
+        if 'sr_number' in data and isinstance(data['sr_number'], dict):
+            data['sr_number'] = data['sr_number'].get('id') or data['sr_number'].get('pk')
+
         # Remove fields with empty strings so they don't override existing values
         fields_to_check = ['qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct', 'amount_inr']
         for field in fields_to_check:
@@ -91,8 +95,6 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     # Display fields
     from_company_label = serializers.CharField(source='from_company.name', read_only=True)
     to_company_label = serializers.CharField(source='to_company.name', read_only=True)
-    from_company = serializers.CharField(source='from_company.name', read_only=True)
-    to_company = serializers.CharField(source='to_company.name', read_only=True)
     boe_label = serializers.CharField(source='boe.boe_number', read_only=True, allow_null=True)
     direction_label = serializers.CharField(source='get_direction_display', read_only=True)
     license_type_label = serializers.CharField(source='get_license_type_display', read_only=True)

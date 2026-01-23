@@ -53,6 +53,14 @@ export default function TradeForm() {
         if (!formData.boe) {
             return;
         }
+
+        // Only prefill if lines are empty (for create mode or when explicitly requested)
+        // Don't auto-prefill in edit mode if lines already exist
+        if (formData.lines && formData.lines.length > 0) {
+            console.log('Lines already exist, skipping BOE auto-prefill');
+            return;
+        }
+
         try {
             // boe can be either ID or object with id
             const boeId = typeof formData.boe === 'object' ? formData.boe.id : formData.boe;
@@ -81,7 +89,7 @@ export default function TradeForm() {
         } catch (err) {
             toast.error("Failed to fetch BOE details");
         }
-    }, [formData.boe, billingMode]);
+    }, [formData.boe, formData.lines, billingMode]);
 
     // Fetch existing trade if editing
     useEffect(() => {
@@ -93,10 +101,9 @@ export default function TradeForm() {
         }
     }, [isEdit, id]);
 
-    // Auto-prefill from BOE when BOE is selected (works in both create and edit mode)
-    // Skip during initial load to prevent overwriting existing trade data
+    // Auto-prefill from BOE when BOE is selected (only if lines are empty)
     useEffect(() => {
-        if (formData.boe && !isInitialLoadRef.current) {
+        if (formData.boe) {
             handlePrefillFromBOE();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps

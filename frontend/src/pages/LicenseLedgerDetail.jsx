@@ -173,7 +173,7 @@ export default function LicenseLedgerDetail() {
 
         // Table headers with proper rupee symbol
         const headers = isDFIA
-            ? [['Date', 'Particulars', 'Items', 'SION Norms', 'CIF $ Dr', 'CIF $ Cr', 'Rate', 'Debit (Rs)', 'Credit (Rs)', 'Balance (Rs)', 'P/L (Rs)']]
+            ? [['Date', 'Particulars', 'Items', 'CIF $ Dr', 'CIF $ Cr', 'Rate', 'Debit (Rs)', 'Credit (Rs)', 'Balance (Rs)', 'P/L (Rs)']]
             : [['Date', 'Particulars', 'Value Dr', 'Value Cr', 'Rate', 'Debit (Rs)', 'Credit (Rs)', 'Balance (Rs)', 'P/L (Rs)']];
 
         // Table data with Indian number formatting
@@ -186,7 +186,6 @@ export default function LicenseLedgerDetail() {
             if (isDFIA) {
                 row.push(
                     txn.items || '',
-                    txn.sion_norms || '',
                     txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '',
                     txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : ''
                 );
@@ -215,7 +214,7 @@ export default function LicenseLedgerDetail() {
         const totalPL = salesTransactions.length > 0 ? salesTransactions[salesTransactions.length - 1].profit_loss : 0;
 
         const totalsRow = isDFIA
-            ? ['', 'TOTAL', '', '', '', '', '', formatIndianNumber(totalDebit, 2), formatIndianNumber(totalCredit, 2), formatIndianNumber(currentBalance, 2), formatIndianNumber(Math.abs(totalPL), 2)]
+            ? ['', 'TOTAL', '', '', '', '', formatIndianNumber(totalDebit, 2), formatIndianNumber(totalCredit, 2), formatIndianNumber(currentBalance, 2), formatIndianNumber(Math.abs(totalPL), 2)]
             : ['', 'TOTAL', '', '', '', formatIndianNumber(totalDebit, 2), formatIndianNumber(totalCredit, 2), formatIndianNumber(currentBalance, 2), formatIndianNumber(Math.abs(totalPL), 2)];
 
         data.push(totalsRow);
@@ -329,7 +328,7 @@ export default function LicenseLedgerDetail() {
         // Table headers with proper alignment
         const headers = ['Date', 'Particulars'];
         if (isDFIA) {
-            headers.push('Items', 'SION Norms', 'CIF $ Dr', 'CIF $ Cr');
+            headers.push('Items', 'CIF $ Dr', 'CIF $ Cr');
         } else {
             headers.push('Value Dr', 'Value Cr');
         }
@@ -348,7 +347,6 @@ export default function LicenseLedgerDetail() {
             if (isDFIA) {
                 row.push(
                     txn.items || '',
-                    txn.sion_norms || '',
                     txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '',
                     txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : ''
                 );
@@ -379,7 +377,7 @@ export default function LicenseLedgerDetail() {
 
         const totalsRow = ['', 'TOTAL'];
         if (isDFIA) {
-            totalsRow.push('', '', '', '');  // Items, SION Norms, CIF $ Dr, CIF $ Cr
+            totalsRow.push('', '', '');  // Items, CIF $ Dr, CIF $ Cr
         } else {
             totalsRow.push('', '');
         }
@@ -505,7 +503,6 @@ export default function LicenseLedgerDetail() {
                 { wch: 12 },  // Date
                 { wch: 40 },  // Particulars
                 { wch: 20 },  // Items
-                { wch: 18 },  // SION Norms
                 { wch: 14 },  // CIF $ Dr
                 { wch: 14 },  // CIF $ Cr
                 { wch: 12 },  // Rate
@@ -649,6 +646,21 @@ export default function LicenseLedgerDetail() {
                                 <span style={{ color: '#6c757d', marginRight: '10px' }}>License Date:</span>
                                 <strong>{formatDate(ledger.license_date)}</strong>
                             </div>
+                            {isDFIA && (
+                                <div>
+                                    <span style={{ color: '#6c757d', marginRight: '10px' }}>SION Norms:</span>
+                                    <strong style={{ color: '#17a2b8' }}>
+                                        {(() => {
+                                            const allNorms = [...new Set(
+                                                ledger.transactions
+                                                    .filter(t => t.sion_norms)
+                                                    .flatMap(t => t.sion_norms.split(', '))
+                                            )];
+                                            return allNorms.length > 0 ? allNorms.join(', ') : 'N/A';
+                                        })()}
+                                    </strong>
+                                </div>
+                            )}
                             <div>
                                 <span style={{ color: '#6c757d', marginRight: '10px' }}>Expiry Date:</span>
                                 <strong>{formatDate(ledger.expiry_date)}</strong>
@@ -719,7 +731,6 @@ export default function LicenseLedgerDetail() {
                             <th style={{ padding: '12px 15px', textAlign: 'left', borderRight: '1px solid #3d4f5f', width: '100px', fontWeight: '600' }}>Date</th>
                             <th style={{ padding: '12px 15px', textAlign: 'left', borderRight: '1px solid #3d4f5f', minWidth: '280px', fontWeight: '600' }}>Particulars</th>
                             {isDFIA && <th style={{ padding: '12px 15px', textAlign: 'left', borderRight: '1px solid #3d4f5f', minWidth: '180px', fontWeight: '600' }}>Items</th>}
-k                            {isDFIA && <th style={{ padding: '12px 15px', textAlign: 'left', borderRight: '1px solid #3d4f5f', width: '120px', fontWeight: '600' }}>SION Norms</th>}
                             {isDFIA && <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '110px', fontWeight: '600' }}>CIF $ Dr</th>}
                             {isDFIA && <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '110px', fontWeight: '600' }}>CIF $ Cr</th>}
                             {!isDFIA && <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '120px', fontWeight: '600' }}>Value Dr</th>}
@@ -784,17 +795,6 @@ k                            {isDFIA && <th style={{ padding: '12px 15px', textA
                                             color: '#495057'
                                         }}>
                                             {txn.items || '-'}
-                                        </td>
-                                    )}
-                                    {isDFIA && (
-                                        <td style={{
-                                            padding: '12px 15px',
-                                            borderRight: '1px solid #e9ecef',
-                                            fontSize: '0.85rem',
-                                            color: '#6c757d',
-                                            fontWeight: '500'
-                                        }}>
-                                            {txn.sion_norms || '-'}
                                         </td>
                                     )}
                                     {isDFIA && (

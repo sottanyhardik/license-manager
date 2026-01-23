@@ -454,7 +454,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'exporter': license.exporter.name if license.exporter else '',
                 'port': license.port.name if license.port else '',
                 'total_value': total_purchase_cif,
-                'available_balance': float(license.balance_cif or 0),
+                'available_balance': round(running_balance, 2),  # Use calculated running balance, not DB field
+                'db_balance': float(license.balance_cif or 0),  # Keep DB balance for reference
                 'transactions': transactions,
             })
 
@@ -563,7 +564,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'exporter': license.exporter.name if license.exporter else '',
                 'port': license.port_code.name if license.port_code else '',
                 'total_value': total_purchase_value,
-                'available_balance': float(license.balance_value or 0),
+                'available_balance': round(running_balance, 2),  # Use calculated running balance, not DB field
+                'db_balance': float(license.balance_value or 0),  # Keep DB balance for reference
                 'transactions': transactions,
             })
 

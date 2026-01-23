@@ -295,6 +295,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Get detailed ledger view for a specific license showing all transactions.
         Works for both DFIA and Incentive licenses.
+        Accepts either ID (integer) or license_number (string) as pk parameter.
         """
         from django.utils import timezone
         from trade.models import LicenseTrade
@@ -303,7 +304,13 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         if license_type == 'DFIA':
             try:
-                license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=pk)
+                # Try to lookup by ID first (if pk is numeric), otherwise by license_number
+                try:
+                    license_id = int(pk)
+                    license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=license_id)
+                except (ValueError, TypeError):
+                    # pk is not a number, treat as license_number
+                    license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
             except LicenseDetailsModel.DoesNotExist:
                 return Response({'error': 'License not found'}, status=404)
 
@@ -461,7 +468,13 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         else:  # INCENTIVE
             try:
-                license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=pk)
+                # Try to lookup by ID first (if pk is numeric), otherwise by license_number
+                try:
+                    license_id = int(pk)
+                    license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=license_id)
+                except (ValueError, TypeError):
+                    # pk is not a number, treat as license_number
+                    license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
             except IncentiveLicense.DoesNotExist:
                 return Response({'error': 'License not found'}, status=404)
 

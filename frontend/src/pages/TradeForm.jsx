@@ -145,6 +145,38 @@ export default function TradeForm() {
                 data.incentive_lines = [];
             }
 
+            // Fetch full company objects if they are IDs (for HybridSelect to display properly)
+            if (data.from_company && typeof data.from_company === 'number') {
+                try {
+                    const { data: companyData } = await api.get(`/masters/companies/${data.from_company}/`);
+                    data.from_company = companyData;
+                } catch (err) {
+                    console.warn(`From company ${data.from_company} not found`);
+                    data.from_company = null;
+                }
+            }
+
+            if (data.to_company && typeof data.to_company === 'number') {
+                try {
+                    const { data: companyData } = await api.get(`/masters/companies/${data.to_company}/`);
+                    data.to_company = companyData;
+                } catch (err) {
+                    console.warn(`To company ${data.to_company} not found`);
+                    data.to_company = null;
+                }
+            }
+
+            // Fetch full BOE object if it's an ID
+            if (data.boe && typeof data.boe === 'number') {
+                try {
+                    const { data: boeData } = await api.get(`/bill-of-entries/${data.boe}/`);
+                    data.boe = boeData;
+                } catch (err) {
+                    console.warn(`BOE ${data.boe} not found`);
+                    data.boe = null;
+                }
+            }
+
             // For edit mode: if incentive_lines exist and have incentive_license IDs,
             // fetch the full license objects so HybridSelect can display them
             // Gracefully handle deleted/missing licenses

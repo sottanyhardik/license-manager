@@ -75,23 +75,35 @@ export default function AsyncSelectField({
             return;
         }
 
+        // If val is already a full object with id, use it directly
+        if (typeof val === 'object' && !Array.isArray(val) && val[valueField]) {
+            setSelectedOption(formatOption(val));
+            return;
+        }
+
         if (isMulti) {
-            // For multi-select, val should be an array of IDs
-            let ids = Array.isArray(val) ? val : [val];
+            // For multi-select, val should be an array of IDs or objects
+            let items = Array.isArray(val) ? val : [val];
 
             // Handle comma-separated string values for backward compatibility
-            if (ids.length === 1 && typeof ids[0] === 'string' && ids[0].includes(',')) {
-                ids = ids[0].split(',').map(id => id.trim()).filter(id => id);
+            if (items.length === 1 && typeof items[0] === 'string' && items[0].includes(',')) {
+                items = items[0].split(',').map(id => id.trim()).filter(id => id);
             }
 
             // Filter out empty/null values
-            ids = ids.filter(id => id !== null && id !== undefined && id !== '');
+            items = items.filter(item => item !== null && item !== undefined && item !== '');
 
             const options = [];
 
-            for (const id of ids) {
-                const opt = await fetchOptionById(id);
-                if (opt) options.push(opt);
+            for (const item of items) {
+                // If item is an object, format it directly
+                if (typeof item === 'object' && item[valueField]) {
+                    options.push(formatOption(item));
+                } else {
+                    // Otherwise fetch by ID
+                    const opt = await fetchOptionById(item);
+                    if (opt) options.push(opt);
+                }
             }
 
             setSelectedOption(options);

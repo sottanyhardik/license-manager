@@ -304,15 +304,23 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         if license_type == 'DFIA':
             try:
-                # Try to lookup by ID first (if pk is numeric), otherwise by license_number
-                try:
-                    license_id = int(pk)
-                    license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=license_id)
-                except (ValueError, TypeError):
-                    # pk is not a number, treat as license_number
-                    license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
+                # Check if pk looks like a license number (contains leading zeros or letters)
+                # If pk is numeric and doesn't have leading zeros, treat as ID
+                if pk.isdigit() and not pk.startswith('0'):
+                    # Pure numeric without leading zero - likely an ID
+                    license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=int(pk))
+                else:
+                    # Contains leading zeros or non-numeric characters - treat as license_number
+                    try:
+                        license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
+                    except LicenseDetailsModel.DoesNotExist:
+                        # Fallback: try as ID if license_number lookup fails
+                        try:
+                            license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=int(pk))
+                        except (ValueError, TypeError, LicenseDetailsModel.DoesNotExist):
+                            raise LicenseDetailsModel.DoesNotExist
             except LicenseDetailsModel.DoesNotExist:
-                return Response({'error': 'License not found'}, status=404)
+                return Response({'error': f'License not found: {pk}'}, status=404)
 
             # Get all trades for this license
             trades = LicenseTrade.objects.filter(
@@ -468,15 +476,23 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         else:  # INCENTIVE
             try:
-                # Try to lookup by ID first (if pk is numeric), otherwise by license_number
-                try:
-                    license_id = int(pk)
-                    license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=license_id)
-                except (ValueError, TypeError):
-                    # pk is not a number, treat as license_number
-                    license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
+                # Check if pk looks like a license number (contains leading zeros or letters)
+                # If pk is numeric and doesn't have leading zeros, treat as ID
+                if pk.isdigit() and not pk.startswith('0'):
+                    # Pure numeric without leading zero - likely an ID
+                    license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
+                else:
+                    # Contains leading zeros or non-numeric characters - treat as license_number
+                    try:
+                        license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
+                    except IncentiveLicense.DoesNotExist:
+                        # Fallback: try as ID if license_number lookup fails
+                        try:
+                            license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
+                        except (ValueError, TypeError, IncentiveLicense.DoesNotExist):
+                            raise IncentiveLicense.DoesNotExist
             except IncentiveLicense.DoesNotExist:
-                return Response({'error': 'License not found'}, status=404)
+                return Response({'error': f'License not found: {pk}'}, status=404)
 
             transactions = []
             running_balance = 0

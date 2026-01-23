@@ -77,7 +77,7 @@ export default function LicenseLedgerDetail() {
     if (!ledger) return null;
 
     const isDFIA = ledger.license_type === 'DFIA';
-    const hasPurchases = ledger.transactions.some(t => t.type === 'PURCHASE');
+    const hasPurchases = ledger.transactions.some(t => t.type === 'PURCHASE' || t.type === 'OPENING');
     const currentBalance = ledger.available_balance || 0;
     const isNegativeBalance = currentBalance < 0;
     const showPurchaseWarning = !hasPurchases || isNegativeBalance;

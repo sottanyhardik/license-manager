@@ -394,45 +394,58 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         import logging
         logger = logging.getLogger(__name__)
 
-        # Parse nested arrays from FormData format (license_documents[0].type)
+        # Parse nested arrays from FormData format (export_license[0].field, import_license[0].field, license_documents[0].field)
         if hasattr(data, 'getlist'):
             # It's MultiValueDict (FormData)
             logger.info("Parsing FormData for nested arrays")
 
-            # Extract license_documents from FormData
-            doc_dict = {}
+            nested_dicts = {
+                'export_license': {},
+                'import_license': {},
+                'license_documents': {},
+            }
             for key in list(data.keys()):
-                if key.startswith('license_documents['):
-                    # Extract index and field name
-                    # Format: license_documents[0].type or license_documents[0].file
-                    import re
-                    match = re.match(r'license_documents\[(\d+)\]\.(.+)', key)
-                    if match:
-                        index = int(match.group(1))
-                        field_name = match.group(2)
+                import re
+                match = re.match(r'(export_license|import_license|license_documents)\[(\d+)\]\.(.+)', key)
+                if match:
+                    group = match.group(1)
+                    index = int(match.group(2))
+                    field_name = match.group(3)
+                    if index not in nested_dicts[group]:
+                        nested_dicts[group][index] = {}
 
-                        if index not in doc_dict:
-                            doc_dict[index] = {}
+                    if group == 'import_license' and field_name == 'items':
+                        nested_dicts[group][index][field_name] = data.getlist(key)
+                    else:
+                        nested_dicts[group][index][field_name] = data.get(key)
 
-                        doc_dict[index][field_name] = data.get(key)
+            parsed_data = {}
+            for key in data.keys():
+                if not key.startswith(('export_license[', 'import_license[', 'license_documents[')):
+                    parsed_data[key] = data.get(key)
 
-            # Convert dict to list and create regular dict with parsed data
-            if doc_dict:
-                license_documents = [doc_dict[i] for i in sorted(doc_dict.keys())]
+            if nested_dicts['export_license']:
+                parsed_data['export_license'] = [
+                    nested_dicts['export_license'][i] for i in sorted(nested_dicts['export_license'].keys())
+                ]
+                logger.info("Parsed %d export items from FormData", len(parsed_data['export_license']))
+
+            if nested_dicts['import_license']:
+                parsed_data['import_license'] = [
+                    nested_dicts['import_license'][i] for i in sorted(nested_dicts['import_license'].keys())
+                ]
+                logger.info("Parsed %d import items from FormData", len(parsed_data['import_license']))
+
+            if nested_dicts['license_documents']:
+                license_documents = [
+                    nested_dicts['license_documents'][i] for i in sorted(nested_dicts['license_documents'].keys())
+                ]
                 logger.info("Parsed %d documents from FormData", len(license_documents))
                 for i, doc in enumerate(license_documents):
                     logger.info("Document %d: type=%s, file=%s", i, doc.get('type'), doc.get('file'))
-
-                # Convert MultiValueDict to regular dict for processing
-                parsed_data = {}
-                for key in data.keys():
-                    # Skip the old FormData format keys
-                    if not key.startswith('license_documents['):
-                        parsed_data[key] = data.get(key)
-
-                # Add parsed license_documents as list
                 parsed_data['license_documents'] = license_documents
-                data = parsed_data
+
+            data = parsed_data
 
         # Clean empty strings for boolean fields before validation
         self._clean_boolean_fields(data)

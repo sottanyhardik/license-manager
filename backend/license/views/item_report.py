@@ -141,7 +141,7 @@ class ItemReportView(View):
         # Filter by purchase_status if specified
         if purchase_status:
             purchase_status_list = [ps.strip() for ps in purchase_status.split(',') if ps.strip()]
-            items = items.filter(license__purchase_status__in=purchase_status_list)
+            items = items.filter(license__purchase_status__code__in=purchase_status_list)
 
         # Order by license number and serial number
         items = items.order_by('license__license_number', 'serial_number')

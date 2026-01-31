@@ -72,7 +72,7 @@ class ActiveLicensesReportView(View):
         licenses_query = LicenseDetailsModel.objects.filter(
             license_expiry_date__gte=start_date,
             is_active=True,
-            purchase_status__in=[GE, MI, IP, SM]
+            purchase_status__code__in=[GE, MI, IP, SM]
         ).select_related('exporter', 'port').prefetch_related(
             'export_license__norm_class',
             'import_license__items',

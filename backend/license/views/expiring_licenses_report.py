@@ -71,7 +71,7 @@ class ExpiringLicensesReportView(View):
             license_expiry_date__gte=today,
             license_expiry_date__lte=expiry_date,
             is_active=True,
-            purchase_status__in=[GE, MI, IP, SM]
+            purchase_status__code__in=[GE, MI, IP, SM]
         ).select_related('exporter', 'port').prefetch_related(
             'export_license__norm_class',
             'import_license__items',

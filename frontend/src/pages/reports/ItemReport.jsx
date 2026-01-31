@@ -635,6 +635,23 @@ export default function ItemReport() {
                                             })()}
                                         </span>
                                     </div>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <span className="text-muted small">Balance CIF:</span>
+                                        <span className="fw-bold text-primary">
+                                            {(() => {
+                                                const uniqueLicenses = {};
+                                                reportData.items.forEach(item => {
+                                                    if (!uniqueLicenses[item.license_id]) {
+                                                        uniqueLicenses[item.license_id] = item.balance_cif || 0;
+                                                    }
+                                                });
+                                                return Object.values(uniqueLicenses).reduce((sum, val) => sum + val, 0).toLocaleString('en-IN', {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2
+                                                });
+                                            })()}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -728,6 +745,7 @@ export default function ItemReport() {
                                             <th style={{minWidth: '200px'}}>Item Name</th>
                                             <th className="text-end" style={{minWidth: '140px'}}>Avail Qty</th>
                                             <th className="text-end" style={{minWidth: '140px'}}>Avail Bal</th>
+                                            <th className="text-end" style={{minWidth: '140px'}}>Balance CIF</th>
                                             <th className="text-center" style={{minWidth: '120px'}}>Is Restricted</th>
                                             <th style={{minWidth: '200px'}}>Notes</th>
                                             <th style={{minWidth: '200px'}}>Condition Sheet</th>
@@ -851,6 +869,11 @@ export default function ItemReport() {
                                                                         verticalAlign: 'middle',
                                                                         backgroundColor: '#f8f9fa'
                                                                     }}>{firstItem.available_balance.toFixed(2)}</td>
+                                                                    <td className="text-end text-primary fw-semibold"
+                                                                        rowSpan={rowSpan} style={{
+                                                                        verticalAlign: 'middle',
+                                                                        backgroundColor: '#f8f9fa'
+                                                                    }}>{firstItem.balance_cif.toFixed(2)}</td>
                                                                     <td className="text-center" rowSpan={rowSpan}
                                                                         style={{
                                                                             verticalAlign: 'middle',

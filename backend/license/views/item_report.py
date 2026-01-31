@@ -180,6 +180,7 @@ class ItemReportView(View):
                 'quantity': float(item.quantity or 0),
                 'available_quantity': float(item.available_quantity or 0),
                 'available_balance': available_balance,
+                'balance_cif': float(item.license.balance_cif or 0),
                 'is_restricted': item.is_restricted,
                 'notes': item.license.balance_report_notes or '',
                 'condition_sheet': item.license.condition_sheet or '',
@@ -220,7 +221,7 @@ class ItemReportView(View):
         headers = [
             'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Exporter Name',
             'Serial Number', 'HSN Code', 'Product Description', 'Item Name',
-            'Available Quantity', 'Available Balance', 'Notes', 'Condition Sheet', 'Transfer Status'
+            'Available Quantity', 'Available Balance', 'Balance CIF', 'Notes', 'Condition Sheet', 'Transfer Status'
         ]
 
         def create_sheet(workbook, sheet_name, items_list):
@@ -248,9 +249,10 @@ class ItemReportView(View):
             ws.column_dimensions['I'].width = 25  # Item Name
             ws.column_dimensions['J'].width = 18  # Available Quantity
             ws.column_dimensions['K'].width = 18  # Available Balance
-            ws.column_dimensions['L'].width = 30  # Notes
-            ws.column_dimensions['M'].width = 30  # Condition Sheet
-            ws.column_dimensions['N'].width = 35  # Transfer Status
+            ws.column_dimensions['L'].width = 18  # Balance CIF
+            ws.column_dimensions['M'].width = 30  # Notes
+            ws.column_dimensions['N'].width = 30  # Condition Sheet
+            ws.column_dimensions['O'].width = 35  # Transfer Status
 
             # Group items by license
             grouped_items = {}
@@ -291,10 +293,11 @@ class ItemReportView(View):
                         ws.cell(row=current_row, column=4, value=item['license_expiry_date'])  # License Expiry Date
                         ws.cell(row=current_row, column=5, value=item['exporter_name'])  # Exporter Name
                         ws.cell(row=current_row, column=11, value=item['available_balance'])  # Available Balance
-                        ws.cell(row=current_row, column=12, value=item['notes'])  # Notes
-                        ws.cell(row=current_row, column=13, value=item['condition_sheet'])  # Condition Sheet
+                        ws.cell(row=current_row, column=12, value=item['balance_cif'])  # Balance CIF
+                        ws.cell(row=current_row, column=13, value=item['notes'])  # Notes
+                        ws.cell(row=current_row, column=14, value=item['condition_sheet'])  # Condition Sheet
                         # Transfer Status - use latest_transfer
-                        ws.cell(row=current_row, column=14, value=item.get('latest_transfer', ''))  # Transfer Status
+                        ws.cell(row=current_row, column=15, value=item.get('latest_transfer', ''))  # Transfer Status
 
                     # Item-level columns (for each row)
                     ws.cell(row=current_row, column=6, value=item['serial_number'])  # Serial Number
@@ -321,15 +324,17 @@ class ItemReportView(View):
                     ws.merge_cells(start_row=start_row, start_column=5, end_row=end_row, end_column=5)
                     # Merge Available Balance (column K / 11)
                     ws.merge_cells(start_row=start_row, start_column=11, end_row=end_row, end_column=11)
-                    # Merge Notes (column L / 12)
+                    # Merge Balance CIF (column L / 12)
                     ws.merge_cells(start_row=start_row, start_column=12, end_row=end_row, end_column=12)
-                    # Merge Condition Sheet (column M / 13)
+                    # Merge Notes (column M / 13)
                     ws.merge_cells(start_row=start_row, start_column=13, end_row=end_row, end_column=13)
-                    # Merge Transfer Status (column N / 14)
+                    # Merge Condition Sheet (column N / 14)
                     ws.merge_cells(start_row=start_row, start_column=14, end_row=end_row, end_column=14)
+                    # Merge Transfer Status (column O / 15)
+                    ws.merge_cells(start_row=start_row, start_column=15, end_row=end_row, end_column=15)
 
                     # Apply vertical center alignment to merged cells
-                    for col in [1, 2, 3, 4, 5, 11, 12, 13, 14]:
+                    for col in [1, 2, 3, 4, 5, 11, 12, 13, 14, 15]:
                         cell = ws.cell(row=start_row, column=col)
                         cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
                         cell.border = thin_border

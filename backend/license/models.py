@@ -139,7 +139,7 @@ class LicenseDetailsModel(AuditModel):
             models.Index(fields=['file_number']),
             models.Index(fields=['exporter', 'license_date']),
             models.Index(fields=['port', 'license_date']),
-            models.Index(fields=['purchase_status']),
+            # purchase_status index is auto-created by ForeignKey, no need to add explicitly
             models.Index(fields=['license_date']),
             models.Index(fields=['license_expiry_date']),
             models.Index(fields=['is_active', 'is_expired']),

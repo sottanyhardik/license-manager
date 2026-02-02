@@ -57,14 +57,18 @@ class LicenseFilterSet(BaseFilterSet):
     - License number (exact or contains)
     """
 
-    # Company filters
+    # Exporter filters (Company)
+    exporter_id = filters.NumberFilter(field_name='exporter_id')
+    exporter_ids = filters.CharFilter(method='filter_exporter_ids', label='Exporter IDs (comma-separated)')
+
+    # Legacy company filters (mapped to exporter for backwards compatibility)
     company = filters.ModelMultipleChoiceFilter(
-        field_name='company',
+        field_name='exporter',
         queryset=None,  # Will be set dynamically
         label='Company (multiple)'
     )
-    company_id = filters.NumberFilter(field_name='company_id')
-    company_ids = filters.CharFilter(method='filter_company_ids', label='Company IDs (comma-separated)')
+    company_id = filters.NumberFilter(field_name='exporter_id')
+    company_ids = filters.CharFilter(method='filter_exporter_ids', label='Company IDs (comma-separated)')
 
     # License date filters
     license_date_from = filters.DateFilter(field_name='license_date', lookup_expr='gte')
@@ -114,11 +118,11 @@ class LicenseFilterSet(BaseFilterSet):
         if 'company' in self.filters:
             self.filters['company'].queryset = CompanyModel.objects.all()
 
-    def filter_company_ids(self, queryset, name, value):
-        """Filter by comma-separated company IDs."""
+    def filter_exporter_ids(self, queryset, name, value):
+        """Filter by comma-separated exporter IDs."""
         if value:
             ids = [int(x.strip()) for x in value.split(',') if x.strip().isdigit()]
-            return queryset.filter(company_id__in=ids)
+            return queryset.filter(exporter_id__in=ids)
         return queryset
 
     def filter_by_status(self, queryset, name, value):
@@ -182,7 +186,7 @@ class LicenseFilterSet(BaseFilterSet):
     class Meta:
         fields = {
             'license_number': ['exact', 'icontains'],
-            'company__name': ['icontains'],
+            'exporter__name': ['icontains'],
             'is_active': ['exact'],
             'balance_cif': ['gte', 'lte', 'exact'],
         }

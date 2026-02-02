@@ -97,7 +97,7 @@ class LicenseFilterSet(BaseFilterSet):
     has_balance = filters.BooleanFilter(method='filter_has_balance', label='Has Balance > 0')
 
     # Purchase status
-    purchase_status = filters.CharFilter(field_name='purchase_status__code')
+    purchase_status = filters.CharFilter(method='filter_purchase_status', label='Purchase Status')
     purchase_status_ids = filters.CharFilter(method='filter_purchase_status_ids', label='Purchase Status IDs')
 
     # License number
@@ -149,11 +149,34 @@ class LicenseFilterSet(BaseFilterSet):
         else:
             return queryset.filter(balance_cif=0)
 
-    def filter_purchase_status_ids(self, queryset, name, value):
-        """Filter by comma-separated purchase status codes."""
+    def filter_purchase_status(self, queryset, name, value):
+        """Filter by single or comma-separated purchase status IDs or codes."""
         if value:
-            codes = [x.strip().upper() for x in value.split(',') if x.strip()]
-            return queryset.filter(purchase_status__code__in=codes)
+            values = [x.strip() for x in value.split(',') if x.strip()]
+            # Check if values are numeric IDs or string codes
+            if all(v.isdigit() for v in values):
+                # Numeric IDs - filter by ID
+                ids = [int(v) for v in values]
+                return queryset.filter(purchase_status_id__in=ids)
+            else:
+                # String codes - filter by code
+                codes = [v.upper() for v in values]
+                return queryset.filter(purchase_status__code__in=codes)
+        return queryset
+
+    def filter_purchase_status_ids(self, queryset, name, value):
+        """Filter by comma-separated purchase status IDs or codes."""
+        if value:
+            values = [x.strip() for x in value.split(',') if x.strip()]
+            # Check if values are numeric IDs or string codes
+            if all(v.isdigit() for v in values):
+                # Numeric IDs - filter by ID
+                ids = [int(v) for v in values]
+                return queryset.filter(purchase_status_id__in=ids)
+            else:
+                # String codes - filter by code
+                codes = [v.upper() for v in values]
+                return queryset.filter(purchase_status__code__in=codes)
         return queryset
 
     class Meta:

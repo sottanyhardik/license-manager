@@ -26,10 +26,10 @@ class LicenseItemViewSet(viewsets.ModelViewSet):
     ViewSet for license items.
     Used for dropdowns, selection in BOE forms, and updating individual fields like is_restricted.
     """
-    queryset = LicenseImportItemsModel.objects.select_related('license', 'hs_code').all()
+    queryset = LicenseImportItemsModel.objects.select_related('license', 'hs_code').prefetch_related('items').all()
     serializer_class = LicenseItemSimpleSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['description', 'license__license_number', 'hs_code__hs_code']
+    search_fields = ['description', 'items__name', 'license__license_number', 'hs_code__hs_code']
     filterset_fields = ['license', 'hs_code']
     ordering_fields = ['serial_number', 'license__license_number']
     ordering = ['license__license_number', 'serial_number']

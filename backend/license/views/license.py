@@ -6,6 +6,8 @@ from accounts.permissions import LicensePermission
 from core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, \
     NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
+from core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
+from core.filtersets import LicenseFilterSet
 from core.views.master_view import MasterViewSet
 from license.models import LicenseDetailsModel
 from license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, \
@@ -176,6 +178,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     """
     permission_classes = [LicensePermission]
     lookup_value_regex = '[^/]+'  # Allow both numbers and strings
+
+    # Apply advanced filter backends
+    filterset_class = LicenseFilterSet
+    filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
+    search_fields = ['license_number', 'file_number', 'exporter__name', 'company__name']
+    ordering_fields = ['license_date', 'license_expiry_date', 'balance_cif', 'company__name', 'license_number']
 
     def list(self, request, *args, **kwargs):
         """Override list to add dynamic purchase_status default to metadata"""

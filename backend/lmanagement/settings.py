@@ -173,12 +173,45 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardPagination",
+    "PAGE_SIZE": 25,
     "DATETIME_FORMAT": "%d-%m-%Y %H:%M",
     "DATE_FORMAT": "%d-%m-%Y",
     # Disable CSRF for API endpoints when using JWT authentication
     "DEFAULT_RENDERER_CLASSES": (
         "rest_framework.renderers.JSONRenderer",
     ),
+    # Throttling configuration
+    "DEFAULT_THROTTLE_CLASSES": [
+        "core.throttling.BurstRateThrottle",  # Short-term burst protection
+        "core.throttling.UserRateThrottle",   # General user throttling
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        # Anonymous users (unauthenticated)
+        "anon": "100/hour",           # 100 requests per hour for anonymous users
+
+        # Authenticated users (general)
+        "user": "1000/hour",          # 1000 requests per hour for authenticated users
+
+        # Staff users (admins)
+        "staff": "5000/hour",         # 5000 requests per hour for staff users
+
+        # Burst protection (short-term)
+        "burst": "60/minute",         # 60 requests per minute (prevents rapid-fire)
+
+        # Sustained usage (long-term)
+        "sustained": "10000/day",     # 10000 requests per day
+
+        # Resource-intensive operations
+        "upload": "20/hour",          # 20 file uploads per hour
+        "export": "30/hour",          # 30 exports (Excel/PDF) per hour
+
+        # Security-sensitive operations
+        "login": "5/minute",          # 5 login attempts per minute
+        "strict": "10/hour",          # 10 sensitive operations per hour (delete, bulk ops)
+    },
+    # Return throttle information in response headers
+    "NUM_PROXIES": 1,  # Number of proxies (for accurate IP detection)
 }
 
 SIMPLE_JWT = {

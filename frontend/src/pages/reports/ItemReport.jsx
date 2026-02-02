@@ -1,9 +1,10 @@
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useState, useMemo} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
 import {toast} from "react-toastify";
 import Select from "react-select";
+import {useDebouncedFilters} from "../../hooks/useDebounce";
 
 export default function ItemReport() {
     const [reportData, setReportData] = useState(null);
@@ -25,6 +26,20 @@ export default function ItemReport() {
     const [editingCell, setEditingCell] = useState(null); // {itemId, field}
     const [editValue, setEditValue] = useState("");
     const [togglingRestriction, setTogglingRestriction] = useState({});
+
+    // Debounce all filters together - wait 500ms after last change
+    const filters = useMemo(() => ({
+        selectedItemNames,
+        minBalance,
+        minAvailQty,
+        licenseStatus,
+        selectedCompanies,
+        excludeCompanies,
+        isRestricted,
+        purchaseStatus
+    }), [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus]);
+
+    const { debouncedFilters, isPending } = useDebouncedFilters(filters, 500);
 
     useEffect(() => {
         let isMounted = true;
@@ -53,40 +68,53 @@ export default function ItemReport() {
 
     useEffect(() => {
         // Only load report if at least one item name is selected
-        if (selectedItemNames.length > 0) {
+        // Uses debounced filters to avoid excessive API calls
+        if (debouncedFilters.selectedItemNames.length > 0) {
             loadReport();
         } else {
             setReportData(null);
         }
-    }, [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus]);
+    }, [debouncedFilters]);
 
     const loadReport = async () => {
         setLoading(true);
         try {
             let url = `reports/item-report/?format=json`;
 
-            if (selectedItemNames.length > 0) {
-                url += `&item_names=${selectedItemNames.join(',')}`;
+            // Use debounced filter values
+            const {
+                selectedItemNames: items,
+                selectedCompanies: companies,
+                excludeCompanies: excluded,
+                minBalance: minBal,
+                minAvailQty: minQty,
+                licenseStatus: status,
+                isRestricted: restricted,
+                purchaseStatus: pStatus
+            } = debouncedFilters;
+
+            if (items.length > 0) {
+                url += `&item_names=${items.join(',')}`;
             }
 
-            if (selectedCompanies.length > 0) {
-                url += `&company_ids=${selectedCompanies.join(',')}`;
+            if (companies.length > 0) {
+                url += `&company_ids=${companies.join(',')}`;
             }
 
-            if (excludeCompanies.length > 0) {
-                url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
+            if (excluded.length > 0) {
+                url += `&exclude_company_ids=${excluded.join(',')}`;
             }
 
-            url += `&min_balance=${minBalance}`;
-            url += `&min_avail_qty=${minAvailQty}`;
-            url += `&license_status=${licenseStatus}`;
+            url += `&min_balance=${minBal}`;
+            url += `&min_avail_qty=${minQty}`;
+            url += `&license_status=${status}`;
 
-            if (isRestricted !== 'all') {
-                url += `&is_restricted=${isRestricted}`;
+            if (restricted !== 'all') {
+                url += `&is_restricted=${restricted}`;
             }
 
-            if (purchaseStatus.length > 0) {
-                url += `&purchase_status=${purchaseStatus.join(',')}`;
+            if (pStatus.length > 0) {
+                url += `&purchase_status=${pStatus.join(',')}`;
             }
 
             const response = await api.get(url);
@@ -391,6 +419,12 @@ export default function ItemReport() {
                             <h5 className="mb-0" style={{ fontWeight: '600', color: '#2c3e50' }}>
                                 <i className="bi bi-sliders me-2"></i>
                                 Filters
+                                {isPending && (
+                                    <span className="ms-2" style={{ fontSize: '0.85rem', color: '#6c757d' }}>
+                                        <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                        Updating...
+                                    </span>
+                                )}
                             </h5>
                             {hasActiveFilters && (
                                 <button

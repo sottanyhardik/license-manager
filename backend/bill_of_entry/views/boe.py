@@ -8,6 +8,8 @@ from bill_of_entry.models import BillOfEntryModel
 from bill_of_entry.serializers import BillOfEntrySerializer
 from bill_of_entry.views_export import add_grouped_export_action
 from core.constants import TYPE_CHOICES, ROW_TYPE_CHOICES
+from core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
+from core.filtersets import BOEFilterSet
 from core.views.master_view import MasterViewSet
 
 # Nested field definitions for Bill of Entry
@@ -116,6 +118,13 @@ BaseBillOfEntryViewSet = MasterViewSet.create_viewset(
 # Create custom ViewSet with additional filtering
 class BillOfEntryViewSet(BaseBillOfEntryViewSet):
     """Extended BOE ViewSet with custom filtering for trade form"""
+    permission_classes = [BillOfEntryPermission]
+
+    # Apply advanced filter backends
+    filterset_class = BOEFilterSet
+    filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
+    search_fields = ['bill_of_entry_number', 'invoice_no', 'product_name', 'port__name', 'company__name']
+    ordering_fields = ['bill_of_entry_date', 'bill_of_entry_number', 'company__name', 'port__name']
 
     def get_queryset(self):
         """Override to add custom filtering for available_for_trade"""

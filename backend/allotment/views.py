@@ -8,6 +8,8 @@ from allotment.models import AllotmentModel
 from allotment.serializers import AllotmentSerializer
 from allotment.views_export import add_grouped_export_action
 from core.constants import ROW_TYPE_CHOICES
+from core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
+from core.filtersets import AllotmentFilterSet
 from core.views.master_view import MasterViewSet
 
 
@@ -139,8 +141,12 @@ AllotmentViewSet = MasterViewSet.create_viewset(
 # Add grouped export functionality
 AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)
 
-# Add permission classes
+# Add permission classes and filter backends
 AllotmentViewSet.permission_classes = [AllotmentPermission]
+AllotmentViewSet.filterset_class = AllotmentFilterSet
+AllotmentViewSet.filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
+AllotmentViewSet.search_fields = ['item_name', 'company__name', 'invoice', 'bl_detail', 'port__name']
+AllotmentViewSet.ordering_fields = ['estimated_arrival_date', 'modified_on', 'company__name', 'item_name']
 
 # Add default filters and performance optimizations
 original_get_queryset = AllotmentViewSet.get_queryset

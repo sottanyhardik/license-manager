@@ -1,41 +1,47 @@
 import "./App.css";
 import {BrowserRouter, Navigate, Route, Routes} from "react-router-dom";
-import {lazy, Suspense} from "react";
+import {lazy, Suspense, useEffect} from "react";
 import {ToastContainer} from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import {AuthProvider} from "./context/AuthContext";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminLayout from "./layout/AdminLayout";
+import {PageLoader} from "./components/LoadingFallback";
+import {lazyLoadWithRetry, preloadCriticalRoutes} from "./utils/lazyLoad";
 
 import Login from "./pages/Login";
 import Unauthorized from "./pages/errors/Unauthorized";
 import NotFound from "./pages/errors/NotFound";
 
-// Lazy load pages
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const LicensePage = lazy(() => import("./pages/LicensePage"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Profile = lazy(() => import("./pages/Profile"));
-const MasterList = lazy(() => import("./pages/masters/MasterList"));
-const MasterForm = lazy(() => import("./pages/masters/MasterForm"));
-const AllotmentAction = lazy(() => import("./pages/AllotmentAction"));
-const BOETransferLetter = lazy(() => import("./pages/BOETransferLetter"));
+// Lazy load pages with retry logic
+const Dashboard = lazyLoadWithRetry(() => import("./pages/Dashboard"));
+const LicensePage = lazyLoadWithRetry(() => import("./pages/LicensePage"));
+const Settings = lazyLoadWithRetry(() => import("./pages/Settings"));
+const Profile = lazyLoadWithRetry(() => import("./pages/Profile"));
+const MasterList = lazyLoadWithRetry(() => import("./pages/masters/MasterList"));
+const MasterForm = lazyLoadWithRetry(() => import("./pages/masters/MasterForm"));
+const AllotmentAction = lazyLoadWithRetry(() => import("./pages/AllotmentAction"));
+const BOETransferLetter = lazyLoadWithRetry(() => import("./pages/BOETransferLetter"));
+
+// Report pages - lazy load on demand
 const SionE1 = lazy(() => import("./pages/reports/SionE1"));
 const SionE5 = lazy(() => import("./pages/reports/SionE5"));
 const SionE126 = lazy(() => import("./pages/reports/SionE126"));
 const SionE132 = lazy(() => import("./pages/reports/SionE132"));
 const ExpiringLicenses = lazy(() => import("./pages/reports/ExpiringLicenses"));
 const ActiveLicenses = lazy(() => import("./pages/reports/ActiveLicenses"));
-const ItemPivotReport = lazy(() => import("./pages/reports/ItemPivotReport"));
-const ItemReport = lazy(() => import("./pages/reports/ItemReport"));
+const ItemPivotReport = lazyLoadWithRetry(() => import("./pages/reports/ItemPivotReport"));
+const ItemReport = lazyLoadWithRetry(() => import("./pages/reports/ItemReport"));
+
+// Trade & Ledger Upload
 const TradeForm = lazy(() => import("./pages/TradeForm"));
 const LedgerCSVUpload = lazy(() => import("./pages/LedgerCSVUpload"));
 const LedgerUpload = lazy(() => import("./pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("./pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("./pages/LicenseLedgerDetail"));
 
-// Ledger Module Pages
+// Ledger Module Pages - lazy load on demand
 const ChartOfAccounts = lazy(() => import("./pages/ledger/ChartOfAccounts"));
 const BankAccounts = lazy(() => import("./pages/ledger/BankAccounts"));
 const JournalEntries = lazy(() => import("./pages/ledger/JournalEntries"));
@@ -47,6 +53,15 @@ const TrialBalance = lazy(() => import("./pages/ledger/TrialBalance"));
 const OutstandingInvoices = lazy(() => import("./pages/ledger/OutstandingInvoices"));
 
 export default function App() {
+    // Preload critical routes after initial load
+    useEffect(() => {
+        preloadCriticalRoutes({
+            masterList: () => import("./pages/masters/MasterList"),
+            itemReport: () => import("./pages/reports/ItemReport"),
+            itemPivotReport: () => import("./pages/reports/ItemPivotReport")
+        }, 3000); // Preload after 3 seconds
+    }, []);
+
     return (
         <AuthProvider>
             <BrowserRouter>
@@ -61,7 +76,7 @@ export default function App() {
                     draggable
                     pauseOnHover
                 />
-                <Suspense fallback={<div className="p-4">Loading...</div>}>
+                <Suspense fallback={<PageLoader />}>
                     <Routes>
 
                             {/* Public */}

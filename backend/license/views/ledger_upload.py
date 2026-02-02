@@ -45,6 +45,10 @@ class LedgerUploadView(APIView):
     authentication_classes = []  # Disable authentication requirements
     http_method_names = ['post', 'options']  # Explicitly allow POST and OPTIONS
 
+    # Apply upload throttling
+    from core.throttling import UploadRateThrottle
+    throttle_classes = [UploadRateThrottle]
+
     def post(self, request):
         """
         Process uploaded ledger file(s) asynchronously using Celery.

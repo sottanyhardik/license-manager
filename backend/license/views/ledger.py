@@ -72,7 +72,9 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             incentive_data = self._prepare_incentive_data(incentive_qs)
             # Combine and sort
             combined = list(dfia_data) + list(incentive_data)
-            combined.sort(key=lambda x: x.get('license_date', ''), reverse=True)
+            # Sort by license_date, putting None values at the end
+            from datetime import date
+            combined.sort(key=lambda x: x.get('license_date') or date.min, reverse=True)
             return combined
 
     def _prepare_dfia_data(self, queryset):

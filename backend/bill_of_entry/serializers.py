@@ -103,6 +103,38 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_on', 'modified_on', 'created_by', 'modified_by']
 
+    def to_internal_value(self, data):
+        """Parse JSON strings or flattened FormData from multipart/form-data"""
+        import json
+        import re
+
+        # Create a mutable copy of the data
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+
+        # Handle JSON string format (when frontend sends JSON.stringify for nested arrays)
+        if 'item_details' in data and isinstance(data['item_details'], str):
+            try:
+                data['item_details'] = json.loads(data['item_details'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Handle flattened FormData format (item_details[0][field])
+        if hasattr(data, 'getlist'):
+            nested_items = {}
+            for key in list(data.keys()):
+                match = re.match(r'item_details\[(\d+)\]\.(.+)', key)
+                if match:
+                    index = int(match.group(1))
+                    field_name = match.group(2)
+                    if index not in nested_items:
+                        nested_items[index] = {}
+                    nested_items[index][field_name] = data[key]
+
+            if nested_items:
+                data['item_details'] = [nested_items[i] for i in sorted(nested_items.keys())]
+
+        return super().to_internal_value(data)
+
     def create(self, validated_data):
         """Create BOE with nested item details"""
         item_details_data = validated_data.pop('item_details', [])

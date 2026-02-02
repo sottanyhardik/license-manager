@@ -254,6 +254,23 @@ LicenseTradeViewSet.permission_classes = [TradePermission]
 
 # Add custom actions to TradeViewSet
 class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
+    def create(self, request, *args, **kwargs):
+        """Override create to log request data"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"🔥 VIEW CREATE called")
+        logger.info(f"🔥 request.data keys: {list(request.data.keys())}")
+        logger.info(f"🔥 request.content_type: {request.content_type}")
+
+        if 'lines' in request.data:
+            logger.info(f"🔥 request.data['lines'] type: {type(request.data['lines'])}")
+            logger.info(f"🔥 request.data['lines'] value: {str(request.data['lines'])[:200]}")
+        else:
+            logger.error(f"🔥 'lines' NOT in request.data!")
+
+        return super().create(request, *args, **kwargs)
+
     @action(detail=True, methods=['get'], url_path='generate-bill-of-supply')
     def generate_bill_of_supply(self, request, pk=None):
         """

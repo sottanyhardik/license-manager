@@ -105,6 +105,46 @@ class SionNormClassNestedSerializer(AuditSerializerMixin):
             return f"{obj.norm_class} - {obj.description}"
         return obj.norm_class
 
+    def to_internal_value(self, data):
+        """Parse JSON strings or flattened FormData from multipart/form-data"""
+        import json
+        import re
+
+        # Create a mutable copy of the data
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+
+        # Handle JSON string format for nested fields
+        for field in ['export_norm', 'import_norm', 'notes', 'conditions']:
+            if field in data and isinstance(data[field], str):
+                try:
+                    data[field] = json.loads(data[field])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        # Handle flattened FormData format
+        if hasattr(data, 'getlist'):
+            nested_fields = {
+                'export_norm': {},
+                'import_norm': {},
+                'notes': {},
+                'conditions': {}
+            }
+            for key in list(data.keys()):
+                for field_name in nested_fields.keys():
+                    match = re.match(rf'{field_name}\[(\d+)\]\.(.+)', key)
+                    if match:
+                        index = int(match.group(1))
+                        sub_field = match.group(2)
+                        if index not in nested_fields[field_name]:
+                            nested_fields[field_name][index] = {}
+                        nested_fields[field_name][index][sub_field] = data[key]
+
+            for field_name, items in nested_fields.items():
+                if items:
+                    data[field_name] = [items[i] for i in sorted(items.keys())]
+
+        return super().to_internal_value(data)
+
     def create(self, validated_data):
         export_data = validated_data.pop("export_norm", [])
         import_data = validated_data.pop("import_norm", [])

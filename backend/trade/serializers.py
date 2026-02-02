@@ -104,6 +104,96 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     paid_or_received = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
     due_amount = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
 
+    def to_internal_value(self, data):
+        """Parse JSON strings OR flattened FormData from multipart/form-data"""
+        import json
+        import re
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"🔍 to_internal_value called. Data keys: {list(data.keys())}")
+
+        # Create a mutable copy of the data.
+        # For QueryDict, convert to a plain dict to avoid string-coercion on assignment.
+        raw_data = data
+        if hasattr(data, 'getlist'):
+            data = {key: raw_data.get(key) for key in raw_data.keys()}
+        else:
+            data = data.copy() if hasattr(data, 'copy') else dict(data)
+
+        # Handle both JSON string format AND flattened FormData format
+        for field in ['lines', 'incentive_lines', 'payments']:
+            if field in data:
+                logger.info(f"🔍 Field '{field}' found. Type: {type(data[field])}, Value: {str(data[field])[:100]}")
+
+                # Format 1: JSON string (from TradeForm)
+                if isinstance(data[field], str):
+                    try:
+                        parsed = json.loads(data[field])
+                        data[field] = parsed
+                        logger.info(f"✅ Parsed {field} from JSON string: {len(parsed)} items")
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.error(f"❌ Failed to parse {field} as JSON: {str(e)}")
+                        pass
+                else:
+                    logger.info(f"ℹ️  {field} already parsed as {type(data[field])}, length: {len(data[field]) if hasattr(data[field], '__len__') else 'N/A'}")
+            else:
+                logger.warning(f"⚠️  Field '{field}' NOT in data - checking for flattened format")
+
+        # Format 2: Flattened FormData format (from MasterForm)
+        # Check if data has flattened keys like "lines[0].field"
+        if hasattr(raw_data, 'keys'):
+            nested_fields = {
+                'lines': {},
+                'incentive_lines': {},
+                'payments': {}
+            }
+
+            for key in list(raw_data.keys()):
+                for field_name in nested_fields.keys():
+                    # Match patterns like "lines[0].sr_number" or "lines[0][sr_number]"
+                    match = re.match(rf'{field_name}\[(\d+)\][\.\[](.+?)[\]\.]?$', key)
+                    if match:
+                        index = int(match.group(1))
+                        sub_field = match.group(2).replace(']', '').replace('[', '.')
+
+                        if index not in nested_fields[field_name]:
+                            nested_fields[field_name][index] = {}
+
+                        nested_fields[field_name][index][sub_field] = raw_data[key]
+                        logger.info(f"🔍 Found flattened field: {key} -> {field_name}[{index}].{sub_field}")
+
+            # Convert flattened format to list format
+            for field_name, items in nested_fields.items():
+                if items:
+                    data[field_name] = [items[i] for i in sorted(items.keys())]
+                    logger.info(f"✅ Reconstructed {field_name} from flattened format: {len(data[field_name])} items")
+
+        return super().to_internal_value(data)
+
+    def validate(self, data):
+        """Validate that at least one line (regular or incentive) is present"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        lines = data.get('lines', [])
+        incentive_lines = data.get('incentive_lines', [])
+
+        logger.info(f"🔍 VALIDATE: lines type={type(lines)}, length={len(lines) if hasattr(lines, '__len__') else 'N/A'}, value={str(lines)[:200]}")
+        logger.info(f"🔍 VALIDATE: incentive_lines type={type(incentive_lines)}, length={len(incentive_lines) if hasattr(incentive_lines, '__len__') else 'N/A'}")
+        logger.info(f"🔍 VALIDATE: All data keys: {list(data.keys())}")
+
+        # Check if both are empty
+        if not lines and not incentive_lines:
+            logger.error(f"❌ VALIDATION FAILED: No lines present! lines={lines}, incentive_lines={incentive_lines}")
+            raise serializers.ValidationError({
+                "lines": "At least one trade line or incentive line must be defined.",
+                "incentive_lines": "At least one trade line or incentive line must be defined."
+            })
+
+        logger.info(f"✅ VALIDATION PASSED: lines={len(lines)}, incentive_lines={len(incentive_lines)}")
+        return data
+
     def get_incentive_license(self, obj):
         """Return all license numbers (DFIA and Incentive) comma-separated"""
         license_numbers = set()
@@ -152,9 +242,14 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """Create trade with nested lines and payments"""
+        import logging
+        logger = logging.getLogger(__name__)
+
         lines_data = validated_data.pop('lines', [])
         incentive_lines_data = validated_data.pop('incentive_lines', [])
         payments_data = validated_data.pop('payments', [])
+
+        logger.info(f"🔥 CREATE: lines={len(lines_data)}, incentive={len(incentive_lines_data)}, payments={len(payments_data)}")
 
         # Create trade header
         trade = LicenseTrade.objects.create(**validated_data)
@@ -336,6 +431,38 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             'created_by', 'created_by_username', 'created_on', 'modified_on'
         ]
         read_only_fields = ['total_debit', 'total_credit', 'is_balanced', 'created_on', 'modified_on']
+
+    def to_internal_value(self, data):
+        """Parse JSON strings or flattened FormData from multipart/form-data"""
+        import json
+        import re
+
+        # Create a mutable copy of the data
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+
+        # Handle JSON string format (when frontend sends JSON.stringify)
+        if 'lines' in data and isinstance(data['lines'], str):
+            try:
+                data['lines'] = json.loads(data['lines'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Handle flattened FormData format (lines[0][field])
+        if hasattr(data, 'getlist'):
+            nested_items = {}
+            for key in list(data.keys()):
+                match = re.match(r'lines\[(\d+)\]\.(.+)', key)
+                if match:
+                    index = int(match.group(1))
+                    field_name = match.group(2)
+                    if index not in nested_items:
+                        nested_items[index] = {}
+                    nested_items[index][field_name] = data[key]
+
+            if nested_items:
+                data['lines'] = [nested_items[i] for i in sorted(nested_items.keys())]
+
+        return super().to_internal_value(data)
 
     def create(self, validated_data):
         """Create journal entry with lines"""

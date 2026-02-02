@@ -501,8 +501,25 @@ export default function TradeForm() {
         setFieldErrors({});
 
         try {
+            // Validate that at least one line type exists
+            if (formData.lines.length === 0 && formData.incentive_lines.length === 0) {
+                const errorMsg = "At least one trade line or incentive line must be added.";
+                setError(errorMsg);
+                setFieldErrors({
+                    lines: [errorMsg],
+                    incentive_lines: [errorMsg]
+                });
+                toast.error(errorMsg);
+                setSaving(false);
+                return;
+            }
+
             // Check if we have file upload
             const hasFile = formData.purchase_invoice_copy instanceof File;
+
+            console.log('🔍 Frontend: hasFile =', hasFile);
+            console.log('🔍 Frontend: formData.lines.length =', formData.lines.length);
+            console.log('🔍 Frontend: formData.lines =', formData.lines);
 
             let payload;
             let headers = {};
@@ -552,6 +569,8 @@ export default function TradeForm() {
                     cleanedLine.hsn_code = '49070000';
                     return cleanedLine;
                 });
+                console.log('🔍 Frontend: cleanedLines before stringify:', cleanedLines);
+                console.log('🔍 Frontend: cleanedLines as JSON:', JSON.stringify(cleanedLines));
                 formDataObj.append('lines', JSON.stringify(cleanedLines));
 
                 // Add incentive_lines as JSON string (clean up empty id fields)
@@ -1454,6 +1473,11 @@ export default function TradeForm() {
                 >
                     Add Row
                 </button>
+                {fieldErrors.lines && formData.lines.length === 0 && (
+                    <div className="text-danger small mt-2">
+                        {Array.isArray(fieldErrors.lines) ? fieldErrors.lines[0] : fieldErrors.lines}
+                    </div>
+                )}
                     </>
                 )}
 
@@ -1548,6 +1572,11 @@ export default function TradeForm() {
                         >
                             Add Row
                         </button>
+                        {fieldErrors.incentive_lines && formData.incentive_lines.length === 0 && (
+                            <div className="text-danger small mt-2">
+                                {Array.isArray(fieldErrors.incentive_lines) ? fieldErrors.incentive_lines[0] : fieldErrors.incentive_lines}
+                            </div>
+                        )}
                     </>
                 )}
 

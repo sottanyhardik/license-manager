@@ -142,24 +142,7 @@ class Migration(migrations.Migration):
         ),
 
         # ===================================================================
-        # InvoiceEntity - Composite indexes for invoice tracking
+        # InvoiceEntity - No composite indexes needed
+        # (Simple model with only company entity information)
         # ===================================================================
-
-        # Index for company + invoice lookups
-        migrations.AddIndex(
-            model_name='invoiceentity',
-            index=models.Index(
-                fields=['company_id', 'invoice_no'],
-                name='invoice_company_no_idx'
-            ),
-        ),
-
-        # Index for invoice date range queries
-        migrations.AddIndex(
-            model_name='invoiceentity',
-            index=models.Index(
-                fields=['company_id', '-invoice_date'],
-                name='invoice_company_date_idx'
-            ),
-        ),
     ]

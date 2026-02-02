@@ -182,8 +182,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     # Apply advanced filter backends
     filterset_class = LicenseFilterSet
     filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
-    search_fields = ['license_number', 'file_number', 'exporter__name', 'company__name']
-    ordering_fields = ['license_date', 'license_expiry_date', 'balance_cif', 'company__name', 'license_number']
+    search_fields = ['license_number', 'file_number', 'exporter__name']
+    ordering_fields = ['license_date', 'license_expiry_date', 'balance_cif', 'exporter__name', 'license_number']
 
     def list(self, request, *args, **kwargs):
         """Override list to add dynamic purchase_status default to metadata"""

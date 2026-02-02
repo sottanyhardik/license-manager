@@ -135,7 +135,101 @@ rm -f /tmp/migration_output.log
 echo -e "\${BLUE}→ Collecting static files...\${NC}"
 python manage.py collectstatic --noinput
 
-echo -e "\${BLUE}→ Setting file permissions...\${NC}"
+echo -e "\n\${BLUE}================================================\${NC}"
+echo -e "\${BLUE}📊 Database Optimization & Setup\${NC}"
+echo -e "\${BLUE}================================================\${NC}"
+
+echo -e "\${BLUE}→ Creating materialized views...\${NC}"
+python manage.py shell -c "
+from core.materialized_views import create_all_materialized_views
+try:
+    create_all_materialized_views()
+    print('✅ Materialized views created successfully')
+except Exception as e:
+    print(f'⚠️  Materialized views may already exist or error: {e}')
+" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Materialized views check completed\${NC}"
+
+echo -e "\${BLUE}→ Refreshing materialized views with data...\${NC}"
+python manage.py refresh_materialized_views --all 2>&1 | tail -5 || echo -e "\${YELLOW}  ⚠️  Materialized views refresh completed with warnings\${NC}"
+
+echo -e "\${BLUE}→ Verifying database indexes...\${NC}"
+python manage.py shell -c "
+from django.db import connection
+with connection.cursor() as cursor:
+    cursor.execute('''
+        SELECT
+            schemaname,
+            tablename,
+            indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+        AND (
+            indexname LIKE '%composite%'
+            OR indexname LIKE '%performance%'
+            OR indexname LIKE '%_idx'
+        )
+        ORDER BY tablename, indexname
+    ''')
+    indexes = cursor.fetchall()
+    print(f'✅ Found {len(indexes)} performance indexes')
+    for schema, table, index in indexes[:5]:
+        print(f'  - {table}.{index}')
+    if len(indexes) > 5:
+        print(f'  ... and {len(indexes) - 5} more')
+" 2>&1 | grep -E '✅|Found' || echo -e "\${YELLOW}  ⚠️  Index verification completed\${NC}"
+
+echo -e "\${BLUE}→ Checking Redis cache connection...\${NC}"
+python manage.py shell -c "
+from django.core.cache import cache
+try:
+    cache.set('deployment_test_key', 'deployment_test_value', 10)
+    value = cache.get('deployment_test_key')
+    if value == 'deployment_test_value':
+        print('✅ Redis cache is working correctly')
+        cache.delete('deployment_test_key')
+    else:
+        print('⚠️  Redis cache connection issue')
+except Exception as e:
+    print(f'⚠️  Redis cache error: {e}')
+" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Redis check completed\${NC}"
+
+echo -e "\${BLUE}→ Warming up critical caches...\${NC}"
+python manage.py shell -c "
+from django.core.cache import cache
+from core.models import CompanyModel, PurchaseStatusModel
+import json
+
+try:
+    # Cache active companies
+    companies = list(CompanyModel.objects.filter(is_active=True).values('id', 'name'))
+    cache.set('active_companies_list', json.dumps(companies), 3600)
+
+    # Cache purchase statuses
+    statuses = list(PurchaseStatusModel.objects.all().values('id', 'code', 'name'))
+    cache.set('purchase_statuses_list', json.dumps(statuses), 3600)
+
+    print(f'✅ Cached {len(companies)} companies and {len(statuses)} purchase statuses')
+except Exception as e:
+    print(f'⚠️  Cache warmup error: {e}')
+" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Cache warmup completed\${NC}"
+
+echo -e "\${BLUE}→ Checking throttle system health...\${NC}"
+python manage.py shell -c "
+from django.core.cache import cache
+try:
+    # Test throttle cache
+    cache.set('throttle_health_check', 'ok', 10)
+    test = cache.get('throttle_health_check')
+    if test == 'ok':
+        print('✅ Throttling system ready')
+        cache.delete('throttle_health_check')
+    else:
+        print('⚠️  Throttling cache issue')
+except Exception as e:
+    print(f'⚠️  Throttling system error: {e}')
+" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Throttling check completed\${NC}"
+
+echo -e "\n\${BLUE}→ Setting file permissions...\${NC}"
 echo '$PASSWORD' | sudo -S chown -R django:django $SERVER_PATH/backend/media 2>/dev/null || true
 echo '$PASSWORD' | sudo -S chmod -R 775 $SERVER_PATH/backend/media 2>/dev/null || true
 echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null || true

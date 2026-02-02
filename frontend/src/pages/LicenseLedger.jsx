@@ -42,11 +42,16 @@ export default function LicenseLedger() {
 
             const response = await api.get(`/license-ledger/?${params.toString()}`);
 
-            // Handle both array and object response formats
+            // Handle multiple response formats
             const data = response.data;
             if (Array.isArray(data)) {
+                // Direct array
                 setLicenses(data);
+            } else if (data && Array.isArray(data.results)) {
+                // DRF paginated response: {count, next, previous, results}
+                setLicenses(data.results);
             } else if (data && Array.isArray(data.licenses)) {
+                // Custom format: {licenses}
                 setLicenses(data.licenses);
             } else {
                 setLicenses([]);

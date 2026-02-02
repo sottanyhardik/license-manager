@@ -201,7 +201,14 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             reverse = ordering.startswith('-')
             order_field = ordering.lstrip('-')
             if order_field in ['license_date', 'balance_value', 'license_expiry_date']:
-                data.sort(key=lambda x: x.get(order_field, ''), reverse=reverse)
+                # Handle None values in date/numeric fields
+                from datetime import date
+                if order_field in ['license_date', 'license_expiry_date']:
+                    # For date fields, use date.min for None values
+                    data.sort(key=lambda x: x.get(order_field) or date.min, reverse=reverse)
+                else:
+                    # For numeric fields (balance_value), use 0 for None values
+                    data.sort(key=lambda x: x.get(order_field) or 0, reverse=reverse)
 
         # Pagination
         page = self.paginate_queryset(data)

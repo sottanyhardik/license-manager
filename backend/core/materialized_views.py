@@ -210,7 +210,7 @@ SELECT
 
     -- Allotment stats
     (SELECT COUNT(*) FROM allotment_allotmentmodel
-     WHERE allotment_date >= CURRENT_DATE - INTERVAL '30 days') as allotments_last_30_days,
+     WHERE created_on >= CURRENT_DATE - INTERVAL '30 days') as allotments_last_30_days,
 
     -- Companies with active licenses
     (SELECT COUNT(DISTINCT exporter_id) FROM license_licensedetailsmodel

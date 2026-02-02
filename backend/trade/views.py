@@ -23,7 +23,10 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
             "invoice_number",
             "from_company__name",
             "to_company__name",
-            "remarks"
+            "remarks",
+            "lines__sr_number__license__license_number",  # DFIA license number
+            "incentive_license__license_number",  # Incentive license number (header)
+            "incentive_lines__incentive_license__license_number"  # Incentive license number (lines)
         ],
         "filter": {
             "direction": {

@@ -206,7 +206,7 @@ SELECT
 
     -- BOE stats
     (SELECT COUNT(*) FROM bill_of_entry_billofentrymodel
-     WHERE boe_date >= CURRENT_DATE - INTERVAL '30 days') as boe_last_30_days,
+     WHERE bill_of_entry_date >= CURRENT_DATE - INTERVAL '30 days') as boe_last_30_days,
 
     -- Allotment stats
     (SELECT COUNT(*) FROM allotment_allotmentmodel

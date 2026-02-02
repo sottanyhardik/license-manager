@@ -30,7 +30,12 @@ SELECT
     ld.id as license_id,
     ld.license_number,
     ld.exporter_id,
-    ld.total_cif,
+    -- Calculate total CIF from export items
+    COALESCE((
+        SELECT SUM(lei.cif_fc)
+        FROM license_licenseexportitemmodel lei
+        WHERE lei.license_id = ld.id
+    ), 0) as total_cif,
     ld.license_date,
     ld.license_expiry_date,
     ld.is_active,
@@ -43,18 +48,22 @@ SELECT
 
     -- Calculate allotted CIF
     COALESCE(SUM(CASE
-        WHEN ai.allotment_id IS NOT NULL THEN ai.allotted_cif
+        WHEN ai.allotment_id IS NOT NULL THEN ai.cif_fc
         ELSE 0
     END), 0) as allotted_cif,
 
     -- Calculate balance CIF (total - utilized - allotted)
-    ld.total_cif -
+    COALESCE((
+        SELECT SUM(lei.cif_fc)
+        FROM license_licenseexportitemmodel lei
+        WHERE lei.license_id = ld.id
+    ), 0) -
     COALESCE(SUM(CASE
         WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
         ELSE 0
     END), 0) -
     COALESCE(SUM(CASE
-        WHEN ai.allotment_id IS NOT NULL THEN ai.allotted_cif
+        WHEN ai.allotment_id IS NOT NULL THEN ai.cif_fc
         ELSE 0
     END), 0) as balance_cif,
 
@@ -73,7 +82,7 @@ LEFT JOIN bill_of_entry_rowdetails rd
 LEFT JOIN allotment_allotmentitems ai
     ON ai.item_id = lii.id
 
-GROUP BY ld.id, ld.license_number, ld.exporter_id, ld.total_cif,
+GROUP BY ld.id, ld.license_number, ld.exporter_id,
          ld.license_date, ld.license_expiry_date, ld.is_active;
 
 CREATE UNIQUE INDEX IF NOT EXISTS license_balance_mv_license_id_idx
@@ -99,7 +108,7 @@ SELECT
     ld.license_number,
     ld.exporter_id,
     lii.quantity as total_quantity,
-    lii.cif as total_cif,
+    lii.cif_fc as total_cif,
 
     -- Utilized via BOE
     COALESCE(SUM(CASE
@@ -113,8 +122,8 @@ SELECT
     END), 0) as utilized_cif,
 
     -- Allotted
-    COALESCE(SUM(ai.allotted_quantity), 0) as allotted_quantity,
-    COALESCE(SUM(ai.allotted_cif), 0) as allotted_cif,
+    COALESCE(SUM(ai.qty), 0) as allotted_quantity,
+    COALESCE(SUM(ai.cif_fc), 0) as allotted_cif,
 
     -- Balance (available)
     lii.quantity -
@@ -122,14 +131,14 @@ SELECT
         WHEN rd.transaction_type = 'DEBIT' THEN rd.qty
         ELSE 0
     END), 0) -
-    COALESCE(SUM(ai.allotted_quantity), 0) as available_quantity,
+    COALESCE(SUM(ai.qty), 0) as available_quantity,
 
-    lii.cif -
+    lii.cif_fc -
     COALESCE(SUM(CASE
         WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
         ELSE 0
     END), 0) -
-    COALESCE(SUM(ai.allotted_cif), 0) as available_cif,
+    COALESCE(SUM(ai.cif_fc), 0) as available_cif,
 
     -- Item restrictions
     lii.is_restricted,
@@ -150,7 +159,7 @@ LEFT JOIN allotment_allotmentitems ai
     ON ai.item_id = lii.id
 
 GROUP BY lii.id, lii.license_id, lii.serial_number, ld.license_number,
-         ld.exporter_id, lii.quantity, lii.cif, lii.is_restricted;
+         ld.exporter_id, lii.quantity, lii.cif_fc, lii.is_restricted;
 
 CREATE UNIQUE INDEX IF NOT EXISTS item_balance_mv_item_id_idx
     ON item_balance_mv(item_id);
@@ -186,7 +195,7 @@ SELECT
      as expiring_soon_count,
 
     -- Total CIF values
-    (SELECT COALESCE(SUM(total_cif), 0) FROM license_licensedetailsmodel
+    (SELECT COALESCE(SUM(total_cif), 0) FROM license_balance_mv
      WHERE is_active = true) as total_cif_value,
 
     (SELECT COALESCE(SUM(balance_cif), 0) FROM license_balance_mv

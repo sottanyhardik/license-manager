@@ -3,6 +3,7 @@ License Ledger Views - Unified view for DFIA and Incentive license balances
 """
 from decimal import Decimal
 
+from django.utils import timezone
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -653,7 +654,3 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             'min_balance_filter': float(min_balance),
             'licenses': combined
         })
-
-
-# Import timezone at top
-from django.utils import timezone

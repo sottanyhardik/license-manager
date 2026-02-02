@@ -191,8 +191,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             search_lower = search.lower()
             data = [
                 item for item in data
-                if search_lower in item.get('license_number', '').lower()
-                   or search_lower in item.get('exporter_name', '').lower()
+                if search_lower in (item.get('license_number') or '').lower()
+                   or search_lower in (item.get('exporter_name') or '').lower()
             ]
 
         # Apply ordering

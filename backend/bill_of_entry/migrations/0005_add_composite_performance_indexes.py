@@ -96,7 +96,7 @@ class Migration(migrations.Migration):
             ),
         ),
 
-        # Index for transaction type + company filtering (debit/credit reports)
+        # Index for transaction type filtering (debit/credit reports)
         migrations.AddIndex(
             model_name='rowdetails',
             index=models.Index(
@@ -105,21 +105,12 @@ class Migration(migrations.Migration):
             ),
         ),
 
-        # Index for HSN-based filtering (HS code queries)
+        # Index for row type filtering
         migrations.AddIndex(
             model_name='rowdetails',
             index=models.Index(
-                fields=['hsn_id', 'bill_of_entry_id'],
-                name='row_hsn_boe_idx'
-            ),
-        ),
-
-        # Index for invoice entity tracking
-        migrations.AddIndex(
-            model_name='rowdetails',
-            index=models.Index(
-                fields=['invoice_entity_id', 'bill_of_entry_id'],
-                name='row_invoice_boe_idx'
+                fields=['row_type', 'bill_of_entry_id'],
+                name='row_type_boe_idx'
             ),
         ),
 

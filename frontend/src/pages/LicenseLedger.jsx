@@ -41,9 +41,19 @@ export default function LicenseLedger() {
             params.append('active_only', filters.active_only);
 
             const response = await api.get(`/license-ledger/?${params.toString()}`);
-            setLicenses(response.data || []);
+
+            // Handle both array and object response formats
+            const data = response.data;
+            if (Array.isArray(data)) {
+                setLicenses(data);
+            } else if (data && Array.isArray(data.licenses)) {
+                setLicenses(data.licenses);
+            } else {
+                setLicenses([]);
+            }
         } catch (error) {
             console.error('Error fetching ledger data:', error);
+            setLicenses([]);
         } finally {
             setLoading(false);
         }

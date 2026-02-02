@@ -29,7 +29,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS license_balance_mv AS
 SELECT
     ld.id as license_id,
     ld.license_number,
-    ld.company_id,
+    ld.exporter_id,
     ld.total_cif,
     ld.license_date,
     ld.license_expiry_date,
@@ -73,14 +73,14 @@ LEFT JOIN bill_of_entry_rowdetails rd
 LEFT JOIN allotment_allotmentitems ai
     ON ai.item_id = lii.id
 
-GROUP BY ld.id, ld.license_number, ld.company_id, ld.total_cif,
+GROUP BY ld.id, ld.license_number, ld.exporter_id, ld.total_cif,
          ld.license_date, ld.license_expiry_date, ld.is_active;
 
 CREATE UNIQUE INDEX IF NOT EXISTS license_balance_mv_license_id_idx
     ON license_balance_mv(license_id);
 
-CREATE INDEX IF NOT EXISTS license_balance_mv_company_id_idx
-    ON license_balance_mv(company_id);
+CREATE INDEX IF NOT EXISTS license_balance_mv_exporter_id_idx
+    ON license_balance_mv(exporter_id);
 
 CREATE INDEX IF NOT EXISTS license_balance_mv_balance_cif_idx
     ON license_balance_mv(balance_cif);
@@ -97,7 +97,7 @@ SELECT
     lii.license_id,
     lii.serial_number,
     ld.license_number,
-    ld.company_id,
+    ld.exporter_id,
     lii.quantity as total_quantity,
     lii.cif as total_cif,
 
@@ -150,7 +150,7 @@ LEFT JOIN allotment_allotmentitems ai
     ON ai.item_id = lii.id
 
 GROUP BY lii.id, lii.license_id, lii.serial_number, ld.license_number,
-         ld.company_id, lii.quantity, lii.cif, lii.is_restricted;
+         ld.exporter_id, lii.quantity, lii.cif, lii.is_restricted;
 
 CREATE UNIQUE INDEX IF NOT EXISTS item_balance_mv_item_id_idx
     ON item_balance_mv(item_id);
@@ -158,8 +158,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS item_balance_mv_item_id_idx
 CREATE INDEX IF NOT EXISTS item_balance_mv_license_id_idx
     ON item_balance_mv(license_id);
 
-CREATE INDEX IF NOT EXISTS item_balance_mv_company_id_idx
-    ON item_balance_mv(company_id);
+CREATE INDEX IF NOT EXISTS item_balance_mv_exporter_id_idx
+    ON item_balance_mv(exporter_id);
 
 CREATE INDEX IF NOT EXISTS item_balance_mv_available_cif_idx
     ON item_balance_mv(available_cif);
@@ -204,7 +204,7 @@ SELECT
      WHERE allotment_date >= CURRENT_DATE - INTERVAL '30 days') as allotments_last_30_days,
 
     -- Companies with active licenses
-    (SELECT COUNT(DISTINCT company_id) FROM license_licensedetailsmodel
+    (SELECT COUNT(DISTINCT exporter_id) FROM license_licensedetailsmodel
      WHERE is_active = true) as active_companies_count,
 
     -- Metadata

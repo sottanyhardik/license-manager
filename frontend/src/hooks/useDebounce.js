@@ -63,15 +63,23 @@ export const useDebouncedCallback = (callback, delay = 300) => {
     }, [timeoutId]);
 
     const debouncedCallback = (...args) => {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
+        // Return a promise for async compatibility
+        return new Promise((resolve, reject) => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
 
-        const newTimeoutId = setTimeout(() => {
-            callback(...args);
-        }, delay);
+            const newTimeoutId = setTimeout(async () => {
+                try {
+                    const result = await callback(...args);
+                    resolve(result);
+                } catch (error) {
+                    reject(error);
+                }
+            }, delay);
 
-        setTimeoutId(newTimeoutId);
+            setTimeoutId(newTimeoutId);
+        });
     };
 
     return debouncedCallback;

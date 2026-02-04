@@ -26,9 +26,14 @@ export default function Settings() {
     const loadUsers = async () => {
         try {
             const response = await api.get("auth/users/");
-            setUsers(response.data);
+            // Handle both array and paginated response formats
+            const usersData = Array.isArray(response.data)
+                ? response.data
+                : response.data.results || [];
+            setUsers(usersData);
         } catch (error) {
             toast.error("Failed to load users");
+            setUsers([]); // Set empty array on error
         } finally{
             setLoading(false);
         }

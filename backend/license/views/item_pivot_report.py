@@ -546,7 +546,7 @@ class ItemPivotReportView(View):
                     # Build headers
                     base_headers = [
                         'Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter',
-                        'Total CIF', 'Alloted CIF', 'Balance CIF'
+                        'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet'
                     ]
 
                     # Add item columns (HSN Code, Product Description, Total QTY, Debited QTY, Available QTY, Restriction %, Restriction Value, Unit Price for RUTILE)
@@ -601,6 +601,8 @@ class ItemPivotReportView(View):
                         row_data.append(license_data['total_cif'])
                         row_data.append(license_data['alloted_cif'])
                         row_data.append(license_data['balance_cif'])
+                        row_data.append(license_data.get('balance_report_notes', ''))
+                        row_data.append(license_data.get('condition_sheet', ''))
 
                         # Item columns
                         for item in report_data['items']:
@@ -649,8 +651,8 @@ class ItemPivotReportView(View):
                     total_cell.font = Font(bold=True)
                     totals_row.append(total_cell)
 
-                    # Skip columns 2-5 (DFIA No, DFIA Dt, Expiry Dt, Exporter)
-                    totals_row.extend([None, None, None, None])
+                    # Skip columns 2-5 (DFIA No, DFIA Dt, Expiry Dt, Exporter) + Notes + Condition Sheet
+                    totals_row.extend([None, None, None, None, None, None])
 
                     # Calculate totals for CIF columns
                     total_cif = sum(lic['total_cif'] for lic in licenses_list)
@@ -811,7 +813,7 @@ class ItemPivotReportView(View):
                     worksheet.append([])
 
                     # Headers
-                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Alloted CIF', 'Balance CIF']
+                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet']
                     item_headers = []
                     for item in items_with_data:
                         item_name = item['name']
@@ -854,7 +856,9 @@ class ItemPivotReportView(View):
                             lic['exporter'],
                             lic['total_cif'],
                             lic['alloted_cif'],
-                            lic['balance_cif']
+                            lic['balance_cif'],
+                            lic.get('balance_report_notes', ''),
+                            lic.get('condition_sheet', '')
                         ]
 
                         for item in items_with_data:
@@ -883,7 +887,7 @@ class ItemPivotReportView(View):
                     # Totals row
                     totals_row = [WriteOnlyCell(worksheet, value='TOTAL')]
                     totals_row[0].font = Font(bold=True)
-                    totals_row.extend([None, None, None, None])
+                    totals_row.extend([None, None, None, None, None, None])
 
                     total_cif_cell = WriteOnlyCell(worksheet, value=sum(l['total_cif'] for l in licenses_list))
                     total_cif_cell.font = Font(bold=True)

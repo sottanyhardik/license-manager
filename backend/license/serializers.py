@@ -1163,6 +1163,24 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
                         logger.info(f"  -> Validation: has_type={has_type}, has_file={has_file}, is_file_obj={is_file_obj}")
 
+                        if not has_type:
+                            from rest_framework.exceptions import ValidationError
+                            raise ValidationError({
+                                'license_documents': [f"Document #{idx + 1}: Document type is required"]
+                            })
+
+                        if not has_file:
+                            from rest_framework.exceptions import ValidationError
+                            raise ValidationError({
+                                'license_documents': [f"Document #{idx + 1}: File is required"]
+                            })
+
+                        if not is_file_obj:
+                            from rest_framework.exceptions import ValidationError
+                            raise ValidationError({
+                                'license_documents': [f"Document #{idx + 1}: Please upload a valid file"]
+                            })
+
                         if d.get('type') and d.get('file') and not isinstance(d.get('file'), str):
                             obj = LicenseDocumentModel.objects.create(license=instance, **d)
                             processed_ids.add(obj.id)

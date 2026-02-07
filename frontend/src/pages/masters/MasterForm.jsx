@@ -986,7 +986,29 @@ export default function MasterForm({
                     }
                 }, 100);
             } else {
-                const errorMsg = err.response?.data?.detail || "Failed to save record";
+                // Handle other error formats
+                let errorMsg = "Failed to save record";
+
+                if (err.response?.data?.detail) {
+                    errorMsg = err.response.data.detail;
+                } else if (err.response?.data?.error) {
+                    errorMsg = err.response.data.error;
+                } else if (err.response?.data?.message) {
+                    errorMsg = err.response.data.message;
+                } else if (typeof err.response?.data === 'string') {
+                    errorMsg = err.response.data;
+                } else if (err.response?.status === 400) {
+                    errorMsg = "Invalid data provided. Please check your input.";
+                } else if (err.response?.status === 403) {
+                    errorMsg = "You don't have permission to perform this action.";
+                } else if (err.response?.status === 404) {
+                    errorMsg = "Record not found.";
+                } else if (err.response?.status === 500) {
+                    errorMsg = "Server error occurred. Please try again or contact support.";
+                } else if (err.message) {
+                    errorMsg = `Error: ${err.message}`;
+                }
+
                 setError(errorMsg);
                 toast.error(errorMsg);
             }

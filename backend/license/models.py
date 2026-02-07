@@ -665,14 +665,15 @@ class LicenseDetailsModel(AuditModel):
     def get_starch_confectionery(self):
         return self.get_item_data("EMULSIFIER")
 
-    @cached_property
     def get_per_cif(self) -> Optional[Dict[str, Decimal]]:
         """
         Compute restriction budgets based on export norm class.
         Returns decimals in the dict values.
+        NOTE: Removed @cached_property to ensure fresh calculation after updates.
         """
         available_value = self.get_balance_cif
-        credit = _to_decimal(self.opening_balance or DEC_0, DEC_0)
+        # Use total export CIF as credit for restriction calculations
+        credit = _to_decimal(self._calculate_license_credit() or DEC_0, DEC_0)
 
         first_norm = self.export_license.all().values_list("norm_class__norm_class", flat=True).first()
         if not first_norm:

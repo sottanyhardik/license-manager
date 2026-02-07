@@ -188,27 +188,27 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_THROTTLE_RATES": {
         # Anonymous users (unauthenticated)
-        "anon": "100/hour",           # 100 requests per hour for anonymous users
+        "anon": "300/hour",           # 300 requests per hour for anonymous users
 
         # Authenticated users (general)
-        "user": "1000/hour",          # 1000 requests per hour for authenticated users
+        "user": "3000/hour",          # 3000 requests per hour for authenticated users
 
         # Staff users (admins)
-        "staff": "5000/hour",         # 5000 requests per hour for staff users
+        "staff": "10000/hour",        # 10000 requests per hour for staff users
 
         # Burst protection (short-term)
-        "burst": "60/minute",         # 60 requests per minute (prevents rapid-fire)
+        "burst": "180/minute",        # 180 requests per minute (3 per second - prevents rapid-fire)
 
         # Sustained usage (long-term)
-        "sustained": "10000/day",     # 10000 requests per day
+        "sustained": "20000/day",     # 20000 requests per day
 
         # Resource-intensive operations
-        "upload": "20/hour",          # 20 file uploads per hour
-        "export": "30/hour",          # 30 exports (Excel/PDF) per hour
+        "upload": "50/hour",          # 50 file uploads per hour
+        "export": "100/hour",         # 100 exports (Excel/PDF) per hour
 
         # Security-sensitive operations
-        "login": "5/minute",          # 5 login attempts per minute
-        "strict": "10/hour",          # 10 sensitive operations per hour (delete, bulk ops)
+        "login": "10/minute",         # 10 login attempts per minute
+        "strict": "30/hour",          # 30 sensitive operations per hour (delete, bulk ops)
     },
     # Return throttle information in response headers
     "NUM_PROXIES": 1,  # Number of proxies (for accurate IP detection)

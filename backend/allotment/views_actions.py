@@ -78,7 +78,8 @@ class AllotmentActionViewSet(ViewSet):
 
         # Get available license import items with available quantity
         # Show all items with available quantity > 0 (including partially allocated ones)
-        queryset = LicenseImportItemsModel.objects.filter(
+        # Note: We explicitly use .all() to avoid any default manager filters
+        queryset = LicenseImportItemsModel.objects.all().filter(
             available_quantity__gt=0
         ).select_related(
             'license',
@@ -180,13 +181,26 @@ class AllotmentActionViewSet(ViewSet):
             queryset = queryset.filter(hs_code__hs_code__startswith=hs_code)
 
         # Apply is_expired filter
+        # Note: is_expired='all' means show both expired and non-expired (no filter applied)
         if is_expired and is_expired.lower() != 'all':
             from django.utils import timezone
             today = timezone.now().date()
             if is_expired.lower() in ['true', '1', 'yes']:
-                queryset = queryset.filter(license__license_expiry_date__lt=today)
+                # Show ONLY expired licenses:
+                # License is expired if EITHER is_expired=True OR expiry_date < today
+                queryset = queryset.filter(
+                    Q(license__is_expired=True) |
+                    Q(license__license_expiry_date__lt=today)
+                )
             elif is_expired.lower() in ['false', '0', 'no']:
-                queryset = queryset.filter(license__license_expiry_date__gte=today)
+                # Show ONLY non-expired licenses:
+                # License is NOT expired if is_expired=False AND (no expiry date OR expiry_date >= today)
+                queryset = queryset.filter(
+                    license__is_expired=False,
+                ).filter(
+                    Q(license__license_expiry_date__isnull=True) |
+                    Q(license__license_expiry_date__gte=today)
+                )
 
         # Apply exclude exporter filter
         if exclude_exporter:

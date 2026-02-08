@@ -180,7 +180,7 @@ class AllotmentActionViewSet(ViewSet):
             queryset = queryset.filter(hs_code__hs_code__startswith=hs_code)
 
         # Apply is_expired filter
-        if is_expired:
+        if is_expired and is_expired.lower() != 'all':
             from django.utils import timezone
             today = timezone.now().date()
             if is_expired.lower() in ['true', '1', 'yes']:

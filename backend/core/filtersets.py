@@ -253,6 +253,7 @@ class AllotmentFilterSet(BaseFilterSet):
 
     # License filter
     license = filters.NumberFilter(field_name='license_id')
+    license_number = filters.CharFilter(method='filter_license_number')
 
     # Approval status
     is_approved = filters.BooleanFilter(field_name='is_approved')
@@ -265,6 +266,14 @@ class AllotmentFilterSet(BaseFilterSet):
         if value:
             ids = [int(x.strip()) for x in value.split(',') if x.strip().isdigit()]
             return queryset.filter(company_id__in=ids)
+        return queryset
+
+    def filter_license_number(self, queryset, name, value):
+        """Filter allotments by license number (searches in nested allotment_details)."""
+        if value:
+            return queryset.filter(
+                allotment_details__item__license__license_number__iexact=value
+            ).distinct()
         return queryset
 
     def filter_recent_days(self, queryset, name, value):

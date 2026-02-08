@@ -11,6 +11,7 @@ from core.constants import ROW_TYPE_CHOICES
 from core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
 from core.filtersets import AllotmentFilterSet
 from core.views.master_view import MasterViewSet
+from django_filters.rest_framework import DjangoFilterBackend
 
 
 def _get_active_usd_rate():
@@ -48,6 +49,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
         "search": ["item_name", "company__name", "invoice", "bl_detail",
                    "allotment_details__item__license__license_number"],
         "filter": {
+            "license_number": {"type": "text", "label": "License Number"},
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
                                 "filter_field": "company"},
@@ -144,7 +146,7 @@ AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)
 # Add permission classes and filter backends
 AllotmentViewSet.permission_classes = [AllotmentPermission]
 AllotmentViewSet.filterset_class = AllotmentFilterSet
-AllotmentViewSet.filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
+AllotmentViewSet.filter_backends = [DjangoFilterBackend, CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
 AllotmentViewSet.search_fields = ['item_name', 'company__name', 'invoice', 'bl_detail', 'port__name']
 AllotmentViewSet.ordering_fields = ['estimated_arrival_date', 'modified_on', 'company__name', 'item_name']
 

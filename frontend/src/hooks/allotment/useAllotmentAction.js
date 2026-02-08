@@ -26,6 +26,7 @@ export const useAllotmentAction = (allotmentId) => {
     const [isFirstLoad, setIsFirstLoad] = useState(true);
 
     const [filters, setFilters] = useState({
+        license_number: '',
         description: '',
         exporter: '',
         available_quantity_gte: '50',
@@ -35,7 +36,7 @@ export const useAllotmentAction = (allotmentId) => {
         notification_number: '',
         norm_class: '',
         hs_code: '',
-        is_expired: 'false'
+        is_expired: 'all'
     });
 
     // Pagination
@@ -267,6 +268,7 @@ export const useAllotmentAction = (allotmentId) => {
     // Clear filters
     const clearFilters = useCallback(() => {
         setFilters({
+            license_number: '',
             description: '',
             exporter: '',
             available_quantity_gte: '50',
@@ -276,7 +278,7 @@ export const useAllotmentAction = (allotmentId) => {
             notification_number: '',
             norm_class: '',
             hs_code: '',
-            is_expired: 'false'
+            is_expired: 'all'
         });
     }, []);
 

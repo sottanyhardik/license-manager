@@ -246,15 +246,19 @@ class LicenseFilterService:
     def apply_expiry_filter(queryset: QuerySet, is_expired: Optional[str]) -> QuerySet:
         """
         Filter by license expiry status.
-        
+
         Args:
             queryset: QuerySet to filter
-            is_expired: "true" to show only expired, "false" to exclude expired
-            
+            is_expired: "true" to show only expired, "false" to exclude expired, "all" to show all
+
         Returns:
             Filtered QuerySet
         """
         if not is_expired:
+            return queryset
+
+        # If "all" is selected, don't apply any filter
+        if is_expired.lower() == 'all':
             return queryset
 
         if is_expired.lower() == 'true':

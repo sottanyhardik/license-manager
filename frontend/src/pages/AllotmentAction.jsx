@@ -34,7 +34,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         notification_number: "",
         norm_class: "",
         hs_code: "",
-        is_expired: "false",
+        is_expired: "all",
         is_restricted: "all",
         purchase_status: "GE,GO,SM,MI",  // GE Purchase, GE Operating, SM Purchase, Conversion
         license_status: "active",
@@ -968,7 +968,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             value={filters.is_expired}
                                             onChange={(e) => setFilters({...filters, is_expired: e.target.value})}
                                         >
-                                            <option value="">All</option>
+                                            <option value="all">All</option>
                                             <option value="false">Not Expired</option>
                                             <option value="true">Expired</option>
                                         </select>
@@ -1079,7 +1079,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 notification_number: "",
                                                 norm_class: "",
                                                 hs_code: "",
-                                                is_expired: "false",
+                                                is_expired: "all",
                                                 is_restricted: "all",
                                                 purchase_status: "GE,GO,SM,MI",
                                                 license_status: "active",

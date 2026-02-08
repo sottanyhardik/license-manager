@@ -48,7 +48,6 @@ class AllotmentActionViewSet(ViewSet):
         - notification_number: Filter by license notification number
         - norm_class: Filter by license norm class (export license)
         - hs_code: Filter by HS code
-        - is_expired: Filter expired licenses (true/false)
         - is_restricted: Filter by is_restricted flag (true/false/all)
         - purchase_status: Filter by purchase status (comma-separated)
         - license_status: Filter by license status (active/expired/expiring_soon/all)
@@ -70,7 +69,6 @@ class AllotmentActionViewSet(ViewSet):
         notification_number = request.query_params.get('notification_number', '')
         norm_class = request.query_params.get('norm_class', '')
         hs_code = request.query_params.get('hs_code', '')
-        is_expired = request.query_params.get('is_expired', '')
         is_restricted = request.query_params.get('is_restricted', '')
         purchase_status = request.query_params.get('purchase_status', '')
         license_status = request.query_params.get('license_status', '')
@@ -179,28 +177,6 @@ class AllotmentActionViewSet(ViewSet):
         # Apply HS code filter (starts with)
         if hs_code:
             queryset = queryset.filter(hs_code__hs_code__startswith=hs_code)
-
-        # Apply is_expired filter
-        # Note: is_expired='all' means show both expired and non-expired (no filter applied)
-        if is_expired and is_expired.lower() != 'all':
-            from django.utils import timezone
-            today = timezone.now().date()
-            if is_expired.lower() in ['true', '1', 'yes']:
-                # Show ONLY expired licenses:
-                # License is expired if EITHER is_expired=True OR expiry_date < today
-                queryset = queryset.filter(
-                    Q(license__is_expired=True) |
-                    Q(license__license_expiry_date__lt=today)
-                )
-            elif is_expired.lower() in ['false', '0', 'no']:
-                # Show ONLY non-expired licenses:
-                # License is NOT expired if is_expired=False AND (no expiry date OR expiry_date >= today)
-                queryset = queryset.filter(
-                    license__is_expired=False,
-                ).filter(
-                    Q(license__license_expiry_date__isnull=True) |
-                    Q(license__license_expiry_date__gte=today)
-                )
 
         # Apply exclude exporter filter
         if exclude_exporter:

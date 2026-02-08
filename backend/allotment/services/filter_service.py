@@ -242,31 +242,6 @@ class LicenseFilterService:
 
         return queryset.filter(hs_code__hs_code__icontains=hs_code)
 
-    @staticmethod
-    def apply_expiry_filter(queryset: QuerySet, is_expired: Optional[str]) -> QuerySet:
-        """
-        Filter by license expiry status.
-
-        Args:
-            queryset: QuerySet to filter
-            is_expired: "true" to show only expired, "false" to exclude expired, "all" to show all
-
-        Returns:
-            Filtered QuerySet
-        """
-        if not is_expired:
-            return queryset
-
-        # If "all" is selected, don't apply any filter
-        if is_expired.lower() == 'all':
-            return queryset
-
-        if is_expired.lower() == 'true':
-            queryset = queryset.filter(license__is_expired=True)
-        elif is_expired.lower() == 'false':
-            queryset = queryset.filter(license__is_expired=False)
-
-        return queryset
 
     @classmethod
     def filter_available_items(
@@ -281,12 +256,11 @@ class LicenseFilterService:
             max_value: str = '',
             notification_number: str = '',
             norm_class: str = '',
-            hs_code: str = '',
-            is_expired: str = ''
+            hs_code: str = ''
     ) -> QuerySet:
         """
         Apply all filters to get available license items.
-        
+
         Args:
             search: General search term
             license_number: License number filter
@@ -299,8 +273,7 @@ class LicenseFilterService:
             notification_number: Notification number filter
             norm_class: Norm class filter
             hs_code: HS code filter
-            is_expired: Expiry filter
-            
+
         Returns:
             Filtered QuerySet
         """
@@ -317,6 +290,5 @@ class LicenseFilterService:
         queryset = cls.apply_notification_filter(queryset, notification_number)
         queryset = cls.apply_norm_class_filter(queryset, norm_class)
         queryset = cls.apply_hs_code_filter(queryset, hs_code)
-        queryset = cls.apply_expiry_filter(queryset, is_expired)
 
         return queryset

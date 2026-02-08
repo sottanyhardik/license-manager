@@ -35,8 +35,7 @@ export const useAllotmentAction = (allotmentId) => {
         available_value_lte: '',
         notification_number: '',
         norm_class: '',
-        hs_code: '',
-        is_expired: 'all'
+        hs_code: ''
     });
 
     // Pagination
@@ -277,8 +276,7 @@ export const useAllotmentAction = (allotmentId) => {
             available_value_lte: '',
             notification_number: '',
             norm_class: '',
-            hs_code: '',
-            is_expired: 'all'
+            hs_code: ''
         });
     }, []);
 

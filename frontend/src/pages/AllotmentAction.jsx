@@ -962,18 +962,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         />
                                     </div>
                                     <div className="col-md-3">
-                                        <label className="form-label">Is Expired</label>
-                                        <select
-                                            className="form-control form-control-sm"
-                                            value={filters.is_expired}
-                                            onChange={(e) => setFilters({...filters, is_expired: e.target.value})}
-                                        >
-                                            <option value="all">All</option>
-                                            <option value="false">Not Expired</option>
-                                            <option value="true">Expired</option>
-                                        </select>
-                                    </div>
-                                    <div className="col-md-3">
                                         <label className="form-label">Min Available Qty</label>
                                         <input
                                             type="number"

@@ -1187,9 +1187,16 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 # This prevents accidental deletion when frontend doesn't send nested data
                 if len(imports) > 0:
                     # Delete items that are no longer in the payload
-                    for item in existing_items:
-                        if item.id not in processed_ids:
+                    items_to_delete = [item for item in existing_items if item.id not in processed_ids]
+                    if items_to_delete:
+                        logger.info(f"Deleting {len(items_to_delete)} import items not in payload: {[item.id for item in items_to_delete]}")
+                        for item in items_to_delete:
+                            logger.info(f"  -> Deleting import item ID={item.id}, serial={item.serial_number}")
                             item.delete()
+                    else:
+                        logger.info("No import items to delete - all existing items were updated or are in payload")
+
+                logger.info(f"Import items update complete. Processed {len(processed_ids)} items, deleted {len(items_to_delete) if len(imports) > 0 else 0} items")
 
         if docs is not None:
             from django.db import transaction

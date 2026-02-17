@@ -453,20 +453,31 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
     def _clean_boolean_fields(self, data):
-        """Convert empty strings to False for boolean fields in nested data."""
+        """Convert string boolean values to actual booleans for FormData compatibility."""
         # Boolean fields in main license
         boolean_fields = ['is_audit', 'is_mnm', 'is_not_registered', 'is_null', 'is_au',
                          'is_active', 'is_incomplete', 'is_expired', 'is_individual']
 
         for field in boolean_fields:
-            if field in data and data[field] == '':
-                data[field] = False
+            if field in data:
+                value = data[field]
+                if isinstance(value, str):
+                    # Convert string booleans from FormData to actual booleans
+                    if value == '' or value.lower() in ('false', '0', 'no'):
+                        data[field] = False
+                    elif value.lower() in ('true', '1', 'yes'):
+                        data[field] = True
 
         # Boolean fields in import_license nested array
         if 'import_license' in data and isinstance(data['import_license'], list):
             for item in data['import_license']:
-                if isinstance(item, dict) and 'is_restricted' in item and item['is_restricted'] == '':
-                    item['is_restricted'] = False
+                if isinstance(item, dict) and 'is_restricted' in item:
+                    value = item['is_restricted']
+                    if isinstance(value, str):
+                        if value == '' or value.lower() in ('false', '0', 'no'):
+                            item['is_restricted'] = False
+                        elif value.lower() in ('true', '1', 'yes'):
+                            item['is_restricted'] = True
 
         return data
 
@@ -896,9 +907,16 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 for e in exports:
                     item_id = e.get('id')
 
-                    # Remove form-only fields that are not part of the model
+                    # Remove form-only fields and nested read-only fields that are not part of the model
                     e.pop('start_serial_number', None)
                     e.pop('end_serial_number', None)
+                    e.pop('norm_class_label', None)
+                    e.pop('item_label', None)
+
+                    # Remove nested detail objects (norm_class_detail.*, item_detail.*)
+                    keys_to_remove = [k for k in e.keys() if '.' in k or k.endswith('_detail')]
+                    for key in keys_to_remove:
+                        e.pop(key, None)
 
                     # Convert empty strings and None to 0 for required NOT NULL fields
                     for field in ['net_quantity', 'old_quantity']:
@@ -970,13 +988,43 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 # Update or create import items
                 for idx, i in enumerate(imports):
                     item_id = i.get('id')
+                    # Convert item_id to int for proper matching
+                    if item_id:
+                        try:
+                            item_id = int(item_id)
+                        except (ValueError, TypeError):
+                            item_id = None
+
                     serial_number = i.get('serial_number')
+                    # Convert serial_number to int for proper matching
+                    if serial_number:
+                        try:
+                            serial_number = int(serial_number)
+                        except (ValueError, TypeError):
+                            pass
+
                     items_list = i.pop('items', [])
                     description = i.get('description')
                     hs_code = i.get('hs_code')
 
                     # Remove fields that don't exist in LicenseImportItemsModel
                     i.pop('duty_type', None)  # This field only exists in export items
+                    i.pop('license_number', None)
+                    i.pop('license_date', None)
+                    i.pop('license_expiry', None)
+                    i.pop('license_expiry_date', None)
+                    i.pop('notification_number', None)
+                    i.pop('exporter_name', None)
+
+                    # Remove read-only computed properties that have no setter
+                    i.pop('balance_cif_fc', None)
+                    i.pop('allotted_quantity', None)
+                    i.pop('allotted_value', None)
+
+                    # Remove nested detail objects and read-only fields with dots or array brackets
+                    keys_to_remove = [k for k in i.keys() if '.' in k or '[' in k or k.endswith('_detail') or k.endswith('_label')]
+                    for key in keys_to_remove:
+                        i.pop(key, None)
 
                     obj = None
 
@@ -1079,23 +1127,54 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                             logger.debug(f"  -> Skipping: creating duplicate serial {serial_number}")
                             continue
 
-                        logger.debug(f"  -> Creating new item with serial {serial_number}")
-                        # Create new item only if serial_number doesn't exist
-                        i.pop('id', None)  # Remove ID if present
-                        i.pop('license', None)  # Remove license field - we use instance
-                        i.pop('license_date', None)  # Remove read-only fields
-                        i.pop('license_expiry', None)  # Remove read-only fields
+                        # Double-check: if serial_number exists in DB, update it instead of creating
+                        if serial_number and serial_number in existing_items_by_serial:
+                            logger.warning(f"  -> Found existing item by serial {serial_number} in fallback check, updating instead")
+                            obj = existing_items_by_serial[serial_number]
 
-                        # Handle foreign keys - convert to _id format for direct assignment
-                        if 'hs_code' in i and i['hs_code'] is not None:
-                            i['hs_code_id'] = i.pop('hs_code')
+                            # Auto-calculate quantity if not provided or is 0
+                            hs_code = i.get('hs_code')
+                            if hs_code and (not i.get('quantity') or i.get('quantity') == 0 or i.get('quantity') == ''):
+                                calculated_qty = self._calculate_import_quantity(instance, hs_code)
+                                if calculated_qty > 0:
+                                    i['quantity'] = calculated_qty
 
-                        i['items'] = items_list
-                        obj = self._create_import_item(instance, i)
-                        processed_ids.add(obj.id)
-                        if obj.serial_number:
+                            for key, value in i.items():
+                                if key not in ('id', 'license', 'license_date', 'license_expiry', 'balance_cif_fc',
+                                               'license_number', 'notification_number', 'exporter_name', 'hs_code_detail',
+                                               'hs_code_label', 'allotted_quantity', 'allotted_value'):
+                                    # Handle foreign keys by using _id suffix
+                                    if key == 'hs_code' and value is not None:
+                                        setattr(obj, 'hs_code_id', value)
+                                    else:
+                                        setattr(obj, key, value)
+                            obj.save()
+
+                            # Update M2M relationship - only if items is empty
+                            if isinstance(items_list, list):
+                                if not obj.items.exists():
+                                    obj.items.set(items_list)
+
+                            processed_ids.add(obj.id)
                             processed_serials.add(obj.serial_number)
-                        logger.debug(f"  -> Created item with ID {obj.id}")
+                        else:
+                            logger.debug(f"  -> Creating new item with serial {serial_number}")
+                            # Create new item only if serial_number doesn't exist
+                            i.pop('id', None)  # Remove ID if present
+                            i.pop('license', None)  # Remove license field - we use instance
+                            i.pop('license_date', None)  # Remove read-only fields
+                            i.pop('license_expiry', None)  # Remove read-only fields
+
+                            # Handle foreign keys - convert to _id format for direct assignment
+                            if 'hs_code' in i and i['hs_code'] is not None:
+                                i['hs_code_id'] = i.pop('hs_code')
+
+                            i['items'] = items_list
+                            obj = self._create_import_item(instance, i)
+                            processed_ids.add(obj.id)
+                            if obj.serial_number:
+                                processed_serials.add(obj.serial_number)
+                            logger.debug(f"  -> Created item with ID {obj.id}")
 
                     # Save description to ProductDescriptionModel
                     if description and hs_code:
@@ -1158,35 +1237,16 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         # Only create if type and file are present (and file is a File object, not URL string)
                         file_obj = d.get('file')
                         has_type = bool(d.get('type'))
-                        has_file = bool(file_obj)
-                        is_file_obj = has_file and not isinstance(file_obj, str)
+                        is_file_obj = file_obj and not isinstance(file_obj, str)
 
-                        logger.info(f"  -> Validation: has_type={has_type}, has_file={has_file}, is_file_obj={is_file_obj}")
+                        logger.info(f"  -> Validation: has_type={has_type}, is_file_obj={is_file_obj}, file={file_obj}")
 
-                        if not has_type:
-                            from rest_framework.exceptions import ValidationError
-                            raise ValidationError({
-                                'license_documents': [f"Document #{idx + 1}: Document type is required"]
-                            })
-
-                        if not has_file:
-                            from rest_framework.exceptions import ValidationError
-                            raise ValidationError({
-                                'license_documents': [f"Document #{idx + 1}: File is required"]
-                            })
-
-                        if not is_file_obj:
-                            from rest_framework.exceptions import ValidationError
-                            raise ValidationError({
-                                'license_documents': [f"Document #{idx + 1}: Please upload a valid file"]
-                            })
-
-                        if d.get('type') and d.get('file') and not isinstance(d.get('file'), str):
+                        if has_type and is_file_obj:
                             obj = LicenseDocumentModel.objects.create(license=instance, **d)
                             processed_ids.add(obj.id)
                             logger.info(f"  -> Created new document with ID={obj.id}")
                         else:
-                            logger.warning(f"  -> Skipped creating document: validation failed")
+                            logger.warning(f"  -> Skipped creating document: type={d.get('type')}, file type={type(file_obj)}")
 
                 # Only delete documents if we actually received document data in the payload
                 # This prevents accidental deletion when frontend doesn't send nested data

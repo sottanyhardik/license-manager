@@ -123,7 +123,14 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
     # Apply advanced filter backends
     filterset_class = BOEFilterSet
     filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
-    search_fields = ['bill_of_entry_number', 'invoice_no', 'product_name', 'port__name', 'company__name']
+    search_fields = [
+        'bill_of_entry_number',
+        'invoice_no',
+        'product_name',
+        'port__name',
+        'company__name',
+        'item_details__sr_number__license__license_number',
+    ]
     ordering_fields = ['bill_of_entry_date', 'bill_of_entry_number', 'company__name', 'port__name']
 
     def get_queryset(self):

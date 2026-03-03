@@ -5,7 +5,7 @@ import AsyncCreatableSelect from "react-select/async-creatable";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import api from "../../api/axios";
-import {formatDateForInput} from "../../utils/dateFormatter";
+import {formatDateForInput, parseDate as parseDateUtil} from "../../utils/dateFormatter";
 
 /**
  * NestedFieldArray Component
@@ -35,11 +35,9 @@ export default function NestedFieldArray({
                                              formData = {}
                                          }) {
 
-    // Helper function to parse date from YYYY-MM-DD to Date object
+    // Use centralized date parser from utility
     const parseDate = (dateString) => {
-        if (!dateString) return null;
-        const date = new Date(dateString);
-        return isNaN(date.getTime()) ? null : date;
+        return parseDateUtil(dateString);
     };
 
     // Helper function to format Date object to YYYY-MM-DD for API

@@ -41,16 +41,7 @@ const LedgerUpload = lazy(() => import("./pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("./pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("./pages/LicenseLedgerDetail"));
 
-// Ledger Module Pages - lazy load on demand
-const ChartOfAccounts = lazy(() => import("./pages/ledger/ChartOfAccounts"));
-const BankAccounts = lazy(() => import("./pages/ledger/BankAccounts"));
-const JournalEntries = lazy(() => import("./pages/ledger/JournalEntries"));
-const PartyLedger = lazy(() => import("./pages/ledger/PartyLedger"));
-const AccountLedger = lazy(() => import("./pages/ledger/AccountLedger"));
-const BalanceSheet = lazy(() => import("./pages/ledger/BalanceSheet"));
-const ProfitLoss = lazy(() => import("./pages/ledger/ProfitLoss"));
-const TrialBalance = lazy(() => import("./pages/ledger/TrialBalance"));
-const OutstandingInvoices = lazy(() => import("./pages/ledger/OutstandingInvoices"));
+
 
 export default function App() {
     // Preload critical routes after initial load
@@ -505,124 +496,6 @@ export default function App() {
                                         <AdminLayout>
                                             <Profile/>
                                         </AdminLayout>
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            {/* Ledger Module Routes */}
-                            <Route
-                                path="/ledger/chart-of-accounts"
-                                element={
-                                    <ProtectedRoute>
-                                        
-                                            <AdminLayout>
-                                                <ChartOfAccounts/>
-                                            </AdminLayout>
-                                        
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/ledger/bank-accounts"
-                                element={
-                                    <ProtectedRoute>
-                                        
-                                            <AdminLayout>
-                                                <BankAccounts/>
-                                            </AdminLayout>
-                                        
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/ledger/journal-entries"
-                                element={
-                                    <ProtectedRoute>
-                                        
-                                            <AdminLayout>
-                                                <JournalEntries/>
-                                            </AdminLayout>
-                                        
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/ledger/party-ledger"
-                                element={
-                                    <ProtectedRoute>
-                                        
-                                            <AdminLayout>
-                                                <PartyLedger/>
-                                            </AdminLayout>
-                                        
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/ledger/account-ledger"
-                                element={
-                                    <ProtectedRoute>
-                                        
-                                            <AdminLayout>
-                                                <AccountLedger/>
-                                            </AdminLayout>
-                                        
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/ledger/reports/balance-sheet"
-                                element={
-                                    <ProtectedRoute>
-                                        
-                                            <AdminLayout>
-                                                <BalanceSheet/>
-                                            </AdminLayout>
-                                        
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/ledger/reports/profit-loss"
-                                element={
-                                    <ProtectedRoute>
-                                        
-                                            <AdminLayout>
-                                                <ProfitLoss/>
-                                            </AdminLayout>
-                                        
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/ledger/reports/trial-balance"
-                                element={
-                                    <ProtectedRoute>
-                                        
-                                            <AdminLayout>
-                                                <TrialBalance/>
-                                            </AdminLayout>
-                                        
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            <Route
-                                path="/ledger/reports/outstanding"
-                                element={
-                                    <ProtectedRoute>
-                                        
-                                            <AdminLayout>
-                                                <OutstandingInvoices/>
-                                            </AdminLayout>
-                                        
                                     </ProtectedRoute>
                                 }
                             />

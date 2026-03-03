@@ -1,7 +1,7 @@
 import {useContext} from "react";
 import {Link} from "react-router-dom";
 import {AuthContext} from "../context/AuthContext";
-import {routes, reportEntities, masterEntities, ledgerEntities, commissionEntities} from "../routes/config";
+import {routes, reportEntities, masterEntities} from "../routes/config";
 
 export default function TopNav() {
     const {user, logout} = useContext(AuthContext);

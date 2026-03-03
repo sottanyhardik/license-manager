@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import api from "../api/axios";
 import CreatableSelect from 'react-select/creatable';
 import AsyncSelect from 'react-select/async';
+import { formatDate } from '../utils/dateFormatter';
 
 /**
  * Reusable Transfer Letter Form Component
@@ -249,7 +250,7 @@ export default function TransferLetterForm({
                     <div className="col-md-6 d-flex align-items-end">
                         <small className="text-muted">
                             <i className="bi bi-info-circle me-1"></i>
-                            Today's date ({new Date().toLocaleDateString('en-GB')}) will be included automatically
+                            Today's date ({formatDate(new Date())}) will be included automatically
                         </small>
                     </div>
                 </div>

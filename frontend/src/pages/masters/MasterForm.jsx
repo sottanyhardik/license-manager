@@ -7,7 +7,9 @@ import HybridSelect from "../../components/HybridSelect";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import {markNewItemCreated} from "../../utils/filterPersistence";
-import {formatDateForInput} from "../../utils/dateFormatter";
+import {formatDateForInput, parseDate as parseDateUtil} from "../../utils/dateFormatter";
+import * as validateFormUtil from "../../utils/formValidation";
+import { ValidationRules } from "../../utils/formValidation";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import {navigateToList} from "../../utils/navigationUtils";
 import {useBackButton} from "../../hooks/useBackButton";
@@ -54,48 +56,9 @@ export default function MasterForm({
     // Enable browser back button support with filter preservation
     useBackButton(entityName, !isModal);
 
-    // Helper function to parse date from YYYY-MM-DD to Date object
+    // Use centralized date parser from utility
     const parseDate = (dateString) => {
-        if (!dateString) return null;
-
-        // If it's already a Date object, return it
-        if (dateString instanceof Date) {
-            return isNaN(dateString.getTime()) ? null : dateString;
-        }
-
-        // Parse string date
-        if (typeof dateString === 'string') {
-            // Split the date string to avoid timezone issues
-            const parts = dateString.split('-');
-            if (parts.length === 3) {
-                let year, month, day;
-
-                // Check if it's YYYY-MM-DD format (year is 4 digits)
-                if (parts[0].length === 4) {
-                    year = parseInt(parts[0], 10);
-                    month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
-                    day = parseInt(parts[2], 10);
-                }
-                // Check if it's dd-MM-yyyy format (first part is 1-2 digits)
-                else if (parts[2].length === 4) {
-                    day = parseInt(parts[0], 10);
-                    month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
-                    year = parseInt(parts[2], 10);
-                }
-                // Unknown format, try default parsing
-                else {
-                    const date = new Date(dateString);
-                    return isNaN(date.getTime()) ? null : date;
-                }
-
-                // Create date at noon local time to avoid timezone boundary issues
-                const date = new Date(year, month, day, 12, 0, 0);
-                return isNaN(date.getTime()) ? null : date;
-            }
-        }
-
-        const date = new Date(dateString);
-        return isNaN(date.getTime()) ? null : date;
+        return parseDateUtil(dateString);
     };
 
     // Helper function to format Date object to YYYY-MM-DD for API
@@ -479,28 +442,56 @@ export default function MasterForm({
     // Frontend validation function
     const validateForm = () => {
         const errors = {};
-        const requiredFields = [];
 
-        // Collect required fields from metadata
+        // Collect required fields from metadata and validate using utility
         if (metadata.form_fields) {
             metadata.form_fields.forEach(fieldName => {
                 const fieldMeta = metadata.field_meta?.[fieldName] || {};
+                const label = fieldMeta.label || fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const value = formData[fieldName];
+                const rules = [];
+
+                // Add required rule
                 if (fieldMeta.required) {
-                    requiredFields.push({
-                        name: fieldName,
-                        label: fieldMeta.label || fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-                    });
+                    rules.push(ValidationRules.REQUIRED);
+                }
+
+                // Add type-specific validations
+                if (fieldMeta.type === 'email' || fieldName.includes('email')) {
+                    rules.push(ValidationRules.EMAIL);
+                }
+                if (fieldMeta.type === 'url' || fieldName.includes('url')) {
+                    rules.push(ValidationRules.URL);
+                }
+                if (fieldMeta.type === 'number' || fieldMeta.type === 'decimal' || fieldMeta.type === 'integer') {
+                    if (fieldMeta.type === 'integer') {
+                        rules.push(ValidationRules.INTEGER);
+                    } else {
+                        rules.push(ValidationRules.NUMBER);
+                    }
+                }
+                if (fieldMeta.min_value !== undefined) {
+                    rules.push({ type: ValidationRules.MIN_VALUE, value: fieldMeta.min_value });
+                }
+                if (fieldMeta.max_value !== undefined) {
+                    rules.push({ type: ValidationRules.MAX_VALUE, value: fieldMeta.max_value });
+                }
+                if (fieldMeta.min_length) {
+                    rules.push({ type: ValidationRules.MIN_LENGTH, value: fieldMeta.min_length });
+                }
+                if (fieldMeta.max_length) {
+                    rules.push({ type: ValidationRules.MAX_LENGTH, value: fieldMeta.max_length });
+                }
+
+                // Validate field if it has rules
+                if (rules.length > 0) {
+                    const fieldErrors = validateFormUtil.validateField(value, rules, label);
+                    if (fieldErrors.length > 0) {
+                        errors[fieldName] = fieldErrors;
+                    }
                 }
             });
         }
-
-        // Validate required fields
-        requiredFields.forEach(field => {
-            const value = formData[field.name];
-            if (value === null || value === undefined || value === '') {
-                errors[field.name] = [`${field.label} is required`];
-            }
-        });
 
         // License-specific validations
         if (entityName === 'licenses') {
@@ -518,61 +509,45 @@ export default function MasterForm({
                 }
             }
 
-            // Validate export items
+            // Validate export items using validation utility
             if (formData.export_license && Array.isArray(formData.export_license)) {
-                const exportErrors = [];
-                formData.export_license.forEach((item, index) => {
-                    const itemErrors = {};
-
-                    // HS Code is not required for export items (can be blank)
-                    // Removed: if (!item.hs_code) { itemErrors.hs_code = ['HS Code is required']; }
-
-                    if (!item.description || item.description.trim() === '') {
-                        itemErrors.description = ['Description is required'];
+                const exportSchema = {
+                    description: {
+                        rules: [ValidationRules.REQUIRED],
+                        label: 'Description'
+                    },
+                    net_quantity: {
+                        rules: [ValidationRules.REQUIRED, ValidationRules.NON_NEGATIVE],
+                        label: 'Net Quantity'
                     }
-
-                    // Net quantity can be 0 or greater (including 0)
-                    const netQty = parseFloat(item.net_quantity);
-                    if (item.net_quantity === '' || item.net_quantity === null || item.net_quantity === undefined) {
-                        itemErrors.net_quantity = ['Net quantity is required'];
-                    } else if (isNaN(netQty) || netQty < 0) {
-                        itemErrors.net_quantity = ['Net quantity cannot be negative'];
-                    }
-
-                    // Unit is not required for export items (has default value 'kg' in backend)
-
-                    if (Object.keys(itemErrors).length > 0) {
-                        exportErrors[index] = itemErrors;
-                    }
-                });
+                };
+                const exportErrors = validateFormUtil.validateNestedArray(formData.export_license, exportSchema);
                 if (exportErrors.length > 0) {
                     errors.export_license = exportErrors;
                 }
             }
 
-            // Validate import items
+            // Validate import items using validation utility
             if (formData.import_license && Array.isArray(formData.import_license)) {
-                const importErrors = [];
-                formData.import_license.forEach((item, index) => {
-                    const itemErrors = {};
-
-                    if (!item.hs_code) {
-                        itemErrors.hs_code = ['HS Code is required'];
+                const importSchema = {
+                    hs_code: {
+                        rules: [ValidationRules.REQUIRED],
+                        label: 'HS Code'
+                    },
+                    description: {
+                        rules: [ValidationRules.REQUIRED],
+                        label: 'Description'
+                    },
+                    serial_number: {
+                        rules: [ValidationRules.REQUIRED, ValidationRules.INTEGER],
+                        label: 'Serial Number'
+                    },
+                    unit: {
+                        rules: [ValidationRules.REQUIRED],
+                        label: 'Unit'
                     }
-                    if (!item.description || item.description.trim() === '') {
-                        itemErrors.description = ['Description is required'];
-                    }
-                    if (!item.serial_number && item.serial_number !== 0) {
-                        itemErrors.serial_number = ['Serial number is required'];
-                    }
-                    if (!item.unit) {
-                        itemErrors.unit = ['Unit is required'];
-                    }
-
-                    if (Object.keys(itemErrors).length > 0) {
-                        importErrors[index] = itemErrors;
-                    }
-                });
+                };
+                const importErrors = validateFormUtil.validateNestedArray(formData.import_license, importSchema);
                 if (importErrors.length > 0) {
                     errors.import_license = importErrors;
                 }
@@ -582,17 +557,18 @@ export default function MasterForm({
             if (formData.license_documents && Array.isArray(formData.license_documents)) {
                 const docErrors = [];
                 formData.license_documents.forEach((doc, index) => {
-                    const itemErrors = {};
-
                     // Only validate if file is provided (new document)
                     if (doc.file && doc.file instanceof File) {
-                        if (!doc.type || doc.type.trim() === '') {
-                            itemErrors.type = ['Document type is required'];
+                        const docSchema = {
+                            type: {
+                                rules: [ValidationRules.REQUIRED],
+                                label: 'Document Type'
+                            }
+                        };
+                        const itemErrors = validateFormUtil.validateForm(doc, docSchema);
+                        if (Object.keys(itemErrors).length > 0) {
+                            docErrors[index] = itemErrors;
                         }
-                    }
-
-                    if (Object.keys(itemErrors).length > 0) {
-                        docErrors[index] = itemErrors;
                     }
                 });
                 if (docErrors.length > 0) {
@@ -882,7 +858,9 @@ export default function MasterForm({
 
             // Handle field-level errors
             if (err.response?.data && typeof err.response.data === 'object') {
-                setFieldErrors(err.response.data);
+                // Format backend errors using utility
+                const formattedErrors = validateFormUtil.formatBackendErrors(err.response.data);
+                setFieldErrors(formattedErrors);
 
                 // Create a user-friendly error message with better field names
                 const errorMessages = [];

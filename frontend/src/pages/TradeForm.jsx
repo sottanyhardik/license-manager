@@ -5,7 +5,9 @@ import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import {formatDateForInput} from "../utils/dateFormatter";
+import {formatDateForInput, parseDate} from "../utils/dateFormatter";
+import * as validateFormUtil from "../utils/formValidation";
+import { ValidationRules } from "../utils/formValidation";
 import TransferLetterModal from "../components/TransferLetterModal";
 import {navigateToList} from "../utils/navigationUtils";
 import {useBackButton} from "../hooks/useBackButton";
@@ -114,36 +116,18 @@ export default function TradeForm() {
         try {
             const { data } = await api.get(`/trades/${id}/`);
 
-            // Parse date fields
+            // Parse date fields using centralized date parser
             if (data.invoice_date) {
-                const originalDate = data.invoice_date;
-                console.log('Original invoice_date from API:', originalDate);
-
-                const parts = data.invoice_date.split('-');
-
-                // Detect format: if first part is 4 digits, it's yyyy-MM-dd, else dd-MM-yyyy
-                let year, month, day;
-                if (parts[0].length === 4) {
-                    // Format: yyyy-MM-dd
-                    year = parseInt(parts[0]);
-                    month = parseInt(parts[1]) - 1; // JS months are 0-indexed
-                    day = parseInt(parts[2]);
-                } else {
-                    // Format: dd-MM-yyyy
-                    day = parseInt(parts[0]);
-                    month = parseInt(parts[1]) - 1; // JS months are 0-indexed
-                    year = parseInt(parts[2]);
-                }
-
-                data.invoice_date = new Date(year, month, day, 12, 0, 0);
-                console.log('Parsed to Date object:', data.invoice_date.toLocaleDateString(), data.invoice_date);
+                console.log('Original invoice_date from API:', data.invoice_date);
+                data.invoice_date = parseDate(data.invoice_date) || new Date();
+                console.log('Parsed to Date object:', data.invoice_date);
             }
 
             // Parse payment dates
             if (data.payments) {
                 data.payments = data.payments.map(payment => ({
                     ...payment,
-                    date: payment.date ? new Date(payment.date + 'T12:00:00') : new Date()
+                    date: payment.date ? parseDate(payment.date) || new Date() : new Date()
                 }));
             }
 
@@ -494,25 +478,94 @@ export default function TradeForm() {
         }));
     };
 
+    // Validation function for trade form
+    const validateTradeForm = () => {
+        const errors = {};
+
+        // Basic field validation
+        const basicSchema = {
+            direction: { rules: [ValidationRules.REQUIRED], label: 'Direction' },
+            invoice_number: { rules: [ValidationRules.REQUIRED], label: 'Invoice Number' },
+            invoice_date: { rules: [ValidationRules.REQUIRED, ValidationRules.DATE], label: 'Invoice Date' }
+        };
+
+        // Validate based on direction
+        if (formData.direction === 'PURCHASE') {
+            basicSchema.from_company = { rules: [ValidationRules.REQUIRED], label: 'From Company' };
+        } else if (formData.direction === 'SALE') {
+            basicSchema.to_company = { rules: [ValidationRules.REQUIRED], label: 'To Company' };
+        }
+
+        // Validate basic fields
+        Object.keys(basicSchema).forEach(field => {
+            const config = basicSchema[field];
+            const value = formData[field];
+            const fieldErrors = validateFormUtil.validateField(value, config.rules, config.label);
+            if (fieldErrors.length > 0) {
+                errors[field] = fieldErrors;
+            }
+        });
+
+        // Validate lines
+        if (formData.lines.length === 0 && formData.incentive_lines.length === 0) {
+            errors.lines = ['At least one trade line or incentive line must be added'];
+        }
+
+        // Validate trade lines
+        if (formData.lines.length > 0) {
+            const lineSchema = {
+                license_item: { rules: [ValidationRules.REQUIRED], label: 'License Item' },
+                amount_inr: { rules: [ValidationRules.REQUIRED, ValidationRules.NON_NEGATIVE], label: 'Amount (INR)' }
+            };
+            const lineErrors = validateFormUtil.validateNestedArray(formData.lines, lineSchema);
+            if (lineErrors.length > 0) {
+                errors.lines = lineErrors;
+            }
+        }
+
+        // Validate payments
+        if (formData.payments && formData.payments.length > 0) {
+            const paymentSchema = {
+                amount: { rules: [ValidationRules.REQUIRED, ValidationRules.POSITIVE_NUMBER], label: 'Payment Amount' },
+                mode: { rules: [ValidationRules.REQUIRED], label: 'Payment Mode' },
+                date: { rules: [ValidationRules.REQUIRED, ValidationRules.DATE], label: 'Payment Date' }
+            };
+            const paymentErrors = validateFormUtil.validateNestedArray(formData.payments, paymentSchema);
+            if (paymentErrors.length > 0) {
+                errors.payments = paymentErrors;
+            }
+        }
+
+        return errors;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSaving(true);
         setError("");
         setFieldErrors({});
 
+        // Frontend validation
+        const validationErrors = validateTradeForm();
+        if (Object.keys(validationErrors).length > 0) {
+            setFieldErrors(validationErrors);
+            setError("Please fix the validation errors before submitting");
+            toast.error("Validation failed. Please check the form for errors.");
+
+            // Scroll to first error
+            setTimeout(() => {
+                const firstErrorField = document.querySelector('.is-invalid');
+                if (firstErrorField) {
+                    firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstErrorField.focus();
+                }
+            }, 100);
+
+            setSaving(false);
+            return;
+        }
+
         try {
-            // Validate that at least one line type exists
-            if (formData.lines.length === 0 && formData.incentive_lines.length === 0) {
-                const errorMsg = "At least one trade line or incentive line must be added.";
-                setError(errorMsg);
-                setFieldErrors({
-                    lines: [errorMsg],
-                    incentive_lines: [errorMsg]
-                });
-                toast.error(errorMsg);
-                setSaving(false);
-                return;
-            }
 
             // Check if we have file upload
             const hasFile = formData.purchase_invoice_copy instanceof File;
@@ -677,9 +730,12 @@ export default function TradeForm() {
             toast.success(isEdit ? "Trade updated successfully" : "Trade created successfully");
             navigate("/trades");
         } catch (err) {
-            // Handle field-level errors
+            console.error('Save error:', err.response?.data);
+
+            // Handle field-level errors with improved formatting
             if (err.response?.data && typeof err.response.data === 'object') {
-                setFieldErrors(err.response.data);
+                const formattedErrors = validateFormUtil.formatBackendErrors(err.response.data);
+                setFieldErrors(formattedErrors);
 
                 // Create user-friendly error message
                 const errorMessages = [];
@@ -1082,7 +1138,7 @@ export default function TradeForm() {
                     <div className="col-md-6">
                         <label className="form-label">Invoice Date</label>
                         <DatePicker
-                            selected={formData.invoice_date instanceof Date ? formData.invoice_date : new Date(formData.invoice_date)}
+                            selected={formData.invoice_date instanceof Date ? formData.invoice_date : parseDate(formData.invoice_date)}
                             onChange={(date) => setFormData(prev => ({ ...prev, invoice_date: date }))}
                             dateFormat="dd-MM-yyyy"
                             className="form-control"

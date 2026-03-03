@@ -208,16 +208,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             // Extract just the IDs
             const itemIds = editingItems.map(i => i.value);
 
-            await api.patch(`/licenses/${licenseId}/`, {
-                import_license: licenseData.import_license.map(importItem => {
-                    if (importItem.id === item.id) {
-                        return {
-                            ...importItem,
-                            items: itemIds
-                        };
-                    }
-                    return importItem;
-                })
+            // Update only the specific item via the license-items endpoint
+            // This prevents overriding other concurrent changes to the license
+            await api.patch(`/license-items/${item.id}/`, {
+                items: itemIds
             });
 
             // Update local state without reloading
@@ -242,7 +236,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             setEditingItemId(null);
         } catch (error) {
             console.error('Error updating items:', error);
-            toast.error('Failed to update items');
+            toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to update items');
         } finally {
             setSaving(false);
         }
@@ -257,6 +251,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     const handleRestrictedToggle = async (itemId, isRestricted) => {
         try {
             // Update via the license-items API endpoint
+            // Using the item-specific endpoint prevents overriding other concurrent changes
             await api.patch(`/license-items/${itemId}/`, {
                 is_restricted: isRestricted
             });

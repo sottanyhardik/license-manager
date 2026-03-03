@@ -419,13 +419,18 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 # Calculate rate and update balance
                 rate = total_amount / total_cif_usd if total_cif_usd > 0 else 0
 
-                if trans_type == 'PURCHASE':
+                if trans_type in ['PURCHASE', 'COMMISSION_PURCHASE']:
                     running_balance += total_cif_usd
                     total_purchase_cif += total_cif_usd
                     total_purchase_amount += total_amount
 
-                    # First purchase is the opening balance (only if no original opening balance)
-                    if idx == 0 and len(transactions) == 0:
+                    # Commission entries are always shown as expenses (debit)
+                    is_commission = trans_type == 'COMMISSION_PURCHASE'
+                    txn_type = 'COMMISSION' if is_commission else 'PURCHASE'
+                    particular_prefix = 'Commission Paid to' if is_commission else 'Purchase DFIA -'
+
+                    # First purchase is the opening balance (only if no original opening balance and not commission)
+                    if idx == 0 and len(transactions) == 0 and not is_commission:
                         transactions.append({
                             'date': trans_date,
                             'type': 'OPENING',
@@ -444,48 +449,76 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     else:
                         transactions.append({
                             'date': trans_date,
-                            'type': 'PURCHASE',
-                            'particular': f'Purchase DFIA - {trans_obj.from_company.name if trans_obj.from_company else "N/A"}',
+                            'type': txn_type,
+                            'particular': f'{particular_prefix} {trans_obj.from_company.name if trans_obj.from_company else "N/A"}',
                             'invoice_number': trans_obj.invoice_number or '',
                             'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
                             'sion_norms': ', '.join(sion_norms) if sion_norms else '',
                             'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
                             'cif_usd': total_cif_usd,
-                            'debit_cif': total_cif_usd,  # Purchase is debit (asset increases)
+                            'debit_cif': total_cif_usd,  # Purchase/Commission is debit
                             'credit_cif': 0,
                             'rate': round(rate, 2),
                             'amount': total_amount,
-                            'debit_amount': total_amount,  # Purchase amount is debit (cost)
+                            'debit_amount': total_amount,  # Purchase/Commission amount is debit (expense)
                             'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
                         })
 
-                else:  # SALE
-                    running_balance -= total_cif_usd
-                    total_sales_amount += total_amount
+                elif trans_type in ['SALE', 'COMMISSION_SALE']:
+                    # Commission sale is also an expense (debit) - commission paid on sale
+                    is_commission = trans_type == 'COMMISSION_SALE'
 
-                    # Calculate cumulative profit: Total Sales So Far - Total Purchase Amount
-                    cumulative_profit = total_sales_amount - total_purchase_amount
+                    if is_commission:
+                        # Commission sale is an expense (debit)
+                        running_balance += total_cif_usd
+                        total_purchase_amount += total_amount
 
-                    transactions.append({
-                        'date': trans_date,
-                        'type': 'SALE',
-                        'particular': f'DFIA Sale - {trans_obj.to_company.name if trans_obj.to_company else "N/A"}',
-                        'invoice_number': trans_obj.invoice_number or '',
-                        'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
-                        'sion_norms': ', '.join(sion_norms) if sion_norms else '',
-                        'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
-                        'cif_usd': total_cif_usd,
-                        'debit_cif': 0,
-                        'credit_cif': total_cif_usd,  # Sale is credit (asset decreases)
-                        'rate': round(rate, 2),
-                        'amount': total_amount,
-                        'debit_amount': 0,
-                        'credit_amount': total_amount,  # Sale amount is credit (revenue)
-                        'balance': round(running_balance, 2),
-                        'profit_loss': round(cumulative_profit, 2),  # Show cumulative profit
-                    })
+                        transactions.append({
+                            'date': trans_date,
+                            'type': 'COMMISSION',
+                            'particular': f'Commission Paid to {trans_obj.to_company.name if trans_obj.to_company else "N/A"}',
+                            'invoice_number': trans_obj.invoice_number or '',
+                            'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
+                            'sion_norms': ', '.join(sion_norms) if sion_norms else '',
+                            'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
+                            'cif_usd': total_cif_usd,
+                            'debit_cif': total_cif_usd,  # Commission is debit (expense)
+                            'credit_cif': 0,
+                            'rate': round(rate, 2),
+                            'amount': total_amount,
+                            'debit_amount': total_amount,  # Commission amount is debit (expense)
+                            'credit_amount': 0,
+                            'balance': round(running_balance, 2),
+                            'profit_loss': 0,
+                        })
+                    else:
+                        # Regular sale
+                        running_balance -= total_cif_usd
+                        total_sales_amount += total_amount
+
+                        # Calculate cumulative profit: Total Sales So Far - Total Purchase Amount
+                        cumulative_profit = total_sales_amount - total_purchase_amount
+
+                        transactions.append({
+                            'date': trans_date,
+                            'type': 'SALE',
+                            'particular': f'DFIA Sale - {trans_obj.to_company.name if trans_obj.to_company else "N/A"}',
+                            'invoice_number': trans_obj.invoice_number or '',
+                            'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
+                            'sion_norms': ', '.join(sion_norms) if sion_norms else '',
+                            'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
+                            'cif_usd': total_cif_usd,
+                            'debit_cif': 0,
+                            'credit_cif': total_cif_usd,  # Sale is credit (asset decreases)
+                            'rate': round(rate, 2),
+                            'amount': total_amount,
+                            'debit_amount': 0,
+                            'credit_amount': total_amount,  # Sale amount is credit (revenue)
+                            'balance': round(running_balance, 2),
+                            'profit_loss': round(cumulative_profit, 2),  # Show cumulative profit
+                        })
 
             return Response({
                 'license_type': 'DFIA',
@@ -551,13 +584,18 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 rate_pct = float(license_line.rate_pct or 0)
                 amount = float(license_line.amount_inr or 0)
 
-                if trade.direction == 'PURCHASE':
+                if trade.direction in ['PURCHASE', 'COMMISSION_PURCHASE']:
                     running_balance += license_value
                     total_purchase_value += license_value
                     total_purchase_amount += amount
 
-                    # First purchase is the opening balance
-                    if is_first_transaction:
+                    # Commission entries are always shown as expenses (debit)
+                    is_commission = trade.direction == 'COMMISSION_PURCHASE'
+                    txn_type = 'COMMISSION' if is_commission else 'PURCHASE'
+                    particular_prefix = 'Commission Paid to' if is_commission else f'Purchase {license.license_type} -'
+
+                    # First purchase is the opening balance (unless it's commission)
+                    if is_first_transaction and not is_commission:
                         transactions.append({
                             'date': trade.invoice_date or license.license_date,
                             'type': 'OPENING',
@@ -577,42 +615,69 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     else:
                         transactions.append({
                             'date': trade.invoice_date or license.license_date,
-                            'type': 'PURCHASE',
-                            'particular': f'Purchase {license.license_type} - {trade.from_company.name if trade.from_company else "N/A"}',
+                            'type': txn_type,
+                            'particular': f'{particular_prefix} {trade.from_company.name if trade.from_company else "N/A"}',
                             'invoice_number': trade.invoice_number or '',
                             'license_value': license_value,
-                            'debit_license_value': license_value,  # Purchase is debit
+                            'debit_license_value': license_value,  # Purchase/Commission is debit
                             'credit_license_value': 0,
                             'rate': round(rate_pct, 3),
                             'amount': amount,
-                            'debit_amount': amount,  # Purchase amount is debit
+                            'debit_amount': amount,  # Purchase/Commission amount is debit (expense)
                             'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
                         })
+                        if is_first_transaction:
+                            is_first_transaction = False
 
-                else:  # SALE
-                    running_balance -= license_value
-                    total_sales_amount += amount
+                elif trade.direction in ['SALE', 'COMMISSION_SALE']:
+                    # Commission sale is an income (still debit in license ledger context as it's money out)
+                    is_commission = trade.direction == 'COMMISSION_SALE'
 
-                    # Calculate cumulative profit: Total Sales So Far - Total Purchase Amount
-                    cumulative_profit = total_sales_amount - total_purchase_amount
+                    if is_commission:
+                        # Commission sale is also an expense (debit) - commission paid on sale
+                        running_balance += license_value
+                        total_purchase_amount += amount
 
-                    transactions.append({
-                        'date': trade.invoice_date or timezone.now().date(),
-                        'type': 'SALE',
-                        'particular': f'{license.license_type} Sale - {trade.to_company.name if trade.to_company else "N/A"}',
-                        'invoice_number': trade.invoice_number or '',
-                        'license_value': license_value,
-                        'debit_license_value': 0,
-                        'credit_license_value': license_value,  # Sale is credit
-                        'rate': round(rate_pct, 3),
-                        'amount': amount,
-                        'debit_amount': 0,
-                        'credit_amount': amount,  # Sale amount is credit
-                        'balance': round(running_balance, 2),
-                        'profit_loss': round(cumulative_profit, 2),  # Show cumulative profit
-                    })
+                        transactions.append({
+                            'date': trade.invoice_date or timezone.now().date(),
+                            'type': 'COMMISSION',
+                            'particular': f'Commission Paid to {trade.to_company.name if trade.to_company else "N/A"}',
+                            'invoice_number': trade.invoice_number or '',
+                            'license_value': license_value,
+                            'debit_license_value': license_value,  # Commission is debit (expense)
+                            'credit_license_value': 0,
+                            'rate': round(rate_pct, 3),
+                            'amount': amount,
+                            'debit_amount': amount,  # Commission amount is debit (expense)
+                            'credit_amount': 0,
+                            'balance': round(running_balance, 2),
+                            'profit_loss': 0,
+                        })
+                    else:
+                        # Regular sale
+                        running_balance -= license_value
+                        total_sales_amount += amount
+
+                        # Calculate cumulative profit: Total Sales So Far - Total Purchase Amount
+                        cumulative_profit = total_sales_amount - total_purchase_amount
+
+                        transactions.append({
+                            'date': trade.invoice_date or timezone.now().date(),
+                            'type': 'SALE',
+                            'particular': f'{license.license_type} Sale - {trade.to_company.name if trade.to_company else "N/A"}',
+                            'invoice_number': trade.invoice_number or '',
+                            'license_value': license_value,
+                            'debit_license_value': 0,
+                            'credit_license_value': license_value,  # Sale is credit
+                            'rate': round(rate_pct, 3),
+                            'amount': amount,
+                            'debit_amount': 0,
+                            'credit_amount': amount,  # Sale amount is credit
+                            'balance': round(running_balance, 2),
+                            'profit_loss': round(cumulative_profit, 2),  # Show cumulative profit
+                        })
                     is_first_transaction = False
 
             return Response({

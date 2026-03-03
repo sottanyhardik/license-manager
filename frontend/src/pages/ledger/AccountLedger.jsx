@@ -1,6 +1,7 @@
 import {useEffect, useState} from "react";
 import {toast} from 'react-toastify';
 import api from "../../api/axios";
+import { formatDate } from '../../utils/dateFormatter';
 
 export default function AccountLedger() {
     const [accounts, setAccounts] = useState([]);
@@ -213,7 +214,7 @@ export default function AccountLedger() {
                                         {/* Transaction Rows */}
                                         {ledgerData.entries?.map((entry, index) => (
                                             <tr key={index}>
-                                                <td>{new Date(entry.date).toLocaleDateString('en-GB')}</td>
+                                                <td>{formatDate(entry.date)}</td>
                                                 <td><code>{entry.entry_number}</code></td>
                                                 <td>{entry.reference || '-'}</td>
                                                 <td>{entry.description || '-'}</td>

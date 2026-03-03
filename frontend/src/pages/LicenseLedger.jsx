@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
+import { formatDate } from '../utils/dateFormatter';
 
 export default function LicenseLedger() {
     const navigate = useNavigate();
@@ -483,11 +484,11 @@ export default function LicenseLedger() {
                                                 </span>
                                             </td>
                                             <td style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.9rem', color: '#5a6c7d' }}>
-                                                {new Date(license.license_date).toLocaleDateString('en-GB')}
+                                                {formatDate(license.license_date)}
                                             </td>
                                             <td style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.9rem' }}>
                                                 <span style={{ color: license.is_expired ? '#d32f2f' : '#5a6c7d' }}>
-                                                    {new Date(license.license_expiry_date).toLocaleDateString('en-GB')}
+                                                    {formatDate(license.license_expiry_date)}
                                                 </span>
                                                 {license.is_expired && (
                                                     <span className="badge bg-danger ms-2" style={{ fontSize: '0.7rem', padding: '3px 6px' }}>

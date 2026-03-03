@@ -353,18 +353,11 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                     const fieldKey = col.replace(/__/g, '_');
                                     let value = item[fieldKey] || item[col];
 
-                                    // Format date fields as dd-mm-yyyy
+                                    // Format date fields as dd-MM-yyyy
                                     if (value && (col.includes("date") || col.includes("_at") || col.includes("_on"))) {
-                                        try {
-                                            const date = new Date(value);
-                                            if (!isNaN(date.getTime())) {
-                                                const day = String(date.getDate()).padStart(2, '0');
-                                                const month = String(date.getMonth() + 1).padStart(2, '0');
-                                                const year = date.getFullYear();
-                                                value = `${day}-${month}-${year}`;
-                                            }
-                                        } catch (e) {
-                                            // Keep original value if date parsing fails
+                                        const formattedDate = formatDate(value);
+                                        if (formattedDate) {
+                                            value = formattedDate;
                                         }
                                     }
 

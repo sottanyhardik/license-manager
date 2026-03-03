@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import AsyncSelect from 'react-select/async';
 import { toast } from 'react-toastify';
+import { formatDate } from '../utils/dateFormatter';
 
 // Inline Editable Text Component
 function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
@@ -437,10 +438,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
-                                                        {licenseData.license_date ? new Date(licenseData.license_date).toLocaleDateString('en-GB') : '-'}
+                                                        {licenseData.license_date ? formatDate(licenseData.license_date) : '-'}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
-                                                        {licenseData.license_expiry_date ? new Date(licenseData.license_expiry_date).toLocaleDateString('en-GB') : '-'}
+                                                        {licenseData.license_expiry_date ? formatDate(licenseData.license_expiry_date) : '-'}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                         {licenseData.exporter_name || '-'}
@@ -631,7 +632,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                         {usageData.boes.map((boe) => (
                                                                                             <tr key={boe.id}>
                                                                                                 <td>{boe.bill_of_entry_number}</td>
-                                                                                                <td>{boe.date ? new Date(boe.date).toLocaleDateString() : '-'}</td>
+                                                                                                <td>{boe.date ? formatDate(boe.date) : '-'}</td>
                                                                                                 <td>{boe.port || '-'}</td>
                                                                                                 <td>{boe.company || '-'}</td>
                                                                                                 <td>{parseFloat(boe.quantity || 0).toFixed(2)}</td>
@@ -900,7 +901,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                             {usageData.boes.map((boe) => (
                                                                                                 <tr key={boe.id}>
                                                                                                     <td>{boe.bill_of_entry_number}</td>
-                                                                                                    <td>{boe.date ? new Date(boe.date).toLocaleDateString() : '-'}</td>
+                                                                                                    <td>{boe.date ? formatDate(boe.date) : '-'}</td>
                                                                                                     <td>{boe.port || '-'}</td>
                                                                                                     <td>{boe.company || '-'}</td>
                                                                                                     <td>{parseFloat(boe.quantity || 0).toFixed(2)}</td>

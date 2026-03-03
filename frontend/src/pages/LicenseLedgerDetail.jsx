@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
+import { formatDate as formatDateUtil } from '../utils/dateFormatter';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -38,7 +39,7 @@ export default function LicenseLedgerDetail() {
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
-        return new Date(dateStr).toLocaleDateString('en-GB');
+        return formatDateUtil(dateStr) || '-';
     };
 
     const formatCurrency = (value, currency = 'INR') => {

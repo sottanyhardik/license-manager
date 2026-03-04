@@ -514,7 +514,7 @@ export default function TradeForm() {
         // Validate trade lines
         if (formData.lines.length > 0) {
             const lineSchema = {
-                license_item: { rules: [ValidationRules.REQUIRED], label: 'License Item' },
+                sr_number: { rules: [ValidationRules.REQUIRED], label: 'License Item' },
                 amount_inr: { rules: [ValidationRules.REQUIRED, ValidationRules.NON_NEGATIVE], label: 'Amount (INR)' }
             };
             const lineErrors = validateFormUtil.validateNestedArray(formData.lines, lineSchema);

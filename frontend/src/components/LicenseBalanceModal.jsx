@@ -281,10 +281,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         try {
             toast.info('Generating PDF file...');
 
-            // Call backend to generate PDF - use license number instead of ID
+            // Call backend to generate PDF using license ID
             const token = localStorage.getItem('access');
-            const licenseNumber = licenseData?.license_number || licenseId;
-            const pdfUrl = `/api/licenses/${licenseNumber}/balance-pdf/?access_token=${token}`;
+            const pdfUrl = `/api/licenses/${licenseId}/balance-pdf/?access_token=${token}`;
 
             // Open PDF in new tab to download
             window.open(pdfUrl, '_blank');
@@ -300,10 +299,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         try {
             toast.info('Generating Excel file...');
 
-            // Call backend to generate Excel - use license number instead of ID
+            // Call backend to generate Excel using license ID
             const token = localStorage.getItem('access');
-            const licenseNumber = licenseData?.license_number || licenseId;
-            const excelUrl = `/api/licenses/${licenseNumber}/balance-excel/?access_token=${token}`;
+            const excelUrl = `/api/licenses/${licenseId}/balance-excel/?access_token=${token}`;
 
             // Fetch the Excel file as blob
             const response = await fetch(excelUrl);
@@ -315,7 +313,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
-            link.download = `${licenseNumber}-balance.xlsx`;
+            link.download = `${licenseData?.license_number || licenseId}-balance.xlsx`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

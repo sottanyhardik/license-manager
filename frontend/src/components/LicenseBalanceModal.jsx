@@ -305,10 +305,23 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             const licenseNumber = licenseData?.license_number || licenseId;
             const excelUrl = `/api/licenses/${licenseNumber}/balance-excel/?access_token=${token}`;
 
-            // Open Excel download
-            window.open(excelUrl, '_blank');
+            // Fetch the Excel file as blob
+            const response = await fetch(excelUrl);
+            if (!response.ok) {
+                throw new Error('Failed to generate Excel file');
+            }
 
-            toast.success('Excel file is being downloaded!');
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `${licenseNumber}-balance.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+
+            toast.success('Excel file downloaded successfully!');
         } catch (error) {
             console.error('Error generating Excel:', error);
             toast.error('Failed to generate Excel file');

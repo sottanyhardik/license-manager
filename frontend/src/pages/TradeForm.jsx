@@ -485,7 +485,6 @@ export default function TradeForm() {
         // Basic field validation
         const basicSchema = {
             direction: { rules: [ValidationRules.REQUIRED], label: 'Direction' },
-            invoice_number: { rules: [ValidationRules.REQUIRED], label: 'Invoice Number' },
             invoice_date: { rules: [ValidationRules.REQUIRED, ValidationRules.DATE], label: 'Invoice Date' }
         };
 
@@ -549,8 +548,42 @@ export default function TradeForm() {
         const validationErrors = validateTradeForm();
         if (Object.keys(validationErrors).length > 0) {
             setFieldErrors(validationErrors);
-            setError("Please fix the validation errors before submitting");
-            toast.error("Validation failed. Please check the form for errors.");
+
+            // Log detailed validation errors for debugging
+            console.error('❌ Validation Errors:', validationErrors);
+            console.log('📋 Form Data:', formData);
+
+            // Create detailed error message
+            const errorDetails = [];
+            Object.entries(validationErrors).forEach(([field, errors]) => {
+                if (Array.isArray(errors)) {
+                    if (typeof errors[0] === 'string') {
+                        errorDetails.push(`${field}: ${errors.join(', ')}`);
+                    } else {
+                        // Nested array errors (like line items)
+                        errors.forEach((lineError, index) => {
+                            if (lineError && typeof lineError === 'object') {
+                                Object.entries(lineError).forEach(([lineField, lineErrors]) => {
+                                    errorDetails.push(`Line ${index + 1} - ${lineField}: ${lineErrors.join(', ')}`);
+                                });
+                            }
+                        });
+                    }
+                } else if (typeof errors === 'object') {
+                    Object.entries(errors).forEach(([subField, subErrors]) => {
+                        errorDetails.push(`${field}.${subField}: ${subErrors}`);
+                    });
+                }
+            });
+
+            const detailedErrorMsg = "Validation errors:\n" + errorDetails.join('\n');
+            setError(detailedErrorMsg);
+
+            // Show first few errors in toast
+            errorDetails.slice(0, 3).forEach(err => toast.error(err));
+            if (errorDetails.length > 3) {
+                toast.error(`And ${errorDetails.length - 3} more errors...`);
+            }
 
             // Scroll to first error
             setTimeout(() => {

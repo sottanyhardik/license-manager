@@ -1108,7 +1108,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         current_row += 1
 
                 # Allotment Details
-                allotments = AllotmentItems.objects.filter(item=item).select_related('allotment', 'allotment__company')
+                # Only show allotments where bill_of_entry is NULL (not yet converted to BOE)
+                allotments = AllotmentItems.objects.filter(
+                    item=item,
+                    allotment__bill_of_entry__isnull=True
+                ).select_related('allotment', 'allotment__company')
                 if allotments.exists():
                     current_row += 1
                     ws.merge_cells(f'A{current_row}:D{current_row}')

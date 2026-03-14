@@ -296,6 +296,25 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         }
     };
 
+    const handleDownloadExcel = async () => {
+        try {
+            toast.info('Generating Excel file...');
+
+            // Call backend to generate Excel - use license number instead of ID
+            const token = localStorage.getItem('access');
+            const licenseNumber = licenseData?.license_number || licenseId;
+            const excelUrl = `/api/licenses/${licenseNumber}/balance-excel/?access_token=${token}`;
+
+            // Open Excel download
+            window.open(excelUrl, '_blank');
+
+            toast.success('Excel file is being downloaded!');
+        } catch (error) {
+            console.error('Error generating Excel:', error);
+            toast.error('Failed to generate Excel file');
+        }
+    };
+
     if (!show) return null;
 
     return (
@@ -323,35 +342,64 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                             <i className="bi bi-file-text me-2"></i>
                             License Balance Report{licenseData ? ` - ${licenseData.license_number}` : ''}
                         </h5>
-                        <div className="d-flex gap-3 align-items-center">
+                        <div className="d-flex gap-2 align-items-center">
                             {licenseData && (
-                                <button
-                                    type="button"
-                                    className="btn btn-sm"
-                                    onClick={handleDownloadPDF}
-                                    disabled={loading}
-                                    style={{
-                                        backgroundColor: 'white',
-                                        color: '#667eea',
-                                        border: 'none',
-                                        fontWeight: '500',
-                                        padding: '0.5rem 1rem',
-                                        borderRadius: '6px',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                        transition: 'all 0.3s'
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.target.style.transform = 'translateY(-2px)';
-                                        e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.target.style.transform = 'translateY(0)';
-                                        e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-                                    }}
-                                >
-                                    <i className="bi bi-file-earmark-pdf me-2"></i>
-                                    Download PDF
-                                </button>
+                                <>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm"
+                                        onClick={handleDownloadPDF}
+                                        disabled={loading}
+                                        style={{
+                                            backgroundColor: 'white',
+                                            color: '#667eea',
+                                            border: 'none',
+                                            fontWeight: '500',
+                                            padding: '0.5rem 1rem',
+                                            borderRadius: '6px',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                            transition: 'all 0.3s'
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.transform = 'translateY(-2px)';
+                                            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.transform = 'translateY(0)';
+                                            e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                                        }}
+                                    >
+                                        <i className="bi bi-file-earmark-pdf me-2"></i>
+                                        Download PDF
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm"
+                                        onClick={handleDownloadExcel}
+                                        disabled={loading}
+                                        style={{
+                                            backgroundColor: 'white',
+                                            color: '#28a745',
+                                            border: 'none',
+                                            fontWeight: '500',
+                                            padding: '0.5rem 1rem',
+                                            borderRadius: '6px',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                            transition: 'all 0.3s'
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.transform = 'translateY(-2px)';
+                                            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.transform = 'translateY(0)';
+                                            e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                                        }}
+                                    >
+                                        <i className="bi bi-file-earmark-excel me-2"></i>
+                                        Download Excel
+                                    </button>
+                                </>
                             )}
                             <button
                                 type="button"

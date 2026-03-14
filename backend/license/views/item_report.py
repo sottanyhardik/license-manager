@@ -33,10 +33,14 @@ class ItemReportView(View):
         license_status = request.GET.get('license_status', 'active')
         is_restricted = request.GET.get('is_restricted')  # 'true', 'false', or None for all
         purchase_status = request.GET.get('purchase_status')  # Comma-separated purchase status codes
+        product_description = request.GET.get('product_description')  # Product description search
+        hsn_code = request.GET.get('hsn_code')  # HSN code search
+        norms = request.GET.get('norms')  # Comma-separated SION norm classes
+        notification_numbers = request.GET.get('notification_numbers')  # Comma-separated notification numbers
 
         if output_format == 'excel':
             try:
-                return self.export_to_excel(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status)
+                return self.export_to_excel(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -44,7 +48,7 @@ class ItemReportView(View):
 
         # For JSON, generate full report
         try:
-            report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status)
+            report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -52,7 +56,7 @@ class ItemReportView(View):
 
         return JsonResponse(report_data, safe=False)
 
-    def generate_report(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None):
+    def generate_report(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None):
         """
         Generate item report with all license import items.
 
@@ -65,6 +69,10 @@ class ItemReportView(View):
             license_status: Filter by status - 'active', 'expired', 'expiring_soon', 'all' (default 'active')
             is_restricted: Filter by restriction status - 'true', 'false', or None for all
             purchase_status: Comma-separated purchase status codes (e.g., 'GE,MI,SM')
+            product_description: Search text for product description (case-insensitive contains search)
+            hsn_code: Search text for HSN code (case-insensitive contains search)
+            norms: Comma-separated SION norm classes (e.g., '019/2015,098/2009')
+            notification_numbers: Comma-separated license notification numbers (e.g., '019/2015,098/2009')
 
         Returns:
             Dictionary with report data
@@ -143,6 +151,24 @@ class ItemReportView(View):
             purchase_status_list = [ps.strip() for ps in purchase_status.split(',') if ps.strip()]
             items = items.filter(license__purchase_status__code__in=purchase_status_list)
 
+        # Filter by product description if specified (case-insensitive contains search)
+        if product_description:
+            items = items.filter(description__icontains=product_description)
+
+        # Filter by HSN code if specified (case-insensitive contains search)
+        if hsn_code:
+            items = items.filter(hs_code__hs_code__icontains=hsn_code)
+
+        # Filter by norms (SION norm class) if specified
+        if norms:
+            norms_list = [n.strip() for n in norms.split(',') if n.strip()]
+            items = items.filter(items__sion_norm_class__norm_class__in=norms_list).distinct()
+
+        # Filter by notification numbers (license notification) if specified
+        if notification_numbers:
+            notification_list = [n.strip() for n in notification_numbers.split(',') if n.strip()]
+            items = items.filter(license__notification_number__in=notification_list).distinct()
+
         # Order by license number and serial number
         items = items.order_by('license__license_number', 'serial_number')
 
@@ -194,14 +220,14 @@ class ItemReportView(View):
             'items': report_items
         }
 
-    def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None):
+    def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None):
         """Export item report to Excel with separate sheets for Restricted and Not Restricted items"""
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
         from io import BytesIO
 
         # Generate report data
-        report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status)
+        report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers)
         items = report_data['items']
 
         # Separate items into restricted and not restricted

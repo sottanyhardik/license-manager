@@ -21,6 +21,10 @@ export default function ItemReport() {
     const [excludeCompanies, setExcludeCompanies] = useState([]);
     const [isRestricted, setIsRestricted] = useState('all'); // 'all', 'true', 'false'
     const [purchaseStatus, setPurchaseStatus] = useState(['GE', 'MI', 'SM']); // Default: GE, MI, SM
+    const [productDescSearch, setProductDescSearch] = useState('');
+    const [hsnCodeSearch, setHsnCodeSearch] = useState('');
+    const [selectedNorms, setSelectedNorms] = useState([]);
+    const [selectedNotifications, setSelectedNotifications] = useState([]);
 
     // Inline edit states
     const [editingCell, setEditingCell] = useState(null); // {itemId, field}
@@ -36,8 +40,12 @@ export default function ItemReport() {
         selectedCompanies,
         excludeCompanies,
         isRestricted,
-        purchaseStatus
-    }), [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus]);
+        purchaseStatus,
+        productDescSearch,
+        hsnCodeSearch,
+        selectedNorms,
+        selectedNotifications
+    }), [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus, productDescSearch, hsnCodeSearch, selectedNorms, selectedNotifications]);
 
     const { debouncedFilters, isPending } = useDebouncedFilters(filters, 500);
 
@@ -67,9 +75,9 @@ export default function ItemReport() {
     }, []);
 
     useEffect(() => {
-        // Only load report if at least one item name is selected
+        // Load report if at least one item name is selected OR if searching by product description or HSN code
         // Uses debounced filters to avoid excessive API calls
-        if (debouncedFilters.selectedItemNames.length > 0) {
+        if (debouncedFilters.selectedItemNames.length > 0 || debouncedFilters.productDescSearch || debouncedFilters.hsnCodeSearch) {
             loadReport();
         } else {
             setReportData(null);
@@ -90,7 +98,11 @@ export default function ItemReport() {
                 minAvailQty: minQty,
                 licenseStatus: status,
                 isRestricted: restricted,
-                purchaseStatus: pStatus
+                purchaseStatus: pStatus,
+                productDescSearch: prodDesc,
+                hsnCodeSearch: hsnCode,
+                selectedNorms: norms,
+                selectedNotifications: notifications
             } = debouncedFilters;
 
             if (items.length > 0) {
@@ -115,6 +127,22 @@ export default function ItemReport() {
 
             if (pStatus.length > 0) {
                 url += `&purchase_status=${pStatus.join(',')}`;
+            }
+
+            if (prodDesc) {
+                url += `&product_description=${encodeURIComponent(prodDesc)}`;
+            }
+
+            if (hsnCode) {
+                url += `&hsn_code=${encodeURIComponent(hsnCode)}`;
+            }
+
+            if (norms.length > 0) {
+                url += `&norms=${norms.join(',')}`;
+            }
+
+            if (notifications.length > 0) {
+                url += `&notification_numbers=${notifications.join(',')}`;
             }
 
             const response = await api.get(url);
@@ -156,6 +184,22 @@ export default function ItemReport() {
                 url += `&purchase_status=${purchaseStatus.join(',')}`;
             }
 
+            if (productDescSearch) {
+                url += `&product_description=${encodeURIComponent(productDescSearch)}`;
+            }
+
+            if (hsnCodeSearch) {
+                url += `&hsn_code=${encodeURIComponent(hsnCodeSearch)}`;
+            }
+
+            if (selectedNorms.length > 0) {
+                url += `&norms=${selectedNorms.join(',')}`;
+            }
+
+            if (selectedNotifications.length > 0) {
+                url += `&notification_numbers=${selectedNotifications.join(',')}`;
+            }
+
             const response = await api.get(url, {
                 responseType: 'blob',
             });
@@ -191,6 +235,14 @@ export default function ItemReport() {
         setPurchaseStatus(values || []);
     };
 
+    const handleNormsChange = (values) => {
+        setSelectedNorms(values || []);
+    };
+
+    const handleNotificationsChange = (values) => {
+        setSelectedNotifications(values || []);
+    };
+
     const handleClearFilters = () => {
         setSelectedItemNames([]);
         setMinBalance(200);
@@ -200,9 +252,13 @@ export default function ItemReport() {
         setExcludeCompanies([]);
         setIsRestricted('all');
         setPurchaseStatus(['GE', 'MI', 'SM']);
+        setProductDescSearch('');
+        setHsnCodeSearch('');
+        setSelectedNorms([]);
+        setSelectedNotifications([]);
     };
 
-    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || (purchaseStatus.length !== 3 || !purchaseStatus.includes('GE') || !purchaseStatus.includes('MI') || !purchaseStatus.includes('SM'));
+    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || (purchaseStatus.length !== 3 || !purchaseStatus.includes('GE') || !purchaseStatus.includes('MI') || !purchaseStatus.includes('SM')) || productDescSearch !== '' || hsnCodeSearch !== '' || selectedNorms.length > 0 || selectedNotifications.length > 0;
 
     // Inline editing handlers
     const startEdit = (itemId, field, currentValue) => {
@@ -382,7 +438,7 @@ export default function ItemReport() {
                     <button
                         className="btn"
                         onClick={handleExport}
-                        disabled={downloading || selectedItemNames.length === 0}
+                        disabled={downloading || (selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch)}
                         style={{
                             backgroundColor: 'white',
                             border: '2px solid white',
@@ -557,7 +613,7 @@ export default function ItemReport() {
                                     </select>
                                 </div>
 
-                                <div className="col-lg-9 col-md-6">
+                                <div className="col-lg-6 col-md-6">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-cart-check me-1"></i>
                                         Purchase Status
@@ -584,6 +640,85 @@ export default function ItemReport() {
                                         placeholder="Select purchase status..."
                                         className="basic-multi-select"
                                         classNamePrefix="select"
+                                    />
+                                </div>
+
+                                <div className="col-lg-3 col-md-6">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-tags me-1"></i>
+                                        Norms
+                                    </label>
+                                    <Select
+                                        isMulti
+                                        value={[
+                                            {value: 'E1', label: 'E1'},
+                                            {value: 'E5', label: 'E5'},
+                                            {value: 'E126', label: 'E126'},
+                                            {value: 'E132', label: 'E132'}
+                                        ].filter(opt => selectedNorms.includes(opt.value))}
+                                        onChange={(selected) => handleNormsChange(selected ? selected.map(s => s.value) : [])}
+                                        options={[
+                                            {value: 'E1', label: 'E1'},
+                                            {value: 'E5', label: 'E5'},
+                                            {value: 'E126', label: 'E126'},
+                                            {value: 'E132', label: 'E132'}
+                                        ]}
+                                        placeholder="Select norms..."
+                                        className="basic-multi-select"
+                                        classNamePrefix="select"
+                                    />
+                                </div>
+
+                                <div className="col-lg-3 col-md-6">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-bell me-1"></i>
+                                        Notification
+                                    </label>
+                                    <Select
+                                        isMulti
+                                        value={[
+                                            {value: '019/2015', label: '019/2015'},
+                                            {value: '098/2009', label: '098/2009'},
+                                            {value: '025/2023', label: '025/2023'}
+                                        ].filter(opt => selectedNotifications.includes(opt.value))}
+                                        onChange={(selected) => handleNotificationsChange(selected ? selected.map(s => s.value) : [])}
+                                        options={[
+                                            {value: '019/2015', label: '019/2015'},
+                                            {value: '098/2009', label: '098/2009'},
+                                            {value: '025/2023', label: '025/2023'}
+                                        ]}
+                                        placeholder="Select notification..."
+                                        className="basic-multi-select"
+                                        classNamePrefix="select"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="row g-3 mt-2">
+                                <div className="col-lg-6 col-md-12">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-file-text me-1"></i>
+                                        Product Description
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Search by product description..."
+                                        value={productDescSearch}
+                                        onChange={(e) => setProductDescSearch(e.target.value)}
+                                    />
+                                </div>
+                                <div className="col-lg-6 col-md-12">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-upc-scan me-1"></i>
+                                        HSN Code
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Search by HSN code..."
+                                        value={hsnCodeSearch}
+                                        onChange={(e) => setHsnCodeSearch(e.target.value)}
                                     />
                                 </div>
                             </div>
@@ -622,6 +757,9 @@ export default function ItemReport() {
                                             {isRestricted !== 'all' && <span className="badge bg-primary ms-2">Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span>}
                                             {purchaseStatus.length > 0 && purchaseStatus.length < 6 && <span className="badge bg-primary ms-2">Purchase Status: {purchaseStatus.length}</span>}
                                             {selectedItemNames.length > 0 && <span className="badge bg-primary ms-2">Item Names: {selectedItemNames.length}</span>}
+                                            {productDescSearch !== '' && <span className="badge bg-primary ms-2">Product Desc: "{productDescSearch}"</span>}
+                                            {hsnCodeSearch !== '' && <span className="badge bg-primary ms-2">HSN Code: "{hsnCodeSearch}"</span>}
+                                            {selectedNorms.length > 0 && <span className="badge bg-primary ms-2">Norms: {selectedNorms.length}</span>}
                                         </div>
                                     </div>
                                 </div>
@@ -632,7 +770,7 @@ export default function ItemReport() {
             </div>
 
             {/* Sticky Totals Bar */}
-            {!loading && selectedItemNames.length > 0 && reportData && reportData.items.length > 0 && (
+            {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
                 <div className="row mb-3">
                     <div className="col-12">
                         <div className="card shadow-sm border-0" style={{
@@ -709,28 +847,35 @@ export default function ItemReport() {
                         </div>
                     )}
 
-                    {!loading && selectedItemNames.length === 0 && (
+                    {!loading && selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
                                 <i className="bi bi-tag" style={{fontSize: '3rem', color: '#667eea'}}></i>
-                                <h5 className="mt-3 text-primary">Select Item Names to View Report</h5>
-                                <p className="text-muted">Please select at least one item name from the filter above to
-                                    load the report data</p>
+                                <h5 className="mt-3 text-primary">Select Filters to View Report</h5>
+                                <p className="text-muted">Please select item names, search by product description, or search by HSN code to load the report data</p>
                             </div>
                         </div>
                     )}
 
-                    {!loading && selectedItemNames.length > 0 && reportData && reportData.items.length === 0 && (
+                    {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length === 0 && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
                                 <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
                                 <h5 className="mt-3 text-muted">No items found</h5>
                                 <p className="text-muted">Try adjusting your filters to see more results.</p>
+                                <div className="mt-3 text-start" style={{maxWidth: '600px', margin: '0 auto'}}>
+                                    <p className="small text-muted mb-2"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
+                                    <ul className="small text-muted">
+                                        <li>Setting License Status to "All"</li>
+                                        <li>Lowering the Min Balance (CIF) to 100</li>
+                                        <li>Checking if your search term matches exactly (case-insensitive partial match)</li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {!loading && selectedItemNames.length > 0 && reportData && reportData.items.length > 0 && (
+                    {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body p-0">
                                 <div className="table-responsive" style={{overflowX: 'auto'}}>

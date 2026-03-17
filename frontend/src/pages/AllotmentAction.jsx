@@ -723,13 +723,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     borderRadius: '6px'
                                 }}
                                 onClick={() => {
-                                    const headers = ['License', 'Serial', 'Description', 'Exporter', 'Transfer Status', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
+                                    const headers = ['License', 'Serial', 'Description', 'HSN Code', 'Exporter', 'Transfer Status', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
                                     const rows = allotment.allotment_details.map(detail => {
                                         const transferInfo = [detail.current_owner, detail.file_transfer_status].filter(Boolean).join(' - ') || '-';
                                         return [
                                             detail.license_number,
                                             detail.serial_number,
                                             detail.product_description,
+                                            detail.hs_code || '-',
                                             detail.exporter,
                                             transferInfo,
                                             detail.license_date,
@@ -757,6 +758,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <th style={{minWidth: '120px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>License</th>
                                     <th style={{minWidth: '70px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Serial</th>
                                     <th style={{minWidth: '300px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Description</th>
+                                    <th style={{minWidth: '100px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>HSN Code</th>
                                     <th style={{minWidth: '200px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Exporter</th>
                                     <th style={{minWidth: '180px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Transfer<br/>Status</th>
                                     <th style={{minWidth: '100px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>License<br/>Date</th>
@@ -772,6 +774,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         <td style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{detail.license_number}</td>
                                         <td style={{whiteSpace: 'nowrap'}}>{detail.serial_number}</td>
                                         <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
+                                        <td style={{whiteSpace: 'nowrap'}}>{detail.hs_code || '-'}</td>
                                         <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
                                         <td style={{wordWrap: 'break-word', whiteSpace: 'normal', fontSize: '0.80rem', lineHeight: '1.3'}}>
                                             {detail.current_owner && detail.file_transfer_status ? (
@@ -814,7 +817,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </tbody>
                                 <tfoot className="table-secondary">
                                 <tr>
-                                    <th colSpan="7" className="text-end">Total:</th>
+                                    <th colSpan="8" className="text-end">Total:</th>
                                     <th className="text-end">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
                                     <th className="text-end">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
                                     <th></th>

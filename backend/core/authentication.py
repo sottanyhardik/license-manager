@@ -21,12 +21,22 @@ class JWTAuthenticationFromQueryParam(JWTAuthentication):
             return header_auth
 
         # If no header auth, try query parameter
-        access_token = request.query_params.get('access_token')
+        # Handle both request.query_params (DRF) and request.GET (Django)
+        access_token = None
+        if hasattr(request, 'query_params'):
+            access_token = request.query_params.get('access_token')
+        elif hasattr(request, 'GET'):
+            access_token = request.GET.get('access_token')
+
         if access_token:
             try:
                 validated_token = self.get_validated_token(access_token)
                 return self.get_user(validated_token), validated_token
-            except (InvalidToken, AuthenticationFailed):
+            except (InvalidToken, AuthenticationFailed) as e:
+                # Log the error for debugging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"JWT authentication failed: {str(e)}")
                 pass
 
         return None

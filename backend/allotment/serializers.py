@@ -9,6 +9,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     serial_number = serializers.CharField(read_only=True, required=False)
     ledger = serializers.SerializerMethodField()
     product_description = serializers.CharField(read_only=True, required=False)
+    hs_code = serializers.CharField(read_only=True, required=False)
     license_number = serializers.CharField(read_only=True, required=False)
     license_date = serializers.SerializerMethodField()
     exporter = serializers.CharField(read_only=True, required=False, source='exporter.name')
@@ -64,7 +65,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
         model = AllotmentItems
         fields = [
             'id', 'item', 'allotment', 'cif_inr', 'cif_fc', 'qty', 'is_boe',
-            'serial_number', 'ledger', 'product_description', 'license_number',
+            'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number',
             'license_date', 'exporter', 'license_expiry', 'registration_number',
             'registration_date', 'notification_number', 'file_number', 'port_code',
             'purchase_status', 'current_owner', 'file_transfer_status'

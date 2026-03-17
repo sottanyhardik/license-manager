@@ -275,6 +275,27 @@ class LicenseActionViewSet(ViewSet):
                             failed_count += 1
                             continue
 
+                        # Track fields to update
+                        update_fields = []
+
+                        # Update validity/expiry date if provided
+                        validity = license_data.get('validity')
+                        if validity:
+                            from datetime import datetime
+                            try:
+                                if '/' in validity:
+                                    parsed_validity = datetime.strptime(validity, '%d/%m/%Y').date()
+                                elif '-' in validity:
+                                    parsed_validity = datetime.strptime(validity, '%Y-%m-%d').date()
+                                else:
+                                    parsed_validity = None
+
+                                if parsed_validity and parsed_validity != license_obj.license_expiry_date:
+                                    license_obj.license_expiry_date = parsed_validity
+                                    update_fields.append('license_expiry_date')
+                            except (ValueError, AttributeError):
+                                pass  # Skip invalid validity dates
+
                         # Update current owner if provided
                         if current_owner_data and current_owner_data.get('iec'):
                             owner_iec = current_owner_data.get('iec')
@@ -286,7 +307,11 @@ class LicenseActionViewSet(ViewSet):
                                 defaults={'name': owner_name or f"Company {owner_iec}"}
                             )
                             license_obj.current_owner = owner_company
-                            license_obj.save(update_fields=['current_owner'])
+                            update_fields.append('current_owner')
+
+                        # Save if any fields were updated
+                        if update_fields:
+                            license_obj.save(update_fields=update_fields)
 
                         # Store transfer data in LicenseTransferModel
                         transfers = license_data.get('transfers', [])

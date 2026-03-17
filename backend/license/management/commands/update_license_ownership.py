@@ -55,12 +55,14 @@ def build_payload(dfia, data):
     Build payload to post to server from ownership API response.
     """
     current_owner = data.get("meisScripCurrentOwnerDtls", {})
+    original_owner = data.get("meisScripOriginalOwnerDtls", {})
     transfers = data.get("scripTransfer", [])
 
     payload = {
         "license_number": dfia.license_number,
         "license_date": dfia.license_date.strftime('%Y-%m-%d') if dfia.license_date else None,
         "exporter_iec": dfia.exporter.iec if dfia.exporter else None,
+        "validity": original_owner.get("validity"),  # Add validity date
         "current_owner": {
             "iec": current_owner.get("iec"),
             "name": current_owner.get("firm")
@@ -141,9 +143,31 @@ def save_ownership_locally(dfia, data):
 
     try:
         current_owner = data.get("meisScripCurrentOwnerDtls", {})
+        original_owner = data.get("meisScripOriginalOwnerDtls", {})
         transfers = data.get("scripTransfer", [])
 
+        # Update license expiry date from validity field if available
+        validity_date = original_owner.get("validity")
+        if validity_date:
+            # Parse validity date (assuming DD/MM/YYYY format)
+            from datetime import datetime
+            try:
+                if '/' in validity_date:
+                    parsed_validity = datetime.strptime(validity_date, '%d/%m/%Y').date()
+                elif '-' in validity_date:
+                    parsed_validity = datetime.strptime(validity_date, '%Y-%m-%d').date()
+                else:
+                    parsed_validity = None
+
+                if parsed_validity and parsed_validity != dfia.license_expiry_date:
+                    print(f"   📅 Updating expiry date: {dfia.license_expiry_date} → {parsed_validity}")
+                    dfia.license_expiry_date = parsed_validity
+                    dfia.save(update_fields=['license_expiry_date'])
+            except (ValueError, AttributeError) as e:
+                print(f"   ⚠️  Could not parse validity date '{validity_date}': {e}")
+
         # Update license with current owner - find or create company by IEC
+        update_fields = []
         if current_owner.get("iec"):
             owner_iec = current_owner.get("iec")
             owner_name = current_owner.get("firm")
@@ -159,7 +183,10 @@ def save_ownership_locally(dfia, data):
                 )
 
             dfia.current_owner = owner_company
-            dfia.save(update_fields=['current_owner'])
+            update_fields.append('current_owner')
+
+        if update_fields:
+            dfia.save(update_fields=update_fields)
 
         # Save/update transfers
         for transfer_data in transfers:

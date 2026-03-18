@@ -253,15 +253,15 @@ class LicenseTrade(models.Model):
                 name="chk_from_to_companies_different",
                 check=Q(from_company__isnull=True) | Q(to_company__isnull=True) | ~Q(from_company=F("to_company")),
             ),
-            # B) Prevent duplicate supplier + invoice_number for PURCHASE (ignore blanks)
+            # B) Prevent duplicate supplier + invoice_number + direction for PURCHASE (ignore blanks)
             models.UniqueConstraint(
-                fields=["from_company", "invoice_number"],
+                fields=["from_company", "invoice_number", "direction"],
                 condition=Q(direction="PURCHASE") & ~Q(invoice_number=""),
                 name="uniq_purchase_supplier_invoice",
             ),
-            # C) Prevent duplicate buyer + invoice_number for SALE (ignore blanks)
+            # C) Prevent duplicate buyer + invoice_number + direction for SALE (ignore blanks)
             models.UniqueConstraint(
-                fields=["to_company", "invoice_number"],
+                fields=["to_company", "invoice_number", "direction"],
                 condition=Q(direction='SALE') & ~Q(invoice_number=""),
                 name="uniq_sale_buyer_invoice_nonblank",
             ),

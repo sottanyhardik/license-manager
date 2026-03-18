@@ -775,10 +775,17 @@ export default function TradeForm() {
                 Object.entries(err.response.data).forEach(([field, errors]) => {
                     if (Array.isArray(errors)) {
                         errors.forEach(error => {
-                            errorMessages.push(`${field}: ${error}`);
+                            // Make field name more readable
+                            const fieldLabel = field === 'non_field_errors'
+                                ? 'Error'
+                                : field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                            errorMessages.push(`${fieldLabel}: ${error}`);
                         });
                     } else {
-                        errorMessages.push(`${field}: ${errors}`);
+                        const fieldLabel = field === 'non_field_errors'
+                            ? 'Error'
+                            : field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        errorMessages.push(`${fieldLabel}: ${errors}`);
                     }
                 });
 

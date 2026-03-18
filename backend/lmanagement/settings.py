@@ -165,7 +165,8 @@ AUTH_USER_MODEL = "accounts.User"
 # ---------------------------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "core.authentication.JWTAuthenticationFromQueryParam",
+        "rest_framework.authentication.SessionAuthentication",  # Session auth for browser
+        "core.authentication.JWTAuthenticationFromQueryParam",  # JWT auth for API
     ),
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend"

@@ -87,6 +87,9 @@ echo -e "\${BLUE}→ Activating Python virtual environment...\${NC}"
 cd $SERVER_PATH
 source venv/bin/activate
 
+echo -e "\${BLUE}→ Upgrading pip to latest version...\${NC}"
+pip install --upgrade pip --quiet
+
 echo -e "\${BLUE}→ Installing Python dependencies...\${NC}"
 cd backend
 pip install -r requirements.txt --quiet

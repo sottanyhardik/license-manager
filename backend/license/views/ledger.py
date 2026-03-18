@@ -217,6 +217,71 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response(data)
 
+    def retrieve(self, request, pk=None, *args, **kwargs):
+        """
+        Retrieve a single license by ID or license_number.
+        Supports both DFIA and Incentive licenses.
+        """
+        license_type = request.query_params.get('license_type', 'DFIA')
+
+        if license_type == 'DFIA':
+            try:
+                # Try to find license by ID or license_number
+                if pk.isdigit() and not pk.startswith('0'):
+                    # Pure numeric without leading zero - try as ID first
+                    try:
+                        license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=int(pk))
+                    except LicenseDetailsModel.DoesNotExist:
+                        # Fallback: try as license_number
+                        license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
+                else:
+                    # Contains leading zeros or non-numeric - treat as license_number first
+                    try:
+                        license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
+                    except LicenseDetailsModel.DoesNotExist:
+                        # Fallback: try as ID
+                        try:
+                            license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=int(pk))
+                        except (ValueError, TypeError, LicenseDetailsModel.DoesNotExist):
+                            raise LicenseDetailsModel.DoesNotExist
+            except LicenseDetailsModel.DoesNotExist:
+                return Response({'error': f'License not found: {pk}'}, status=404)
+
+            # Prepare DFIA data
+            dfia_data = self._prepare_dfia_data([license])
+            if dfia_data:
+                return Response(dfia_data[0])
+            return Response({'error': 'License not found'}, status=404)
+
+        else:  # INCENTIVE
+            try:
+                # Try to find license by ID or license_number
+                if pk.isdigit() and not pk.startswith('0'):
+                    # Pure numeric without leading zero - try as ID first
+                    try:
+                        license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
+                    except IncentiveLicense.DoesNotExist:
+                        # Fallback: try as license_number
+                        license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
+                else:
+                    # Contains leading zeros or non-numeric - treat as license_number first
+                    try:
+                        license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
+                    except IncentiveLicense.DoesNotExist:
+                        # Fallback: try as ID
+                        try:
+                            license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
+                        except (ValueError, TypeError, IncentiveLicense.DoesNotExist):
+                            raise IncentiveLicense.DoesNotExist
+            except IncentiveLicense.DoesNotExist:
+                return Response({'error': f'License not found: {pk}'}, status=404)
+
+            # Prepare Incentive data
+            incentive_data = self._prepare_incentive_data([license])
+            if incentive_data:
+                return Response(incentive_data[0])
+            return Response({'error': 'License not found'}, status=404)
+
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """

@@ -793,3 +793,86 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             'min_balance_filter': float(min_balance),
             'licenses': combined
         })
+
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """
+        Search across both DFIA and Incentive licenses by license number or exporter name.
+        Returns combined results from both types.
+
+        Query params:
+        - q: Search query (searches license_number and exporter name)
+        - license_type: Filter by type (DFIA, INCENTIVE, RODTEP, ROSTL, MEIS, or ALL)
+        - active_only: Filter only active licenses (default: true)
+        - min_balance: Minimum balance filter
+        """
+        from django.db.models import Q
+
+        query = request.query_params.get('q', '').strip()
+        license_type = request.query_params.get('license_type', 'ALL')
+        active_only = request.query_params.get('active_only', 'true').lower() == 'true'
+        min_balance = request.query_params.get('min_balance')
+
+        if not query:
+            return Response({
+                'error': 'Search query parameter "q" is required'
+            }, status=400)
+
+        results = []
+
+        # Search DFIA licenses if applicable
+        if license_type in ['ALL', 'DFIA']:
+            dfia_qs = LicenseDetailsModel.objects.select_related('exporter', 'port').filter(
+                Q(license_number__icontains=query) |
+                Q(exporter__name__icontains=query)
+            )
+
+            if active_only:
+                dfia_qs = dfia_qs.filter(is_expired=False)
+
+            if min_balance:
+                try:
+                    min_bal = Decimal(min_balance)
+                    dfia_qs = dfia_qs.filter(balance_cif__gte=min_bal)
+                except (ValueError, TypeError):
+                    pass
+
+            dfia_data = self._prepare_dfia_data(dfia_qs[:50])  # Limit to 50 results
+            results.extend(dfia_data)
+
+        # Search Incentive licenses if applicable
+        if license_type in ['ALL', 'INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
+            incentive_qs = IncentiveLicense.objects.select_related('exporter', 'port_code').filter(
+                Q(license_number__icontains=query) |
+                Q(exporter__name__icontains=query)
+            )
+
+            if active_only:
+                incentive_qs = incentive_qs.filter(
+                    is_active=True,
+                    license_expiry_date__gte=timezone.now().date()
+                )
+
+            if license_type not in ['ALL', 'INCENTIVE']:
+                incentive_qs = incentive_qs.filter(license_type=license_type)
+
+            if min_balance:
+                try:
+                    min_bal = Decimal(min_balance)
+                    incentive_qs = incentive_qs.filter(balance_value__gte=min_bal)
+                except (ValueError, TypeError):
+                    pass
+
+            incentive_data = self._prepare_incentive_data(incentive_qs[:50])  # Limit to 50 results
+            results.extend(incentive_data)
+
+        # Sort by license date (most recent first)
+        from datetime import date
+        results.sort(key=lambda x: x.get('license_date') or date.min, reverse=True)
+
+        return Response({
+            'count': len(results),
+            'query': query,
+            'license_type': license_type,
+            'results': results
+        })

@@ -496,7 +496,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 opening_cif = float(license.opening_balance or 0)
                 running_balance = opening_cif
                 total_purchase_cif = opening_cif
-                total_purchase_amount = 0  # No purchase cost for original license
+                # Opening balance has no cost (original license at face value)
+                total_purchase_amount = 0
 
                 transactions.append({
                     'date': license.license_date,
@@ -508,7 +509,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     'credit_cif': 0,
                     'rate': 0,
                     'amount': 0,
-                    'debit_amount': 0,
+                    'debit_amount': 0,  # No cost for original license
                     'credit_amount': 0,
                     'balance': round(running_balance, 2),
                     'profit_loss': 0,
@@ -632,9 +633,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         running_balance -= total_cif_usd
                         total_sales_amount += total_amount
 
-                        # Calculate cumulative profit: Total Sales So Far - Total Purchase Amount
-                        cumulative_profit = total_sales_amount - total_purchase_amount
-
+                        # Store sale transaction (P/L will be calculated after all transactions)
                         transactions.append({
                             'date': trans_date,
                             'type': 'SALE',
@@ -651,8 +650,14 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'debit_amount': 0,
                             'credit_amount': total_amount,  # Sale amount is credit (revenue)
                             'balance': round(running_balance, 2),
-                            'profit_loss': round(cumulative_profit, 2),  # Show cumulative profit
+                            'profit_loss': 0,  # Will be updated after all transactions
                         })
+
+            # After all transactions are processed, calculate final P/L and update all SALE rows
+            final_profit_loss = round(total_sales_amount - total_purchase_amount, 2)
+            for txn in transactions:
+                if txn['type'] == 'SALE':
+                    txn['profit_loss'] = final_profit_loss
 
             return Response({
                 'license_type': 'DFIA',
@@ -772,9 +777,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         running_balance -= license_value
                         total_sales_amount += amount
 
-                        # Calculate cumulative profit: Total Sales So Far - Total Purchase Amount
-                        cumulative_profit = total_sales_amount - total_purchase_amount
-
+                        # Store sale transaction (P/L will be calculated after all transactions)
                         transactions.append({
                             'date': trade.invoice_date or timezone.now().date(),
                             'type': 'SALE',
@@ -788,9 +791,15 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'debit_amount': 0,
                             'credit_amount': amount,  # Sale amount is credit
                             'balance': round(running_balance, 2),
-                            'profit_loss': round(cumulative_profit, 2),  # Show cumulative profit
+                            'profit_loss': 0,  # Will be updated after all transactions
                         })
                     is_first_transaction = False
+
+            # After all transactions are processed, calculate final P/L and update all SALE rows
+            final_profit_loss = round(total_sales_amount - total_purchase_amount, 2)
+            for txn in transactions:
+                if txn['type'] == 'SALE':
+                    txn['profit_loss'] = final_profit_loss
 
             return Response({
                 'license_type': license.license_type,

@@ -221,66 +221,88 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Retrieve a single license by ID or license_number.
         Supports both DFIA and Incentive licenses.
+        Auto-searches both tables if not found in the specified type.
         """
-        license_type = request.query_params.get('license_type', 'DFIA')
+        license_type = request.query_params.get('license_type', 'AUTO')
 
-        if license_type == 'DFIA':
-            try:
-                # Try to find license by ID or license_number
-                if pk.isdigit() and not pk.startswith('0'):
-                    # Pure numeric without leading zero - try as ID first
-                    try:
-                        license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=int(pk))
-                    except LicenseDetailsModel.DoesNotExist:
-                        # Fallback: try as license_number
-                        license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
-                else:
-                    # Contains leading zeros or non-numeric - treat as license_number first
-                    try:
-                        license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
-                    except LicenseDetailsModel.DoesNotExist:
-                        # Fallback: try as ID
+        # Helper function to find license in either table
+        def find_license(pk, search_dfia=True, search_incentive=True):
+            """Try to find license in DFIA and/or Incentive tables"""
+
+            # Search DFIA if requested
+            if search_dfia:
+                try:
+                    if pk.isdigit() and not pk.startswith('0'):
                         try:
                             license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=int(pk))
-                        except (ValueError, TypeError, LicenseDetailsModel.DoesNotExist):
-                            raise LicenseDetailsModel.DoesNotExist
-            except LicenseDetailsModel.DoesNotExist:
-                return Response({'error': f'License not found: {pk}'}, status=404)
+                            return ('DFIA', license)
+                        except LicenseDetailsModel.DoesNotExist:
+                            license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
+                            return ('DFIA', license)
+                    else:
+                        try:
+                            license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(license_number=pk)
+                            return ('DFIA', license)
+                        except LicenseDetailsModel.DoesNotExist:
+                            try:
+                                license = LicenseDetailsModel.objects.select_related('exporter', 'port').get(pk=int(pk))
+                                return ('DFIA', license)
+                            except (ValueError, TypeError, LicenseDetailsModel.DoesNotExist):
+                                pass
+                except LicenseDetailsModel.DoesNotExist:
+                    pass
 
-            # Prepare DFIA data
+            # Search Incentive if requested
+            if search_incentive:
+                try:
+                    if pk.isdigit() and not pk.startswith('0'):
+                        try:
+                            license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
+                            return ('INCENTIVE', license)
+                        except IncentiveLicense.DoesNotExist:
+                            license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
+                            return ('INCENTIVE', license)
+                    else:
+                        try:
+                            license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
+                            return ('INCENTIVE', license)
+                        except IncentiveLicense.DoesNotExist:
+                            try:
+                                license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
+                                return ('INCENTIVE', license)
+                            except (ValueError, TypeError, IncentiveLicense.DoesNotExist):
+                                pass
+                except IncentiveLicense.DoesNotExist:
+                    pass
+
+            return (None, None)
+
+        # Determine search strategy based on license_type parameter
+        if license_type == 'DFIA':
+            found_type, license = find_license(pk, search_dfia=True, search_incentive=False)
+        elif license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
+            found_type, license = find_license(pk, search_dfia=False, search_incentive=True)
+        else:  # AUTO or ALL - search both
+            found_type, license = find_license(pk, search_dfia=True, search_incentive=True)
+
+        # If not found, return 404
+        if not license:
+            return Response({
+                'error': f'License not found: {pk}',
+                'searched_in': 'DFIA only' if license_type == 'DFIA' else 'Incentive only' if license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'] else 'both DFIA and Incentive'
+            }, status=404)
+
+        # Prepare and return data based on found type
+        if found_type == 'DFIA':
             dfia_data = self._prepare_dfia_data([license])
             if dfia_data:
                 return Response(dfia_data[0])
-            return Response({'error': 'License not found'}, status=404)
-
         else:  # INCENTIVE
-            try:
-                # Try to find license by ID or license_number
-                if pk.isdigit() and not pk.startswith('0'):
-                    # Pure numeric without leading zero - try as ID first
-                    try:
-                        license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
-                    except IncentiveLicense.DoesNotExist:
-                        # Fallback: try as license_number
-                        license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
-                else:
-                    # Contains leading zeros or non-numeric - treat as license_number first
-                    try:
-                        license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
-                    except IncentiveLicense.DoesNotExist:
-                        # Fallback: try as ID
-                        try:
-                            license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
-                        except (ValueError, TypeError, IncentiveLicense.DoesNotExist):
-                            raise IncentiveLicense.DoesNotExist
-            except IncentiveLicense.DoesNotExist:
-                return Response({'error': f'License not found: {pk}'}, status=404)
-
-            # Prepare Incentive data
             incentive_data = self._prepare_incentive_data([license])
             if incentive_data:
                 return Response(incentive_data[0])
-            return Response({'error': 'License not found'}, status=404)
+
+        return Response({'error': 'License data preparation failed'}, status=500)
 
     @action(detail=False, methods=['get'])
     def summary(self, request):

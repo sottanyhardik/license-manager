@@ -27,7 +27,8 @@ export default function LicenseLedgerDetail() {
         setLoading(true);
         setError(null);
         try {
-            const response = await api.get(`/license-ledger/${id}/ledger_detail/?license_type=${licenseType}`);
+            // Backend now auto-detects license type (searches both DFIA and Incentive)
+            const response = await api.get(`/license-ledger/${id}/ledger_detail/`);
             setLedger(response.data);
         } catch (err) {
             console.error('Error fetching ledger detail:', err);

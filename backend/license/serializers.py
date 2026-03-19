@@ -969,10 +969,42 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 # Only delete items if we actually received export data in the payload
                 # This prevents accidental deletion when frontend doesn't send nested data
                 if len(exports) > 0:
+                    from django.db.models import ProtectedError
+                    from rest_framework.exceptions import ValidationError
+                    import logging
+                    logger = logging.getLogger(__name__)
+
+                    protected_items = []
+                    deleted_count = 0
+
                     # Delete items that are no longer in the payload
                     for item_id, item in existing_items.items():
                         if item_id not in processed_ids:
-                            item.delete()
+                            try:
+                                logger.info(f"  -> Attempting to delete export item ID={item_id}")
+                                item.delete()
+                                deleted_count += 1
+                                logger.info(f"  -> Successfully deleted export item ID={item_id}")
+                            except ProtectedError as e:
+                                logger.warning(f"  -> Cannot delete export item ID={item_id}: {e}")
+                                protected_items.append({
+                                    'id': item.id,
+                                    'description': item.description or str(item.norm_class) if item.norm_class else 'Unknown'
+                                })
+
+                    logger.info(f"Deleted {deleted_count} export items successfully")
+
+                    # If any items couldn't be deleted due to protection, raise validation error
+                    if protected_items:
+                        error_msg = "Cannot delete the following export items because they are referenced elsewhere:\n"
+                        for protected in protected_items:
+                            error_msg += f"  - {protected['description']}\n"
+                        error_msg += "Please remove references first, or keep them in the license."
+
+                        logger.error(f"Protected export items preventing deletion: {protected_items}")
+                        raise ValidationError({
+                            'export_license': error_msg
+                        })
 
         if imports is not None:
             from django.db import transaction
@@ -1196,11 +1228,54 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 if len(imports) > 0:
                     # Delete items that are no longer in the payload
                     items_to_delete = [item for item in existing_items if item.id not in processed_ids]
+
+                    # SAFETY CHECK: Warn if there's a mismatch (frontend didn't send all items)
                     if items_to_delete:
-                        logger.info(f"Deleting {len(items_to_delete)} import items not in payload: {[item.id for item in items_to_delete]}")
+                        logger.warning(f"Import items mismatch detected:")
+                        logger.warning(f"  - Processed {len(processed_ids)} items from payload")
+                        logger.warning(f"  - {len(existing_items)} items exist in database")
+                        logger.warning(f"  - Processed IDs: {sorted(processed_ids)}")
+                        logger.warning(f"  - Existing IDs: {sorted([item.id for item in existing_items])}")
+                        logger.warning(f"  - Items marked for deletion: {[{'id': item.id, 'serial': item.serial_number} for item in items_to_delete]}")
+
+                    if items_to_delete:
+                        logger.info(f"Attempting to delete {len(items_to_delete)} import items not in payload")
+                        from django.db.models import ProtectedError
+                        from rest_framework.exceptions import ValidationError
+
+                        protected_items = []
+                        deleted_count = 0
+
                         for item in items_to_delete:
-                            logger.info(f"  -> Deleting import item ID={item.id}, serial={item.serial_number}")
-                            item.delete()
+                            try:
+                                logger.info(f"  -> Attempting to delete import item ID={item.id}, serial={item.serial_number}")
+                                item.delete()
+                                deleted_count += 1
+                                logger.info(f"  -> Successfully deleted import item ID={item.id}")
+                            except ProtectedError as e:
+                                logger.warning(f"  -> Cannot delete import item ID={item.id}: {e}")
+                                protected_items.append({
+                                    'id': item.id,
+                                    'serial_number': item.serial_number,
+                                    'description': item.description
+                                })
+
+                        logger.info(f"Deleted {deleted_count} import items successfully")
+
+                        # If any items couldn't be deleted due to protection, raise validation error
+                        if protected_items:
+                            error_msg = f"Cannot delete {len(protected_items)} import item(s) because they are used in trades or bills of entry:\n\n"
+                            for protected in protected_items:
+                                error_msg += f"  • Serial #{protected['serial_number']}: {protected['description']} (ID: {protected['id']})\n"
+                            error_msg += f"\nThese items are currently being used and cannot be removed from the license. "
+                            error_msg += f"To delete them, first remove their usage from trades or bills of entry, "
+                            error_msg += f"or include them in your save to keep them."
+
+                            logger.error(f"Protected items preventing deletion: {protected_items}")
+                            raise ValidationError({
+                                'import_license': error_msg,
+                                'non_field_errors': [f"Cannot delete {len(protected_items)} import item(s) - they are being used in trades/BOEs"]
+                            })
                     else:
                         logger.info("No import items to delete - all existing items were updated or are in payload")
 

@@ -689,9 +689,10 @@ export default function MasterList() {
                                             // Create new SALE trade with swapped companies
                                             const saleTradeData = {
                                                 direction: 'SALE',
-                                                from_company: purchaseTrade.to_company,  // Swap: purchase TO becomes sale FROM
-                                                to_company: purchaseTrade.from_company,  // Swap: purchase FROM becomes sale TO
-                                                boe: purchaseTrade.boe,
+                                                license_type: purchaseTrade.license_type || 'DFIA',  // Copy license type
+                                                from_company: purchaseTrade.to_company?.id || purchaseTrade.to_company,  // Swap: purchase TO becomes sale FROM
+                                                to_company: purchaseTrade.from_company?.id || purchaseTrade.from_company,  // Swap: purchase FROM becomes sale TO
+                                                boe: purchaseTrade.boe?.id || purchaseTrade.boe,
                                                 invoice_number: '',  // Leave empty for user to fill
                                                 invoice_date: new Date().toISOString().split('T')[0],  // Today's date
                                                 remarks: purchaseTrade.remarks || '',
@@ -719,6 +720,7 @@ export default function MasterList() {
                                                     pct: line.pct,
                                                     amount_inr: line.amount_inr
                                                 })),
+                                                incentive_lines: [],  // Empty incentive lines for new trade
                                                 payments: []  // Empty payments for new trade
                                             };
 
@@ -735,7 +737,26 @@ export default function MasterList() {
                                             // Navigate to edit page of the new SALE trade
                                             navigate(`/trades/${newResponse.data.id}/edit`);
                                         } catch (err) {
-                                            toast.error(err.response?.data?.error || 'Failed to copy trade to sale');
+                                            console.error('Copy to sale error:', err.response?.data);
+                                            // Show detailed error message
+                                            if (err.response?.data) {
+                                                const errorData = err.response.data;
+                                                if (errorData.non_field_errors) {
+                                                    toast.error(`Error: ${errorData.non_field_errors[0]}`);
+                                                } else if (typeof errorData === 'object') {
+                                                    const errorMsg = Object.entries(errorData)
+                                                        .map(([field, errors]) => {
+                                                            const msgs = Array.isArray(errors) ? errors : [errors];
+                                                            return `${field}: ${msgs.join(', ')}`;
+                                                        })
+                                                        .join('\n');
+                                                    toast.error(errorMsg || 'Failed to copy trade to sale');
+                                                } else {
+                                                    toast.error(errorData.error || errorData.detail || 'Failed to copy trade to sale');
+                                                }
+                                            } else {
+                                                toast.error('Failed to copy trade to sale');
+                                            }
                                         }
                                     },
                                     // Only show for PURCHASE transactions

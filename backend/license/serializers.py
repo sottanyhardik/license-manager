@@ -579,8 +579,13 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
                 # Only validate new documents (with file object)
                 if doc.get('file') and not isinstance(doc.get('file'), str):
-                    if not doc.get('type') or not doc.get('type').strip():
+                    doc_type = doc.get('type')
+                    # Check if type is missing, empty string, or whitespace only
+                    if not doc_type or (isinstance(doc_type, str) and not doc_type.strip()):
                         item_errors['type'] = ['Document type is required']
+                    # Validate type is one of the allowed choices
+                    elif doc_type not in ['LICENSE COPY', 'TRANSFER LETTER', 'OTHER']:
+                        item_errors['type'] = [f'Invalid document type: {doc_type}. Must be one of: LICENSE COPY, TRANSFER LETTER, OTHER']
 
                 if item_errors:
                     doc_errors.append(item_errors)
@@ -861,8 +866,11 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 self._create_import_item(instance, i)
 
             for d in docs:
-                # Validate required fields
-                if d.get('type') and d.get('file'):
+                # Validate required fields - ensure type is not empty and file is present
+                doc_type = d.get('type', '').strip() if d.get('type') else None
+                if doc_type and d.get('file'):
+                    # Ensure type is set properly
+                    d['type'] = doc_type
                     LicenseDocumentModel.objects.create(license=instance, **d)
             for t in transfers:
                 LicenseTransferModel.objects.create(license=instance, **t)
@@ -1243,12 +1251,15 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
                         # Only create if type and file are present (and file is a File object, not URL string)
                         file_obj = d.get('file')
-                        has_type = bool(d.get('type'))
+                        doc_type = d.get('type', '').strip() if d.get('type') else None
+                        has_type = bool(doc_type)
                         is_file_obj = file_obj and not isinstance(file_obj, str)
 
-                        logger.info(f"  -> Validation: has_type={has_type}, is_file_obj={is_file_obj}, file={file_obj}")
+                        logger.info(f"  -> Validation: has_type={has_type}, doc_type={doc_type}, is_file_obj={is_file_obj}, file={file_obj}")
 
                         if has_type and is_file_obj:
+                            # Ensure type is set properly
+                            d['type'] = doc_type
                             obj = LicenseDocumentModel.objects.create(license=instance, **d)
                             processed_ids.add(obj.id)
                             logger.info(f"  -> Created new document with ID={obj.id}")

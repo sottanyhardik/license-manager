@@ -52,12 +52,19 @@ def license_path(instance, filename):
     - OTHER -> licenses/<license_number>/<license_number> Other.ext
     """
     import os
+    import logging
+    logger = logging.getLogger(__name__)
 
     # Safely get license number with fallback
     try:
-        license_number = instance.license.license_number if instance.license else 'unknown'
-    except Exception:
-        license_number = 'unknown'
+        if not instance.license:
+            logger.error(f"license_path called with instance.license=None, filename={filename}")
+            license_number = 'temp'
+        else:
+            license_number = instance.license.license_number or 'unknown'
+    except Exception as e:
+        logger.error(f"Error in license_path: {e}, instance={instance}, filename={filename}")
+        license_number = 'temp'
 
     file_ext = os.path.splitext(filename)[1]  # Get original extension
 
@@ -68,7 +75,10 @@ def license_path(instance, filename):
         'OTHER': 'Other',
     }
 
-    suffix = type_suffix_map.get(instance.type, instance.type or 'Document')
+    # Safely get type with fallback
+    doc_type = getattr(instance, 'type', 'OTHER')
+    suffix = type_suffix_map.get(doc_type, 'Document')
+
     return f"licenses/{license_number}/{license_number} {suffix}{file_ext}"
 
 

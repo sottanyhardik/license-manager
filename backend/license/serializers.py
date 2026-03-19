@@ -1229,19 +1229,33 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                     if item_id and item_id in existing_items:
                         # Keep existing document - mark as processed so it won't be deleted
                         obj = existing_items[item_id]
-                        logger.info(f"  -> Updating existing document ID={item_id}")
+                        logger.info(f"  -> Found existing document ID={item_id}")
 
-                        # Update type if changed
-                        if 'type' in d and d['type']:
-                            obj.type = d['type']
-                            logger.info(f"  -> Updated type to {d['type']}")
+                        changed = False
 
-                        # Update file only if new File object provided
-                        if 'file' in d and d['file'] and not isinstance(d['file'], str):
-                            obj.file = d['file']
-                            logger.info(f"  -> Updated file to {d['file']}")
+                        # Update type if changed (and not empty)
+                        new_type = d.get('type', '').strip() if d.get('type') else None
+                        if new_type and new_type != obj.type:
+                            obj.type = new_type
+                            changed = True
+                            logger.info(f"  -> Updated type from '{obj.type}' to '{new_type}'")
 
-                        obj.save()
+                        # Update file only if new File object provided (not a URL string)
+                        file_value = d.get('file')
+                        if file_value and not isinstance(file_value, str):
+                            obj.file = file_value
+                            changed = True
+                            logger.info(f"  -> Updated file to {file_value}")
+                        elif isinstance(file_value, str):
+                            logger.info(f"  -> Skipping file update (URL string): {file_value}")
+
+                        # Only save if something actually changed
+                        if changed:
+                            obj.save()
+                            logger.info(f"  -> Saved changes to document ID={item_id}")
+                        else:
+                            logger.info(f"  -> No changes to document ID={item_id}, skipping save")
+
                         processed_ids.add(item_id)
                     else:
                         # Create new document

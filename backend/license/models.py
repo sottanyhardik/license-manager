@@ -52,7 +52,13 @@ def license_path(instance, filename):
     - OTHER -> licenses/<license_number>/<license_number> Other.ext
     """
     import os
-    license_number = instance.license.license_number
+
+    # Safely get license number with fallback
+    try:
+        license_number = instance.license.license_number if instance.license else 'unknown'
+    except Exception:
+        license_number = 'unknown'
+
     file_ext = os.path.splitext(filename)[1]  # Get original extension
 
     # Map document type to suffix
@@ -62,7 +68,7 @@ def license_path(instance, filename):
         'OTHER': 'Other',
     }
 
-    suffix = type_suffix_map.get(instance.type, instance.type)
+    suffix = type_suffix_map.get(instance.type, instance.type or 'Document')
     return f"licenses/{license_number}/{license_number} {suffix}{file_ext}"
 
 

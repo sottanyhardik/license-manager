@@ -50,7 +50,7 @@ def fetch_eligible_licenses():
     ).order_by("-license_expiry_date")
 
 
-def build_payload(dfia, data):
+def build_payload(dfia, data, fetched_iec=None):
     """
     Build payload to post to server from ownership API response.
     """
@@ -58,10 +58,19 @@ def build_payload(dfia, data):
     original_owner = data.get("meisScripOriginalOwnerDtls", {})
     transfers = data.get("scripTransfer", [])
 
+    # Get exporter IEC from license, original owner, or the IEC used to fetch
+    exporter_iec = None
+    if dfia.exporter:
+        exporter_iec = dfia.exporter.iec
+    elif original_owner.get("iec"):
+        exporter_iec = original_owner.get("iec")
+    elif fetched_iec:
+        exporter_iec = fetched_iec
+
     payload = {
         "license_number": dfia.license_number,
         "license_date": dfia.license_date.strftime('%Y-%m-%d') if dfia.license_date else None,
-        "exporter_iec": dfia.exporter.iec if dfia.exporter else None,
+        "exporter_iec": exporter_iec,
         "validity": original_owner.get("validity"),  # Add validity date
         "current_owner": {
             "iec": current_owner.get("iec"),
@@ -141,7 +150,7 @@ def authenticate(server_url=None):
         return False
 
 
-def save_ownership_locally(dfia, data):
+def save_ownership_locally(dfia, data, fetched_iec=None):
     """
     Save ownership information to local database.
     """
@@ -152,6 +161,42 @@ def save_ownership_locally(dfia, data):
         current_owner = data.get("meisScripCurrentOwnerDtls", {})
         original_owner = data.get("meisScripOriginalOwnerDtls", {})
         transfers = data.get("scripTransfer", [])
+
+        # Update license exporter if not set - try to get from original owner
+        if not dfia.exporter and original_owner.get("iec"):
+            original_iec = original_owner.get("iec")
+            original_name = original_owner.get("firm")
+
+            # Find or create company for original owner
+            try:
+                exporter_company = CompanyModel.objects.get(iec=original_iec)
+                print(f"   📋 Found exporter: {exporter_company.name} ({original_iec})")
+            except CompanyModel.DoesNotExist:
+                exporter_company = CompanyModel.objects.create(
+                    iec=original_iec,
+                    name=original_name or f"Company {original_iec}"
+                )
+                print(f"   ➕ Created exporter: {exporter_company.name} ({original_iec})")
+
+            # Update license with exporter
+            dfia.exporter = exporter_company
+            dfia.save(update_fields=['exporter'])
+            print(f"   ✅ Updated license exporter to {original_iec}")
+        elif not dfia.exporter and fetched_iec:
+            # Use the IEC that was used to fetch as fallback
+            try:
+                exporter_company = CompanyModel.objects.get(iec=fetched_iec)
+                print(f"   📋 Found exporter: {exporter_company.name} ({fetched_iec})")
+            except CompanyModel.DoesNotExist:
+                exporter_company = CompanyModel.objects.create(
+                    iec=fetched_iec,
+                    name=f"Company {fetched_iec}"
+                )
+                print(f"   ➕ Created exporter: {exporter_company.name} ({fetched_iec})")
+
+            dfia.exporter = exporter_company
+            dfia.save(update_fields=['exporter'])
+            print(f"   ✅ Updated license exporter to {fetched_iec}")
 
         # Update license expiry date from validity field if available
         validity_date = original_owner.get("validity")
@@ -280,15 +325,17 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None,
     import requests.exceptions
 
     # Get IEC number - from parameter, or from exporter, or from default_iec
+    # Always try to fetch, using default IEC if needed
     if iec_number:
         iec = iec_number
     elif dfia.exporter:
         iec = dfia.exporter.iec
     elif default_iec:
         iec = default_iec
-        print(f"   ℹ️  Using default IEC: {iec}")
+        print(f"   ℹ️  Using default IEC to fetch: {iec}")
     else:
-        return (False, None, "No exporter associated with license and no IEC provided")
+        # If no IEC is available at all, skip but don't fail
+        return (False, None, "No IEC available (no exporter, no default IEC)")
 
     for attempt in range(max_retries):
         try:
@@ -311,14 +358,14 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None,
 
             data = response.json()
 
-            # Step 2: Save to local database
-            saved_locally = save_ownership_locally(dfia, data)
+            # Step 2: Save to local database (pass the IEC used for fetching)
+            saved_locally = save_ownership_locally(dfia, data, fetched_iec=iec)
 
             if not saved_locally:
                 return (False, None, "Local save failed")
 
-            # Step 3: Build payload for server
-            payload = build_payload(dfia, data)
+            # Step 3: Build payload for server (pass the IEC used for fetching)
+            payload = build_payload(dfia, data, fetched_iec=iec)
             return (True, payload, None)
 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:

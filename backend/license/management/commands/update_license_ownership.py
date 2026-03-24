@@ -496,6 +496,11 @@ class Command(BaseCommand):
             default='LACPS9967D',
             help='Default IEC number to use for licenses without exporter (default: LACPS9967D)',
         )
+        parser.add_argument(
+            '--fetch-all',
+            action='store_true',
+            help='Fetch ALL licenses including expired ones (by default only fetches non-expired licenses)',
+        )
 
     def handle(self, *args, **options):
         local_only = options['local_only']
@@ -506,6 +511,7 @@ class Command(BaseCommand):
         license_numbers_str = options['licenses']
         server_url = options['server']
         default_iec = options['iec']  # Default IEC for licenses without exporter
+        fetch_all = options['fetch_all']  # Fetch all licenses including expired
 
         # If not local-only and no server specified, ask for server
         if not local_only and not server_url:
@@ -546,6 +552,7 @@ class Command(BaseCommand):
         if not local_only:
             self.stdout.write(f"Server: {server_url}")
         self.stdout.write(f"Mode: {'LOCAL ONLY' if local_only else 'LOCAL + BULK SERVER SYNC'}")
+        self.stdout.write(f"License Filter: {'ALL (including expired)' if fetch_all else 'Non-expired only'}")
         self.stdout.write(f"Retry Count: {retry_count}")
         self.stdout.write(f"Skip Errors: {'Yes' if skip_errors else 'No'}")
         if proxy:
@@ -564,7 +571,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING("Continuing in LOCAL ONLY mode..."))
                 local_only = True
 
-        # Fetch licenses - either specific ones or eligible ones
+        # Fetch licenses - either specific ones, all licenses, or eligible ones
         if license_numbers_str:
             # Process specific license numbers
             license_numbers = [ln.strip() for ln in license_numbers_str.split(',')]
@@ -577,7 +584,13 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(
                     f"\n⚠️  Licenses not found: {', '.join(sorted(missing_numbers))}"
                 ))
+        elif fetch_all:
+            # Fetch ALL licenses (including expired)
+            licenses = LicenseDetailsModel.objects.all().order_by("-license_expiry_date")
+            if limit:
+                licenses = licenses[:limit]
         else:
+            # Fetch only non-expired licenses
             licenses = fetch_eligible_licenses()
             if limit:
                 licenses = licenses[:limit]

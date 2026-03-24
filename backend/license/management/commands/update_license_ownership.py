@@ -11,7 +11,7 @@ from data_script.fetch_ownership import fetch_scrip_ownership
 from license.models import LicenseDetailsModel
 
 # === Config ===
-# Use the correct server domain
+# Use the correct server domain (default, can be overridden by --server option)
 SERVER_BASE_URL = os.getenv('SERVER_BASE_URL', 'https://license-manager.duckdns.org')
 SERVER_API = f"{SERVER_BASE_URL}/api/license-actions/update-license-transfer/"
 SERVER_AUTH_URL = f"{SERVER_BASE_URL}/api/auth/login/"
@@ -88,17 +88,24 @@ def build_payload(dfia, data):
     return payload
 
 
-def authenticate():
+def authenticate(server_url=None):
     """
     Authenticate with server and get JWT token.
     """
     global auth_token
+
+    # Use provided server_url or fallback to SERVER_BASE_URL
+    if server_url is None:
+        server_url = SERVER_BASE_URL
+
+    auth_url = f"{server_url}/api/auth/login/"
+
     try:
-        print(f"   Connecting to: {SERVER_AUTH_URL}")
+        print(f"   Connecting to: {auth_url}")
         print(f"   Username: {SERVER_USERNAME}")
 
         response = requests.post(
-            SERVER_AUTH_URL,
+            auth_url,
             json={
                 'username': SERVER_USERNAME,
                 'password': SERVER_PASSWORD
@@ -265,12 +272,20 @@ def save_ownership_locally(dfia, data):
         return False
 
 
-def fetch_and_update_ownership(dfia, max_retries=3, proxy=None):
+def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None):
     """
     Fetch ownership info from PRC and save locally.
     Returns tuple: (success, payload_or_none, error_msg_or_none)
     """
     import requests.exceptions
+
+    # Get IEC number - from parameter, or from exporter, or return error
+    if iec_number:
+        iec = iec_number
+    elif dfia.exporter:
+        iec = dfia.exporter.iec
+    else:
+        return (False, None, "No exporter associated with license and no IEC provided")
 
     for attempt in range(max_retries):
         try:
@@ -278,7 +293,7 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None):
             response = fetch_scrip_ownership(
                 scrip_number=dfia.license_number,
                 scrip_issue_date=dfia.license_date.strftime('%d/%m/%Y'),
-                iec_number=dfia.exporter.iec,
+                iec_number=iec,
                 app_id=APP_ID,
                 session_id=SESSION_ID,
                 csrf_token=CSRF_TOKEN,
@@ -319,7 +334,7 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None):
     return (False, None, "Max retries exceeded")
 
 
-def bulk_sync_to_server(payloads):
+def bulk_sync_to_server(payloads, server_url):
     """
     Send all payloads to server in a single batch request.
     """
@@ -336,7 +351,7 @@ def bulk_sync_to_server(payloads):
         # Send batch request
         batch_payload = {"licenses": payloads}
         res = requests.post(
-            f"{SERVER_BASE_URL}/api/license-actions/bulk-update-license-transfer/",
+            f"{server_url}/api/license-actions/bulk-update-license-transfer/",
             json=batch_payload,
             headers=headers,
             timeout=300  # 5 minutes for bulk operation
@@ -351,10 +366,10 @@ def bulk_sync_to_server(payloads):
             }
         elif res.status_code == 401:
             # Retry with re-authentication
-            if authenticate():
+            if authenticate(server_url):
                 headers['Authorization'] = f'Bearer {auth_token}'
                 res = requests.post(
-                    f"{SERVER_BASE_URL}/api/license-actions/bulk-update-license-transfer/",
+                    f"{server_url}/api/license-actions/bulk-update-license-transfer/",
                     json=batch_payload,
                     headers=headers,
                     timeout=300
@@ -419,6 +434,18 @@ class Command(BaseCommand):
             default=None,
             help='Comma-separated list of specific license numbers to process',
         )
+        parser.add_argument(
+            '--server',
+            type=str,
+            default=None,
+            help='Server URL to sync to (e.g., https://license-manager.duckdns.org, http://139.59.92.226, http://165.232.185.220)',
+        )
+        parser.add_argument(
+            '--iec',
+            type=str,
+            default=None,
+            help='IEC number to use for fetching ownership (useful when license has no exporter)',
+        )
 
     def handle(self, *args, **options):
         local_only = options['local_only']
@@ -427,11 +454,47 @@ class Command(BaseCommand):
         retry_count = options['retry_count']
         proxy = options['proxy'] or DGFT_PROXY
         license_numbers_str = options['licenses']
+        server_url = options['server']
+        iec_number = options['iec']
 
-        self.stdout.write("="*80)
+        # If not local-only and no server specified, ask for server
+        if not local_only and not server_url:
+            self.stdout.write("\n" + "="*80)
+            self.stdout.write("🌐 Select Server to Sync")
+            self.stdout.write("="*80)
+            self.stdout.write("1. https://license-manager.duckdns.org (143.110.252.201)")
+            self.stdout.write("2. https://labdhi.duckdns.org (139.59.92.226)")
+            self.stdout.write("3. http://165.232.185.220 (license-tractor.duckdns.org)")
+            self.stdout.write("4. Custom URL")
+            self.stdout.write("5. Skip server sync (local only)")
+            self.stdout.write("="*80)
+
+            choice = input("\nEnter your choice (1-5): ").strip()
+
+            if choice == '1':
+                server_url = 'https://license-manager.duckdns.org'
+            elif choice == '2':
+                server_url = 'https://labdhi.duckdns.org'
+            elif choice == '3':
+                server_url = 'http://165.232.185.220'
+            elif choice == '4':
+                server_url = input("Enter custom server URL: ").strip()
+            elif choice == '5':
+                local_only = True
+                self.stdout.write(self.style.WARNING("\n⚠️  Continuing in LOCAL ONLY mode"))
+            else:
+                self.stdout.write(self.style.ERROR("\n❌ Invalid choice. Exiting."))
+                return
+
+        # Use provided server or default
+        if not server_url and not local_only:
+            server_url = SERVER_BASE_URL
+
+        self.stdout.write("\n" + "="*80)
         self.stdout.write("📋 License Ownership Update Tool")
         self.stdout.write("="*80)
-        self.stdout.write(f"Server: {SERVER_BASE_URL}")
+        if not local_only:
+            self.stdout.write(f"Server: {server_url}")
         self.stdout.write(f"Mode: {'LOCAL ONLY' if local_only else 'LOCAL + BULK SERVER SYNC'}")
         self.stdout.write(f"Retry Count: {retry_count}")
         self.stdout.write(f"Skip Errors: {'Yes' if skip_errors else 'No'}")
@@ -439,12 +502,14 @@ class Command(BaseCommand):
             self.stdout.write(f"Proxy: {proxy}")
         if license_numbers_str:
             self.stdout.write(f"Specific Licenses: {license_numbers_str}")
+        if iec_number:
+            self.stdout.write(f"IEC Number: {iec_number}")
         self.stdout.write("="*80)
 
         # Authenticate with server if syncing
         if not local_only:
             self.stdout.write("\n🔐 Authenticating with server...")
-            if not authenticate():
+            if not authenticate(server_url):
                 self.stdout.write(self.style.ERROR("Failed to authenticate."))
                 self.stdout.write(self.style.WARNING("Continuing in LOCAL ONLY mode..."))
                 local_only = True
@@ -496,7 +561,7 @@ class Command(BaseCommand):
             for idx, dfia in enumerate(batch_licenses, start=batch_start + 1):
                 self.stdout.write(f"\n[{idx}/{total}] Processing {dfia.license_number}...")
                 try:
-                    success, payload, error = fetch_and_update_ownership(dfia, max_retries=retry_count, proxy=proxy)
+                    success, payload, error = fetch_and_update_ownership(dfia, max_retries=retry_count, proxy=proxy, iec_number=iec_number)
 
                     if success:
                         self.stdout.write(f"   ✅ Fetched and saved locally")
@@ -519,7 +584,7 @@ class Command(BaseCommand):
                 self.stdout.write("\n" + "-"*80)
                 self.stdout.write(f"🌐 Syncing batch {batch_num} ({len(batch_payloads)} licenses) to server...")
 
-                result = bulk_sync_to_server(batch_payloads)
+                result = bulk_sync_to_server(batch_payloads, server_url)
 
                 batch_success = result.get("success", 0)
                 batch_failed = result.get("failed", 0)

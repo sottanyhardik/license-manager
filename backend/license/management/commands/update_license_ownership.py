@@ -272,18 +272,21 @@ def save_ownership_locally(dfia, data):
         return False
 
 
-def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None):
+def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None, default_iec=None):
     """
     Fetch ownership info from PRC and save locally.
     Returns tuple: (success, payload_or_none, error_msg_or_none)
     """
     import requests.exceptions
 
-    # Get IEC number - from parameter, or from exporter, or return error
+    # Get IEC number - from parameter, or from exporter, or from default_iec
     if iec_number:
         iec = iec_number
     elif dfia.exporter:
         iec = dfia.exporter.iec
+    elif default_iec:
+        iec = default_iec
+        print(f"   ℹ️  Using default IEC: {iec}")
     else:
         return (False, None, "No exporter associated with license and no IEC provided")
 
@@ -443,8 +446,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--iec',
             type=str,
-            default=None,
-            help='IEC number to use for fetching ownership (useful when license has no exporter)',
+            default='LACPS9967D',
+            help='Default IEC number to use for licenses without exporter (default: LACPS9967D)',
         )
 
     def handle(self, *args, **options):
@@ -455,7 +458,7 @@ class Command(BaseCommand):
         proxy = options['proxy'] or DGFT_PROXY
         license_numbers_str = options['licenses']
         server_url = options['server']
-        iec_number = options['iec']
+        default_iec = options['iec']  # Default IEC for licenses without exporter
 
         # If not local-only and no server specified, ask for server
         if not local_only and not server_url:
@@ -502,8 +505,8 @@ class Command(BaseCommand):
             self.stdout.write(f"Proxy: {proxy}")
         if license_numbers_str:
             self.stdout.write(f"Specific Licenses: {license_numbers_str}")
-        if iec_number:
-            self.stdout.write(f"IEC Number: {iec_number}")
+        if default_iec:
+            self.stdout.write(f"Default IEC (for licenses without exporter): {default_iec}")
         self.stdout.write("="*80)
 
         # Authenticate with server if syncing
@@ -561,7 +564,7 @@ class Command(BaseCommand):
             for idx, dfia in enumerate(batch_licenses, start=batch_start + 1):
                 self.stdout.write(f"\n[{idx}/{total}] Processing {dfia.license_number}...")
                 try:
-                    success, payload, error = fetch_and_update_ownership(dfia, max_retries=retry_count, proxy=proxy, iec_number=iec_number)
+                    success, payload, error = fetch_and_update_ownership(dfia, max_retries=retry_count, proxy=proxy, default_iec=default_iec)
 
                     if success:
                         self.stdout.write(f"   ✅ Fetched and saved locally")

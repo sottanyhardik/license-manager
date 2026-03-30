@@ -14,6 +14,7 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from core.models import TransferLetterModel
+from allotment.scripts.aro import convert_docx_to_pdf
 
 
 def merge_license_documents(licenses, output_path):
@@ -59,6 +60,34 @@ def merge_license_documents(licenses, output_path):
                     # Add PDF directly
                     merger.append(file_path)
                     added_count += 1
+                elif file_ext in ['.doc', '.docx']:
+                    # Convert DOCX/DOC to PDF using proper conversion
+                    try:
+                        import tempfile
+
+                        # Create temporary PDF file
+                        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
+                            tmp_pdf_path = tmp_pdf.name
+
+                        # Use the reliable convert_docx_to_pdf function from aro.py
+                        if convert_docx_to_pdf(file_path, tmp_pdf_path):
+                            # Add converted PDF to merger
+                            merger.append(tmp_pdf_path)
+                            added_count += 1
+                            print(f"✓ Converted DOCX to PDF: {os.path.basename(file_path)}")
+
+                            # Clean up temp file after adding to merger
+                            try:
+                                os.remove(tmp_pdf_path)
+                            except:
+                                pass
+                        else:
+                            print(f"✗ Failed to convert DOCX file: {os.path.basename(file_path)}")
+                            continue
+
+                    except Exception as e:
+                        print(f"✗ Error converting DOCX file {os.path.basename(file_path)}: {str(e)}")
+                        continue
                 elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
                     # Convert image to PDF
                     img = Image.open(file_path)

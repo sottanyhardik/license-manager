@@ -15,7 +15,10 @@ logger = logging.getLogger(__name__)
 
 def convert_docx_to_pdf(docx_path, pdf_path):
     """
-    Convert DOCX to PDF using unoconv (preferred) or LibreOffice with file locking.
+    Convert DOCX to PDF using multiple methods:
+    1. Microsoft Office on macOS (preferred if available)
+    2. unoconv (Linux/macOS)
+    3. LibreOffice (Linux/macOS)
 
     Returns True if successful, False otherwise.
     """
@@ -35,6 +38,59 @@ def convert_docx_to_pdf(docx_path, pdf_path):
     logger.info(f"Starting PDF conversion: {os.path.basename(docx_path)}")
     logger.debug(f"DOCX path: {docx_path}, PDF path: {pdf_path}")
     print(f"[CONVERT] Starting: {os.path.basename(docx_path)}", flush=True)
+
+    # Method 0: Try Microsoft Office on macOS first (using AppleScript)
+    try:
+        import platform
+        if platform.system() == 'Darwin':  # macOS only
+            logger.debug("Attempting conversion with Microsoft Word (macOS)...")
+
+            # Convert paths to absolute and use POSIX paths
+            abs_docx_path = os.path.abspath(docx_path)
+            abs_pdf_path = os.path.abspath(pdf_path)
+
+            # Use AppleScript to automate Microsoft Word
+            # Note: Escape single quotes in paths and use proper Word syntax
+            # Replace single quotes with escaped versions for AppleScript
+            escaped_docx = abs_docx_path.replace("'", "\\'")
+            escaped_pdf = abs_pdf_path.replace("'", "\\'").replace("`", "\\`")
+
+            applescript = f'''
+            tell application "Microsoft Word"
+                set inputFile to POSIX file "{escaped_docx}"
+                set outputFile to "{escaped_pdf}"
+
+                set theDoc to open file name inputFile
+                save as theDoc file name outputFile file format format PDF
+                close theDoc saving no
+            end tell
+            '''
+
+            result = subprocess.run([
+                'osascript',
+                '-e', applescript
+            ], capture_output=True, timeout=60, text=True)
+
+            if result.returncode == 0 and os.path.exists(pdf_path):
+                try:
+                    with open(debug_log, "a") as f:
+                        f.write(f"SUCCESS: Microsoft Word converted successfully\n")
+                        f.flush()
+                except:
+                    pass
+                logger.info(f"✓ Successfully converted with Microsoft Word: {os.path.basename(docx_path)}")
+                print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF (Microsoft Word)")
+                return True
+            else:
+                logger.warning(f"Microsoft Word conversion failed, trying other methods...")
+                if result.stderr:
+                    logger.debug(f"MS Word stderr: {result.stderr}")
+                if result.stdout:
+                    logger.debug(f"MS Word stdout: {result.stdout}")
+    except FileNotFoundError:
+        logger.debug("Microsoft Word not found or osascript not available")
+    except Exception as e:
+        logger.warning(f"Microsoft Word error: {str(e)}, trying other methods...")
 
     # Method 1: Try unoconv first (more reliable in server environments)
     try:
@@ -301,7 +357,7 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
 
     if conversion_failed_count > 0:
         print(f"\nWarning: {conversion_failed_count} file(s) could not be converted to PDF.")
-        print("To enable PDF conversion, install LibreOffice:")
-        print("  macOS: brew install --cask libreoffice")
+        print("To enable PDF conversion, install one of the following:")
+        print("  macOS: Microsoft Office (preferred) or LibreOffice (brew install --cask libreoffice)")
         print("  Ubuntu/Debian: sudo apt-get install libreoffice")
         print("  RHEL/CentOS: sudo yum install libreoffice")

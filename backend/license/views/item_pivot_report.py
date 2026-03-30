@@ -203,25 +203,38 @@ class ItemPivotReportView(View):
                 conversion_norms = ['E1', 'E5', 'E126', 'E132']
                 is_conversion = license_obj.purchase_status and license_obj.purchase_status.code == CO
 
+                # Get exporter name for split sheet logic
+                exporter_name = (license_obj.exporter.name or '') if license_obj.exporter else ''
+                exporter_name_upper = exporter_name.upper()
+
+                # Determine exporter category for split sheets
+                exporter_category = None
+                if 'PARLE' in exporter_name_upper:
+                    exporter_category = 'Parle'
+                elif 'HALDIRAM SNACKS' in exporter_name_upper:
+                    exporter_category = 'Haldiram Snacks'
+                elif 'HALDIRAM FOODS' in exporter_name_upper:
+                    exporter_category = 'Haldiram Foods'
+                elif 'HARIOMKAR FOOD' in exporter_name_upper:
+                    exporter_category = 'Hariomkar Food'
+
                 # Build notification key based on norm class and purchase status
                 if norm_class in conversion_norms and is_conversion:
                     # For conversion licenses in E1, E5, E126, E132
-                    if norm_class == 'E5':
-                        # E5 Conversion: split by Parle vs Others
-                        exporter_name = (license_obj.exporter.name or '') if license_obj.exporter else ''
-                        if 'PARLE' in exporter_name.upper():
-                            notification_key = f"{notification} - Conversion - Parle"
+                    if norm_class in ['E5', 'E132']:
+                        # E5 and E132 Conversion: split by exporter category
+                        if exporter_category:
+                            notification_key = f"{notification} - Conversion - {exporter_category}"
                         else:
                             notification_key = f"{notification} - Conversion"
                     else:
-                        # E1, E126, E132 Conversion
+                        # E1, E126 Conversion
                         notification_key = f"{notification} - Conversion"
 
-                elif norm_class == 'E5':
-                    # E5 non-conversion: split by Parle vs Others
-                    exporter_name = (license_obj.exporter.name or '') if license_obj.exporter else ''
-                    if 'PARLE' in exporter_name.upper():
-                        notification_key = f"{notification} - Parle"
+                elif norm_class in ['E5', 'E132']:
+                    # E5 and E132 non-conversion: split by exporter category
+                    if exporter_category:
+                        notification_key = f"{notification} - {exporter_category}"
                     else:
                         notification_key = f"{notification} - Others"
 

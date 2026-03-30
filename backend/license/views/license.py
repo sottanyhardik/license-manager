@@ -1244,9 +1244,61 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     merger.append(file_path)
                     logger.info(f"Added PDF: {file_path}")
                 elif file_ext in ['.doc', '.docx']:
-                    # Skip DOCX/DOC files - don't convert them
-                    logger.info(f"Skipping DOCX/DOC file: {file_path}")
-                    continue
+                    # Convert DOCX/DOC to PDF
+                    try:
+                        from docx import Document
+                        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+                        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                        from reportlab.lib.pagesizes import A4
+                        from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
+                        import tempfile
+
+                        # Read DOCX content
+                        doc = Document(file_path)
+
+                        # Create temporary PDF file
+                        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
+                            tmp_pdf_path = tmp_pdf.name
+
+                        # Create PDF
+                        pdf = SimpleDocTemplate(tmp_pdf_path, pagesize=A4)
+                        story = []
+                        styles = getSampleStyleSheet()
+
+                        # Add custom style
+                        normal_style = ParagraphStyle(
+                            'CustomNormal',
+                            parent=styles['Normal'],
+                            fontSize=10,
+                            leading=14,
+                            alignment=TA_LEFT
+                        )
+
+                        # Convert paragraphs to PDF
+                        for paragraph in doc.paragraphs:
+                            if paragraph.text.strip():
+                                # Escape special characters for reportlab
+                                text = paragraph.text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                                p = Paragraph(text, normal_style)
+                                story.append(p)
+                                story.append(Spacer(1, 6))
+
+                        # Build PDF
+                        pdf.build(story)
+
+                        # Add converted PDF to merger
+                        merger.append(tmp_pdf_path)
+                        logger.info(f"Converted and added DOCX/DOC: {file_path}")
+
+                        # Clean up temp file
+                        try:
+                            os.remove(tmp_pdf_path)
+                        except:
+                            pass
+
+                    except Exception as e:
+                        logger.error(f"Error converting DOCX file {file_path}: {str(e)}")
+                        continue
                 elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
                     # Convert image to PDF
                     img = Image.open(file_path)

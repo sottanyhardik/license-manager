@@ -161,7 +161,7 @@ export default function DataTable({
     }
 
     return (
-        <div className="table-responsive">
+        <div className="table-responsive-mobile">
             <table className="table table-hover table-bordered">
                 <thead className="table-light">
                     <tr>
@@ -191,6 +191,7 @@ export default function DataTable({
                                 return (
                                     <td
                                         key={column}
+                                        data-label={formatColumnName(column)}
                                         onClick={() => {
                                             if (!isCurrentlyEditing && isEditableField && typeof value === 'boolean') {
                                                 // For boolean fields with inline editing, toggle immediately
@@ -245,7 +246,7 @@ export default function DataTable({
                                     </td>
                                 );
                             })}
-                            <td className="text-center">
+                            <td className="text-center" data-label="Actions">
                                 <div className="btn-group btn-group-sm">
                                     {customActions.map((action, idx) => {
                                         if (action.showIf && !action.showIf(item)) {
@@ -257,8 +258,9 @@ export default function DataTable({
                                                 className={action.className || "btn btn-outline-info"}
                                                 onClick={() => action.onClick(item)}
                                                 title={action.label}
+                                                aria-label={action.label}
                                             >
-                                                {action.icon && <i className={action.icon}></i>}
+                                                {action.icon && <i className={action.icon} aria-hidden="true"></i>}
                                             </button>
                                         );
                                     })}
@@ -267,8 +269,9 @@ export default function DataTable({
                                             onClick={() => onEdit(item)}
                                             className="btn btn-outline-primary"
                                             title="Edit"
+                                            aria-label="Edit"
                                         >
-                                            <i className="bi bi-pencil"></i>
+                                            <i className="bi bi-pencil" aria-hidden="true"></i>
                                         </button>
                                     )}
                                     {onDelete && (
@@ -276,8 +279,9 @@ export default function DataTable({
                                             className="btn btn-outline-danger"
                                             onClick={() => onDelete(item)}
                                             title="Delete"
+                                            aria-label="Delete"
                                         >
-                                            <i className="bi bi-trash"></i>
+                                            <i className="bi bi-trash" aria-hidden="true"></i>
                                         </button>
                                     )}
                                 </div>

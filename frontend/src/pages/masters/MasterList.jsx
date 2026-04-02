@@ -10,6 +10,7 @@ import AccordionTable from "../../components/AccordionTable";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import TransferLetterModal from "../../components/TransferLetterModal";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
+import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 
 /**
  * Generic Master List Page
@@ -80,6 +81,9 @@ export default function MasterList() {
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
     const [transferLetterType, setTransferLetterType] = useState('');
     const [transferLetterEntityId, setTransferLetterEntityId] = useState(null);
+
+    // Confirmation dialog hook
+    const { confirmDelete, confirmDangerousAction, confirmDialog } = useConfirmDialog();
 
     const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
         // Abort any pending request
@@ -303,7 +307,8 @@ export default function MasterList() {
     };
 
     const handleDelete = async (item) => {
-        if (!window.confirm(`Are you sure you want to delete this record?`)) {
+        const confirmed = await confirmDelete('this record');
+        if (!confirmed) {
             return;
         }
 
@@ -538,7 +543,11 @@ export default function MasterList() {
                                 backdropFilter: 'blur(10px)'
                             }}
                             onClick={async () => {
-                                if (!window.confirm('This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?')) {
+                                const confirmed = await confirmDangerousAction(
+                                    'Bulk Update Product Names',
+                                    'This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?'
+                                );
+                                if (!confirmed) {
                                     return;
                                 }
 
@@ -1224,6 +1233,9 @@ export default function MasterList() {
                     entityId={transferLetterEntityId}
                 />
             )}
+
+            {/* Confirmation Dialog */}
+            {confirmDialog}
 
         </div>
     );

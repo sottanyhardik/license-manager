@@ -1240,14 +1240,13 @@ export default function MasterForm({
                                         return (
                                             <div key={field} className={`${colClass} mb-3`}>
                                                 <div className="form-group-material">
-                                                    <label className="form-label" style={{
+                                                    <label className={`form-label ${fieldMeta.required ? 'required' : ''}`} style={{
                                                         fontWeight: '500',
                                                         color: '#374151',
                                                         marginBottom: '8px',
                                                         fontSize: '0.875rem'
                                                     }}>
                                                         {label}
-                                                        {fieldMeta.required && <span className="text-danger ms-1">*</span>}
                                                     </label>
                                                     {renderField(field)}
                                                     {hasError && (

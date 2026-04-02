@@ -14,8 +14,12 @@ export default function AdminLayout({children}) {
 
     return (
         <div className="d-flex flex-column" style={{minHeight: "100vh"}}>
+            {/* Skip navigation link for keyboard accessibility */}
+            <a href="#main-content" className="skip-link">
+                Skip to main content
+            </a>
             {!isInIframe && <TopNav/>}
-            <div className="flex-grow-1" style={{
+            <main id="main-content" className="flex-grow-1" style={{
                 backgroundColor: 'var(--background-color)',
                 overflowY: 'auto'
             }}>
@@ -24,9 +28,17 @@ export default function AdminLayout({children}) {
                     maxWidth: '100%',
                     paddingBottom: isInIframe ? '1rem' : '5rem'
                 }}>
+                    {/* ARIA live region for form validation announcements */}
+                    <div
+                        id="form-announcements"
+                        role="status"
+                        aria-live="polite"
+                        aria-atomic="true"
+                        className="visually-hidden"
+                    ></div>
                     {children}
                 </div>
-            </div>
+            </main>
             {!isInIframe && <footer className="border-top py-3 mt-auto" style={{
                 position: 'sticky',
                 bottom: 0,

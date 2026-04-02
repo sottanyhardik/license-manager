@@ -404,34 +404,18 @@ export default function LicenseLedger() {
             if (exportFilters.purchase_date_to) params.append('purchase_date_to', exportFilters.purchase_date_to);
             params.append('active_only', exportFilters.active_only);
 
-            // Use the new backend endpoint that generates PDF directly
-            const response = await api.get(`/license-ledger/export/all/?${params.toString()}`, {
-                responseType: 'blob'
-            });
+            // Open PDF in dedicated viewer route that can be refreshed
+            const pdfViewerUrl = `/pdf-viewer?url=${encodeURIComponent(`/license-ledger/export/all/?${params.toString()}`)}`;
+            const newWindow = window.open(pdfViewerUrl, '_blank');
 
-            // Create download link with descriptive filename
-            const blob = new Blob([response.data], { type: 'application/pdf' });
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-
-            // Generate filename based on options
-            let filenamePart = 'All';
-            if (exportOptions.license_type && exportOptions.license_type !== 'ALL') {
-                filenamePart = exportOptions.license_type;
+            if (newWindow) {
+                toast.success('PDF opened in new tab - you can refresh to regenerate');
+            } else {
+                toast.error('Popup blocked. Please allow popups for this site.');
             }
-            if (!exportFilters.active_only) {
-                filenamePart += '_Including_Expired';
-            }
-
-            link.download = `License_Ledger_${filenamePart}_${new Date().toISOString().split('T')[0]}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
         } catch (error) {
-            console.error('Error exporting PDF:', error);
-            toast.error('Failed to export PDF. Please try again.');
+            console.error('Error opening PDF:', error);
+            toast.error('Failed to open PDF viewer.');
         } finally {
             setExportingPdf(false);
         }

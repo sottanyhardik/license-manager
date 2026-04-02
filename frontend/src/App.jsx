@@ -41,6 +41,7 @@ const LedgerCSVUpload = lazy(() => import("./pages/LedgerCSVUpload"));
 const LedgerUpload = lazy(() => import("./pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("./pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("./pages/LicenseLedgerDetail"));
+const PDFViewer = lazy(() => import("./pages/PDFViewer"));
 
 
 
@@ -474,6 +475,15 @@ export default function App() {
                                         <AdminLayout>
                                             <LicenseLedgerDetail/>
                                         </AdminLayout>
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/pdf-viewer"
+                                element={
+                                    <ProtectedRoute>
+                                        <PDFViewer/>
                                     </ProtectedRoute>
                                 }
                             />

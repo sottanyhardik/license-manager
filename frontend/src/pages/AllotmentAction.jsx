@@ -52,9 +52,31 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [deletingItems, setDeletingItems] = useState({});
+    const [initialAllocationData, setInitialAllocationData] = useState({});
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
     // Enable browser back button support with filter preservation
     useBackButton('allotments', !isModal);
+
+    // Track unsaved changes
+    useEffect(() => {
+        if (Object.keys(initialAllocationData).length > 0) {
+            const hasChanges = JSON.stringify(allocationData) !== JSON.stringify(initialAllocationData);
+            setHasUnsavedChanges(hasChanges);
+        }
+    }, [allocationData, initialAllocationData]);
+
+    // Warn user before leaving page with unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges]);
 
     useEffect(() => {
         fetchNotificationOptions();
@@ -162,6 +184,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             setAllotment(data.allotment);
             setAvailableItems(data.available_items || data.results || []);
 
+            // Set initial allocation data on first load
+            if (Object.keys(initialAllocationData).length === 0) {
+                setInitialAllocationData({});
+            }
+
             // Update pagination info if provided by backend
             if (data.count !== undefined) {
                 setPagination(prev => ({
@@ -234,11 +261,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         const availableCifFc = parseFloat(item.balance_cif_fc || 0);
         const availableQty = parseFloat(item.available_quantity || 0);
 
-        // Constrain to minimum of balanced quantity and available quantity
+        // Show warning if user tries to exceed limits
         if (inputQty > balancedQty) {
+            toast.warning(`Quantity adjusted to balanced quantity: ${balancedQty}`);
             inputQty = balancedQty;
         }
         if (inputQty > availableQty) {
+            toast.warning(`Quantity adjusted to available quantity: ${availableQty}`);
             inputQty = availableQty;
         }
 
@@ -249,12 +278,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         if (allocateCifFc > balancedValueWithBuffer) {
             inputQty = Math.floor(balancedValueWithBuffer / unitPrice);
             allocateCifFc = inputQty * unitPrice;
+            toast.warning(`Quantity adjusted to match value limit: ${inputQty}`);
         }
 
         // If calculated value exceeds available CIF FC, adjust quantity down
         if (allocateCifFc > availableCifFc) {
             inputQty = Math.floor(availableCifFc / unitPrice);
             allocateCifFc = inputQty * unitPrice;
+            toast.warning(`Quantity adjusted to available CIF: ${inputQty}`);
         }
 
         setAllocationData({
@@ -367,6 +398,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 const newAllocationData = {...allocationData};
                 delete newAllocationData[item.id];
                 setAllocationData(newAllocationData);
+                setInitialAllocationData(JSON.parse(JSON.stringify(newAllocationData))); // Update initial state after save
 
                 // Update allotment data (for balance quantity/value display)
                 if (data.allotment) {

@@ -281,17 +281,20 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         try {
             toast.info('Generating PDF file...');
 
-            // Call backend to generate PDF using license ID
-            const token = localStorage.getItem('access');
-            const pdfUrl = `/api/licenses/${licenseId}/balance-pdf/?access_token=${token}`;
-
-            // Open PDF in new tab to download
-            window.open(pdfUrl, '_blank');
+            // Call backend to generate PDF using license ID with Authorization header
+            const response = await api.get(`/licenses/${licenseId}/balance-pdf/`, {
+                responseType: 'blob',
+                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+            });
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => window.URL.revokeObjectURL(url), 100);
 
             toast.success('PDF file is being generated!');
         } catch (error) {
             console.error('Error generating PDF:', error);
-            toast.error('Failed to generate PDF file');
+            toast.error(error?.response?.data?.error || 'Failed to generate PDF file');
         }
     };
 
@@ -459,12 +462,23 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             </span>
                                                             {(licenseData.has_tl || licenseData.has_copy) && (
                                                                 <a
-                                                                    href={`/api/licenses/${licenseData.id}/merged-documents/?access_token=${localStorage.getItem('access')}`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
+                                                                    href="#"
                                                                     title="View merged documents"
-                                                                    onClick={(e) => {
+                                                                    onClick={async (e) => {
+                                                                        e.preventDefault();
                                                                         e.stopPropagation();
+                                                                        try {
+                                                                            const response = await api.get(`/licenses/${licenseData.id}/merged-documents/`, {
+                                                                                responseType: 'blob',
+                                                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                                                            });
+                                                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                                                            const url = window.URL.createObjectURL(blob);
+                                                                            window.open(url, '_blank');
+                                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                                        } catch {
+                                                                            toast.error('Failed to load merged documents');
+                                                                        }
                                                                     }}
                                                                     style={{
                                                                         fontSize: '0.75rem',

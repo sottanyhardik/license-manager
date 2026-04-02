@@ -1,5 +1,6 @@
 # trade/views.py
 
+from datetime import datetime, date
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
@@ -12,6 +13,29 @@ from .serializers import (
     TradeLineSimpleSerializer,
     LicenseTradePaymentSerializer
 )
+
+
+def _parse_date_strict(date_str):
+    """
+    Parse date string in strict ISO format (YYYY-MM-DD) only.
+
+    Args:
+        date_str: Date string to parse
+
+    Returns:
+        date object if successful, None otherwise
+
+    Raises:
+        ValueError: If date string is not in YYYY-MM-DD format
+    """
+    if not date_str:
+        return None
+
+    try:
+        # Only accept ISO format YYYY-MM-DD
+        return datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError as e:
+        raise ValueError(f"Invalid date format. Expected YYYY-MM-DD, got: {date_str}") from e
 
 
 # Trade transactions ViewSet
@@ -262,15 +286,15 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
         import logging
         logger = logging.getLogger(__name__)
 
-        logger.info(f"🔥 VIEW CREATE called")
-        logger.info(f"🔥 request.data keys: {list(request.data.keys())}")
-        logger.info(f"🔥 request.content_type: {request.content_type}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("VIEW CREATE called")
+            logger.debug("request.data keys: %s", list(request.data.keys()))
+            logger.debug("request.content_type: %s", request.content_type)
 
-        if 'lines' in request.data:
-            logger.info(f"🔥 request.data['lines'] type: {type(request.data['lines'])}")
-            logger.info(f"🔥 request.data['lines'] value: {str(request.data['lines'])[:200]}")
-        else:
-            logger.error(f"🔥 'lines' NOT in request.data!")
+            if 'lines' in request.data:
+                logger.debug("request.data['lines'] type: %s", type(request.data['lines']).__name__)
+            else:
+                logger.debug("'lines' NOT in request.data")
 
         return super().create(request, *args, **kwargs)
 
@@ -402,21 +426,16 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Parse invoice_date string to date object (support both formats)
+        # Parse invoice_date string to date object (strict ISO format only)
         invoice_date = None
         if invoice_date_str:
             try:
-                # Try YYYY-MM-DD first
-                invoice_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                try:
-                    # Try dd-mm-YYYY
-                    invoice_date = datetime.strptime(invoice_date_str, '%d-%m-%Y').date()
-                except ValueError:
-                    return Response(
-                        {"error": "Invalid date format. Use YYYY-MM-DD or dd-mm-yyyy"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                invoice_date = _parse_date_strict(invoice_date_str)
+            except ValueError as e:
+                return Response(
+                    {"error": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         from core.models import CompanyModel
         try:

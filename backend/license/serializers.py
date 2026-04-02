@@ -397,7 +397,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         # Parse nested arrays from FormData format (export_license[0].field, import_license[0].field, license_documents[0].field)
         if hasattr(data, 'getlist'):
             # It's MultiValueDict (FormData)
-            logger.info("Parsing FormData for nested arrays")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Parsing FormData for nested arrays")
 
             nested_dicts = {
                 'export_license': {},
@@ -428,21 +429,24 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 parsed_data['export_license'] = [
                     nested_dicts['export_license'][i] for i in sorted(nested_dicts['export_license'].keys())
                 ]
-                logger.info("Parsed %d export items from FormData", len(parsed_data['export_license']))
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Parsed %d export items from FormData", len(parsed_data['export_license']))
 
             if nested_dicts['import_license']:
                 parsed_data['import_license'] = [
                     nested_dicts['import_license'][i] for i in sorted(nested_dicts['import_license'].keys())
                 ]
-                logger.info("Parsed %d import items from FormData", len(parsed_data['import_license']))
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Parsed %d import items from FormData", len(parsed_data['import_license']))
 
             if nested_dicts['license_documents']:
                 license_documents = [
                     nested_dicts['license_documents'][i] for i in sorted(nested_dicts['license_documents'].keys())
                 ]
-                logger.info("Parsed %d documents from FormData", len(license_documents))
-                for i, doc in enumerate(license_documents):
-                    logger.info("Document %d: type=%s, file=%s", i, doc.get('type'), doc.get('file'))
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Parsed %d documents from FormData", len(license_documents))
+                    for i, doc in enumerate(license_documents):
+                        logger.debug("Document %d: type=%s, file=%s", i, doc.get('type'), doc.get('file'))
                 parsed_data['license_documents'] = license_documents
 
             data = parsed_data
@@ -491,14 +495,21 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
         errors = {}
 
-        # Validate license_number format
+        # Validate license_number format and sanitize
         if 'license_number' in data and data['license_number']:
-            license_number = data['license_number']
-            if not re.match(r'^[A-Z0-9/-]+$', license_number):
-                errors['license_number'] = ['License number can only contain uppercase letters, numbers, hyphens, and slashes']
+            license_number = str(data['license_number']).strip().upper()
 
-        # Validate license_number uniqueness
-        if 'license_number' in data and data['license_number']:
+            # Sanitize: remove any characters not in allowed set
+            sanitized = re.sub(r'[^A-Z0-9/-]', '', license_number)
+
+            if sanitized != license_number:
+                errors['license_number'] = ['License number contains invalid characters. Only uppercase letters, numbers, hyphens, and slashes are allowed.']
+            else:
+                # Update data with sanitized value
+                data['license_number'] = sanitized
+
+        # Validate license_number uniqueness (only if no format errors)
+        if 'license_number' in data and data['license_number'] and 'license_number' not in errors:
             license_number = data['license_number']
             existing = LicenseDetailsModel.objects.filter(license_number=license_number)
             # Exclude current instance when updating
@@ -736,7 +747,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to calculate import quantity: {str(e)}")
+            logger.warning("Failed to calculate import quantity: %s", str(e))
 
         return Decimal('0')
 
@@ -803,7 +814,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Failed to auto-link items in _create_import_item for {obj.id}: {str(e)}")
+            logger.error("Failed to auto-link items in _create_import_item for %d: %s", obj.id, str(e))
 
         return obj
 
@@ -880,11 +891,14 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
-        # DEBUG: Log what we receive
+        from django.db import transaction
         import logging
         logger = logging.getLogger(__name__)
-        logger.info("="*50)
-        logger.info("UPDATE called with validated_data keys: %s", list(validated_data.keys()))
+
+        # Log what we receive
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("="*50)
+            logger.debug("UPDATE called with validated_data keys: %s", list(validated_data.keys()))
 
         exports = validated_data.pop("export_license", None)
         imports = validated_data.pop("import_license", None)
@@ -892,23 +906,31 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         transfers = validated_data.pop("transfers", None)
         purchases = validated_data.pop("purchases", None)
 
-        # DEBUG: Log license_documents
-        logger.info("license_documents extracted: %s", docs)
-        if docs:
-            logger.info("Number of documents: %s", len(docs))
-            for i, doc in enumerate(docs):
-                logger.info("Document %s: keys=%s, type=%s, file=%s", i, list(doc.keys()), doc.get('type'), doc.get('file'))
+        # Log license_documents
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("license_documents extracted: %s", docs)
+            if docs:
+                logger.debug("Number of documents: %s", len(docs))
+                for i, doc in enumerate(docs):
+                    logger.debug("Document %s: keys=%s, type=%s, file=%s", i, list(doc.keys()), doc.get('type'), doc.get('file'))
 
-        for k, v in validated_data.items():
-            setattr(instance, k, v)
-        instance.save()
+        # Use atomic transaction with row-level locking to prevent race conditions
+        with transaction.atomic():
+            # Lock the license record for update to prevent concurrent modifications
+            locked_instance = LicenseDetailsModel.objects.select_for_update().get(pk=instance.pk)
+
+            # Update the main license fields
+            for k, v in validated_data.items():
+                setattr(locked_instance, k, v)
+            locked_instance.save()
+
+            # Update instance reference to use locked instance
+            instance = locked_instance
 
         if exports is not None:
-            from django.db import transaction
-
             with transaction.atomic():
-                # Build mapping of ID to existing export items
-                existing_items = {item.id: item for item in instance.export_license.all()}
+                # Lock and get all existing export items to prevent race conditions
+                existing_items = {item.id: item for item in instance.export_license.select_for_update().all()}
                 processed_ids = set()
 
                 # Update or create export items
@@ -981,18 +1003,20 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                     for item_id, item in existing_items.items():
                         if item_id not in processed_ids:
                             try:
-                                logger.info(f"  -> Attempting to delete export item ID={item_id}")
+                                if logger.isEnabledFor(logging.DEBUG):
+                                    logger.debug("Attempting to delete export item ID=%d", item_id)
                                 item.delete()
                                 deleted_count += 1
-                                logger.info(f"  -> Successfully deleted export item ID={item_id}")
+                                if logger.isEnabledFor(logging.DEBUG):
+                                    logger.debug("Successfully deleted export item ID=%d", item_id)
                             except ProtectedError as e:
-                                logger.warning(f"  -> Cannot delete export item ID={item_id}: {e}")
+                                logger.warning("Cannot delete export item ID=%d: %s", item_id, str(e))
                                 protected_items.append({
                                     'id': item.id,
                                     'description': item.description or str(item.norm_class) if item.norm_class else 'Unknown'
                                 })
 
-                    logger.info(f"Deleted {deleted_count} export items successfully")
+                    logger.info("Deleted %d export items successfully", deleted_count)
 
                     # If any items couldn't be deleted due to protection, raise validation error
                     if protected_items:
@@ -1001,29 +1025,27 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                             error_msg += f"  - {protected['description']}\n"
                         error_msg += "Please remove references first, or keep them in the license."
 
-                        logger.error(f"Protected export items preventing deletion: {protected_items}")
+                        logger.error("Protected export items preventing deletion: %s", protected_items)
                         raise ValidationError({
                             'export_license': error_msg
                         })
 
         if imports is not None:
-            from django.db import transaction
             from license.signals import update_license_on_import_item_change
-            import logging
-            logger = logging.getLogger(__name__)
 
             # Use transaction to ensure atomicity
             with transaction.atomic():
-                # Get all existing import items
-                existing_items = list(instance.import_license.all())
+                # Lock and get all existing import items to prevent race conditions
+                existing_items = list(instance.import_license.select_for_update().all())
                 existing_items_by_id = {item.id: item for item in existing_items}
                 existing_items_by_serial = {item.serial_number: item for item in existing_items}
                 processed_ids = set()
                 processed_serials = set()
 
-                logger.debug(f"Existing items by ID: {list(existing_items_by_id.keys())}")
-                logger.debug(f"Existing items by serial: {list(existing_items_by_serial.keys())}")
-                logger.debug(f"Incoming imports count: {len(imports)}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Existing items by ID: %s", list(existing_items_by_id.keys()))
+                    logger.debug("Existing items by serial: %s", list(existing_items_by_serial.keys()))
+                    logger.debug("Incoming imports count: %d", len(imports))
 
                 # Update or create import items
                 for idx, i in enumerate(imports):
@@ -1068,11 +1090,13 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
                     obj = None
 
-                    logger.debug(f"Processing import #{idx}: id={item_id}, serial={serial_number}")
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Processing import #%d: id=%s, serial=%s", idx, item_id, serial_number)
 
                     # First, try to match by ID
                     if item_id and item_id in existing_items_by_id:
-                        logger.debug(f"  -> Matched by ID {item_id}")
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("  -> Matched by ID %s", item_id)
                         # Update existing item by ID
                         obj = existing_items_by_id[item_id]
 
@@ -1109,7 +1133,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                                 raw=False
                             )
                         except Exception as e:
-                            logger.error(f"Failed to auto-link items for import item {obj.id}: {str(e)}")
+                            logger.error("Failed to auto-link items for import item %d: %s", obj.id, str(e))
 
                         processed_ids.add(obj.id)
                         processed_serials.add(obj.serial_number)
@@ -1117,9 +1141,11 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                     elif serial_number and serial_number in existing_items_by_serial:
                         # Check if this serial was already processed (avoid duplicates in same batch)
                         if serial_number in processed_serials:
-                            logger.debug(f"  -> Skipping: serial {serial_number} already processed")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.debug("  -> Skipping: serial %s already processed", serial_number)
                             continue
-                        logger.debug(f"  -> Matched by serial {serial_number}")
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("  -> Matched by serial %s", serial_number)
 
                         # Update existing item by serial_number
                         obj = existing_items_by_serial[serial_number]
@@ -1157,19 +1183,20 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                                 raw=False
                             )
                         except Exception as e:
-                            logger.error(f"Failed to auto-link items for import item {obj.id}: {str(e)}")
+                            logger.error("Failed to auto-link items for import item %d: %s", obj.id, str(e))
 
                         processed_ids.add(obj.id)
                         processed_serials.add(obj.serial_number)
                     else:
                         # Check if this serial was already processed (avoid duplicates in same batch)
                         if serial_number and serial_number in processed_serials:
-                            logger.debug(f"  -> Skipping: creating duplicate serial {serial_number}")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.debug("  -> Skipping: creating duplicate serial %s", serial_number)
                             continue
 
                         # Double-check: if serial_number exists in DB, update it instead of creating
                         if serial_number and serial_number in existing_items_by_serial:
-                            logger.warning(f"  -> Found existing item by serial {serial_number} in fallback check, updating instead")
+                            logger.warning("Found existing item by serial %s in fallback check, updating instead", serial_number)
                             obj = existing_items_by_serial[serial_number]
 
                             # Auto-calculate quantity if not provided or is 0
@@ -1198,7 +1225,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                             processed_ids.add(obj.id)
                             processed_serials.add(obj.serial_number)
                         else:
-                            logger.debug(f"  -> Creating new item with serial {serial_number}")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.debug("  -> Creating new item with serial %s", serial_number)
                             # Create new item only if serial_number doesn't exist
                             i.pop('id', None)  # Remove ID if present
                             i.pop('license', None)  # Remove license field - we use instance
@@ -1214,7 +1242,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                             processed_ids.add(obj.id)
                             if obj.serial_number:
                                 processed_serials.add(obj.serial_number)
-                            logger.debug(f"  -> Created item with ID {obj.id}")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.debug("  -> Created item with ID %d", obj.id)
 
                     # Save description to ProductDescriptionModel
                     if description and hs_code:
@@ -1231,15 +1260,16 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
                     # SAFETY CHECK: Warn if there's a mismatch (frontend didn't send all items)
                     if items_to_delete:
-                        logger.warning(f"Import items mismatch detected:")
-                        logger.warning(f"  - Processed {len(processed_ids)} items from payload")
-                        logger.warning(f"  - {len(existing_items)} items exist in database")
-                        logger.warning(f"  - Processed IDs: {sorted(processed_ids)}")
-                        logger.warning(f"  - Existing IDs: {sorted([item.id for item in existing_items])}")
-                        logger.warning(f"  - Items marked for deletion: {[{'id': item.id, 'serial': item.serial_number} for item in items_to_delete]}")
+                        logger.warning("Import items mismatch detected:")
+                        logger.warning("  - Processed %d items from payload", len(processed_ids))
+                        logger.warning("  - %d items exist in database", len(existing_items))
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("  - Processed IDs: %s", sorted(processed_ids))
+                            logger.debug("  - Existing IDs: %s", sorted([item.id for item in existing_items]))
+                            logger.debug("  - Items marked for deletion: %s", [{'id': item.id, 'serial': item.serial_number} for item in items_to_delete])
 
                     if items_to_delete:
-                        logger.info(f"Attempting to delete {len(items_to_delete)} import items not in payload")
+                        logger.info("Attempting to delete %d import items not in payload", len(items_to_delete))
                         from django.db.models import ProtectedError
                         from rest_framework.exceptions import ValidationError
 
@@ -1248,19 +1278,21 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
                         for item in items_to_delete:
                             try:
-                                logger.info(f"  -> Attempting to delete import item ID={item.id}, serial={item.serial_number}")
+                                if logger.isEnabledFor(logging.DEBUG):
+                                    logger.debug("Attempting to delete import item ID=%d, serial=%s", item.id, item.serial_number)
                                 item.delete()
                                 deleted_count += 1
-                                logger.info(f"  -> Successfully deleted import item ID={item.id}")
+                                if logger.isEnabledFor(logging.DEBUG):
+                                    logger.debug("Successfully deleted import item ID=%d", item.id)
                             except ProtectedError as e:
-                                logger.warning(f"  -> Cannot delete import item ID={item.id}: {e}")
+                                logger.warning("Cannot delete import item ID=%d: %s", item.id, str(e))
                                 protected_items.append({
                                     'id': item.id,
                                     'serial_number': item.serial_number,
                                     'description': item.description
                                 })
 
-                        logger.info(f"Deleted {deleted_count} import items successfully")
+                        logger.info("Deleted %d import items successfully", deleted_count)
 
                         # If any items couldn't be deleted due to protection, raise validation error
                         if protected_items:
@@ -1271,7 +1303,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                             error_msg += f"To delete them, first remove their usage from trades or bills of entry, "
                             error_msg += f"or include them in your save to keep them."
 
-                            logger.error(f"Protected items preventing deletion: {protected_items}")
+                            logger.error("Protected items preventing deletion: %s", protected_items)
                             raise ValidationError({
                                 'import_license': error_msg,
                                 'non_field_errors': [f"Cannot delete {len(protected_items)} import item(s) - they are being used in trades/BOEs"]
@@ -1279,14 +1311,12 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                     else:
                         logger.info("No import items to delete - all existing items were updated or are in payload")
 
-                logger.info(f"Import items update complete. Processed {len(processed_ids)} items, deleted {len(items_to_delete) if len(imports) > 0 else 0} items")
+                logger.info("Import items update complete. Processed %d items, deleted %d items", len(processed_ids), len(items_to_delete) if len(imports) > 0 else 0)
 
         if docs is not None:
-            from django.db import transaction
-
             with transaction.atomic():
-                # Build mapping of ID to existing documents
-                existing_items = {item.id: item for item in instance.license_documents.all()}
+                # Lock and get all existing documents to prevent race conditions
+                existing_items = {item.id: item for item in instance.license_documents.select_for_update().all()}
                 processed_ids = set()
 
                 # Process documents from payload
@@ -1299,12 +1329,14 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         except (ValueError, TypeError):
                             item_id = None
 
-                    logger.info(f"Processing document {idx}: id={item_id}, type={d.get('type')}, file type={type(d.get('file'))}, file={d.get('file')}")
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Processing document %d: id=%s, type=%s, file type=%s", idx, item_id, d.get('type'), type(d.get('file')).__name__)
 
                     if item_id and item_id in existing_items:
                         # Keep existing document - mark as processed so it won't be deleted
                         obj = existing_items[item_id]
-                        logger.info(f"  -> Found existing document ID={item_id}")
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("Found existing document ID=%s", item_id)
 
                         changed = False
 
@@ -1313,28 +1345,32 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         if new_type and new_type != obj.type:
                             obj.type = new_type
                             changed = True
-                            logger.info(f"  -> Updated type from '{obj.type}' to '{new_type}'")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.debug("Updated type to '%s'", new_type)
 
                         # Update file only if new File object provided (not a URL string)
                         file_value = d.get('file')
                         if file_value and not isinstance(file_value, str):
                             obj.file = file_value
                             changed = True
-                            logger.info(f"  -> Updated file to {file_value}")
-                        elif isinstance(file_value, str):
-                            logger.info(f"  -> Skipping file update (URL string): {file_value}")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.debug("Updated file")
+                        elif isinstance(file_value, str) and logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("Skipping file update (URL string)")
 
                         # Only save if something actually changed
                         if changed:
                             obj.save()
-                            logger.info(f"  -> Saved changes to document ID={item_id}")
-                        else:
-                            logger.info(f"  -> No changes to document ID={item_id}, skipping save")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.debug("Saved changes to document ID=%s", item_id)
+                        elif logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("No changes to document ID=%s, skipping save", item_id)
 
                         processed_ids.add(item_id)
                     else:
                         # Create new document
-                        logger.info(f"  -> Creating new document")
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("Creating new document")
                         d.pop('id', None)
                         d.pop('license', None)
 
@@ -1344,16 +1380,18 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         has_type = bool(doc_type)
                         is_file_obj = file_obj and not isinstance(file_obj, str)
 
-                        logger.info(f"  -> Validation: has_type={has_type}, doc_type={doc_type}, is_file_obj={is_file_obj}, file={file_obj}")
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("Validation: has_type=%s, doc_type=%s, is_file_obj=%s", has_type, doc_type, is_file_obj)
 
                         if has_type and is_file_obj:
                             # Ensure type is set properly
                             d['type'] = doc_type
                             obj = LicenseDocumentModel.objects.create(license=instance, **d)
                             processed_ids.add(obj.id)
-                            logger.info(f"  -> Created new document with ID={obj.id}")
-                        else:
-                            logger.warning(f"  -> Skipped creating document: type={d.get('type')}, file type={type(file_obj)}")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.debug("Created new document with ID=%d", obj.id)
+                        elif logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("Skipped creating document: type=%s, file type=%s", d.get('type'), type(file_obj).__name__)
 
                 # Only delete documents if we actually received document data in the payload
                 # This prevents accidental deletion when frontend doesn't send nested data
@@ -1364,11 +1402,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                             item.delete()
 
         if transfers is not None:
-            from django.db import transaction
-
             with transaction.atomic():
-                # Build mapping of ID to existing transfers
-                existing_items = {item.id: item for item in instance.transfers.all()}
+                # Lock and get all existing transfers to prevent race conditions
+                existing_items = {item.id: item for item in instance.transfers.select_for_update().all()}
                 processed_ids = set()
 
                 # Update or create transfers
@@ -1396,11 +1432,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                         item.delete()
 
         if purchases is not None:
-            from django.db import transaction
-
             with transaction.atomic():
-                # Build mapping of ID to existing purchases
-                existing_items = {item.id: item for item in instance.purchases.all()}
+                # Lock and get all existing purchases to prevent race conditions
+                existing_items = {item.id: item for item in instance.purchases.select_for_update().all()}
                 processed_ids = set()
 
                 # Update or create purchases

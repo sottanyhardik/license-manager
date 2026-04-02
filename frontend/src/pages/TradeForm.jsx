@@ -39,9 +39,31 @@ export default function TradeForm() {
     const [fieldErrors, setFieldErrors] = useState({});
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
     const isInitialLoadRef = useRef(true);
+    const [initialFormData, setInitialFormData] = useState(null);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
     // Enable browser back button support with filter preservation
     useBackButton('trades');
+
+    // Track unsaved changes
+    useEffect(() => {
+        if (initialFormData) {
+            const hasChanges = JSON.stringify(formData) !== JSON.stringify(initialFormData);
+            setHasUnsavedChanges(hasChanges);
+        }
+    }, [formData, initialFormData]);
+
+    // Warn user before leaving page with unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges]);
 
     // Helper function to format Date object to YYYY-MM-DD for API
     const formatDateForAPI = (date) => {
@@ -62,6 +84,9 @@ export default function TradeForm() {
             console.log('Lines already exist, skipping BOE auto-prefill');
             return;
         }
+
+        // Show loading state
+        const loadingToastId = toast.loading("Loading BOE details...");
 
         try {
             // boe can be either ID or object with id
@@ -88,8 +113,20 @@ export default function TradeForm() {
                 ...prev,
                 lines: lines
             }));
+
+            toast.update(loadingToastId, {
+                render: "BOE details loaded successfully",
+                type: "success",
+                isLoading: false,
+                autoClose: 2000
+            });
         } catch (err) {
-            toast.error("Failed to fetch BOE details");
+            toast.update(loadingToastId, {
+                render: "Failed to fetch BOE details",
+                type: "error",
+                isLoading: false,
+                autoClose: 3000
+            });
         }
     }, [formData.boe, formData.lines, billingMode]);
 
@@ -100,6 +137,8 @@ export default function TradeForm() {
         } else {
             // In create mode, mark initial load as complete immediately
             isInitialLoadRef.current = false;
+            // Set initial form data for create mode
+            setInitialFormData(JSON.parse(JSON.stringify(formData)));
         }
     }, [isEdit, id]);
 
@@ -166,6 +205,7 @@ export default function TradeForm() {
             }
 
             setFormData(data);
+            setInitialFormData(JSON.parse(JSON.stringify(data))); // Deep clone for initial snapshot
 
             // Set billing mode from first line if exists
             if (data.lines && data.lines.length > 0) {
@@ -761,6 +801,7 @@ export default function TradeForm() {
             }
 
             toast.success(isEdit ? "Trade updated successfully" : "Trade created successfully");
+            setHasUnsavedChanges(false); // Clear unsaved changes flag
             navigate("/trades");
         } catch (err) {
             console.error('Save error:', err.response?.data);

@@ -1,16 +1,32 @@
-import React from "react";
+import React from 'react';
 
-export default class ErrorBoundary extends React.Component {
-  state = { hasError: false };
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
 
-  render() {
-    if (this.state.hasError)
-      return <h2>Something went wrong inside this component.</h2>;
+    componentDidCatch(error, errorInfo) {
+        console.error('Error caught by boundary:', error, errorInfo);
+    }
 
-    return this.props.children;
-  }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="container mt-5">
+                    <div className="alert alert-danger">
+                        <h4>Something went wrong</h4>
+                        <p>Please refresh the page or contact support.</p>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
 }
+
+export default ErrorBoundary;

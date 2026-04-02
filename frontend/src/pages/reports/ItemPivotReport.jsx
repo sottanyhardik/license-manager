@@ -881,11 +881,24 @@ export default function ItemPivotReport() {
                                                                     <span>{license.license_number}</span>
                                                                     {(license.has_tl || license.has_copy) && (
                                                                         <a
-                                                                            href={`/api/licenses/${license.id}/merged-documents/?access_token=${localStorage.getItem('access')}`}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
+                                                                            href="#"
                                                                             title="View merged documents"
-                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            onClick={async (e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                try {
+                                                                                    const response = await api.get(`/licenses/${license.id}/merged-documents/`, {
+                                                                                        responseType: 'blob',
+                                                                                        headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                                                                    });
+                                                                                    const blob = new Blob([response.data], { type: 'application/pdf' });
+                                                                                    const url = window.URL.createObjectURL(blob);
+                                                                                    window.open(url, '_blank');
+                                                                                    setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                                                } catch {
+                                                                                    toast.error('Failed to load merged documents');
+                                                                                }
+                                                                            }}
                                                                             style={{
                                                                                 fontSize: '0.7rem',
                                                                                 color: '#28a745',

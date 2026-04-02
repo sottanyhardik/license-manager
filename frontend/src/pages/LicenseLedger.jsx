@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
 import { formatDate } from '../utils/dateFormatter';
@@ -34,7 +35,15 @@ export default function LicenseLedger() {
     useEffect(() => {
         fetchLedgerData();
         fetchSummary();
-    }, [filters]);
+    }, [
+        filters.license_type,
+        filters.min_balance,
+        filters.search,
+        filters.active_only,
+        filters.ordering,
+        filters.purchase_date_from,
+        filters.purchase_date_to
+    ]);
 
     const fetchLedgerData = async () => {
         setLoading(true);
@@ -369,7 +378,7 @@ export default function LicenseLedger() {
         doc.text(`Net P/L: ${totalPL >= 0 ? '+' : '-'} ₹${formatIndianNumber(Math.abs(totalPL), 2)}`, pageWidth - 14, finalY + 10, { align: 'right' });
     };
 
-    const handleExportAllPdf = async (exportOptions = {}) => {
+    const handleExportAllPdf = useCallback(async (exportOptions = {}) => {
         try {
             setExportingPdf(true);
 
@@ -422,15 +431,23 @@ export default function LicenseLedger() {
             window.URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Error exporting PDF:', error);
-            window.alert('Failed to export PDF. Please try again.');
+            toast.error('Failed to export PDF. Please try again.');
         } finally {
             setExportingPdf(false);
         }
-    };
+    }, [
+        filters.license_type,
+        filters.min_balance,
+        filters.search,
+        filters.active_only,
+        filters.ordering,
+        filters.purchase_date_from,
+        filters.purchase_date_to
+    ]);
 
-    const handleExportWithFilters = () => {
+    const handleExportWithFilters = useCallback(() => {
         handleExportAllPdf();
-    };
+    }, [handleExportAllPdf]);
 
     const handleExportAllActive = () => {
         handleExportAllPdf({ license_type: 'ALL', active_only: true, min_balance: '', search: '', ordering: '-license_date' });
@@ -838,6 +855,7 @@ export default function LicenseLedger() {
                                     className="btn btn-sm btn-outline-primary"
                                     onClick={handleExportWithFilters}
                                     disabled={loading || exportingPdf}
+                                    aria-label="Export all licenses to PDF"
                                     title="Export with current filters"
                                     style={{ fontWeight: '600' }}
                                 >
@@ -848,7 +866,7 @@ export default function LicenseLedger() {
                                         </>
                                     ) : (
                                         <>
-                                            <i className="bi bi-file-earmark-pdf me-1"></i>
+                                            <i className="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>
                                             Export All PDF
                                         </>
                                     )}

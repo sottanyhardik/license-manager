@@ -9,7 +9,7 @@ import DataTable from "../../components/DataTable";
 import AccordionTable from "../../components/AccordionTable";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import TransferLetterModal from "../../components/TransferLetterModal";
-import {saveFilterState, restoreFilterState, shouldRestoreFilters, getNewlyCreatedItem} from "../../utils/filterPersistence";
+import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
 
 /**
  * Generic Master List Page
@@ -70,6 +70,7 @@ export default function MasterList() {
     const [filterParams, setFilterParams] = useState(getDefaultFilters());
     const backendDefaultsApplied = useRef(false);
     const pendingRequestRef = useRef(null);
+    const abortControllerRef = useRef(null);
 
     // License Balance Modal state
     const [showBalanceModal, setShowBalanceModal] = useState(false);
@@ -81,6 +82,14 @@ export default function MasterList() {
     const [transferLetterEntityId, setTransferLetterEntityId] = useState(null);
 
     const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
+        // Abort any pending request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+
+        // Create new AbortController for this request
+        abortControllerRef.current = new AbortController();
+
         // If there's already a pending request with same params, skip this one
         const requestKey = JSON.stringify({page, size, filters, entity: entityName});
 
@@ -117,7 +126,10 @@ export default function MasterList() {
                     apiPath = `/masters/${entityName}/`;
                 }
 
-                const {data: apiResponse} = await api.get(apiPath, {params});
+                const {data: apiResponse} = await api.get(apiPath, {
+                    params,
+                    signal: abortControllerRef.current.signal
+                });
                 response = apiResponse;
             }
 
@@ -144,6 +156,10 @@ export default function MasterList() {
             setHasPrevious(response.has_previous || false);
 
         } catch (err) {
+            // Ignore abort errors (they're expected when a new request cancels the previous one)
+            if (err.name === 'AbortError' || err.name === 'CanceledError') {
+                return;
+            }
             const errorMsg = err.response?.data?.detail || "Failed to load data";
             setError(errorMsg);
             toast.error(errorMsg);
@@ -171,7 +187,7 @@ export default function MasterList() {
                     sessionStorage.removeItem(`${entity}ListFilters`);
                     // Also clear the filter state key used by filterPersistence
                     sessionStorage.removeItem(`filterState_${entity}`);
-                } catch (error) {
+                } catch {
                     // Silently handle error
                 }
             }
@@ -311,6 +327,15 @@ export default function MasterList() {
     };
 
     const handleToggleBoolean = async (item, field, newValue) => {
+        // Optimistic UI update - update local state immediately
+        setData(prevData =>
+            prevData.map(dataItem =>
+                dataItem.id === item.id
+                    ? { ...dataItem, [field]: newValue }
+                    : dataItem
+            )
+        );
+
         try {
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
@@ -323,9 +348,17 @@ export default function MasterList() {
 
             await api.patch(apiPath, { [field]: newValue });
             toast.success("Field updated successfully");
-            // Refresh data to show updated value
+            // Refresh data to ensure consistency with backend
             fetchData(currentPage, pageSize, filterParams);
         } catch (err) {
+            // Revert optimistic update on error
+            setData(prevData =>
+                prevData.map(dataItem =>
+                    dataItem.id === item.id
+                        ? { ...dataItem, [field]: !newValue }
+                        : dataItem
+                )
+            );
             toast.error(err.response?.data?.detail || `Failed to update ${field}`);
             throw err; // Re-throw to let component know it failed
         }
@@ -390,11 +423,17 @@ export default function MasterList() {
                 }
 
                 if (format === 'pdf') {
-                    // For PDF, open the URL directly with access token
-                    const token = localStorage.getItem('access');
-                    const queryParams = new URLSearchParams({...params, access_token: token}).toString();
-                    const pdfUrl = `/api${apiPath}?${queryParams}`;
-                    window.open(pdfUrl, '_blank');
+                    // For PDF, use blob download with Authorization header
+                    const response = await api.get(apiPath, {
+                        params,
+                        responseType: 'blob',
+                        headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                    });
+                    const blob = new Blob([response.data], { type: 'application/pdf' });
+                    const url = window.URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                    // Clean up blob URL after a delay
+                    setTimeout(() => window.URL.revokeObjectURL(url), 100);
                 } else {
                     // For Excel, download as before
                     const response = await api.get(apiPath, {
@@ -459,6 +498,7 @@ export default function MasterList() {
                     <button
                         className="btn"
                         onClick={() => handleExport('xlsx')}
+                        aria-label="Export to Excel"
                         title="Export to Excel"
                         style={{
                             backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -468,12 +508,13 @@ export default function MasterList() {
                             backdropFilter: 'blur(10px)'
                         }}
                     >
-                        <i className="bi bi-file-earmark-excel me-1"></i>
+                        <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
                         Excel
                     </button>
                     <button
                         className="btn"
                         onClick={() => handleExport('pdf')}
+                        aria-label="Export to PDF"
                         title="Export to PDF"
                         style={{
                             backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -483,7 +524,7 @@ export default function MasterList() {
                             backdropFilter: 'blur(10px)'
                         }}
                     >
-                        <i className="bi bi-file-earmark-pdf me-1"></i>
+                        <i className="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>
                         PDF
                     </button>
                     {entityName === 'bill-of-entries' && (
@@ -510,7 +551,7 @@ export default function MasterList() {
                                     setLoading(false);
 
                                     if (response.data.success) {
-                                        alert(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
+                                        toast.success(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
 
                                         // Refresh the list to show updated product names
                                         fetchData(currentPage, pageSize, filterParams);
@@ -520,7 +561,7 @@ export default function MasterList() {
                                 } catch (err) {
                                     setLoading(false);
                                     setError(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
-                                    alert(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
+                                    toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
                                 }
                             }}
                             title="Update all empty product names in entire database"
@@ -778,11 +819,16 @@ export default function MasterList() {
                                     className: 'btn btn-outline-primary',
                                     onClick: async (item) => {
                                         try {
-                                            const token = localStorage.getItem('access');
-                                            const pdfUrl = `/api/license-actions/${item.id}/download-ledger/?access_token=${token}`;
-                                            window.open(pdfUrl, '_blank');
+                                            const response = await api.get(`/license-actions/${item.id}/download-ledger/`, {
+                                                responseType: 'blob',
+                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                            });
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            window.open(url, '_blank');
+                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
                                         } catch (err) {
-                                            alert(err || 'Failed to generate ledger PDF');
+                                            toast.error(err?.response?.data?.error || 'Failed to generate ledger PDF');
                                         }
                                     }
                                 }
@@ -844,11 +890,16 @@ export default function MasterList() {
                                     className: 'btn btn-outline-danger',
                                     onClick: async (item) => {
                                         try {
-                                            const token = localStorage.getItem('access');
-                                            const pdfUrl = `/api/allotment-actions/${item.id}/generate-pdf/?access_token=${token}`;
-                                            window.open(pdfUrl, '_blank');
+                                            const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
+                                                responseType: 'blob',
+                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                            });
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            window.open(url, '_blank');
+                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
                                         } catch (err) {
-                                            alert(err.response?.data?.error || 'Failed to generate PDF');
+                                            toast.error(err.response?.data?.error || 'Failed to generate PDF');
                                         }
                                     }
                                 }
@@ -873,11 +924,11 @@ export default function MasterList() {
                                         }
                                         try {
                                             const response = await api.post(`/bill-of-entries/${item.id}/update-product-name/`);
-                                            alert(response.data.message || 'Product name updated successfully');
+                                            toast.success(response.data.message || 'Product name updated successfully');
                                             // Refresh the list to show updated product name
                                             fetchData(currentPage, pageSize, filterParams);
                                         } catch (err) {
-                                            alert(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
+                                            toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
                                         }
                                     },
                                     showIf: (item) => !item.product_name || item.product_name.trim() === ''
@@ -948,7 +999,7 @@ export default function MasterList() {
                                         <span style={{ fontWeight: '500' }}>{value || '-'}</span>
                                         {(item.has_tl || item.has_copy) && (
                                             <a
-                                                href={`/api/licenses/${item.id}/merged-documents/?access_token=${localStorage.getItem('access')}`}
+                                                href={`/api/licenses/${item.id}/merged-documents/`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 title="View merged documents"
@@ -999,11 +1050,16 @@ export default function MasterList() {
                                     className: 'btn btn-outline-danger',
                                     onClick: async (item) => {
                                         try {
-                                            const token = localStorage.getItem('access');
-                                            const pdfUrl = `/api/licenses/${item.id}/balance-pdf/?access_token=${token}`;
-                                            window.open(pdfUrl, '_blank');
+                                            const response = await api.get(`/licenses/${item.id}/balance-pdf/`, {
+                                                responseType: 'blob',
+                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                            });
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            window.open(url, '_blank');
+                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
                                         } catch (err) {
-                                            alert(err || 'Failed to generate PDF');
+                                            alert(err?.response?.data?.error || 'Failed to generate PDF');
                                         }
                                     }
                                 }
@@ -1065,11 +1121,16 @@ export default function MasterList() {
                                     className: 'btn btn-outline-danger',
                                     onClick: async (item) => {
                                         try {
-                                            const token = localStorage.getItem('access');
-                                            const pdfUrl = `/api/allotment-actions/${item.id}/generate-pdf/?access_token=${token}`;
-                                            window.open(pdfUrl, '_blank');
+                                            const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
+                                                responseType: 'blob',
+                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                            });
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            window.open(url, '_blank');
+                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
                                         } catch (err) {
-                                            alert(err.response?.data?.error || 'Failed to generate PDF');
+                                            toast.error(err.response?.data?.error || 'Failed to generate PDF');
                                         }
                                     }
                                 }
@@ -1094,11 +1155,11 @@ export default function MasterList() {
                                         }
                                         try {
                                             const response = await api.post(`/bill-of-entries/${item.id}/update-product-name/`);
-                                            alert(response.data.message || 'Product name updated successfully');
+                                            toast.success(response.data.message || 'Product name updated successfully');
                                             // Refresh the list to show updated product name
                                             fetchData(currentPage, pageSize, filterParams);
                                         } catch (err) {
-                                            alert(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
+                                            toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
                                         }
                                     },
                                     showIf: (item) => !item.product_name || item.product_name.trim() === ''

@@ -110,7 +110,8 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         import logging
         logger = logging.getLogger(__name__)
 
-        logger.info(f"🔍 to_internal_value called. Data keys: {list(data.keys())}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("to_internal_value called. Data keys: %s", list(data.keys()))
 
         # Create a mutable copy of the data.
         # For QueryDict, convert to a plain dict to avoid string-coercion on assignment.
@@ -123,21 +124,25 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         # Handle both JSON string format AND flattened FormData format
         for field in ['lines', 'incentive_lines', 'payments']:
             if field in data:
-                logger.info(f"🔍 Field '{field}' found. Type: {type(data[field])}, Value: {str(data[field])[:100]}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Field '%s' found. Type: %s", field, type(data[field]).__name__)
 
                 # Format 1: JSON string (from TradeForm)
                 if isinstance(data[field], str):
                     try:
                         parsed = json.loads(data[field])
                         data[field] = parsed
-                        logger.info(f"✅ Parsed {field} from JSON string: {len(parsed)} items")
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("Parsed %s from JSON string: %d items", field, len(parsed))
                     except (json.JSONDecodeError, TypeError) as e:
-                        logger.error(f"❌ Failed to parse {field} as JSON: {str(e)}")
-                        pass
-                else:
-                    logger.info(f"ℹ️  {field} already parsed as {type(data[field])}, length: {len(data[field]) if hasattr(data[field], '__len__') else 'N/A'}")
-            else:
-                logger.warning(f"⚠️  Field '{field}' NOT in data - checking for flattened format")
+                        logger.error("Failed to parse %s as JSON: %s", field, str(e))
+                        raise serializers.ValidationError({
+                            field: f"Invalid JSON format: {str(e)}"
+                        })
+                elif logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("%s already parsed as %s", field, type(data[field]).__name__)
+            elif logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Field '%s' NOT in data - checking for flattened format", field)
 
         # Format 2: Flattened FormData format (from MasterForm)
         # Check if data has flattened keys like "lines[0].field"
@@ -160,13 +165,15 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                             nested_fields[field_name][index] = {}
 
                         nested_fields[field_name][index][sub_field] = raw_data[key]
-                        logger.info(f"🔍 Found flattened field: {key} -> {field_name}[{index}].{sub_field}")
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug("Found flattened field: %s -> %s[%d].%s", key, field_name, index, sub_field)
 
             # Convert flattened format to list format
             for field_name, items in nested_fields.items():
                 if items:
                     data[field_name] = [items[i] for i in sorted(items.keys())]
-                    logger.info(f"✅ Reconstructed {field_name} from flattened format: {len(data[field_name])} items")
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Reconstructed %s from flattened format: %d items", field_name, len(data[field_name]))
 
         return super().to_internal_value(data)
 
@@ -178,19 +185,21 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         lines = data.get('lines', [])
         incentive_lines = data.get('incentive_lines', [])
 
-        logger.info(f"🔍 VALIDATE: lines type={type(lines)}, length={len(lines) if hasattr(lines, '__len__') else 'N/A'}, value={str(lines)[:200]}")
-        logger.info(f"🔍 VALIDATE: incentive_lines type={type(incentive_lines)}, length={len(incentive_lines) if hasattr(incentive_lines, '__len__') else 'N/A'}")
-        logger.info(f"🔍 VALIDATE: All data keys: {list(data.keys())}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("VALIDATE: lines type=%s, length=%s", type(lines).__name__, len(lines) if hasattr(lines, '__len__') else 'N/A')
+            logger.debug("VALIDATE: incentive_lines type=%s, length=%s", type(incentive_lines).__name__, len(incentive_lines) if hasattr(incentive_lines, '__len__') else 'N/A')
+            logger.debug("VALIDATE: All data keys: %s", list(data.keys()))
 
         # Check if both are empty
         if not lines and not incentive_lines:
-            logger.error(f"❌ VALIDATION FAILED: No lines present! lines={lines}, incentive_lines={incentive_lines}")
+            logger.error("VALIDATION FAILED: No lines present")
             raise serializers.ValidationError({
                 "lines": "At least one trade line or incentive line must be defined.",
                 "incentive_lines": "At least one trade line or incentive line must be defined."
             })
 
-        logger.info(f"✅ VALIDATION PASSED: lines={len(lines)}, incentive_lines={len(incentive_lines)}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("VALIDATION PASSED: lines=%d, incentive_lines=%d", len(lines), len(incentive_lines))
         return data
 
     def get_incentive_license(self, obj):
@@ -248,7 +257,8 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         incentive_lines_data = validated_data.pop('incentive_lines', [])
         payments_data = validated_data.pop('payments', [])
 
-        logger.info(f"🔥 CREATE: lines={len(lines_data)}, incentive={len(incentive_lines_data)}, payments={len(payments_data)}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("CREATE: lines=%d, incentive=%d, payments=%d", len(lines_data), len(incentive_lines_data), len(payments_data))
 
         # Create trade header
         trade = LicenseTrade.objects.create(**validated_data)

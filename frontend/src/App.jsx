@@ -9,6 +9,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminLayout from "./layout/AdminLayout";
 import {PageLoader} from "./components/LoadingFallback";
 import {lazyLoadWithRetry, preloadCriticalRoutes} from "./utils/lazyLoad";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 import Login from "./pages/Login";
 import Unauthorized from "./pages/errors/Unauthorized";
@@ -67,8 +68,9 @@ export default function App() {
                     draggable
                     pauseOnHover
                 />
-                <Suspense fallback={<PageLoader />}>
-                    <Routes>
+                <ErrorBoundary>
+                    <Suspense fallback={<PageLoader />}>
+                        <Routes>
 
                             {/* Public */}
                             <Route path="/login" element={<Login/>}/>
@@ -544,7 +546,8 @@ export default function App() {
                             <Route path="*" element={<NotFound/>}/>
                         </Routes>
                     </Suspense>
-                </BrowserRouter>
+                </ErrorBoundary>
+            </BrowserRouter>
         </AuthProvider>
     );
 }

@@ -16,41 +16,77 @@ export default function PDFViewer() {
     const apiUrl = searchParams.get('url');
 
     useEffect(() => {
+        let isMounted = true;
+        let currentBlobUrl = null;
+
         const fetchPDF = async () => {
             if (!apiUrl) {
-                setError('No PDF URL provided');
-                setLoading(false);
+                if (isMounted) {
+                    setError('No PDF URL provided');
+                    setLoading(false);
+                }
                 return;
             }
 
             try {
-                setLoading(true);
-                setError(null);
+                if (isMounted) {
+                    setLoading(true);
+                    setError(null);
+                    setPdfUrl(null); // Clear previous PDF
+                }
 
                 const response = await api.get(apiUrl, {
                     responseType: 'blob'
                 });
 
+                if (!isMounted) return; // Don't update if unmounted
+
                 const blob = new Blob([response.data], { type: 'application/pdf' });
                 const url = window.URL.createObjectURL(blob);
+                currentBlobUrl = url;
                 setPdfUrl(url);
                 setLoading(false);
             } catch (err) {
+                if (!isMounted) return; // Don't update if unmounted
+
                 console.error('Error loading PDF:', err);
-                setError(err.response?.data?.detail || 'Failed to load PDF');
+
+                // Better error handling
+                let errorMessage = 'Failed to load PDF';
+
+                if (err.response) {
+                    // Server responded with error
+                    if (err.response.status === 404) {
+                        errorMessage = 'PDF endpoint not found';
+                    } else if (err.response.status === 401) {
+                        errorMessage = 'Authentication required. Please log in again.';
+                    } else if (err.response.status === 500) {
+                        errorMessage = 'Server error while generating PDF';
+                    } else {
+                        errorMessage = err.response.data?.detail || err.response.data?.error || errorMessage;
+                    }
+                } else if (err.request) {
+                    // Network error
+                    errorMessage = 'Network error. Please check your connection and try again.';
+                } else {
+                    errorMessage = err.message || errorMessage;
+                }
+
+                setError(errorMessage);
                 setLoading(false);
             }
         };
 
         fetchPDF();
 
-        // Cleanup blob URL on unmount
+        // Cleanup function
         return () => {
-            if (pdfUrl) {
-                window.URL.revokeObjectURL(pdfUrl);
+            isMounted = false;
+            if (currentBlobUrl) {
+                window.URL.revokeObjectURL(currentBlobUrl);
             }
         };
-    }, [apiUrl]); // Re-fetch when apiUrl changes (on refresh)
+    }, [apiUrl]); // Only re-fetch when apiUrl changes (on refresh)
 
     if (loading) {
         return (

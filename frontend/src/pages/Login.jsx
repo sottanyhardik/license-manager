@@ -1,21 +1,30 @@
 import {useContext, useEffect, useState} from "react";
-import {useNavigate} from "react-router-dom";
+import {useNavigate, useLocation} from "react-router-dom";
 import api from "../api/axios";
 import {AuthContext} from "../context/AuthContext";
 
 export default function Login() {
     const {user, loading: authLoading, loginSuccess} = useContext(AuthContext);
     const navigate = useNavigate();
+    const location = useLocation();
     const [form, setForm] = useState({username: "", password: ""});
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
+    // Get the path user was trying to access from either:
+    // 1. location.state (from ProtectedRoute redirect)
+    // 2. redirect query param (from logout)
+    // 3. default to dashboard
+    const searchParams = new URLSearchParams(location.search);
+    const redirectParam = searchParams.get('redirect');
+    const from = location.state?.from || redirectParam || "/dashboard";
+
     // Redirect if already logged in
     useEffect(() => {
         if (!authLoading && user) {
-            navigate("/dashboard");
+            navigate(from, {replace: true});
         }
-    }, [user, authLoading, navigate]);
+    }, [user, authLoading, navigate, from]);
 
     const submit = async (e) => {
         e.preventDefault();
@@ -32,8 +41,8 @@ export default function Login() {
                 user: data.user
             });
 
-            // Use React Router navigation instead of page reload
-            navigate("/dashboard");
+            // Redirect to the page user was trying to access (or dashboard)
+            navigate(from, {replace: true});
         } catch (e) {
             setError(e.response?.data?.detail || "Invalid username or password");
             setSubmitting(false);

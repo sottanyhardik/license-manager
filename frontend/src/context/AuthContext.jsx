@@ -54,9 +54,14 @@ export const AuthProvider = ({children}) => {
             });
         } catch {
         }
+
+        // Save current path before clearing storage
+        const currentPath = window.location.pathname;
         localStorage.clear();
         setUser(null);
-        window.location.href = "/login";
+
+        // Redirect to login with current path saved in URL state
+        window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
     };
 
     return (

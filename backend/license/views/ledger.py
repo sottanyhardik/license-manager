@@ -2,14 +2,75 @@
 License Ledger Views - Unified view for DFIA and Incentive license balances
 """
 from decimal import Decimal
+from io import BytesIO
+from datetime import datetime
 
 from django.utils import timezone
+from django.http import HttpResponse
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+
 from license.models import LicenseDetailsModel, IncentiveLicense
+
+
+def format_indian_number(num, decimals=2):
+    """
+    Format number in Indian numbering system (lakhs and crores).
+    Example: 1,00,00,000.00 (1 crore)
+    """
+    if num is None:
+        return "0"
+
+    # Handle negative numbers
+    is_negative = num < 0
+    num = abs(num)
+
+    # Split into integer and decimal parts
+    if decimals > 0:
+        format_str = f"{{:,.{decimals}f}}"
+        formatted = format_str.format(num)
+        parts = formatted.split('.')
+        integer_part = parts[0].replace(',', '')
+        decimal_part = parts[1] if len(parts) > 1 else '0' * decimals
+    else:
+        integer_part = str(int(num))
+        decimal_part = None
+
+    # Convert to Indian numbering system
+    if len(integer_part) <= 3:
+        result = integer_part
+    else:
+        # Last 3 digits
+        last_three = integer_part[-3:]
+        remaining = integer_part[:-3]
+
+        # Group remaining digits in pairs from right to left
+        groups = []
+        while remaining:
+            groups.append(remaining[-2:])
+            remaining = remaining[:-2]
+
+        groups.reverse()
+        result = ','.join(groups) + ',' + last_three
+
+    # Add decimal part if needed
+    if decimal_part is not None:
+        result = f"{result}.{decimal_part}"
+
+    # Add negative sign if needed
+    if is_negative:
+        result = f"-{result}"
+
+    return result
 
 
 class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
@@ -35,6 +96,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         min_balance = self.request.query_params.get('min_balance')
         exporter_id = self.request.query_params.get('exporter')
         is_active_only = self.request.query_params.get('active_only', 'true').lower() == 'true'
+        purchase_date_from = self.request.query_params.get('purchase_date_from')
+        purchase_date_to = self.request.query_params.get('purchase_date_to')
 
         # Get DFIA licenses
         dfia_qs = LicenseDetailsModel.objects.select_related('exporter', 'port').all()
@@ -58,6 +121,49 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 incentive_qs = incentive_qs.filter(balance_value__gte=min_bal)
             except (ValueError, TypeError):
                 pass
+
+        # Filter by purchase date range
+        if purchase_date_from or purchase_date_to:
+            from trade.models import LicenseTrade
+            from datetime import datetime
+
+            # Get license IDs that have purchases within date range
+            dfia_purchase_filter = {}
+            incentive_purchase_filter = {}
+
+            if purchase_date_from:
+                try:
+                    date_from = datetime.strptime(purchase_date_from, '%Y-%m-%d').date()
+                    dfia_purchase_filter['invoice_date__gte'] = date_from
+                    incentive_purchase_filter['invoice_date__gte'] = date_from
+                except ValueError:
+                    pass
+
+            if purchase_date_to:
+                try:
+                    date_to = datetime.strptime(purchase_date_to, '%Y-%m-%d').date()
+                    dfia_purchase_filter['invoice_date__lte'] = date_to
+                    incentive_purchase_filter['invoice_date__lte'] = date_to
+                except ValueError:
+                    pass
+
+            if dfia_purchase_filter:
+                # Get DFIA licenses that have purchases in the date range
+                dfia_license_ids = LicenseTrade.objects.filter(
+                    license_type='DFIA',
+                    direction='PURCHASE',
+                    **dfia_purchase_filter
+                ).values_list('lines__sr_number__license_id', flat=True).distinct()
+                dfia_qs = dfia_qs.filter(id__in=dfia_license_ids)
+
+            if incentive_purchase_filter:
+                # Get Incentive licenses that have purchases in the date range
+                incentive_license_ids = LicenseTrade.objects.filter(
+                    license_type='INCENTIVE',
+                    direction='PURCHASE',
+                    **incentive_purchase_filter
+                ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
+                incentive_qs = incentive_qs.filter(id__in=incentive_license_ids)
 
         # Filter by license type
         if license_type == 'DFIA':
@@ -84,20 +190,36 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         data = []
         for license in queryset:
-            # Calculate purchase and sale amounts for this specific license
-            purchase_amount = LicenseTrade.objects.filter(
+            # Calculate purchase and sale amounts (INR) for this specific license
+            purchase_amount_inr = LicenseTrade.objects.filter(
                 license_type='DFIA',
                 direction='PURCHASE',
                 lines__sr_number__license=license
             ).aggregate(total=Sum('lines__amount_inr'))['total'] or 0
 
-            sale_amount = LicenseTrade.objects.filter(
+            sale_amount_inr = LicenseTrade.objects.filter(
                 license_type='DFIA',
                 direction='SALE',
                 lines__sr_number__license=license
             ).aggregate(total=Sum('lines__amount_inr'))['total'] or 0
 
-            profit_loss = float(sale_amount) - float(purchase_amount)
+            # Calculate purchase and sale amounts in USD (cif_fc)
+            purchase_amount_usd = LicenseTrade.objects.filter(
+                license_type='DFIA',
+                direction='PURCHASE',
+                lines__sr_number__license=license
+            ).aggregate(total=Sum('lines__cif_fc'))['total'] or 0
+
+            sale_amount_usd = LicenseTrade.objects.filter(
+                license_type='DFIA',
+                direction='SALE',
+                lines__sr_number__license=license
+            ).aggregate(total=Sum('lines__cif_fc'))['total'] or 0
+
+            profit_loss = float(sale_amount_inr) - float(purchase_amount_inr)
+
+            # Calculate balance: Purchase USD - Sold USD
+            balance_usd = float(purchase_amount_usd) - float(sale_amount_usd)
 
             data.append({
                 'id': license.id,
@@ -108,18 +230,18 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'exporter_name': license.exporter.name if license.exporter else '',
                 'exporter_id': license.exporter.id if license.exporter else None,
                 'port_name': license.port.name if license.port else '',
-                'total_value': float(license.opening_balance or 0),
-                'balance_value': float(license.balance_cif or 0),
-                'sold_value': float(license.opening_balance or 0) - float(license.balance_cif or 0),
-                'purchase_amount': float(purchase_amount),
-                'sale_amount': float(sale_amount),
+                'total_value': float(purchase_amount_usd),  # Total purchased USD
+                'balance_value': balance_usd,                # Balance = Purchase - Sold
+                'sold_value': float(sale_amount_usd),       # Total sold USD
+                'purchase_amount': float(purchase_amount_inr),
+                'sale_amount': float(sale_amount_inr),
                 'profit_loss': profit_loss,
                 'currency': 'USD',
                 'is_expired': license.is_expired,
                 'is_active': not license.is_expired,
                 'sold_status': self._get_sold_status(
-                    license.opening_balance or 0,
-                    license.balance_cif or 0
+                    purchase_amount_usd or 0,
+                    balance_usd or 0
                 ),
             })
         return data
@@ -131,24 +253,37 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         data = []
         for license in queryset:
-            # Calculate purchase and sale amounts for this specific incentive license
-            purchase_amount = LicenseTrade.objects.filter(
+            # Calculate purchase and sale amounts (INR) for this specific incentive license
+            purchase_amount_inr = LicenseTrade.objects.filter(
                 license_type='INCENTIVE',
                 direction='PURCHASE',
                 incentive_lines__incentive_license=license
             ).aggregate(total=Sum('incentive_lines__amount_inr'))['total'] or 0
 
-            sale_amount = LicenseTrade.objects.filter(
+            sale_amount_inr = LicenseTrade.objects.filter(
                 license_type='INCENTIVE',
                 direction='SALE',
                 incentive_lines__incentive_license=license
             ).aggregate(total=Sum('incentive_lines__amount_inr'))['total'] or 0
 
-            profit_loss = float(sale_amount) - float(purchase_amount)
+            # Calculate total purchased value (INR) from trade lines
+            purchase_value_inr = LicenseTrade.objects.filter(
+                license_type='INCENTIVE',
+                direction='PURCHASE',
+                incentive_lines__incentive_license=license
+            ).aggregate(total=Sum('incentive_lines__license_value'))['total'] or 0
 
-            total_value = float(license.license_value or 0)
-            balance_value = float(license.balance_value or 0)
-            sold_value = total_value - balance_value
+            # Calculate total sold value (INR) from trade lines
+            sale_value_inr = LicenseTrade.objects.filter(
+                license_type='INCENTIVE',
+                direction='SALE',
+                incentive_lines__incentive_license=license
+            ).aggregate(total=Sum('incentive_lines__license_value'))['total'] or 0
+
+            profit_loss = float(sale_amount_inr) - float(purchase_amount_inr)
+
+            # Calculate balance: Purchase INR - Sold INR
+            balance_inr = float(purchase_value_inr) - float(sale_value_inr)
 
             data.append({
                 'id': license.id,
@@ -159,16 +294,16 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'exporter_name': license.exporter.name if license.exporter else '',
                 'exporter_id': license.exporter.id if license.exporter else None,
                 'port_name': license.port_code.name if license.port_code else '',
-                'total_value': total_value,
-                'balance_value': balance_value,
-                'sold_value': sold_value,
-                'purchase_amount': float(purchase_amount),
-                'sale_amount': float(sale_amount),
+                'total_value': float(purchase_value_inr),  # Total purchased INR
+                'balance_value': balance_inr,              # Balance = Purchase - Sold
+                'sold_value': float(sale_value_inr),       # Total sold INR
+                'purchase_amount': float(purchase_amount_inr),
+                'sale_amount': float(sale_amount_inr),
                 'profit_loss': profit_loss,
                 'currency': 'INR',
                 'is_expired': license.license_expiry_date < timezone.now().date() if license.license_expiry_date else False,
                 'is_active': license.is_active,
-                'sold_status': self._get_sold_status(total_value, balance_value),
+                'sold_status': self._get_sold_status(purchase_value_inr, balance_inr),
             })
         return data
 
@@ -932,3 +1067,490 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             'license_type': license_type,
             'results': results
         })
+
+    @action(detail=False, methods=['get'], url_path='export/all')
+    def export_all(self, request):
+        """
+        Export all licenses (or filtered licenses) to a single PDF file.
+
+        Query params (same as list):
+        - license_type: Filter by type (DFIA, INCENTIVE, RODTEP, ROSTL, MEIS, or ALL) - default: ALL
+        - active_only: Filter only active licenses (default: true)
+        - min_balance: Minimum balance filter
+        - exporter: Filter by exporter ID
+        - search: Search by license number or exporter name
+        """
+        # Get filtered data using same logic as list()
+        data = self.get_queryset()
+
+        # Apply search filter manually for combined data
+        search = request.query_params.get('search')
+        if search and isinstance(data, list):
+            search_lower = search.lower()
+            data = [
+                item for item in data
+                if search_lower in (item.get('license_number') or '').lower()
+                   or search_lower in (item.get('exporter_name') or '').lower()
+            ]
+
+        # Apply ordering
+        ordering = request.query_params.get('ordering', '-license_date')
+        if isinstance(data, list):
+            reverse = ordering.startswith('-')
+            order_field = ordering.lstrip('-')
+            if order_field in ['license_date', 'balance_value', 'license_expiry_date']:
+                from datetime import date
+                if order_field in ['license_date', 'license_expiry_date']:
+                    data.sort(key=lambda x: x.get(order_field) or date.min, reverse=reverse)
+                else:
+                    data.sort(key=lambda x: x.get(order_field) or 0, reverse=reverse)
+
+        # Generate PDF
+        pdf_content = self._generate_all_licenses_pdf(data, request.query_params)
+
+        # Create response
+        response = HttpResponse(pdf_content, content_type='application/pdf')
+        filename = f"license_ledger_all_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        return response
+
+    def _generate_all_licenses_pdf(self, licenses_data, query_params):
+        """
+        Generate a PDF containing all licenses in a tabular format.
+        """
+        buffer = BytesIO()
+
+        # Create PDF with landscape orientation for better table fit
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=30,
+            leftMargin=30,
+            topMargin=40,
+            bottomMargin=40
+        )
+
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Title style
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.HexColor('#1a1a1a'),
+            spaceAfter=12,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        )
+
+        # Subtitle style
+        subtitle_style = ParagraphStyle(
+            'Subtitle',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#555555'),
+            spaceAfter=6,
+            alignment=TA_CENTER,
+            fontName='Helvetica'
+        )
+
+        # Title
+        title = Paragraph("LICENSE LEDGER - ALL LICENSES", title_style)
+        elements.append(title)
+
+        # Add filter information
+        license_type = query_params.get('license_type', 'ALL')
+        active_only = query_params.get('active_only', 'true').lower() == 'true'
+
+        filter_info = f"License Type: {license_type} | Status: {'Active Only' if active_only else 'All'} | Total: {len(licenses_data)} licenses"
+        subtitle = Paragraph(filter_info, subtitle_style)
+        elements.append(subtitle)
+        elements.append(Spacer(1, 0.2 * inch))
+
+        if not licenses_data:
+            no_data = Paragraph("<i>No licenses found matching the criteria</i>", styles['Normal'])
+            elements.append(no_data)
+        else:
+            # Wrap style for text cells - enable multi-line wrapping
+            wrap_style = ParagraphStyle(
+                'WrapStyle',
+                parent=styles['Normal'],
+                fontSize=7,
+                leading=9,
+                wordWrap='CJK',  # Enable word wrapping
+                splitLongWords=True
+            )
+
+            # Green style for profit values
+            profit_style = ParagraphStyle(
+                'ProfitStyle',
+                parent=wrap_style,
+                textColor=colors.green
+            )
+
+            # Red style for loss values
+            loss_style = ParagraphStyle(
+                'LossStyle',
+                parent=wrap_style,
+                textColor=colors.red
+            )
+
+            # Separate licenses into profit and loss groups
+            profit_licenses = [lic for lic in licenses_data if lic.get('profit_loss', 0) >= 0]
+            loss_licenses = [lic for lic in licenses_data if lic.get('profit_loss', 0) < 0]
+
+            # Helper function to process table for a set of licenses
+            def create_license_table(licenses_list, table_title):
+                if not licenses_list:
+                    return None, {}
+
+                # Table header
+                header = [[
+                    'License No.',
+                    'Type',
+                    'Exporter',
+                    'License Date',
+                    'Expiry',
+                    'Purchase\n($)',
+                    'Sold\n($)',
+                    'Balance\n($)',
+                    'Purchase\nAmt (INR)',
+                    'Sale\nAmt (INR)',
+                    'P/L\n(INR)',
+                    'Status'
+                ]]
+
+                table_data = header[:]
+                no_purchase_rows = []
+                negative_balance_rows = []
+
+                for idx, license in enumerate(licenses_list):
+                    row_num = idx + 1  # +1 for header
+
+                    # Extract data
+                    lic_date = license.get('license_date')
+                    exp_date = license.get('license_expiry_date')
+                    lic_date_str = lic_date.strftime('%d-%b-%y') if lic_date else '-'
+                    exp_date_str = exp_date.strftime('%d-%b-%y') if exp_date else '-'
+
+                    total_val = license.get('total_value', 0)
+                    balance_val = license.get('balance_value', 0)
+                    sold_val = license.get('sold_value', 0)
+                    purchase_amt = license.get('purchase_amount', 0)
+                    sale_amt = license.get('sale_amount', 0)
+                    profit_loss = license.get('profit_loss', 0)
+                    currency = license.get('currency', 'USD')
+                    status = 'Active' if license.get('is_active', False) else 'Expired'
+
+                    # Wrap exporter name - always use Paragraph for multi-line support
+                    exporter_name = license.get('exporter_name') or 'N/A'
+                    exporter_para = Paragraph(str(exporter_name), wrap_style)
+
+                    # Calculate balance
+                    purchase_usd = total_val
+                    sold_usd = sold_val
+                    calculated_balance = purchase_usd - sold_usd
+
+                    # Format with Indian number system
+                    if currency == 'USD':
+                        purchase_str = f"${format_indian_number(purchase_usd, 2)}"
+                        sold_str = f"${format_indian_number(sold_usd, 2)}"
+                        balance_str = f"${format_indian_number(calculated_balance, 2)}"
+                    else:
+                        purchase_str = f"INR {format_indian_number(purchase_usd, 2)}"
+                        sold_str = f"INR {format_indian_number(sold_usd, 2)}"
+                        balance_str = f"INR {format_indian_number(calculated_balance, 2)}"
+
+                    # Track special rows
+                    if not purchase_amt or purchase_amt == 0:
+                        no_purchase_rows.append(row_num)
+                    if calculated_balance < 0:
+                        negative_balance_rows.append(row_num)
+
+                    # Wrap all monetary values in Paragraph for text wrapping
+                    purchase_amt_str = f"INR {format_indian_number(purchase_amt, 2)}" if purchase_amt else 'No Purchase'
+                    sale_amt_str = f"INR {format_indian_number(sale_amt, 2)}" if sale_amt else '-'
+                    pl_str = f"INR {format_indian_number(profit_loss, 2)}"
+
+                    # Use green for profit, red for loss
+                    pl_paragraph_style = profit_style if profit_loss >= 0 else loss_style
+
+                    # Ensure all values are strings before creating Paragraphs
+                    license_number = str(license.get('license_number') or 'N/A')[:14]
+                    license_type = str(license.get('license_type') or 'N/A')[:6]
+
+                    table_data.append([
+                        Paragraph(license_number, wrap_style),
+                        Paragraph(license_type, wrap_style),
+                        exporter_para,
+                        Paragraph(str(lic_date_str), wrap_style),
+                        Paragraph(str(exp_date_str), wrap_style),
+                        Paragraph(str(purchase_str), wrap_style),
+                        Paragraph(str(sold_str), wrap_style),
+                        Paragraph(str(balance_str), wrap_style),
+                        Paragraph(str(purchase_amt_str), wrap_style),
+                        Paragraph(str(sale_amt_str), wrap_style),
+                        Paragraph(str(pl_str), pl_paragraph_style),
+                        Paragraph(str(status[:3]), wrap_style)
+                    ])
+
+                # Calculate totals for this group
+                total_purchase_usd = sum(lic.get('total_value', 0) for lic in licenses_list if lic.get('currency') == 'USD')
+                total_sold_usd = sum(lic.get('sold_value', 0) for lic in licenses_list if lic.get('currency') == 'USD')
+                total_balance_usd = sum(lic.get('balance_value', 0) for lic in licenses_list if lic.get('currency') == 'USD')
+
+                total_purchase_inr_val = sum(lic.get('total_value', 0) for lic in licenses_list if lic.get('currency') == 'INR')
+                total_sold_inr_val = sum(lic.get('sold_value', 0) for lic in licenses_list if lic.get('currency') == 'INR')
+                total_balance_inr_val = sum(lic.get('balance_value', 0) for lic in licenses_list if lic.get('currency') == 'INR')
+
+                total_purchase_amt = sum(lic.get('purchase_amount', 0) for lic in licenses_list)
+                total_sale_amt = sum(lic.get('sale_amount', 0) for lic in licenses_list)
+                total_pl = sum(lic.get('profit_loss', 0) for lic in licenses_list)
+
+                # Create bold style for total row
+                total_style = ParagraphStyle(
+                    'TotalStyle',
+                    parent=wrap_style,
+                    fontSize=7.5,
+                    leading=9.5,
+                    fontName='Helvetica-Bold',
+                    wordWrap='CJK',
+                    splitLongWords=True
+                )
+
+                # Create bold profit/loss styles for total row
+                total_profit_style = ParagraphStyle(
+                    'TotalProfitStyle',
+                    parent=total_style,
+                    textColor=colors.green
+                )
+
+                total_loss_style = ParagraphStyle(
+                    'TotalLossStyle',
+                    parent=total_style,
+                    textColor=colors.red
+                )
+
+                # Format total values with Paragraph for multi-line support
+                purchase_total_str = f"${format_indian_number(total_purchase_usd, 2)}" if total_purchase_usd else (f"INR {format_indian_number(total_purchase_inr_val, 2)}" if total_purchase_inr_val else '-')
+                sold_total_str = f"${format_indian_number(total_sold_usd, 2)}" if total_sold_usd else (f"INR {format_indian_number(total_sold_inr_val, 2)}" if total_sold_inr_val else '-')
+                balance_total_str = f"${format_indian_number(total_balance_usd, 2)}" if total_balance_usd else (f"INR {format_indian_number(total_balance_inr_val, 2)}" if total_balance_inr_val else '-')
+
+                # Use green/red for total P/L
+                total_pl_style = total_profit_style if total_pl >= 0 else total_loss_style
+
+                # Add total row with Paragraphs
+                table_data.append([
+                    Paragraph('<b>TOTAL</b>', total_style),
+                    '',
+                    '',
+                    '',
+                    '',
+                    Paragraph(f'<b>{purchase_total_str}</b>', total_style),
+                    Paragraph(f'<b>{sold_total_str}</b>', total_style),
+                    Paragraph(f'<b>{balance_total_str}</b>', total_style),
+                    Paragraph(f'<b>INR {format_indian_number(total_purchase_amt, 2)}</b>', total_style),
+                    Paragraph(f'<b>INR {format_indian_number(total_sale_amt, 2)}</b>', total_style),
+                    Paragraph(f'<b>INR {format_indian_number(total_pl, 2)}</b>', total_pl_style),
+                    ''
+                ])
+
+                return table_data, {'no_purchase': no_purchase_rows, 'negative_balance': negative_balance_rows, 'licenses': licenses_list, 'has_total_row': True}
+
+            # Helper function to style and append a table
+            def style_and_append_table(table_data, metadata, table_title, title_color):
+                if not table_data:
+                    return
+
+                # Add section title
+                section_title_style = ParagraphStyle(
+                    'SectionTitle',
+                    parent=styles['Heading2'],
+                    fontSize=14,
+                    textColor=colors.HexColor(title_color),
+                    spaceAfter=10,
+                    fontName='Helvetica-Bold'
+                )
+                section_title = Paragraph(table_title, section_title_style)
+                elements.append(section_title)
+
+                # Create table with appropriate column widths for landscape A4
+                # Landscape A4 width: ~11 inches minus margins = ~10.5 inches available
+                col_widths = [
+                    0.9*inch,   # License No.
+                    0.55*inch,  # Type
+                    1.4*inch,   # Exporter (wider for multi-line)
+                    0.7*inch,   # License Date
+                    0.7*inch,   # Expiry
+                    0.9*inch,   # Purchase ($)
+                    0.9*inch,   # Sold ($)
+                    0.9*inch,   # Balance ($)
+                    0.85*inch,  # Purchase Amt (INR)
+                    0.85*inch,  # Sale Amt (INR)
+                    0.75*inch,  # P/L (INR)
+                    0.5*inch    # Status
+                ]
+                table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+                # Style the table
+                no_purchase_rows = metadata.get('no_purchase', [])
+                negative_balance_rows = metadata.get('negative_balance', [])
+                licenses_list = metadata.get('licenses', [])
+
+                table_style = [
+                    # Header row
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 8),
+                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+
+                    # Data rows
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 7),
+                    ('ALIGN', (0, 1), (2, -1), 'LEFT'),
+                    ('ALIGN', (3, 1), (4, -1), 'CENTER'),
+                    ('ALIGN', (5, 1), (-1, -1), 'RIGHT'),
+
+                    # Grid and borders
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('VALIGN', (0, 1), (-1, -1), 'TOP'),  # Align to top for multi-line
+                    ('TOPPADDING', (0, 0), (-1, -1), 5),   # Increased padding
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ]
+
+                # Check if table has total row
+                has_total_row = metadata.get('has_total_row', False)
+                total_row_idx = len(table_data) - 1 if has_total_row else -1
+
+                # Alternate row colors and highlights
+                for i in range(1, len(table_data)):
+                    # Style total row differently
+                    if has_total_row and i == total_row_idx:
+                        table_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#e8eaf6')))
+                        table_style.append(('LINEABOVE', (0, i), (-1, i), 2, colors.HexColor('#34495e')))
+                        table_style.append(('VALIGN', (0, i), (-1, i), 'TOP'))  # Top align for wrapped totals
+                        # Note: Font styling handled by Paragraph objects
+                        continue
+
+                    if i % 2 == 0:
+                        table_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#f8f9fa')))
+
+                    if i in negative_balance_rows:
+                        table_style.append(('BACKGROUND', (7, i), (7, i), colors.HexColor('#d32f2f')))
+                        table_style.append(('TEXTCOLOR', (7, i), (7, i), colors.whitesmoke))
+                        table_style.append(('FONTNAME', (7, i), (7, i), 'Helvetica-Bold'))
+
+                    if i in no_purchase_rows:
+                        table_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#ffebee')))
+                        table_style.append(('TEXTCOLOR', (8, i), (8, i), colors.HexColor('#c62828')))
+                        table_style.append(('FONTNAME', (8, i), (8, i), 'Helvetica-Bold'))
+
+                    if i - 1 < len(licenses_list):
+                        license = licenses_list[i - 1]
+                        if not license.get('is_active', False) and i not in no_purchase_rows:
+                            table_style.append(('TEXTCOLOR', (0, i), (-1, i), colors.HexColor('#999999')))
+
+                        profit_loss = license.get('profit_loss', 0)
+                        if profit_loss > 0:
+                            table_style.append(('TEXTCOLOR', (10, i), (10, i), colors.HexColor('#2e7d32')))
+                        elif profit_loss < 0:
+                            table_style.append(('TEXTCOLOR', (10, i), (10, i), colors.HexColor('#d32f2f')))
+
+                table.setStyle(TableStyle(table_style))
+                elements.append(table)
+                elements.append(Spacer(1, 0.3 * inch))
+
+            # Create PROFIT licenses table
+            if profit_licenses:
+                profit_table_data, profit_metadata = create_license_table(profit_licenses, "PROFIT LICENSES")
+                style_and_append_table(profit_table_data, profit_metadata, f"PROFIT LICENSES ({len(profit_licenses)} licenses)", '#2e7d32')
+
+            # Create LOSS licenses table
+            if loss_licenses:
+                loss_table_data, loss_metadata = create_license_table(loss_licenses, "LOSS LICENSES")
+                style_and_append_table(loss_table_data, loss_metadata, f"LOSS LICENSES ({len(loss_licenses)} licenses)", '#d32f2f')
+
+            # Add summary section
+            elements.append(Spacer(1, 0.3 * inch))
+
+            # Calculate totals
+            total_balance_dfia = sum(lic.get('balance_value', 0) for lic in licenses_data if lic.get('currency') == 'USD')
+            total_balance_inr = sum(lic.get('balance_value', 0) for lic in licenses_data if lic.get('currency') == 'INR')
+            total_purchase = sum(lic.get('purchase_amount', 0) for lic in licenses_data)
+            total_sale = sum(lic.get('sale_amount', 0) for lic in licenses_data)
+            total_profit_loss = sum(lic.get('profit_loss', 0) for lic in licenses_data)
+
+            # Summary title
+            summary_title_style = ParagraphStyle(
+                'SummaryTitle',
+                parent=styles['Heading2'],
+                fontSize=12,
+                textColor=colors.HexColor('#2c3e50'),
+                spaceAfter=8,
+                fontName='Helvetica-Bold'
+            )
+            summary_title = Paragraph("SUMMARY", summary_title_style)
+            elements.append(summary_title)
+
+            # Summary data with Indian number format
+            summary_data = [
+                ['Total Licenses', 'Profit Licenses', 'Loss Licenses', 'Balance (USD)', 'Balance (INR)', 'Purchase (INR)', 'Sale (INR)', 'Net P/L (INR)'],
+                [
+                    str(len(licenses_data)),
+                    str(len(profit_licenses)),
+                    str(len(loss_licenses)),
+                    f"${format_indian_number(total_balance_dfia, 2)}" if total_balance_dfia else '-',
+                    f"INR {format_indian_number(total_balance_inr, 2)}" if total_balance_inr else '-',
+                    f"INR {format_indian_number(total_purchase, 2)}",
+                    f"INR {format_indian_number(total_sale, 2)}",
+                    f"INR {format_indian_number(total_profit_loss, 2)}"
+                ]
+            ]
+
+            summary_table = Table(summary_data, colWidths=[1*inch, 1*inch, 1*inch, 1.1*inch, 1.1*inch, 1.1*inch, 1.1*inch, 1.1*inch])
+            summary_table_style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#ecf0f1')),
+                ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 1), (-1, 1), 9),
+                ('ALIGN', (0, 1), (0, 1), 'CENTER'),
+                ('ALIGN', (1, 1), (-1, 1), 'RIGHT'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ]
+
+            # Color code profit/loss in summary
+            if total_profit_loss > 0:
+                summary_table_style.append(('TEXTCOLOR', (5, 1), (5, 1), colors.HexColor('#2e7d32')))
+            elif total_profit_loss < 0:
+                summary_table_style.append(('TEXTCOLOR', (5, 1), (5, 1), colors.HexColor('#d32f2f')))
+
+            summary_table.setStyle(TableStyle(summary_table_style))
+            elements.append(summary_table)
+
+        # Footer
+        elements.append(Spacer(1, 0.3 * inch))
+        footer_text = Paragraph(
+            f"<i>Generated on: {datetime.now().strftime('%d-%b-%Y %H:%M:%S')}</i>",
+            ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=TA_CENTER)
+        )
+        elements.append(footer_text)
+
+        # Build PDF
+        doc.build(elements)
+
+        pdf = buffer.getvalue()
+        buffer.close()
+        return pdf

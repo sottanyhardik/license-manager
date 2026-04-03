@@ -8,7 +8,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function LicenseLedgerDetail() {
-    const { id } = useParams();
+    const { id, companyId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
     const [ledger, setLedger] = useState(null);
@@ -21,14 +21,21 @@ export default function LicenseLedgerDetail() {
 
     useEffect(() => {
         fetchLedgerDetail();
-    }, [id, licenseType]);
+    }, [id, licenseType, companyId]);
 
     const fetchLedgerDetail = async () => {
         setLoading(true);
         setError(null);
         try {
             // Backend now auto-detects license type (searches both DFIA and Incentive)
-            const response = await api.get(`/license-ledger/${id}/ledger_detail/`);
+            // Add company parameter if provided to filter transactions by company
+            const params = new URLSearchParams();
+            if (companyId) {
+                params.append('company', companyId);
+            }
+            const queryString = params.toString();
+            const url = `/license-ledger/${id}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
+            const response = await api.get(url);
             setLedger(response.data);
         } catch (err) {
             console.error('Error fetching ledger detail:', err);

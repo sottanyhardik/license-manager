@@ -469,7 +469,7 @@ export default function App() {
                             />
 
                             <Route
-                                path="/license-ledger/:id"
+                                path="/license-ledger/:id/:companyId?"
                                 element={
                                     <ProtectedRoute>
                                         <AdminLayout>

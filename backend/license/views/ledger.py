@@ -111,6 +111,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         license_type = self.request.query_params.get('license_type', 'ALL')
         min_balance = self.request.query_params.get('min_balance')
         exporter_id = self.request.query_params.get('exporter')
+        company_id = self.request.query_params.get('company')  # Filter by company in trades
+        no_purchases = self.request.query_params.get('no_purchases', 'false').lower() == 'true'  # Filter licenses without purchases
         is_active_only = self.request.query_params.get('active_only', 'true').lower() == 'true'
         purchase_date_from = self.request.query_params.get('purchase_date_from')
         purchase_date_to = self.request.query_params.get('purchase_date_to')
@@ -180,6 +182,51 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     **incentive_purchase_filter
                 ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
                 incentive_qs = incentive_qs.filter(id__in=incentive_license_ids)
+
+        # Filter by company (show licenses where company appears in from_company OR to_company of trades)
+        if company_id:
+            from trade.models import LicenseTrade
+            from django.db.models import Q
+
+            try:
+                company_id_int = int(company_id)
+
+                # Get DFIA licenses that have trades with this company
+                dfia_license_ids = LicenseTrade.objects.filter(
+                    Q(from_company_id=company_id_int) | Q(to_company_id=company_id_int),
+                    license_type='DFIA'
+                ).values_list('lines__sr_number__license_id', flat=True).distinct()
+                dfia_qs = dfia_qs.filter(id__in=dfia_license_ids)
+
+                # Get Incentive licenses that have trades with this company
+                incentive_license_ids = LicenseTrade.objects.filter(
+                    Q(from_company_id=company_id_int) | Q(to_company_id=company_id_int),
+                    license_type='INCENTIVE'
+                ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
+                incentive_qs = incentive_qs.filter(id__in=incentive_license_ids)
+
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid company_id: {company_id}")
+                pass
+
+        # Filter licenses without purchases (no purchase trades)
+        if no_purchases:
+            from trade.models import LicenseTrade
+
+            # Get licenses that have purchase trades
+            dfia_with_purchases = LicenseTrade.objects.filter(
+                license_type='DFIA',
+                direction='PURCHASE'
+            ).values_list('lines__sr_number__license_id', flat=True).distinct()
+
+            incentive_with_purchases = LicenseTrade.objects.filter(
+                license_type='INCENTIVE',
+                direction='PURCHASE'
+            ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
+
+            # Exclude licenses that have purchases
+            dfia_qs = dfia_qs.exclude(id__in=dfia_with_purchases)
+            incentive_qs = incentive_qs.exclude(id__in=incentive_with_purchases)
 
         # Filter by license type
         if license_type == 'DFIA':
@@ -466,53 +513,200 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """
-        Get summary statistics for license balances
+        Get summary statistics for license balances.
+        Filters by company, license_type, date range, and other parameters.
         """
         from django.utils import timezone
+        from trade.models import LicenseTrade
+        from django.db.models import Sum, Q
+
+        # Get filter parameters
+        company_id = request.query_params.get('company')
+        license_type = request.query_params.get('license_type', 'ALL')
+        is_active_only = request.query_params.get('active_only', 'true').lower() == 'true'
+        min_balance = request.query_params.get('min_balance')
+        purchase_date_from = request.query_params.get('purchase_date_from')
+        purchase_date_to = request.query_params.get('purchase_date_to')
 
         # DFIA Summary
-        dfia_qs = LicenseDetailsModel.objects.filter(is_expired=False)
+        if is_active_only:
+            dfia_qs = LicenseDetailsModel.objects.filter(is_expired=False)
+        else:
+            dfia_qs = LicenseDetailsModel.objects.all()
+
+        # Incentive Summary
+        if is_active_only:
+            incentive_qs = IncentiveLicense.objects.filter(
+                is_active=True,
+                license_expiry_date__gte=timezone.now().date()
+            )
+        else:
+            incentive_qs = IncentiveLicense.objects.all()
+
+        # Filter by min_balance
+        if min_balance:
+            try:
+                min_bal = Decimal(min_balance)
+                dfia_qs = dfia_qs.filter(balance_cif__gte=min_bal)
+                incentive_qs = incentive_qs.filter(balance_value__gte=min_bal)
+            except (ValueError, TypeError):
+                pass
+
+        # Filter by purchase date range
+        if purchase_date_from or purchase_date_to:
+            from datetime import datetime
+
+            dfia_purchase_filter = {}
+            incentive_purchase_filter = {}
+
+            if purchase_date_from:
+                try:
+                    date_from = datetime.strptime(purchase_date_from, '%Y-%m-%d').date()
+                    dfia_purchase_filter['invoice_date__gte'] = date_from
+                    incentive_purchase_filter['invoice_date__gte'] = date_from
+                except ValueError:
+                    pass
+
+            if purchase_date_to:
+                try:
+                    date_to = datetime.strptime(purchase_date_to, '%Y-%m-%d').date()
+                    dfia_purchase_filter['invoice_date__lte'] = date_to
+                    incentive_purchase_filter['invoice_date__lte'] = date_to
+                except ValueError:
+                    pass
+
+            if dfia_purchase_filter:
+                dfia_license_ids = LicenseTrade.objects.filter(
+                    license_type='DFIA',
+                    direction='PURCHASE',
+                    **dfia_purchase_filter
+                ).values_list('lines__sr_number__license_id', flat=True).distinct()
+                dfia_qs = dfia_qs.filter(id__in=dfia_license_ids)
+
+            if incentive_purchase_filter:
+                incentive_license_ids = LicenseTrade.objects.filter(
+                    license_type='INCENTIVE',
+                    direction='PURCHASE',
+                    **incentive_purchase_filter
+                ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
+                incentive_qs = incentive_qs.filter(id__in=incentive_license_ids)
+
+        # Filter by company if specified
+        if company_id:
+            try:
+                company_id_int = int(company_id)
+
+                # Get DFIA licenses that have trades with this company
+                dfia_license_ids = LicenseTrade.objects.filter(
+                    Q(from_company_id=company_id_int) | Q(to_company_id=company_id_int),
+                    license_type='DFIA'
+                ).values_list('lines__sr_number__license_id', flat=True).distinct()
+                dfia_qs = dfia_qs.filter(id__in=dfia_license_ids)
+
+                # Get Incentive licenses that have trades with this company
+                incentive_license_ids = LicenseTrade.objects.filter(
+                    Q(from_company_id=company_id_int) | Q(to_company_id=company_id_int),
+                    license_type='INCENTIVE'
+                ).values_list('incentive_lines__incentive_license_id', flat=True).distinct()
+                incentive_qs = incentive_qs.filter(id__in=incentive_license_ids)
+
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid company_id in summary: {company_id}")
+                pass
+
+        # Filter by license type
+        if license_type != 'ALL':
+            if license_type == 'DFIA':
+                incentive_qs = IncentiveLicense.objects.none()
+            elif license_type in ['RODTEP', 'ROSTL', 'MEIS', 'INCENTIVE']:
+                dfia_qs = LicenseDetailsModel.objects.none()
+                if license_type != 'INCENTIVE':
+                    incentive_qs = incentive_qs.filter(license_type=license_type)
+
         dfia_total = sum(_get_safe_balance(lic, 'opening_balance') for lic in dfia_qs)
         dfia_balance = sum(_get_safe_balance(lic, 'balance_cif') for lic in dfia_qs)
         dfia_sold = dfia_total - dfia_balance
 
-        # Incentive Summary
-        incentive_qs = IncentiveLicense.objects.filter(
-            is_active=True,
-            license_expiry_date__gte=timezone.now().date()
-        )
         incentive_total = sum(_get_safe_balance(lic, 'license_value') for lic in incentive_qs)
         incentive_balance = sum(_get_safe_balance(lic, 'balance_value') for lic in incentive_qs)
         incentive_sold = sum(_get_safe_balance(lic, 'sold_value') for lic in incentive_qs)
 
         # Calculate purchase and sale amounts from trades
-        from trade.models import LicenseTrade
-        from django.db.models import Sum, Q
+        # Build base trade filters
+        dfia_trade_filter = {'license_type': 'DFIA'}
+        incentive_trade_filter = {'license_type': 'INCENTIVE'}
 
-        # DFIA Trades
-        dfia_purchases = LicenseTrade.objects.filter(
-            license_type='DFIA',
-            direction='PURCHASE'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        # Add date range filters for trades
+        if purchase_date_from:
+            try:
+                date_from = datetime.strptime(purchase_date_from, '%Y-%m-%d').date()
+                dfia_trade_filter['invoice_date__gte'] = date_from
+                incentive_trade_filter['invoice_date__gte'] = date_from
+            except ValueError:
+                pass
 
-        dfia_sales = LicenseTrade.objects.filter(
-            license_type='DFIA',
-            direction='SALE'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        if purchase_date_to:
+            try:
+                date_to = datetime.strptime(purchase_date_to, '%Y-%m-%d').date()
+                dfia_trade_filter['invoice_date__lte'] = date_to
+                incentive_trade_filter['invoice_date__lte'] = date_to
+            except ValueError:
+                pass
+
+        # Build query with company and date filters
+        if company_id:
+            try:
+                company_id_int = int(company_id)
+                company_q = Q(from_company_id=company_id_int) | Q(to_company_id=company_id_int)
+
+                dfia_purchases = LicenseTrade.objects.filter(
+                    company_q,
+                    direction='PURCHASE',
+                    **dfia_trade_filter
+                ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+                dfia_sales = LicenseTrade.objects.filter(
+                    company_q,
+                    direction='SALE',
+                    **dfia_trade_filter
+                ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+                incentive_purchases = LicenseTrade.objects.filter(
+                    company_q,
+                    direction='PURCHASE',
+                    **incentive_trade_filter
+                ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+                incentive_sales = LicenseTrade.objects.filter(
+                    company_q,
+                    direction='SALE',
+                    **incentive_trade_filter
+                ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+            except (ValueError, TypeError):
+                dfia_purchases = dfia_sales = incentive_purchases = incentive_sales = 0
+        else:
+            dfia_purchases = LicenseTrade.objects.filter(
+                direction='PURCHASE',
+                **dfia_trade_filter
+            ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+            dfia_sales = LicenseTrade.objects.filter(
+                direction='SALE',
+                **dfia_trade_filter
+            ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+            incentive_purchases = LicenseTrade.objects.filter(
+                direction='PURCHASE',
+                **incentive_trade_filter
+            ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+            incentive_sales = LicenseTrade.objects.filter(
+                direction='SALE',
+                **incentive_trade_filter
+            ).aggregate(total=Sum('total_amount'))['total'] or 0
 
         dfia_profit = float(dfia_sales) - float(dfia_purchases)
-
-        # Incentive Trades
-        incentive_purchases = LicenseTrade.objects.filter(
-            license_type='INCENTIVE',
-            direction='PURCHASE'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-
-        incentive_sales = LicenseTrade.objects.filter(
-            license_type='INCENTIVE',
-            direction='SALE'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-
         incentive_profit = float(incentive_sales) - float(incentive_purchases)
 
         return Response({
@@ -553,11 +747,15 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         Works for both DFIA and Incentive licenses.
         Accepts either ID (integer) or license_number (string) as pk parameter.
         Auto-searches both tables if license_type not specified.
+
+        Optional company parameter: If provided, only shows transactions involving that company.
         """
         from django.utils import timezone
         from trade.models import LicenseTrade
+        from django.db.models import Q
 
         license_type = request.query_params.get('license_type', 'AUTO')
+        company_id = request.query_params.get('company')  # Optional company filter
 
         # Determine search strategy
         if license_type == 'DFIA':
@@ -578,10 +776,18 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         if found_type == 'DFIA':
             # License already found by helper function, just process it
             # Get all trades for this license
-            trades = LicenseTrade.objects.filter(
+            trades_query = LicenseTrade.objects.filter(
                 license_type='DFIA',
                 lines__sr_number__license=license
-            ).prefetch_related('lines__sr_number').distinct().order_by('invoice_date', 'id')
+            )
+
+            # Filter by company if provided (transactions where company is either from_company or to_company)
+            if company_id:
+                trades_query = trades_query.filter(
+                    Q(from_company_id=company_id) | Q(to_company_id=company_id)
+                )
+
+            trades = trades_query.prefetch_related('lines__sr_number').distinct().order_by('invoice_date', 'id')
 
             transactions = []
             running_balance = 0
@@ -624,6 +830,22 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
             # Process transactions (all are LicenseTrade objects)
             for idx, (trans_type, trans_date, trans_obj) in enumerate(all_trans):
+                # If company filter is active, check if this transaction is relevant for this company
+                # From company's perspective:
+                # - PURCHASE: Show if company is the BUYER (to_company) - they purchased FROM someone
+                # - SALE: Show if company is the SELLER (from_company) - they sold TO someone
+                # This allows the company to see their complete buy-sell cycle for profit/loss calculation
+                if company_id:
+                    company_id_int = int(company_id)
+                    if trans_type in ['PURCHASE', 'COMMISSION_PURCHASE']:
+                        # Show PURCHASE only if the filtered company is the buyer (to_company)
+                        if trans_obj.to_company_id != company_id_int:
+                            continue
+                    elif trans_type in ['SALE', 'COMMISSION_SALE']:
+                        # Show SALE only if the filtered company is the seller (from_company)
+                        if trans_obj.from_company_id != company_id_int:
+                            continue
+
                 # Get all lines for this trade that belong to THIS specific license
                 total_cif_usd = 0
                 total_amount = 0
@@ -807,13 +1029,37 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             is_first_transaction = True
 
             # Get all trades that have THIS specific incentive license in their incentive_lines
-            trades = LicenseTrade.objects.filter(
+            trades_query = LicenseTrade.objects.filter(
                 license_type='INCENTIVE',
                 incentive_lines__incentive_license=license
-            ).prefetch_related('incentive_lines').distinct().order_by('invoice_date', 'id')
+            )
+
+            # Filter by company if provided (transactions where company is either from_company or to_company)
+            if company_id:
+                trades_query = trades_query.filter(
+                    Q(from_company_id=company_id) | Q(to_company_id=company_id)
+                )
+
+            trades = trades_query.prefetch_related('incentive_lines').distinct().order_by('invoice_date', 'id')
 
             # Process trades
             for trade in trades:
+                # If company filter is active, check if this transaction is relevant for this company
+                # From company's perspective:
+                # - PURCHASE: Show if company is the BUYER (to_company) - they purchased FROM someone
+                # - SALE: Show if company is the SELLER (from_company) - they sold TO someone
+                # This allows the company to see their complete buy-sell cycle for profit/loss calculation
+                if company_id:
+                    company_id_int = int(company_id)
+                    if trade.direction in ['PURCHASE', 'COMMISSION_PURCHASE']:
+                        # Show PURCHASE only if the filtered company is the buyer (to_company)
+                        if trade.to_company_id != company_id_int:
+                            continue
+                    elif trade.direction in ['SALE', 'COMMISSION_SALE']:
+                        # Show SALE only if the filtered company is the seller (from_company)
+                        if trade.from_company_id != company_id_int:
+                            continue
+
                 # Find the specific line for THIS license
                 license_line = trade.incentive_lines.filter(incentive_license=license).first()
 
@@ -1546,6 +1792,207 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         except Exception as e:
             logger.exception(f"Failed to generate licenses PDF: {e}")
+            raise
+        finally:
+            if buffer:
+                try:
+                    buffer.close()
+                except Exception:
+                    pass
+
+    @action(detail=False, methods=['get'], url_path='company-ledger')
+    def company_ledger(self, request):
+        """
+        Get ledger view for a specific company showing only licenses
+        where the company appears in trades (either as buyer or seller).
+
+        Query params:
+        - company: Company ID (required)
+        - license_type: Filter by type (DFIA, INCENTIVE, etc.) - default: ALL
+        - active_only: Filter only active licenses (default: true)
+        """
+        company_id = request.query_params.get('company')
+
+        if not company_id:
+            return Response({'error': 'company parameter is required'}, status=400)
+
+        # Use existing get_queryset logic which already filters by company
+        data = self.get_queryset()
+
+        # Add company transaction count for each license
+        from trade.models import LicenseTrade
+        from django.db.models import Q, Count
+
+        try:
+            company_id_int = int(company_id)
+
+            for item in data if isinstance(data, list) else []:
+                license_id = item.get('license_id')
+                license_type = item.get('license_type')
+
+                if license_type == 'DFIA':
+                    # Count trades for this license involving the company
+                    trade_count = LicenseTrade.objects.filter(
+                        Q(from_company_id=company_id_int) | Q(to_company_id=company_id_int),
+                        license_type='DFIA',
+                        lines__sr_number__license_id=license_id
+                    ).count()
+                else:
+                    # Incentive license
+                    trade_count = LicenseTrade.objects.filter(
+                        Q(from_company_id=company_id_int) | Q(to_company_id=company_id_int),
+                        license_type='INCENTIVE',
+                        incentive_lines__incentive_license_id=license_id
+                    ).count()
+
+                item['company_transaction_count'] = trade_count
+
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid company_id: {company_id} - {e}")
+            return Response({'error': 'Invalid company ID'}, status=400)
+
+        return Response({'results': data})
+
+    @action(detail=False, methods=['get'], url_path='company-ledger/export')
+    def company_ledger_export(self, request):
+        """
+        Export company-specific ledger to PDF.
+
+        Query params:
+        - company: Company ID (required)
+        - license_type: Filter by type (default: ALL)
+        - active_only: Filter only active licenses (default: true)
+        """
+        company_id = request.query_params.get('company')
+
+        if not company_id:
+            return Response({'error': 'company parameter is required'}, status=400)
+
+        # Get company name
+        from core.models import CompanyModel
+        try:
+            company = CompanyModel.objects.get(pk=int(company_id))
+            company_name = company.name
+        except (CompanyModel.DoesNotExist, ValueError):
+            return Response({'error': 'Company not found'}, status=404)
+
+        # Get filtered data
+        data = self.get_queryset()
+
+        # Generate PDF
+        pdf_content = self._generate_company_ledger_pdf(data, company_name, request.query_params)
+
+        # Create response
+        response = HttpResponse(pdf_content, content_type='application/pdf')
+        safe_company_name = "".join(c for c in company_name if c.isalnum() or c in (' ', '_')).strip()
+        filename = f"company_ledger_{safe_company_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        return response
+
+    def _generate_company_ledger_pdf(self, licenses_data, company_name, query_params):
+        """Generate PDF for company-specific ledger."""
+        buffer = None
+        try:
+            buffer = BytesIO()
+
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=landscape(A4),
+                rightMargin=30,
+                leftMargin=30,
+                topMargin=40,
+                bottomMargin=40
+            )
+
+            elements = []
+            styles = getSampleStyleSheet()
+
+            # Title style
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=18,
+                textColor=colors.HexColor('#1a1a1a'),
+                spaceAfter=12,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+
+            # Subtitle style
+            subtitle_style = ParagraphStyle(
+                'Subtitle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#555555'),
+                spaceAfter=6,
+                alignment=TA_CENTER,
+                fontName='Helvetica'
+            )
+
+            # Title
+            title = Paragraph(f"COMPANY LEDGER - {company_name.upper()}", title_style)
+            elements.append(title)
+
+            # Filter info
+            license_type = query_params.get('license_type', 'ALL')
+            active_only = query_params.get('active_only', 'true').lower() == 'true'
+
+            filter_info = f"License Type: {license_type} | Status: {'Active Only' if active_only else 'All'} | Total: {len(licenses_data)} licenses"
+            subtitle = Paragraph(filter_info, subtitle_style)
+            elements.append(subtitle)
+            elements.append(Spacer(1, 0.3 * inch))
+
+            # Table data
+            table_data = [[
+                'License No.',
+                'Type',
+                'Exporter',
+                'Date',
+                'Expiry',
+                'Total Value',
+                'Balance'
+            ]]
+
+            for lic in licenses_data:
+                currency = 'USD' if lic.get('license_type') == 'DFIA' else 'INR'
+                table_data.append([
+                    lic.get('license_number', '-'),
+                    lic.get('license_type', '-'),
+                    (lic.get('exporter_name', '-') or '-')[:25],
+                    lic.get('license_date', '-') if lic.get('license_date') else '-',
+                    lic.get('expiry_date', '-') if lic.get('expiry_date') else '-',
+                    f"{currency} {format_indian_number(lic.get('total_value', 0))}",
+                    f"{currency} {format_indian_number(lic.get('available_balance', 0))}"
+                ])
+
+            # Create table
+            table = Table(table_data, colWidths=[90, 50, 150, 70, 70, 100, 100])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a5568')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f7fafc')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e0')),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')]),
+            ]))
+
+            elements.append(table)
+
+            # Build PDF
+            doc.build(elements)
+
+            pdf = buffer.getvalue()
+            return pdf
+
+        except Exception as e:
+            logger.exception(f"Failed to generate company ledger PDF: {e}")
             raise
         finally:
             if buffer:

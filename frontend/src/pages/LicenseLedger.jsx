@@ -6,6 +6,7 @@ import { formatIndianNumber } from '../utils/numberFormatter';
 import { formatDate } from '../utils/dateFormatter';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import AsyncSelectField from '../components/AsyncSelectField';
 
 export default function LicenseLedger() {
     const navigate = useNavigate();
@@ -13,14 +14,47 @@ export default function LicenseLedger() {
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [exportingPdf, setExportingPdf] = useState(false);
+
+    // Get current financial year dates (April 1 to March 31)
+    const getCurrentFinancialYear = () => {
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth(); // 0-11
+
+        // If current month is Jan-Mar (0-2), FY started last year
+        // If current month is Apr-Dec (3-11), FY started this year
+        const fyStartYear = currentMonth <= 2 ? currentYear - 1 : currentYear;
+
+        const fyStart = `${fyStartYear}-04-01`;
+        const fyEnd = `${fyStartYear + 1}-03-31`;
+
+        return { fyStart, fyEnd };
+    };
+
+    const getPreviousFinancialYear = () => {
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth();
+
+        const fyStartYear = currentMonth <= 2 ? currentYear - 2 : currentYear - 1;
+
+        const fyStart = `${fyStartYear}-04-01`;
+        const fyEnd = `${fyStartYear + 1}-03-31`;
+
+        return { fyStart, fyEnd };
+    };
+
+    const { fyStart: currentFYStart, fyEnd: currentFYEnd } = getCurrentFinancialYear();
+
     const [filters, setFilters] = useState({
         license_type: 'ALL',
         min_balance: '',
         search: '',
+        company: null,
         active_only: true,
         ordering: '-license_date',
-        purchase_date_from: '',
-        purchase_date_to: ''
+        purchase_date_from: currentFYStart,  // Default to current FY start
+        purchase_date_to: currentFYEnd       // Default to current FY end
     });
 
     const licenseTypeOptions = [
@@ -32,13 +66,44 @@ export default function LicenseLedger() {
         { value: 'MEIS', label: 'MEIS', icon: 'bi-star' },
     ];
 
+    // Centralized function to build filter params
+    const buildFilterParams = useCallback((additionalFilters = {}) => {
+        const params = new URLSearchParams();
+
+        const currentFilters = { ...filters, ...additionalFilters };
+
+        if (currentFilters.license_type) params.append('license_type', currentFilters.license_type);
+        if (currentFilters.min_balance) params.append('min_balance', currentFilters.min_balance);
+        if (currentFilters.search) params.append('search', currentFilters.search);
+        if (currentFilters.company) params.append('company', currentFilters.company.value || currentFilters.company);
+        if (currentFilters.ordering) params.append('ordering', currentFilters.ordering);
+        if (currentFilters.purchase_date_from) params.append('purchase_date_from', currentFilters.purchase_date_from);
+        if (currentFilters.purchase_date_to) params.append('purchase_date_to', currentFilters.purchase_date_to);
+        params.append('active_only', currentFilters.active_only);
+
+        // Include no_purchases parameter if provided
+        if (currentFilters.no_purchases) params.append('no_purchases', currentFilters.no_purchases);
+
+        return params;
+    }, [filters]);
+
     useEffect(() => {
-        fetchLedgerData();
-        fetchSummary();
+        // Only fetch data if company is selected
+        if (filters.company) {
+            fetchLedgerData();
+            fetchSummary();
+        } else {
+            // Clear data when no company selected
+            setLicenses([]);
+            setSummary(null);
+            setLoading(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         filters.license_type,
         filters.min_balance,
         filters.search,
+        filters.company,
         filters.active_only,
         filters.ordering,
         filters.purchase_date_from,
@@ -46,17 +111,16 @@ export default function LicenseLedger() {
     ]);
 
     const fetchLedgerData = async () => {
+        // Don't fetch if no company selected
+        if (!filters.company) {
+            setLicenses([]);
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
-            const params = new URLSearchParams();
-            if (filters.license_type) params.append('license_type', filters.license_type);
-            if (filters.min_balance) params.append('min_balance', filters.min_balance);
-            if (filters.search) params.append('search', filters.search);
-            if (filters.ordering) params.append('ordering', filters.ordering);
-            if (filters.purchase_date_from) params.append('purchase_date_from', filters.purchase_date_from);
-            if (filters.purchase_date_to) params.append('purchase_date_to', filters.purchase_date_to);
-            params.append('active_only', filters.active_only);
-
+            const params = buildFilterParams();
             const response = await api.get(`/license-ledger/?${params.toString()}`);
 
             // Handle multiple response formats
@@ -82,8 +146,15 @@ export default function LicenseLedger() {
     };
 
     const fetchSummary = async () => {
+        // Don't fetch if no company selected
+        if (!filters.company) {
+            setSummary(null);
+            return;
+        }
+
         try {
-            const response = await api.get('/license-ledger/summary/');
+            const params = buildFilterParams();
+            const response = await api.get(`/license-ledger/summary/?${params.toString()}`);
             setSummary(response.data);
         } catch (error) {
             console.error('Error fetching summary:', error);
@@ -92,6 +163,32 @@ export default function LicenseLedger() {
 
     const handleFilterChange = (field, value) => {
         setFilters(prev => ({ ...prev, [field]: value }));
+    };
+
+    const setCurrentFinancialYear = () => {
+        const { fyStart, fyEnd } = getCurrentFinancialYear();
+        setFilters(prev => ({
+            ...prev,
+            purchase_date_from: fyStart,
+            purchase_date_to: fyEnd
+        }));
+    };
+
+    const setPreviousFinancialYear = () => {
+        const { fyStart, fyEnd } = getPreviousFinancialYear();
+        setFilters(prev => ({
+            ...prev,
+            purchase_date_from: fyStart,
+            purchase_date_to: fyEnd
+        }));
+    };
+
+    const clearDateFilter = () => {
+        setFilters(prev => ({
+            ...prev,
+            purchase_date_from: '',
+            purchase_date_to: ''
+        }));
     };
 
     const formatCurrency = (value, currency) => {
@@ -115,7 +212,11 @@ export default function LicenseLedger() {
     };
 
     const handleViewDetails = (license) => {
-        navigate(`/license-ledger/${license.id}`, {
+        const companyId = filters.company?.value || filters.company;
+        const path = companyId
+            ? `/license-ledger/${license.id}/${companyId}`
+            : `/license-ledger/${license.id}`;
+        navigate(path, {
             state: { license_type: license.license_type }
         });
     };
@@ -378,33 +479,16 @@ export default function LicenseLedger() {
         doc.text(`Net P/L: ${totalPL >= 0 ? '+' : '-'} ₹${formatIndianNumber(Math.abs(totalPL), 2)}`, pageWidth - 14, finalY + 10, { align: 'right' });
     };
 
-    const handleExportAllPdf = useCallback(async (exportOptions = {}) => {
+    const handleExportPdf = useCallback(async () => {
+        if (!filters.company) {
+            toast.error('Please select a company first');
+            return;
+        }
+
         try {
             setExportingPdf(true);
 
-            // Build query params based on export options
-            const params = new URLSearchParams();
-
-            // Use custom options or current filters
-            const exportFilters = {
-                license_type: exportOptions.license_type || filters.license_type,
-                min_balance: exportOptions.min_balance || filters.min_balance,
-                search: exportOptions.search || filters.search,
-                ordering: exportOptions.ordering || filters.ordering,
-                active_only: exportOptions.active_only !== undefined ? exportOptions.active_only : filters.active_only,
-                purchase_date_from: exportOptions.purchase_date_from || filters.purchase_date_from,
-                purchase_date_to: exportOptions.purchase_date_to || filters.purchase_date_to
-            };
-
-            if (exportFilters.license_type) params.append('license_type', exportFilters.license_type);
-            if (exportFilters.min_balance) params.append('min_balance', exportFilters.min_balance);
-            if (exportFilters.search) params.append('search', exportFilters.search);
-            if (exportFilters.ordering) params.append('ordering', exportFilters.ordering);
-            if (exportFilters.purchase_date_from) params.append('purchase_date_from', exportFilters.purchase_date_from);
-            if (exportFilters.purchase_date_to) params.append('purchase_date_to', exportFilters.purchase_date_to);
-            params.append('active_only', exportFilters.active_only);
-
-            // Open PDF in dedicated viewer route that can be refreshed
+            const params = buildFilterParams();
             const pdfViewerUrl = `/pdf-viewer?url=${encodeURIComponent(`/license-ledger/export/all/?${params.toString()}`)}`;
             const newWindow = window.open(pdfViewerUrl, '_blank');
 
@@ -419,23 +503,31 @@ export default function LicenseLedger() {
         } finally {
             setExportingPdf(false);
         }
-    }, [
-        filters.license_type,
-        filters.min_balance,
-        filters.search,
-        filters.active_only,
-        filters.ordering,
-        filters.purchase_date_from,
-        filters.purchase_date_to
-    ]);
+    }, [filters.company, buildFilterParams]);
 
-    const handleExportWithFilters = useCallback(() => {
-        handleExportAllPdf();
-    }, [handleExportAllPdf]);
+    const handleExportNoPurchases = useCallback(async () => {
+        try {
+            setExportingPdf(true);
 
-    const handleExportAllActive = () => {
-        handleExportAllPdf({ license_type: 'ALL', active_only: true, min_balance: '', search: '', ordering: '-license_date' });
-    };
+            // Only use no_purchases parameter, ignore all other filters
+            const params = new URLSearchParams();
+            params.append('no_purchases', 'true');
+
+            const pdfViewerUrl = `/pdf-viewer?url=${encodeURIComponent(`/license-ledger/export/all/?${params.toString()}`)}`;
+            const newWindow = window.open(pdfViewerUrl, '_blank');
+
+            if (newWindow) {
+                toast.success('PDF with licenses without purchases opened');
+            } else {
+                toast.error('Popup blocked. Please allow popups for this site.');
+            }
+        } catch (error) {
+            console.error('Error opening PDF:', error);
+            toast.error('Failed to open PDF viewer.');
+        } finally {
+            setExportingPdf(false);
+        }
+    }, []);
 
     const handleExportAllIncludingExpired = () => {
         handleExportAllPdf({ license_type: 'ALL', active_only: false, min_balance: '', search: '', ordering: '-license_date' });
@@ -510,13 +602,39 @@ export default function LicenseLedger() {
                         boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
                         color: 'white'
                     }}>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '8px' }}>
-                            <i className="bi bi-journal-text me-3"></i>
-                            License Ledger
-                        </h1>
-                        <p style={{ fontSize: '1.05rem', marginBottom: '0', opacity: '0.95' }}>
-                            Track and manage available balance for DFIA and Incentive licenses
-                        </p>
+                        <div className="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '8px' }}>
+                                    <i className="bi bi-journal-text me-3"></i>
+                                    License Ledger
+                                </h1>
+                                <p style={{ fontSize: '1.05rem', marginBottom: '0', opacity: '0.95' }}>
+                                    Track and manage available balance for DFIA and Incentive licenses
+                                </p>
+                            </div>
+                            <div className="d-flex gap-2">
+                                {filters.company && (
+                                    <button
+                                        className="btn btn-light"
+                                        onClick={handleExportPdf}
+                                        disabled={exportingPdf}
+                                        style={{ fontWeight: '600' }}
+                                    >
+                                        <i className="bi bi-file-earmark-pdf me-2"></i>
+                                        Export PDF
+                                    </button>
+                                )}
+                                <button
+                                    className="btn btn-outline-light"
+                                    onClick={handleExportNoPurchases}
+                                    disabled={exportingPdf}
+                                    style={{ fontWeight: '600' }}
+                                >
+                                    <i className="bi bi-file-earmark-excel me-2"></i>
+                                    No Purchases
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -577,15 +695,15 @@ export default function LicenseLedger() {
 
                                 <div className="row g-3">
                                     <div className="col-4">
-                                        <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Sold Value</p>
-                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#d32f2f' }}>
-                                            $ {formatIndianNumber(summary.dfia.sold_value_usd, 2)}
-                                        </p>
-                                    </div>
-                                    <div className="col-4">
                                         <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Purchase (₹)</p>
                                         <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#f57c00' }}>
                                             ₹ {formatIndianNumber(summary.dfia.purchase_amount_inr, 0)}
+                                        </p>
+                                    </div>
+                                    <div className="col-4">
+                                        <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Sold (₹)</p>
+                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#1976d2' }}>
+                                            ₹ {formatIndianNumber(summary.dfia.sale_amount_inr, 0)}
                                         </p>
                                     </div>
                                     <div className="col-4">
@@ -656,15 +774,15 @@ export default function LicenseLedger() {
 
                                 <div className="row g-3">
                                     <div className="col-4">
-                                        <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Sold Value</p>
-                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#d32f2f' }}>
-                                            ₹ {formatIndianNumber(summary.incentive.sold_value_inr, 2)}
-                                        </p>
-                                    </div>
-                                    <div className="col-4">
                                         <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Purchase (₹)</p>
                                         <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#f57c00' }}>
                                             ₹ {formatIndianNumber(summary.incentive.purchase_amount_inr, 0)}
+                                        </p>
+                                    </div>
+                                    <div className="col-4">
+                                        <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Sold (₹)</p>
+                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#1976d2' }}>
+                                            ₹ {formatIndianNumber(summary.incentive.sale_amount_inr, 0)}
                                         </p>
                                     </div>
                                     <div className="col-4">
@@ -687,12 +805,47 @@ export default function LicenseLedger() {
             {/* Enhanced Filters Section */}
             <div className="card border-0 shadow-sm mb-4">
                 <div className="card-body p-4">
-                    <div className="d-flex align-items-center mb-3">
-                        <i className="bi bi-funnel text-primary me-2" style={{ fontSize: '1.25rem' }}></i>
-                        <h5 className="mb-0" style={{ fontWeight: '600', color: '#2c3e50' }}>Filters & Search</h5>
+                    <div className="d-flex align-items-center justify-content-between mb-3">
+                        <div className="d-flex align-items-center">
+                            <i className="bi bi-funnel text-primary me-2" style={{ fontSize: '1.25rem' }}></i>
+                            <h5 className="mb-0" style={{ fontWeight: '600', color: '#2c3e50' }}>Filters & Search</h5>
+                            {filters.company && (
+                                <span className="badge bg-info ms-3" style={{ fontSize: '0.85rem' }}>
+                                    <i className="bi bi-building me-1"></i>
+                                    Company: {filters.company.label}
+                                </span>
+                            )}
+                        </div>
+                        {filters.company && (
+                            <button
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => handleFilterChange('company', null)}
+                                style={{ fontSize: '0.85rem' }}
+                            >
+                                <i className="bi bi-x-circle me-1"></i>
+                                Clear Company Filter
+                            </button>
+                        )}
                     </div>
                     <div className="row g-3">
-                        <div className="col-lg-3 col-md-4">
+                        <div className="col-lg-3 col-md-5">
+                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#5a6c7d' }}>
+                                <i className="bi bi-building me-1"></i>
+                                Company Filter
+                            </label>
+                            <AsyncSelectField
+                                endpoint="masters/companies/"
+                                labelField="name"
+                                valueField="id"
+                                value={filters.company}
+                                onChange={(value) => handleFilterChange('company', value)}
+                                isMulti={false}
+                                placeholder="Select company to view their ledger..."
+                                loadOnMount={false}
+                            />
+                            <small className="text-muted">Filter by trades with specific company</small>
+                        </div>
+                        <div className="col-lg-2 col-md-4">
                             <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#5a6c7d' }}>
                                 License Type
                             </label>
@@ -775,10 +928,39 @@ export default function LicenseLedger() {
                     {/* Purchase Date Filter Row */}
                     <div className="row g-3 mt-2">
                         <div className="col-12">
-                            <div className="d-flex align-items-center mb-2">
-                                <i className="bi bi-calendar-range text-primary me-2"></i>
-                                <strong style={{ fontSize: '0.9rem', color: '#5a6c7d' }}>Purchase Date Range</strong>
-                                <small className="text-muted ms-2" style={{ fontSize: '0.8rem' }}>(Filter licenses by purchase date)</small>
+                            <div className="d-flex align-items-center justify-content-between mb-2">
+                                <div className="d-flex align-items-center">
+                                    <i className="bi bi-calendar-range text-primary me-2"></i>
+                                    <strong style={{ fontSize: '0.9rem', color: '#5a6c7d' }}>Purchase Date Range</strong>
+                                    <small className="text-muted ms-2" style={{ fontSize: '0.8rem' }}>(Defaults to current FY: Apr-Mar)</small>
+                                </div>
+                                <div className="btn-group" role="group">
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-primary"
+                                        onClick={setCurrentFinancialYear}
+                                        style={{ fontSize: '0.85rem' }}
+                                    >
+                                        <i className="bi bi-calendar-check me-1"></i>Current FY
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={setPreviousFinancialYear}
+                                        style={{ fontSize: '0.85rem' }}
+                                    >
+                                        <i className="bi bi-calendar3 me-1"></i>Previous FY
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-danger"
+                                        onClick={clearDateFilter}
+                                        disabled={!filters.purchase_date_from && !filters.purchase_date_to}
+                                        style={{ fontSize: '0.85rem' }}
+                                    >
+                                        <i className="bi bi-x-circle me-1"></i>Clear
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div className="col-lg-3 col-md-4">
@@ -805,19 +987,6 @@ export default function LicenseLedger() {
                                 style={{ borderColor: '#ced4da', fontSize: '0.95rem' }}
                             />
                         </div>
-                        <div className="col-lg-2 col-md-4 d-flex align-items-end">
-                            <button
-                                className="btn btn-sm btn-outline-secondary w-100"
-                                onClick={() => {
-                                    handleFilterChange('purchase_date_from', '');
-                                    handleFilterChange('purchase_date_to', '');
-                                }}
-                                disabled={!filters.purchase_date_from && !filters.purchase_date_to}
-                                style={{ fontWeight: '500' }}
-                            >
-                                <i className="bi bi-x-circle me-1"></i>Clear Dates
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -830,141 +999,9 @@ export default function LicenseLedger() {
                             <i className="bi bi-table text-primary me-2"></i>
                             License Listings
                         </h5>
-                        <div className="d-flex align-items-center gap-2">
-                            <span className="badge bg-light text-dark" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                                {licenses.length} {licenses.length === 1 ? 'License' : 'Licenses'}
-                            </span>
-                            <div className="btn-group" role="group">
-                                <button
-                                    className="btn btn-sm btn-outline-primary"
-                                    onClick={handleExportWithFilters}
-                                    disabled={loading || exportingPdf}
-                                    aria-label="Export all licenses to PDF"
-                                    title="Export with current filters"
-                                    style={{ fontWeight: '600' }}
-                                >
-                                    {exportingPdf ? (
-                                        <>
-                                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                            Exporting...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <i className="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>
-                                            Export All PDF
-                                        </>
-                                    )}
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline-primary dropdown-toggle dropdown-toggle-split"
-                                    data-bs-toggle="dropdown"
-                                    aria-expanded="false"
-                                    disabled={loading || exportingPdf}
-                                    style={{ fontWeight: '600' }}
-                                >
-                                    <span className="visually-hidden">Toggle Dropdown</span>
-                                </button>
-                                <ul className="dropdown-menu dropdown-menu-end" style={{ minWidth: '250px' }}>
-                                    <li><h6 className="dropdown-header" style={{ fontSize: '0.75rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Quick Export Options</h6></li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportWithFilters} disabled={exportingPdf}>
-                                            <i className="bi bi-funnel-fill me-2 text-primary"></i>
-                                            <strong>Current Filters</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                Export with applied filters
-                                            </small>
-                                        </button>
-                                    </li>
-                                    <li><hr className="dropdown-divider" /></li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportAllActive} disabled={exportingPdf}>
-                                            <i className="bi bi-check-circle me-2 text-success"></i>
-                                            <strong>All Active Licenses</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                All types, active only
-                                            </small>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportAllIncludingExpired} disabled={exportingPdf}>
-                                            <i className="bi bi-list-ul me-2 text-secondary"></i>
-                                            <strong>All Licenses (Inc. Expired)</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                Complete list with expired
-                                            </small>
-                                        </button>
-                                    </li>
-                                    <li><hr className="dropdown-divider" /></li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportDFIAOnly} disabled={exportingPdf}>
-                                            <i className="bi bi-globe me-2 text-info"></i>
-                                            <strong>DFIA Only</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                Active DFIA licenses
-                                            </small>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportIncentiveOnly} disabled={exportingPdf}>
-                                            <i className="bi bi-trophy me-2 text-warning"></i>
-                                            <strong>Incentive Only</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                All incentive schemes
-                                            </small>
-                                        </button>
-                                    </li>
-                                    <li><hr className="dropdown-divider" /></li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportWithBalance} disabled={exportingPdf}>
-                                            <i className="bi bi-cash-stack me-2 text-success"></i>
-                                            <strong>With Balance (≥100)</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                Sorted by highest balance
-                                            </small>
-                                        </button>
-                                    </li>
-                                    <li><hr className="dropdown-divider" /></li>
-                                    <li><h6 className="dropdown-header" style={{ fontSize: '0.75rem', color: '#6c757d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Purchase Date Ranges</h6></li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportThisMonth} disabled={exportingPdf}>
-                                            <i className="bi bi-calendar-month me-2 text-primary"></i>
-                                            <strong>This Month</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                Purchased in current month
-                                            </small>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportLastMonth} disabled={exportingPdf}>
-                                            <i className="bi bi-calendar3 me-2 text-info"></i>
-                                            <strong>Last Month</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                Purchased in previous month
-                                            </small>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportLast3Months} disabled={exportingPdf}>
-                                            <i className="bi bi-calendar-range me-2 text-warning"></i>
-                                            <strong>Last 3 Months</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                Purchased in last quarter
-                                            </small>
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button className="dropdown-item" onClick={handleExportThisYear} disabled={exportingPdf}>
-                                            <i className="bi bi-calendar-year me-2 text-success"></i>
-                                            <strong>This Year</strong>
-                                            <small className="d-block text-muted" style={{ fontSize: '0.75rem', marginLeft: '24px' }}>
-                                                Purchased in current year
-                                            </small>
-                                        </button>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
+                        <span className="badge bg-light text-dark" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                            {licenses.length} {licenses.length === 1 ? 'License' : 'Licenses'}
+                        </span>
                     </div>
                 </div>
                 <div className="card-body p-0">
@@ -1008,7 +1045,17 @@ export default function LicenseLedger() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {loading ? (
+                                {!filters.company ? (
+                                    <tr>
+                                        <td colSpan="11" className="text-center py-5">
+                                            <i className="bi bi-building" style={{ fontSize: '4rem', color: '#cbd5e0' }}></i>
+                                            <h4 className="mt-4 mb-2" style={{ color: '#2d3748', fontWeight: '600' }}>Select a Company</h4>
+                                            <p className="text-muted mb-0" style={{ fontSize: '1rem' }}>
+                                                Choose a company from the filter above to view their license ledger
+                                            </p>
+                                        </td>
+                                    </tr>
+                                ) : loading ? (
                                     <tr>
                                         <td colSpan="11" className="text-center py-5">
                                             <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
@@ -1022,7 +1069,7 @@ export default function LicenseLedger() {
                                         <td colSpan="11" className="text-center py-5">
                                             <i className="bi bi-inbox text-muted" style={{ fontSize: '3rem' }}></i>
                                             <p className="text-muted mt-3 mb-0" style={{ fontSize: '1.05rem' }}>
-                                                No licenses found matching your criteria
+                                                No licenses found for {filters.company.label}
                                             </p>
                                         </td>
                                     </tr>

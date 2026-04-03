@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
-from .helpers import _sync_nested
-from .models import (
+from core.helpers import _sync_nested
+from core.models import (
     CompanyModel, PortModel, HSCodeModel,
     HeadSIONNormsModel, SionNormClassModel,
     SIONExportModel, SIONImportModel,
@@ -284,7 +284,7 @@ class ExchangeRateSerializer(AuditSerializerMixin):
 
     def get_is_active(self, obj):
         """Check if this is the active (latest) exchange rate"""
-        from .models import ExchangeRateModel
+        from core.models import ExchangeRateModel
         active_rate = ExchangeRateModel.get_active_rate()
         return obj.id == active_rate.id if active_rate else False
 

@@ -42,9 +42,9 @@ export default function HybridSelect({
                 return item.hs_code || item.name || item.id;
             }
 
-            // Special handling for ports - show code
+            // Special handling for ports - show name (which includes code like "NHAVA SHEVA SEA (INNSA1)")
             if (endpoint.includes("port")) {
-                return item.code || item.name || item.id;
+                return item.name || item.code || item.id;
             }
 
             // Default: use labelField

@@ -105,69 +105,63 @@ export default function MasterForm({
                 field_meta: data.field_meta || {}
             });
 
+            console.log('[MasterForm] Full metadata received:', {
+                entity: entityName,
+                isEdit,
+                field_meta: data.field_meta,
+                fk_endpoint_overrides: data.fk_endpoint_overrides,
+                label_field_overrides: data.label_field_overrides,
+                port_code_meta: data.field_meta?.port_code
+            });
+
             // Apply default values from field_meta when creating new record (not editing)
             if (!isEdit && data.field_meta) {
                 const defaults = {};
                 const fkDefaults = {}; // Store FK defaults to fetch labels
 
+                console.log('[MasterForm] Processing field_meta for defaults, isEdit:', isEdit);
+
                 Object.keys(data.field_meta).forEach(fieldName => {
                     const fieldConfig = data.field_meta[fieldName];
                     if (fieldConfig.default !== undefined && fieldConfig.default !== null) {
                         defaults[fieldName] = fieldConfig.default;
+                        console.log(`[MasterForm] Found default for ${fieldName}:`, fieldConfig.default, 'type:', fieldConfig.type);
 
                         // Track FK fields with defaults to fetch their labels
-                        if (fieldConfig.type === 'fk' && typeof fieldConfig.default === 'number') {
-                            const endpoint = fieldConfig.fk_endpoint || data.fk_endpoint_overrides?.[fieldName];
+                        // Note: type can be 'fk' or 'select' (enhanced by backend)
+                        if ((fieldConfig.type === 'fk' || fieldConfig.type === 'select') && typeof fieldConfig.default === 'number') {
+                            const endpoint = fieldConfig.fk_endpoint || fieldConfig.endpoint || data.fk_endpoint_overrides?.[fieldName];
+                            const labelField = fieldConfig.label_field || data.label_field_overrides?.[fieldName] || 'name';
                             console.log(`[MasterForm] FK default for ${fieldName}:`, {
                                 id: fieldConfig.default,
                                 endpoint,
-                                from_field: fieldConfig.fk_endpoint,
+                                labelField,
+                                from_field_config: {
+                                    fk_endpoint: fieldConfig.fk_endpoint,
+                                    endpoint: fieldConfig.endpoint,
+                                    label_field: fieldConfig.label_field
+                                },
                                 from_overrides: data.fk_endpoint_overrides?.[fieldName]
                             });
 
                             fkDefaults[fieldName] = {
                                 id: fieldConfig.default,
                                 endpoint: endpoint,
-                                labelField: data.label_field_overrides?.[fieldName] || 'name'
+                                labelField: labelField
                             };
                         }
                     }
                 });
 
-                // Fetch FK default labels
+                // For FK defaults, just set the ID - AsyncSelectField will fetch the label
                 if (Object.keys(fkDefaults).length > 0) {
-                    const fetchPromises = Object.keys(fkDefaults).map(async (fieldName) => {
-                        const { id, endpoint, labelField } = fkDefaults[fieldName];
-                        console.log(`[MasterForm] Fetching FK label for ${fieldName} from ${endpoint}${id}/`);
+                    const fkValues = Object.keys(fkDefaults).reduce((acc, fieldName) => {
+                        acc[fieldName] = fkDefaults[fieldName].id;
+                        return acc;
+                    }, {});
 
-                        if (endpoint) {
-                            try {
-                                const response = await api.get(`${endpoint}${id}/`);
-                                const label = response.data[labelField] || response.data.name || `ID: ${id}`;
-                                console.log(`[MasterForm] Successfully fetched label for ${fieldName}:`, label);
-                                return { fieldName, value: { value: id, label: label } };
-                            } catch (err) {
-                                console.error(`[MasterForm] Failed to fetch label for ${fieldName}:`, err);
-                                // Keep the ID as fallback
-                                return { fieldName, value: { value: id, label: `ID: ${id}` } };
-                            }
-                        } else {
-                            console.warn(`[MasterForm] No endpoint found for ${fieldName}, setting ID only`);
-                            // No endpoint, just set the ID
-                            return { fieldName, value: { value: id, label: `ID: ${id}` } };
-                        }
-                    });
-
-                    // Wait for all FK fetches to complete, then update form data
-                    Promise.all(fetchPromises).then(results => {
-                        const fkValues = results.reduce((acc, { fieldName, value }) => {
-                            acc[fieldName] = value;
-                            return acc;
-                        }, {});
-
-                        setFormData(prev => ({ ...prev, ...fkValues }));
-                        console.log('[MasterForm] FK defaults applied:', fkValues);
-                    });
+                    setFormData(prev => ({ ...prev, ...fkValues }));
+                    console.log('[MasterForm] FK defaults (IDs only) applied:', fkValues);
                 }
 
                 // Only set non-FK defaults if we found any

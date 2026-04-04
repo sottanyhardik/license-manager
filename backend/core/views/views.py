@@ -169,11 +169,14 @@ def enhance_config_with_fk(model_cls, config=None):
             preferred = endpoints[0] if endpoints else None
 
         # Provide both a preferred 'endpoint' and an 'endpoints' list for robustness
+        # Preserve any existing field_meta configuration (like 'default', 'fk_endpoint', etc.)
+        existing_meta = field_meta.get(fk_name, {})
         field_meta[fk_name] = {
-            "type": "select",
-            "endpoint": preferred,
+            "type": existing_meta.get("type", "select"),
+            "endpoint": existing_meta.get("fk_endpoint") or existing_meta.get("endpoint") or preferred,
             "endpoints": endpoints,
             "label_field": label_field,
+            **{k: v for k, v in existing_meta.items() if k not in ["type", "endpoint", "endpoints", "label_field"]}
         }
 
         # Annotate nested_field_defs entries that reference this fk_name

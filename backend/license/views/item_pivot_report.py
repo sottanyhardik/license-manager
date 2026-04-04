@@ -17,7 +17,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from core.constants import DEC_0, DEC_000, GE, MI, IP, SM, CO
+from core.constants import DEC_0, DEC_000, MI, IP, SM, CO
 from core.models import ItemNameModel
 from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
 
@@ -85,8 +85,9 @@ class ItemPivotReportView(View):
 
         # Base query - licenses with required purchase status
         # Note: Don't filter by is_active here as it may exclude expired licenses
+        # Exclude GE (operating) licenses from item pivot report
         licenses = LicenseDetailsModel.objects.filter(
-            purchase_status__code__in=[GE, MI, IP, SM, CO]
+            purchase_status__code__in=[MI, IP, SM, CO]
         )
 
         # Apply license status filter

@@ -108,16 +108,58 @@ export default function MasterForm({
             // Apply default values from field_meta when creating new record (not editing)
             if (!isEdit && data.field_meta) {
                 const defaults = {};
+                const fkDefaults = {}; // Store FK defaults to fetch labels
+
                 Object.keys(data.field_meta).forEach(fieldName => {
                     const fieldConfig = data.field_meta[fieldName];
                     if (fieldConfig.default !== undefined && fieldConfig.default !== null) {
                         defaults[fieldName] = fieldConfig.default;
+
+                        // Track FK fields with defaults to fetch their labels
+                        if (fieldConfig.type === 'fk' && typeof fieldConfig.default === 'number') {
+                            fkDefaults[fieldName] = {
+                                id: fieldConfig.default,
+                                endpoint: fieldConfig.fk_endpoint || data.fk_endpoint_overrides?.[fieldName],
+                                labelField: data.label_field_overrides?.[fieldName] || 'name'
+                            };
+                        }
                     }
                 });
 
-                // Only set defaults if we found any
-                if (Object.keys(defaults).length > 0) {
-                    setFormData(prevData => ({...prevData, ...defaults}));
+                // Fetch FK default labels
+                if (Object.keys(fkDefaults).length > 0) {
+                    Object.keys(fkDefaults).forEach(async (fieldName) => {
+                        const { id, endpoint, labelField } = fkDefaults[fieldName];
+                        if (endpoint) {
+                            try {
+                                const response = await api.get(`${endpoint}${id}/`);
+                                const label = response.data[labelField] || response.data.name || `ID: ${id}`;
+                                setFormData(prev => ({
+                                    ...prev,
+                                    [fieldName]: { value: id, label: label }
+                                }));
+                            } catch (err) {
+                                console.error(`Failed to fetch label for ${fieldName}:`, err);
+                                // Keep the ID as fallback
+                                setFormData(prev => ({
+                                    ...prev,
+                                    [fieldName]: { value: id, label: `ID: ${id}` }
+                                }));
+                            }
+                        }
+                    });
+                }
+
+                // Only set non-FK defaults if we found any
+                const nonFkDefaults = Object.keys(defaults)
+                    .filter(key => !fkDefaults[key])
+                    .reduce((obj, key) => {
+                        obj[key] = defaults[key];
+                        return obj;
+                    }, {});
+
+                if (Object.keys(nonFkDefaults).length > 0) {
+                    setFormData(prevData => ({...prevData, ...nonFkDefaults}));
                 }
             }
         } catch (err) {

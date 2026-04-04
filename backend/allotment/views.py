@@ -110,7 +110,13 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "company": {
                 "type": "fk",
                 "fk_endpoint": "/masters/companies/",
-                "label_field": "name"
+                "label_field": "name",
+                "required": True
+            },
+            "item_name": {
+                "type": "text",
+                "required": True,
+                "label": "Item Name"
             },
             "port": {
                 "type": "fk",

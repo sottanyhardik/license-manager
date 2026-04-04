@@ -133,6 +133,12 @@ IncentiveLicenseViewSet = IncentiveLicenseViewSetClass.create_viewset(
                     'required': True,
                     'step': '0.01',
                 },
+                'port_code': {
+                    'type': 'fk',
+                    'label': 'Port Code',
+                    'required': False,
+                    'default': 513,  # INNSA1 - NHAVA SHEVA SEA
+                },
                 'is_active': {
                     'type': 'checkbox',
                     'label': 'Active',

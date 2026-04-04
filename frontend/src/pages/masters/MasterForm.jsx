@@ -117,9 +117,17 @@ export default function MasterForm({
 
                         // Track FK fields with defaults to fetch their labels
                         if (fieldConfig.type === 'fk' && typeof fieldConfig.default === 'number') {
+                            const endpoint = fieldConfig.fk_endpoint || data.fk_endpoint_overrides?.[fieldName];
+                            console.log(`[MasterForm] FK default for ${fieldName}:`, {
+                                id: fieldConfig.default,
+                                endpoint,
+                                from_field: fieldConfig.fk_endpoint,
+                                from_overrides: data.fk_endpoint_overrides?.[fieldName]
+                            });
+
                             fkDefaults[fieldName] = {
                                 id: fieldConfig.default,
-                                endpoint: fieldConfig.fk_endpoint || data.fk_endpoint_overrides?.[fieldName],
+                                endpoint: endpoint,
                                 labelField: data.label_field_overrides?.[fieldName] || 'name'
                             };
                         }
@@ -130,22 +138,32 @@ export default function MasterForm({
                 if (Object.keys(fkDefaults).length > 0) {
                     Object.keys(fkDefaults).forEach(async (fieldName) => {
                         const { id, endpoint, labelField } = fkDefaults[fieldName];
+                        console.log(`[MasterForm] Fetching FK label for ${fieldName} from ${endpoint}${id}/`);
+
                         if (endpoint) {
                             try {
                                 const response = await api.get(`${endpoint}${id}/`);
                                 const label = response.data[labelField] || response.data.name || `ID: ${id}`;
+                                console.log(`[MasterForm] Successfully fetched label for ${fieldName}:`, label);
                                 setFormData(prev => ({
                                     ...prev,
                                     [fieldName]: { value: id, label: label }
                                 }));
                             } catch (err) {
-                                console.error(`Failed to fetch label for ${fieldName}:`, err);
+                                console.error(`[MasterForm] Failed to fetch label for ${fieldName}:`, err);
                                 // Keep the ID as fallback
                                 setFormData(prev => ({
                                     ...prev,
                                     [fieldName]: { value: id, label: `ID: ${id}` }
                                 }));
                             }
+                        } else {
+                            console.warn(`[MasterForm] No endpoint found for ${fieldName}, setting ID only`);
+                            // No endpoint, just set the ID
+                            setFormData(prev => ({
+                                ...prev,
+                                [fieldName]: { value: id, label: `ID: ${id}` }
+                            }));
                         }
                     });
                 }

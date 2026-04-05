@@ -1659,8 +1659,15 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     txn_title = Paragraph("Transaction Details", txn_title_style)
                     elements.append(txn_title)
 
-                    # Create transaction table
-                    wrap_style = ParagraphStyle('WrapStyle', parent=styles['Normal'], fontSize=7, leading=9)
+                    # Create transaction table with proper wrapping
+                    wrap_style = ParagraphStyle(
+                        'WrapStyle',
+                        parent=styles['Normal'],
+                        fontSize=7,
+                        leading=9,
+                        wordWrap='CJK',
+                        splitLongWords=True
+                    )
 
                     txn_data = [[
                         'Date', 'Type', 'Particulars', 'Invoice No.',
@@ -1692,24 +1699,32 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         else:
                             pl_para = '-'
 
+                        # Wrap all text fields in Paragraph for proper text wrapping
                         txn_data.append([
-                            date_str,
-                            txn_type,
-                            Paragraph(particular[:50], wrap_style) if len(particular) > 50 else particular,
-                            invoice[:15] if len(invoice) > 15 else invoice,
-                            format_indian_number(debit_cif, 2) if debit_cif > 0 else '-',
-                            format_indian_number(credit_cif, 2) if credit_cif > 0 else '-',
-                            format_indian_number(balance, 2),
-                            format_indian_number(debit_amt, 2) if debit_amt > 0 else '-',
-                            format_indian_number(credit_amt, 2) if credit_amt > 0 else '-',
+                            Paragraph(date_str, wrap_style),
+                            Paragraph(txn_type, wrap_style),
+                            Paragraph(particular, wrap_style),
+                            Paragraph(invoice, wrap_style),
+                            Paragraph(format_indian_number(debit_cif, 2) if debit_cif > 0 else '-', wrap_style),
+                            Paragraph(format_indian_number(credit_cif, 2) if credit_cif > 0 else '-', wrap_style),
+                            Paragraph(format_indian_number(balance, 2), wrap_style),
+                            Paragraph(format_indian_number(debit_amt, 2) if debit_amt > 0 else '-', wrap_style),
+                            Paragraph(format_indian_number(credit_amt, 2) if credit_amt > 0 else '-', wrap_style),
                             pl_para
                         ])
 
-                    # Create table
+                    # Create table with expanded widths (landscape A4: ~10.5 inches available)
                     txn_table = Table(txn_data, colWidths=[
-                        0.6*inch, 0.65*inch, 1.8*inch, 0.8*inch,
-                        0.75*inch, 0.75*inch, 0.75*inch,
-                        0.9*inch, 0.9*inch, 0.8*inch
+                        0.7*inch,   # Date
+                        0.8*inch,   # Type
+                        2.2*inch,   # Particulars (expanded)
+                        0.9*inch,   # Invoice No.
+                        0.85*inch,  # Debit CIF
+                        0.85*inch,  # Credit CIF
+                        0.85*inch,  # Balance
+                        0.95*inch,  # Debit Amt
+                        0.95*inch,  # Credit Amt
+                        0.85*inch   # P/L
                     ], repeatRows=1)
 
                     txn_table.setStyle(TableStyle([
@@ -1719,18 +1734,21 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                         ('FONTSIZE', (0, 0), (-1, 0), 7),
                         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
 
                         # Data rows
                         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                         ('FONTSIZE', (0, 1), (-1, -1), 7),
-                        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
-                        ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('ALIGN', (0, 1), (3, -1), 'LEFT'),  # Date, Type, Particulars, Invoice left-aligned
+                        ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),  # All amounts right-aligned
+                        ('VALIGN', (0, 1), (-1, -1), 'TOP'),  # Top align for better text wrapping
 
                         # Grid
                         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                        ('TOPPADDING', (0, 0), (-1, -1), 3),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                        ('TOPPADDING', (0, 0), (-1, -1), 4),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
                         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
                     ]))
 

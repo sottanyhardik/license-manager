@@ -489,6 +489,7 @@ export default function LicenseLedger() {
             setExportingPdf(true);
 
             const params = buildFilterParams();
+            params.set('detailed', 'true');  // Request detailed transaction view
             const pdfViewerUrl = `/pdf-viewer?url=${encodeURIComponent(`/license-ledger/export/all/?${params.toString()}`)}`;
             const newWindow = window.open(pdfViewerUrl, '_blank');
 

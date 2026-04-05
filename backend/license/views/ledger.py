@@ -1356,6 +1356,165 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         return response
 
+    def _get_license_transactions(self, lic_data):
+        """
+        Fetch detailed transactions for a single license.
+        Returns list of transaction dictionaries with all details.
+        """
+        from trade.models import LicenseTrade
+        from django.utils import timezone
+
+        license_type = lic_data.get('license_type')
+        lic_id = lic_data.get('id')
+
+        if not lic_id:
+            return []
+
+        try:
+            # Get the actual license object
+            if license_type == 'DFIA':
+                license_obj = LicenseDetailsModel.objects.get(id=lic_id)
+            elif license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
+                license_obj = IncentiveLicense.objects.get(id=lic_id)
+            else:
+                return []
+
+            # Get trades for this license
+            if license_type == 'DFIA':
+                trades = LicenseTrade.objects.filter(
+                    license_type='DFIA',
+                    lines__sr_number__license=license_obj
+                ).prefetch_related('lines__sr_number').distinct().order_by('invoice_date', 'id')
+            else:
+                trades = LicenseTrade.objects.filter(
+                    license_type='INCENTIVE',
+                    lines__serial_number__license=license_obj
+                ).prefetch_related('lines__serial_number').distinct().order_by('invoice_date', 'id')
+
+            transactions = []
+            running_balance = 0
+            total_purchase_cif = 0
+            total_purchase_amount = 0
+            total_sales_amount = 0
+
+            # Sort transactions
+            all_trans = []
+            for trade in trades:
+                all_trans.append((trade.direction, trade.invoice_date or timezone.now().date(), trade))
+
+            all_trans.sort(key=lambda x: (x[1], x[0] != 'PURCHASE'))
+
+            # Add opening balance if exists
+            if len(all_trans) == 0 and license_type == 'DFIA':
+                opening_bal = float(license_obj.opening_balance or 0)
+                if opening_bal > 0:
+                    running_balance = opening_bal
+                    total_purchase_cif = opening_bal
+                    transactions.append({
+                        'date': license_obj.license_date,
+                        'type': 'OPENING',
+                        'particular': f'Opening Balance - Original DFIA License',
+                        'invoice_number': license_obj.license_number,
+                        'cif_usd': opening_bal,
+                        'debit_cif': opening_bal,
+                        'credit_cif': 0,
+                        'rate': 0,
+                        'amount': 0,
+                        'debit_amount': 0,
+                        'credit_amount': 0,
+                        'balance': round(running_balance, 2),
+                        'profit_loss': 0,
+                    })
+
+            # Process each transaction
+            for idx, (trans_type, trans_date, trans_obj) in enumerate(all_trans):
+                total_cif_usd = 0
+                total_amount = 0
+
+                # Get lines for this license only
+                if license_type == 'DFIA':
+                    lines = trans_obj.lines.filter(sr_number__license_id=lic_id)
+                else:
+                    lines = trans_obj.lines.filter(serial_number__license_id=lic_id)
+
+                for line in lines:
+                    try:
+                        if line.exc_rate and line.cif_inr:
+                            exc_rate = float(line.exc_rate)
+                            if exc_rate > 0:
+                                cif_usd = float(line.cif_inr) / exc_rate
+                            else:
+                                cif_usd = float(line.cif_fc or 0)
+                        else:
+                            cif_usd = float(line.cif_fc or 0)
+                    except (ValueError, TypeError, ZeroDivisionError):
+                        cif_usd = 0
+
+                    total_cif_usd += cif_usd
+                    total_amount += float(line.amount_inr or 0)
+
+                # Calculate rate and update balance
+                try:
+                    rate = total_amount / total_cif_usd if total_cif_usd != 0 else 0
+                except (ZeroDivisionError, ValueError):
+                    rate = 0
+
+                debit_cif = 0
+                credit_cif = 0
+                debit_amount = 0
+                credit_amount = 0
+
+                if trans_type in ['PURCHASE', 'COMMISSION_PURCHASE']:
+                    debit_cif = total_cif_usd
+                    debit_amount = total_amount
+                    running_balance += total_cif_usd
+                    total_purchase_cif += total_cif_usd
+                    total_purchase_amount += total_amount
+                elif trans_type in ['SALE', 'COMMISSION_SALE']:
+                    credit_cif = total_cif_usd
+                    credit_amount = total_amount
+                    running_balance -= total_cif_usd
+                    total_sales_amount += total_amount
+
+                # Calculate profit/loss for sales
+                profit_loss = 0
+                if trans_type in ['SALE', 'COMMISSION_SALE'] and total_purchase_cif > 0:
+                    avg_purchase_rate = total_purchase_amount / total_purchase_cif
+                    purchase_amount_for_this_sale = total_cif_usd * avg_purchase_rate
+                    sale_amount_inr = total_amount
+                    profit_loss = sale_amount_inr - purchase_amount_for_this_sale
+
+                # Get company names
+                from_company = trans_obj.from_company.name if trans_obj.from_company else 'Unknown'
+                to_company = trans_obj.to_company.name if trans_obj.to_company else 'Unknown'
+
+                if trans_type in ['PURCHASE', 'COMMISSION_PURCHASE']:
+                    particular = f"Purchase from {from_company}"
+                else:
+                    particular = f"Sale to {to_company}"
+
+                transactions.append({
+                    'date': trans_date,
+                    'type': trans_type.replace('_', ' ').title(),
+                    'particular': particular,
+                    'invoice_number': trans_obj.invoice_number or '-',
+                    'cif_usd': total_cif_usd,
+                    'debit_cif': debit_cif,
+                    'credit_cif': credit_cif,
+                    'rate': rate,
+                    'amount': total_amount,
+                    'debit_amount': debit_amount,
+                    'credit_amount': credit_amount,
+                    'balance': round(running_balance, 2),
+                    'profit_loss': round(profit_loss, 2),
+                })
+
+            return transactions
+
+        except Exception as e:
+            logger.error(f"Error fetching transactions for license {lic_id}: {e}")
+            return []
+
     def _generate_detailed_licenses_pdf(self, licenses_data, query_params):
         """
         Generate a detailed PDF showing all transactions for each license with profit/loss.
@@ -1471,15 +1630,102 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 elements.append(pl_para)
                 elements.append(Spacer(1, 0.15 * inch))
 
-                # Transaction Details (if available)
-                # Note: The licenses_data from list() doesn't include detailed transactions
-                # We would need to fetch them separately, but for now show summary
-                txn_note = Paragraph(
-                    "<i>Note: Detailed transaction-by-transaction ledger requires individual license detail view. "
-                    "This report shows summary profit/loss calculation.</i>",
-                    styles['Normal']
-                )
-                elements.append(txn_note)
+                # Fetch detailed transactions for this license
+                transactions = self._get_license_transactions(lic_data)
+
+                if transactions:
+                    # Transaction table header
+                    txn_title_style = ParagraphStyle(
+                        'TxnTitleStyle',
+                        parent=styles['Heading3'],
+                        fontSize=11,
+                        textColor=colors.HexColor('#34495e'),
+                        spaceAfter=6,
+                        fontName='Helvetica-Bold'
+                    )
+                    txn_title = Paragraph("Transaction Details", txn_title_style)
+                    elements.append(txn_title)
+
+                    # Create transaction table
+                    wrap_style = ParagraphStyle('WrapStyle', parent=styles['Normal'], fontSize=7, leading=9)
+
+                    txn_data = [[
+                        'Date', 'Type', 'Particulars', 'Invoice No.',
+                        'Debit CIF', 'Credit CIF', 'Balance',
+                        'Debit Amt', 'Credit Amt', 'P/L'
+                    ]]
+
+                    for txn in transactions:
+                        # Format values
+                        date_str = txn['date'].strftime('%d-%b-%y') if txn.get('date') else '-'
+                        txn_type = txn.get('type', '-')
+                        particular = txn.get('particular', '-')
+                        invoice = txn.get('invoice_number', '-')
+
+                        debit_cif = txn.get('debit_cif', 0)
+                        credit_cif = txn.get('credit_cif', 0)
+                        balance = txn.get('balance', 0)
+                        debit_amt = txn.get('debit_amount', 0)
+                        credit_amt = txn.get('credit_amount', 0)
+                        pl = txn.get('profit_loss', 0)
+
+                        # Color code profit/loss
+                        if pl > 0:
+                            pl_text = f"+{format_indian_number(pl, 2)}"
+                            pl_para = Paragraph(f'<font color="green">{pl_text}</font>', wrap_style)
+                        elif pl < 0:
+                            pl_text = format_indian_number(pl, 2)
+                            pl_para = Paragraph(f'<font color="red">{pl_text}</font>', wrap_style)
+                        else:
+                            pl_para = '-'
+
+                        txn_data.append([
+                            date_str,
+                            txn_type,
+                            Paragraph(particular[:50], wrap_style) if len(particular) > 50 else particular,
+                            invoice[:15] if len(invoice) > 15 else invoice,
+                            format_indian_number(debit_cif, 2) if debit_cif > 0 else '-',
+                            format_indian_number(credit_cif, 2) if credit_cif > 0 else '-',
+                            format_indian_number(balance, 2),
+                            format_indian_number(debit_amt, 2) if debit_amt > 0 else '-',
+                            format_indian_number(credit_amt, 2) if credit_amt > 0 else '-',
+                            pl_para
+                        ])
+
+                    # Create table
+                    txn_table = Table(txn_data, colWidths=[
+                        0.6*inch, 0.65*inch, 1.8*inch, 0.8*inch,
+                        0.75*inch, 0.75*inch, 0.75*inch,
+                        0.9*inch, 0.9*inch, 0.8*inch
+                    ], repeatRows=1)
+
+                    txn_table.setStyle(TableStyle([
+                        # Header
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 7),
+                        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+
+                        # Data rows
+                        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                        ('FONTSIZE', (0, 1), (-1, -1), 7),
+                        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
+                        ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+                        # Grid
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                        ('TOPPADDING', (0, 0), (-1, -1), 3),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+                    ]))
+
+                    elements.append(txn_table)
+                else:
+                    no_txn = Paragraph("<i>No transactions found for this license</i>", styles['Normal'])
+                    elements.append(no_txn)
+
                 elements.append(Spacer(1, 0.2 * inch))
 
         doc.build(elements)

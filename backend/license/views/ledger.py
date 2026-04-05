@@ -1386,10 +1386,11 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     lines__sr_number__license=license_obj
                 ).prefetch_related('lines__sr_number').distinct().order_by('invoice_date', 'id')
             else:
+                # For Incentive licenses, use incentive_lines relationship
                 trades = LicenseTrade.objects.filter(
                     license_type='INCENTIVE',
-                    lines__serial_number__license=license_obj
-                ).prefetch_related('lines__serial_number').distinct().order_by('invoice_date', 'id')
+                    incentive_lines__incentive_license=license_obj
+                ).prefetch_related('incentive_lines').distinct().order_by('invoice_date', 'id')
 
             transactions = []
             running_balance = 0
@@ -1434,24 +1435,36 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 # Get lines for this license only
                 if license_type == 'DFIA':
                     lines = trans_obj.lines.filter(sr_number__license_id=lic_id)
-                else:
-                    lines = trans_obj.lines.filter(serial_number__license_id=lic_id)
 
-                for line in lines:
-                    try:
-                        if line.exc_rate and line.cif_inr:
-                            exc_rate = float(line.exc_rate)
-                            if exc_rate > 0:
-                                cif_usd = float(line.cif_inr) / exc_rate
+                    for line in lines:
+                        try:
+                            if line.exc_rate and line.cif_inr:
+                                exc_rate = float(line.exc_rate)
+                                if exc_rate > 0:
+                                    cif_usd = float(line.cif_inr) / exc_rate
+                                else:
+                                    cif_usd = float(line.cif_fc or 0)
                             else:
                                 cif_usd = float(line.cif_fc or 0)
-                        else:
-                            cif_usd = float(line.cif_fc or 0)
-                    except (ValueError, TypeError, ZeroDivisionError):
-                        cif_usd = 0
+                        except (ValueError, TypeError, ZeroDivisionError):
+                            cif_usd = 0
 
-                    total_cif_usd += cif_usd
-                    total_amount += float(line.amount_inr or 0)
+                        total_cif_usd += cif_usd
+                        total_amount += float(line.amount_inr or 0)
+                else:
+                    # For Incentive licenses, use incentive_lines
+                    incentive_line = trans_obj.incentive_lines.filter(incentive_license_id=lic_id).first()
+
+                    if incentive_line:
+                        total_cif_usd = float(incentive_line.license_value or 0)
+                        total_amount = float(incentive_line.amount_inr or 0)
+                    else:
+                        # No line for this license in this trade, skip
+                        continue
+
+                # Skip if no value
+                if total_cif_usd == 0 and total_amount == 0:
+                    continue
 
                 # Calculate rate and update balance
                 try:

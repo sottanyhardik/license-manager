@@ -463,118 +463,126 @@ def generate_license_ledger_pdf(license_obj):
                 no_trans = Paragraph("<i>No transactions found</i>", styles['Normal'])
                 elements.append(no_trans)
 
-            # Add chronological transaction ledger (detailed accounting view)
-            if len(allotment_data) > 1 or len(boe_data) > 1:
-                elements.append(Spacer(1, SPACER_LARGE))
+            elements.append(Spacer(1, SPACER_LARGE))
 
-                # Section title
-                ledger_title_style = ParagraphStyle('LedgerTitleStyle', parent=styles['Heading2'],
-                                                   fontSize=12, textColor=colors.HexColor('#2c3e50'),
-                                                   spaceAfter=6, fontName='Helvetica-Bold')
-                ledger_title = Paragraph("Detailed Transaction Ledger (Chronological)", ledger_title_style)
-                elements.append(ledger_title)
-                elements.append(Spacer(1, SPACER_SMALL))
+        # Add chronological transaction ledger for entire license (all items combined)
+        elements.append(Spacer(1, SPACER_LARGE))
 
-                # Collect all transactions
-                all_transactions = []
+        ledger_title_style = ParagraphStyle('LedgerTitleStyle', parent=styles['Heading2'],
+                                           fontSize=12, textColor=colors.HexColor('#2c3e50'),
+                                           spaceAfter=6, fontName='Helvetica-Bold')
+        ledger_title = Paragraph("DETAILED TRANSACTION LEDGER (CHRONOLOGICAL)", ledger_title_style)
+        elements.append(ledger_title)
+        elements.append(Spacer(1, SPACER_SMALL))
 
-                # Add allotments (purchases)
-                for item in items:
-                    allotments = item.allotment_details.filter(
-                        is_boe=False,
-                        allotment__is_boe=False
-                    ).select_related('allotment', 'allotment__company').order_by('allotment__estimated_arrival_date')
+        # Collect ALL transactions from ALL items
+        all_transactions = []
+        wrap_style = ParagraphStyle('WrapStyle', parent=styles['Normal'], fontSize=FONT_SIZE_DATA, leading=10)
 
-                    for allot in allotments:
-                        company_name = allot.allotment.company.name if allot.allotment.company else 'Unknown'
-                        display_date = allot.allotment.estimated_arrival_date if allot.allotment.estimated_arrival_date else allot.allotment.modified_on
+        for group_key, items in item_groups.items():
+            # Get item description for reference
+            first_item = sorted(items, key=lambda x: x.serial_number if x.serial_number is not None else 0)[0]
+            description = first_item.description if first_item.description else "No Description"
 
-                        all_transactions.append({
-                            'type': 'Purchase',
-                            'date': display_date,
-                            'date_str': display_date.strftime('%d-%b-%Y') if display_date else '-',
-                            'sort_date': display_date if display_date else datetime.min,
-                            'particulars': f"Allotment - {company_name}",
-                            'qty_in': Decimal(str(allot.qty or 0)),
-                            'qty_out': Decimal('0'),
-                            'cif_in': Decimal(str(allot.cif_fc or 0)),
-                            'cif_out': Decimal('0')
-                        })
+            # Add allotments (purchases)
+            for item in items:
+                allotments = item.allotment_details.filter(
+                    is_boe=False,
+                    allotment__is_boe=False
+                ).select_related('allotment', 'allotment__company')
 
-                # Add BOEs (sales)
-                for item in items:
-                    boes = item.item_details.filter(
-                        bill_of_entry__isnull=False
-                    ).select_related('bill_of_entry', 'bill_of_entry__company').order_by('bill_of_entry__bill_of_entry_date')
+                for allot in allotments:
+                    company_name = allot.allotment.company.name if allot.allotment.company else 'Unknown'
+                    display_date = allot.allotment.estimated_arrival_date if allot.allotment.estimated_arrival_date else allot.allotment.modified_on
 
-                    for boe in boes:
-                        company_name = boe.bill_of_entry.company.name if boe.bill_of_entry.company else 'Unknown'
-                        boe_date = boe.bill_of_entry.bill_of_entry_date
-                        boe_number = boe.bill_of_entry.bill_of_entry_number or '-'
+                    all_transactions.append({
+                        'type': 'Purchase',
+                        'date': display_date,
+                        'date_str': display_date.strftime('%d-%b-%Y') if display_date else '-',
+                        'sort_date': display_date if display_date else datetime.min,
+                        'particulars': f"{description[:30]}... - {company_name}",
+                        'qty_in': Decimal(str(allot.qty or 0)),
+                        'qty_out': Decimal('0'),
+                        'cif_in': Decimal(str(allot.cif_fc or 0)),
+                        'cif_out': Decimal('0')
+                    })
 
-                        all_transactions.append({
-                            'type': 'Sale',
-                            'date': boe_date,
-                            'date_str': boe_date.strftime('%d-%b-%Y') if boe_date else '-',
-                            'sort_date': boe_date if boe_date else datetime.min,
-                            'particulars': f"BOE {boe_number} - {company_name}",
-                            'qty_in': Decimal('0'),
-                            'qty_out': Decimal(str(boe.qty or 0)),
-                            'cif_in': Decimal('0'),
-                            'cif_out': Decimal(str(boe.cif_fc or 0))
-                        })
+            # Add BOEs (sales)
+            for item in items:
+                boes = item.item_details.filter(
+                    bill_of_entry__isnull=False
+                ).select_related('bill_of_entry', 'bill_of_entry__company')
 
-                # Sort by date
-                all_transactions.sort(key=lambda x: x['sort_date'])
+                for boe in boes:
+                    company_name = boe.bill_of_entry.company.name if boe.bill_of_entry.company else 'Unknown'
+                    boe_date = boe.bill_of_entry.bill_of_entry_date
+                    boe_number = boe.bill_of_entry.bill_of_entry_number or '-'
 
-                # Create ledger table with running balance
-                ledger_data = [['Date', 'Type', 'Particulars', 'Qty In', 'Qty Out', 'CIF In (FC)', 'CIF Out (FC)', 'Balance Qty', 'Balance CIF']]
+                    all_transactions.append({
+                        'type': 'Sale',
+                        'date': boe_date,
+                        'date_str': boe_date.strftime('%d-%b-%Y') if boe_date else '-',
+                        'sort_date': boe_date if boe_date else datetime.min,
+                        'particulars': f"{description[:30]}... - BOE {boe_number} - {company_name}",
+                        'qty_in': Decimal('0'),
+                        'qty_out': Decimal(str(boe.qty or 0)),
+                        'cif_in': Decimal('0'),
+                        'cif_out': Decimal(str(boe.cif_fc or 0))
+                    })
 
-                running_qty = Decimal('0')
-                running_cif = Decimal('0')
+        # Sort all transactions by date
+        all_transactions.sort(key=lambda x: x['sort_date'])
 
-                for txn in all_transactions:
-                    running_qty = running_qty + txn['qty_in'] - txn['qty_out']
-                    running_cif = running_cif + txn['cif_in'] - txn['cif_out']
+        if all_transactions:
+            # Create ledger table with running balance
+            ledger_data = [['Date', 'Type', 'Particulars', 'Qty In', 'Qty Out', 'CIF In (FC)', 'CIF Out (FC)', 'Balance Qty', 'Balance CIF']]
 
-                    ledger_data.append([
-                        txn['date_str'],
-                        txn['type'],
-                        Paragraph(txn['particulars'], wrap_style),
-                        f"{txn['qty_in']:.1f}" if txn['qty_in'] > 0 else '-',
-                        f"{txn['qty_out']:.1f}" if txn['qty_out'] > 0 else '-',
-                        f"{txn['cif_in']:.2f}" if txn['cif_in'] > 0 else '-',
-                        f"{txn['cif_out']:.2f}" if txn['cif_out'] > 0 else '-',
-                        f"{running_qty:.1f}",
-                        f"{running_cif:.2f}"
-                    ])
+            running_qty = Decimal('0')
+            running_cif = Decimal('0')
 
-                # Create ledger table
-                ledger_table = Table(ledger_data, colWidths=[0.8*inch, 0.7*inch, 2.5*inch, 0.7*inch, 0.7*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.9*inch])
-                ledger_table_style = [
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (2, -1), 'LEFT'),
-                    ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 7),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                    ('TOPPADDING', (0, 0), (-1, -1), 3),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
-                ]
+            for txn in all_transactions:
+                running_qty = running_qty + txn['qty_in'] - txn['qty_out']
+                running_cif = running_cif + txn['cif_in'] - txn['cif_out']
 
-                # Highlight balance columns
-                ledger_table_style.extend([
-                    ('BACKGROUND', (7, 1), (8, -1), colors.HexColor('#e8f5e9')),
-                    ('FONTNAME', (7, 1), (8, -1), 'Helvetica-Bold'),
+                ledger_data.append([
+                    txn['date_str'],
+                    txn['type'],
+                    Paragraph(txn['particulars'], wrap_style),
+                    f"{txn['qty_in']:.1f}" if txn['qty_in'] > 0 else '-',
+                    f"{txn['qty_out']:.1f}" if txn['qty_out'] > 0 else '-',
+                    f"{txn['cif_in']:.2f}" if txn['cif_in'] > 0 else '-',
+                    f"{txn['cif_out']:.2f}" if txn['cif_out'] > 0 else '-',
+                    f"{running_qty:.1f}",
+                    f"{running_cif:.2f}"
                 ])
 
-                ledger_table.setStyle(TableStyle(ledger_table_style))
-                elements.append(ledger_table)
+            # Create ledger table
+            ledger_table = Table(ledger_data, colWidths=[0.8*inch, 0.7*inch, 2.5*inch, 0.7*inch, 0.7*inch, 0.9*inch, 0.9*inch, 0.9*inch, 0.9*inch])
+            ledger_table_style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (2, -1), 'LEFT'),
+                ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 7),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+            ]
 
-            elements.append(Spacer(1, SPACER_LARGE))
+            # Highlight balance columns
+            ledger_table_style.extend([
+                ('BACKGROUND', (7, 1), (8, -1), colors.HexColor('#e8f5e9')),
+                ('FONTNAME', (7, 1), (8, -1), 'Helvetica-Bold'),
+            ])
+
+            ledger_table.setStyle(TableStyle(ledger_table_style))
+            elements.append(ledger_table)
+        else:
+            no_trans_msg = Paragraph("<i>No transactions found for this license</i>", styles['Normal'])
+            elements.append(no_trans_msg)
 
         # Summary table at the end
         elements.append(Spacer(1, SPACER_LARGE))

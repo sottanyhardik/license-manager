@@ -11,6 +11,17 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err, req, res) => {
+            // Suppress ECONNREFUSED noise during Django auto-reload restarts
+            if (err.code === 'ECONNREFUSED') {
+              if (!res.headersSent) {
+                res.writeHead(502, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ detail: 'Backend restarting, please retry.' }));
+              }
+            }
+          });
+        },
       }
     }
   },

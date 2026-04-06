@@ -124,7 +124,9 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         incentive_qs = IncentiveLicense.objects.select_related('exporter', 'port_code').all()
 
         # Apply filters
-        if is_active_only:
+        # When a company filter is active, skip active_only so fully-used or expired licenses
+        # that have trades with that company are still shown in the company's history.
+        if is_active_only and not company_id:
             dfia_qs = dfia_qs.filter(is_expired=False)
             incentive_qs = incentive_qs.filter(is_active=True, license_expiry_date__gte=timezone.now().date())
 
@@ -781,10 +783,15 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 lines__sr_number__license=license
             )
 
-            # Filter by company if provided (transactions where company is either from_company or to_company)
+            # Direction-aware company filter:
+            # - PURCHASE/COMMISSION_PURCHASE: company is the BUYER (to_company)
+            # - SALE/COMMISSION_SALE: company is the SELLER (from_company)
+            # This shows only transactions owned by the company, not ones where they
+            # are merely the counterparty (e.g. "Sale to LABDHI" is the SELLER's entry).
             if company_id:
                 trades_query = trades_query.filter(
-                    Q(from_company_id=company_id) | Q(to_company_id=company_id)
+                    Q(direction__in=['PURCHASE', 'COMMISSION_PURCHASE'], to_company_id=company_id) |
+                    Q(direction__in=['SALE', 'COMMISSION_SALE'], from_company_id=company_id)
                 )
 
             trades = trades_query.prefetch_related('lines__sr_number').distinct().order_by('invoice_date', 'id')
@@ -797,12 +804,14 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             total_purchase_amount = 0
             total_sales_amount = 0  # Track total sales amount for simple profit calculation
 
-            # Get all trades and sort by date
+            # Get all trades and sort: purchases always before sales (regardless of date)
+            # so running balance and P/L are calculated correctly even when a sale is
+            # recorded before its corresponding purchase in chronological order.
             all_trans = []
             for trade in trades:
                 all_trans.append((trade.direction, trade.invoice_date or timezone.now().date(), trade))
 
-            all_trans.sort(key=lambda x: (x[1], x[0] != 'PURCHASE'))  # Purchases first on same date
+            all_trans.sort(key=lambda x: (x[0] not in ['PURCHASE', 'COMMISSION_PURCHASE'], x[1]))
 
             # If there are no trades but there's an opening balance, add it first
             if len(all_trans) == 0 and float(license.opening_balance or 0) > 0:
@@ -829,23 +838,9 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 })
 
             # Process transactions (all are LicenseTrade objects)
+            # The queryset is already filtered to only trades involving the company (from_company or to_company),
+            # so no additional per-transaction filtering is needed here.
             for idx, (trans_type, trans_date, trans_obj) in enumerate(all_trans):
-                # If company filter is active, check if this transaction is relevant for this company
-                # From company's perspective:
-                # - PURCHASE: Show if company is the BUYER (to_company) - they purchased FROM someone
-                # - SALE: Show if company is the SELLER (from_company) - they sold TO someone
-                # This allows the company to see their complete buy-sell cycle for profit/loss calculation
-                if company_id:
-                    company_id_int = int(company_id)
-                    if trans_type in ['PURCHASE', 'COMMISSION_PURCHASE']:
-                        # Show PURCHASE only if the filtered company is the buyer (to_company)
-                        if trans_obj.to_company_id != company_id_int:
-                            continue
-                    elif trans_type in ['SALE', 'COMMISSION_SALE']:
-                        # Show SALE only if the filtered company is the seller (from_company)
-                        if trans_obj.from_company_id != company_id_int:
-                            continue
-
                 # Get all lines for this trade that belong to THIS specific license
                 total_cif_usd = 0
                 total_amount = 0
@@ -1012,8 +1007,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'exporter': license.exporter.name if license.exporter else '',
                 'port': license.port.name if license.port else '',
                 'total_value': total_purchase_cif,
-                'available_balance': round(running_balance, 2),  # Use calculated running balance, not DB field
-                'db_balance': float(license.balance_cif or 0),  # Keep DB balance for reference
+                'available_balance': round(running_balance, 2),
+                'db_balance': float(license.balance_cif or 0),
                 'transactions': transactions,
             })
 
@@ -1034,32 +1029,21 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 incentive_lines__incentive_license=license
             )
 
-            # Filter by company if provided (transactions where company is either from_company or to_company)
+            # Direction-aware company filter:
+            # - PURCHASE/COMMISSION_PURCHASE: company is the BUYER (to_company)
+            # - SALE/COMMISSION_SALE: company is the SELLER (from_company)
             if company_id:
                 trades_query = trades_query.filter(
-                    Q(from_company_id=company_id) | Q(to_company_id=company_id)
+                    Q(direction__in=['PURCHASE', 'COMMISSION_PURCHASE'], to_company_id=company_id) |
+                    Q(direction__in=['SALE', 'COMMISSION_SALE'], from_company_id=company_id)
                 )
 
             trades = trades_query.prefetch_related('incentive_lines').distinct().order_by('invoice_date', 'id')
 
             # Process trades
+            # The queryset is already filtered to only trades involving the company (from_company or to_company),
+            # so no additional per-trade filtering is needed here.
             for trade in trades:
-                # If company filter is active, check if this transaction is relevant for this company
-                # From company's perspective:
-                # - PURCHASE: Show if company is the BUYER (to_company) - they purchased FROM someone
-                # - SALE: Show if company is the SELLER (from_company) - they sold TO someone
-                # This allows the company to see their complete buy-sell cycle for profit/loss calculation
-                if company_id:
-                    company_id_int = int(company_id)
-                    if trade.direction in ['PURCHASE', 'COMMISSION_PURCHASE']:
-                        # Show PURCHASE only if the filtered company is the buyer (to_company)
-                        if trade.to_company_id != company_id_int:
-                            continue
-                    elif trade.direction in ['SALE', 'COMMISSION_SALE']:
-                        # Show SALE only if the filtered company is the seller (from_company)
-                        if trade.from_company_id != company_id_int:
-                            continue
-
                 # Find the specific line for THIS license
                 license_line = trade.incentive_lines.filter(incentive_license=license).first()
 
@@ -1356,13 +1340,18 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         return response
 
-    def _get_license_transactions(self, lic_data):
+    def _get_license_transactions(self, lic_data, company_id=None):
         """
         Fetch detailed transactions for a single license.
         Returns list of transaction dictionaries with all details.
+
+        When company_id is provided, uses direction-aware filtering (same logic as ledger_detail):
+        - PURCHASE/COMMISSION_PURCHASE: only show if company is the BUYER (to_company)
+        - SALE/COMMISSION_SALE: only show if company is the SELLER (from_company)
         """
         from trade.models import LicenseTrade
         from django.utils import timezone
+        from django.db.models import Q
 
         license_type = lic_data.get('license_type')
         lic_id = lic_data.get('id')
@@ -1379,15 +1368,30 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             else:
                 return []
 
-            # Get trades for this license
+            # Direction-aware company filter:
+            # - PURCHASE: company is the BUYER (to_company)
+            # - SALE: company is the SELLER (from_company)
+            company_filter = Q()
+            if company_id:
+                try:
+                    company_id_int = int(company_id)
+                    company_filter = (
+                        Q(direction__in=['PURCHASE', 'COMMISSION_PURCHASE'], to_company_id=company_id_int) |
+                        Q(direction__in=['SALE', 'COMMISSION_SALE'], from_company_id=company_id_int)
+                    )
+                except (ValueError, TypeError):
+                    pass
+
             if license_type == 'DFIA':
                 trades = LicenseTrade.objects.filter(
+                    company_filter,
                     license_type='DFIA',
                     lines__sr_number__license=license_obj
                 ).prefetch_related('lines__sr_number').distinct().order_by('invoice_date', 'id')
             else:
                 # For Incentive licenses, use incentive_lines relationship
                 trades = LicenseTrade.objects.filter(
+                    company_filter,
                     license_type='INCENTIVE',
                     incentive_lines__incentive_license=license_obj
                 ).prefetch_related('incentive_lines').distinct().order_by('invoice_date', 'id')
@@ -1398,12 +1402,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             total_purchase_amount = 0
             total_sales_amount = 0
 
-            # Sort transactions
+            # Sort: all purchases before sales so P/L is computed correctly
             all_trans = []
             for trade in trades:
                 all_trans.append((trade.direction, trade.invoice_date or timezone.now().date(), trade))
 
-            all_trans.sort(key=lambda x: (x[1], x[0] != 'PURCHASE'))
+            all_trans.sort(key=lambda x: (x[0] not in ['PURCHASE', 'COMMISSION_PURCHASE'], x[1]))
 
             # Add opening balance if exists
             if len(all_trans) == 0 and license_type == 'DFIA':
@@ -1590,6 +1594,10 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 elements.append(lic_header)
 
                 # License Info Table
+                # Fetch transactions first (direction-aware company filter applied inside)
+                company_id = query_params.get('company')
+                transactions = self._get_license_transactions(lic_data, company_id=company_id)
+
                 lic_date = lic_data.get('license_date')
                 exp_date = lic_data.get('license_expiry_date')
                 lic_date_str = lic_date.strftime('%d-%b-%Y') if lic_date else '-'
@@ -1597,11 +1605,16 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
                 total_val = lic_data.get('total_value', 0)
                 balance_val = lic_data.get('balance_value', 0)
-                sold_val = lic_data.get('sold_value', 0)
-                purchase_amt = lic_data.get('purchase_amount', 0)
-                sale_amt = lic_data.get('sale_amount', 0)
-                profit_loss = lic_data.get('profit_loss', 0)
                 currency = lic_data.get('currency', 'USD')
+
+                if company_id and transactions:
+                    purchase_amt = sum(t.get('debit_amount', 0) for t in transactions)
+                    sale_amt = sum(t.get('credit_amount', 0) for t in transactions)
+                    profit_loss = sale_amt - purchase_amt
+                else:
+                    purchase_amt = lic_data.get('purchase_amount', 0)
+                    sale_amt = lic_data.get('sale_amount', 0)
+                    profit_loss = lic_data.get('profit_loss', 0)
 
                 info_data = [
                     ['License Date:', lic_date_str, 'Expiry Date:', exp_date_str],
@@ -1642,9 +1655,6 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 pl_para = Paragraph(pl_text, pl_style)
                 elements.append(pl_para)
                 elements.append(Spacer(1, 0.15 * inch))
-
-                # Fetch detailed transactions for this license
-                transactions = self._get_license_transactions(lic_data)
 
                 if transactions:
                     # Transaction table header
@@ -1758,6 +1768,112 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     elements.append(no_txn)
 
                 elements.append(Spacer(1, 0.2 * inch))
+
+        # ── Summary page ──────────────────────────────────────────────────────
+        if licenses_data:
+            elements.append(PageBreak())
+
+            summary_title_style = ParagraphStyle(
+                'SummaryTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                textColor=colors.HexColor('#1a1a1a'),
+                spaceAfter=14,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            elements.append(Paragraph("LICENSE PROFIT / LOSS SUMMARY", summary_title_style))
+            elements.append(Spacer(1, 0.15 * inch))
+
+            summary_header = [
+                'License No.', 'Type', 'Exporter',
+                'Purchase Amt (₹)', 'Sale Amt (₹)', 'P/L (₹)'
+            ]
+
+            summary_rows = [summary_header]
+            total_purchase = 0
+            total_sale = 0
+            total_pl = 0
+
+            company_id_summary = query_params.get('company')
+
+            for lic_data in licenses_data:
+                txns = self._get_license_transactions(lic_data, company_id=company_id_summary)
+                if company_id_summary and txns:
+                    pur = sum(t.get('debit_amount', 0) for t in txns)
+                    sal = sum(t.get('credit_amount', 0) for t in txns)
+                    pl  = sal - pur
+                else:
+                    pur = lic_data.get('purchase_amount', 0)
+                    sal = lic_data.get('sale_amount', 0)
+                    pl  = lic_data.get('profit_loss', 0)
+
+                total_purchase += pur
+                total_sale     += sal
+                total_pl       += pl
+
+                pl_color = 'green' if pl >= 0 else 'red'
+                pl_sign  = '+' if pl >= 0 else ''
+                pl_cell  = Paragraph(
+                    f'<font color="{pl_color}">{pl_sign}{format_indian_number(pl, 2)}</font>',
+                    ParagraphStyle('plcell', fontSize=7, fontName='Helvetica', alignment=1)
+                )
+
+                summary_rows.append([
+                    lic_data.get('license_number', '-'),
+                    lic_data.get('license_type', '-'),
+                    lic_data.get('exporter_name', '-'),
+                    format_indian_number(pur, 2),
+                    format_indian_number(sal, 2),
+                    pl_cell,
+                ])
+
+            # Totals row
+            total_pl_color = 'green' if total_pl >= 0 else 'red'
+            total_pl_sign  = '+' if total_pl >= 0 else ''
+            total_pl_cell  = Paragraph(
+                f'<font color="{total_pl_color}"><b>{total_pl_sign}{format_indian_number(total_pl, 2)}</b></font>',
+                ParagraphStyle('tplcell', fontSize=7, fontName='Helvetica-Bold', alignment=1)
+            )
+            summary_rows.append([
+                Paragraph('<b>TOTAL</b>', ParagraphStyle('tot', fontSize=7, fontName='Helvetica-Bold')),
+                '', '',
+                Paragraph(f'<b>{format_indian_number(total_purchase, 2)}</b>', ParagraphStyle('tp', fontSize=7, fontName='Helvetica-Bold', alignment=2)),
+                Paragraph(f'<b>{format_indian_number(total_sale, 2)}</b>',     ParagraphStyle('ts', fontSize=7, fontName='Helvetica-Bold', alignment=2)),
+                total_pl_cell,
+            ])
+
+            summary_table = Table(summary_rows, colWidths=[
+                1.5*inch, 0.7*inch, 2.5*inch, 1.4*inch, 1.4*inch, 1.2*inch
+            ], repeatRows=1)
+
+            summary_table.setStyle(TableStyle([
+                # Header
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+                ('TEXTCOLOR',  (0, 0), (-1, 0), colors.whitesmoke),
+                ('FONTNAME',   (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE',   (0, 0), (-1, 0), 8),
+                ('ALIGN',      (0, 0), (-1, 0), 'CENTER'),
+                ('VALIGN',     (0, 0), (-1, 0), 'MIDDLE'),
+                # Data
+                ('FONTNAME',   (0, 1), (-1, -2), 'Helvetica'),
+                ('FONTSIZE',   (0, 1), (-1, -1), 7),
+                ('ALIGN',      (3, 1), (-1, -1), 'RIGHT'),
+                ('ALIGN',      (0, 1), (2, -1), 'LEFT'),
+                ('VALIGN',     (0, 1), (-1, -1), 'MIDDLE'),
+                # Totals row
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ecf0f1')),
+                ('FONTNAME',   (0, -1), (-1, -1), 'Helvetica-Bold'),
+                # Grid
+                ('GRID',       (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f8f9fa')]),
+                ('TOPPADDING',    (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LEFTPADDING',   (0, 0), (-1, -1), 5),
+                ('RIGHTPADDING',  (0, 0), (-1, -1), 5),
+            ]))
+
+            elements.append(summary_table)
 
         doc.build(elements)
         pdf_content = buffer.getvalue()

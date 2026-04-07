@@ -1068,7 +1068,7 @@ export default function MasterList() {
                                             window.open(url, '_blank');
                                             setTimeout(() => window.URL.revokeObjectURL(url), 100);
                                         } catch (err) {
-                                            alert(err?.response?.data?.error || 'Failed to generate PDF');
+                                            toast.error(err?.response?.data?.error || 'Failed to generate PDF');
                                         }
                                     }
                                 }

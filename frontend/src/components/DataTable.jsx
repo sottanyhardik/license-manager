@@ -1,4 +1,5 @@
 import {useState} from "react";
+import {toast} from "react-toastify";
 import {formatDate} from "../utils/dateFormatter";
 
 /**
@@ -105,7 +106,7 @@ export default function DataTable({
             await onInlineUpdate(item.id, columnName, editValue);
             setEditingCell(null);
         } catch (error) {
-            console.error("Failed to update:", error);
+            toast.error(error?.response?.data?.error || 'Failed to save. Please try again.');
         } finally {
             setSaving(false);
         }
@@ -134,7 +135,7 @@ export default function DataTable({
             const newValue = !currentValue;
             await onInlineUpdate(item.id, columnName, newValue);
         } catch (error) {
-            console.error('Failed to toggle:', error);
+            toast.error(error?.response?.data?.error || 'Failed to update. Please try again.');
         } finally {
             setSaving(false);
         }

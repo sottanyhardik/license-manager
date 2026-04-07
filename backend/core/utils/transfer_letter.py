@@ -2,8 +2,11 @@
 Generic Transfer Letter Generation Utility
 Works for both Allotment and BOE
 """
+import logging
 import os
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from decimal import Decimal
 from shutil import make_archive
 
@@ -74,19 +77,19 @@ def merge_license_documents(licenses, output_path):
                             # Add converted PDF to merger
                             merger.append(tmp_pdf_path)
                             added_count += 1
-                            print(f"✓ Converted DOCX to PDF: {os.path.basename(file_path)}")
+                            logger.debug("Converted DOCX to PDF: %s", os.path.basename(file_path))
 
                             # Clean up temp file after adding to merger
                             try:
                                 os.remove(tmp_pdf_path)
-                            except:
+                            except OSError:
                                 pass
                         else:
-                            print(f"✗ Failed to convert DOCX file: {os.path.basename(file_path)}")
+                            logger.warning("Failed to convert DOCX file: %s", os.path.basename(file_path))
                             continue
 
                     except Exception as e:
-                        print(f"✗ Error converting DOCX file {os.path.basename(file_path)}: {str(e)}")
+                        logger.error("Error converting DOCX file %s: %s", os.path.basename(file_path), str(e))
                         continue
                 elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
                     # Convert image to PDF
@@ -128,16 +131,14 @@ def merge_license_documents(licenses, output_path):
             # Write merged PDF
             merger.write(output_path)
             merger.close()
-            print(f"✓ Merged {added_count} license documents into {os.path.basename(output_path)}")
+            logger.info("Merged %d license documents into %s", added_count, os.path.basename(output_path))
             return True
         else:
-            print("✗ No license documents found to merge")
+            logger.warning("No license documents found to merge")
             return False
 
     except Exception as e:
-        print(f"✗ Error merging license documents: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error merging license documents")
         return False
 
 
@@ -158,11 +159,11 @@ def merge_tl_with_license_copy(tl_pdf_path, license_copy_path, output_path):
 
         # Check if both files exist
         if not os.path.exists(tl_pdf_path):
-            print(f"✗ Transfer letter PDF not found: {tl_pdf_path}")
+            logger.error("Transfer letter PDF not found: %s", tl_pdf_path)
             return False
 
         if not os.path.exists(license_copy_path):
-            print(f"✗ License copy PDF not found: {license_copy_path}")
+            logger.error("License copy PDF not found: %s", license_copy_path)
             return False
 
         merger = PdfMerger()
@@ -175,13 +176,11 @@ def merge_tl_with_license_copy(tl_pdf_path, license_copy_path, output_path):
         merger.write(output_path)
         merger.close()
 
-        print(f"✓ Created FS PDF: {os.path.basename(output_path)}")
+        logger.info("Created FS PDF: %s", os.path.basename(output_path))
         return True
 
     except Exception as e:
-        print(f"✗ Error merging TL with License Copy: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error merging TL with License Copy")
         return False
 
 
@@ -361,21 +360,21 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                     if merge_tl_with_license_copy(tl_pdf_path, license_copy_path, fs_pdf_path):
                         # FS PDF created successfully - track for deletion
                         successfully_merged.append((tl_pdf_path, license_copy_path))
-                        print(f"✓ Created FS PDF: {fs_filename}")
+                        logger.info("Created FS PDF: %s", fs_filename)
 
             # Delete only the TL and Copy PDFs that have FS successfully created
             for tl_path, copy_path in successfully_merged:
                 try:
                     os.remove(tl_path)
-                    print(f"✓ Deleted TL PDF: {os.path.basename(tl_path)}")
-                except Exception as e:
-                    print(f"✗ Could not delete TL PDF {os.path.basename(tl_path)}: {str(e)}")
+                    logger.debug("Deleted TL PDF: %s", os.path.basename(tl_path))
+                except OSError as e:
+                    logger.warning("Could not delete TL PDF %s: %s", os.path.basename(tl_path), str(e))
 
                 try:
                     os.remove(copy_path)
-                    print(f"✓ Deleted Copy PDF: {os.path.basename(copy_path)}")
-                except Exception as e:
-                    print(f"✗ Could not delete Copy PDF {os.path.basename(copy_path)}: {str(e)}")
+                    logger.debug("Deleted Copy PDF: %s", os.path.basename(copy_path))
+                except OSError as e:
+                    logger.warning("Could not delete Copy PDF %s: %s", os.path.basename(copy_path), str(e))
 
         # Create zip file
         file_name = f'{dir_name}.zip'
@@ -392,8 +391,7 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
             'error': 'Transfer letter template not found'
         }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Failed to generate transfer letter")
         return Response({
             'error': f'Failed to generate transfer letter: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

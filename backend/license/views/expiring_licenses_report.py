@@ -575,7 +575,7 @@ class ExpiringLicensesReportView(View):
                                 cell_length = len(str(cell.value))
                                 if cell_length > max_length:
                                     max_length = cell_length
-                        except:
+                        except (TypeError, AttributeError):
                             pass
 
                 adjusted_width = min(max(max_length + 2, 10), 50)

@@ -1293,7 +1293,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         # Clean up temp file
                         try:
                             os.remove(tmp_pdf_path)
-                        except:
+                        except OSError:
                             pass
 
                     except Exception as e:

@@ -81,7 +81,6 @@ export default function TradeForm() {
         // Only prefill if lines are empty (for create mode or when explicitly requested)
         // Don't auto-prefill in edit mode if lines already exist
         if (formData.lines && formData.lines.length > 0) {
-            console.log('Lines already exist, skipping BOE auto-prefill');
             return;
         }
 
@@ -157,9 +156,7 @@ export default function TradeForm() {
 
             // Parse date fields using centralized date parser
             if (data.invoice_date) {
-                console.log('Original invoice_date from API:', data.invoice_date);
                 data.invoice_date = parseDate(data.invoice_date) || new Date();
-                console.log('Parsed to Date object:', data.invoice_date);
             }
 
             // Parse payment dates
@@ -347,18 +344,9 @@ export default function TradeForm() {
 
         // If incentive license is selected, fetch full details and auto-fill license_value
         if (field === 'incentive_license' && value) {
-            console.log('Selected incentive license ID:', value);
             try {
-                // Fetch the full license details from API
                 const { data } = await api.get(`/incentive-licenses/${value}/`);
-                console.log('Fetched incentive license data:', data);
-
-                // Keep the ID as the value (don't replace with full object)
-                // line.incentive_license is already set to 'value' on line 267
-
-                // Auto-fill license_value from fetched data
                 line.license_value = parseFloat(data.license_value) || 0;
-                console.log('Auto-filled license_value:', line.license_value);
 
                 // Trigger recalculation of amount if rate is already set
                 if (line.rate_pct > 0) {
@@ -589,10 +577,6 @@ export default function TradeForm() {
         if (Object.keys(validationErrors).length > 0) {
             setFieldErrors(validationErrors);
 
-            // Log detailed validation errors for debugging
-            console.error('❌ Validation Errors:', validationErrors);
-            console.log('📋 Form Data:', formData);
-
             // Create detailed error message
             const errorDetails = [];
             Object.entries(validationErrors).forEach(([field, errors]) => {
@@ -643,10 +627,6 @@ export default function TradeForm() {
             // Check if we have file upload
             const hasFile = formData.purchase_invoice_copy instanceof File;
 
-            console.log('🔍 Frontend: hasFile =', hasFile);
-            console.log('🔍 Frontend: formData.lines.length =', formData.lines.length);
-            console.log('🔍 Frontend: formData.lines =', formData.lines);
-
             let payload;
             let headers = {};
 
@@ -695,8 +675,6 @@ export default function TradeForm() {
                     cleanedLine.hsn_code = '49070000';
                     return cleanedLine;
                 });
-                console.log('🔍 Frontend: cleanedLines before stringify:', cleanedLines);
-                console.log('🔍 Frontend: cleanedLines as JSON:', JSON.stringify(cleanedLines));
                 formDataObj.append('lines', JSON.stringify(cleanedLines));
 
                 // Add incentive_lines as JSON string (clean up empty id fields)

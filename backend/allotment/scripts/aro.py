@@ -76,7 +76,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                     with open(debug_log, "a") as f:
                         f.write(f"SUCCESS: Microsoft Word converted successfully\n")
                         f.flush()
-                except:
+                except OSError:
                     pass
                 logger.info(f"✓ Successfully converted with Microsoft Word: {os.path.basename(docx_path)}")
                 print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF (Microsoft Word)")
@@ -107,7 +107,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                 with open(debug_log, "a") as f:
                     f.write(f"SUCCESS: unoconv converted successfully\n")
                     f.flush()
-            except:
+            except OSError:
                 pass
             logger.info(f"✓ Successfully converted with unoconv: {os.path.basename(docx_path)}")
             print(f"✓ Successfully converted {os.path.basename(docx_path)} to PDF")
@@ -211,7 +211,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                             f.write(f"SUCCESS: LibreOffice converted successfully\n")
                             f.write(f"PDF size: {os.path.getsize(pdf_path)} bytes\n")
                             f.flush()
-                    except:
+                    except OSError:
                         pass
                     msg = f"✓ Successfully converted {os.path.basename(docx_path)} to PDF"
                     logger.info(msg)
@@ -225,7 +225,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                             f.write(f"Stdout: {result.stdout}\n")
                             f.write(f"Stderr: {result.stderr}\n")
                             f.flush()
-                    except:
+                    except OSError:
                         pass
                     msg = f"✗ PDF not created: {os.path.basename(docx_path)}"
                     logger.error(msg)
@@ -275,7 +275,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                 os.remove(html_path)
 
             return os.path.exists(pdf_path)
-    except:
+    except Exception:
         pass
 
     return False
@@ -350,9 +350,7 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
                 print(f"Warning: Could not convert {docx_filename} to PDF. Keeping DOCX file.")
 
         except Exception as e:
-            print(f"Error generating transfer letter {idx}: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error generating transfer letter %s", idx)
             raise
 
     if conversion_failed_count > 0:

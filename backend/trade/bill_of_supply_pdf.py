@@ -88,7 +88,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
                 color_value = '#' + color_value
             try:
                 company_color = colors.HexColor(color_value)
-            except:
+            except (ValueError, TypeError):
                 company_color = colors.black
 
     doc = SimpleDocTemplate(

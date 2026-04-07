@@ -88,16 +88,8 @@ export default function MasterForm({
                 apiPath = `/masters/${entityName}/`;
             }
 
-            console.log('[MasterForm] Fetching metadata from:', apiPath, 'for entity:', entityName);
-
             // Use GET to fetch metadata (custom structure with form_fields, field_meta, etc.)
             const {data} = await api.get(apiPath);
-
-            console.log('[MasterForm] Metadata response:', {
-                form_fields: data.form_fields,
-                field_meta_keys: Object.keys(data.field_meta || {}),
-                full_response_keys: Object.keys(data)
-            });
 
             setMetadata({
                 form_fields: data.form_fields || data.fields || [],
@@ -105,44 +97,21 @@ export default function MasterForm({
                 field_meta: data.field_meta || {}
             });
 
-            console.log('[MasterForm] Full metadata received:', {
-                entity: entityName,
-                isEdit,
-                field_meta: data.field_meta,
-                fk_endpoint_overrides: data.fk_endpoint_overrides,
-                label_field_overrides: data.label_field_overrides,
-                port_code_meta: data.field_meta?.port_code
-            });
-
             // Apply default values from field_meta when creating new record (not editing)
             if (!isEdit && data.field_meta) {
                 const defaults = {};
                 const fkDefaults = {}; // Store FK defaults to fetch labels
 
-                console.log('[MasterForm] Processing field_meta for defaults, isEdit:', isEdit);
-
                 Object.keys(data.field_meta).forEach(fieldName => {
                     const fieldConfig = data.field_meta[fieldName];
                     if (fieldConfig.default !== undefined && fieldConfig.default !== null) {
                         defaults[fieldName] = fieldConfig.default;
-                        console.log(`[MasterForm] Found default for ${fieldName}:`, fieldConfig.default, 'type:', fieldConfig.type);
 
                         // Track FK fields with defaults to fetch their labels
                         // Note: type can be 'fk' or 'select' (enhanced by backend)
                         if ((fieldConfig.type === 'fk' || fieldConfig.type === 'select') && typeof fieldConfig.default === 'number') {
                             const endpoint = fieldConfig.fk_endpoint || fieldConfig.endpoint || data.fk_endpoint_overrides?.[fieldName];
                             const labelField = fieldConfig.label_field || data.label_field_overrides?.[fieldName] || 'name';
-                            console.log(`[MasterForm] FK default for ${fieldName}:`, {
-                                id: fieldConfig.default,
-                                endpoint,
-                                labelField,
-                                from_field_config: {
-                                    fk_endpoint: fieldConfig.fk_endpoint,
-                                    endpoint: fieldConfig.endpoint,
-                                    label_field: fieldConfig.label_field
-                                },
-                                from_overrides: data.fk_endpoint_overrides?.[fieldName]
-                            });
 
                             fkDefaults[fieldName] = {
                                 id: fieldConfig.default,
@@ -161,7 +130,6 @@ export default function MasterForm({
                     }, {});
 
                     setFormData(prev => ({ ...prev, ...fkValues }));
-                    console.log('[MasterForm] FK defaults (IDs only) applied:', fkValues);
                 }
 
                 // Only set non-FK defaults if we found any
@@ -204,11 +172,6 @@ export default function MasterForm({
     };
 
     const handleChange = async (field, value) => {
-        // DEBUG: Log license_documents changes
-        if (field === 'license_documents') {
-            console.log('[MasterForm.handleChange] license_documents updated:', value);
-        }
-
         const updates = {[field]: value};
 
         // Auto-calculate registration_number when license_number changes
@@ -711,21 +674,6 @@ export default function MasterForm({
         }
 
         try {
-            // DEBUG: Log license_documents before sending
-            if (entityName === 'licenses' && formData.license_documents) {
-                console.log('=== DEBUG: license_documents before sending ===');
-                console.log('Raw formData.license_documents:', formData.license_documents);
-                formData.license_documents.forEach((doc, index) => {
-                    console.log(`Document ${index}:`, {
-                        type: doc.type,
-                        typeOf: typeof doc.type,
-                        file: doc.file,
-                        fileType: doc.file ? doc.file.constructor.name : 'null',
-                        allKeys: Object.keys(doc)
-                    });
-                });
-            }
-
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
                 apiPath = `/${entityName}/`;
@@ -792,16 +740,6 @@ export default function MasterForm({
                 Object.entries(formData).forEach(([key, value]) => {
                     appendToFormData(key, value);
                 });
-
-                // DEBUG: Log FormData contents for license_documents
-                if (entityName === 'licenses') {
-                    console.log('=== DEBUG: FormData contents ===');
-                    for (let [key, value] of formDataObj.entries()) {
-                        if (key.includes('license_documents')) {
-                            console.log(key, ':', value);
-                        }
-                    }
-                }
 
                 if (isEdit) {
                     response = await api.patch(`${apiPath}${id}/`, formDataObj, {

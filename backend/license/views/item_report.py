@@ -2,6 +2,8 @@
 Item Report - List all License Import Items with filters and inline editing support
 """
 
+import logging
+
 from django.db.models import Q, Prefetch
 from django.http import JsonResponse, HttpResponse
 from django.views import View
@@ -12,6 +14,8 @@ from rest_framework.response import Response
 
 from core.models import ItemNameModel
 from license.models import LicenseImportItemsModel, LicenseDetailsModel
+
+logger = logging.getLogger(__name__)
 
 
 class ItemReportView(View):
@@ -42,16 +46,14 @@ class ItemReportView(View):
             try:
                 return self.export_to_excel(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error exporting item report to Excel")
                 return JsonResponse({'error': str(e)}, status=500)
 
         # For JSON, generate full report
         try:
             report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error generating item report")
             return JsonResponse({'error': str(e)}, status=500)
 
         return JsonResponse(report_data, safe=False)

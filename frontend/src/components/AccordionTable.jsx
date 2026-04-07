@@ -1,5 +1,6 @@
 import {useState, Fragment} from "react";
 import {Link} from "react-router-dom";
+import {toast} from "react-toastify";
 import api from "../api/axios";
 import {formatDate} from "../utils/dateFormatter";
 import {formatIndianNumber} from "../utils/numberFormatter";
@@ -41,7 +42,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                     const response = await api.get(`${basePath}/${id}/nested_items/`);
                     setNestedData({...nestedData, [id]: response.data});
                 } catch (err) {
-                    // Silently handle error
+                    toast.error('Failed to load details. Please try again.');
                 } finally {
                     setLoadingNested({...loadingNested, [id]: false});
                 }
@@ -59,7 +60,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
         try {
             await onToggleBoolean(item, field, !currentValue);
         } catch (err) {
-            // Silently handle error
+            toast.error('Failed to update. Please try again.');
         } finally {
             setTogglingFields({...togglingFields, [fieldKey]: false});
         }

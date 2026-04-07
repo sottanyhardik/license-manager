@@ -155,7 +155,7 @@ class LicenseActionViewSet(ViewSet):
                                 transfer_date = datetime.strptime(transfer_date, '%d/%m/%Y').date()
                             else:
                                 transfer_date = datetime.strptime(transfer_date, '%Y-%m-%d').date()
-                        except:
+                        except ValueError:
                             transfer_date = None
 
                     # Parse datetime fields
@@ -166,7 +166,7 @@ class LicenseActionViewSet(ViewSet):
                             if 'T' in date_str:
                                 return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
                             return datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
-                        except:
+                        except ValueError:
                             return None
 
                     # Find or create from_company
@@ -329,7 +329,7 @@ class LicenseActionViewSet(ViewSet):
                                             transfer_date = datetime.strptime(transfer_date, '%d/%m/%Y').date()
                                         else:
                                             transfer_date = datetime.strptime(transfer_date, '%Y-%m-%d').date()
-                                    except:
+                                    except ValueError:
                                         transfer_date = None
 
                                 # Parse datetime fields
@@ -346,7 +346,7 @@ class LicenseActionViewSet(ViewSet):
                                         if timezone.is_naive(dt):
                                             dt = timezone.make_aware(dt)
                                         return dt
-                                    except:
+                                    except ValueError:
                                         return None
 
                                 # Find or create from_company

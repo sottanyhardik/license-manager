@@ -2,7 +2,7 @@ import axios from "axios";
 import { toast } from 'react-toastify';
 
 const api = axios.create({
-    baseURL: "/api/",  // Use relative URL to work on any domain
+    baseURL: "/api/",
     headers: {"Content-Type": "application/json"},
 });
 
@@ -13,72 +13,101 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Auto-refresh access token on 401 errors with enhanced error handling
+// ─── Refresh queue ────────────────────────────────────────────────────────────
+// Prevents the race condition where multiple concurrent 401s each try to refresh,
+// causing "token already blacklisted" errors and unexpected logouts.
+// Only one refresh fires; all other pending requests wait for it to finish.
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(({ resolve, reject }) => {
+        if (error) reject(error);
+        else resolve(token);
+    });
+    failedQueue = [];
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 api.interceptors.response.use(
     (res) => res,
     async (error) => {
         const original = error.config;
 
-        // Network error (offline)
+        // Network error (no response — offline or server unreachable)
         if (!error.response) {
             toast.error('Network error. Please check your connection.');
             return Promise.reject(error);
         }
 
-        // 401 - Unauthorized (existing logic)
-        if (error.response.status === 401 && !original._retry) {
+        const status = error.response.status;
+
+        // 401 - Unauthorized: attempt token refresh once
+        if (status === 401 && !original._retry) {
+
+            // If a refresh is already in flight, queue this request until it completes
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then((token) => {
+                    original.headers.Authorization = `Bearer ${token}`;
+                    return api(original);
+                }).catch((err) => Promise.reject(err));
+            }
+
             original._retry = true;
+            isRefreshing = true;
 
             const refresh = localStorage.getItem("refresh");
             if (!refresh) {
+                isRefreshing = false;
+                processQueue(error);
                 localStorage.clear();
                 window.location.href = "/login";
                 return Promise.reject(error);
             }
 
             try {
-                const {data} = await axios.post(
-                    "/api/auth/refresh/",  // Use relative URL
-                    {refresh}
-                );
+                const { data } = await axios.post("/api/auth/refresh/", { refresh });
 
-                // Save new tokens (rotation)
                 localStorage.setItem("access", data.access);
-                if (data.refresh) {
-                    localStorage.setItem("refresh", data.refresh);
-                }
+                if (data.refresh) localStorage.setItem("refresh", data.refresh);
 
-                // Update the authorization header for the retry
                 original.headers.Authorization = `Bearer ${data.access}`;
-
-                // Retry original request
+                processQueue(null, data.access);
                 return api(original);
 
             } catch (refreshError) {
+                processQueue(refreshError);
                 localStorage.clear();
-                window.location.href = "/login";
+                window.location.href = "/login?reason=session_expired";
                 return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
             }
         }
 
         // 403 - Forbidden
-        if (error.response.status === 403) {
+        if (status === 403) {
             toast.error('Access denied. You do not have permission.');
+            return Promise.reject(error);
         }
 
-        // 404 - Not found
-        if (error.response.status === 404) {
+        // 404 - Not found (skip toast on retry requests to avoid double-toasting)
+        if (status === 404 && !original._retry) {
             toast.error('Resource not found.');
+            return Promise.reject(error);
         }
 
-        // 500+ - Server error with retry
-        if (error.response.status >= 500 && !original._retryCount) {
+        // 500+ - Server error with up to 2 retries (exponential backoff)
+        if (status >= 500) {
             original._retryCount = (original._retryCount || 0) + 1;
             if (original._retryCount <= 2) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 1000 * original._retryCount));
                 return api(original);
             }
             toast.error('Server error. Please try again later.');
+            return Promise.reject(error);
         }
 
         return Promise.reject(error);

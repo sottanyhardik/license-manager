@@ -216,7 +216,10 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    # Access token lasts 4 hours — long enough for a full working session.
+    # The frontend proactively refreshes 5 min before expiry, so users never
+    # hit a 401 mid-request during normal use.
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=4),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 
     # Enable refresh rotation
@@ -241,7 +244,7 @@ CELERY_TIMEZONE = TIME_ZONE
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1",
+        "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
         "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
     }
 }

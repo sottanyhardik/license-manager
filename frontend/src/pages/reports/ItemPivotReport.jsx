@@ -86,7 +86,7 @@ export default function ItemPivotReport() {
             const response = await api.get(url);
             setReportData(response.data);
         } catch (error) {
-            alert('Failed to load report. Please try again.');
+            toast.error(error?.response?.data?.error || 'Failed to load report. Please try again.');
             setReportData(null);
         } finally {
             setLoading(false);
@@ -173,7 +173,7 @@ export default function ItemPivotReport() {
             link.remove();
             window.URL.revokeObjectURL(downloadUrl);
         } catch (error) {
-            alert('Failed to download report. Please try again.');
+            toast.error(error?.response?.data?.error || 'Failed to download report. Please try again.');
         } finally {
             setDownloading(false);
         }

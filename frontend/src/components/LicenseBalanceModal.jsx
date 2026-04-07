@@ -143,7 +143,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             });
             setUsageData(response.data);
         } catch (error) {
-            console.error('Error fetching item usage:', error);
+            toast.error('Failed to load usage details.');
             setUsageData({
                 boes: [],
                 allotments: []

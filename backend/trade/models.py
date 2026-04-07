@@ -92,9 +92,6 @@ def get_next_invoice_number(direction: str, company_name: str, invoice_date=None
     Returns:
         Next invoice number string
     """
-    from django.db.models import Max
-    import re
-
     # Get prefix and FY
     base_prefix = company_prefix(company_name)
     fy = indian_fy_label(invoice_date)

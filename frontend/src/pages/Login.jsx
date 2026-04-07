@@ -17,7 +17,13 @@ export default function Login() {
     // 3. default to dashboard
     const searchParams = new URLSearchParams(location.search);
     const redirectParam = searchParams.get('redirect');
+    const reason = searchParams.get('reason');
     const from = location.state?.from || redirectParam || "/dashboard";
+
+    const sessionMessage =
+        reason === 'idle' ? 'You were logged out due to inactivity. Please log in again.' :
+        reason === 'session_expired' ? 'Your session has expired. Please log in again.' :
+        null;
 
     // Redirect if already logged in
     useEffect(() => {
@@ -94,6 +100,15 @@ export default function Login() {
 
                 {/* Form Section */}
                 <div style={{ padding: '40px 32px' }}>
+                    {sessionMessage && (
+                        <div className="alert alert-warning d-flex align-items-center" role="alert" style={{
+                            borderRadius: '10px',
+                            marginBottom: '24px'
+                        }}>
+                            <i className="bi bi-clock-history me-2"></i>
+                            {sessionMessage}
+                        </div>
+                    )}
                     {error && (
                         <div className="alert alert-danger d-flex align-items-center" role="alert" style={{
                             borderRadius: '10px',

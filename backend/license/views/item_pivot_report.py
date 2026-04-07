@@ -5,6 +5,7 @@ Shows licenses with items as column headers, displaying quantities and values pe
 Similar to the GE DFIA report format.
 """
 
+import logging
 from collections import defaultdict
 from decimal import Decimal
 from typing import Dict, List, Any
@@ -20,6 +21,8 @@ from rest_framework.response import Response
 from core.constants import DEC_0, DEC_000, GE, MI, CO
 from core.models import ItemNameModel
 from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
+
+logger = logging.getLogger(__name__)
 
 
 class ItemPivotReportView(View):
@@ -45,8 +48,7 @@ class ItemPivotReportView(View):
             try:
                 return self.export_to_excel_streaming(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error exporting item pivot report to Excel")
                 return JsonResponse({
                     'error': str(e)
                 }, status=500)
@@ -756,7 +758,7 @@ class ItemPivotReportView(View):
                 # Clean up temp file after streaming
                 try:
                     os.unlink(file_path)
-                except:
+                except OSError:
                     pass
 
             response = StreamingHttpResponse(
@@ -770,7 +772,7 @@ class ItemPivotReportView(View):
             # Clean up temp file in case of error
             try:
                 os.unlink(temp_file.name)
-            except:
+            except OSError:
                 pass
             raise e
 
@@ -950,7 +952,7 @@ class ItemPivotReportView(View):
                         yield chunk
                 try:
                     os.unlink(file_path)
-                except:
+                except OSError:
                     pass
 
             response = StreamingHttpResponse(
@@ -963,7 +965,7 @@ class ItemPivotReportView(View):
         except Exception as e:
             try:
                 os.unlink(temp_file.name)
-            except:
+            except OSError:
                 pass
             raise e
 
@@ -1010,8 +1012,7 @@ class ItemPivotViewSet(viewsets.ViewSet):
 
             return Response(result)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error generating item pivot report")
             return Response({"error": str(e)}, status=500)
 
     @action(detail=False, methods=['post', 'get'], url_path='generate-async')

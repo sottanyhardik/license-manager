@@ -170,10 +170,10 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
         try:
             date_object = datetime.datetime.strptime(item["be_date"], "%Y/%m/%d")
             item["be_date"] = date_object.strftime("%Y-%m-%d")
-        except Exception:
+        except ValueError:
             try:
                 item["be_date"] = item["be_date"].strftime("%Y-%m-%d")
-            except:
+            except AttributeError:
                 pass
         key = (item["be_number"], item["be_date"], existing_ports[item["port"]])
         unique_bill_entries[key] = item

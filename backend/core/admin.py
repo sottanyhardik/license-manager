@@ -19,7 +19,7 @@ for model_name, model in app.models.items():
             model_admin.search_fields = model.admin_search_fields if hasattr(model, 'admin_search_fields') else ()
             model_admin.list_filter = model.list_filter if hasattr(model, 'list_filter') else ()
             admin.site.register(model, model_admin)
-    except:
+    except Exception:
         pass
 
 

@@ -127,19 +127,11 @@ class LicenseDetailsModel(AuditModel):
     balance_cif = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
                                       validators=[MinValueValidator(DEC_0)])
 
-    export_item = models.CharField(max_length=255, null=True, blank=True)
     is_incomplete = models.BooleanField(default=False)
     is_expired = models.BooleanField(default=False)
     is_individual = models.BooleanField(default=False)
 
     ge_file_number = models.IntegerField(default=0)
-
-    fob = models.IntegerField(default=0, null=True, blank=True)
-
-    billing_rate = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
-                                       validators=[MinValueValidator(DEC_0)])
-    billing_amount = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
-                                         validators=[MinValueValidator(DEC_0)])
 
     admin_search_fields = ("license_number",)
 
@@ -198,12 +190,6 @@ class LicenseDetailsModel(AuditModel):
                 "total"]
         return _to_decimal(total, DEC_0)
 
-    def opening_cif_inr(self) -> Decimal:
-        total = \
-            self.export_license.aggregate(total=Coalesce(Sum("cif_inr"), Value(DEC_0), output_field=DecimalField()))[
-                "total"]
-        return _to_decimal(total, DEC_0)
-
     @property
     def get_total_debit(self) -> Decimal:
         """Total BOE debit. Uses centralized service."""
@@ -229,11 +215,6 @@ class LicenseDetailsModel(AuditModel):
         from license.services.balance_calculator import LicenseBalanceCalculator
         return LicenseBalanceCalculator.calculate_allotment(self)
 
-    def _calculate_license_trade(self) -> Decimal:
-        """Calculate total trade (no invoice) using centralized service"""
-        from license.services.balance_calculator import LicenseBalanceCalculator
-        return LicenseBalanceCalculator.calculate_trade(self)
-
     @property
     def get_balance_cif(self) -> Decimal:
         """
@@ -255,9 +236,6 @@ class LicenseDetailsModel(AuditModel):
         from license.services.restriction_calculator import RestrictionCalculator
         total_export_cif = self._calculate_license_credit()
         return RestrictionCalculator.calculate_all_restriction_balances(self, total_export_cif)
-
-    def get_party_name(self) -> str:
-        return str(self.exporter)[:8]
 
     # ---------- grouped import summaries ----------
     @cached_property

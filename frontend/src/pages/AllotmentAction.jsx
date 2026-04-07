@@ -175,9 +175,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 }
             });
 
-            console.log('Fetching with params:', params);
-            console.log('Current filters:', filters);
-
             const {data} = await api.get(`/allotment-actions/${id}/available-licenses/`, {
                 params
             });

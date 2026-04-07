@@ -138,7 +138,7 @@ export default function LicenseLedger() {
                 setLicenses([]);
             }
         } catch (error) {
-            console.error('Error fetching ledger data:', error);
+            toast.error(error?.response?.data?.error || 'Failed to load ledger data.');
             setLicenses([]);
         } finally {
             setLoading(false);
@@ -157,7 +157,7 @@ export default function LicenseLedger() {
             const response = await api.get(`/license-ledger/summary/?${params.toString()}`);
             setSummary(response.data);
         } catch (error) {
-            console.error('Error fetching summary:', error);
+            toast.error('Failed to load summary data.');
         }
     };
 

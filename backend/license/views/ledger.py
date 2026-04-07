@@ -253,38 +253,42 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         from trade.models import LicenseTrade
         from django.db.models import Sum, Q
 
+        # Fetch all licenses with related data in one query
+        licenses = list(queryset.select_related('exporter', 'port'))
+        if not licenses:
+            return []
+
+        license_ids = [lic.id for lic in licenses]
+
+        # Batch all 4 aggregate queries into 2 group-by queries instead of 4N queries
+        purchase_totals = (
+            LicenseTrade.objects
+            .filter(license_type='DFIA', direction='PURCHASE', lines__sr_number__license_id__in=license_ids)
+            .values('lines__sr_number__license_id')
+            .annotate(total_inr=Sum('lines__amount_inr'), total_usd=Sum('lines__cif_fc'))
+        )
+        sale_totals = (
+            LicenseTrade.objects
+            .filter(license_type='DFIA', direction='SALE', lines__sr_number__license_id__in=license_ids)
+            .values('lines__sr_number__license_id')
+            .annotate(total_inr=Sum('lines__amount_inr'), total_usd=Sum('lines__cif_fc'))
+        )
+
+        purchase_map = {r['lines__sr_number__license_id']: r for r in purchase_totals}
+        sale_map = {r['lines__sr_number__license_id']: r for r in sale_totals}
+
         data = []
-        for license in queryset:
-            # Calculate purchase and sale amounts (INR) for this specific license
-            purchase_amount_inr = LicenseTrade.objects.filter(
-                license_type='DFIA',
-                direction='PURCHASE',
-                lines__sr_number__license=license
-            ).aggregate(total=Sum('lines__amount_inr'))['total'] or 0
+        for license in licenses:
+            pur_row = purchase_map.get(license.id, {})
+            sal_row = sale_map.get(license.id, {})
 
-            sale_amount_inr = LicenseTrade.objects.filter(
-                license_type='DFIA',
-                direction='SALE',
-                lines__sr_number__license=license
-            ).aggregate(total=Sum('lines__amount_inr'))['total'] or 0
+            purchase_amount_inr = float(pur_row.get('total_inr') or 0)
+            purchase_amount_usd = float(pur_row.get('total_usd') or 0)
+            sale_amount_inr = float(sal_row.get('total_inr') or 0)
+            sale_amount_usd = float(sal_row.get('total_usd') or 0)
 
-            # Calculate purchase and sale amounts in USD (cif_fc)
-            purchase_amount_usd = LicenseTrade.objects.filter(
-                license_type='DFIA',
-                direction='PURCHASE',
-                lines__sr_number__license=license
-            ).aggregate(total=Sum('lines__cif_fc'))['total'] or 0
-
-            sale_amount_usd = LicenseTrade.objects.filter(
-                license_type='DFIA',
-                direction='SALE',
-                lines__sr_number__license=license
-            ).aggregate(total=Sum('lines__cif_fc'))['total'] or 0
-
-            profit_loss = float(sale_amount_inr) - float(purchase_amount_inr)
-
-            # Calculate balance: Purchase USD - Sold USD
-            balance_usd = float(purchase_amount_usd) - float(sale_amount_usd)
+            profit_loss = sale_amount_inr - purchase_amount_inr
+            balance_usd = purchase_amount_usd - sale_amount_usd
 
             data.append({
                 'id': license.id,
@@ -295,60 +299,60 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'exporter_name': license.exporter.name if license.exporter else '',
                 'exporter_id': license.exporter.id if license.exporter else None,
                 'port_name': license.port.name if license.port else '',
-                'total_value': float(purchase_amount_usd),  # Total purchased USD
-                'balance_value': balance_usd,                # Balance = Purchase - Sold
-                'sold_value': float(sale_amount_usd),       # Total sold USD
-                'purchase_amount': float(purchase_amount_inr),
-                'sale_amount': float(sale_amount_inr),
+                'total_value': purchase_amount_usd,
+                'balance_value': balance_usd,
+                'sold_value': sale_amount_usd,
+                'purchase_amount': purchase_amount_inr,
+                'sale_amount': sale_amount_inr,
                 'profit_loss': profit_loss,
                 'currency': 'USD',
                 'is_expired': license.is_expired,
                 'is_active': not license.is_expired,
-                'sold_status': self._get_sold_status(
-                    purchase_amount_usd or 0,
-                    balance_usd or 0
-                ),
+                'sold_status': self._get_sold_status(purchase_amount_usd, balance_usd),
             })
         return data
 
     def _prepare_incentive_data(self, queryset):
         """Prepare Incentive license data for ledger view"""
         from trade.models import LicenseTrade
-        from django.db.models import Sum, Q
+        from django.db.models import Sum
+
+        licenses = list(queryset.select_related('exporter', 'port_code'))
+        if not licenses:
+            return []
+
+        license_ids = [lic.id for lic in licenses]
+        today = timezone.now().date()
+
+        # Batch all 4 aggregate queries into 2 group-by queries instead of 4N queries
+        purchase_totals = (
+            LicenseTrade.objects
+            .filter(license_type='INCENTIVE', direction='PURCHASE', incentive_lines__incentive_license_id__in=license_ids)
+            .values('incentive_lines__incentive_license_id')
+            .annotate(total_inr=Sum('incentive_lines__amount_inr'), total_value=Sum('incentive_lines__license_value'))
+        )
+        sale_totals = (
+            LicenseTrade.objects
+            .filter(license_type='INCENTIVE', direction='SALE', incentive_lines__incentive_license_id__in=license_ids)
+            .values('incentive_lines__incentive_license_id')
+            .annotate(total_inr=Sum('incentive_lines__amount_inr'), total_value=Sum('incentive_lines__license_value'))
+        )
+
+        purchase_map = {r['incentive_lines__incentive_license_id']: r for r in purchase_totals}
+        sale_map = {r['incentive_lines__incentive_license_id']: r for r in sale_totals}
 
         data = []
-        for license in queryset:
-            # Calculate purchase and sale amounts (INR) for this specific incentive license
-            purchase_amount_inr = LicenseTrade.objects.filter(
-                license_type='INCENTIVE',
-                direction='PURCHASE',
-                incentive_lines__incentive_license=license
-            ).aggregate(total=Sum('incentive_lines__amount_inr'))['total'] or 0
+        for license in licenses:
+            pur_row = purchase_map.get(license.id, {})
+            sal_row = sale_map.get(license.id, {})
 
-            sale_amount_inr = LicenseTrade.objects.filter(
-                license_type='INCENTIVE',
-                direction='SALE',
-                incentive_lines__incentive_license=license
-            ).aggregate(total=Sum('incentive_lines__amount_inr'))['total'] or 0
+            purchase_amount_inr = float(pur_row.get('total_inr') or 0)
+            purchase_value_inr = float(pur_row.get('total_value') or 0)
+            sale_amount_inr = float(sal_row.get('total_inr') or 0)
+            sale_value_inr = float(sal_row.get('total_value') or 0)
 
-            # Calculate total purchased value (INR) from trade lines
-            purchase_value_inr = LicenseTrade.objects.filter(
-                license_type='INCENTIVE',
-                direction='PURCHASE',
-                incentive_lines__incentive_license=license
-            ).aggregate(total=Sum('incentive_lines__license_value'))['total'] or 0
-
-            # Calculate total sold value (INR) from trade lines
-            sale_value_inr = LicenseTrade.objects.filter(
-                license_type='INCENTIVE',
-                direction='SALE',
-                incentive_lines__incentive_license=license
-            ).aggregate(total=Sum('incentive_lines__license_value'))['total'] or 0
-
-            profit_loss = float(sale_amount_inr) - float(purchase_amount_inr)
-
-            # Calculate balance: Purchase INR - Sold INR
-            balance_inr = float(purchase_value_inr) - float(sale_value_inr)
+            profit_loss = sale_amount_inr - purchase_amount_inr
+            balance_inr = purchase_value_inr - sale_value_inr
 
             data.append({
                 'id': license.id,
@@ -359,14 +363,14 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'exporter_name': license.exporter.name if license.exporter else '',
                 'exporter_id': license.exporter.id if license.exporter else None,
                 'port_name': license.port_code.name if license.port_code else '',
-                'total_value': float(purchase_value_inr),  # Total purchased INR
-                'balance_value': balance_inr,              # Balance = Purchase - Sold
-                'sold_value': float(sale_value_inr),       # Total sold INR
-                'purchase_amount': float(purchase_amount_inr),
-                'sale_amount': float(sale_amount_inr),
+                'total_value': purchase_value_inr,
+                'balance_value': balance_inr,
+                'sold_value': sale_value_inr,
+                'purchase_amount': purchase_amount_inr,
+                'sale_amount': sale_amount_inr,
                 'profit_loss': profit_loss,
                 'currency': 'INR',
-                'is_expired': license.license_expiry_date < timezone.now().date() if license.license_expiry_date else False,
+                'is_expired': license.license_expiry_date < today if license.license_expiry_date else False,
                 'is_active': license.is_active,
                 'sold_status': self._get_sold_status(purchase_value_inr, balance_inr),
             })
@@ -380,6 +384,31 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             return 'NO'
         else:
             return 'PARTIAL'
+
+    def _get_incentive_breakdown(self, incentive_qs):
+        """
+        Return per-type count and balance for RODTEP/ROSTL/MEIS in a single DB query
+        instead of 6 queries (count + sum loop × 3 types).
+        """
+        from django.db.models import Count, Sum
+        rows = (
+            incentive_qs
+            .filter(license_type__in=['RODTEP', 'ROSTL', 'MEIS'])
+            .values('license_type')
+            .annotate(count=Count('id'), balance=Sum('balance_value'))
+        )
+        breakdown = {
+            row['license_type']: {
+                'count': row['count'],
+                'balance': round(float(row['balance'] or 0), 2),
+            }
+            for row in rows
+        }
+        # Fill any missing types with zeros
+        for lt in ['RODTEP', 'ROSTL', 'MEIS']:
+            if lt not in breakdown:
+                breakdown[lt] = {'count': 0, 'balance': 0.0}
+        return breakdown
 
     def list(self, request, *args, **kwargs):
         """Override list to handle non-queryset data"""
@@ -625,13 +654,23 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 if license_type != 'INCENTIVE':
                     incentive_qs = incentive_qs.filter(license_type=license_type)
 
+        from django.db.models import Count
+
+        # opening_balance is a @cached_property (not a DB column), must sum in Python
         dfia_total = sum(_get_safe_balance(lic, 'opening_balance') for lic in dfia_qs)
-        dfia_balance = sum(_get_safe_balance(lic, 'balance_cif') for lic in dfia_qs)
+        # balance_cif IS a DB column — aggregate at DB level to avoid loading all objects
+        dfia_balance = float(dfia_qs.aggregate(balance=Sum('balance_cif'))['balance'] or 0)
         dfia_sold = dfia_total - dfia_balance
 
-        incentive_total = sum(_get_safe_balance(lic, 'license_value') for lic in incentive_qs)
-        incentive_balance = sum(_get_safe_balance(lic, 'balance_value') for lic in incentive_qs)
-        incentive_sold = sum(_get_safe_balance(lic, 'sold_value') for lic in incentive_qs)
+        # license_value, balance_value, sold_value are all real DB columns on IncentiveLicense
+        incentive_agg = incentive_qs.aggregate(
+            total=Sum('license_value'),
+            balance=Sum('balance_value'),
+            sold=Sum('sold_value'),
+        )
+        incentive_total = float(incentive_agg['total'] or 0)
+        incentive_balance = float(incentive_agg['balance'] or 0)
+        incentive_sold = float(incentive_agg['sold'] or 0)
 
         # Calculate purchase and sale amounts from trades
         # Build base trade filters
@@ -729,16 +768,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 'purchase_amount_inr': round(float(incentive_purchases), 2),
                 'sale_amount_inr': round(float(incentive_sales), 2),
                 'profit_loss_inr': round(incentive_profit, 2),
-                'breakdown': {
-                    license_type: {
-                        'count': incentive_qs.filter(license_type=license_type).count(),
-                        'balance': round(sum(
-                            float(lic.balance_value or 0)
-                            for lic in incentive_qs.filter(license_type=license_type)
-                        ), 2)
-                    }
-                    for license_type in ['RODTEP', 'ROSTL', 'MEIS']
-                }
+                'breakdown': self._get_incentive_breakdown(incentive_qs)
             }
         })
 
@@ -794,7 +824,11 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     Q(direction__in=['SALE', 'COMMISSION_SALE'], from_company_id=company_id)
                 )
 
-            trades = trades_query.prefetch_related('lines__sr_number').distinct().order_by('invoice_date', 'id')
+            trades = trades_query.prefetch_related(
+                'lines__sr_number__items__sion_norm_class',
+                'from_company',
+                'to_company',
+            ).distinct().order_by('invoice_date', 'id')
 
             transactions = []
             running_balance = 0
@@ -847,6 +881,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 items_desc = []
 
                 sion_norms = []  # Collect SION norms for this transaction
+                qty_kg_total = 0.0
                 for line in trans_obj.lines.all():
                     # Only include lines that reference THIS specific license
                     if line.sr_number and line.sr_number.license_id != license.id:
@@ -871,14 +906,17 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
                     total_cif_usd += cif_usd
                     total_amount += float(line.amount_inr or 0)
+                    # qty_kg only counted for lines that have a valid sr_number (matches original logic)
+                    if line.sr_number:
+                        qty_kg_total += float(line.qty_kg or 0)
 
                     # Collect item names and SION norms
                     if line.sr_number:
-                        # Get all items linked to this sr_number (import item)
+                        # Get all items linked to this sr_number (import item) — prefetched
                         for item in line.sr_number.items.all():
                             if item.name:
                                 items_desc.append(item.name)
-                            # Collect SION norm class if available
+                            # Collect SION norm class if available — prefetched
                             if item.sion_norm_class:
                                 sion_norm = item.sion_norm_class.norm_class
                                 if sion_norm and sion_norm not in sion_norms:
@@ -929,7 +967,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'invoice_number': trans_obj.invoice_number or '',
                             'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
                             'sion_norms': ', '.join(sion_norms) if sion_norms else '',
-                            'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
+                            'qty': qty_kg_total,
                             'cif_usd': total_cif_usd,
                             'debit_cif': total_cif_usd,  # Purchase/Commission is debit
                             'credit_cif': 0,
@@ -957,7 +995,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'invoice_number': trans_obj.invoice_number or '',
                             'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
                             'sion_norms': ', '.join(sion_norms) if sion_norms else '',
-                            'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
+                            'qty': qty_kg_total,
                             'cif_usd': total_cif_usd,
                             'debit_cif': total_cif_usd,  # Commission is debit (expense)
                             'credit_cif': 0,
@@ -981,7 +1019,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'invoice_number': trans_obj.invoice_number or '',
                             'items': ', '.join(set(items_desc))[:100] if items_desc else 'N/A',
                             'sion_norms': ', '.join(sion_norms) if sion_norms else '',
-                            'qty': sum(float(line.qty_kg or 0) for line in trans_obj.lines.all() if line.sr_number and line.sr_number.license_id == license.id),
+                            'qty': qty_kg_total,
                             'cif_usd': total_cif_usd,
                             'debit_cif': 0,
                             'credit_cif': total_cif_usd,  # Sale is credit (asset decreases)
@@ -1038,14 +1076,21 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     Q(direction__in=['SALE', 'COMMISSION_SALE'], from_company_id=company_id)
                 )
 
-            trades = trades_query.prefetch_related('incentive_lines').distinct().order_by('invoice_date', 'id')
+            trades = trades_query.prefetch_related(
+                'incentive_lines__incentive_license',
+                'from_company',
+                'to_company',
+            ).distinct().order_by('invoice_date', 'id')
 
             # Process trades
             # The queryset is already filtered to only trades involving the company (from_company or to_company),
             # so no additional per-trade filtering is needed here.
             for trade in trades:
-                # Find the specific line for THIS license
-                license_line = trade.incentive_lines.filter(incentive_license=license).first()
+                # Find the specific line for THIS license — use prefetched data to avoid N+1
+                license_line = next(
+                    (l for l in trade.incentive_lines.all() if l.incentive_license_id == license.id),
+                    None,
+                )
 
                 if not license_line:
                     continue
@@ -1786,7 +1831,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             elements.append(Spacer(1, 0.15 * inch))
 
             summary_header = [
-                'License No.', 'Type', 'Exporter',
+                'License No.', 'License Date', 'Expiry Date', 'Type', 'Exporter',
+                'CIF $ Purchase', 'CIF $ Sold', 'Balance $',
                 'Purchase Amt (₹)', 'Sale Amt (₹)', 'P/L (₹)'
             ]
 
@@ -1794,6 +1840,9 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             total_purchase = 0
             total_sale = 0
             total_pl = 0
+            total_cif_purchase = 0
+            total_cif_sold = 0
+            total_cif_balance = 0
 
             company_id_summary = query_params.get('company')
 
@@ -1808,9 +1857,17 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     sal = lic_data.get('sale_amount', 0)
                     pl  = lic_data.get('profit_loss', 0)
 
+                cif_purchase = lic_data.get('total_value', 0) or 0
+                cif_sold = lic_data.get('sold_value', 0) or 0
+                cif_balance = lic_data.get('balance_value', 0) or 0
+                currency = lic_data.get('currency', 'USD')
+
                 total_purchase += pur
                 total_sale     += sal
                 total_pl       += pl
+                total_cif_purchase += cif_purchase
+                total_cif_sold     += cif_sold
+                total_cif_balance  += cif_balance
 
                 pl_color = 'green' if pl >= 0 else 'red'
                 pl_sign  = '+' if pl >= 0 else ''
@@ -1819,10 +1876,20 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     ParagraphStyle('plcell', fontSize=7, fontName='Helvetica', alignment=1)
                 )
 
+                lic_date = lic_data.get('license_date')
+                exp_date = lic_data.get('license_expiry_date')
+                lic_date_str = lic_date.strftime('%d-%b-%Y') if lic_date else '-'
+                exp_date_str = exp_date.strftime('%d-%b-%Y') if exp_date else '-'
+
                 summary_rows.append([
                     lic_data.get('license_number', '-'),
+                    lic_date_str,
+                    exp_date_str,
                     lic_data.get('license_type', '-'),
                     lic_data.get('exporter_name', '-'),
+                    f"{currency} {format_indian_number(cif_purchase, 2)}",
+                    f"{currency} {format_indian_number(cif_sold, 2)}",
+                    f"{currency} {format_indian_number(cif_balance, 2)}",
                     format_indian_number(pur, 2),
                     format_indian_number(sal, 2),
                     pl_cell,
@@ -1837,14 +1904,19 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             )
             summary_rows.append([
                 Paragraph('<b>TOTAL</b>', ParagraphStyle('tot', fontSize=7, fontName='Helvetica-Bold')),
-                '', '',
+                '', '', '', '',
+                Paragraph(f'<b>{format_indian_number(total_cif_purchase, 2)}</b>', ParagraphStyle('tcp', fontSize=7, fontName='Helvetica-Bold', alignment=2)),
+                Paragraph(f'<b>{format_indian_number(total_cif_sold, 2)}</b>',     ParagraphStyle('tcs', fontSize=7, fontName='Helvetica-Bold', alignment=2)),
+                Paragraph(f'<b>{format_indian_number(total_cif_balance, 2)}</b>',  ParagraphStyle('tcb', fontSize=7, fontName='Helvetica-Bold', alignment=2)),
                 Paragraph(f'<b>{format_indian_number(total_purchase, 2)}</b>', ParagraphStyle('tp', fontSize=7, fontName='Helvetica-Bold', alignment=2)),
                 Paragraph(f'<b>{format_indian_number(total_sale, 2)}</b>',     ParagraphStyle('ts', fontSize=7, fontName='Helvetica-Bold', alignment=2)),
                 total_pl_cell,
             ])
 
             summary_table = Table(summary_rows, colWidths=[
-                1.5*inch, 0.7*inch, 2.5*inch, 1.4*inch, 1.4*inch, 1.2*inch
+                1.3*inch, 0.85*inch, 0.85*inch, 0.6*inch, 1.6*inch,
+                1.0*inch, 1.0*inch, 1.0*inch,
+                1.1*inch, 1.1*inch, 1.0*inch
             ], repeatRows=1)
 
             summary_table.setStyle(TableStyle([
@@ -1852,15 +1924,20 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
                 ('TEXTCOLOR',  (0, 0), (-1, 0), colors.whitesmoke),
                 ('FONTNAME',   (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE',   (0, 0), (-1, 0), 8),
+                ('FONTSIZE',   (0, 0), (-1, 0), 7),
                 ('ALIGN',      (0, 0), (-1, 0), 'CENTER'),
                 ('VALIGN',     (0, 0), (-1, 0), 'MIDDLE'),
                 # Data
                 ('FONTNAME',   (0, 1), (-1, -2), 'Helvetica'),
                 ('FONTSIZE',   (0, 1), (-1, -1), 7),
-                ('ALIGN',      (3, 1), (-1, -1), 'RIGHT'),
-                ('ALIGN',      (0, 1), (2, -1), 'LEFT'),
+                ('ALIGN',      (5, 1), (-1, -1), 'RIGHT'),
+                ('ALIGN',      (0, 1), (4, -1), 'LEFT'),
                 ('VALIGN',     (0, 1), (-1, -1), 'MIDDLE'),
+                # Highlight CIF $ columns
+                ('BACKGROUND', (5, 1), (5, -2), colors.HexColor('#fdebd0')),
+                ('BACKGROUND', (6, 1), (6, -2), colors.HexColor('#d5f4e6')),
+                ('BACKGROUND', (7, 1), (7, -2), colors.HexColor('#e8f5e9')),
+                ('FONTNAME',   (7, 1), (7, -2), 'Helvetica-Bold'),
                 # Totals row
                 ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ecf0f1')),
                 ('FONTNAME',   (0, -1), (-1, -1), 'Helvetica-Bold'),
@@ -1869,8 +1946,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f8f9fa')]),
                 ('TOPPADDING',    (0, 0), (-1, -1), 5),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                ('LEFTPADDING',   (0, 0), (-1, -1), 5),
-                ('RIGHTPADDING',  (0, 0), (-1, -1), 5),
+                ('LEFTPADDING',   (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
             ]))
 
             elements.append(summary_table)

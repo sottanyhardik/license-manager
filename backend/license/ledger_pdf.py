@@ -590,9 +590,18 @@ def generate_license_ledger_pdf(license_obj):
         elements.append(summary_title)
         elements.append(Spacer(1, SPACER_SMALL))
 
+        # License date / expiry info before summary table
+        license_date_str = license_obj.license_date.strftime('%d-%b-%Y') if license_obj.license_date else 'N/A'
+        expiry_date_str = license_obj.license_expiry_date.strftime('%d-%b-%Y') if license_obj.license_expiry_date else 'N/A'
+        summary_info_style = ParagraphStyle('SummaryInfo', parent=styles['Normal'], fontSize=FONT_SIZE_HEADER, leading=13)
+        elements.append(Paragraph(
+            f"<b>License Date:</b> {license_date_str} &nbsp;&nbsp;&nbsp; <b>Expiry Date:</b> {expiry_date_str}",
+            summary_info_style
+        ))
+        elements.append(Spacer(1, SPACER_SMALL))
+
         summary_data = [
-            ['Item Description', 'Total Import Qty', 'CIF FC', 'Allotted Qty', 'BOE Qty', 'Available Qty',
-             'Balance CIF FC']]
+            ['Item Description', 'Import Qty', 'Total CIF $', 'Purchase Qty', 'CIF $ Purchase', 'Sold Qty', 'CIF $ Sold', 'Avail Qty', 'Balance $']]
 
         # Calculate summary for each item group
         for group_key, items in sorted(item_groups.items(), key=lambda x: min((item.serial_number for item in x[1] if item.serial_number is not None), default=0)):
@@ -633,11 +642,7 @@ def generate_license_ledger_pdf(license_obj):
                     boe_qty += Decimal(str(boe.qty or 0))
                     total_boe_cif_fc += Decimal(str(boe.cif_fc or 0))
 
-                # Balance CIF FC: Use centralized available_value_calculated property
-                # This property is the SINGLE SOURCE OF TRUTH for available value calculation
-                # It handles:
-                # - is_restricted = True: Uses restriction-based calculation (2%, 3%, 5%, 10%)
-                # - is_restricted = False: Uses license.get_balance_cif (shared balance)
+                # Balance $: Use centralized available_value_calculated property
                 balance_cif_fc = Decimal(str(item.available_value_calculated or 0))
 
             # Use Paragraph for description to allow text wrapping
@@ -649,14 +654,15 @@ def generate_license_ledger_pdf(license_obj):
                 f"{total_import_qty:.2f}",
                 f"{total_cif_fc:.2f}",
                 f"{allotted_qty:.2f}" if allotted_qty > 0 else '-',
+                f"{total_allotted_cif_fc:.2f}" if total_allotted_cif_fc > 0 else '-',
                 f"{boe_qty:.2f}" if boe_qty > 0 else '-',
+                f"{total_boe_cif_fc:.2f}" if total_boe_cif_fc > 0 else '-',
                 f"{total_available_qty:.2f}",
                 f"{balance_cif_fc:.2f}",
             ])
 
         summary_table = Table(summary_data,
-                              colWidths=[3 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch, 0.9 * inch,
-                                         0.8 * inch])
+                              colWidths=[2.5 * inch, 0.7 * inch, 0.8 * inch, 0.7 * inch, 0.9 * inch, 0.7 * inch, 0.9 * inch, 0.7 * inch, 0.9 * inch])
         summary_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -668,6 +674,12 @@ def generate_license_ledger_pdf(license_obj):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
             ('TOPPADDING', (0, 0), (-1, -1), 6),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            # Highlight CIF $ Purchase and CIF $ Sold columns
+            ('BACKGROUND', (4, 1), (4, -1), colors.HexColor('#fdebd0')),
+            ('BACKGROUND', (6, 1), (6, -1), colors.HexColor('#d5f4e6')),
+            # Highlight Balance $ column
+            ('BACKGROUND', (8, 1), (8, -1), colors.HexColor('#e8f5e9')),
+            ('FONTNAME', (8, 1), (8, -1), 'Helvetica-Bold'),
         ]))
 
         elements.append(summary_table)

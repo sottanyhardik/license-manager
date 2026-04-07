@@ -143,7 +143,7 @@ class DashboardDataView(APIView):
         # Recent 5 BOE ordered by bill_of_entry_date (all BOE records)
         recent_boe = BillOfEntryModel.objects.filter(
             bill_of_entry_date__isnull=False
-        ).order_by('-bill_of_entry_date')[:5]
+        ).select_related('company').order_by('-bill_of_entry_date')[:5]
 
         recent_data = []
         for boe in recent_boe:

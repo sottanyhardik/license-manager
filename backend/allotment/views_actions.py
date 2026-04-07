@@ -119,13 +119,8 @@ class AllotmentActionViewSet(ViewSet):
                 Q(hs_code__product_description__iexact=description)  # Exact match on HS product description
             ).distinct()
 
-            exact_count = exact_queryset.count()
-            logger.info(f"Exact match count: {exact_count}")
-
-            if exact_count > 0:
-                # Found exact matches, use them
+            if exact_queryset.exists():
                 queryset = exact_queryset
-                logger.info(f"Using exact matches for '{description}'")
             else:
                 # No exact matches, try partial matches
                 queryset = queryset.filter(
@@ -134,7 +129,6 @@ class AllotmentActionViewSet(ViewSet):
                     Q(hs_code__hs_code__icontains=description) |
                     Q(hs_code__product_description__icontains=description)
                 ).distinct()
-                logger.info(f"Using partial matches for '{description}', count: {queryset.count()}")
 
         # Apply exporter filter (after description to ensure AND logic)
         if exporter:

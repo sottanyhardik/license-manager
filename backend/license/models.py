@@ -153,6 +153,8 @@ class LicenseDetailsModel(AuditModel):
             models.Index(fields=['is_active', 'is_expired']),
             models.Index(fields=['balance_cif']),
             models.Index(fields=['current_owner']),
+            models.Index(fields=['notification_number']),
+            models.Index(fields=['scheme_code']),
         ]
 
     def __str__(self) -> str:

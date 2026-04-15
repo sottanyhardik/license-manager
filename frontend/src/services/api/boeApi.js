@@ -68,6 +68,17 @@ export const exportBOEListExcel = async (params = {}) => {
     return response.data;
 };
 
+/**
+ * Export BOE list to Port Excel (simplified: BOE Number, BOE Date, Port, Quantity, Total CIF INR, Item Name)
+ */
+export const exportBOEPortExcel = async (params = {}) => {
+    const response = await api.get('/bill-of-entries/export/', {
+        params: {...params, _export: 'port_xlsx'},
+        responseType: 'blob'
+    });
+    return response.data;
+};
+
 export default {
     fetchBOEList,
     fetchBOE,
@@ -76,4 +87,5 @@ export default {
     deleteBOE,
     exportBOEListPDF,
     exportBOEListExcel,
+    exportBOEPortExcel,
 };

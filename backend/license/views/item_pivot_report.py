@@ -42,11 +42,13 @@ class ItemPivotReportView(View):
         exclude_company_ids = request.GET.get('exclude_company_ids')  # Comma-separated company IDs to exclude
         min_balance = int(request.GET.get('min_balance', 200))
         license_status = request.GET.get('license_status', 'active')
+        expiry_date_from = request.GET.get('expiry_date_from')  # YYYY-MM-DD
+        expiry_date_to = request.GET.get('expiry_date_to')      # YYYY-MM-DD
 
         # For Excel export, use streaming approach to avoid timeout
         if output_format == 'excel':
             try:
-                return self.export_to_excel_streaming(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status)
+                return self.export_to_excel_streaming(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status, expiry_date_from, expiry_date_to)
             except Exception as e:
                 logger.exception("Error exporting item pivot report to Excel")
                 return JsonResponse({
@@ -56,7 +58,7 @@ class ItemPivotReportView(View):
         # For JSON, generate full report
         try:
             report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance,
-                                               license_status)
+                                               license_status, expiry_date_from, expiry_date_to)
         except Exception as e:
             return JsonResponse({
                 'error': str(e)
@@ -66,7 +68,8 @@ class ItemPivotReportView(View):
 
     def generate_report(self, days: int = 30, sion_norm: str = None,
                         company_ids: str = None, exclude_company_ids: str = None,
-                        min_balance: int = 200, license_status: str = 'active') -> Dict[str, Any]:
+                        min_balance: int = 200, license_status: str = 'active',
+                        expiry_date_from: str = None, expiry_date_to: str = None) -> Dict[str, Any]:
         """
         Generate item-wise pivot report.
 
@@ -110,6 +113,14 @@ class ItemPivotReportView(View):
                 license_expiry_date__lte=today + timedelta(days=30)
             )
         # If 'all', no date or is_active filter applied - shows everything
+
+        # Apply explicit expiry date range filter (overrides license_status date logic if provided)
+        if expiry_date_from:
+            from datetime import datetime as _dt
+            licenses = licenses.filter(license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date())
+        if expiry_date_to:
+            from datetime import datetime as _dt
+            licenses = licenses.filter(license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date())
 
         # Filter by SION norm if specified (optional)
         if sion_norm:
@@ -777,7 +788,8 @@ class ItemPivotReportView(View):
             raise e
 
     def export_to_excel_streaming(self, days=30, sion_norm=None, company_ids=None,
-                                  exclude_company_ids=None, min_balance=200, license_status='active'):
+                                  exclude_company_ids=None, min_balance=200, license_status='active',
+                                  expiry_date_from=None, expiry_date_to=None):
         """
         Export report to Excel - uses existing generate_report for data, then formats as Excel.
         This ensures consistency with JSON output.
@@ -798,7 +810,7 @@ class ItemPivotReportView(View):
 
         try:
             # Use the working generate_report method
-            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status)
+            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status, expiry_date_from, expiry_date_to)
 
             workbook = openpyxl.Workbook(write_only=True)
             licenses_by_norm_notif = report_data.get('licenses_by_norm_notification', {})

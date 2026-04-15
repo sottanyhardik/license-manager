@@ -464,6 +464,25 @@ export default function MasterList() {
         }
     };
 
+    const handlePortExcelExport = async () => {
+        try {
+            const blob = await boeApi.exportBOEPortExcel(filterParams);
+            const blobObj = new Blob([blob], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            const url = window.URL.createObjectURL(blobObj);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `port-boe-report_${new Date().toISOString().split('T')[0]}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to export Port Excel');
+        }
+    };
+
     const entityTitle = entityName
         ?.split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -532,6 +551,24 @@ export default function MasterList() {
                         <i className="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>
                         PDF
                     </button>
+                    {entityName === 'bill-of-entries' && (
+                        <button
+                            className="btn"
+                            onClick={handlePortExcelExport}
+                            aria-label="Port Excel Download"
+                            title="Download port-wise BOE Excel (BOE No, Date, Port, Company, Qty, CIF INR, Item) using applied filters"
+                            style={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                color: 'white',
+                                fontWeight: '500',
+                                backdropFilter: 'blur(10px)'
+                            }}
+                        >
+                            <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
+                            Port Excel
+                        </button>
+                    )}
                     {entityName === 'bill-of-entries' && (
                         <button
                             className="btn"

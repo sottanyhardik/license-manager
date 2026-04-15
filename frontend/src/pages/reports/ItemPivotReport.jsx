@@ -19,6 +19,8 @@ export default function ItemPivotReport() {
     const [availableNorms, setAvailableNorms] = useState([]);
     const [minBalance, setMinBalance] = useState(200);
     const [licenseStatus, setLicenseStatus] = useState('active');
+    const [expiryDateFrom, setExpiryDateFrom] = useState('');
+    const [expiryDateTo, setExpiryDateTo] = useState('');
 
     useEffect(() => {
         loadFilterOptions();
@@ -38,7 +40,7 @@ export default function ItemPivotReport() {
         if (activeNormTab) {
             loadReport(activeNormTab);
         }
-    }, [activeNormTab, selectedCompanies, excludeCompanies, minBalance, licenseStatus]);
+    }, [activeNormTab, selectedCompanies, excludeCompanies, minBalance, licenseStatus, expiryDateFrom, expiryDateTo]);
 
     const loadFilterOptions = async () => {
         try {
@@ -82,6 +84,8 @@ export default function ItemPivotReport() {
             }
             url += `&min_balance=${minBalance}`;
             url += `&license_status=${licenseStatus}`;
+            if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
+            if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
 
             const response = await api.get(url);
             setReportData(response.data);
@@ -159,6 +163,8 @@ export default function ItemPivotReport() {
             }
             url += `&min_balance=${minBalance}`;
             url += `&license_status=${licenseStatus}`;
+            if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
+            if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
 
             const response = await api.get(url, {
                 responseType: 'blob',
@@ -192,9 +198,11 @@ export default function ItemPivotReport() {
         setExcludeCompanies([]);
         setMinBalance(200);
         setLicenseStatus('active');
+        setExpiryDateFrom('');
+        setExpiryDateTo('');
     };
 
-    const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active';
+    const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active' || expiryDateFrom || expiryDateTo;
 
     const getTotalLicenseCount = () => {
         if (!reportData) return 0;
@@ -476,6 +484,32 @@ export default function ItemPivotReport() {
 
                                     <div className="col-lg-3 col-md-6">
                                         <label className="form-label fw-bold mb-2">
+                                            <i className="bi bi-calendar-range me-1"></i>
+                                            Expiry Date From
+                                        </label>
+                                        <input
+                                            type="date"
+                                            className="form-control"
+                                            value={expiryDateFrom}
+                                            onChange={(e) => setExpiryDateFrom(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="col-lg-3 col-md-6">
+                                        <label className="form-label fw-bold mb-2">
+                                            <i className="bi bi-calendar-range me-1"></i>
+                                            Expiry Date To
+                                        </label>
+                                        <input
+                                            type="date"
+                                            className="form-control"
+                                            value={expiryDateTo}
+                                            onChange={(e) => setExpiryDateTo(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="col-lg-3 col-md-6">
+                                        <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-building me-1"></i>
                                             Include Companies
                                         </label>
@@ -523,6 +557,8 @@ export default function ItemPivotReport() {
                                                 {minBalance !== 200 && <span className="badge bg-primary ms-2">Min Balance: ₹{minBalance}</span>}
                                                 {licenseStatus !== 'active' && <span
                                                     className="badge bg-primary ms-2">Status: {licenseStatus.replace('_', ' ')}</span>}
+                                                {expiryDateFrom && <span className="badge bg-primary ms-2">Expiry From: {expiryDateFrom}</span>}
+                                                {expiryDateTo && <span className="badge bg-primary ms-2">Expiry To: {expiryDateTo}</span>}
                                                 {selectedCompanies.length > 0 && <span
                                                     className="badge bg-primary ms-2">Incl. Companies: {selectedCompanies.length}</span>}
                                                 {excludeCompanies.length > 0 && <span className="badge bg-primary ms-2">Excl. Companies: {excludeCompanies.length}</span>}

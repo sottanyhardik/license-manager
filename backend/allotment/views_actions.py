@@ -73,8 +73,6 @@ class AllotmentActionViewSet(ViewSet):
         purchase_status = request.query_params.get('purchase_status', '')
         license_status = request.query_params.get('license_status', '')
         item_names = request.query_params.get('item_names', '')
-        expiry_date_from = request.query_params.get('expiry_date_from', '')
-        expiry_date_to = request.query_params.get('expiry_date_to', '')
 
         # Get available license import items with available quantity
         # Show all items with available quantity > 0 (including partially allocated ones)
@@ -207,21 +205,6 @@ class AllotmentActionViewSet(ViewSet):
                     license__license_expiry_date__gte=today,
                     license__license_expiry_date__lte=expiring_date
                 )
-
-        # Apply expiry date range filter
-        if expiry_date_from:
-            try:
-                from datetime import datetime as _dt
-                queryset = queryset.filter(license__license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date())
-            except (ValueError, TypeError):
-                pass
-
-        if expiry_date_to:
-            try:
-                from datetime import datetime as _dt
-                queryset = queryset.filter(license__license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date())
-            except (ValueError, TypeError):
-                pass
 
         # Apply item_names filter
         if item_names:

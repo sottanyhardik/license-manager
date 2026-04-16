@@ -230,6 +230,7 @@ class LedgerTaskStatusView(APIView):
 
     permission_classes = []
     authentication_classes = []
+    throttle_classes = []
     http_method_names = ['get', 'options']
 
     def get(self, request, task_id):

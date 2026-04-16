@@ -25,8 +25,6 @@ export default function ItemReport() {
     const [hsnCodeSearch, setHsnCodeSearch] = useState('');
     const [selectedNorms, setSelectedNorms] = useState([]);
     const [selectedNotifications, setSelectedNotifications] = useState([]);
-    const [expiryDateFrom, setExpiryDateFrom] = useState('');
-    const [expiryDateTo, setExpiryDateTo] = useState('');
 
     // Inline edit states
     const [editingCell, setEditingCell] = useState(null); // {itemId, field}
@@ -46,10 +44,8 @@ export default function ItemReport() {
         productDescSearch,
         hsnCodeSearch,
         selectedNorms,
-        selectedNotifications,
-        expiryDateFrom,
-        expiryDateTo
-    }), [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus, productDescSearch, hsnCodeSearch, selectedNorms, selectedNotifications, expiryDateFrom, expiryDateTo]);
+        selectedNotifications
+    }), [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus, productDescSearch, hsnCodeSearch, selectedNorms, selectedNotifications]);
 
     const { debouncedFilters, isPending } = useDebouncedFilters(filters, 500);
 
@@ -106,9 +102,7 @@ export default function ItemReport() {
                 productDescSearch: prodDesc,
                 hsnCodeSearch: hsnCode,
                 selectedNorms: norms,
-                selectedNotifications: notifications,
-                expiryDateFrom: expFrom,
-                expiryDateTo: expTo
+                selectedNotifications: notifications
             } = debouncedFilters;
 
             if (items.length > 0) {
@@ -150,9 +144,6 @@ export default function ItemReport() {
             if (notifications.length > 0) {
                 url += `&notification_numbers=${notifications.join(',')}`;
             }
-
-            if (expFrom) url += `&expiry_date_from=${expFrom}`;
-            if (expTo) url += `&expiry_date_to=${expTo}`;
 
             const response = await api.get(url);
             setReportData(response.data);
@@ -208,9 +199,6 @@ export default function ItemReport() {
             if (selectedNotifications.length > 0) {
                 url += `&notification_numbers=${selectedNotifications.join(',')}`;
             }
-
-            if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
-            if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
 
             const response = await api.get(url, {
                 responseType: 'blob',
@@ -268,11 +256,9 @@ export default function ItemReport() {
         setHsnCodeSearch('');
         setSelectedNorms([]);
         setSelectedNotifications([]);
-        setExpiryDateFrom('');
-        setExpiryDateTo('');
     };
 
-    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || (purchaseStatus.length !== 3 || !purchaseStatus.includes('GE') || !purchaseStatus.includes('MI') || !purchaseStatus.includes('SM')) || productDescSearch !== '' || hsnCodeSearch !== '' || selectedNorms.length > 0 || selectedNotifications.length > 0 || expiryDateFrom !== '' || expiryDateTo !== '';
+    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || (purchaseStatus.length !== 3 || !purchaseStatus.includes('GE') || !purchaseStatus.includes('MI') || !purchaseStatus.includes('SM')) || productDescSearch !== '' || hsnCodeSearch !== '' || selectedNorms.length > 0 || selectedNotifications.length > 0;
 
     // Inline editing handlers
     const startEdit = (itemId, field, currentValue) => {
@@ -569,32 +555,6 @@ export default function ItemReport() {
                                         <option value="expired">Expired</option>
                                         <option value="all">All</option>
                                     </select>
-                                </div>
-
-                                <div className="col-lg-2 col-md-6">
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-calendar-range me-1"></i>
-                                        Expiry Date From
-                                    </label>
-                                    <input
-                                        type="date"
-                                        className="form-control"
-                                        value={expiryDateFrom}
-                                        onChange={(e) => setExpiryDateFrom(e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="col-lg-2 col-md-6">
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-calendar-range me-1"></i>
-                                        Expiry Date To
-                                    </label>
-                                    <input
-                                        type="date"
-                                        className="form-control"
-                                        value={expiryDateTo}
-                                        onChange={(e) => setExpiryDateTo(e.target.value)}
-                                    />
                                 </div>
 
                                 <div className="col-lg-3 col-md-6">

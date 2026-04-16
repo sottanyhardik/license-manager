@@ -41,26 +41,24 @@ class ItemReportView(View):
         hsn_code = request.GET.get('hsn_code')  # HSN code search
         norms = request.GET.get('norms')  # Comma-separated SION norm classes
         notification_numbers = request.GET.get('notification_numbers')  # Comma-separated notification numbers
-        expiry_date_from = request.GET.get('expiry_date_from')  # YYYY-MM-DD
-        expiry_date_to = request.GET.get('expiry_date_to')      # YYYY-MM-DD
 
         if output_format == 'excel':
             try:
-                return self.export_to_excel(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
+                return self.export_to_excel(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers)
             except Exception as e:
                 logger.exception("Error exporting item report to Excel")
                 return JsonResponse({'error': str(e)}, status=500)
 
         # For JSON, generate full report
         try:
-            report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
+            report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers)
         except Exception as e:
             logger.exception("Error generating item report")
             return JsonResponse({'error': str(e)}, status=500)
 
         return JsonResponse(report_data, safe=False)
 
-    def generate_report(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None):
+    def generate_report(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None):
         """
         Generate item report with all license import items.
 
@@ -119,14 +117,6 @@ class ItemReportView(View):
                 license__license_expiry_date__lte=today + timedelta(days=30)
             )
         # If 'all', no date or is_active filter applied
-
-        # Apply explicit expiry date range filter
-        if expiry_date_from:
-            from datetime import datetime as _dt
-            items = items.filter(license__license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date())
-        if expiry_date_to:
-            from datetime import datetime as _dt
-            items = items.filter(license__license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date())
 
         # Filter by min_balance using stored available_value field (can be done in query)
         # This pre-filters before iteration for better performance
@@ -232,14 +222,14 @@ class ItemReportView(View):
             'items': report_items
         }
 
-    def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None):
+    def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None):
         """Export item report to Excel with separate sheets for Restricted and Not Restricted items"""
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
         from io import BytesIO
 
         # Generate report data
-        report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
+        report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers)
         items = report_data['items']
 
         # Separate items into restricted and not restricted

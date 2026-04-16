@@ -1123,7 +1123,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 is_restricted: "all",
                                                 purchase_status: "GE,GO,SM,MI",
                                                 license_status: "active",
-                                                item_names: ""
+                                                item_names: "",
+                                                expiry_date_from: "",
+                                                expiry_date_to: ""
                                             })}
                                         >
                                             <i className="bi bi-x-circle me-1"></i>

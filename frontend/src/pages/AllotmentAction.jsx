@@ -38,7 +38,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         is_restricted: "all",
         purchase_status: "GE,GO,SM,MI",  // GE Purchase, GE Operating, SM Purchase, Conversion
         license_status: "active",
-        item_names: ""
+        item_names: "",
+        expiry_date_from: "",
+        expiry_date_to: ""
     });
     const [isFirstLoad, setIsFirstLoad] = useState(true);
     const [notificationOptions, setNotificationOptions] = useState([]);
@@ -1075,6 +1077,24 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <option value="expired">Expired</option>
                                             <option value="expiring_soon">Expiring Soon</option>
                                         </select>
+                                    </div>
+                                    <div className="col-md-3">
+                                        <label className="form-label">Expiry Date From</label>
+                                        <input
+                                            type="date"
+                                            className="form-control form-control-sm"
+                                            value={filters.expiry_date_from}
+                                            onChange={(e) => setFilters({...filters, expiry_date_from: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="col-md-3">
+                                        <label className="form-label">Expiry Date To</label>
+                                        <input
+                                            type="date"
+                                            className="form-control form-control-sm"
+                                            value={filters.expiry_date_to}
+                                            onChange={(e) => setFilters({...filters, expiry_date_to: e.target.value})}
+                                        />
                                     </div>
                                     <div className="col-md-12 mt-2">
                                         <button

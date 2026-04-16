@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import os
 
-from celery import Celery
+from celery import Celery, signals
 from celery.schedules import crontab
 from django.conf import settings
 
@@ -71,6 +71,14 @@ app.conf.beat_schedule = {
         }
     },
 }
+
+
+@signals.worker_process_init.connect
+def reset_db_connections(**kwargs):
+    """Close inherited DB connections after each worker fork so psycopg2 gets a fresh connection."""
+    from django.db import connections
+    for conn in connections.all():
+        conn.close()
 
 
 @app.task(bind=True)

@@ -889,3 +889,33 @@ def process_ledger_file_async(self, file_content, file_name):
     finally:
         # Restore original recursion limit
         sys.setrecursionlimit(old_recursion_limit)
+
+
+@shared_task(bind=True, name='process_single_license')
+def process_single_license(self, dict_data):
+    """
+    Process a single license dict (already parsed from CSV).
+    Dispatched individually so licenses are processed in parallel.
+
+    Args:
+        dict_data: Serialized license dict from parse_license_data()
+
+    Returns:
+        dict with license_number or error details
+    """
+    from scripts.parse_ledger import create_object
+
+    license_no = dict_data.get('lic_no', 'Unknown')
+    logger.info(f"Processing single license: {license_no} (task={self.request.id})")
+
+    try:
+        license_number = create_object(dict_data)
+        logger.info(f"Successfully processed license: {license_number}")
+        return {
+            'status': 'SUCCESS',
+            'license_number': license_number,
+            'lic_no': license_no,
+        }
+    except Exception as e:
+        logger.error(f"Error processing license {license_no}: {e}", exc_info=True)
+        raise

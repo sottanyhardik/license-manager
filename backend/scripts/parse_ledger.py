@@ -18,20 +18,6 @@ def parse_date(date_str):
     return None
 
 
-def _strip_val(s):
-    """Strip leading ': ' prefix that the DGFT ledger CSV format adds before values."""
-    s = s.strip()
-    if s.startswith(': '):
-        return s[2:]
-    return s
-
-
-def _parse_float(s):
-    """Parse a float from a CSV value, stripping the ': ' prefix if present."""
-    v = _strip_val(s)
-    return float(v) if v else 0
-
-
 def parse_license_data(rows):
     """
     Parses a list of rows (from CSV or OCR extraction) into structured dict_list based on license groupings.
@@ -52,32 +38,30 @@ def parse_license_data(rows):
         if row[0] == "Regn.No.":
             if current:
                 dict_list.append(current)
-            lic_no = _strip_val(row[5])
-            if len(lic_no) == 9:
-                lic_no = "0" + lic_no
+            if len(row[5]) == 9:
+                row[5] = "0" + row[5]
             current = {
                 "ledger_date": datetime.datetime.now().date(),
-                "registration_no": _strip_val(row[1]),
-                "registration_date": _strip_val(row[3]),
-                "lic_no": lic_no,
-                "lic_date": _strip_val(row[7]),
+                "registration_no": row[1],
+                "registration_date": row[3],
+                "lic_no": row[5],
+                "lic_date": row[7],
                 "row": []
             }
-        elif row[0] in ("RANo.", "RA No."):
-            current["port"] = _strip_val(row[5])
+        elif row[0] == "RANo.":
+            current["port"] = row[5]
         elif row[0] == "IEC":
-            iec = _strip_val(row[1])
-            if len(iec) == 9:
-                iec = "0" + iec
-            current["iec"] = iec
-            current["scheme_code"] = _strip_val(row[3])
-            current["notification"] = _strip_val(row[5])
-            current["foregin_currency"] = _strip_val(row[7])
+            if len(row[1]) == 9:
+                row[1] = "0" + row[1]
+            current["iec"] = row[1]
+            current["scheme_code"] = row[3]
+            current["notification"] = row[5]
+            current["foregin_currency"] = row[7]
 
         elif row[0].lower() == "tot.duty":
-            current["cif_inr"] = _parse_float(row[3])
-            current["total_quantity"] = _parse_float(row[5])
-            current["cif_fc"] = _parse_float(row[7])
+            current["cif_inr"] = float(row[3]) if row[3] else 0
+            current["total_quantity"] = float(row[5]) if row[5] else 0
+            current["cif_fc"] = float(row[7]) if row[7] else 0
 
         elif row[0] and row[0].lower() in ["credit-", "debit-"]:
             if row[0].lower() == 'credit-':
@@ -186,7 +170,7 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
         try:
             date_object = datetime.datetime.strptime(item["be_date"], "%Y/%m/%d")
             item["be_date"] = date_object.strftime("%Y-%m-%d")
-        except ValueError:
+        except (ValueError, TypeError):
             try:
                 item["be_date"] = item["be_date"].strftime("%Y-%m-%d")
             except AttributeError:

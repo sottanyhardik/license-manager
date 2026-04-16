@@ -3,8 +3,7 @@ import { useFileUpload } from '../hooks';
 import axios from 'axios';
 
 const LedgerUpload = () => {
-  const [asyncTasks, setAsyncTasks] = useState([]);
-  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [asyncFileTasks, setAsyncFileTasks] = useState([]);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [useAsyncMode, setUseAsyncMode] = useState(true);
 
@@ -53,8 +52,8 @@ const LedgerUpload = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      if (response.data.tasks) {
-        setAsyncTasks(response.data.tasks);
+      if (response.data.file_tasks) {
+        setAsyncFileTasks(response.data.file_tasks);
         setShowTaskModal(true);
         clearFiles();
         document.getElementById('file-input').value = '';
@@ -72,36 +71,34 @@ const LedgerUpload = () => {
     }
   };
 
-  // Task Status Modal Component
-  const TaskStatusModal = ({ tasks, show, onHide }) => {
+  // Task Status Modal — one card per file, each license polled individually
+  const TaskStatusModal = ({ fileTasks, show, onHide }) => {
     const [taskStatuses, setTaskStatuses] = useState({});
 
     useEffect(() => {
-      if (!show || tasks.length === 0) return;
+      if (!show || fileTasks.length === 0) return;
 
-      const intervals = tasks.map((task) => {
-        return setInterval(async () => {
+      // Collect all individual license tasks across files
+      const allTasks = fileTasks.flatMap(f => f.tasks);
+      const intervals = [];
+
+      allTasks.forEach((task) => {
+        const interval = setInterval(async () => {
           try {
             const response = await axios.get(`/api/ledger-task-status/${task.task_id}/`);
-            setTaskStatuses((prev) => ({
-              ...prev,
-              [task.task_id]: response.data,
-            }));
-
-            // Stop polling if task is complete
+            setTaskStatuses((prev) => ({ ...prev, [task.task_id]: response.data }));
             if (response.data.state === 'SUCCESS' || response.data.state === 'FAILURE') {
-              clearInterval(intervals.find(i => i === interval));
+              clearInterval(interval);
             }
           } catch (err) {
             console.error('Error fetching task status:', err);
           }
-        }, 2000); // Poll every 2 seconds
+        }, 2000);
+        intervals.push(interval);
       });
 
-      return () => {
-        intervals.forEach(clearInterval);
-      };
-    }, [tasks, show]);
+      return () => intervals.forEach(clearInterval);
+    }, [fileTasks, show]);
 
     if (!show) return null;
 
@@ -111,120 +108,75 @@ const LedgerUpload = () => {
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">
-                <i className="bi bi-gear-fill me-2 spinner-border spinner-border-sm"></i>
+                <i className="bi bi-gear-fill me-2"></i>
                 Processing Ledger Files
               </h5>
               <button type="button" className="btn-close" onClick={onHide}></button>
             </div>
             <div className="modal-body">
-              {tasks.map((task) => {
-                const status = taskStatuses[task.task_id];
-                const isComplete = status?.state === 'SUCCESS';
-                const isFailed = status?.state === 'FAILURE';
-                const isProgress = status?.state === 'PROGRESS';
+              {fileTasks.map((fileEntry, fi) => {
+                const total = fileEntry.total;
+                const done = fileEntry.tasks.filter(t => taskStatuses[t.task_id]?.state === 'SUCCESS').length;
+                const failed = fileEntry.tasks.filter(t => taskStatuses[t.task_id]?.state === 'FAILURE').length;
+                const pending = total - done - failed;
+                const pct = total > 0 ? Math.round(((done + failed) / total) * 100) : 0;
+                const allDone = pending === 0;
 
                 return (
-                  <div key={task.task_id} className="card mb-3">
+                  <div key={fi} className="card mb-3">
                     <div className="card-body">
-                      <div className="d-flex justify-content-between align-items-start mb-3">
-                        <div>
-                          <h6 className="mb-1">
-                            <i className="bi bi-file-earmark-text me-2"></i>
-                            {task.file}
-                          </h6>
-                          <small className="text-muted">Task ID: {task.task_id}</small>
-                        </div>
-                        <span className={`badge ${
-                          isComplete ? 'bg-success' :
-                          isFailed ? 'bg-danger' :
-                          'bg-primary'
-                        }`}>
-                          {status?.state || 'QUEUED'}
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <h6 className="mb-0">
+                          <i className="bi bi-file-earmark-text me-2"></i>
+                          {fileEntry.file}
+                        </h6>
+                        <span className={`badge ${allDone ? (failed > 0 ? 'bg-warning' : 'bg-success') : 'bg-primary'}`}>
+                          {allDone ? 'Done' : 'Processing'}
                         </span>
                       </div>
 
-                      {isProgress && status && (
-                        <>
-                          <div className="progress mb-2" style={{ height: '20px' }}>
-                            <div
-                              className="progress-bar progress-bar-striped progress-bar-animated"
-                              style={{
-                                width: `${(status.current / status.total) * 100}%`
-                              }}
-                            >
-                              {status.current} / {status.total}
-                            </div>
-                          </div>
-                          <p className="mb-2 small text-muted">{status.status}</p>
+                      <div className="progress mb-2" style={{ height: '8px' }}>
+                        <div
+                          className={`progress-bar ${!allDone ? 'progress-bar-striped progress-bar-animated' : done > 0 ? 'bg-success' : 'bg-danger'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
 
-                          {status.processed_licenses?.length > 0 && (
-                            <div className="mb-2">
-                              <small className="fw-bold">Processed Licenses ({status.processed_licenses.length}):</small>
-                              <div className="d-flex flex-wrap gap-1 mt-1">
-                                {status.processed_licenses.slice(-5).map((license, idx) => (
-                                  <span key={idx} className="badge bg-success bg-opacity-75">
-                                    {license}
-                                  </span>
-                                ))}
-                                {status.processed_licenses.length > 5 && (
-                                  <span className="badge bg-secondary">
-                                    +{status.processed_licenses.length - 5} more
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
+                      <div className="d-flex gap-3 small text-muted mb-2">
+                        <span><i className="bi bi-check-circle text-success me-1"></i>{done} done</span>
+                        {failed > 0 && <span><i className="bi bi-x-circle text-danger me-1"></i>{failed} failed</span>}
+                        {pending > 0 && <span><i className="bi bi-hourglass-split me-1"></i>{pending} pending</span>}
+                        <span className="ms-auto">{pct}%</span>
+                      </div>
 
-                          {status.failed_licenses?.length > 0 && (
-                            <div className="alert alert-danger alert-sm mb-0">
-                              <small className="fw-bold">Failed: {status.failed_licenses.length}</small>
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {isComplete && status?.result && (
-                        <div className="alert alert-success mb-0">
-                          <div className="d-flex justify-content-between align-items-center">
-                            <div>
-                              <i className="bi bi-check-circle-fill me-2"></i>
-                              <strong>Completed Successfully</strong>
-                            </div>
-                            <span className="badge bg-success">
-                              {status.result.processed_count} licenses
-                            </span>
-                          </div>
-                          {status.result.failed_count > 0 && (
-                            <div className="mt-2 text-warning">
-                              <i className="bi bi-exclamation-triangle me-1"></i>
-                              {status.result.failed_count} license(s) failed
-                            </div>
-                          )}
+                      <details>
+                        <summary className="small fw-bold" style={{ cursor: 'pointer' }}>
+                          Licenses ({total})
+                        </summary>
+                        <div className="d-flex flex-wrap gap-1 mt-2">
+                          {fileEntry.tasks.map((task) => {
+                            const s = taskStatuses[task.task_id];
+                            const isOk = s?.state === 'SUCCESS';
+                            const isFail = s?.state === 'FAILURE';
+                            return (
+                              <span
+                                key={task.task_id}
+                                className={`badge ${isOk ? 'bg-success' : isFail ? 'bg-danger' : 'bg-secondary'}`}
+                                title={isFail ? s?.error : isOk ? 'Processed' : 'Pending'}
+                              >
+                                {task.license}
+                              </span>
+                            );
+                          })}
                         </div>
-                      )}
-
-                      {isFailed && status && (
-                        <div className="alert alert-danger mb-0">
-                          <i className="bi bi-x-circle-fill me-2"></i>
-                          <strong>Failed:</strong> {status.error}
-                        </div>
-                      )}
-
-                      {!status && (
-                        <div className="text-muted">
-                          <i className="bi bi-hourglass-split me-2"></i>
-                          Waiting to start...
-                        </div>
-                      )}
+                      </details>
                     </div>
                   </div>
                 );
               })}
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={onHide}>
-                Close
-              </button>
+              <button type="button" className="btn btn-secondary" onClick={onHide}>Close</button>
             </div>
           </div>
         </div>
@@ -272,7 +224,7 @@ const LedgerUpload = () => {
 
       {/* Task Status Modal */}
       <TaskStatusModal
-        tasks={asyncTasks}
+        fileTasks={asyncFileTasks}
         show={showTaskModal}
         onHide={() => setShowTaskModal(false)}
       />
@@ -452,7 +404,7 @@ const LedgerUpload = () => {
             </div>
           </div>
 
-          {/* Results Section */}
+          {/* Results Section (sync mode only) */}
           {results.length > 0 && (
             <div className="card mt-3">
               <div className="card-header bg-white d-flex justify-content-between align-items-center">
@@ -508,6 +460,22 @@ const LedgerUpload = () => {
                                     <span key={idx} className="badge bg-success bg-opacity-75">
                                       {license}
                                     </span>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+
+                            {result.data?.results?.[0]?.failed?.length > 0 && (
+                              <details className="mt-2">
+                                <summary className="cursor-pointer small fw-bold text-danger">
+                                  <i className="bi bi-exclamation-triangle me-1"></i>
+                                  Failed Licenses ({result.data.results[0].failed.length})
+                                </summary>
+                                <div className="mt-2">
+                                  {result.data.results[0].failed.map((f, idx) => (
+                                    <div key={idx} className="small text-danger mb-1">
+                                      <strong>{f.license}:</strong> {f.error}
+                                    </div>
                                   ))}
                                 </div>
                               </details>

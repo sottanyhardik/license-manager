@@ -482,6 +482,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         from reportlab.lib.enums import TA_CENTER, TA_LEFT
         import io
         from datetime import date
+        from bill_of_entry.models import RowDetails
+        from allotment.models import AllotmentItems
 
         license_obj = self.get_object()
 
@@ -646,9 +648,6 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
             ]))
             elements.append(import_section_header)
-
-            from bill_of_entry.models import RowDetails
-            from allotment.models import AllotmentItems
 
             for item in license_obj.import_license.all():
                 # Main item data
@@ -882,6 +881,119 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
             ]))
             elements.append(notes_content)
+
+        # ── End-of-PDF Summary Table ─────────────────────────────────────────
+        # One flat row per BOE/Allotment per item — easy to copy-paste to Excel
+        # Light green = BOE rows, Light red = Allotment rows
+        COLOR_BOE   = colors.HexColor('#d9ead3')   # light green
+        COLOR_ALLOT = colors.HexColor('#fce8e6')   # light red
+        COLOR_HDR   = colors.HexColor('#1a1a1a')
+
+        # Paragraph style for wrapping text in summary cells
+        wrap_style = ParagraphStyle('wrap', parent=styles['Normal'], fontSize=7.5, leading=10)
+
+        def P(text):
+            return Paragraph(str(text), wrap_style)
+
+        # Collect all rows
+        summary_data = [['License No', 'License Date', 'Item', 'Type', 'Reference', 'Date', 'Qty', 'Rate', 'CIF Value (FC)']]
+        row_colors   = []  # one entry per data row (not header)
+        total_cif    = 0.0
+
+        license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
+        lic_no = license_obj.license_number or '-'
+
+        for item in license_obj.import_license.all():
+            item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
+
+            boes = RowDetails.objects.filter(
+                sr_number_id=item.id, transaction_type='D'
+            ).select_related('bill_of_entry', 'bill_of_entry__port')
+
+            for rd in boes:
+                qty  = float(rd.qty or 0)
+                cif  = float(rd.cif_fc or 0)
+                rate = cif / qty if qty else 0.0
+                total_cif += cif
+                ref_no   = rd.bill_of_entry.bill_of_entry_number or '-'
+                ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else '-'
+                product  = rd.bill_of_entry.product_name or item_name
+                summary_data.append([
+                    P(lic_no), P(license_date_str), P(product),
+                    P('BOE'), P(ref_no), P(ref_date),
+                    P(f"{qty:,.2f}"), P(f"{rate:.2f}"), P(f"{cif:,.2f}"),
+                ])
+                row_colors.append(COLOR_BOE)
+
+            allotments = AllotmentItems.objects.filter(
+                item_id=item.id, allotment__bill_of_entry__isnull=True
+            ).select_related('allotment', 'allotment__company')
+
+            for ai in allotments:
+                qty  = float(ai.qty or 0)
+                cif  = float(ai.cif_fc or 0)
+                rate = cif / qty if qty else 0.0
+                total_cif += cif
+                company    = ai.allotment.company.name if ai.allotment.company else '-'
+                allot_date = ai.allotment.date.strftime('%d-%m-%Y') if hasattr(ai.allotment, 'date') and ai.allotment.date else '-'
+                product    = ai.allotment.item_name or item_name
+                summary_data.append([
+                    P(lic_no), P(license_date_str), P(product),
+                    P('Allotment'), P(company), P(allot_date),
+                    P(f"{qty:,.2f}"), P(f"{rate:.2f}"), P(f"{cif:,.2f}"),
+                ])
+                row_colors.append(COLOR_ALLOT)
+
+        if len(summary_data) > 1:
+            # Total row
+            summary_data.append([P(''), P(''), P(''), P(''), P(''), P('TOTAL'), P(''), P(''), P(f"{total_cif:,.2f}")])
+            row_colors.append(colors.HexColor('#f2f2f2'))
+
+            # Section header
+            summ_hdr = Table([['Summary (BOE & Allotments)']], colWidths=[277*mm])
+            summ_hdr.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), COLOR_HDR),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            elements.append(Spacer(1, 10))
+            elements.append(summ_hdr)
+
+            # col widths: lic_no, lic_date, item, type, ref, ref_date, qty, rate, cif
+            col_w = [30*mm, 22*mm, 60*mm, 22*mm, 40*mm, 22*mm, 22*mm, 22*mm, 37*mm]
+            summ_table = Table(summary_data, colWidths=col_w)
+
+            style_cmds = [
+                # Header row
+                ('BACKGROUND', (0, 0), (-1, 0), COLOR_HDR),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 7.5),
+                # Data rows
+                ('FONTSIZE', (0, 1), (-1, -1), 7.5),
+                ('ALIGN', (6, 0), (-1, -1), 'RIGHT'),   # qty, rate, cif right-aligned
+                ('ALIGN', (0, 0), (5, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                # Total row bold
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f2f2f2')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ]
+            # Apply per-row background colours (skip header row at index 0)
+            for i, bg in enumerate(row_colors, start=1):
+                if i < len(summary_data):  # skip total row (handled above)
+                    style_cmds.append(('BACKGROUND', (0, i), (-1, i), bg))
+
+            summ_table.setStyle(TableStyle(style_cmds))
+            elements.append(summ_table)
 
         # Build PDF
         doc.build(elements)

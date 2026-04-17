@@ -1108,6 +1108,32 @@ export default function MasterList() {
                                             toast.error(err?.response?.data?.error || 'Failed to generate PDF');
                                         }
                                     }
+                                },
+                                {
+                                    label: 'Download Excel',
+                                    icon: 'bi bi-file-earmark-excel',
+                                    className: 'btn btn-outline-success',
+                                    onClick: async (item) => {
+                                        try {
+                                            const response = await api.get(`/licenses/${item.id}/balance-excel/`, {
+                                                responseType: 'blob',
+                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                            });
+                                            const blob = new Blob([response.data], {
+                                                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                                            });
+                                            const url = window.URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = `${item.license_number || item.id}-balance.xlsx`;
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                        } catch (err) {
+                                            toast.error(err?.response?.data?.error || 'Failed to generate Excel');
+                                        }
+                                    }
                                 }
                             ] : entityName === 'allotments' ? [
                                 {

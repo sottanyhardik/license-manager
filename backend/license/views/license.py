@@ -895,59 +895,123 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         def P(text):
             return Paragraph(str(text), wrap_style)
 
-        # Collect all rows
-        summary_data = [['License No', 'License Date', 'Item', 'Type', 'Reference', 'Date', 'Qty', 'Rate', 'CIF Value (FC)']]
-        row_colors   = []  # one entry per data row (not header)
+        # Collect all rows — sort by item name before building table
+        # Columns: License No | License Date | Item | Type | Company | Reference | Qty | Rate | CIF Value (FC)
+        # BOE Reference  = "BOE number\nDate"
+        # Allot Reference = "Invoice\nETA: date" (if available)
+        summary_data = [['License No', 'License Date', 'Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']]
+        summary_rows = []  # (sort_key, row_cells, color)
         total_cif    = 0.0
 
         license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
         lic_no = license_obj.license_number or '-'
+
+        # Pre-aggregate by item name across all sr numbers.
+        from collections import defaultdict
+        from decimal import Decimal as _Dec
+        from django.db.models import Sum as _Sum, DecimalField as _DF, Value as _Val
+        from django.db.models.functions import Coalesce as _Coalesce
+
+        _bal_agg = defaultdict(lambda: {'qty': 0.0, 'is_restricted': False, 'restriction_pct': None, 'sr_ids': [], 'description': '', 'hs_code': ''})
+        for _item in license_obj.import_license.all():
+            _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
+            _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+            _bal_agg[_key]['sr_ids'].append(_item.id)
+            if _item.is_restricted:
+                _bal_agg[_key]['is_restricted'] = True
+                if _bal_agg[_key]['restriction_pct'] is None:
+                    # Get restriction_percentage directly from linked ItemNameModel
+                    # (without sion_norm_class requirement, which may be null)
+                    _rpct_val = _item.items.filter(
+                        restriction_percentage__gt=0
+                    ).values_list('restriction_percentage', flat=True).first()
+                    if _rpct_val:
+                        _bal_agg[_key]['restriction_pct'] = _Dec(str(_rpct_val))
+            if not _bal_agg[_key]['description']:
+                _bal_agg[_key]['description'] = _item.description or _key
+            if not _bal_agg[_key]['hs_code']:
+                _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
 
         for item in license_obj.import_license.all():
             item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
 
             boes = RowDetails.objects.filter(
                 sr_number_id=item.id, transaction_type='D'
-            ).select_related('bill_of_entry', 'bill_of_entry__port')
+            ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
 
             for rd in boes:
-                qty  = float(rd.qty or 0)
-                cif  = float(rd.cif_fc or 0)
-                rate = cif / qty if qty else 0.0
+                qty     = float(rd.qty or 0)
+                cif     = float(rd.cif_fc or 0)
+                rate    = cif / qty if qty else 0.0
                 total_cif += cif
-                ref_no   = rd.bill_of_entry.bill_of_entry_number or '-'
-                ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else '-'
-                product  = rd.bill_of_entry.product_name or item_name
-                summary_data.append([
+                boe_company = rd.bill_of_entry.company.name if rd.bill_of_entry.company else '-'
+                ref_no  = rd.bill_of_entry.bill_of_entry_number or '-'
+                ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else ''
+                ref_str = f"{ref_no}\n{ref_date}" if ref_date else ref_no
+                product = rd.bill_of_entry.product_name or item_name
+                summary_rows.append((product.lower(), [
                     P(lic_no), P(license_date_str), P(product),
-                    P('BOE'), P(ref_no), P(ref_date),
+                    P('BOE'), P(boe_company), P(ref_str),
                     P(f"{qty:,.2f}"), P(f"{rate:.2f}"), P(f"{cif:,.2f}"),
-                ])
-                row_colors.append(COLOR_BOE)
+                ], COLOR_BOE))
 
             allotments = AllotmentItems.objects.filter(
                 item_id=item.id, allotment__bill_of_entry__isnull=True
             ).select_related('allotment', 'allotment__company')
 
             for ai in allotments:
-                qty  = float(ai.qty or 0)
-                cif  = float(ai.cif_fc or 0)
-                rate = cif / qty if qty else 0.0
+                qty     = float(ai.qty or 0)
+                cif     = float(ai.cif_fc or 0)
+                rate    = cif / qty if qty else 0.0
                 total_cif += cif
-                company    = ai.allotment.company.name if ai.allotment.company else '-'
-                allot_date = ai.allotment.date.strftime('%d-%m-%Y') if hasattr(ai.allotment, 'date') and ai.allotment.date else '-'
-                product    = ai.allotment.item_name or item_name
-                summary_data.append([
+                company = ai.allotment.company.name if ai.allotment.company else '-'
+                invoice = ai.allotment.invoice or '-'
+                eta     = ai.allotment.estimated_arrival_date.strftime('%d-%m-%Y') if ai.allotment.estimated_arrival_date else ''
+                ref_str = f"{invoice}\nETA: {eta}" if eta else invoice
+                product = ai.allotment.item_name or item_name
+                summary_rows.append((product.lower(), [
                     P(lic_no), P(license_date_str), P(product),
-                    P('Allotment'), P(company), P(allot_date),
+                    P('Allotment'), P(company), P(ref_str),
                     P(f"{qty:,.2f}"), P(f"{rate:.2f}"), P(f"{cif:,.2f}"),
-                ])
-                row_colors.append(COLOR_ALLOT)
+                ], COLOR_ALLOT))
+
+        # Sort by item name
+        summary_rows.sort(key=lambda x: x[0])
+        row_colors = []
+        for _, row_cells, color in summary_rows:
+            summary_data.append(row_cells)
+            row_colors.append(color)
 
         if len(summary_data) > 1:
             # Total row
-            summary_data.append([P(''), P(''), P(''), P(''), P(''), P('TOTAL'), P(''), P(''), P(f"{total_cif:,.2f}")])
+            summary_data.append([P(''), P(''), P(''), P(''), P('TOTAL'), P(''), P(''), P(''), P(f"{total_cif:,.2f}")])
             row_colors.append(colors.HexColor('#f2f2f2'))
+
+            # ── License info mini-header (License No | License Date | Total CIF) ──
+            total_license_cif = total_cif + float(license_obj.balance_cif or 0)
+            info_style = ParagraphStyle('info', parent=styles['Normal'], fontSize=8, leading=11,
+                                        textColor=colors.white, fontName='Helvetica-Bold')
+            def IP(label, value):
+                return Paragraph(f"<b>{label}:</b> {value}", info_style)
+
+            info_row = Table([[
+                IP('License No', lic_no),
+                IP('License Date', license_date_str),
+                IP('Total CIF', f"{total_license_cif:,.2f}"),
+            ]], colWidths=[92*mm, 92*mm, 93*mm])
+            info_row.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), COLOR_HDR),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(Spacer(1, 10))
+            elements.append(info_row)
 
             # Section header
             summ_hdr = Table([['Summary (BOE & Allotments)']], colWidths=[277*mm])
@@ -960,11 +1024,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 ('TOPPADDING', (0, 0), (-1, -1), 5),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
             ]))
-            elements.append(Spacer(1, 10))
             elements.append(summ_hdr)
 
-            # col widths: lic_no, lic_date, item, type, ref, ref_date, qty, rate, cif
-            col_w = [30*mm, 22*mm, 60*mm, 22*mm, 40*mm, 22*mm, 22*mm, 22*mm, 37*mm]
+            # col widths: lic_no, lic_date, item, type, company, reference, qty, rate, cif = 277mm
+            col_w = [28*mm, 22*mm, 55*mm, 18*mm, 40*mm, 35*mm, 20*mm, 22*mm, 37*mm]
             summ_table = Table(summary_data, colWidths=col_w)
 
             style_cmds = [
@@ -995,6 +1058,115 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             summ_table.setStyle(TableStyle(style_cmds))
             elements.append(summ_table)
 
+        # ── Balance Summary Table ─────────────────────────────────────────────
+        if _bal_agg:
+            total_bal_cif_fc = float(license_obj.balance_cif or 0)
+            COLOR_YELLOW = colors.HexColor('#ffff00')
+
+            # "Summary (Balance Quantity)" section header
+            bal_hdr = Table([['Summary (Balance Quantity)']], colWidths=[277*mm])
+            bal_hdr.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), COLOR_HDR),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            elements.append(Spacer(1, 8))
+            elements.append(bal_hdr)
+
+            # col widths: hsn, item_name, bal_qty, unit_price, cif_fc = 277mm
+            # 30 + 87 + 45 + 45 + 70 = 277mm
+            bal_col_w = [30*mm, 87*mm, 45*mm, 45*mm, 70*mm]
+
+            Pb      = ParagraphStyle('balwrap',     parent=styles['Normal'], fontSize=8, leading=11)
+            Pb_hdr  = ParagraphStyle('balwrap_hdr', parent=styles['Normal'], fontSize=8, leading=11,
+                                     textColor=colors.white, fontName='Helvetica-Bold')
+            Pb_yel  = ParagraphStyle('balwrap_yel', parent=styles['Normal'], fontSize=9, leading=12,
+                                     fontName='Helvetica-Bold')
+
+            def BP(text):
+                return Paragraph(str(text), Pb)
+            def BH(text):   # white bold header cell
+                return Paragraph(str(text), Pb_hdr)
+            def BY(text):   # yellow-cell (black bold)
+                return Paragraph(str(text), Pb_yel)
+
+            _license_balance = float(license_obj.balance_cif or 0)
+            _total_export_cif = _Dec(str(license_obj._calculate_license_credit() or 0))
+
+            bal_table_data = [
+                # Row 0: cols 0-3 merged "BALANCE CIF $" | col 4 = total (yellow)
+                [BH('BALANCE CIF $'), '', '', '', BY(f"{total_bal_cif_fc:,.2f}")],
+                # Row 1: column headers
+                [BH('HSN Code'), BH('Item Name'), BH('Bal Qty'), BH('Unit Price'), BH('CIF FC')],
+            ]
+            for item_key in sorted(_bal_agg.keys()):
+                b_qty = _bal_agg[item_key]['qty']
+                # Restricted items: compute per-group balance = (export_cif × pct/100) − group_debits − group_allotments
+                # Non-restricted items: show license-level balance
+                if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
+                    _rpct = _bal_agg[item_key]['restriction_pct']
+                    _sr_ids = _bal_agg[item_key]['sr_ids']
+                    _grp_debits = RowDetails.objects.filter(
+                        sr_number_id__in=_sr_ids, transaction_type='D'
+                    ).aggregate(
+                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                    )['total'] or _Dec('0')
+                    _grp_allots = AllotmentItems.objects.filter(
+                        item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
+                    ).aggregate(
+                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                    )['total'] or _Dec('0')
+                    _allowed = _total_export_cif * _rpct / _Dec('100')
+                    b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+                else:
+                    b_cif = _license_balance
+                unit_price = b_cif / b_qty if b_qty else 0.0
+                desc       = _bal_agg[item_key]['description'] or item_key
+                hs         = _bal_agg[item_key]['hs_code']
+                bal_table_data.append([
+                    BP(hs),
+                    BP(desc),
+                    BP(f"{b_qty:,.2f}"),
+                    BP(f"{unit_price:,.2f}"),
+                    BP(f"{b_cif:,.2f}"),
+                ])
+
+            bal_table = Table(bal_table_data, colWidths=bal_col_w)
+            bal_style = TableStyle([
+                # Row 0: merge cols 0-3, dark header | col 4 yellow
+                ('SPAN', (0, 0), (3, 0)),
+                ('BACKGROUND', (0, 0), (3, 0), COLOR_HDR),
+                ('BACKGROUND', (4, 0), (4, 0), COLOR_YELLOW),
+                ('TEXTCOLOR', (4, 0), (4, 0), colors.black),
+                ('ALIGN', (0, 0), (3, 0), 'CENTER'),
+                ('ALIGN', (4, 0), (4, 0), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                # Row 1: column headers
+                ('BACKGROUND', (0, 1), (-1, 1), COLOR_HDR),
+                ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 1), (-1, 1), 8),
+                # Data rows: cols 2-4 right-aligned
+                ('FONTSIZE', (0, 2), (-1, -1), 8),
+                ('ALIGN', (2, 2), (-1, -1), 'RIGHT'),
+                ('ALIGN', (0, 2), (1, -1), 'LEFT'),
+                ('ROWBACKGROUNDS', (0, 2), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+                # All cells
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ])
+            bal_table.setStyle(bal_style)
+            elements.append(Spacer(1, 8))
+            elements.append(bal_table)
+
         # Build PDF
         doc.build(elements)
 
@@ -1012,8 +1184,291 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     @action(detail=True, methods=['get'], url_path='balance-excel')
     def balance_excel(self, request, pk=None):
         """
-        Generate Excel report for license balance details with all BOEs and Allotments.
+        Generate Excel summary report matching the two bottom tables in balance_pdf:
+        1. Summary (BOE & Allotments)
+        2. Summary (Balance Quantity)
         """
+        from django.http import HttpResponse
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
+        from io import BytesIO
+        from decimal import Decimal as _Dec
+        from collections import defaultdict
+        from django.db.models import Sum as _Sum, DecimalField as _DF, Value as _Val
+        from django.db.models.functions import Coalesce as _Coalesce
+        from bill_of_entry.models import RowDetails
+        from allotment.models import AllotmentItems
+
+        license_obj = self.get_object()
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Summary"
+
+        # ── Styles ────────────────────────────────────────────────────────────
+        HDR_FILL   = PatternFill(start_color="1a1a1a", end_color="1a1a1a", fill_type="solid")
+        HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
+        BOE_FILL   = PatternFill(start_color="d9ead3", end_color="d9ead3", fill_type="solid")
+        ALLOT_FILL = PatternFill(start_color="fce8e6", end_color="fce8e6", fill_type="solid")
+        TOTAL_FILL = PatternFill(start_color="f2f2f2", end_color="f2f2f2", fill_type="solid")
+        YEL_FILL   = PatternFill(start_color="ffff00", end_color="ffff00", fill_type="solid")
+        ALT_FILL   = PatternFill(start_color="f9f9f9", end_color="f9f9f9", fill_type="solid")
+        BOLD       = Font(bold=True, size=9)
+        NORM       = Font(size=9)
+        THIN_BORDER = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
+        )
+
+        def _hdr(ws, row, col, value):
+            c = ws.cell(row=row, column=col, value=value)
+            c.fill = HDR_FILL; c.font = HDR_FONT
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            return c
+
+        def _cell(ws, row, col, value, fill=None, bold=False, align='left', num_fmt=None):
+            c = ws.cell(row=row, column=col, value=value)
+            if fill: c.fill = fill
+            c.font = BOLD if bold else NORM
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal=align, vertical='center', wrap_text=True)
+            if num_fmt: c.number_format = num_fmt
+            return c
+
+        license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
+        lic_no = license_obj.license_number or '-'
+
+        # ── Collect summary rows ──────────────────────────────────────────────
+        summary_rows = []   # (sort_key, row_data_dict, is_boe)
+        total_cif = 0.0
+
+        for item in license_obj.import_license.all():
+            item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
+
+            boes = RowDetails.objects.filter(
+                sr_number_id=item.id, transaction_type='D'
+            ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+
+            for rd in boes:
+                qty  = float(rd.qty or 0)
+                cif  = float(rd.cif_fc or 0)
+                rate = cif / qty if qty else 0.0
+                total_cif += cif
+                boe_company = rd.bill_of_entry.company.name if rd.bill_of_entry.company else '-'
+                ref_no   = rd.bill_of_entry.bill_of_entry_number or '-'
+                ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else ''
+                ref_str  = f"{ref_no} / {ref_date}" if ref_date else ref_no
+                product  = rd.bill_of_entry.product_name or item_name
+                summary_rows.append((product.lower(), {
+                    'lic_no': lic_no, 'lic_date': license_date_str,
+                    'item': product, 'type': 'BOE', 'company': boe_company,
+                    'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
+                }, True))
+
+            allotments = AllotmentItems.objects.filter(
+                item_id=item.id, allotment__bill_of_entry__isnull=True
+            ).select_related('allotment', 'allotment__company')
+
+            for ai in allotments:
+                qty     = float(ai.qty or 0)
+                cif     = float(ai.cif_fc or 0)
+                rate    = cif / qty if qty else 0.0
+                total_cif += cif
+                company = ai.allotment.company.name if ai.allotment.company else '-'
+                invoice = ai.allotment.invoice or '-'
+                eta     = ai.allotment.estimated_arrival_date.strftime('%d-%m-%Y') if ai.allotment.estimated_arrival_date else ''
+                ref_str = f"{invoice} / ETA: {eta}" if eta else invoice
+                product = ai.allotment.item_name or item_name
+                summary_rows.append((product.lower(), {
+                    'lic_no': lic_no, 'lic_date': license_date_str,
+                    'item': product, 'type': 'Allotment', 'company': company,
+                    'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
+                }, False))
+
+        summary_rows.sort(key=lambda x: x[0])
+
+        # ── Pre-aggregate balance data ─────────────────────────────────────────
+        _bal_agg = defaultdict(lambda: {
+            'qty': 0.0, 'is_restricted': False, 'restriction_pct': None,
+            'sr_ids': [], 'description': '', 'hs_code': ''
+        })
+        for _item in license_obj.import_license.all():
+            _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
+            _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+            _bal_agg[_key]['sr_ids'].append(_item.id)
+            if _item.is_restricted:
+                _bal_agg[_key]['is_restricted'] = True
+                if _bal_agg[_key]['restriction_pct'] is None:
+                    _rpct_val = _item.items.filter(
+                        restriction_percentage__gt=0
+                    ).values_list('restriction_percentage', flat=True).first()
+                    if _rpct_val:
+                        _bal_agg[_key]['restriction_pct'] = _Dec(str(_rpct_val))
+            if not _bal_agg[_key]['description']:
+                _bal_agg[_key]['description'] = _item.description or _key
+            if not _bal_agg[_key]['hs_code']:
+                _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
+
+        _license_balance = float(license_obj.balance_cif or 0)
+        _total_export_cif = _Dec(str(license_obj._calculate_license_credit() or 0))
+        total_license_cif = total_cif + _license_balance
+
+        # ══════════════════════════════════════════════════════════════════════
+        # Section 1: License info row
+        # ══════════════════════════════════════════════════════════════════════
+        r = 1
+        INFO_FILL = PatternFill(start_color="1a1a1a", end_color="1a1a1a", fill_type="solid")
+        INFO_FONT = Font(bold=True, color="FFFFFF", size=9)
+        for col, (label, val) in enumerate([
+            ('License No', lic_no),
+            ('License Date', license_date_str),
+            ('Total CIF', f"{total_license_cif:,.2f}")
+        ], 1):
+            c = ws.cell(row=r, column=col, value=f"{label}: {val}")
+            c.fill = INFO_FILL; c.font = INFO_FONT
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal='left' if col < 3 else 'right', vertical='center')
+        r += 1
+
+        # ══════════════════════════════════════════════════════════════════════
+        # Section 2: Summary (BOE & Allotments)
+        # ══════════════════════════════════════════════════════════════════════
+        # Section header (merged A:I)
+        ws.merge_cells(f'A{r}:I{r}')
+        sh = ws[f'A{r}']
+        sh.value = 'Summary (BOE & Allotments)'
+        sh.fill = HDR_FILL; sh.font = Font(bold=True, color="FFFFFF", size=10)
+        sh.alignment = Alignment(horizontal='center', vertical='center')
+        r += 1
+
+        # Column headers
+        SUMM_COLS = ['License No', 'License Date', 'Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']
+        for col, h in enumerate(SUMM_COLS, 1):
+            _hdr(ws, r, col, h)
+        r += 1
+
+        # Data rows
+        for _, row_data, is_boe in summary_rows:
+            fill = BOE_FILL if is_boe else ALLOT_FILL
+            _cell(ws, r, 1, row_data['lic_no'],   fill=fill)
+            _cell(ws, r, 2, row_data['lic_date'],  fill=fill)
+            _cell(ws, r, 3, row_data['item'],      fill=fill)
+            _cell(ws, r, 4, row_data['type'],      fill=fill)
+            _cell(ws, r, 5, row_data['company'],   fill=fill)
+            _cell(ws, r, 6, row_data['reference'], fill=fill)
+            _cell(ws, r, 7, row_data['qty'],       fill=fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 8, row_data['rate'],      fill=fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 9, row_data['cif'],       fill=fill, align='right', num_fmt='#,##0.00')
+            r += 1
+
+        # Total row
+        if summary_rows:
+            _cell(ws, r, 1, '', fill=TOTAL_FILL)
+            _cell(ws, r, 2, '', fill=TOTAL_FILL)
+            _cell(ws, r, 3, '', fill=TOTAL_FILL)
+            _cell(ws, r, 4, '', fill=TOTAL_FILL)
+            _cell(ws, r, 5, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
+            _cell(ws, r, 6, '', fill=TOTAL_FILL)
+            _cell(ws, r, 7, '', fill=TOTAL_FILL)
+            _cell(ws, r, 8, '', fill=TOTAL_FILL)
+            _cell(ws, r, 9, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            r += 1
+
+        r += 1  # blank row
+
+        # ══════════════════════════════════════════════════════════════════════
+        # Section 3: Summary (Balance Quantity)
+        # ══════════════════════════════════════════════════════════════════════
+        ws.merge_cells(f'A{r}:E{r}')
+        bh = ws[f'A{r}']
+        bh.value = 'Summary (Balance Quantity)'
+        bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
+        bh.alignment = Alignment(horizontal='center', vertical='center')
+        r += 1
+
+        # BALANCE CIF $ row: cols A-D merged + col E yellow
+        ws.merge_cells(f'A{r}:D{r}')
+        bc = ws[f'A{r}']
+        bc.value = 'BALANCE CIF $'
+        bc.fill = HDR_FILL; bc.font = Font(bold=True, color="FFFFFF", size=9)
+        bc.alignment = Alignment(horizontal='center', vertical='center')
+        bc.border = THIN_BORDER
+        yc = ws.cell(row=r, column=5, value=_license_balance)
+        yc.fill = YEL_FILL; yc.font = Font(bold=True, size=9)
+        yc.border = THIN_BORDER
+        yc.alignment = Alignment(horizontal='right', vertical='center')
+        yc.number_format = '#,##0.00'
+        r += 1
+
+        # Column headers
+        BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
+        for col, h in enumerate(BAL_COLS, 1):
+            _hdr(ws, r, col, h)
+        r += 1
+
+        # Data rows
+        for idx, item_key in enumerate(sorted(_bal_agg.keys())):
+            b_qty = _bal_agg[item_key]['qty']
+            if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
+                _rpct  = _bal_agg[item_key]['restriction_pct']
+                _sr_ids = _bal_agg[item_key]['sr_ids']
+                _grp_debits = RowDetails.objects.filter(
+                    sr_number_id__in=_sr_ids, transaction_type='D'
+                ).aggregate(
+                    total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                )['total'] or _Dec('0')
+                _grp_allots = AllotmentItems.objects.filter(
+                    item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
+                ).aggregate(
+                    total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                )['total'] or _Dec('0')
+                _allowed = _total_export_cif * _rpct / _Dec('100')
+                b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+            else:
+                b_cif = _license_balance
+
+            unit_price = b_cif / b_qty if b_qty else 0.0
+            desc = _bal_agg[item_key]['description'] or item_key
+            hs   = _bal_agg[item_key]['hs_code']
+            row_fill = None if idx % 2 == 0 else ALT_FILL
+
+            _cell(ws, r, 1, hs,         fill=row_fill)
+            _cell(ws, r, 2, desc,       fill=row_fill)
+            _cell(ws, r, 3, b_qty,      fill=row_fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
+            r += 1
+
+        # ── Column widths ─────────────────────────────────────────────────────
+        ws.column_dimensions['A'].width = 14
+        ws.column_dimensions['B'].width = 14
+        ws.column_dimensions['C'].width = 40
+        ws.column_dimensions['D'].width = 22
+        ws.column_dimensions['E'].width = 25
+        ws.column_dimensions['F'].width = 28
+        ws.column_dimensions['G'].width = 14
+        ws.column_dimensions['H'].width = 14
+        ws.column_dimensions['I'].width = 16
+
+        ws.freeze_panes = 'A2'
+
+        # ── Save ──────────────────────────────────────────────────────────────
+        excel_file = BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+
+        response = HttpResponse(
+            excel_file.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{license_obj.license_number}-summary.xlsx"'
+        return response
+
+    @action(detail=True, methods=['get'], url_path='balance-excel-unused')
+    def balance_excel_unused(self, request, pk=None):
+        """Original full balance Excel — kept for reference, no longer exposed."""
         from django.http import HttpResponse
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill, Border, Side

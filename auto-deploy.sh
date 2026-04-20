@@ -246,6 +246,21 @@ source $SERVER_PATH/venv/bin/activate
 celery -A lmanagement purge -f 2>/dev/null || echo -e "\${YELLOW}  ⚠️  Could not purge Celery queue (queue might be empty)\${NC}"
 echo -e "\${GREEN}  ✅ Celery queue purged\${NC}"
 
+echo -e "\${BLUE}→ Ensuring Celery worker listens on 'celery,ledger' queues...\${NC}"
+CELERY_CONF=\$(echo '$PASSWORD' | sudo -S find /etc/supervisor/conf.d/ -name "*celery*" ! -name "*beat*" 2>/dev/null | head -1)
+if [ -n "\$CELERY_CONF" ]; then
+    if ! echo '$PASSWORD' | sudo -S grep -q "\-Q celery,ledger" "\$CELERY_CONF" 2>/dev/null; then
+        echo '$PASSWORD' | sudo -S sed -i 's/\(command=.*celery.*worker.*\)/\1 -Q celery,ledger/' "\$CELERY_CONF"
+        echo '$PASSWORD' | sudo -S supervisorctl reread
+        echo '$PASSWORD' | sudo -S supervisorctl update
+        echo -e "\${GREEN}  ✅ Celery worker queue config updated to celery,ledger\${NC}"
+    else
+        echo -e "\${GREEN}  ✅ Celery worker already configured for celery,ledger queues\${NC}"
+    fi
+else
+    echo -e "\${YELLOW}  ⚠️  Celery supervisor conf not found, skipping queue config\${NC}"
+fi
+
 echo -e "\${BLUE}→ Checking and restarting Celery if configured...\${NC}"
 if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery &>/dev/null; then
     echo '$PASSWORD' | sudo -S supervisorctl restart license-manager-celery

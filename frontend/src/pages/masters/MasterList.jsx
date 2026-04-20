@@ -52,7 +52,7 @@ export default function MasterList() {
             return {
                 type: 'AT',
                 is_boe: 'False',
-                is_allotted: 'True'
+                is_allotted: 'all'
             };
         }
         if (entityName === 'bill-of-entries') {

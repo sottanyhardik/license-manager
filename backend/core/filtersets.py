@@ -258,6 +258,9 @@ class AllotmentFilterSet(BaseFilterSet):
     # Approval status
     is_approved = filters.BooleanFilter(field_name='is_approved')
 
+    # Allotment status
+    is_allotted = filters.BooleanFilter(field_name='is_allotted')
+
     # Recent filter
     recent_days = filters.NumberFilter(method='filter_recent_days')
 

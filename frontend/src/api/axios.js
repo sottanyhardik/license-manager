@@ -34,6 +34,11 @@ api.interceptors.response.use(
     async (error) => {
         const original = error.config;
 
+        // Intentional aborts (AbortController / axios cancel) — not a real network error
+        if (error.name === 'CanceledError' || error.name === 'AbortError') {
+            return Promise.reject(error);
+        }
+
         // Network error (no response — offline or server unreachable)
         if (!error.response) {
             toast.error('Network error. Please check your connection.');

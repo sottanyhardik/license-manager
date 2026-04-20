@@ -17,7 +17,7 @@ const TaskStatusModal = ({ fileTasks, show, onHide }) => {
     allTasks.forEach((task) => {
       const interval = setInterval(async () => {
         try {
-          const response = await api.get(`licenses/ledger-task-status/${task.task_id}/`);
+          const response = await api.get(`ledger-task-status/${task.task_id}/`);
           setTaskStatuses((prev) => ({ ...prev, [task.task_id]: response.data }));
           if (response.data.state === 'SUCCESS' || response.data.state === 'FAILURE') {
             clearInterval(interval);
@@ -176,7 +176,7 @@ const LedgerUpload = () => {
     formData.append('async', 'true');
 
     try {
-      const response = await api.post('licenses/upload-ledger/', formData, {
+      const response = await api.post('upload-ledger/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 

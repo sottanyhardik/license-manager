@@ -119,6 +119,11 @@ export const masterEntities = [
 // Report entities configuration
 export const reportEntities = [
     {
+        path: "/reports/download-license",
+        label: "Download License",
+        icon: "file-earmark-excel",
+    },
+    {
         path: "/reports/item-pivot",
         label: "Item Pivot Report",
         icon: "table",

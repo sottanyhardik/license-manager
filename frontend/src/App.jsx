@@ -32,6 +32,7 @@ const SionE126 = lazy(() => import("./pages/reports/SionE126"));
 const SionE132 = lazy(() => import("./pages/reports/SionE132"));
 const ExpiringLicenses = lazy(() => import("./pages/reports/ExpiringLicenses"));
 const ActiveLicenses = lazy(() => import("./pages/reports/ActiveLicenses"));
+const DownloadLicense = lazy(() => import("./pages/reports/DownloadLicense"));
 const ItemPivotReport = lazyLoadWithRetry(() => import("./pages/reports/ItemPivotReport"));
 const ItemReport = lazyLoadWithRetry(() => import("./pages/reports/ItemReport"));
 
@@ -268,6 +269,17 @@ export default function App() {
                                                 <ActiveLicenses/>
                                             </AdminLayout>
                                         
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/reports/download-license"
+                                element={
+                                    <ProtectedRoute>
+                                        <AdminLayout>
+                                            <DownloadLicense/>
+                                        </AdminLayout>
                                     </ProtectedRoute>
                                 }
                             />

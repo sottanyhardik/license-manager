@@ -1191,6 +1191,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         from django.http import HttpResponse
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter as _gcl
         from io import BytesIO
         from decimal import Decimal as _Dec
         from collections import defaultdict
@@ -1391,11 +1392,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
             _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
             _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
+            _util_return = {
+                'lic_no': lic_no, 'norm_type': 'other',
+                'balance_cif': _license_balance,
+                'planned': {}, 'qty_per_cat': {}, 'total_planned': _license_balance, 'categories': []
+            }
             if _is_e1:
                 _UTIL_PLAN = [
                     ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
                     ('FRUIT JUICE',                                   3.0, [],       ['fruit juice']),
-                    ('TARTARIC ACID / CITRIC ACID',                   1.0, [],       ['tartaric', 'citric']),
+                    ('TARTARIC ACID / CITRIC ACID',                   0.7, [],       ['tartaric', 'citric']),
                     ('POLYPROPYLENE',                                  1.0, [],       ['polypropylene']),
                     ('PAPER & PAPER BOARD',                           0.7, [],       ['paper']),
                 ]
@@ -1470,9 +1476,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
                 _total_planned = 0.0
                 _e1_remaining = _license_balance
+                _planned_per_cat = {}
                 for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
                     _bq = _cat_totals[_lbl]
                     _pc = min(_rt * _bq, _e1_remaining)
+                    _planned_per_cat[_lbl] = _pc
                     _up = _pc / _bq if _bq else 0.0
                     _e1_remaining -= _pc
                     _total_planned += _pc
@@ -1527,6 +1535,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _rc2.alignment = Alignment(horizontal='right', vertical='center')
                 _rc2.number_format = '#,##0.00'
                 r += 1
+                _util_return.update({
+                    'norm_type': 'E1', 'planned': _planned_per_cat,
+                    'qty_per_cat': dict(_cat_totals),
+                    'total_planned': _total_planned,
+                    'categories': [lbl for lbl, *_ in _UTIL_PLAN]
+                })
             elif _is_e5:
                 for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
                     _hdr(ws, r, col, h)
@@ -1534,9 +1548,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
                 _e5_planned = 0.0
                 _e5_remaining = _license_balance
+                _e5_planned_per_cat = {}
                 for _idx, (_lbl, _rt, _hskw) in enumerate(_E5_CATS):
                     _bq = _e5_totals[_lbl]
                     _pc = min(_rt * _bq, _e5_remaining)
+                    _e5_planned_per_cat[_lbl] = _pc
                     _up = _pc / _bq if _bq else 0.0
                     _e5_remaining -= _pc
                     _e5_planned += _pc
@@ -1587,6 +1603,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _cell(ws, r, 4, 'TOTAL ALLOCATED CIF $', fill=TOTAL_FILL, bold=True, align='right')
                 _cell(ws, r, 5, _e5_planned + _wf, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 r += 1
+                _e5_planned_per_cat['WHEAT FLOUR'] = _wf
+                _e5_qty = dict(_e5_totals)
+                _e5_qty['WHEAT FLOUR'] = _wf_qty
+                _util_return.update({
+                    'norm_type': 'E5', 'planned': _e5_planned_per_cat,
+                    'qty_per_cat': _e5_qty,
+                    'total_planned': _e5_planned + _wf,
+                    'categories': [lbl for lbl, *_ in _E5_CATS] + ['WHEAT FLOUR']
+                })
             else:
                 BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
                 for col, h in enumerate(BAL_COLS, 1):
@@ -1635,6 +1660,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             ws.column_dimensions['H'].width = 14
             ws.column_dimensions['I'].width = 16
             ws.freeze_panes = 'A2'
+            return _util_return
 
         def _norm_sort_key(lic):
             norms = list(lic.export_license.values_list('norm_class__norm_class', flat=True))
@@ -1648,8 +1674,227 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         sorted_licenses = sorted(licenses, key=_norm_sort_key)
 
+        _util_summaries = []
         for license_obj in sorted_licenses:
-            _write_license_sheet(wb, license_obj)
+            _util_summaries.append(_write_license_sheet(wb, license_obj))
+
+        # ── Create Utilization Planning Summary as first sheet ─────────────────
+        _E1_CATS_LABELS = [
+            'OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS',
+            'FRUIT JUICE',
+            'TARTARIC ACID / CITRIC ACID',
+            'POLYPROPYLENE',
+            'PAPER & PAPER BOARD',
+        ]
+        _E5_CATS_LABELS = [
+            'DIETARY FIBRE',
+            'VEGETABLE OIL (1513)',
+            'VEGETABLE OIL (15119020)',
+            'MILK (0404)',
+            'MILK (3502)',
+            'WHEAT FLOUR',
+        ]
+        _e1_rows = [s for s in _util_summaries if s['norm_type'] == 'E1']
+        _e5_rows = [s for s in _util_summaries if s['norm_type'] == 'E5']
+        _other_rows = [s for s in _util_summaries if s['norm_type'] == 'other']
+
+        _sw = wb.create_sheet(title="Utilization Planning Summary")
+        wb.move_sheet(_sw, offset=-(len(wb.worksheets) - 1))
+
+        _sr = 1
+
+        def _shdr(ws, row, col, value, span=1):
+            c = ws.cell(row=row, column=col, value=value)
+            c.fill = HDR_FILL; c.font = HDR_FONT
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            return c
+
+        def _scell(ws, row, col, value, fill=None, bold=False, align='left', num_fmt=None):
+            c = ws.cell(row=row, column=col, value=value)
+            if fill: c.fill = fill
+            c.font = BOLD if bold else NORM
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal=align, vertical='center', wrap_text=True)
+            if num_fmt: c.number_format = num_fmt
+            return c
+
+        # E1: 2 fixed + 5 cats×2 + 1 total + 1 wastage = 14
+        # E5: 2 fixed + 6 cats×2 + 1 total + 1 wastage = 16
+        _E1_TOTAL_COL  = 2 + len(_E1_CATS_LABELS) * 2 + 1   # 13
+        _E1_WASTE_COL  = _E1_TOTAL_COL + 1                   # 14
+        _E5_TOTAL_COL  = 2 + len(_E5_CATS_LABELS) * 2 + 1   # 15
+        _E5_WASTE_COL  = _E5_TOTAL_COL + 1                   # 16
+        _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 2)
+
+        WASTE_FILL = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
+
+        def _merge_hdr(ws, r, c1, c2, value, fill_color="1F4E79"):
+            ws.merge_cells(f'{_gcl(c1)}{r}:{_gcl(c2)}{r}')
+            c = ws[f'{_gcl(c1)}{r}']
+            c.value = value
+            c.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+            c.font = Font(bold=True, color="FFFFFF", size=9)
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        # Title row
+        _sw.merge_cells(f'A{_sr}:{_gcl(_MAX_COL)}{_sr}')
+        _tc = _sw[f'A{_sr}']
+        _tc.value = 'UTILIZATION PLANNING SUMMARY'
+        _tc.fill = HDR_FILL; _tc.font = Font(bold=True, color="FFFFFF", size=12)
+        _tc.alignment = Alignment(horizontal='center', vertical='center')
+        _sr += 1
+
+        # ── E1 section ────────────────────────────────────────────────────────
+        if _e1_rows:
+            _merge_hdr(_sw, _sr, 1, _E1_WASTE_COL, 'E1 NORM LICENSES', "2E75B6")
+            _sr += 1
+
+            _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'License No')
+            _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'Balance CIF $')
+            for _ci, _cat in enumerate(_E1_CATS_LABELS):
+                _cc = 3 + _ci * 2
+                _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+1)}{_sr}')
+                _shdr(_sw, _sr, _cc, _cat)
+            _sw.merge_cells(f'{_gcl(_E1_TOTAL_COL)}{_sr}:{_gcl(_E1_TOTAL_COL)}{_sr+1}')
+            _shdr(_sw, _sr, _E1_TOTAL_COL, 'TOTAL PLANNED CIF $')
+            _sw.merge_cells(f'{_gcl(_E1_WASTE_COL)}{_sr}:{_gcl(_E1_WASTE_COL)}{_sr+1}')
+            _c = _sw.cell(row=_sr, column=_E1_WASTE_COL, value='Wastage $')
+            _c.fill = WASTE_FILL; _c.font = Font(bold=True, size=9)
+            _c.border = THIN_BORDER
+            _c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            _sr += 1
+            for _ci in range(len(_E1_CATS_LABELS)):
+                _cc = 3 + _ci * 2
+                _shdr(_sw, _sr, _cc,     'Bal Qty')
+                _shdr(_sw, _sr, _cc + 1, 'Planned CIF ($)')
+            _sr += 1
+
+            _e1_tot = {'bal': 0.0, 'planned': 0.0, 'waste': 0.0,
+                       'qty': {c: 0.0 for c in _E1_CATS_LABELS},
+                       'cif': {c: 0.0 for c in _E1_CATS_LABELS}}
+            for _i, _row in enumerate(_e1_rows):
+                _rf = None if _i % 2 == 0 else ALT_FILL
+                _waste = _row['balance_cif'] - _row['total_planned']
+                _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
+                _scell(_sw, _sr, 2, _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                for _ci, _cat in enumerate(_E1_CATS_LABELS):
+                    _cc = 3 + _ci * 2
+                    _q = _row['qty_per_cat'].get(_cat, 0.0)
+                    _p = _row['planned'].get(_cat, 0.0)
+                    _scell(_sw, _sr, _cc,     _q, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _scell(_sw, _sr, _cc + 1, _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _e1_tot['qty'][_cat] += _q
+                    _e1_tot['cif'][_cat] += _p
+                _scell(_sw, _sr, _E1_TOTAL_COL, _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
+                _wc = _sw.cell(row=_sr, column=_E1_WASTE_COL, value=_waste)
+                _wc.fill = WASTE_FILL; _wc.font = Font(bold=True, size=9)
+                _wc.border = THIN_BORDER; _wc.alignment = Alignment(horizontal='right', vertical='center')
+                _wc.number_format = '#,##0.00'
+                _e1_tot['bal']     += _row['balance_cif']
+                _e1_tot['planned'] += _row['total_planned']
+                _e1_tot['waste']   += _waste
+                _sr += 1
+
+            # E1 total row
+            _scell(_sw, _sr, 1, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
+            _scell(_sw, _sr, 2, _e1_tot['bal'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            for _ci, _cat in enumerate(_E1_CATS_LABELS):
+                _cc = 3 + _ci * 2
+                _scell(_sw, _sr, _cc,     _e1_tot['qty'][_cat], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 1, _e1_tot['cif'][_cat], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, _E1_TOTAL_COL, _e1_tot['planned'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _wt = _sw.cell(row=_sr, column=_E1_WASTE_COL, value=_e1_tot['waste'])
+            _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
+            _wt.border = THIN_BORDER; _wt.alignment = Alignment(horizontal='right', vertical='center')
+            _wt.number_format = '#,##0.00'
+            _sr += 2
+
+        # ── E5 section ────────────────────────────────────────────────────────
+        if _e5_rows:
+            _merge_hdr(_sw, _sr, 1, _E5_WASTE_COL, 'E5 NORM LICENSES', "375623")
+            _sr += 1
+
+            _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'License No')
+            _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'Balance CIF $')
+            for _ci, _cat in enumerate(_E5_CATS_LABELS):
+                _cc = 3 + _ci * 2
+                _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+1)}{_sr}')
+                _shdr(_sw, _sr, _cc, _cat)
+            _sw.merge_cells(f'{_gcl(_E5_TOTAL_COL)}{_sr}:{_gcl(_E5_TOTAL_COL)}{_sr+1}')
+            _shdr(_sw, _sr, _E5_TOTAL_COL, 'TOTAL ALLOCATED CIF $')
+            _sw.merge_cells(f'{_gcl(_E5_WASTE_COL)}{_sr}:{_gcl(_E5_WASTE_COL)}{_sr+1}')
+            _c = _sw.cell(row=_sr, column=_E5_WASTE_COL, value='Wastage $')
+            _c.fill = WASTE_FILL; _c.font = Font(bold=True, size=9)
+            _c.border = THIN_BORDER
+            _c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            _sr += 1
+            for _ci in range(len(_E5_CATS_LABELS)):
+                _cc = 3 + _ci * 2
+                _shdr(_sw, _sr, _cc,     'Bal Qty')
+                _shdr(_sw, _sr, _cc + 1, 'Planned CIF ($)')
+            _sr += 1
+
+            _e5_tot = {'bal': 0.0, 'planned': 0.0, 'waste': 0.0,
+                       'qty': {c: 0.0 for c in _E5_CATS_LABELS},
+                       'cif': {c: 0.0 for c in _E5_CATS_LABELS}}
+            for _i, _row in enumerate(_e5_rows):
+                _rf = None if _i % 2 == 0 else ALT_FILL
+                _waste = _row['balance_cif'] - _row['total_planned']
+                _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
+                _scell(_sw, _sr, 2, _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                for _ci, _cat in enumerate(_E5_CATS_LABELS):
+                    _cc = 3 + _ci * 2
+                    _q = _row['qty_per_cat'].get(_cat, 0.0)
+                    _p = _row['planned'].get(_cat, 0.0)
+                    _scell(_sw, _sr, _cc,     _q, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _scell(_sw, _sr, _cc + 1, _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _e5_tot['qty'][_cat] += _q
+                    _e5_tot['cif'][_cat] += _p
+                _scell(_sw, _sr, _E5_TOTAL_COL, _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
+                _wc = _sw.cell(row=_sr, column=_E5_WASTE_COL, value=_waste)
+                _wc.fill = WASTE_FILL; _wc.font = Font(bold=True, size=9)
+                _wc.border = THIN_BORDER; _wc.alignment = Alignment(horizontal='right', vertical='center')
+                _wc.number_format = '#,##0.00'
+                _e5_tot['bal']     += _row['balance_cif']
+                _e5_tot['planned'] += _row['total_planned']
+                _e5_tot['waste']   += _waste
+                _sr += 1
+
+            # E5 total row
+            _scell(_sw, _sr, 1, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
+            _scell(_sw, _sr, 2, _e5_tot['bal'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            for _ci, _cat in enumerate(_E5_CATS_LABELS):
+                _cc = 3 + _ci * 2
+                _scell(_sw, _sr, _cc,     _e5_tot['qty'][_cat], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 1, _e5_tot['cif'][_cat], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, _E5_TOTAL_COL, _e5_tot['planned'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _wt = _sw.cell(row=_sr, column=_E5_WASTE_COL, value=_e5_tot['waste'])
+            _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
+            _wt.border = THIN_BORDER; _wt.alignment = Alignment(horizontal='right', vertical='center')
+            _wt.number_format = '#,##0.00'
+            _sr += 2
+
+        # ── Other licenses section ─────────────────────────────────────────────
+        if _other_rows:
+            _merge_hdr(_sw, _sr, 1, 2, 'OTHER LICENSES', "595959")
+            _sr += 1
+            _shdr(_sw, _sr, 1, 'License No')
+            _shdr(_sw, _sr, 2, 'Balance CIF $')
+            _sr += 1
+            for _i, _row in enumerate(_other_rows):
+                _rf = None if _i % 2 == 0 else ALT_FILL
+                _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
+                _scell(_sw, _sr, 2, _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                _sr += 1
+
+        # Column widths for summary sheet
+        _sw.column_dimensions['A'].width = 18
+        _sw.column_dimensions['B'].width = 16
+        for _col_idx in range(3, _MAX_COL + 1):
+            _sw.column_dimensions[_gcl(_col_idx)].width = 14
+        _sw.freeze_panes = 'A4'
 
         excel_file = BytesIO()
         wb.save(excel_file)
@@ -1881,7 +2126,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _UTIL_PLAN = [
                 ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
                 ('FRUIT JUICE',                                   3.0, [],       ['fruit juice']),
-                ('TARTARIC ACID / CITRIC ACID',                   1.0, [],       ['tartaric', 'citric']),
+                ('TARTARIC ACID / CITRIC ACID',                   0.7, [],       ['tartaric', 'citric']),
                 ('POLYPROPYLENE',                                  1.0, [],       ['polypropylene']),
                 ('PAPER & PAPER BOARD',                           0.7, [],       ['paper']),
             ]

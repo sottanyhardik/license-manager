@@ -1249,6 +1249,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             ws = wb.create_sheet(title=sheet_name)
 
             license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
+            license_expiry_str = license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-'
             lic_no = license_obj.license_number or '-'
 
             summary_rows = []
@@ -1330,12 +1331,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             for col, (label, val) in enumerate([
                 ('License No', lic_no),
                 ('License Date', license_date_str),
+                ('Expiry Date', license_expiry_str),
                 ('Total CIF', f"{total_license_cif:,.2f}")
             ], 1):
                 c = ws.cell(row=r, column=col, value=f"{label}: {val}")
                 c.fill = INFO_FILL; c.font = INFO_FONT
                 c.border = THIN_BORDER
-                c.alignment = Alignment(horizontal='left' if col < 3 else 'right', vertical='center')
+                c.alignment = Alignment(horizontal='left' if col < 4 else 'right', vertical='center')
             r += 1
 
             ws.merge_cells(f'A{r}:I{r}')
@@ -1513,6 +1515,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             return c
 
         license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
+        license_expiry_str = license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-'
         lic_no = license_obj.license_number or '-'
 
         # ── Collect summary rows ──────────────────────────────────────────────
@@ -1599,12 +1602,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         for col, (label, val) in enumerate([
             ('License No', lic_no),
             ('License Date', license_date_str),
+            ('Expiry Date', license_expiry_str),
             ('Total CIF', f"{total_license_cif:,.2f}")
         ], 1):
             c = ws.cell(row=r, column=col, value=f"{label}: {val}")
             c.fill = INFO_FILL; c.font = INFO_FONT
             c.border = THIN_BORDER
-            c.alignment = Alignment(horizontal='left' if col < 3 else 'right', vertical='center')
+            c.alignment = Alignment(horizontal='left' if col < 4 else 'right', vertical='center')
         r += 1
 
         # ══════════════════════════════════════════════════════════════════════

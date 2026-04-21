@@ -1630,7 +1630,19 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             ws.column_dimensions['I'].width = 16
             ws.freeze_panes = 'A2'
 
-        for license_obj in licenses:
+        def _norm_sort_key(lic):
+            norms = list(lic.export_license.values_list('norm_class__norm_class', flat=True))
+            norm_str = ', '.join(sorted(str(n) for n in norms if n)) or 'ZZZ'
+            # Group order: E1 first, E5 second, rest alphabetically
+            if any('E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in norms if n):
+                return ('0_E1', norm_str)
+            if any(str(n).strip() == 'E5' for n in norms if n):
+                return ('1_E5', norm_str)
+            return ('2_' + norm_str, norm_str)
+
+        sorted_licenses = sorted(licenses, key=_norm_sort_key)
+
+        for license_obj in sorted_licenses:
             _write_license_sheet(wb, license_obj)
 
         excel_file = BytesIO()

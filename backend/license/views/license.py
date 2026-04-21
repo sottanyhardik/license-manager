@@ -1214,13 +1214,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         wb.remove(wb.active)  # remove default empty sheet
 
         # ── Shared styles ──────────────────────────────────────────────────────
-        HDR_FILL   = PatternFill(start_color="1a1a1a", end_color="1a1a1a", fill_type="solid")
+        HDR_FILL   = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
         HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
-        BOE_FILL   = PatternFill(start_color="d9ead3", end_color="d9ead3", fill_type="solid")
-        ALLOT_FILL = PatternFill(start_color="fce8e6", end_color="fce8e6", fill_type="solid")
-        TOTAL_FILL = PatternFill(start_color="f2f2f2", end_color="f2f2f2", fill_type="solid")
-        YEL_FILL   = PatternFill(start_color="ffff00", end_color="ffff00", fill_type="solid")
-        ALT_FILL   = PatternFill(start_color="f9f9f9", end_color="f9f9f9", fill_type="solid")
+        BOE_FILL   = PatternFill(start_color="DEEAF1", end_color="DEEAF1", fill_type="solid")
+        ALLOT_FILL = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+        TOTAL_FILL = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        YEL_FILL   = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+        ALT_FILL   = PatternFill(start_color="F9F9F9", end_color="F9F9F9", fill_type="solid")
         BOLD       = Font(bold=True, size=9)
         NORM       = Font(size=9)
         THIN_BORDER = Border(
@@ -1326,8 +1326,20 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             total_license_cif = total_cif + _license_balance
 
             r = 1
-            INFO_FILL = PatternFill(start_color="1a1a1a", end_color="1a1a1a", fill_type="solid")
+            from datetime import date as _date_cls
+            _today = _date_cls.today()
+            INFO_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
             INFO_FONT = Font(bold=True, color="FFFFFF", size=9)
+            if license_obj.license_expiry_date:
+                _days = (license_obj.license_expiry_date - _today).days
+                if _days < 0:
+                    EXPIRY_FILL = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+                elif _days <= 90:
+                    EXPIRY_FILL = PatternFill(start_color="ED7D31", end_color="ED7D31", fill_type="solid")
+                else:
+                    EXPIRY_FILL = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+            else:
+                EXPIRY_FILL = INFO_FILL
             for col, (label, val) in enumerate([
                 ('License No', lic_no),
                 ('License Date', license_date_str),
@@ -1335,7 +1347,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 ('Total CIF', f"{total_license_cif:,.2f}")
             ], 1):
                 c = ws.cell(row=r, column=col, value=f"{label}: {val}")
-                c.fill = INFO_FILL; c.font = INFO_FONT
+                c.fill = EXPIRY_FILL if col == 3 else INFO_FILL
+                c.font = INFO_FONT
                 c.border = THIN_BORDER
                 c.alignment = Alignment(horizontal='left' if col < 4 else 'right', vertical='center')
             r += 1
@@ -1484,13 +1497,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         ws.title = "Summary"
 
         # ── Styles ────────────────────────────────────────────────────────────
-        HDR_FILL   = PatternFill(start_color="1a1a1a", end_color="1a1a1a", fill_type="solid")
+        HDR_FILL   = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
         HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
-        BOE_FILL   = PatternFill(start_color="d9ead3", end_color="d9ead3", fill_type="solid")
-        ALLOT_FILL = PatternFill(start_color="fce8e6", end_color="fce8e6", fill_type="solid")
-        TOTAL_FILL = PatternFill(start_color="f2f2f2", end_color="f2f2f2", fill_type="solid")
-        YEL_FILL   = PatternFill(start_color="ffff00", end_color="ffff00", fill_type="solid")
-        ALT_FILL   = PatternFill(start_color="f9f9f9", end_color="f9f9f9", fill_type="solid")
+        BOE_FILL   = PatternFill(start_color="DEEAF1", end_color="DEEAF1", fill_type="solid")
+        ALLOT_FILL = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+        TOTAL_FILL = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        YEL_FILL   = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+        ALT_FILL   = PatternFill(start_color="F9F9F9", end_color="F9F9F9", fill_type="solid")
         BOLD       = Font(bold=True, size=9)
         NORM       = Font(size=9)
         THIN_BORDER = Border(
@@ -1597,8 +1610,20 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # Section 1: License info row
         # ══════════════════════════════════════════════════════════════════════
         r = 1
-        INFO_FILL = PatternFill(start_color="1a1a1a", end_color="1a1a1a", fill_type="solid")
+        from datetime import date as _date_cls
+        _today = _date_cls.today()
+        INFO_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
         INFO_FONT = Font(bold=True, color="FFFFFF", size=9)
+        if license_obj.license_expiry_date:
+            _days = (license_obj.license_expiry_date - _today).days
+            if _days < 0:
+                EXPIRY_FILL = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+            elif _days <= 90:
+                EXPIRY_FILL = PatternFill(start_color="ED7D31", end_color="ED7D31", fill_type="solid")
+            else:
+                EXPIRY_FILL = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+        else:
+            EXPIRY_FILL = INFO_FILL
         for col, (label, val) in enumerate([
             ('License No', lic_no),
             ('License Date', license_date_str),
@@ -1606,7 +1631,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             ('Total CIF', f"{total_license_cif:,.2f}")
         ], 1):
             c = ws.cell(row=r, column=col, value=f"{label}: {val}")
-            c.fill = INFO_FILL; c.font = INFO_FONT
+            c.fill = EXPIRY_FILL if col == 3 else INFO_FILL
+            c.font = INFO_FONT
             c.border = THIN_BORDER
             c.alignment = Alignment(horizontal='left' if col < 4 else 'right', vertical='center')
         r += 1

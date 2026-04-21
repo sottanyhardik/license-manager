@@ -1389,9 +1389,37 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
             r += 1
 
+            # ── E1 norm check for utilization planning ───────────────────────
+            _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
+            _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
+            if _is_e1:
+                _UTIL_PLAN = [
+                    ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
+                    ('FRUIT JUICE',                                   3.0, [],       ['fruit juice']),
+                    ('TARTARIC ACID / CITRIC ACID',                   1.0, [],       ['tartaric', 'citric']),
+                    ('POLYPROPYLENE',                                  1.0, [],       ['polypropylene']),
+                    ('PAPER & PAPER BOARD',                           0.7, [],       ['paper']),
+                ]
+                def _cat_match(hs, desc, hs_kw, name_kw):
+                    return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
+                _cat_totals = {label: 0.0 for label, *_ in _UTIL_PLAN}
+                _unclassified = []
+                for _ik in _bal_agg:
+                    _bq = _bal_agg[_ik]['qty']
+                    _de = _bal_agg[_ik]['description'] or _ik
+                    _hs = _bal_agg[_ik]['hs_code']
+                    _found = False
+                    for _lbl, _rt, _hskw, _nkw in _UTIL_PLAN:
+                        if _cat_match(_hs, _de, _hskw, _nkw):
+                            _cat_totals[_lbl] += _bq
+                            _found = True
+                            break
+                    if not _found:
+                        _unclassified.append((_de, _hs, _bq))
+
             ws.merge_cells(f'A{r}:E{r}')
             bh = ws[f'A{r}']
-            bh.value = 'Summary (Balance Quantity)'
+            bh.value = 'Utilization Planning' if _is_e1 else 'Summary (Balance Quantity)'
             bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
             bh.alignment = Alignment(horizontal='center', vertical='center')
             r += 1
@@ -1409,42 +1437,104 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             yc.number_format = '#,##0.00'
             r += 1
 
-            BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
-            for col, h in enumerate(BAL_COLS, 1):
-                _hdr(ws, r, col, h)
-            r += 1
-
-            for idx, item_key in enumerate(sorted(_bal_agg.keys())):
-                b_qty = _bal_agg[item_key]['qty']
-                if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
-                    _rpct  = _bal_agg[item_key]['restriction_pct']
-                    _sr_ids = _bal_agg[item_key]['sr_ids']
-                    _grp_debits = RowDetails.objects.filter(
-                        sr_number_id__in=_sr_ids, transaction_type='D'
-                    ).aggregate(
-                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                    )['total'] or _Dec('0')
-                    _grp_allots = AllotmentItems.objects.filter(
-                        item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
-                    ).aggregate(
-                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                    )['total'] or _Dec('0')
-                    _allowed = _total_export_cif * _rpct / _Dec('100')
-                    b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
-                else:
-                    b_cif = _license_balance
-
-                unit_price = b_cif / b_qty if b_qty else 0.0
-                desc = _bal_agg[item_key]['description'] or item_key
-                hs   = _bal_agg[item_key]['hs_code']
-                row_fill = None if idx % 2 == 0 else ALT_FILL
-
-                _cell(ws, r, 1, hs,         fill=row_fill)
-                _cell(ws, r, 2, desc,       fill=row_fill)
-                _cell(ws, r, 3, b_qty,      fill=row_fill, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
+            if _is_e1:
+                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                    _hdr(ws, r, col, h)
                 r += 1
+
+                _total_planned = 0.0
+                for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
+                    _bq = _cat_totals[_lbl]
+                    _pc = _rt * _bq
+                    _total_planned += _pc
+                    _rf = None if _idx % 2 == 0 else ALT_FILL
+                    _cell(ws, r, 1, _lbl, fill=_rf)
+                    _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    r += 1
+
+                if _unclassified:
+                    r += 1
+                    ws.merge_cells(f'A{r}:E{r}')
+                    _uh = ws[f'A{r}']
+                    _uh.value = 'UNCLASSIFIED ITEMS'
+                    _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
+                    _uh.alignment = Alignment(horizontal='center', vertical='center')
+                    _uh.border = THIN_BORDER
+                    r += 1
+                    for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                        _hdr(ws, r, col, h)
+                    r += 1
+                    for _i2, (_de2, _hs2, _bq2) in enumerate(_unclassified):
+                        _rf2 = None if _i2 % 2 == 0 else ALT_FILL
+                        _cell(ws, r, 1, _de2, fill=_rf2)
+                        _cell(ws, r, 2, _hs2, fill=_rf2)
+                        _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 4, '',   fill=_rf2)
+                        _cell(ws, r, 5, '',   fill=_rf2)
+                        r += 1
+
+                r += 1
+                _cell(ws, r, 1, '', fill=TOTAL_FILL)
+                _cell(ws, r, 2, '', fill=TOTAL_FILL)
+                _cell(ws, r, 3, '', fill=TOTAL_FILL)
+                _cell(ws, r, 4, 'TOTAL PLANNED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+                _cell(ws, r, 5, _total_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                r += 1
+                _rem = _license_balance - _total_planned
+                _RF = PatternFill(start_color="C00000" if _rem < 0 else "1F4E79",
+                                  end_color="C00000" if _rem < 0 else "1F4E79", fill_type="solid")
+                for _ci in range(1, 5):
+                    _cx = ws.cell(row=r, column=_ci)
+                    _cx.fill = _RF; _cx.border = THIN_BORDER
+                _rc = ws.cell(row=r, column=4, value='REMAINING BALANCE CIF $')
+                _rc.fill = _RF; _rc.font = Font(bold=True, color="FFFFFF", size=9)
+                _rc.border = THIN_BORDER; _rc.alignment = Alignment(horizontal='right', vertical='center')
+                _rc2 = ws.cell(row=r, column=5, value=_rem)
+                _rc2.fill = _RF; _rc2.font = Font(bold=True, color="FFFFFF", size=9)
+                _rc2.border = THIN_BORDER
+                _rc2.alignment = Alignment(horizontal='right', vertical='center')
+                _rc2.number_format = '#,##0.00'
+                r += 1
+            else:
+                BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
+                for col, h in enumerate(BAL_COLS, 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+
+                for idx, item_key in enumerate(sorted(_bal_agg.keys())):
+                    b_qty = _bal_agg[item_key]['qty']
+                    if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
+                        _rpct  = _bal_agg[item_key]['restriction_pct']
+                        _sr_ids = _bal_agg[item_key]['sr_ids']
+                        _grp_debits = RowDetails.objects.filter(
+                            sr_number_id__in=_sr_ids, transaction_type='D'
+                        ).aggregate(
+                            total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                        )['total'] or _Dec('0')
+                        _grp_allots = AllotmentItems.objects.filter(
+                            item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
+                        ).aggregate(
+                            total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                        )['total'] or _Dec('0')
+                        _allowed = _total_export_cif * _rpct / _Dec('100')
+                        b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+                    else:
+                        b_cif = _license_balance
+
+                    unit_price = b_cif / b_qty if b_qty else 0.0
+                    desc = _bal_agg[item_key]['description'] or item_key
+                    hs   = _bal_agg[item_key]['hs_code']
+                    row_fill = None if idx % 2 == 0 else ALT_FILL
+
+                    _cell(ws, r, 1, hs,         fill=row_fill)
+                    _cell(ws, r, 2, desc,       fill=row_fill)
+                    _cell(ws, r, 3, b_qty,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                    r += 1
 
             ws.column_dimensions['A'].width = 14
             ws.column_dimensions['B'].width = 14
@@ -1684,11 +1774,38 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         r += 1  # blank row
 
         # ══════════════════════════════════════════════════════════════════════
-        # Section 3: Summary (Balance Quantity)
+        # Section 3: Utilization Planning (E1) / Summary (Balance Quantity)
         # ══════════════════════════════════════════════════════════════════════
+        _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
+        _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
+        if _is_e1:
+            _UTIL_PLAN = [
+                ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
+                ('FRUIT JUICE',                                   3.0, [],       ['fruit juice']),
+                ('TARTARIC ACID / CITRIC ACID',                   1.0, [],       ['tartaric', 'citric']),
+                ('POLYPROPYLENE',                                  1.0, [],       ['polypropylene']),
+                ('PAPER & PAPER BOARD',                           0.7, [],       ['paper']),
+            ]
+            def _cat_match(hs, desc, hs_kw, name_kw):
+                return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
+            _cat_totals = {label: 0.0 for label, *_ in _UTIL_PLAN}
+            _unclassified = []
+            for _ik in _bal_agg:
+                _bq = _bal_agg[_ik]['qty']
+                _de = _bal_agg[_ik]['description'] or _ik
+                _hs = _bal_agg[_ik]['hs_code']
+                _found = False
+                for _lbl, _rt, _hskw, _nkw in _UTIL_PLAN:
+                    if _cat_match(_hs, _de, _hskw, _nkw):
+                        _cat_totals[_lbl] += _bq
+                        _found = True
+                        break
+                if not _found:
+                    _unclassified.append((_de, _hs, _bq))
+
         ws.merge_cells(f'A{r}:E{r}')
         bh = ws[f'A{r}']
-        bh.value = 'Summary (Balance Quantity)'
+        bh.value = 'Utilization Planning' if _is_e1 else 'Summary (Balance Quantity)'
         bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
         bh.alignment = Alignment(horizontal='center', vertical='center')
         r += 1
@@ -1707,44 +1824,106 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         yc.number_format = '#,##0.00'
         r += 1
 
-        # Column headers
-        BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
-        for col, h in enumerate(BAL_COLS, 1):
-            _hdr(ws, r, col, h)
-        r += 1
-
-        # Data rows
-        for idx, item_key in enumerate(sorted(_bal_agg.keys())):
-            b_qty = _bal_agg[item_key]['qty']
-            if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
-                _rpct  = _bal_agg[item_key]['restriction_pct']
-                _sr_ids = _bal_agg[item_key]['sr_ids']
-                _grp_debits = RowDetails.objects.filter(
-                    sr_number_id__in=_sr_ids, transaction_type='D'
-                ).aggregate(
-                    total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                )['total'] or _Dec('0')
-                _grp_allots = AllotmentItems.objects.filter(
-                    item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
-                ).aggregate(
-                    total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                )['total'] or _Dec('0')
-                _allowed = _total_export_cif * _rpct / _Dec('100')
-                b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
-            else:
-                b_cif = _license_balance
-
-            unit_price = b_cif / b_qty if b_qty else 0.0
-            desc = _bal_agg[item_key]['description'] or item_key
-            hs   = _bal_agg[item_key]['hs_code']
-            row_fill = None if idx % 2 == 0 else ALT_FILL
-
-            _cell(ws, r, 1, hs,         fill=row_fill)
-            _cell(ws, r, 2, desc,       fill=row_fill)
-            _cell(ws, r, 3, b_qty,      fill=row_fill, align='right', num_fmt='#,##0.00')
-            _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
-            _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
+        if _is_e1:
+            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                _hdr(ws, r, col, h)
             r += 1
+
+            _total_planned = 0.0
+            for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
+                _bq = _cat_totals[_lbl]
+                _pc = _rt * _bq
+                _total_planned += _pc
+                _rf = None if _idx % 2 == 0 else ALT_FILL
+                _cell(ws, r, 1, _lbl, fill=_rf)
+                _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                r += 1
+
+            if _unclassified:
+                r += 1
+                ws.merge_cells(f'A{r}:E{r}')
+                _uh = ws[f'A{r}']
+                _uh.value = 'UNCLASSIFIED ITEMS'
+                _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
+                _uh.alignment = Alignment(horizontal='center', vertical='center')
+                _uh.border = THIN_BORDER
+                r += 1
+                for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+                for _i2, (_de2, _hs2, _bq2) in enumerate(_unclassified):
+                    _rf2 = None if _i2 % 2 == 0 else ALT_FILL
+                    _cell(ws, r, 1, _de2, fill=_rf2)
+                    _cell(ws, r, 2, _hs2, fill=_rf2)
+                    _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, '',   fill=_rf2)
+                    _cell(ws, r, 5, '',   fill=_rf2)
+                    r += 1
+
+            r += 1
+            _cell(ws, r, 1, '', fill=TOTAL_FILL)
+            _cell(ws, r, 2, '', fill=TOTAL_FILL)
+            _cell(ws, r, 3, '', fill=TOTAL_FILL)
+            _cell(ws, r, 4, 'TOTAL PLANNED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+            _cell(ws, r, 5, _total_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            r += 1
+            _rem = _license_balance - _total_planned
+            _RF = PatternFill(start_color="C00000" if _rem < 0 else "1F4E79",
+                              end_color="C00000" if _rem < 0 else "1F4E79", fill_type="solid")
+            for _ci in range(1, 5):
+                _cx = ws.cell(row=r, column=_ci)
+                _cx.fill = _RF; _cx.border = THIN_BORDER
+            _rc = ws.cell(row=r, column=4, value='REMAINING BALANCE CIF $')
+            _rc.fill = _RF; _rc.font = Font(bold=True, color="FFFFFF", size=9)
+            _rc.border = THIN_BORDER; _rc.alignment = Alignment(horizontal='right', vertical='center')
+            _rc2 = ws.cell(row=r, column=5, value=_rem)
+            _rc2.fill = _RF; _rc2.font = Font(bold=True, color="FFFFFF", size=9)
+            _rc2.border = THIN_BORDER
+            _rc2.alignment = Alignment(horizontal='right', vertical='center')
+            _rc2.number_format = '#,##0.00'
+            r += 1
+        else:
+            # Column headers
+            BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
+            for col, h in enumerate(BAL_COLS, 1):
+                _hdr(ws, r, col, h)
+            r += 1
+
+            # Data rows
+            for idx, item_key in enumerate(sorted(_bal_agg.keys())):
+                b_qty = _bal_agg[item_key]['qty']
+                if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
+                    _rpct  = _bal_agg[item_key]['restriction_pct']
+                    _sr_ids = _bal_agg[item_key]['sr_ids']
+                    _grp_debits = RowDetails.objects.filter(
+                        sr_number_id__in=_sr_ids, transaction_type='D'
+                    ).aggregate(
+                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                    )['total'] or _Dec('0')
+                    _grp_allots = AllotmentItems.objects.filter(
+                        item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
+                    ).aggregate(
+                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                    )['total'] or _Dec('0')
+                    _allowed = _total_export_cif * _rpct / _Dec('100')
+                    b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+                else:
+                    b_cif = _license_balance
+
+                unit_price = b_cif / b_qty if b_qty else 0.0
+                desc = _bal_agg[item_key]['description'] or item_key
+                hs   = _bal_agg[item_key]['hs_code']
+                row_fill = None if idx % 2 == 0 else ALT_FILL
+
+                _cell(ws, r, 1, hs,         fill=row_fill)
+                _cell(ws, r, 2, desc,       fill=row_fill)
+                _cell(ws, r, 3, b_qty,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                r += 1
 
         # ── Column widths ─────────────────────────────────────────────────────
         ws.column_dimensions['A'].width = 14

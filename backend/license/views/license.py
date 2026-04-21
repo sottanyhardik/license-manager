@@ -1425,6 +1425,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 ]
                 _e5_totals = {label: 0.0 for label, *_ in _E5_CATS}
                 _e5_unclassified = []
+                _wf_qty = 0.0
+                _WF_HS = ['11010000']
                 for _ik in _bal_agg:
                     _bq = _bal_agg[_ik]['qty']
                     _hs = (_bal_agg[_ik]['hs_code'] or '').lower()
@@ -1436,7 +1438,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                             _found = True
                             break
                     if not _found:
-                        _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+                        if any(k in _hs for k in _WF_HS):
+                            _wf_qty += _bq
+                        else:
+                            _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
 
             ws.merge_cells(f'A{r}:E{r}')
             bh = ws[f'A{r}']
@@ -1545,11 +1550,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
                 # WHEAT FLOUR row — last priority, remaining balance
                 _wf = _e5_remaining
+                _wf_up = _wf / _wf_qty if _wf_qty else 0.0
                 _wf_rf = None if len(_E5_CATS) % 2 == 0 else ALT_FILL
                 _cell(ws, r, 1, 'WHEAT FLOUR', fill=_wf_rf)
                 _cell(ws, r, 2, '-', fill=_wf_rf, align='center')
-                _cell(ws, r, 3, '-', fill=_wf_rf, align='center')
-                _cell(ws, r, 4, '-', fill=_wf_rf, align='center')
+                _cell(ws, r, 3, _wf_qty if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.00' if _wf_qty else None)
+                _cell(ws, r, 4, _wf_up if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.000000' if _wf_qty else None)
                 _cell(ws, r, 5, _wf, fill=_wf_rf, align='right', num_fmt='#,##0.00')
                 r += 1
 
@@ -1991,6 +1997,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             ]
             _e5_totals = {lbl: 0.0 for lbl, *_ in _E5_CATS}
             _e5_unclassified = []
+            _wf_qty = 0.0
+            _WF_HS = ['11010000']
             for _ik in _bal_agg:
                 _bq = _bal_agg[_ik]['qty']
                 _hs = (_bal_agg[_ik]['hs_code'] or '').lower()
@@ -2002,7 +2010,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _found = True
                         break
                 if not _found:
-                    _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+                    if any(k in _hs for k in _WF_HS):
+                        _wf_qty += _bq
+                    else:
+                        _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
 
             for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
                 _hdr(ws, r, col, h)
@@ -2026,11 +2037,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
             # WHEAT FLOUR row — last priority, remaining balance
             _wf = _e5_remaining
+            _wf_up = _wf / _wf_qty if _wf_qty else 0.0
             _wf_rf = None if len(_E5_CATS) % 2 == 0 else ALT_FILL
             _cell(ws, r, 1, 'WHEAT FLOUR', fill=_wf_rf)
             _cell(ws, r, 2, '-', fill=_wf_rf, align='center')
-            _cell(ws, r, 3, '-', fill=_wf_rf, align='center')
-            _cell(ws, r, 4, '-', fill=_wf_rf, align='center')
+            _cell(ws, r, 3, _wf_qty if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.00' if _wf_qty else None)
+            _cell(ws, r, 4, _wf_up if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.000000' if _wf_qty else None)
             _cell(ws, r, 5, _wf, fill=_wf_rf, align='right', num_fmt='#,##0.00')
             r += 1
 

@@ -728,7 +728,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                             detail.bill_of_entry.bill_of_entry_number,
                             detail.bill_of_entry.bill_of_entry_date.strftime('%d/%m/%Y') if detail.bill_of_entry.bill_of_entry_date else '-',
                             Paragraph(detail.bill_of_entry.port.name if detail.bill_of_entry.port else '-', styles['Normal']),
-                            Paragraph(detail.bill_of_entry.company.name if detail.bill_of_entry.company else '-', styles['Normal']),
+                            Paragraph(detail.bill_of_entry.company.name or '-' if detail.bill_of_entry.company else '-', styles['Normal']),
                             f"{float(detail.qty):.2f}",
                             f"{float(detail.cif_fc):.2f}",
                             f"{float(detail.cif_inr):.2f}"

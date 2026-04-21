@@ -1245,6 +1245,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             return c
 
         def _write_license_sheet(wb, license_obj):
+            from datetime import date as _date_cls
             sheet_name = str(license_obj.license_number)[:31]
             ws = wb.create_sheet(title=sheet_name)
 
@@ -1272,8 +1273,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else ''
                     ref_str  = f"{ref_no} / {ref_date}" if ref_date else ref_no
                     product  = rd.bill_of_entry.product_name or item_name
-                    summary_rows.append((product.lower(), {
-                        'lic_no': lic_no, 'lic_date': license_date_str,
+                    _sort_dt = rd.bill_of_entry.bill_of_entry_date or _date_cls.min
+                    summary_rows.append((0, _sort_dt, {
                         'item': product, 'type': 'BOE', 'company': boe_company,
                         'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
                     }, True))
@@ -1292,13 +1293,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     eta     = ai.allotment.estimated_arrival_date.strftime('%d-%m-%Y') if ai.allotment.estimated_arrival_date else ''
                     ref_str = f"{invoice} / ETA: {eta}" if eta else invoice
                     product = ai.allotment.item_name or item_name
-                    summary_rows.append((product.lower(), {
-                        'lic_no': lic_no, 'lic_date': license_date_str,
+                    _sort_dt = ai.allotment.estimated_arrival_date or _date_cls.min
+                    summary_rows.append((1, _sort_dt, {
                         'item': product, 'type': 'Allotment', 'company': company,
                         'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
                     }, False))
 
-            summary_rows.sort(key=lambda x: x[0])
+            # BOEs first (sorted by BOE date), then allotments (sorted by allotment date)
+            summary_rows.sort(key=lambda x: (x[0], x[1]))
 
             _bal_agg = defaultdict(lambda: {
                 'qty': 0.0, 'is_restricted': False, 'restriction_pct': None,
@@ -1326,7 +1328,6 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             total_license_cif = total_cif + _license_balance
 
             r = 1
-            from datetime import date as _date_cls
             _today = _date_cls.today()
             INFO_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
             INFO_FONT = Font(bold=True, color="FFFFFF", size=9)
@@ -1353,45 +1354,43 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 c.alignment = Alignment(horizontal='left' if col < 4 else 'right', vertical='center')
             r += 1
 
-            ws.merge_cells(f'A{r}:I{r}')
+            ws.merge_cells(f'A{r}:G{r}')
             sh = ws[f'A{r}']
             sh.value = 'Summary (BOE & Allotments)'
             sh.fill = HDR_FILL; sh.font = Font(bold=True, color="FFFFFF", size=10)
             sh.alignment = Alignment(horizontal='center', vertical='center')
             r += 1
 
-            SUMM_COLS = ['License No', 'License Date', 'Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']
+            SUMM_COLS = ['Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']
             for col, h in enumerate(SUMM_COLS, 1):
                 _hdr(ws, r, col, h)
             r += 1
 
-            for _, row_data, is_boe in summary_rows:
+            for _s, _sd, row_data, is_boe in summary_rows:
                 fill = BOE_FILL if is_boe else ALLOT_FILL
-                _cell(ws, r, 1, row_data['lic_no'],   fill=fill)
-                _cell(ws, r, 2, row_data['lic_date'],  fill=fill)
-                _cell(ws, r, 3, row_data['item'],      fill=fill)
-                _cell(ws, r, 4, row_data['type'],      fill=fill)
-                _cell(ws, r, 5, row_data['company'],   fill=fill)
-                _cell(ws, r, 6, row_data['reference'], fill=fill)
-                _cell(ws, r, 7, row_data['qty'],       fill=fill, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 8, row_data['rate'],      fill=fill, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 9, row_data['cif'],       fill=fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 1, row_data['item'],      fill=fill)
+                _cell(ws, r, 2, row_data['type'],      fill=fill)
+                _cell(ws, r, 3, row_data['company'],   fill=fill)
+                _cell(ws, r, 4, row_data['reference'], fill=fill)
+                _cell(ws, r, 5, row_data['qty'],       fill=fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 6, row_data['rate'],      fill=fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 7, row_data['cif'],       fill=fill, align='right', num_fmt='#,##0.00')
                 r += 1
 
             if summary_rows:
                 _cell(ws, r, 1, '', fill=TOTAL_FILL); _cell(ws, r, 2, '', fill=TOTAL_FILL)
-                _cell(ws, r, 3, '', fill=TOTAL_FILL); _cell(ws, r, 4, '', fill=TOTAL_FILL)
-                _cell(ws, r, 5, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
-                _cell(ws, r, 6, '', fill=TOTAL_FILL); _cell(ws, r, 7, '', fill=TOTAL_FILL)
-                _cell(ws, r, 8, '', fill=TOTAL_FILL)
-                _cell(ws, r, 9, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 3, '', fill=TOTAL_FILL)
+                _cell(ws, r, 4, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
+                _cell(ws, r, 5, '', fill=TOTAL_FILL); _cell(ws, r, 6, '', fill=TOTAL_FILL)
+                _cell(ws, r, 7, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 r += 1
 
             r += 1
 
-            # ── E1 norm check for utilization planning ───────────────────────
+            # ── Norm check for utilization planning ──────────────────────────
             _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
             _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
+            _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
             if _is_e1:
                 _UTIL_PLAN = [
                     ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
@@ -1416,10 +1415,32 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                             break
                     if not _found:
                         _unclassified.append((_de, _hs, _bq))
+            elif _is_e5:
+                _E5_CATS = [
+                    ('DIETARY FIBRE',            2.7,   ['0802']),
+                    ('VEGETABLE OIL (1513)',      2.26,  ['1513']),
+                    ('VEGETABLE OIL (15119020)',  1.2,   ['15119020']),
+                    ('MILK (0404)',               3.75,  ['0404']),
+                    ('MILK (3502)',               14.0,  ['3502']),
+                ]
+                _e5_totals = {label: 0.0 for label, *_ in _E5_CATS}
+                _e5_unclassified = []
+                for _ik in _bal_agg:
+                    _bq = _bal_agg[_ik]['qty']
+                    _hs = (_bal_agg[_ik]['hs_code'] or '').lower()
+                    _de = _bal_agg[_ik]['description'] or _ik
+                    _found = False
+                    for _lbl, _rt, _hskw in _E5_CATS:
+                        if any(k in _hs for k in _hskw):
+                            _e5_totals[_lbl] += _bq
+                            _found = True
+                            break
+                    if not _found:
+                        _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
 
             ws.merge_cells(f'A{r}:E{r}')
             bh = ws[f'A{r}']
-            bh.value = 'Utilization Planning' if _is_e1 else 'Summary (Balance Quantity)'
+            bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
             bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
             bh.alignment = Alignment(horizontal='center', vertical='center')
             r += 1
@@ -1443,15 +1464,18 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 r += 1
 
                 _total_planned = 0.0
+                _e1_remaining = _license_balance
                 for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
                     _bq = _cat_totals[_lbl]
-                    _pc = _rt * _bq
+                    _pc = min(_rt * _bq, _e1_remaining)
+                    _up = _pc / _bq if _bq else 0.0
+                    _e1_remaining -= _pc
                     _total_planned += _pc
                     _rf = None if _idx % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _lbl, fill=_rf)
                     _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 4, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
                     r += 1
 
@@ -1497,6 +1521,65 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _rc2.border = THIN_BORDER
                 _rc2.alignment = Alignment(horizontal='right', vertical='center')
                 _rc2.number_format = '#,##0.00'
+                r += 1
+            elif _is_e5:
+                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+
+                _e5_planned = 0.0
+                _e5_remaining = _license_balance
+                for _idx, (_lbl, _rt, _hskw) in enumerate(_E5_CATS):
+                    _bq = _e5_totals[_lbl]
+                    _pc = min(_rt * _bq, _e5_remaining)
+                    _up = _pc / _bq if _bq else 0.0
+                    _e5_remaining -= _pc
+                    _e5_planned += _pc
+                    _rf = None if _idx % 2 == 0 else ALT_FILL
+                    _cell(ws, r, 1, _lbl, fill=_rf)
+                    _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    r += 1
+
+                # WHEAT FLOUR row — last priority, remaining balance
+                _wf = _e5_remaining
+                _wf_rf = None if len(_E5_CATS) % 2 == 0 else ALT_FILL
+                _cell(ws, r, 1, 'WHEAT FLOUR', fill=_wf_rf)
+                _cell(ws, r, 2, '-', fill=_wf_rf, align='center')
+                _cell(ws, r, 3, '-', fill=_wf_rf, align='center')
+                _cell(ws, r, 4, '-', fill=_wf_rf, align='center')
+                _cell(ws, r, 5, _wf, fill=_wf_rf, align='right', num_fmt='#,##0.00')
+                r += 1
+
+                if _e5_unclassified:
+                    r += 1
+                    ws.merge_cells(f'A{r}:E{r}')
+                    _uh = ws[f'A{r}']
+                    _uh.value = 'UNCLASSIFIED ITEMS'
+                    _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
+                    _uh.alignment = Alignment(horizontal='center', vertical='center')
+                    _uh.border = THIN_BORDER
+                    r += 1
+                    for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                        _hdr(ws, r, col, h)
+                    r += 1
+                    for _i2, (_de2, _hs2, _bq2) in enumerate(_e5_unclassified):
+                        _rf2 = None if _i2 % 2 == 0 else ALT_FILL
+                        _cell(ws, r, 1, _de2, fill=_rf2)
+                        _cell(ws, r, 2, _hs2, fill=_rf2)
+                        _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 4, '',   fill=_rf2)
+                        _cell(ws, r, 5, '',   fill=_rf2)
+                        r += 1
+
+                r += 1
+                _cell(ws, r, 1, '', fill=TOTAL_FILL)
+                _cell(ws, r, 2, '', fill=TOTAL_FILL)
+                _cell(ws, r, 3, '', fill=TOTAL_FILL)
+                _cell(ws, r, 4, 'TOTAL ALLOCATED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+                _cell(ws, r, 5, _e5_planned + _wf, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 r += 1
             else:
                 BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
@@ -1622,7 +1705,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         lic_no = license_obj.license_number or '-'
 
         # ── Collect summary rows ──────────────────────────────────────────────
-        summary_rows = []   # (sort_key, row_data_dict, is_boe)
+        from datetime import date as _date_cls
+        summary_rows = []   # (group, sort_date, row_data_dict, is_boe)
         total_cif = 0.0
 
         for item in license_obj.import_license.all():
@@ -1642,8 +1726,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else ''
                 ref_str  = f"{ref_no} / {ref_date}" if ref_date else ref_no
                 product  = rd.bill_of_entry.product_name or item_name
-                summary_rows.append((product.lower(), {
-                    'lic_no': lic_no, 'lic_date': license_date_str,
+                _sort_dt = rd.bill_of_entry.bill_of_entry_date or _date_cls.min
+                summary_rows.append((0, _sort_dt, {
                     'item': product, 'type': 'BOE', 'company': boe_company,
                     'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
                 }, True))
@@ -1662,13 +1746,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 eta     = ai.allotment.estimated_arrival_date.strftime('%d-%m-%Y') if ai.allotment.estimated_arrival_date else ''
                 ref_str = f"{invoice} / ETA: {eta}" if eta else invoice
                 product = ai.allotment.item_name or item_name
-                summary_rows.append((product.lower(), {
-                    'lic_no': lic_no, 'lic_date': license_date_str,
+                _sort_dt = ai.allotment.estimated_arrival_date or _date_cls.min
+                summary_rows.append((1, _sort_dt, {
                     'item': product, 'type': 'Allotment', 'company': company,
                     'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
                 }, False))
 
-        summary_rows.sort(key=lambda x: x[0])
+        # BOEs first (sorted by BOE date), then allotments (sorted by allotment date)
+        summary_rows.sort(key=lambda x: (x[0], x[1]))
 
         # ── Pre-aggregate balance data ─────────────────────────────────────────
         _bal_agg = defaultdict(lambda: {
@@ -1700,7 +1785,6 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # Section 1: License info row
         # ══════════════════════════════════════════════════════════════════════
         r = 1
-        from datetime import date as _date_cls
         _today = _date_cls.today()
         INFO_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
         INFO_FONT = Font(bold=True, color="FFFFFF", size=9)
@@ -1730,8 +1814,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # ══════════════════════════════════════════════════════════════════════
         # Section 2: Summary (BOE & Allotments)
         # ══════════════════════════════════════════════════════════════════════
-        # Section header (merged A:I)
-        ws.merge_cells(f'A{r}:I{r}')
+        # Section header (merged A:G)
+        ws.merge_cells(f'A{r}:G{r}')
         sh = ws[f'A{r}']
         sh.value = 'Summary (BOE & Allotments)'
         sh.fill = HDR_FILL; sh.font = Font(bold=True, color="FFFFFF", size=10)
@@ -1739,23 +1823,21 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         r += 1
 
         # Column headers
-        SUMM_COLS = ['License No', 'License Date', 'Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']
+        SUMM_COLS = ['Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']
         for col, h in enumerate(SUMM_COLS, 1):
             _hdr(ws, r, col, h)
         r += 1
 
         # Data rows
-        for _, row_data, is_boe in summary_rows:
+        for _s, _sd, row_data, is_boe in summary_rows:
             fill = BOE_FILL if is_boe else ALLOT_FILL
-            _cell(ws, r, 1, row_data['lic_no'],   fill=fill)
-            _cell(ws, r, 2, row_data['lic_date'],  fill=fill)
-            _cell(ws, r, 3, row_data['item'],      fill=fill)
-            _cell(ws, r, 4, row_data['type'],      fill=fill)
-            _cell(ws, r, 5, row_data['company'],   fill=fill)
-            _cell(ws, r, 6, row_data['reference'], fill=fill)
-            _cell(ws, r, 7, row_data['qty'],       fill=fill, align='right', num_fmt='#,##0.00')
-            _cell(ws, r, 8, row_data['rate'],      fill=fill, align='right', num_fmt='#,##0.00')
-            _cell(ws, r, 9, row_data['cif'],       fill=fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 1, row_data['item'],      fill=fill)
+            _cell(ws, r, 2, row_data['type'],      fill=fill)
+            _cell(ws, r, 3, row_data['company'],   fill=fill)
+            _cell(ws, r, 4, row_data['reference'], fill=fill)
+            _cell(ws, r, 5, row_data['qty'],       fill=fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 6, row_data['rate'],      fill=fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 7, row_data['cif'],       fill=fill, align='right', num_fmt='#,##0.00')
             r += 1
 
         # Total row
@@ -1763,12 +1845,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _cell(ws, r, 1, '', fill=TOTAL_FILL)
             _cell(ws, r, 2, '', fill=TOTAL_FILL)
             _cell(ws, r, 3, '', fill=TOTAL_FILL)
-            _cell(ws, r, 4, '', fill=TOTAL_FILL)
-            _cell(ws, r, 5, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
+            _cell(ws, r, 4, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
+            _cell(ws, r, 5, '', fill=TOTAL_FILL)
             _cell(ws, r, 6, '', fill=TOTAL_FILL)
-            _cell(ws, r, 7, '', fill=TOTAL_FILL)
-            _cell(ws, r, 8, '', fill=TOTAL_FILL)
-            _cell(ws, r, 9, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 7, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             r += 1
 
         r += 1  # blank row
@@ -1778,6 +1858,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # ══════════════════════════════════════════════════════════════════════
         _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
         _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
+        _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
         if _is_e1:
             _UTIL_PLAN = [
                 ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
@@ -1805,7 +1886,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         ws.merge_cells(f'A{r}:E{r}')
         bh = ws[f'A{r}']
-        bh.value = 'Utilization Planning' if _is_e1 else 'Summary (Balance Quantity)'
+        bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
         bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
         bh.alignment = Alignment(horizontal='center', vertical='center')
         r += 1
@@ -1830,15 +1911,18 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             r += 1
 
             _total_planned = 0.0
+            _e1_remaining = _license_balance
             for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
                 _bq = _cat_totals[_lbl]
-                _pc = _rt * _bq
+                _pc = min(_rt * _bq, _e1_remaining)
+                _up = _pc / _bq if _bq else 0.0
+                _e1_remaining -= _pc
                 _total_planned += _pc
                 _rf = None if _idx % 2 == 0 else ALT_FILL
                 _cell(ws, r, 1, _lbl, fill=_rf)
                 _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 4, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
                 r += 1
 
@@ -1884,6 +1968,87 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _rc2.border = THIN_BORDER
             _rc2.alignment = Alignment(horizontal='right', vertical='center')
             _rc2.number_format = '#,##0.00'
+            r += 1
+        elif _is_e5:
+            _E5_CATS = [
+                ('DIETARY FIBRE',            2.7,  ['0802']),
+                ('VEGETABLE OIL (1513)',      2.26, ['1513']),
+                ('VEGETABLE OIL (15119020)',  1.2,  ['15119020']),
+                ('MILK (0404)',               3.75, ['0404']),
+                ('MILK (3502)',               14.0, ['3502']),
+            ]
+            _e5_totals = {lbl: 0.0 for lbl, *_ in _E5_CATS}
+            _e5_unclassified = []
+            for _ik in _bal_agg:
+                _bq = _bal_agg[_ik]['qty']
+                _hs = (_bal_agg[_ik]['hs_code'] or '').lower()
+                _de = _bal_agg[_ik]['description'] or _ik
+                _found = False
+                for _lbl, _rt, _hskw in _E5_CATS:
+                    if any(k in _hs for k in _hskw):
+                        _e5_totals[_lbl] += _bq
+                        _found = True
+                        break
+                if not _found:
+                    _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+
+            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                _hdr(ws, r, col, h)
+            r += 1
+
+            _e5_planned = 0.0
+            _e5_remaining = _license_balance
+            for _idx, (_lbl, _rt, _hskw) in enumerate(_E5_CATS):
+                _bq = _e5_totals[_lbl]
+                _pc = min(_rt * _bq, _e5_remaining)
+                _up = _pc / _bq if _bq else 0.0
+                _e5_remaining -= _pc
+                _e5_planned += _pc
+                _rf = None if _idx % 2 == 0 else ALT_FILL
+                _cell(ws, r, 1, _lbl, fill=_rf)
+                _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                r += 1
+
+            # WHEAT FLOUR row — last priority, remaining balance
+            _wf = _e5_remaining
+            _wf_rf = None if len(_E5_CATS) % 2 == 0 else ALT_FILL
+            _cell(ws, r, 1, 'WHEAT FLOUR', fill=_wf_rf)
+            _cell(ws, r, 2, '-', fill=_wf_rf, align='center')
+            _cell(ws, r, 3, '-', fill=_wf_rf, align='center')
+            _cell(ws, r, 4, '-', fill=_wf_rf, align='center')
+            _cell(ws, r, 5, _wf, fill=_wf_rf, align='right', num_fmt='#,##0.00')
+            r += 1
+
+            if _e5_unclassified:
+                r += 1
+                ws.merge_cells(f'A{r}:E{r}')
+                _uh = ws[f'A{r}']
+                _uh.value = 'UNCLASSIFIED ITEMS'
+                _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
+                _uh.alignment = Alignment(horizontal='center', vertical='center')
+                _uh.border = THIN_BORDER
+                r += 1
+                for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+                for _i2, (_de2, _hs2, _bq2) in enumerate(_e5_unclassified):
+                    _rf2 = None if _i2 % 2 == 0 else ALT_FILL
+                    _cell(ws, r, 1, _de2, fill=_rf2)
+                    _cell(ws, r, 2, _hs2, fill=_rf2)
+                    _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, '',   fill=_rf2)
+                    _cell(ws, r, 5, '',   fill=_rf2)
+                    r += 1
+
+            r += 1
+            _cell(ws, r, 1, '', fill=TOTAL_FILL)
+            _cell(ws, r, 2, '', fill=TOTAL_FILL)
+            _cell(ws, r, 3, '', fill=TOTAL_FILL)
+            _cell(ws, r, 4, 'TOTAL ALLOCATED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+            _cell(ws, r, 5, _e5_planned + _wf, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             r += 1
         else:
             # Column headers

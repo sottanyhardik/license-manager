@@ -1055,7 +1055,13 @@ export default function MasterList() {
                                                             const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
                                                             window.open(url, '_blank');
                                                             setTimeout(() => window.URL.revokeObjectURL(url), 100);
-                                                        } catch (err) { toast.error('Failed to load documents'); }
+                                                        } catch (err) {
+                                                            if (err.response?.status === 404) {
+                                                                toast.warning('Document files are not available on this server. The files may not have been uploaded yet.');
+                                                            } else {
+                                                                toast.error(err.response?.data ? String(err.response.data).slice(0, 200) : 'Failed to load documents');
+                                                            }
+                                                        }
                                                     }} style={{ fontSize: '0.72rem', color: '#059669', background: '#d1fae5', padding: '2px 6px', borderRadius: '4px', fontWeight: '500', border: 'none', cursor: 'pointer' }}>
                                                         Copy
                                                     </button>

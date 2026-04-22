@@ -2836,7 +2836,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     logger.info(f"Converted and added image: {file_path}")
 
             if len(writer.pages) == 0:
-                return HttpResponse("No readable documents found for this license", status=404)
+                return HttpResponse("Document files are missing from the server storage. The files may not have been synced to this environment.", status=404)
 
             # Write merged PDF to buffer
             output_buffer = io.BytesIO()

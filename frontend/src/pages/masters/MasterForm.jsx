@@ -21,6 +21,137 @@ import {useBackButton} from "../../hooks/useBackButton";
  * - Create: /masters/:entity/create OR /licenses/create
  * - Edit: /masters/:entity/:id/edit OR /licenses/:id/edit
  */
+
+const ENTITY_SECTIONS = {
+    'bill-of-entries': [
+        {
+            title: 'Document Info',
+            icon: 'receipt-cutoff',
+            color: '#6366F1',
+            fields: ['bill_of_entry_number', 'bill_of_entry_date', 'appraisement', 'ooc_date'],
+            cols: { bill_of_entry_number: 'col-md-4', bill_of_entry_date: 'col-md-4', appraisement: 'col-md-4', ooc_date: 'col-md-4' },
+        },
+        {
+            title: 'Parties & Location',
+            icon: 'building',
+            color: '#4F46E5',
+            fields: ['company', 'allotment', 'port', 'cha'],
+            cols: { company: 'col-md-4', allotment: 'col-md-4', port: 'col-md-4', cha: 'col-md-4' },
+        },
+        {
+            title: 'Financial',
+            icon: 'currency-dollar',
+            color: '#10b981',
+            fields: ['exchange_rate'],
+            cols: { exchange_rate: 'col-md-4' },
+        },
+        {
+            title: 'Invoice Details',
+            icon: 'file-earmark-text',
+            color: '#f59e0b',
+            fields: ['product_name', 'invoice_no', 'invoice_date'],
+            cols: { product_name: 'col-md-4', invoice_no: 'col-md-4', invoice_date: 'col-md-4' },
+        },
+        {
+            title: 'Notes',
+            icon: 'chat-left-text',
+            color: '#6b7280',
+            fields: ['comments'],
+            cols: { comments: 'col-12' },
+        },
+    ],
+    licenses: [
+        {
+            title: 'License Identification',
+            icon: 'file-earmark-text',
+            color: '#4F46E5',
+            fields: ['license_number', 'license_date', 'license_expiry_date', 'port', 'iec', 'scheme_code', 'advance_auth_number'],
+            cols: { license_number: 'col-md-4', license_date: 'col-md-4', license_expiry_date: 'col-md-4', port: 'col-md-4', iec: 'col-md-4', scheme_code: 'col-md-4', advance_auth_number: 'col-md-4' },
+        },
+        {
+            title: 'Financial Details',
+            icon: 'currency-dollar',
+            color: '#10b981',
+            fields: ['total_cif_fc', 'total_cif_inr', 'total_duty_amount', 'exchange_rate', 'duty_rate'],
+            cols: { total_cif_fc: 'col-md-4', total_cif_inr: 'col-md-4', total_duty_amount: 'col-md-4', exchange_rate: 'col-md-4', duty_rate: 'col-md-4' },
+        },
+        {
+            title: 'Status Flags',
+            icon: 'toggle-on',
+            color: '#6366F1',
+            fields: ['is_expired', 'is_null_dfia', 'is_incentive'],
+            cols: { is_expired: 'col-md-4', is_null_dfia: 'col-md-4', is_incentive: 'col-md-4' },
+        },
+        {
+            title: 'Conditions & Notes',
+            icon: 'chat-left-text',
+            color: '#6b7280',
+            fields: ['conditions', 'restrictions', 'comments', 'description', 'notes'],
+            cols: {},
+        },
+    ],
+    'incentive-licenses': [
+        {
+            title: 'License Details',
+            icon: 'award',
+            color: '#f59e0b',
+            fields: ['license_type', 'license_number', 'license_date', 'license_expiry_date'],
+            cols: { license_type: 'col-md-3', license_number: 'col-md-3', license_date: 'col-md-3', license_expiry_date: 'col-md-3' },
+        },
+        {
+            title: 'Party & Port',
+            icon: 'building',
+            color: '#4F46E5',
+            fields: ['exporter', 'port_code'],
+            cols: { exporter: 'col-md-6', port_code: 'col-md-6' },
+        },
+        {
+            title: 'Financial',
+            icon: 'currency-rupee',
+            color: '#10b981',
+            fields: ['license_value'],
+            cols: { license_value: 'col-md-4' },
+        },
+        {
+            title: 'Status & Notes',
+            icon: 'toggle-on',
+            color: '#6b7280',
+            fields: ['is_active', 'notes'],
+            cols: { is_active: 'col-md-4' },
+        },
+    ],
+    trades: [
+        {
+            title: 'Trade Details',
+            icon: 'arrow-left-right',
+            color: '#10b981',
+            fields: ['direction', 'license_type', 'invoice_number', 'invoice_date'],
+            cols: { direction: 'col-md-3', license_type: 'col-md-3', invoice_number: 'col-md-3', invoice_date: 'col-md-3' },
+        },
+        {
+            title: 'Parties',
+            icon: 'building',
+            color: '#4F46E5',
+            fields: ['from_company', 'to_company'],
+            cols: { from_company: 'col-md-6', to_company: 'col-md-6' },
+        },
+        {
+            title: 'References',
+            icon: 'link-45deg',
+            color: '#6366F1',
+            fields: ['incentive_license', 'boe'],
+            cols: { incentive_license: 'col-md-6', boe: 'col-md-6' },
+        },
+        {
+            title: 'Documents & Notes',
+            icon: 'file-earmark-arrow-up',
+            color: '#6b7280',
+            fields: ['purchase_invoice_copy', 'remarks'],
+            cols: { purchase_invoice_copy: 'col-md-6' },
+        },
+    ],
+};
+
 export default function MasterForm({
     entityName: propEntityName,
     recordId: propRecordId,
@@ -52,6 +183,7 @@ export default function MasterForm({
     const [updatedFields, setUpdatedFields] = useState({}); // Track updated fields for highlighting
     const [showBalanceModal, setShowBalanceModal] = useState(false); // License balance modal state
     const [savedLicenseId, setSavedLicenseId] = useState(null); // Store saved license ID for modal
+    const [activeNestedTab, setActiveNestedTab] = useState(null);
 
     // Enable browser back button support with filter preservation
     useBackButton(entityName, !isModal);
@@ -416,12 +548,13 @@ export default function MasterForm({
                 } else if (!existingSerialNumbers.has(targetSerialNumber)) {
                     // Serial number doesn't exist - add new item
                     const newIndex = updatedImports.length;
+                    const netQty = parseFloat(exportItem.net_quantity) || 1;
                     const newItem = {
                         serial_number: targetSerialNumber,
                         hs_code: sionImport.hsn_code || null,
                         description: sionImport.description || "",
                         duty_type: sionImport.duty_type || "Basic",
-                        quantity: sionImport.quantity || 0,
+                        quantity: parseFloat((netQty * (sionImport.quantity || 0)).toFixed(4)),
                         unit: sionImport.unit || "KG",
                         cif_fc: 0,
                         cif_inr: 0,
@@ -1157,119 +1290,281 @@ export default function MasterForm({
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
 
+    const entityIconMap = {
+        licenses: 'file-earmark-text',
+        allotments: 'diagram-3',
+        'bill-of-entries': 'receipt-cutoff',
+        trades: 'arrow-left-right',
+        'incentive-licenses': 'award',
+    };
+    const entityColorMap = {
+        licenses: '#4F46E5',
+        allotments: '#06b6d4',
+        'bill-of-entries': '#6366F1',
+        trades: '#10b981',
+        'incentive-licenses': '#f59e0b',
+    };
+    const entityIcon = entityIconMap[entityName] || 'file-earmark';
+    const entityColor = entityColorMap[entityName] || '#4F46E5';
+
     if (loading) {
         return (
-            <div className="container mt-4">
-                <div className="text-center py-5">
-                    <div className="spinner-border text-primary"></div>
-                    <p className="mt-2">Loading...</p>
+            <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <div className="placeholder-glow mb-1"><span className="placeholder col-3 rounded" style={{ height: 24 }}></span></div>
+                        <div className="placeholder-glow"><span className="placeholder col-5 rounded" style={{ height: 14 }}></span></div>
+                    </div>
+                </div>
+                <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                    <div className="card-body p-4">
+                        <div className="row g-3">
+                            {[...Array(6)].map((_, i) => (
+                                <div key={i} className="col-md-4">
+                                    <div className="placeholder-glow mb-1"><span className="placeholder col-6 rounded" style={{ height: 12 }}></span></div>
+                                    <span className="placeholder col-12 rounded d-block" style={{ height: 38 }}></span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
-                <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
-                    <i className={`bi ${isEdit ? 'bi-pencil-square' : 'bi-plus-circle'} me-3`}></i>
-                    {isEdit ? "Edit" : "Create"} {entityTitle}
-                </h1>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+            {/* Compact Header */}
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
+                        <i className={`bi bi-${entityIcon} me-2`} style={{ color: entityColor }}></i>
+                        {isEdit ? 'Edit' : 'New'} {entityTitle}
+                    </h4>
+                    <small className="text-muted">{isEdit ? 'Update existing record' : 'Create a new record'}</small>
+                </div>
+                <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => {
+                        if (isModal && onClose) { onClose(); return; }
+                        navigateToList(navigate, entityName, { preserveFilters: true });
+                    }}
+                >
+                    <i className="bi bi-arrow-left me-1"></i>Back to List
+                </button>
             </div>
 
-            <div className="row">
-                <div className="col-lg-12 mx-auto">
-                    <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                        <div className="card-body" style={{ padding: '32px' }}>
-                            {error && (
-                                <div className="alert alert-danger">
-                                    <strong>
-                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                                        Validation Error
-                                    </strong>
-                                    <div className="mt-2" style={{whiteSpace: 'pre-wrap'}}>
-                                        {error}
+            <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                    <div className="d-flex align-items-center justify-content-between">
+                        <h6 className="mb-0 fw-semibold">
+                            <i className={`bi bi-${entityIcon} me-2`} style={{ color: entityColor }}></i>
+                            {entityTitle} Details
+                        </h6>
+                        {entityName === 'trades' && formData.direction && (() => {
+                            const dirColors = { PURCHASE: '#4F46E5', SALE: '#10b981', COMMISSION_PURCHASE: '#f59e0b', COMMISSION_SALE: '#6366F1' };
+                            const dirLabels = { PURCHASE: 'Purchase', SALE: 'Sale', COMMISSION_PURCHASE: 'Commission Purchase', COMMISSION_SALE: 'Commission Sale' };
+                            const dirIcons = { PURCHASE: 'cart-check', SALE: 'shop', COMMISSION_PURCHASE: 'percent', COMMISSION_SALE: 'percent' };
+                            const ltColors = { DFIA: '#0ea5e9', INCENTIVE: '#f59e0b' };
+                            const ltLabels = { DFIA: 'DFIA License', INCENTIVE: 'Incentive License' };
+                            return (
+                                <div className="d-flex gap-2">
+                                    <span className="badge d-flex align-items-center gap-1" style={{ background: `${dirColors[formData.direction]}20`, color: dirColors[formData.direction], fontWeight: '600', fontSize: '0.78rem', padding: '5px 10px', borderRadius: 6 }}>
+                                        <i className={`bi bi-${dirIcons[formData.direction]}`}></i>
+                                        {dirLabels[formData.direction]}
+                                    </span>
+                                    {formData.license_type && (
+                                        <span className="badge d-flex align-items-center gap-1" style={{ background: `${ltColors[formData.license_type]}20`, color: ltColors[formData.license_type], fontWeight: '600', fontSize: '0.78rem', padding: '5px 10px', borderRadius: 6 }}>
+                                            <i className="bi bi-file-earmark-text"></i>
+                                            {ltLabels[formData.license_type]}
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                </div>
+                <div className="card-body" style={{ padding: '24px' }}>
+                    {error && (
+                        <div className="alert alert-danger d-flex align-items-start gap-2 mb-4">
+                            <i className="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+                            <div>
+                                <strong>Validation Error</strong>
+                                <div className="mt-1" style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}>{error}</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {fetchingAllotment && (
+                        <div className="alert alert-info d-flex align-items-center gap-2 mb-4">
+                            <span className="spinner-border spinner-border-sm flex-shrink-0"></span>
+                            Fetching allotment details...
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} encType="multipart/form-data">
+                        {/* Regular Fields */}
+                        {(() => {
+                            const activeFields = (metadata.form_fields || []).filter(f => !metadata.nested_field_defs?.[f]);
+
+                            const renderOneField = (field, colClass) => {
+                                const isTextarea = !colClass && (field.includes("address") || field.includes("description") ||
+                                    field.includes("note") || field.includes("comment") ||
+                                    field.includes("condition") || field.includes("restriction"));
+                                const col = colClass || (isTextarea ? "col-12" : "col-md-4");
+                                const fieldMeta = metadata.field_meta?.[field] || {};
+                                const label = fieldMeta.label || field.replace(/_/g, " ");
+                                const helpText = fieldMeta.help_text;
+                                const fieldError = fieldErrors[field];
+                                const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
+                                return (
+                                    <div key={field} className={col}>
+                                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                                            {label}{fieldMeta.required && <span className="text-danger ms-1">*</span>}
+                                        </label>
+                                        {renderField(field)}
+                                        {hasError && (
+                                            <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem', marginTop: 4 }}>
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
+                                            </div>
+                                        )}
+                                        {helpText && !hasError && (
+                                            <small className="form-text d-block mt-1" style={{ color: 'var(--text-secondary)', fontSize: '0.73rem' }}>
+                                                <i className="bi bi-info-circle me-1"></i>{helpText}
+                                            </small>
+                                        )}
                                     </div>
-                                </div>
-                            )}
+                                );
+                            };
 
-                            {fetchingAllotment && (
-                                <div className="alert alert-info">
-                                    <span className="spinner-border spinner-border-sm me-2"></span>
-                                    Fetching allotment details...
-                                </div>
-                            )}
+                            const sections = ENTITY_SECTIONS[entityName];
+                            if (sections) {
+                                const sectionedFields = new Set(sections.flatMap(s => s.fields));
+                                const remainingFields = activeFields.filter(f => !sectionedFields.has(f));
 
-                            <form onSubmit={handleSubmit} encType="multipart/form-data">
-                                {/* Regular Fields - 3 columns layout */}
-                                <div className="row">
-                                    {metadata.form_fields?.map((field) => {
-                                        // Skip nested fields (they're rendered separately below)
-                                        if (metadata.nested_field_defs?.[field]) {
-                                            return null;
-                                        }
-
-                                        // Full width for textarea fields
-                                        const isTextarea = field.includes("address") || field.includes("description") ||
-                                            field.includes("note") || field.includes("comment") ||
-                                            field.includes("condition") || field.includes("restriction");
-
-                                        const colClass = isTextarea ? "col-12" : "col-md-4";
-
-                                        const fieldMeta = metadata.field_meta?.[field] || {};
-                                        const label = fieldMeta.label || field.replace(/_/g, " ");
-                                        const helpText = fieldMeta.help_text;
-
-                                        const fieldError = fieldErrors[field];
-                                        const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
-
-                                        return (
-                                            <div key={field} className={`${colClass} mb-3`}>
-                                                <div className="form-group-material">
-                                                    <label className={`form-label ${fieldMeta.required ? 'required' : ''}`} style={{
-                                                        fontWeight: '500',
-                                                        color: 'var(--text-secondary)',
-                                                        marginBottom: '8px',
-                                                        fontSize: '0.875rem'
-                                                    }}>
-                                                        {label}
-                                                    </label>
-                                                    {renderField(field)}
-                                                    {hasError && (
-                                                        <div className="invalid-feedback d-block" style={{
-                                                            fontSize: '0.8rem',
-                                                            marginTop: '6px'
-                                                        }}>
-                                                            <i className="bi bi-exclamation-circle me-1"></i>
-                                                            {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
-                                                        </div>
-                                                    )}
-                                                    {helpText && !hasError && (
-                                                        <small className="form-text d-block mt-1" style={{
-                                                            color: 'var(--text-secondary)',
-                                                            fontSize: '0.75rem'
-                                                        }}>
-                                                            <i className="bi bi-info-circle me-1"></i>
-                                                            {helpText}
-                                                        </small>
-                                                    )}
+                                return (
+                                    <div className="d-flex flex-column gap-3">
+                                        {sections.map(section => {
+                                            const visibleFields = section.fields.filter(f => activeFields.includes(f));
+                                            if (visibleFields.length === 0) return null;
+                                            return (
+                                                <div key={section.title} style={{ background: 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: `3px solid ${section.color}` }}>
+                                                    <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: section.color, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <i className={`bi bi-${section.icon}`}></i> {section.title}
+                                                    </div>
+                                                    <div className="row g-3">
+                                                        {visibleFields.map(f => renderOneField(f, section.cols?.[f]))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {remainingFields.length > 0 && (
+                                            <div style={{ background: 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #9ca3af' }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', marginBottom: '14px' }}>
+                                                    <i className="bi bi-three-dots me-1"></i> Other Fields
+                                                </div>
+                                                <div className="row g-3">
+                                                    {remainingFields.map(f => renderOneField(f))}
                                                 </div>
                                             </div>
-                                        );
-                                    })}
+                                        )}
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div className="row g-3">
+                                    {activeFields.map(f => renderOneField(f))}
                                 </div>
-                                <hr style={{ margin: '32px 0', border: 'none', borderTop: '2px solid #e5e7eb' }}/>
-                                {/* Nested Fields */}
-                                {/* Don't show nested fields for allotments in form - use action page instead */}
-                                {entityName !== 'allotments' && Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
+                            );
+                        })()}
+
+                        {/* Nested Fields */}
+                        {entityName !== 'allotments' && Object.entries(metadata.nested_field_defs || {}).length > 0 && (
+                            <div className="mt-4">
+                                <div style={{ height: 2, background: `linear-gradient(90deg, ${entityColor} 0%, transparent 100%)`, marginBottom: 20, borderRadius: 1 }}></div>
+                                {(entityName === 'licenses' || entityName === 'trades') ? (() => {
+                                    const allNestedEntries = Object.entries(metadata.nested_field_defs || {});
+                                    // For trades, filter tabs based on license_type
+                                    const nestedEntries = entityName === 'trades'
+                                        ? allNestedEntries.filter(([key]) => {
+                                            const lt = formData.license_type;
+                                            if (!lt) return true;
+                                            if (lt === 'DFIA') return key !== 'incentive_lines';
+                                            if (lt === 'INCENTIVE') return key !== 'lines';
+                                            return true;
+                                        })
+                                        : allNestedEntries;
+                                    const activeTab = (activeNestedTab && nestedEntries.some(([k]) => k === activeNestedTab))
+                                        ? activeNestedTab
+                                        : nestedEntries[0]?.[0];
+                                    const tabIcons = {
+                                        export_license: 'box-arrow-up',
+                                        import_license: 'box-arrow-in-down',
+                                        license_documents: 'file-earmark',
+                                        lines: 'list-ul',
+                                        incentive_lines: 'award',
+                                        payments: 'cash-stack',
+                                    };
+                                    const tabLabels = {
+                                        export_license: 'Export Items',
+                                        import_license: 'Import Items',
+                                        license_documents: 'Documents',
+                                        lines: 'Trade Lines',
+                                        incentive_lines: 'Incentive Lines',
+                                        payments: 'Payments',
+                                    };
+                                    return (
+                                        <>
+                                            <ul className="nav nav-tabs" style={{ borderBottom: '2px solid #e5e7eb', gap: 2, marginBottom: 0 }}>
+                                                {nestedEntries.map(([nestedKey]) => {
+                                                    const count = (formData[nestedKey] || []).length;
+                                                    const isActive = activeTab === nestedKey;
+                                                    const hasErrors = (fieldErrors[nestedKey] || []).some(Boolean);
+                                                    const label = tabLabels[nestedKey] || nestedKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                                    return (
+                                                        <li key={nestedKey} className="nav-item">
+                                                            <button
+                                                                type="button"
+                                                                className={`nav-link d-flex align-items-center gap-2 ${isActive ? 'active' : ''}`}
+                                                                onClick={() => setActiveNestedTab(nestedKey)}
+                                                                style={{ fontSize: '0.83rem', fontWeight: isActive ? '600' : '500', padding: '8px 16px', color: isActive ? entityColor : '#6b7280', borderColor: isActive ? `${entityColor} ${entityColor} white` : 'transparent', borderRadius: '8px 8px 0 0' }}
+                                                            >
+                                                                <i className={`bi bi-${tabIcons[nestedKey] || 'table'}`}></i>
+                                                                {label}
+                                                                {count > 0 && (
+                                                                    <span className="badge rounded-pill" style={{ backgroundColor: isActive ? entityColor : '#e5e7eb', color: isActive ? 'white' : '#6b7280', fontSize: '0.7rem', padding: '2px 7px' }}>
+                                                                        {count}
+                                                                    </span>
+                                                                )}
+                                                                {hasErrors && <i className="bi bi-exclamation-circle-fill text-danger" style={{ fontSize: '0.75rem' }}></i>}
+                                                            </button>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                            <div style={{ border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '20px 16px', background: 'white' }}>
+                                                {nestedEntries.map(([nestedKey, nestedDef]) => activeTab === nestedKey ? (
+                                                    <NestedFieldArray
+                                                        key={nestedKey}
+                                                        label={nestedKey.replace(/_/g, " ")}
+                                                        fields={nestedDef}
+                                                        value={formData[nestedKey] || []}
+                                                        onChange={(value) => handleChange(nestedKey, value)}
+                                                        fieldKey={nestedKey}
+                                                        onFetchImports={handleFetchImports}
+                                                        updatedFields={updatedFields}
+                                                        errors={fieldErrors[nestedKey] || []}
+                                                        entityName={entityName}
+                                                        formData={formData}
+                                                    />
+                                                ) : null)}
+                                            </div>
+                                        </>
+                                    );
+                                })() : Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
                                     <NestedFieldArray
                                         key={nestedKey}
                                         label={nestedKey.replace(/_/g, " ")}
@@ -1284,72 +1579,54 @@ export default function MasterForm({
                                         formData={formData}
                                     />
                                 ))}
-                                {/* Action Buttons */}
-                                <div className="mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
-                                    <button
-                                        type="submit"
-                                        className="btn btn-primary me-2"
-                                        disabled={saving}
-                                        style={{
-                                            padding: '12px 32px',
-                                            fontWeight: '600',
-                                            fontSize: '1rem',
-                                            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                                            border: 'none'
-                                        }}
-                                    >
-                                        {saving ? (
-                                            <>
-                                                <span className="spinner-border spinner-border-sm me-2"></span>
-                                                Saving...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <i className="bi bi-check-circle me-2"></i>
-                                                {isEdit ? "Update" : "Create"}
-                                            </>
-                                        )}
-                                    </button>
+                            </div>
+                        )}
 
-                                    {/* License Balance Actions button - only show for licenses in edit mode */}
-                                    {entityName === 'licenses' && isEdit && (
-                                        <button
-                                            type="button"
-                                            className="btn btn-info me-2"
-                                            onClick={() => {
-                                                setSavedLicenseId(id);
-                                                setShowBalanceModal(true);
-                                            }}
-                                            disabled={saving}
-                                            style={{ padding: '12px 24px', fontWeight: '500' }}
-                                        >
-                                            <i className="bi bi-eye me-2"></i>
-                                            View Balance
-                                        </button>
-                                    )}
+                        {/* Action Buttons */}
+                        <div className="d-flex align-items-center gap-2 mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                disabled={saving}
+                                style={{
+                                    padding: '10px 28px', fontWeight: '600',
+                                    background: `linear-gradient(135deg, ${entityColor}, ${entityColor}cc)`,
+                                    border: 'none', borderRadius: '8px'
+                                }}
+                            >
+                                {saving ? (
+                                    <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>
+                                ) : (
+                                    <><i className="bi bi-check-circle me-2"></i>{isEdit ? 'Update' : 'Create'}</>
+                                )}
+                            </button>
 
-                                    <button
-                                        type="button"
-                                        className="btn btn-outline-secondary"
-                                        onClick={() => {
-                                            if (isModal && onClose) {
-                                                onClose();
-                                                return;
-                                            }
+                            {entityName === 'licenses' && isEdit && (
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-info"
+                                    onClick={() => { setSavedLicenseId(id); setShowBalanceModal(true); }}
+                                    disabled={saving}
+                                    style={{ padding: '10px 20px', fontWeight: '500', borderRadius: '8px' }}
+                                >
+                                    <i className="bi bi-eye me-2"></i>View Balance
+                                </button>
+                            )}
 
-                                            // Navigate back to list with filter restoration
-                                            navigateToList(navigate, entityName, { preserveFilters: true });
-                                        }}
-                                        disabled={saving}
-                                        style={{ padding: '12px 24px', fontWeight: '500' }}
-                                    >
-                                        <i className="bi bi-arrow-left me-2"></i>
-                                        Back to List
-                                    </button>
-                                </div>
-                            </form>
+                            <button
+                                type="button"
+                                className="btn btn-outline-secondary"
+                                onClick={() => {
+                                    if (isModal && onClose) { onClose(); return; }
+                                    navigateToList(navigate, entityName, { preserveFilters: true });
+                                }}
+                                disabled={saving}
+                                style={{ padding: '10px 20px', fontWeight: '500', borderRadius: '8px' }}
+                            >
+                                <i className="bi bi-x-lg me-2"></i>Cancel
+                            </button>
                         </div>
-                    </div>
+                    </form>
                 </div>
             </div>
 

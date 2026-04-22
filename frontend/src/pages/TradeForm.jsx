@@ -895,41 +895,43 @@ export default function TradeForm() {
         }
     };
 
+    const directionMeta = {
+        PURCHASE:           { label: 'Purchase',            icon: 'cart-check',   color: '#4F46E5' },
+        SALE:               { label: 'Sale',                icon: 'shop',         color: '#10b981' },
+        COMMISSION_PURCHASE:{ label: 'Commission Purchase', icon: 'percent',      color: '#f59e0b' },
+        COMMISSION_SALE:    { label: 'Commission Sale',     icon: 'graph-up',     color: '#6366F1' },
+    };
+
     return (
-        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+            {/* Compact Header */}
+            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
                 <div>
-                    <div style={{ marginBottom: '12px', opacity: '0.9' }}>
-                        <a
-                            href="#"
-                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                            style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
-                        >
-                            <i className="bi bi-house-door me-2"></i>Home
-                        </a>
-                        <span className="mx-2">/</span>
-                        <a
-                            href="#"
-                            onClick={(e) => { e.preventDefault(); navigate('/trades'); }}
-                            style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
-                        >
-                            Trades
-                        </a>
-                        <span className="mx-2">/</span>
-                        <span style={{ fontSize: '0.9rem' }}>{isEdit ? "Edit Trade" : "Create Trade"}</span>
-                    </div>
-                    <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
-                        <i className={`bi ${isEdit ? 'bi-pencil-square' : 'bi-plus-circle'} me-3`}></i>
-                        {isEdit ? "Edit Trade" : "Create Trade"}
-                    </h1>
+                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
+                        <i className="bi bi-arrow-left-right me-2" style={{ color: '#10b981' }}></i>
+                        {isEdit ? 'Edit Trade' : 'New Trade'}
+                    </h4>
+                    <small className="text-muted">
+                        {isEdit ? 'Update trade details' : 'Create a new trade transaction'}
+                        {formData.direction && (
+                            <span className="ms-2 badge" style={{ background: `${directionMeta[formData.direction]?.color}20`, color: directionMeta[formData.direction]?.color, fontSize: '0.75rem' }}>
+                                <i className={`bi bi-${directionMeta[formData.direction]?.icon} me-1`}></i>
+                                {directionMeta[formData.direction]?.label}
+                            </span>
+                        )}
+                    </small>
+                </div>
+                <div className="d-flex gap-2">
+                    {isEdit && (
+                        <button type="button" className="btn btn-sm btn-outline-secondary"
+                            onClick={() => setShowTransferLetterModal(true)}>
+                            <i className="bi bi-file-earmark-text me-1"></i>Transfer Letter
+                        </button>
+                    )}
+                    <button type="button" className="btn btn-sm btn-outline-secondary"
+                        onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}>
+                        <i className="bi bi-arrow-left me-1"></i>Back to Trades
+                    </button>
                 </div>
             </div>
 
@@ -945,82 +947,75 @@ export default function TradeForm() {
             )}
 
             <form onSubmit={handleSubmit}>
-                {/* Transaction Type Selector */}
+                {/* Transaction Type + License Type — combined card */}
                 <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                    <div className="card-body" style={{ padding: '24px' }}>
-                        <div className="row">
-                            <div className="col-md-12">
-                                <label className="form-label fw-bold">Transaction Type <span className="text-danger">*</span></label>
-                                <div className="d-flex gap-4 flex-wrap">
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="direction"
-                                            id="directionPurchase"
-                                            value="PURCHASE"
-                                            checked={formData.direction === "PURCHASE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="directionPurchase">
-                                            Purchase (Trade In)
-                                        </label>
-                                    </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="direction"
-                                            id="directionSale"
-                                            value="SALE"
-                                            checked={formData.direction === "SALE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="directionSale">
-                                            Sale (Trade Out)
-                                        </label>
-                                    </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="direction"
-                                            id="directionCommissionPurchase"
-                                            value="COMMISSION_PURCHASE"
-                                            checked={formData.direction === "COMMISSION_PURCHASE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="directionCommissionPurchase">
-                                            Commission Purchase
-                                        </label>
-                                    </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="direction"
-                                            id="directionCommissionSale"
-                                            value="COMMISSION_SALE"
-                                            checked={formData.direction === "COMMISSION_SALE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="directionCommissionSale">
-                                            Commission Sale
-                                        </label>
-                                    </div>
+                    <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                        <h6 className="mb-0 fw-semibold">
+                            <i className="bi bi-toggles me-2" style={{ color: '#10b981' }}></i>
+                            Trade Configuration
+                        </h6>
+                    </div>
+                    <div className="card-body p-4">
+                        <div className="row g-4">
+                            <div className="col-md-6">
+                                <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
+                                    TRANSACTION TYPE <span className="text-danger">*</span>
+                                </label>
+                                <div className="d-flex gap-2 flex-wrap">
+                                    {Object.entries(directionMeta).map(([val, m]) => (
+                                        <button key={val} type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, direction: val }))}
+                                            style={{
+                                                border: `2px solid ${formData.direction === val ? m.color : '#e5e7eb'}`,
+                                                background: formData.direction === val ? `${m.color}18` : 'white',
+                                                color: formData.direction === val ? m.color : '#6b7280',
+                                                borderRadius: '8px', padding: '8px 14px',
+                                                fontWeight: formData.direction === val ? '600' : '500',
+                                                fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
+                                            }}>
+                                            <i className={`bi bi-${m.icon} me-1`}></i>{m.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="col-md-6">
+                                <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
+                                    LICENSE TYPE <span className="text-danger">*</span>
+                                </label>
+                                <div className="d-flex gap-2">
+                                    {[{ val:'DFIA', label:'DFIA License', icon:'file-earmark-text', color:'#4F46E5' },
+                                      { val:'INCENTIVE', label:'Incentive License', icon:'award', color:'#f59e0b' }].map(m => (
+                                        <button key={m.val} type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, license_type: m.val, incentive_license: m.val === 'DFIA' ? null : prev.incentive_license }))}
+                                            style={{
+                                                border: `2px solid ${formData.license_type === m.val ? m.color : '#e5e7eb'}`,
+                                                background: formData.license_type === m.val ? `${m.color}18` : 'white',
+                                                color: formData.license_type === m.val ? m.color : '#6b7280',
+                                                borderRadius: '8px', padding: '8px 16px',
+                                                fontWeight: formData.license_type === m.val ? '600' : '500',
+                                                fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
+                                            }}>
+                                            <i className={`bi bi-${m.icon} me-1`}></i>{m.label}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Company Snapshots - Following Screenshot Layout */}
+                {/* Company Snapshots */}
                 <div className="row mb-4">
                     {/* From Company */}
                     <div className="col-md-6">
-                        <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                        <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-building me-2" style={{ color: '#4F46E5' }}></i>
+                                    From Company
+                                </h6>
+                            </div>
                             <div className="card-body" style={{ padding: '20px' }}>
-                                <h6>From Company Snapshot</h6>
 
                                 <div className="mb-3">
                                     <label className="form-label">From Company <span className="text-danger">*</span></label>
@@ -1086,10 +1081,14 @@ export default function TradeForm() {
 
                     {/* To Company */}
                     <div className="col-md-6">
-                        <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                        <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-building me-2" style={{ color: '#10b981' }}></i>
+                                    To Company
+                                </h6>
+                            </div>
                             <div className="card-body" style={{ padding: '20px' }}>
-                                <h6>To Company Snapshot</h6>
-
                                 <div className="mb-3">
                                     <label className="form-label">To Company <span className="text-danger">*</span></label>
                                     <HybridSelect
@@ -1153,14 +1152,22 @@ export default function TradeForm() {
                     </div>
                 </div>
 
-                {/* Invoice Details Section - Matching Screenshot Layout */}
+                {/* Invoice Details + BOE/Remarks card */}
+                <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                    <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                        <h6 className="mb-0 fw-semibold">
+                            <i className="bi bi-file-earmark-text me-2" style={{ color: '#f59e0b' }}></i>
+                            Invoice & Reference Details
+                        </h6>
+                    </div>
+                    <div className="card-body p-4">
                 <div className="row mb-3">
                     <div className="col-md-6">
                         <div className="d-flex justify-content-between align-items-center mb-2">
-                            <label className="form-label mb-0">Invoice Number (optional)</label>
+                            <label className="form-label mb-0" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Invoice Number (optional)</label>
                             <button
                                 type="button"
-                                className="btn btn-warning btn-sm"
+                                className="btn btn-outline-primary btn-sm"
                                 onClick={handlePrefillInvoiceNumber}
                                 disabled={
                                     !formData.direction ||
@@ -1259,10 +1266,10 @@ export default function TradeForm() {
 
 
                 {/* BOE and Remarks */}
-                <div className="row mb-4">
+                <div className="row mb-0">
                     {formData.direction !== 'PURCHASE' && (
                         <div className="col-md-6">
-                            <label className="form-label">BOE (optional)</label>
+                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>BOE (optional)</label>
                             <HybridSelect
                                 fieldMeta={{
                                     endpoint: (() => {
@@ -1293,7 +1300,7 @@ export default function TradeForm() {
                         </div>
                     )}
                     <div className={formData.direction === 'PURCHASE' ? 'col-md-12' : 'col-md-6'}>
-                        <label className="form-label">Remarks</label>
+                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Remarks</label>
                         <textarea
                             className="form-control"
                             rows="2"
@@ -1303,149 +1310,88 @@ export default function TradeForm() {
                         />
                     </div>
                 </div>
-
-                {/* License Type - Placed before Billing Mode */}
-                <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                    <div className="card-body" style={{ padding: '24px' }}>
-                        <div className="row">
-                            <div className="col-md-12">
-                                <label className="form-label fw-bold">License Type <span className="text-danger">*</span></label>
-                                <div className="d-flex gap-4">
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="license_type"
-                                            id="licenseTypeDFIA"
-                                            value="DFIA"
-                                            checked={formData.license_type === "DFIA"}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                license_type: e.target.value,
-                                                incentive_license: null // Clear incentive license when switching to DFIA
-                                            }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="licenseTypeDFIA">
-                                            DFIA License
-                                        </label>
-                                    </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="license_type"
-                                            id="licenseTypeIncentive"
-                                            value="INCENTIVE"
-                                            checked={formData.license_type === "INCENTIVE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, license_type: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="licenseTypeIncentive">
-                                            Incentive License (RODTEP/ROSTL/MEIS)
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                     </div>
                 </div>
 
                 {/* Conditional rendering based on license type */}
                 {formData.license_type === "DFIA" && (
                     <>
-                        {/* Billing Mode - Only for DFIA */}
-                        <div className="mb-3">
-                            <label className="form-label fw-bold">Billing Mode</label>
-                            <div className="d-flex gap-4">
-                                <div className="form-check">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="billingMode"
-                                        id="modeQTY"
-                                        value="QTY"
-                                        checked={billingMode === "QTY"}
-                                        onChange={(e) => {
-                                            setBillingMode(e.target.value);
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
-                                            }));
-                                        }}
-                                    />
-                                    <label className="form-check-label" htmlFor="modeQTY">
-                                        By KG
-                                    </label>
-                                </div>
-                                <div className="form-check">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="billingMode"
-                                        id="modeCIF"
-                                        value="CIF_INR"
-                                        checked={billingMode === "CIF_INR"}
-                                        onChange={(e) => {
-                                            setBillingMode(e.target.value);
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
-                                            }));
-                                        }}
-                                    />
-                                    <label className="form-check-label" htmlFor="modeCIF">
-                                        By CIF INR (%)
-                                    </label>
-                                </div>
-                                <div className="form-check">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="billingMode"
-                                        id="modeFOB"
-                                        value="FOB_INR"
-                                        checked={billingMode === "FOB_INR"}
-                                        onChange={(e) => {
-                                            setBillingMode(e.target.value);
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
-                                            }));
-                                        }}
-                                    />
-                                    <label className="form-check-label" htmlFor="modeFOB">
-                                        By FOB INR (%)
-                                    </label>
+                        {/* Billing Mode card */}
+                        <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-calculator me-2" style={{ color: '#6366F1' }}></i>
+                                    Billing Mode
+                                </h6>
+                            </div>
+                            <div className="card-body p-4">
+                                <div className="d-flex gap-2 flex-wrap">
+                                    {[{ val:'QTY', label:'By Quantity (KG × Rate)', icon:'weight' },
+                                      { val:'CIF_INR', label:'By CIF INR (%)', icon:'currency-rupee' },
+                                      { val:'FOB_INR', label:'By FOB INR (%)', icon:'box-seam' }].map(m => (
+                                        <button key={m.val} type="button"
+                                            onClick={() => {
+                                                setBillingMode(m.val);
+                                                setFormData(prev => ({ ...prev, lines: prev.lines.map(line => ({ ...line, mode: m.val })) }));
+                                            }}
+                                            style={{
+                                                border: `2px solid ${billingMode === m.val ? '#6366F1' : '#e5e7eb'}`,
+                                                background: billingMode === m.val ? '#6366F118' : 'white',
+                                                color: billingMode === m.val ? '#6366F1' : '#6b7280',
+                                                borderRadius: '8px', padding: '8px 18px',
+                                                fontWeight: billingMode === m.val ? '600' : '500',
+                                                fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
+                                            }}>
+                                            <i className={`bi bi-${m.icon} me-2`}></i>{m.label}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Trade Lines Table - For DFIA */}
-                        <div className="table-responsive mb-3">
-                    <table className="table table-bordered table-sm">
-                        <thead className="table-light">
+                        {/* Trade Lines */}
+                        <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-list-ul me-2" style={{ color: '#4F46E5' }}></i>
+                                    Trade Lines
+                                    {formData.lines.length > 0 && (
+                                        <span className="badge ms-2 rounded-pill" style={{ backgroundColor: '#e0e7ff', color: '#4F46E5', fontSize: '0.7rem' }}>
+                                            {formData.lines.length}
+                                        </span>
+                                    )}
+                                </h6>
+                                <button type="button" className="btn btn-sm btn-outline-success"
+                                    onClick={handleAddLine} style={{ borderRadius: '8px' }}>
+                                    <i className="bi bi-plus-lg me-1"></i>Add Row
+                                </button>
+                            </div>
+                            <div className="card-body p-0">
+                        <div className="table-responsive">
+                    <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
+                        <thead style={{ background: 'var(--bs-gray-50)', borderBottom: '2px solid #e5e7eb' }}>
                             <tr>
-                                <th style={{ width: "3%" }}>#</th>
-                                <th style={{ width: "20%" }}>License (SR)</th>
-                                <th style={{ width: "10%" }}>HSN</th>
-                                <th style={{ width: "10%" }}>CIF $</th>
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "3%" }}>#</th>
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "22%" }}>License (SR)</th>
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "9%" }}>HSN</th>
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "9%" }}>CIF $</th>
                                 {billingMode === "CIF_INR" && (
                                     <>
-                                        <th style={{ width: "8%" }}>Exch Rate</th>
-                                        <th style={{ width: "10%" }}>CIF INR</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "8%" }}>Exch Rate</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "10%" }}>CIF INR</th>
                                     </>
                                 )}
                                 {billingMode === "FOB_INR" && (
-                                    <th style={{ width: "10%" }}>FOB INR</th>
+                                    <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "10%" }}>FOB INR</th>
                                 )}
                                 {billingMode === "QTY" && (
                                     <>
-                                        <th style={{ width: "10%" }}>Qty (KG)</th>
-                                        <th style={{ width: "10%" }}>Rate (INR/KG)</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "10%" }}>Qty (KG)</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "10%" }}>Rate (INR/KG)</th>
                                     </>
                                 )}
-                                {billingMode !== "QTY" && <th style={{ width: "8%" }}>Billing %</th>}
-                                <th style={{ width: "12%" }}>Amount</th>
+                                {billingMode !== "QTY" && <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "8%" }}>Billing %</th>}
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "12%" }}>Amount</th>
                                 <th style={{ width: "3%" }}></th>
                             </tr>
                         </thead>
@@ -1561,53 +1507,64 @@ export default function TradeForm() {
                                             placeholder="0.00"
                                         />
                                     </td>
-                                    <td className="text-center">
-                                        <button
-                                            type="button"
-                                            className="btn btn-danger btn-sm"
-                                            onClick={() => handleRemoveLine(index)}
-                                        >
+                                    <td className="text-center px-2">
+                                        <button type="button" className="btn btn-sm btn-outline-danger"
+                                            onClick={() => handleRemoveLine(index)} style={{ borderRadius: '6px', padding: '2px 8px' }}>
                                             <i className="bi bi-trash"></i>
                                         </button>
                                     </td>
                                 </tr>
                             ))}
-                            <tr className="table-secondary fw-bold">
-                                <td colSpan={billingMode === "QTY" ? 6 : (billingMode === "CIF_INR" ? 6 : 5)} className="text-end">Total</td>
-                                <td className="text-end">{calculateTotal().toFixed(2)}</td>
-                                <td></td>
-                            </tr>
+                            {formData.lines.length > 0 && (
+                                <tr style={{ background: '#f0fdf4', borderTop: '2px solid #a7f3d0' }}>
+                                    <td colSpan={billingMode === "QTY" ? 6 : (billingMode === "CIF_INR" ? 6 : 5)} className="text-end fw-semibold px-3 py-2" style={{ color: '#065f46' }}>Total Amount</td>
+                                    <td className="text-end fw-bold px-3 py-2" style={{ color: '#065f46' }}>₹{calculateTotal().toFixed(2)}</td>
+                                    <td></td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
-
-                <button
-                    type="button"
-                    className="btn btn-warning mb-4"
-                    onClick={handleAddLine}
-                >
-                    Add Row
-                </button>
+                </div>
+                </div>
                 {fieldErrors.lines && formData.lines.length === 0 && (
-                    <div className="text-danger small mt-2">
+                    <div className="alert alert-danger py-2 px-3 mt-2 small">
+                        <i className="bi bi-exclamation-circle me-1"></i>
                         {Array.isArray(fieldErrors.lines) ? fieldErrors.lines[0] : fieldErrors.lines}
                     </div>
                 )}
                     </>
                 )}
 
-                {/* Incentive License Lines Table - Only for INCENTIVE */}
+                {/* Incentive License Lines */}
                 {formData.license_type === "INCENTIVE" && (
                     <>
-                        <div className="table-responsive mb-3">
-                            <table className="table table-bordered table-sm">
-                                <thead className="table-light">
+                        <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-award me-2" style={{ color: '#f59e0b' }}></i>
+                                    Incentive Lines
+                                    {formData.incentive_lines.length > 0 && (
+                                        <span className="badge ms-2 rounded-pill" style={{ backgroundColor: '#fef3c7', color: '#92400e', fontSize: '0.7rem' }}>
+                                            {formData.incentive_lines.length}
+                                        </span>
+                                    )}
+                                </h6>
+                                <button type="button" className="btn btn-sm btn-outline-success"
+                                    onClick={handleAddIncentiveLine} style={{ borderRadius: '8px' }}>
+                                    <i className="bi bi-plus-lg me-1"></i>Add Row
+                                </button>
+                            </div>
+                            <div className="card-body p-0">
+                        <div className="table-responsive">
+                            <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
+                                <thead style={{ background: 'var(--bs-gray-50)', borderBottom: '2px solid #e5e7eb' }}>
                                     <tr>
-                                        <th style={{ width: "5%" }}>#</th>
-                                        <th style={{ width: "40%" }}>Incentive License</th>
-                                        <th style={{ width: "20%" }}>License Value (INR)</th>
-                                        <th style={{ width: "15%" }}>Rate (%)</th>
-                                        <th style={{ width: "15%" }}>Amount</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "5%" }}>#</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "40%" }}>Incentive License</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "20%" }}>License Value (INR)</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "15%" }}>Rate (%)</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "15%" }}>Amount</th>
                                         <th style={{ width: "5%" }}></th>
                                     </tr>
                                 </thead>
@@ -1671,75 +1628,51 @@ export default function TradeForm() {
                                             </td>
                                         </tr>
                                     ))}
-                                    <tr className="table-secondary fw-bold">
-                                        <td colSpan={4} className="text-end">Total</td>
-                                        <td className="text-end">{calculateTotal().toFixed(2)}</td>
-                                        <td></td>
-                                    </tr>
+                                    {formData.incentive_lines.length > 0 && (
+                                        <tr style={{ background: '#f0fdf4', borderTop: '2px solid #a7f3d0' }}>
+                                            <td colSpan={4} className="text-end fw-semibold px-3 py-2" style={{ color: '#065f46' }}>Total Amount</td>
+                                            <td className="text-end fw-bold px-3 py-2" style={{ color: '#065f46' }}>₹{calculateTotal().toFixed(2)}</td>
+                                            <td></td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
-
-                        <button
-                            type="button"
-                            className="btn btn-warning mb-4"
-                            onClick={handleAddIncentiveLine}
-                        >
-                            Add Row
-                        </button>
+                        </div>
+                        </div>
                         {fieldErrors.incentive_lines && formData.incentive_lines.length === 0 && (
-                            <div className="text-danger small mt-2">
+                            <div className="alert alert-danger py-2 px-3 mt-2 small">
+                                <i className="bi bi-exclamation-circle me-1"></i>
                                 {Array.isArray(fieldErrors.incentive_lines) ? fieldErrors.incentive_lines[0] : fieldErrors.incentive_lines}
                             </div>
                         )}
                     </>
                 )}
 
-                {/* Action Buttons - Matching Screenshot */}
-                <div className="d-flex gap-2 mb-4">
-                    <button
-                        type="submit"
-                        className="btn btn-warning"
-                        disabled={saving}
-                    >
-                        {saving ? "Saving..." : "Save Trade"}
+                {/* Action Buttons */}
+                <div className="d-flex align-items-center gap-2 mt-4 pt-3 mb-4" style={{ borderTop: '1px solid #e5e7eb' }}>
+                    <button type="submit" className="btn btn-primary" disabled={saving}
+                        style={{ padding: '10px 28px', fontWeight: '600', background: 'linear-gradient(135deg,#4F46E5,#4338CA)', border: 'none', borderRadius: '8px' }}>
+                        {saving ? <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</> : <><i className="bi bi-check-circle me-2"></i>Save Trade</>}
                     </button>
-                    <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}
-                    >
-                        <i className="bi bi-arrow-left me-2"></i>
-                        Back to Trades
+                    <button type="button" className="btn btn-outline-secondary" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}
+                        style={{ padding: '10px 20px', fontWeight: '500', borderRadius: '8px' }}>
+                        <i className="bi bi-x-lg me-2"></i>Cancel
                     </button>
                     {isEdit && (
                         <>
-                            <button
-                                type="button"
-                                className="btn btn-info"
-                                onClick={() => setShowTransferLetterModal(true)}
-                                title="Generate Transfer Letter"
-                            >
-                                <i className="bi bi-file-earmark-text me-1"></i>
-                                Generate Transfer Letter
+                            <button type="button" className="btn btn-outline-info" onClick={() => setShowTransferLetterModal(true)}
+                                style={{ padding: '10px 18px', fontWeight: '500', borderRadius: '8px' }}>
+                                <i className="bi bi-file-earmark-text me-1"></i>Transfer Letter
                             </button>
                             {formData.direction === 'SALE' && (
                                 <div className="btn-group">
-                                    <button
-                                        type="button"
-                                        className="btn btn-warning"
-                                        onClick={() => handleDownloadPDF(true)}
-                                        title="Download Bill of Supply with signature & stamp"
-                                    >
-                                        <i className="bi bi-file-pdf me-1"></i>
-                                        Bill of Supply
+                                    <button type="button" className="btn btn-outline-primary" onClick={() => handleDownloadPDF(true)}
+                                        style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
+                                        <i className="bi bi-file-pdf me-1"></i>Bill of Supply
                                     </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-warning dropdown-toggle dropdown-toggle-split"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false"
-                                    >
+                                    <button type="button" className="btn btn-outline-primary dropdown-toggle dropdown-toggle-split"
+                                        data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
                                         <span className="visually-hidden">Toggle Dropdown</span>
                                     </button>
                                     <ul className="dropdown-menu">
@@ -1774,21 +1707,12 @@ export default function TradeForm() {
                             )}
                             {formData.direction === 'PURCHASE' && (
                                 <div className="btn-group">
-                                    <button
-                                        type="button"
-                                        className="btn btn-success"
-                                        onClick={() => handleDownloadPurchaseInvoice(true)}
-                                        title="Download Purchase Invoice with signature & stamp"
-                                    >
-                                        <i className="bi bi-file-pdf me-1"></i>
-                                        Purchase Invoice
+                                    <button type="button" className="btn btn-outline-success" onClick={() => handleDownloadPurchaseInvoice(true)}
+                                        style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
+                                        <i className="bi bi-file-pdf me-1"></i>Purchase Invoice
                                     </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-success dropdown-toggle dropdown-toggle-split"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false"
-                                    >
+                                    <button type="button" className="btn btn-outline-success dropdown-toggle dropdown-toggle-split"
+                                        data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
                                         <span className="visually-hidden">Toggle Dropdown</span>
                                     </button>
                                     <ul className="dropdown-menu">

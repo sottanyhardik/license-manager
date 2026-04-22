@@ -97,6 +97,33 @@ export default function NestedFieldArray({
             }
         }
 
+        // Trade line (DFIA) calculations
+        if (entityName === "trades" && fieldKey === "lines") {
+            const cur = {...newArray[index], ...updates};
+            const mode = cur.mode;
+            if (mode === 'QTY') {
+                const qty = parseFloat(cur.qty_kg);
+                const rate = parseFloat(cur.rate_inr_per_kg);
+                if (!isNaN(qty) && !isNaN(rate)) updates.amount_inr = (qty * rate).toFixed(2);
+            } else if (mode === 'CIF_INR') {
+                const cif = parseFloat(cur.cif_inr);
+                const pct = parseFloat(cur.pct);
+                if (!isNaN(cif) && !isNaN(pct)) updates.amount_inr = (cif * pct / 100).toFixed(2);
+            } else if (mode === 'FOB_INR') {
+                const fob = parseFloat(cur.fob_inr);
+                const pct = parseFloat(cur.pct);
+                if (!isNaN(fob) && !isNaN(pct)) updates.amount_inr = (fob * pct / 100).toFixed(2);
+            }
+        }
+
+        // Incentive trade line calculations
+        if (entityName === "trades" && fieldKey === "incentive_lines") {
+            const cur = {...newArray[index], ...updates};
+            const lv = parseFloat(cur.license_value);
+            const rp = parseFloat(cur.rate_pct);
+            if (!isNaN(lv) && !isNaN(rp)) updates.amount_inr = (lv * rp / 100).toFixed(2);
+        }
+
         newArray[index] = {
             ...newArray[index],
             ...updates
@@ -211,6 +238,18 @@ export default function NestedFieldArray({
                                 : "No matches found. Press Enter to create."
                         }
                     />
+                </div>
+            );
+        }
+
+        // Handle readonly/calculated fields
+        if (field.readonly || field.read_only) {
+            const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
+            return (
+                <div className="form-control form-control-sm d-flex align-items-center justify-content-between"
+                    style={{ background: '#f0fdf4', color: '#065f46', fontWeight: '600', borderColor: '#a7f3d0', cursor: 'default' }}>
+                    <span>{displayVal}</span>
+                    <i className="bi bi-calculator text-success" style={{ fontSize: '0.7rem', opacity: 0.6 }}></i>
                 </div>
             );
         }
@@ -413,101 +452,192 @@ export default function NestedFieldArray({
         }
     };
 
+    const FIELD_WIDTHS = {
+        import_license: {
+            serial_number: 'col-md-2',
+            hs_code: 'col-md-3',
+            description: 'col-md-5',
+            unit: 'col-md-2',
+            quantity: 'col-md-3',
+            cif_fc: 'col-md-3',
+            cif_inr: 'col-md-3',
+            duty_type: 'col-md-3',
+        },
+        export_license: {
+            description: 'col-md-6',
+            net_quantity: 'col-md-3',
+            start_serial_number: 'col-md-3',
+            norm_class: 'col-md-4',
+        },
+        lines: {
+            sr_number: 'col-md-5',
+            description: 'col-md-6',
+            hsn_code: 'col-md-3',
+            mode: 'col-md-3',
+            qty_kg: 'col-md-3',
+            rate_inr_per_kg: 'col-md-3',
+            cif_fc: 'col-md-3',
+            exc_rate: 'col-md-3',
+            cif_inr: 'col-md-3',
+            fob_inr: 'col-md-3',
+            pct: 'col-md-2',
+            amount_inr: 'col-md-3',
+        },
+        incentive_lines: {
+            incentive_license: 'col-md-5',
+            license_value: 'col-md-3',
+            rate_pct: 'col-md-2',
+            amount_inr: 'col-md-3',
+        },
+        payments: {
+            date: 'col-md-3',
+            amount: 'col-md-3',
+            note: 'col-md-6',
+        },
+    };
+
+    const getItemTitle = (item) => {
+        if (fieldKey === 'import_license') {
+            const parts = [];
+            if (item.serial_number) parts.push(`S.No. ${item.serial_number}`);
+            if (item.description) parts.push(item.description.length > 35 ? item.description.substring(0, 35) + '…' : item.description);
+            return parts.join(' — ');
+        }
+        if (fieldKey === 'export_license') {
+            if (item.description) return item.description.length > 45 ? item.description.substring(0, 45) + '…' : item.description;
+        }
+        if (fieldKey === 'license_documents') {
+            return item.type || item.document_type || '';
+        }
+        if (fieldKey === 'lines') {
+            const parts = [];
+            if (item.sr_number_label) parts.push(item.sr_number_label);
+            if (item.description) parts.push(item.description.length > 35 ? item.description.substring(0, 35) + '…' : item.description);
+            return parts.join(' — ');
+        }
+        if (fieldKey === 'incentive_lines') {
+            const parts = [];
+            if (item.incentive_license_label || item.incentive_license) parts.push(item.incentive_license_label || `License #${item.incentive_license}`);
+            if (item.amount_inr) parts.push(`₹${item.amount_inr}`);
+            return parts.join(' — ');
+        }
+        if (fieldKey === 'payments') {
+            const parts = [];
+            if (item.date) parts.push(item.date);
+            if (item.amount) parts.push(`₹${item.amount}`);
+            return parts.join(' — ');
+        }
+        return '';
+    };
+
+    const sectionLabel = label
+        .split(" ")
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+
     return (
         <div className="mb-4">
             <div className="d-flex justify-content-between align-items-center mb-3">
-                <label className="form-label fw-bold text-capitalize mb-0">
-                    {label}
-                </label>
+                <div>
+                    <h6 className="mb-0 fw-semibold" style={{ color: 'var(--text-dark)' }}>
+                        <i className="bi bi-table me-2" style={{ color: '#6366F1' }}></i>
+                        {sectionLabel}
+                        {value.length > 0 && (
+                            <span className="badge ms-2" style={{ backgroundColor: '#e0e7ff', color: '#4F46E5', fontSize: '0.7rem' }}>
+                                {value.length}
+                            </span>
+                        )}
+                    </h6>
+                </div>
                 <button
                     type="button"
-                    className="btn btn-sm btn-success"
+                    className="btn btn-sm btn-outline-success"
                     onClick={handleAdd}
+                    style={{ borderRadius: '8px' }}
                 >
-                    <i className="bi bi-plus-circle me-1"></i>
-                    Add Item
+                    <i className="bi bi-plus-lg me-1"></i>Add Item
                 </button>
             </div>
 
             {value.length === 0 ? (
-                <div className="alert alert-info">
-                    No items added. Click "Add Item" to add a new item.
+                <div className="text-center py-4" style={{ border: '2px dashed #d1d5db', borderRadius: '10px', color: 'var(--text-secondary)' }}>
+                    <i className="bi bi-inbox d-block mb-1" style={{ fontSize: '1.5rem', opacity: 0.5 }}></i>
+                    <small>No items yet — click <strong>Add Item</strong> to add the first one</small>
                 </div>
             ) : (
-                <div className="nested-items-container">
+                <div className="d-flex flex-column gap-2">
                     {value.map((item, index) => (
-                        <div key={index} className="card mb-3">
-                            <div
-                                className="card-header bg-light d-flex justify-content-between align-items-center py-2">
-                                <h6 className="mb-0">Item #{index + 1}</h6>
-                                <div className="btn-group btn-group-sm">
-                                    {/* Show Fetch button only for export_license items and if callback is provided */}
-                                    {fieldKey === "export_license" && onFetchImports && (
-                                        <button
-                                            type="button"
-                                            className="btn btn-sm btn-primary"
-                                            onClick={() => onFetchImports(index, item)}
-                                            disabled={!item.norm_class || !item.start_serial_number}
-                                            title={
-                                                !item.norm_class || !item.start_serial_number
-                                                    ? "Please select Norm Class and enter Start Serial Number first"
-                                                    : "Fetch import items from SION norm class"
-                                            }
-                                        >
-                                            <i className="bi bi-download me-1"></i>
-                                            Fetch Imports
-                                        </button>
+                        <div key={index} className="card border-0 shadow-sm" style={{ borderRadius: '10px' }}>
+                            <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2 px-3" style={{ borderRadius: '10px 10px 0 0' }}>
+                                <span className="fw-semibold small d-flex align-items-center gap-2" style={{ color: '#6366F1', minWidth: 0 }}>
+                                    <i className="bi bi-hash flex-shrink-0"></i>
+                                    <span className="flex-shrink-0">Item {index + 1}</span>
+                                    {getItemTitle(item) && (
+                                        <span className="fw-normal text-muted text-truncate" style={{ fontSize: '0.78rem', maxWidth: 300 }}>
+                                            — {getItemTitle(item)}
+                                        </span>
                                     )}
+                                </span>
+                                <div className="d-flex gap-1 flex-shrink-0">
+                                    {fieldKey === "export_license" && onFetchImports && (() => {
+                                        const canFetch = item.norm_class && item.start_serial_number && item.net_quantity;
+                                        return (
+                                            <button
+                                                type="button"
+                                                className={`btn btn-sm ${canFetch ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                                onClick={() => onFetchImports(index, item)}
+                                                disabled={!canFetch}
+                                                title={!canFetch ? "Fill Norm Class, Net Quantity and Start Serial first" : "Auto-fill import items from SION norm"}
+                                                style={{ borderRadius: '6px', fontSize: '0.78rem' }}
+                                            >
+                                                <i className="bi bi-magic me-1"></i>Fetch Imports
+                                            </button>
+                                        );
+                                    })()}
                                     <button
                                         type="button"
                                         className="btn btn-sm btn-outline-danger"
                                         onClick={() => handleRemove(index)}
-                                        title="Remove this item"
+                                        title="Remove item"
+                                        style={{ borderRadius: '6px' }}
                                     >
-                                        <i className="bi bi-trash me-1"></i>
-                                        Remove
+                                        <i className="bi bi-trash"></i>
                                     </button>
                                 </div>
                             </div>
-                            <div className="card-body">
-                                {/* Display errors for this item */}
-                                {errors[index] && errors[index].non_field_errors && (
-                                    <div className="alert alert-danger alert-sm mb-3">
-                                        {errors[index].non_field_errors.map((error, errIdx) => (
-                                            <div key={errIdx}>{error}</div>
-                                        ))}
+                            <div className="card-body p-3">
+                                {errors[index]?.non_field_errors && (
+                                    <div className="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3">
+                                        <i className="bi bi-exclamation-circle-fill flex-shrink-0"></i>
+                                        <div className="small">
+                                            {errors[index].non_field_errors.map((e, i) => <div key={i}>{e}</div>)}
+                                        </div>
                                     </div>
                                 )}
 
-                                <div className="row">
+                                <div className="row g-3">
                                     {fields
                                         .filter(f => f.name !== "id")
                                         .map((field) => {
-                                            // Determine column width based on field type
                                             const isTextarea = field.type === "textarea" ||
-                                                field.name.includes("description") ||
-                                                field.name.includes("note") ||
-                                                field.name.includes("comment");
-
-                                            const colClass = isTextarea ? "col-12" : "col-md-4";
-
+                                                (field.name.includes("note") || field.name.includes("comment"));
+                                            const colClass = FIELD_WIDTHS[fieldKey]?.[field.name]
+                                                || (isTextarea ? "col-12" : "col-md-4");
                                             return (
-                                                <div key={field.name} className={`${colClass}`}>
-                                                    <div className="form-group-material">
-                                                        <label className="form-label">
-                                                            {field.label || field.name}
-                                                            {field.required && <span className="text-danger ms-1">*</span>}
-                                                        </label>
-                                                        {renderNestedField(field, item, index)}
-                                                        {/* Display field-level errors */}
-                                                        {errors[index] && errors[index][field.name] && (
-                                                            <div className="invalid-feedback d-block">
-                                                                {Array.isArray(errors[index][field.name])
-                                                                    ? errors[index][field.name].join(', ')
-                                                                    : errors[index][field.name]}
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                <div key={field.name} className={colClass}>
+                                                    <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                                                        {field.label || field.name.replace(/_/g, ' ')}
+                                                        {field.required && <span className="text-danger ms-1">*</span>}
+                                                    </label>
+                                                    {renderNestedField(field, item, index)}
+                                                    {errors[index]?.[field.name] && (
+                                                        <div className="invalid-feedback d-block" style={{ fontSize: '0.75rem' }}>
+                                                            <i className="bi bi-exclamation-circle me-1"></i>
+                                                            {Array.isArray(errors[index][field.name])
+                                                                ? errors[index][field.name].join(', ')
+                                                                : errors[index][field.name]}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -517,6 +647,42 @@ export default function NestedFieldArray({
                     ))}
                 </div>
             )}
+
+            {/* Totals footer for trade lines and payments */}
+            {value.length > 0 && fieldKey === 'lines' && (() => {
+                const totQty = value.reduce((s, i) => s + (parseFloat(i.qty_kg) || 0), 0);
+                const totCif = value.reduce((s, i) => s + (parseFloat(i.cif_inr) || 0), 0);
+                const totAmt = value.reduce((s, i) => s + (parseFloat(i.amount_inr) || 0), 0);
+                return (
+                    <div className="d-flex gap-4 justify-content-end align-items-center mt-2 px-2 py-2"
+                        style={{ background: 'var(--bs-gray-50)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #e5e7eb' }}>
+                        <span className="text-muted">Totals:</span>
+                        <span><span className="text-muted me-1">Qty</span><strong>{totQty.toFixed(3)} kg</strong></span>
+                        <span><span className="text-muted me-1">CIF INR</span><strong>₹{totCif.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                        <span style={{ color: '#065f46' }}><span className="text-muted me-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                    </div>
+                );
+            })()}
+            {value.length > 0 && fieldKey === 'incentive_lines' && (() => {
+                const totAmt = value.reduce((s, i) => s + (parseFloat(i.amount_inr) || 0), 0);
+                return (
+                    <div className="d-flex gap-4 justify-content-end align-items-center mt-2 px-2 py-2"
+                        style={{ background: 'var(--bs-gray-50)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #e5e7eb' }}>
+                        <span className="text-muted">Total:</span>
+                        <span style={{ color: '#065f46' }}><span className="text-muted me-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                    </div>
+                );
+            })()}
+            {value.length > 0 && fieldKey === 'payments' && (() => {
+                const totPaid = value.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+                return (
+                    <div className="d-flex gap-4 justify-content-end align-items-center mt-2 px-2 py-2"
+                        style={{ background: '#f0fdf4', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #a7f3d0' }}>
+                        <span className="text-muted">Total Paid:</span>
+                        <span style={{ color: '#065f46', fontWeight: '700' }}>₹{totPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                );
+            })()}
         </div>
     );
 }

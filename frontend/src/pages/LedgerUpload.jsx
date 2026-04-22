@@ -40,15 +40,15 @@ const TaskStatusModal = ({ fileTasks, show, onHide }) => {
   if (!show) return null;
 
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
       <div className="modal-dialog modal-lg modal-dialog-scrollable">
-        <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title">
+        <div className="modal-content" style={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+          <div className="modal-header" style={{ background: 'linear-gradient(135deg,#4F46E5,#4338CA)', color: 'white', borderRadius: '12px 12px 0 0', borderBottom: 'none', padding: '1.25rem 1.5rem' }}>
+            <h5 className="modal-title fw-semibold">
               <i className="bi bi-gear-fill me-2"></i>
               Processing Ledger Files
             </h5>
-            <button type="button" className="btn-close" onClick={onHide}></button>
+            <button type="button" className="btn-close btn-close-white" onClick={onHide}></button>
           </div>
           <div className="modal-body">
             {fileTasks.map((fileEntry, fi) => {
@@ -200,40 +200,30 @@ const LedgerUpload = () => {
   };
 
   return (
-    <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
-      {/* Header */}
-      <div style={{
-        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-        padding: '32px',
-        borderRadius: '12px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-        color: 'white',
-        marginBottom: '24px'
-      }}>
-        <div className="d-flex justify-content-between align-items-center flex-wrap">
-          <div>
-            <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '8px' }}>
-              <i className="bi bi-file-earmark-spreadsheet me-3"></i>
-              Ledger Upload
-            </h1>
-            <p style={{ fontSize: '1rem', marginBottom: '0', opacity: '0.95' }}>
-              Upload DFIA license ledger files in CSV format
-            </p>
-          </div>
-          <div className="form-check form-switch" style={{ marginTop: '12px' }}>
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="asyncModeSwitch"
-              checked={useAsyncMode}
-              onChange={(e) => setUseAsyncMode(e.target.checked)}
-              style={{ width: '3rem', height: '1.5rem', cursor: 'pointer' }}
-            />
-            <label className="form-check-label" htmlFor="asyncModeSwitch" style={{ paddingLeft: '8px', fontSize: '0.95rem', cursor: 'pointer' }}>
-              <i className="bi bi-lightning-charge-fill me-1"></i>
-              Async Mode {useAsyncMode ? '(Parallel)' : '(Sync)'}
-            </label>
-          </div>
+    <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+      {/* Compact Header */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
+            <i className="bi bi-file-earmark-spreadsheet me-2" style={{ color: '#4F46E5' }}></i>
+            Ledger Upload
+          </h4>
+          <small className="text-muted">Upload DFIA license ledger files in CSV format</small>
+        </div>
+        <div className="form-check form-switch mb-0">
+          <input
+            className="form-check-input"
+            type="checkbox"
+            role="switch"
+            id="asyncModeSwitch"
+            checked={useAsyncMode}
+            onChange={(e) => setUseAsyncMode(e.target.checked)}
+            style={{ width: '2.5rem', height: '1.25rem', cursor: 'pointer' }}
+          />
+          <label className="form-check-label small fw-medium" htmlFor="asyncModeSwitch" style={{ cursor: 'pointer' }}>
+            <i className="bi bi-lightning-charge-fill me-1 text-warning"></i>
+            Async {useAsyncMode ? '(Parallel)' : '(Sync)'}
+          </label>
         </div>
       </div>
 
@@ -247,7 +237,13 @@ const LedgerUpload = () => {
         {/* Main Upload Card */}
         <div className="col-lg-8">
           <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-            <div className="card-body" style={{ padding: '32px' }}>
+            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+              <h6 className="mb-0 fw-semibold">
+                <i className="bi bi-cloud-upload me-2" style={{ color: '#4F46E5' }}></i>
+                Upload Files
+              </h6>
+            </div>
+            <div className="card-body" style={{ padding: '24px' }}>
               {/* Drop Zone */}
               <div
                 className={`border-2 border-dashed rounded p-5 text-center mb-4 ${
@@ -408,11 +404,14 @@ const LedgerUpload = () => {
 
           {/* Results Section (sync mode) */}
           {results.length > 0 && (
-            <div className="card mt-3">
-              <div className="card-header bg-white d-flex justify-content-between align-items-center">
-                <h6 className="mb-0">
-                  <i className="bi bi-list-check text-success me-2"></i>
-                  Upload Results ({results.filter(r => r.success).length} / {results.length} succeeded)
+            <div className="card border-0 shadow-sm mt-3" style={{ borderRadius: '12px' }}>
+              <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                <h6 className="mb-0 fw-semibold">
+                  <i className="bi bi-list-check me-2" style={{ color: '#10b981' }}></i>
+                  Upload Results
+                  <span className="badge ms-2" style={{ backgroundColor: '#d1fae5', color: '#065f46', fontSize: '0.7rem' }}>
+                    {results.filter(r => r.success).length}/{results.length} succeeded
+                  </span>
                 </h6>
               </div>
               <div className="card-body p-3" style={{ maxHeight: '500px', overflowY: 'auto' }}>
@@ -479,10 +478,10 @@ const LedgerUpload = () => {
 
         {/* Instructions Sidebar */}
         <div className="col-lg-4">
-          <div className="card">
-            <div className="card-header bg-white">
-              <h6 className="mb-0">
-                <i className="bi bi-info-circle me-2"></i>
+          <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+              <h6 className="mb-0 fw-semibold">
+                <i className="bi bi-info-circle me-2" style={{ color: '#4F46E5' }}></i>
                 File Format Guide
               </h6>
             </div>

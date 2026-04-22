@@ -54,6 +54,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [deletingItems, setDeletingItems] = useState({});
+    const [togglingRestriction, setTogglingRestriction] = useState({});
     const [initialAllocationData, setInitialAllocationData] = useState({});
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -503,7 +504,54 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         }
     };
 
-    if (initialLoading) return <div className="p-4">Loading...</div>;
+    const handleToggleRestriction = async (item) => {
+        if (togglingRestriction[item.id]) return;
+        setTogglingRestriction(prev => ({...prev, [item.id]: true}));
+        try {
+            const newValue = !item.is_restricted;
+            await api.patch(`license-items/${item.id}/`, { is_restricted: newValue });
+            setAvailableItems(prev => prev.map(i =>
+                i.id === item.id ? {...i, is_restricted: newValue} : i
+            ));
+            toast.success(`Item marked as ${newValue ? 'Restricted' : 'Open'}`);
+        } catch {
+            toast.error('Failed to update restriction status');
+        } finally {
+            setTogglingRestriction(prev => ({...prev, [item.id]: false}));
+        }
+    };
+
+    if (initialLoading) return (
+        <div style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
+            <div className="d-flex justify-content-between align-items-center mb-4 placeholder-glow">
+                <div>
+                    <div className="placeholder col-5" style={{ height: 28, borderRadius: 6, display: 'block' }}></div>
+                    <div className="placeholder col-3 mt-1" style={{ height: 14, borderRadius: 4, display: 'block' }}></div>
+                </div>
+                <div className="d-flex gap-2">
+                    {[80, 90, 110, 90, 100].map((w, i) => (
+                        <div key={i} className="placeholder" style={{ width: w, height: 32, borderRadius: 6 }}></div>
+                    ))}
+                </div>
+            </div>
+            <div className="card border-0 shadow-sm mb-4 placeholder-glow" style={{ borderRadius: 12 }}>
+                <div className="card-header bg-white py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                    <div className="placeholder col-3" style={{ height: 18, borderRadius: 4 }}></div>
+                </div>
+                <div className="card-body d-flex gap-3 p-4">
+                    {[1,2,3,4].map(i => <div key={i} className="placeholder flex-fill" style={{ borderRadius: 8, height: 72 }}></div>)}
+                </div>
+            </div>
+            <div className="card border-0 shadow-sm placeholder-glow" style={{ borderRadius: 12 }}>
+                <div className="card-header bg-white py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                    <div className="placeholder col-4" style={{ height: 18, borderRadius: 4 }}></div>
+                </div>
+                <div className="card-body p-4">
+                    {[1,2,3].map(i => <div key={i} className="placeholder w-100 mb-2" style={{ height: 90, borderRadius: 8 }}></div>)}
+                </div>
+            </div>
+        </div>
+    );
 
     return (
         <div style={{
@@ -515,149 +563,87 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             minHeight: isModal ? 'auto' : '100vh'
         }}>
             {!isModal && (
-                <div style={{
-                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                    padding: '32px',
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                    color: 'white',
-                    marginBottom: '24px',
-                    flexShrink: 0
-                }}>
-                    <div className="d-flex justify-content-between align-items-center flex-wrap">
-                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
-                            <i className="bi bi-diagram-3 me-3"></i>
+                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+                    <div>
+                        <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
+                            <i className="bi bi-diagram-3 me-2" style={{ color: '#4F46E5' }}></i>
                             Allocate License Items
-                        </h1>
-                        <div className="btn-group" style={{ marginTop: '12px' }}>
-                            <button
-                                className="btn"
-                                onClick={() => {
-                            if (isModal && onClose) {
-                                // In modal mode, close the allocation modal and navigate to edit page
-                                onClose();
-                            }
-                            // Navigate to edit page
-                            sessionStorage.setItem('allotmentListFilters', JSON.stringify({
-                                returnTo: 'edit',
-                                timestamp: new Date().getTime()
-                            }));
-                            navigate(`/allotments/${id}/edit`);
-                        }}
-                        title="Edit Allotment"
-                        style={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                            border: '1px solid rgba(255, 255, 255, 0.3)',
-                            color: 'white',
-                            fontWeight: '500',
-                            backdropFilter: 'blur(10px)'
-                        }}
-                    >
-                        <i className="bi bi-pencil-square me-1"></i>
-                        Edit
-                    </button>
-                    <button
-                        className="btn"
-                        onClick={async () => {
-                            if (!window.confirm('Are you sure you want to create a copy of this allotment?')) {
-                                return;
-                            }
-                            try {
-                                const response = await api.post(`allotments/${id}/copy/`);
-                                toast.success('Allotment copied successfully!');
-                                // Navigate to edit page of the new allotment
-                                navigate(`/allotments/${response.data.id}/edit`);
-                            } catch (err) {
-                                toast.error(err.response?.data?.error || 'Failed to copy allotment');
-                            }
-                        }}
-                        title="Create a copy of this allotment"
-                        style={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                            border: '1px solid rgba(255, 255, 255, 0.3)',
-                            color: 'white',
-                            fontWeight: '500',
-                            backdropFilter: 'blur(10px)'
-                        }}
-                    >
-                        <i className="bi bi-files me-1"></i>
-                        Copy Allotment
-                    </button>
-                    <button
-                        className="btn"
-                        onClick={async () => {
-                            try {
-                                const response = await api.get(`allotment-actions/${id}/generate-pdf/`, {
-                                    responseType: 'blob'
-                                });
-                                const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-                                const link = document.createElement('a');
-                                link.href = url;
-                                link.setAttribute('download', `Allotment - ${allotment?.invoice || id}.pdf`);
-                                document.body.appendChild(link);
-                                link.click();
-                                link.remove();
-                                window.URL.revokeObjectURL(url);
-                            } catch (err) {
-                                setError('Failed to download PDF');
-                            }
-                        }}
-                        title="Download Allotment PDF"
-                        style={{
-                            backgroundColor: 'white',
-                            border: '2px solid white',
-                            color: 'var(--primary-color)',
-                            fontWeight: '600',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                        }}
-                    >
-                        <i className="bi bi-file-pdf me-1"></i>
-                        Download PDF
-                    </button>
-                    {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
+                        </h4>
+                        {allotment && (
+                            <small className="text-muted">
+                                {allotment.item_name}
+                                {allotment.invoice && <span className="ms-2">— Invoice #{allotment.invoice}</span>}
+                            </small>
+                        )}
+                    </div>
+                    <div className="d-flex gap-2 flex-wrap">
                         <button
-                            className="btn"
+                            className="btn btn-sm btn-outline-secondary"
                             onClick={() => {
-                                // Scroll to transfer letter section
-                                document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' });
+                                if (isModal && onClose) { onClose(); }
+                                sessionStorage.setItem('allotmentListFilters', JSON.stringify({ returnTo: 'edit', timestamp: new Date().getTime() }));
+                                navigate(`/allotments/${id}/edit`);
                             }}
-                            title="Generate Transfer Letter"
-                            style={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                border: '1px solid rgba(255, 255, 255, 0.3)',
-                                color: 'white',
-                                fontWeight: '500',
-                                backdropFilter: 'blur(10px)'
-                            }}
+                            title="Edit Allotment"
                         >
-                            <i className="bi bi-file-earmark-text me-1"></i>
-                            Transfer Letter
+                            <i className="bi bi-pencil-square me-1"></i>Edit
                         </button>
-                    )}
-                    {!isModal && (
                         <button
-                            className="btn"
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={async () => {
+                                if (!window.confirm('Are you sure you want to create a copy of this allotment?')) return;
+                                try {
+                                    const response = await api.post(`allotments/${id}/copy/`);
+                                    toast.success('Allotment copied successfully!');
+                                    navigate(`/allotments/${response.data.id}/edit`);
+                                } catch (err) {
+                                    toast.error(err.response?.data?.error || 'Failed to copy allotment');
+                                }
+                            }}
+                            title="Create a copy of this allotment"
+                        >
+                            <i className="bi bi-files me-1"></i>Copy
+                        </button>
+                        <button
+                            className="btn btn-sm btn-primary"
+                            onClick={async () => {
+                                try {
+                                    const response = await api.get(`allotment-actions/${id}/generate-pdf/`, { responseType: 'blob' });
+                                    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.setAttribute('download', `Allotment - ${allotment?.invoice || id}.pdf`);
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    link.remove();
+                                    window.URL.revokeObjectURL(url);
+                                } catch (err) {
+                                    setError('Failed to download PDF');
+                                }
+                            }}
+                            title="Download Allotment PDF"
+                            style={{ background: 'linear-gradient(135deg,#4F46E5,#4338CA)', border: 'none' }}
+                        >
+                            <i className="bi bi-file-pdf me-1"></i>Download PDF
+                        </button>
+                        {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
+                            <button
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' })}
+                                title="Generate Transfer Letter"
+                            >
+                                <i className="bi bi-file-earmark-text me-1"></i>Transfer Letter
+                            </button>
+                        )}
+                        <button
+                            className="btn btn-sm btn-outline-secondary"
                             onClick={() => {
-                                // Store a flag to indicate we're returning to list
-                                sessionStorage.setItem('allotmentListFilters', JSON.stringify({
-                                    returnTo: 'list',
-                                    timestamp: new Date().getTime()
-                                }));
+                                sessionStorage.setItem('allotmentListFilters', JSON.stringify({ returnTo: 'list', timestamp: new Date().getTime() }));
                                 navigate('/allotments');
                             }}
-                            style={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                border: '1px solid rgba(255, 255, 255, 0.3)',
-                                color: 'white',
-                                fontWeight: '500',
-                                backdropFilter: 'blur(10px)'
-                            }}
                         >
-                            <i className="bi bi-arrow-left me-1"></i>
-                            Back to Allotments
+                            <i className="bi bi-arrow-left me-1"></i>Back
                         </button>
-                    )}
-                        </div>
                     </div>
                 </div>
             )}
@@ -675,13 +661,35 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 const balanceQty = parseFloat(allotment.balanced_quantity || 0);
                 const balanceValue = requiredValue - allotedValue;
 
+                const progressPct = requiredQty > 0 ? Math.min(100, Math.round((allotedQty / requiredQty) * 100)) : 0;
+                const progressColor = progressPct >= 100 ? '#10b981' : progressPct >= 60 ? '#4F46E5' : '#f59e0b';
+
                 return (
                     <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                        <div className="card-body" style={{ padding: '24px' }}>
-                            <h5 className="card-title mb-4" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
-                                <i className="bi bi-info-circle me-2" style={{ color: 'var(--primary-color)' }}></i>
-                                Allotment Details - {allotment.item_name}
-                            </h5>
+                        <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                            <h6 className="mb-0 fw-semibold">
+                                <i className="bi bi-info-circle me-2" style={{ color: '#4F46E5' }}></i>
+                                Allotment Details
+                                <span className="ms-2 text-muted fw-normal" style={{ fontSize: '0.85rem' }}>{allotment.item_name}</span>
+                            </h6>
+                            <span className="badge" style={{
+                                background: progressPct >= 100 ? '#d1fae5' : 'rgba(79,70,229,0.1)',
+                                color: progressPct >= 100 ? '#065f46' : '#4F46E5',
+                                fontWeight: '600', fontSize: '0.75rem', padding: '5px 10px'
+                            }}>
+                                {progressPct}% Allotted
+                            </span>
+                        </div>
+                        <div className="card-body" style={{ padding: '20px 24px' }}>
+                            <div className="mb-4">
+                                <div className="d-flex justify-content-between mb-1" style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                                    <span>Allotted: <strong>{allotedQty.toLocaleString()}</strong></span>
+                                    <span>Required: <strong>{requiredQty.toLocaleString()}</strong></span>
+                                </div>
+                                <div style={{ height: 6, borderRadius: 4, background: '#e5e7eb', overflow: 'hidden' }}>
+                                    <div style={{ height: '100%', borderRadius: 4, width: `${progressPct}%`, background: `linear-gradient(90deg, ${progressColor}, ${progressColor}cc)`, transition: 'width 0.4s ease' }} />
+                                </div>
+                            </div>
                             <div className="row g-3 align-items-stretch">
                                 {/* Unit Price */}
                                 <div className="col-lg-2 col-md-4">
@@ -753,23 +761,17 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             {/* Allotted Items Table */}
             {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
                 <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                    <div className="card-body" style={{ padding: '24px' }}>
-                        <div className="d-flex justify-content-between align-items-center mb-3">
-                            <h5 className="mb-0" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
-                                <i className="bi bi-check-square me-2" style={{ color: 'var(--success-color)' }}></i>
-                                Allotted Items ({allotment.allotment_details.length})
-                            </h5>
-                            <button
-                                className="btn btn-sm"
-                                style={{
-                                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                                    border: '1px solid rgba(102, 126, 234, 0.3)',
-                                    color: 'var(--primary-color)',
-                                    fontWeight: '500',
-                                    padding: '6px 16px',
-                                    borderRadius: '6px'
-                                }}
-                                onClick={() => {
+                    <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                        <h6 className="mb-0 fw-semibold">
+                            <i className="bi bi-check-square me-2" style={{ color: '#10b981' }}></i>
+                            Allotted Items
+                            <span className="ms-2 badge" style={{ background: 'rgba(16,185,129,0.1)', color: '#065f46', fontWeight: '600', fontSize: '0.72rem' }}>
+                                {allotment.allotment_details.length}
+                            </span>
+                        </h6>
+                        <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => {
                                     const headers = ['License', 'Serial', 'Description', 'HSN Code', 'Exporter', 'Transfer Status', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
                                     const rows = allotment.allotment_details.map(detail => {
                                         const transferInfo = [detail.current_owner, detail.file_transfer_status].filter(Boolean).join(' - ') || '-';
@@ -797,9 +799,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             >
                                 <i className="bi bi-clipboard"></i> Copy
                             </button>
-                        </div>
-                        <div style={{overflowX: 'auto', borderRadius: '8px'}}>
-                            <table className="table table-sm table-hover" style={{width: '100%', marginBottom: '0'}}>
+                    </div>
+                    <div className="card-body p-0">
+                        <div style={{overflowX: 'auto'}}>
+                            <table className="table table-sm table-hover mb-0" style={{width: '100%'}}>
                                 <thead style={{ backgroundColor: 'var(--bs-gray-50)', borderBottom: '2px solid #dee2e6' }}>
                                 <tr>
                                     <th style={{minWidth: '120px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>License</th>
@@ -895,32 +898,66 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             )}
 
             <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                <div className="card-body" style={{ padding: '24px' }}>
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h5 className="mb-0" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
-                            <i className="bi bi-list-check me-2" style={{ color: 'var(--primary-color)' }}></i>
-                            Available License Items
-                        </h5>
-                    </div>
+                <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                    <h6 className="mb-0 fw-semibold">
+                        <i className="bi bi-list-check me-2" style={{ color: '#4F46E5' }}></i>
+                        Available License Items
+                        {pagination.totalItems > 0 && (
+                            <span className="ms-2 text-muted fw-normal" style={{ fontSize: '0.82rem' }}>{pagination.totalItems} items</span>
+                        )}
+                    </h6>
+                </div>
+                <div className="card-body" style={{ padding: '20px 24px' }}>
 
                     {/* Show success/error messages near the table for better visibility */}
                     {error && (
-                        <div className="alert alert-danger alert-dismissible fade show" role="alert" style={{ borderRadius: '8px' }}>
-                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                            {error}
+                        <div className="alert alert-danger alert-dismissible fade show d-flex align-items-start gap-2" role="alert" style={{ borderRadius: '8px' }}>
+                            <i className="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+                            <div className="flex-fill">{error}</div>
                             <button type="button" className="btn-close" onClick={() => setError("")}></button>
                         </div>
                     )}
                     {success && (
-                        <div className="alert alert-success alert-dismissible fade show" role="alert" style={{ borderRadius: '8px' }}>
-                            <i className="bi bi-check-circle-fill me-2"></i>
-                            {success}
+                        <div className="alert alert-success alert-dismissible fade show d-flex align-items-start gap-2" role="alert" style={{ borderRadius: '8px' }}>
+                            <i className="bi bi-check-circle-fill flex-shrink-0 mt-1"></i>
+                            <div className="flex-fill">{success}</div>
                             <button type="button" className="btn-close" onClick={() => setSuccess("")}></button>
                         </div>
                     )}
 
-                    <div className="card mb-3 border-0 shadow-sm" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px' }}>
-                        <div className="card-body" style={{ padding: '20px' }}>
+                    <div className="card border-0 mb-4" style={{ background: 'var(--bs-gray-50)', borderRadius: '10px', border: '1px solid #e5e7eb !important' }}>
+                        <div className="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3" style={{ background: 'transparent', borderBottom: '1px solid #e5e7eb' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <i className="bi bi-funnel"></i> Filters
+                            </span>
+                            <button
+                                className="btn btn-sm btn-link text-muted p-0"
+                                style={{ fontSize: '0.78rem', textDecoration: 'none' }}
+                                onClick={() => setFilters({
+                                    description: "",
+                                    exporter: "",
+                                    exclude_exporter: "",
+                                    license_number: "",
+                                    available_quantity_gte: "50",
+                                    available_quantity_lte: "",
+                                    available_value_gte: "100",
+                                    available_value_lte: "",
+                                    notification_number: "",
+                                    norm_class: "",
+                                    hs_code: "",
+                                    is_expired: "all",
+                                    is_restricted: "all",
+                                    purchase_status: "GE,GO,SM,MI",
+                                    license_status: "active",
+                                    item_names: "",
+                                    expiry_date_from: "",
+                                    expiry_date_to: ""
+                                })}
+                            >
+                                <i className="bi bi-x-circle me-1"></i>Clear All
+                            </button>
+                        </div>
+                        <div className="card-body" style={{ padding: '16px' }}>
                             <div className="row g-3">
                                 <div className="col-md-12">
                                     <label className="form-label">Filter By Item Name</label>
@@ -1112,42 +1149,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             onChange={(e) => setFilters({...filters, expiry_date_to: e.target.value})}
                                         />
                                     </div>
-                                    <div className="col-md-12 mt-2">
-                                        <button
-                                            className="btn btn-sm"
-                                            style={{
-                                                backgroundColor: 'var(--bs-gray-500)',
-                                                border: 'none',
-                                                color: 'white',
-                                                fontWeight: '500',
-                                                padding: '8px 20px',
-                                                borderRadius: '6px'
-                                            }}
-                                            onClick={() => setFilters({
-                                                description: "",
-                                                exporter: "",
-                                                exclude_exporter: "",
-                                                license_number: "",
-                                                available_quantity_gte: "50",
-                                                available_quantity_lte: "",
-                                                available_value_gte: "100",
-                                                available_value_lte: "",
-                                                notification_number: "",
-                                                norm_class: "",
-                                                hs_code: "",
-                                                is_expired: "all",
-                                                is_restricted: "all",
-                                                purchase_status: "GE,GO,SM,MI",
-                                                license_status: "active",
-                                                item_names: "",
-                                                expiry_date_from: "",
-                                                expiry_date_to: ""
-                                            })}
-                                        >
-                                            <i className="bi bi-x-circle me-1"></i>
-                                            Clear Filters
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1182,10 +1183,29 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         background: '#f8fafc',
                                         borderBottom: '1px solid #e2e8f0',
                                     }}>
-                                        <span style={{fontWeight: '700', fontSize: '0.88rem', color: 'var(--primary-color)', marginRight: '4px'}}>
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const licenseId = item.license_id || item.license;
+                                                    const response = await api.get(`licenses/${licenseId}/merged-documents/`, { responseType: 'blob' });
+                                                    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+                                                    window.open(url, '_blank');
+                                                    setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+                                                } catch {
+                                                    toast.error('Failed to load license document');
+                                                }
+                                            }}
+                                            title="View license document"
+                                            style={{
+                                                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                                fontWeight: '700', fontSize: '0.88rem', color: 'var(--primary-color)',
+                                                marginRight: '4px', display: 'inline-flex', alignItems: 'center',
+                                                textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationStyle: 'dotted'
+                                            }}
+                                        >
                                             <i className="bi bi-file-earmark-text me-1" style={{fontSize: '0.8rem'}}></i>
                                             {item.license_number}
-                                        </span>
+                                        </button>
                                         <span style={{
                                             background: 'var(--bs-gray-200)', color: 'var(--text-secondary)',
                                             borderRadius: '4px', padding: '1px 7px', fontSize: '0.75rem', fontWeight: '600'
@@ -1210,10 +1230,31 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <i className="bi bi-calendar3" style={{fontSize: '0.7rem'}}></i>
                                             Exp: {item.license_expiry_date || '—'}
                                         </span>
-                                        {item.is_restricted
-                                            ? <span className="badge" style={{background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid var(--warning-border)', fontSize: '0.7rem'}}>Restricted</span>
-                                            : <span className="badge" style={{background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid var(--success-border)', fontSize: '0.7rem'}}>Open</span>
-                                        }
+                                        {togglingRestriction[item.id] ? (
+                                            <span className="badge" style={{fontSize: '0.7rem', background: 'var(--bs-gray-100)', color: 'var(--text-secondary)'}}>
+                                                <span className="spinner-border spinner-border-sm me-1" style={{width: '0.6rem', height: '0.6rem'}}></span>
+                                                Updating...
+                                            </span>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleToggleRestriction(item)}
+                                                title={item.is_restricted ? 'Click to mark as Open' : 'Click to mark as Restricted'}
+                                                style={{
+                                                    background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                                    display: 'inline-flex', alignItems: 'center'
+                                                }}
+                                            >
+                                                {item.is_restricted ? (
+                                                    <span className="badge" style={{background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid var(--warning-border)', fontSize: '0.7rem'}}>
+                                                        <i className="bi bi-lock-fill me-1"></i>Restricted
+                                                    </span>
+                                                ) : (
+                                                    <span className="badge" style={{background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid var(--success-border)', fontSize: '0.7rem'}}>
+                                                        <i className="bi bi-unlock-fill me-1"></i>Open
+                                                    </span>
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* ── Row 2: Description (full width) ── */}
@@ -1345,17 +1386,19 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     </div>
 
                     {tableLoading && (
-                        <div className="text-center p-3">
+                        <div className="text-center py-4">
                             <div className="spinner-border spinner-border-sm text-primary" role="status">
                                 <span className="visually-hidden">Loading...</span>
                             </div>
-                            <span className="ms-2">Loading items...</span>
+                            <span className="ms-2 text-muted" style={{ fontSize: '0.9rem' }}>Loading items...</span>
                         </div>
                     )}
 
                     {!tableLoading && availableItems.length === 0 && (
-                        <div className="text-center text-muted p-4">
-                            No available license items found
+                        <div className="text-center py-5" style={{ border: '2px dashed #d1d5db', borderRadius: '10px', background: 'white' }}>
+                            <i className="bi bi-inbox d-block mb-2" style={{ fontSize: '2rem', color: '#9ca3af' }}></i>
+                            <div className="fw-semibold text-muted mb-1">No available license items found</div>
+                            <small className="text-muted">Try adjusting the filters above</small>
                         </div>
                     )}
 

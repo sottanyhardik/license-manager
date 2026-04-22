@@ -576,9 +576,9 @@ class AllotmentActionViewSet(ViewSet):
             # Add allotment details
             for detail in allotment.allotment_details.all():
                 license_obj = detail.item.license if detail.item else None
-                license_num_date = f"{license_obj.license_number}\n{license_obj.license_date.strftime('%d/%m/%Y')}" if license_obj and license_obj.license_date else (
+                license_num_date = f"{license_obj.license_number}\n{license_obj.license_date.strftime('%d-%m-%Y')}" if license_obj and license_obj.license_date else (
                     license_obj.license_number if license_obj else 'N/A')
-                reg_num_date = f"{license_obj.registration_number}\n{license_obj.registration_date.strftime('%d/%m/%Y')}" if license_obj and license_obj.registration_date else (
+                reg_num_date = f"{license_obj.registration_number}\n{license_obj.registration_date.strftime('%d-%m-%Y')}" if license_obj and license_obj.registration_date else (
                     license_obj.registration_number if license_obj else 'N/A')
 
                 row = [

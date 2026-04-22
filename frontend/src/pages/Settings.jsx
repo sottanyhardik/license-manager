@@ -192,7 +192,7 @@ export default function Settings() {
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
                                     </td>
-                                    <td>{new Date(user.date_joined).toLocaleDateString()}</td>
+                                    <td>{(() => { const d = new Date(user.date_joined); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; })()}</td>
                                     <td>
                                         <button
                                             className="btn btn-sm btn-outline-primary me-2"

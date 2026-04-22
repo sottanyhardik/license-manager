@@ -1136,150 +1136,196 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </div>
                         </div>
 
-                    <div className="table-responsive" style={{ borderRadius: '8px', maxHeight: '600px', overflowY: 'auto', overflowX: 'auto' }}>
-                        <table className="table table-sm table-hover" style={{fontSize: '0.875rem', marginBottom: '0'}}>
-                            <thead className="sticky-top" style={{backgroundColor: 'var(--bs-gray-50)', borderBottom: '2px solid #dee2e6', zIndex: 10}}>
-                            <tr>
-                                <th style={{minWidth: '100px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>License</th>
-                                <th style={{minWidth: '50px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Serial</th>
-                                <th style={{minWidth: '90px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>HS Code</th>
-                                <th style={{minWidth: '200px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Description</th>
-                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Exporter</th>
-                                <th style={{minWidth: '90px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Notification</th>
-                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Item Name</th>
-                                <th style={{minWidth: '80px', textAlign: 'center', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Is Restricted</th>
-                                <th style={{minWidth: '100px', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Avail Qty</th>
-                                <th style={{minWidth: '110px', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Avail CIF FC</th>
-                                <th style={{minWidth: '80px', textAlign: 'right', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Average</th>
-                                <th style={{minWidth: '90px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Expiry</th>
-                                <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Notes</th>
-                                <th style={{minWidth: '160px', width: '160px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Qty</th>
-                                <th style={{minWidth: '160px', width: '160px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Value</th>
-                                <th style={{minWidth: '130px', position: 'sticky', right: 0, backgroundColor: 'var(--bs-gray-50)', zIndex: 5, fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Action</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {availableItems.map((item) => {
-                                const maxAllocation = calculateMaxAllocation(item);
-                                const currentAllocation = allocationData[item.id];
+                    <div style={{ maxHeight: '650px', overflowY: 'auto', paddingRight: '2px' }}>
+                        {availableItems.map((item) => {
+                            const maxAllocation = calculateMaxAllocation(item);
+                            const currentAllocation = allocationData[item.id];
+                            const qty = parseFloat(item.available_quantity || 0);
+                            const cifFc = parseFloat(item.balance_cif_fc || 0);
+                            const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
+                            const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
 
-                                return (
-                                    <tr key={item.id}>
-                                        <td style={{fontSize: '0.8rem'}}>{item.license_number}</td>
-                                        <td style={{fontSize: '0.8rem', textAlign: 'center'}}>{item.serial_number}</td>
-                                        <td style={{fontSize: '0.8rem'}}>{item.hs_code_label || '-'}</td>
-                                        <td style={{fontSize: '0.8rem', maxWidth: '250px', whiteSpace: 'normal'}}>{item.description}</td>
-                                        <td style={{fontSize: '0.8rem'}}>{item.exporter_name}</td>
-                                        <td style={{fontSize: '0.8rem', textAlign: 'center'}}>{item.notification_number || '-'}</td>
-                                        <td style={{fontSize: '0.8rem'}}>
+                            return (
+                                <div key={item.id} style={{
+                                    display: 'block',
+                                    background: '#ffffff',
+                                    border: `1px solid ${isReady ? 'var(--primary-color)' : '#e2e8f0'}`,
+                                    borderLeft: `4px solid ${isReady ? 'var(--primary-color)' : '#cbd5e1'}`,
+                                    borderRadius: '10px',
+                                    marginBottom: '10px',
+                                    overflow: 'hidden',
+                                    boxShadow: isReady ? '0 2px 12px rgba(79,70,229,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
+                                }}>
+                                    {/* ── Row 1: Identity bar ── */}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        flexWrap: 'wrap',
+                                        gap: '6px',
+                                        padding: '9px 14px',
+                                        background: '#f8fafc',
+                                        borderBottom: '1px solid #e2e8f0',
+                                    }}>
+                                        <span style={{fontWeight: '700', fontSize: '0.88rem', color: 'var(--primary-color)', marginRight: '4px'}}>
+                                            <i className="bi bi-file-earmark-text me-1" style={{fontSize: '0.8rem'}}></i>
+                                            {item.license_number}
+                                        </span>
+                                        <span style={{
+                                            background: 'var(--bs-gray-200)', color: 'var(--text-secondary)',
+                                            borderRadius: '4px', padding: '1px 7px', fontSize: '0.75rem', fontWeight: '600'
+                                        }}>#{item.serial_number}</span>
+
+                                        {item.hs_code_label && (
+                                            <span style={{
+                                                background: 'var(--indigo-50)', color: 'var(--primary-dark)',
+                                                border: '1px solid var(--indigo-200)',
+                                                borderRadius: '4px', padding: '1px 7px', fontSize: '0.75rem',
+                                            }}>HS: {item.hs_code_label}</span>
+                                        )}
+                                        {item.notification_number && (
+                                            <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>
+                                                Notif: {item.notification_number}
+                                            </span>
+                                        )}
+                                        <span style={{
+                                            marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-secondary)',
+                                            display: 'flex', alignItems: 'center', gap: '4px'
+                                        }}>
+                                            <i className="bi bi-calendar3" style={{fontSize: '0.7rem'}}></i>
+                                            Exp: {item.license_expiry_date || '—'}
+                                        </span>
+                                        {item.is_restricted
+                                            ? <span className="badge" style={{background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid var(--warning-border)', fontSize: '0.7rem'}}>Restricted</span>
+                                            : <span className="badge" style={{background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid var(--success-border)', fontSize: '0.7rem'}}>Open</span>
+                                        }
+                                    </div>
+
+                                    {/* ── Row 2: Description (full width) ── */}
+                                    <div style={{padding: '10px 14px 8px', borderBottom: '1px solid #e2e8f0', background: '#ffffff'}}>
+                                        <div style={{fontWeight: '600', fontSize: '0.85rem', color: 'var(--text-dark)', lineHeight: '1.4', marginBottom: '2px'}}>
+                                            {item.description}
+                                        </div>
+                                        <div style={{fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '6px'}}>
+                                            <i className="bi bi-building me-1" style={{fontSize: '0.7rem'}}></i>{item.exporter_name}
+                                        </div>
+                                        <div style={{display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center'}}>
                                             {item.items_detail && item.items_detail.length > 0
-                                                ? item.items_detail.map(i => i.name).join(', ')
-                                                : '-'
+                                                ? item.items_detail.map((i, idx) => (
+                                                    <span key={idx} style={{
+                                                        background: 'var(--indigo-50)', color: 'var(--primary-color)',
+                                                        border: '1px solid var(--indigo-200)',
+                                                        borderRadius: '4px', padding: '2px 8px',
+                                                        fontSize: '0.73rem', fontWeight: '500',
+                                                    }}>{i.name}</span>
+                                                ))
+                                                : <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>No items</span>
                                             }
-                                        </td>
-                                        <td style={{fontSize: '0.8rem', textAlign: 'center'}}>
-                                            {item.is_restricted ? (
-                                                <span className="badge bg-warning text-dark">Yes</span>
-                                            ) : (
-                                                <span className="badge bg-success">No</span>
+                                            {item.notes && (
+                                                <span style={{fontSize: '0.72rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginLeft: '4px'}}>
+                                                    <i className="bi bi-sticky me-1"></i>{item.notes}
+                                                </span>
                                             )}
-                                        </td>
-                                        <td style={{fontSize: '0.8rem', textAlign: 'right', fontWeight: '500'}}>{parseFloat(item.available_quantity || 0).toFixed(3)}</td>
-                                        <td style={{fontSize: '0.8rem', textAlign: 'right', fontWeight: '500'}}>{parseFloat(item.balance_cif_fc || 0).toFixed(2)}</td>
-                                        <td style={{fontSize: '0.8rem', textAlign: 'right', color: 'var(--text-secondary)'}}>
-                                            {(() => {
-                                                const qty = parseFloat(item.available_quantity || 0);
-                                                const value = parseFloat(item.balance_cif_fc || 0);
-                                                const average = qty > 0 ? (value / qty) : 0;
-                                                return average.toFixed(2);
-                                            })()}
-                                        </td>
-                                        <td style={{fontSize: '0.8rem'}}>{item.license_expiry_date}</td>
-                                        <td style={{fontSize: '0.8rem', maxWidth: '200px', whiteSpace: 'normal'}}>{item.notes || '-'}</td>
-                                        <td style={{width: '160px'}}>
-                                            <div className="input-group input-group-sm" style={{width: '100%'}}>
-                                                <input
-                                                    type="number"
-                                                    className="form-control form-control-sm"
-                                                    value={currentAllocation?.qty || ""}
-                                                    onChange={(e) => handleQuantityChange(item.id, e.target.value)}
-                                                    placeholder="Qty"
-                                                    step="1"
-                                                    min="0"
-                                                    max={maxAllocation.qty}
-                                                    title={`Max allowed: ${maxAllocation.qty} (with $20 buffer)`}
-                                                    style={{fontSize: '0.8rem', width: '80px'}}
-                                                />
-                                                <button
-                                                    className="btn btn-outline-secondary btn-sm"
-                                                    type="button"
-                                                    onClick={() => handleMaxQuantity(item)}
-                                                    title={`Max: ${maxAllocation.qty} (includes $20 buffer)`}
-                                                    style={{fontSize: '0.75rem', padding: '0.25rem 0.5rem'}}
-                                                >
-                                                    Max
-                                                </button>
+                                        </div>
+                                    </div>
+
+                                    {/* ── Row 3: Stats + Inputs + Action (compact bottom bar) ── */}
+                                    <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0', background: '#f8fafc'}}>
+
+                                        {/* Availability stats */}
+                                        <div style={{display: 'flex', gap: '16px', padding: '10px 14px', flexShrink: 0}}>
+                                            {[
+                                                {label: 'Avail Qty', value: qty.toFixed(3)},
+                                                {label: 'CIF FC', value: cifFc.toFixed(2)},
+                                                {label: 'Avg', value: average},
+                                            ].map(({label, value}) => (
+                                                <div key={label}>
+                                                    <div style={{fontSize: '0.62rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px'}}>{label}</div>
+                                                    <div style={{fontWeight: '700', fontSize: '0.88rem', color: 'var(--text-dark)', lineHeight: '1.3'}}>{value}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div style={{width: '1px', height: '36px', background: '#e2e8f0', flexShrink: 0}} />
+
+                                        {/* Allocation inputs */}
+                                        <div style={{display: 'flex', gap: '10px', padding: '8px 14px', flexWrap: 'wrap', flex: 1, minWidth: '280px'}}>
+                                            <div style={{flex: '1', minWidth: '130px'}}>
+                                                <label style={{fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', display: 'block', marginBottom: '3px'}}>
+                                                    Qty <span style={{fontWeight: '400', textTransform: 'none'}}>/ max {maxAllocation.qty}</span>
+                                                </label>
+                                                <div className="input-group input-group-sm">
+                                                    <input type="number" className="form-control form-control-sm"
+                                                        value={currentAllocation?.qty || ""}
+                                                        onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                                                        placeholder="Qty"
+                                                        step="1" min="0" max={maxAllocation.qty}
+                                                        style={{fontSize: '0.82rem'}}
+                                                    />
+                                                    <button className="btn btn-outline-secondary btn-sm" type="button"
+                                                        onClick={() => handleMaxQuantity(item)}
+                                                        style={{fontSize: '0.75rem', fontWeight: '600'}}>Max</button>
+                                                </div>
                                             </div>
-                                        </td>
-                                        <td style={{width: '160px'}}>
-                                            <div className="input-group input-group-sm" style={{width: '100%'}}>
-                                                <input
-                                                    type="number"
-                                                    className="form-control form-control-sm"
-                                                    value={currentAllocation?.cif_fc || ""}
-                                                    onChange={(e) => handleValueChange(item.id, e.target.value)}
-                                                    placeholder="Value"
-                                                    step="0.01"
-                                                    min="0"
-                                                    title={`Max allowed: ${maxAllocation.value.toFixed(2)} (with $20 buffer)`}
-                                                    style={{fontSize: '0.8rem', width: '80px'}}
-                                                />
-                                                <button
-                                                    className="btn btn-outline-secondary btn-sm"
-                                                    type="button"
-                                                    onClick={() => handleMaxValue(item)}
-                                                    title={`Max: ${maxAllocation.value.toFixed(2)} (includes $20 buffer)`}
-                                                    style={{fontSize: '0.75rem', padding: '0.25rem 0.5rem'}}
-                                                >
-                                                    Max
-                                                </button>
+                                            <div style={{flex: '1', minWidth: '130px'}}>
+                                                <label style={{fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', display: 'block', marginBottom: '3px'}}>
+                                                    Value <span style={{fontWeight: '400', textTransform: 'none'}}>/ max {maxAllocation.value.toFixed(2)}</span>
+                                                </label>
+                                                <div className="input-group input-group-sm">
+                                                    <input type="number" className="form-control form-control-sm"
+                                                        value={currentAllocation?.cif_fc || ""}
+                                                        onChange={(e) => handleValueChange(item.id, e.target.value)}
+                                                        placeholder="Value"
+                                                        step="0.01" min="0"
+                                                        style={{fontSize: '0.82rem'}}
+                                                    />
+                                                    <button className="btn btn-outline-secondary btn-sm" type="button"
+                                                        onClick={() => handleMaxValue(item)}
+                                                        style={{fontSize: '0.75rem', fontWeight: '600'}}>Max</button>
+                                                </div>
                                             </div>
-                                        </td>
-                                        <td style={{position: 'sticky', right: 0, backgroundColor: 'white', zIndex: 4}}>
+                                        </div>
+
+                                        <div style={{width: '1px', height: '36px', background: '#e2e8f0', flexShrink: 0}} />
+
+                                        {/* Confirm action */}
+                                        <div style={{
+                                            flexShrink: 0, padding: '8px 14px',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        }}>
                                             <button
-                                                className="btn btn-sm w-100"
+                                                className="btn btn-sm"
                                                 style={{
-                                                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
+                                                    background: isReady ? 'var(--primary-gradient)' : 'var(--bs-gray-100)',
                                                     border: 'none',
-                                                    color: 'white',
-                                                    fontWeight: '500',
-                                                    fontSize: '0.8rem',
+                                                    color: isReady ? 'white' : 'var(--text-secondary)',
+                                                    fontWeight: '600',
+                                                    fontSize: '0.82rem',
+                                                    padding: '10px 16px',
+                                                    borderRadius: '8px',
                                                     whiteSpace: 'nowrap',
-                                                    padding: '6px 12px',
-                                                    borderRadius: '6px',
-                                                    opacity: (!currentAllocation || parseFloat(currentAllocation.qty) <= 0 || saving[item.id]) ? 0.6 : 1
+                                                    transition: 'all 200ms',
+                                                    cursor: isReady ? 'pointer' : 'not-allowed',
                                                 }}
                                                 onClick={() => handleConfirmAllot(item)}
-                                                disabled={!currentAllocation || parseFloat(currentAllocation.qty) <= 0 || saving[item.id]}
+                                                disabled={!isReady || saving[item.id]}
                                             >
                                                 {saving[item.id] ? (
                                                     <>
                                                         <span className="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                        Saving...
+                                                        Saving…
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <i className="bi bi-check-circle me-1"></i>
+                                                        <i className="bi bi-check2-circle me-1"></i>
                                                         Confirm
                                                     </>
                                                 )}
                                             </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            </tbody>
-                        </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     {tableLoading && (

@@ -284,7 +284,7 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
         additional_context = {}
         if include_todays_date:
             from datetime import datetime
-            additional_context['todays_date'] = datetime.now().strftime('%d/%m/%Y')
+            additional_context['todays_date'] = datetime.now().strftime('%d-%m-%Y')
 
         generate_tl_software(
             data=data,
@@ -442,10 +442,10 @@ def _prepare_allotment_data(allotment, company_name, address_line1, address_line
                 'company': final_company,
                 'company_address_1': final_address1,
                 'company_address_2': final_address2,
-                'today': datetime.now().date().strftime("%d/%m/%Y"),
+                'today': datetime.now().date().strftime("%d-%m-%Y"),
                 'license': license_number,
                 'serial_number': license_item.serial_number,
-                'license_date': license.license_date.strftime("%d/%m/%Y") if license.license_date else '',
+                'license_date': license.license_date.strftime("%d-%m-%Y") if license.license_date else '',
                 'file_number': license.file_number or '',
                 'quantity': allotment_item.qty,
                 'v_allotment_inr': float(cif_inr),
@@ -512,10 +512,10 @@ def _prepare_boe_data(boe, company_name, address_line1, address_line2, cif_edits
                 'company': final_company,
                 'company_address_1': final_address1,
                 'company_address_2': final_address2,
-                'today': datetime.now().date().strftime("%d/%m/%Y"),
+                'today': datetime.now().date().strftime("%d-%m-%Y"),
                 'license': license_number,
                 'serial_number': license_item.serial_number if license_item else '',
-                'license_date': license_obj.license_date.strftime("%d/%m/%Y") if license_obj.license_date else '',
+                'license_date': license_obj.license_date.strftime("%d-%m-%Y") if license_obj.license_date else '',
                 'file_number': license_obj.file_number or '',
                 'quantity': item.qty,
                 'v_allotment_inr': float(cif_inr),
@@ -591,10 +591,10 @@ def _prepare_trade_data(trade, company_name, address_line1, address_line2, cif_e
             'company': final_company,
             'company_address_1': final_address1,
             'company_address_2': final_address2,
-            'today': datetime.now().date().strftime("%d/%m/%Y"),
+            'today': datetime.now().date().strftime("%d-%m-%Y"),
             'license': license_obj.license_number,
             'serial_number': license_item.serial_number if license_item else '',
-            'license_date': license_obj.license_date.strftime("%d/%m/%Y") if license_obj.license_date else '',
+            'license_date': license_obj.license_date.strftime("%d-%m-%Y") if license_obj.license_date else '',
             'file_number': license_obj.file_number or '',
             'quantity': line.qty_kg,
             'v_allotment_inr': round(float(cif_inr), 2),

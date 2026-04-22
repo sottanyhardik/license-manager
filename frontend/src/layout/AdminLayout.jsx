@@ -24,7 +24,7 @@ export default function AdminLayout({children}) {
                 <div className="container-fluid" style={{
                     padding: isInIframe ? '1rem 1.5rem' : '2rem 1.5rem',
                     maxWidth: '100%',
-                    paddingBottom: isInIframe ? '1rem' : '5rem'
+                    paddingBottom: isInIframe ? '1rem' : '90px'
                 }}>
                     {/* ARIA live region for form validation announcements */}
                     <div
@@ -37,11 +37,13 @@ export default function AdminLayout({children}) {
                     {children}
                 </div>
             </main>
-            {!isInIframe && <footer className="border-top py-3 mt-auto" style={{
-                position: 'sticky',
+            {!isInIframe && <footer className="border-top py-3" style={{
+                position: 'fixed',
                 bottom: 0,
+                left: 0,
+                right: 0,
                 zIndex: 1000,
-                background: 'linear-gradient(to bottom, rgba(248, 249, 250, 0.95), rgba(255, 255, 255, 0.98))',
+                background: 'linear-gradient(to bottom, rgba(248, 249, 250, 0.97), rgba(255, 255, 255, 0.99))',
                 backdropFilter: 'blur(10px)',
                 boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
             }}>
@@ -53,7 +55,7 @@ export default function AdminLayout({children}) {
                                     className="btn btn-sm"
                                     onClick={() => navigate('/licenses/create')}
                                     style={{
-                                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
+                                        background: 'var(--primary-gradient)',
                                         color: 'white',
                                         border: 'none',
                                         fontWeight: '500',

@@ -726,7 +726,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
                         boe_data.append([
                             detail.bill_of_entry.bill_of_entry_number,
-                            detail.bill_of_entry.bill_of_entry_date.strftime('%d/%m/%Y') if detail.bill_of_entry.bill_of_entry_date else '-',
+                            detail.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if detail.bill_of_entry.bill_of_entry_date else '-',
                             Paragraph(detail.bill_of_entry.port.name if detail.bill_of_entry.port else '-', styles['Normal']),
                             Paragraph(detail.bill_of_entry.company.name or '-' if detail.bill_of_entry.company else '-', styles['Normal']),
                             f"{float(detail.qty):.2f}",
@@ -2694,7 +2694,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         import logging
 
         logger = logging.getLogger(__name__)
-        license_obj = LicenseDetailsModel.objects.get(pk=pk)
+        try:
+            license_obj = LicenseDetailsModel.objects.get(pk=pk)
+        except LicenseDetailsModel.DoesNotExist:
+            from django.http import HttpResponse
+            return HttpResponse("License not found", status=404)
         documents = license_obj.license_documents.all()
 
         if not documents.exists():
@@ -2702,16 +2706,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         # Check if required libraries are installed
         try:
-            from PyPDF2 import PdfMerger, PdfReader
+            from pypdf import PdfWriter, PdfReader
             from PIL import Image
             from reportlab.pdfgen import canvas
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.utils import ImageReader
         except ImportError as e:
-            return HttpResponse(f"Missing required library: {str(e)}. Please install PyPDF2 and Pillow.", status=500)
+            return HttpResponse(f"Missing required library: {str(e)}. Please install pypdf and Pillow.", status=500)
 
         try:
-            merger = PdfMerger()
+            writer = PdfWriter()
 
             # Sort documents: TRANSFER LETTER first, then LICENSE COPY, then OTHER
             type_order = {'TRANSFER LETTER': 0, 'LICENSE COPY': 1, 'OTHER': 2}
@@ -2722,11 +2726,18 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     continue
 
                 file_path = doc.file.path
+                if not os.path.exists(file_path):
+                    logger.warning(f"File not found, skipping: {file_path}")
+                    continue
+
                 file_ext = os.path.splitext(file_path)[1].lower()
 
                 if file_ext == '.pdf':
                     # Add PDF directly
-                    merger.append(file_path)
+                    with open(file_path, 'rb') as f:
+                        reader = PdfReader(f)
+                        for page in reader.pages:
+                            writer.add_page(page)
                     logger.info(f"Added PDF: {file_path}")
                 elif file_ext in ['.doc', '.docx']:
                     # Convert DOCX/DOC to PDF
@@ -2771,8 +2782,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         # Build PDF
                         pdf.build(story)
 
-                        # Add converted PDF to merger
-                        merger.append(tmp_pdf_path)
+                        # Add converted PDF pages to writer
+                        with open(tmp_pdf_path, 'rb') as tmp_f:
+                            tmp_reader = PdfReader(tmp_f)
+                            for page in tmp_reader.pages:
+                                writer.add_page(page)
                         logger.info(f"Converted and added DOCX/DOC: {file_path}")
 
                         # Clean up temp file
@@ -2814,30 +2828,33 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     pdf_canvas.drawImage(img_reader, x, y, width=new_width, height=new_height)
                     pdf_canvas.save()
 
-                    # Rewind buffer and create PdfReader from it
+                    # Add image-converted PDF pages to writer
                     img_buffer.seek(0)
-                    pdf_reader = PdfReader(img_buffer)
-                    merger.append(pdf_reader)
+                    img_pdf_reader = PdfReader(img_buffer)
+                    for page in img_pdf_reader.pages:
+                        writer.add_page(page)
                     logger.info(f"Converted and added image: {file_path}")
+
+            if len(writer.pages) == 0:
+                return HttpResponse("No readable documents found for this license", status=404)
 
             # Write merged PDF to buffer
             output_buffer = io.BytesIO()
-            merger.write(output_buffer)
-            merger.close()
+            writer.write(output_buffer)
             output_buffer.seek(0)
 
             # Return merged PDF
-            response = FileResponse(
-                output_buffer,
-                content_type='application/pdf',
-                as_attachment=False,
-                filename=f'license_{license_obj.license_number}_documents.pdf'
-            )
+            import traceback as tb
+            pdf_bytes = output_buffer.getvalue()
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="license_{license_obj.license_number}_documents.pdf"'
             return response
 
         except Exception as e:
-            logger.error(f"Error merging documents: {str(e)}", exc_info=True)
-            return HttpResponse(f"Error merging documents: {str(e)}", status=500)
+            import traceback as tb
+            full_trace = tb.format_exc()
+            logger.error(f"Error merging documents: {full_trace}")
+            return HttpResponse(f"Error: {str(e)}\n\n{full_trace}", status=500, content_type='text/plain')
 
 
 # Add license report actions to viewset

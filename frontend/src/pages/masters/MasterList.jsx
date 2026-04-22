@@ -82,6 +82,17 @@ export default function MasterList() {
     const [transferLetterType, setTransferLetterType] = useState('');
     const [transferLetterEntityId, setTransferLetterEntityId] = useState(null);
 
+    // BOE card expanded rows
+    const [expandedBoeRows, setExpandedBoeRows] = useState(new Set());
+    const toggleBoeRow = (id) => {
+        setExpandedBoeRows(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
     // Confirmation dialog hook
     const { confirmDelete, confirmDangerousAction, confirmDialog } = useConfirmDialog();
 
@@ -673,8 +684,455 @@ export default function MasterList() {
             {/* Table */}
             <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
                 <div className="card-body" style={{ padding: '24px' }}>
-                    {/* Use AccordionTable for entities with nested fields (except licenses and allotments), regular DataTable for others */}
-                    {metadata.nested_field_defs && Object.keys(metadata.nested_field_defs).length > 0 && entityName !== 'licenses' && entityName !== 'allotments' ? (
+                    {/* BOE Card Layout */}
+                    {entityName === 'bill-of-entries' && (
+                        loading ? (
+                            <div className="text-center py-5">
+                                <div className="spinner-border text-primary" role="status"></div>
+                                <div className="mt-2 text-muted">Loading Bill of Entries...</div>
+                            </div>
+                        ) : data.length === 0 ? (
+                            <div className="text-center py-5 text-muted">
+                                <i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i>
+                                <div className="mt-2">No bill of entries found</div>
+                            </div>
+                        ) : (
+                            <div>
+                                {data.map(item => {
+                                    const isExpanded = expandedBoeRows.has(item.id);
+                                    const itemCount = item.item_details?.length || 0;
+                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
+                                    return (
+                                        <div key={item.id} style={{
+                                            display: 'block',
+                                            background: '#ffffff',
+                                            border: '1px solid #e2e8f0',
+                                            borderLeft: '4px solid #4f46e5',
+                                            borderRadius: '10px',
+                                            marginBottom: '10px',
+                                            overflow: 'hidden',
+                                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                                        }}>
+                                            {/* Row 1: Identity */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
+                                                    {item.bill_of_entry_number || '-'}
+                                                </span>
+                                                {item.bill_of_entry_date && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        <i className="bi bi-calendar3 me-1"></i>
+                                                        {item.bill_of_entry_date}
+                                                    </span>
+                                                )}
+                                                {item.port_name && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-geo-alt me-1"></i>{item.port_name}
+                                                    </span>
+                                                )}
+                                                {item.company_name && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-building me-1"></i>{item.company_name}
+                                                    </span>
+                                                )}
+                                                {item.invoice_no && (
+                                                    <span style={{ fontSize: '0.78rem', color: '#059669', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        Inv: {item.invoice_no}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* Row 2: Product + licenses + expand button */}
+                                            <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                                                    <div style={{ flex: 1, minWidth: '200px' }}>
+                                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Product</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>
+                                                            {item.product_name || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No product name</span>}
+                                                        </div>
+                                                    </div>
+                                                    {item.licenses && (
+                                                        <div style={{ flex: 1, minWidth: '140px' }}>
+                                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Licenses</div>
+                                                            <div style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '500' }}>{item.licenses}</div>
+                                                        </div>
+                                                    )}
+                                                    {itemCount > 0 && (
+                                                        <button
+                                                            onClick={() => toggleBoeRow(item.id)}
+                                                            style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: '#4f46e5', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap', alignSelf: 'center' }}
+                                                        >
+                                                            <i className={`bi bi-${isExpanded ? 'chevron-up' : 'chevron-down'}`}></i>
+                                                            {itemCount} Item{itemCount !== 1 ? 's' : ''}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Row 3: Stats + Actions */}
+                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>CIF (INR)</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.total_inr)}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>CIF (FC)</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '600' }}>{item.total_fc ? Number(item.total_fc).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-'}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Qty (MT)</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '600' }}>{item.total_quantity ? Number(item.total_quantity).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '-'}</div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                                    <button
+                                                        onClick={() => { setTransferLetterType('boe'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); }}
+                                                        title="Transfer Letter"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
+                                                    >
+                                                        <i className="bi bi-file-earmark-text"></i> TL
+                                                    </button>
+                                                    {(!item.product_name || item.product_name.trim() === '') && (
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) return;
+                                                                try {
+                                                                    const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
+                                                                    toast.success(response.data.message || 'Product name updated');
+                                                                    fetchData(currentPage, pageSize, filterParams);
+                                                                } catch (err) {
+                                                                    toast.error(err.response?.data?.message || 'Failed to update product name');
+                                                                }
+                                                            }}
+                                                            title="Update Product Name"
+                                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
+                                                        >
+                                                            <i className="bi bi-arrow-repeat"></i>
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/masters/bill-of-entries/${item.id}/edit`); }}
+                                                        title="Edit"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
+                                                    >
+                                                        <i className="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(item)}
+                                                        title="Delete"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
+                                                    >
+                                                        <i className="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Expandable: Item Details */}
+                                            {isExpanded && itemCount > 0 && (
+                                                <div style={{ padding: '10px 14px', background: '#fafaf9', borderTop: '1px solid #e2e8f0' }}>
+                                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Item Details</div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                        {item.item_details.map((detail, idx) => (
+                                                            <div key={detail.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '7px 12px', fontSize: '0.82rem' }}>
+                                                                <span style={{ fontWeight: '600', color: '#4f46e5', minWidth: '90px' }}>{detail.license_number || '-'}</span>
+                                                                <span style={{ flex: 1, color: '#334155', minWidth: '120px' }}>{detail.item_description || '-'}</span>
+                                                                {detail.hs_code && <span style={{ background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>{detail.hs_code}</span>}
+                                                                <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>Qty: <strong>{detail.qty || '-'}</strong></span>
+                                                                <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>FC: <strong>{detail.cif_fc || '-'}</strong></span>
+                                                                <span style={{ color: '#1e293b', fontWeight: '600', whiteSpace: 'nowrap' }}>INR: {fmtInr(detail.cif_inr)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
+                    )}
+
+                    {/* Allotments Card Layout */}
+                    {entityName === 'allotments' && (
+                        loading ? (
+                            <div className="text-center py-5">
+                                <div className="spinner-border text-primary" role="status"></div>
+                                <div className="mt-2 text-muted">Loading Allotments...</div>
+                            </div>
+                        ) : data.length === 0 ? (
+                            <div className="text-center py-5 text-muted">
+                                <i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i>
+                                <div className="mt-2">No allotments found</div>
+                            </div>
+                        ) : (
+                            <div>
+                                {data.map(item => {
+                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
+                                    return (
+                                        <div key={item.id} style={{
+                                            display: 'block',
+                                            background: '#ffffff',
+                                            border: `1px solid ${item.is_boe ? '#86efac' : '#e2e8f0'}`,
+                                            borderLeft: `4px solid ${item.is_boe ? '#22c55e' : '#4f46e5'}`,
+                                            borderRadius: '10px',
+                                            marginBottom: '10px',
+                                            overflow: 'hidden',
+                                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                                        }}>
+                                            {/* Row 1: Identity */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
+                                                    {item.invoice || <span style={{ fontStyle: 'italic', color: '#94a3b8', fontWeight: '400', fontSize: '0.875rem' }}>No Invoice</span>}
+                                                </span>
+                                                {item.estimated_arrival_date && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        <i className="bi bi-calendar3 me-1"></i>{item.estimated_arrival_date}
+                                                    </span>
+                                                )}
+                                                {item.port_name && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-geo-alt me-1"></i>{item.port_name}
+                                                    </span>
+                                                )}
+                                                {item.company_name && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-building me-1"></i>{item.company_name}
+                                                    </span>
+                                                )}
+                                                {item.is_boe && (
+                                                    <span style={{ fontSize: '0.75rem', color: '#166534', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                                                        BOE ✓
+                                                    </span>
+                                                )}
+                                                {item.is_approved && (
+                                                    <span style={{ fontSize: '0.75rem', color: '#1d4ed8', background: '#dbeafe', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                                                        Approved
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* Row 2: Item + Licenses */}
+                                            <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                                                    <div style={{ flex: 1, minWidth: '200px' }}>
+                                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Item</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>
+                                                            {item.item_name || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No item name</span>}
+                                                        </div>
+                                                    </div>
+                                                    {item.dfia_list && (
+                                                        <div style={{ flex: 1, minWidth: '140px' }}>
+                                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Licenses</div>
+                                                            <div style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '500' }}>{item.dfia_list}</div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Row 3: Stats + Actions */}
+                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Req Qty</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{item.required_quantity ? Number(item.required_quantity).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '-'}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Req Value</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '600' }}>{fmtInr(item.required_value)}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Balanced Qty</div>
+                                                        <div style={{ fontSize: '0.875rem', color: item.balanced_quantity > 0 ? '#059669' : '#94a3b8', fontWeight: '600' }}>{item.balanced_quantity ? Number(item.balanced_quantity).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '-'}</div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button onClick={async () => {
+                                                        if (!window.confirm(`Create a copy of allotment ${item.invoice || 'this allotment'}?`)) return;
+                                                        try {
+                                                            const r = await api.post(`allotments/${item.id}/copy/`);
+                                                            toast.success('Allotment copied. Opening in edit mode...');
+                                                            saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
+                                                            navigate(`/allotments/${r.data.id}/edit`);
+                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to copy'); }
+                                                    }} title="Copy" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-copy"></i>
+                                                    </button>
+                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/allocate`); }} title="Allocate" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-box-arrow-in-down"></i>
+                                                    </button>
+                                                    <button onClick={async () => {
+                                                        try {
+                                                            const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
+                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+                                                            window.open(url, '_blank');
+                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to generate PDF'); }
+                                                    }} title="PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-file-pdf"></i>
+                                                    </button>
+                                                    <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
+                    )}
+
+                    {/* Licenses Card Layout */}
+                    {entityName === 'licenses' && (
+                        loading ? (
+                            <div className="text-center py-5">
+                                <div className="spinner-border text-primary" role="status"></div>
+                                <div className="mt-2 text-muted">Loading Licenses...</div>
+                            </div>
+                        ) : data.length === 0 ? (
+                            <div className="text-center py-5 text-muted">
+                                <i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i>
+                                <div className="mt-2">No licenses found</div>
+                            </div>
+                        ) : (
+                            <div>
+                                {data.map(item => {
+                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
+                                    const parseIndianDate = (s) => { if (!s) return null; const p = s.split('-'); return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null; };
+                                    const isExpired = item.license_expiry_date && parseIndianDate(item.license_expiry_date) < new Date();
+                                    const statusColor = item.purchase_status_code === 'E1' ? { bg: '#dbeafe', text: '#1d4ed8' }
+                                        : item.purchase_status_code === 'E5' ? { bg: '#dcfce7', text: '#166534' }
+                                        : { bg: '#f1f5f9', text: '#475569' };
+                                    return (
+                                        <div key={item.id} style={{
+                                            display: 'block',
+                                            background: '#ffffff',
+                                            border: `1px solid ${isExpired ? '#fca5a5' : '#e2e8f0'}`,
+                                            borderLeft: `4px solid ${isExpired ? '#ef4444' : '#4f46e5'}`,
+                                            borderRadius: '10px',
+                                            marginBottom: '10px',
+                                            overflow: 'hidden',
+                                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                                        }}>
+                                            {/* Row 1: Identity */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
+                                                    {item.license_number || '-'}
+                                                </span>
+                                                {item.license_date && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        <i className="bi bi-calendar3 me-1"></i>{item.license_date}
+                                                    </span>
+                                                )}
+                                                {item.license_expiry_date && (
+                                                    <span style={{ fontSize: '0.8rem', color: isExpired ? '#b91c1c' : '#64748b', background: isExpired ? '#fff1f2' : '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        <i className="bi bi-calendar-x me-1"></i>Exp: {item.license_expiry_date}
+                                                    </span>
+                                                )}
+                                                {item.port_name && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-geo-alt me-1"></i>{item.port_name}
+                                                    </span>
+                                                )}
+                                                {item.exporter_name && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-building me-1"></i>{item.exporter_name}
+                                                    </span>
+                                                )}
+                                                {item.purchase_status_label && (
+                                                    <span style={{ fontSize: '0.75rem', color: statusColor.text, background: statusColor.bg, padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                                                        {item.purchase_status_label}
+                                                    </span>
+                                                )}
+                                                {(item.has_tl || item.has_copy) && (
+                                                    <button onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        try {
+                                                            const r = await api.get(`licenses/${item.id}/merged-documents/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
+                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+                                                            window.open(url, '_blank');
+                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                        } catch (err) { toast.error('Failed to load documents'); }
+                                                    }} style={{ fontSize: '0.72rem', color: '#059669', background: '#d1fae5', padding: '2px 6px', borderRadius: '4px', fontWeight: '500', border: 'none', cursor: 'pointer' }}>
+                                                        Copy
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Row 2: Norm class + Transfer */}
+                                            <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                                                    {item.get_norm_class && (
+                                                        <div style={{ minWidth: '120px' }}>
+                                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Norm Class</div>
+                                                            <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.get_norm_class}</div>
+                                                        </div>
+                                                    )}
+                                                    {item.latest_transfer && (
+                                                        <div style={{ flex: 1, minWidth: '160px' }}>
+                                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Latest Transfer</div>
+                                                            <div style={{ fontSize: '0.82rem', color: '#334155' }}>{item.latest_transfer}</div>
+                                                        </div>
+                                                    )}
+                                                    {!item.get_norm_class && !item.latest_transfer && (
+                                                        <div style={{ fontSize: '0.82rem', color: '#94a3b8', fontStyle: 'italic' }}>No additional details</div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Row 3: Stats + Actions */}
+                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Balance CIF</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.get_balance_cif)}</div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-eye"></i>
+                                                    </button>
+                                                    <button onClick={async () => {
+                                                        try {
+                                                            const r = await api.get(`licenses/${item.id}/balance-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
+                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+                                                            window.open(url, '_blank');
+                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                        } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate PDF'); }
+                                                    }} title="Download PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-file-pdf"></i>
+                                                    </button>
+                                                    <button onClick={async () => {
+                                                        try {
+                                                            const r = await api.get(`licenses/${item.id}/balance-excel/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
+                                                            const blob = new Blob([r.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                                                            const url = window.URL.createObjectURL(blob);
+                                                            const a = document.createElement('a'); a.href = url; a.download = `${item.license_number || item.id}-balance.xlsx`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                        } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate Excel'); }
+                                                    }} title="Download Excel" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-file-earmark-excel"></i>
+                                                    </button>
+                                                    <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
+                    )}
+
+                    {/* Use AccordionTable for entities with nested fields (except licenses, allotments, bill-of-entries), regular DataTable for others */}
+                    {entityName !== 'bill-of-entries' && entityName !== 'allotments' && entityName !== 'licenses' && (metadata.nested_field_defs && Object.keys(metadata.nested_field_defs).length > 0 ? (
                         <AccordionTable
                             data={data}
                             columns={metadata.list_display || []}
@@ -1264,7 +1722,7 @@ export default function MasterList() {
                             inlineEditable={metadata.inline_editable || []}
                             onInlineUpdate={handleInlineUpdate}
                         />
-                    )}
+                    ))}
 
                     {/* Pagination */}
                     {!loading && data.length > 0 && (

@@ -56,10 +56,11 @@ export default function Dashboard() {
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
-        const date = new Date(dateStr);
-        // Check if date is valid
-        if (isNaN(date.getTime())) return '-';
-        return date.toLocaleDateString('en-IN');
+        const parts = dateStr.split('-');
+        if (parts.length === 3 && parts[0].length === 4) {
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        return dateStr;
     };
 
     const getDaysUntilExpiry = (expiryDate) => {
@@ -122,12 +123,11 @@ export default function Dashboard() {
                         backdropFilter: 'blur(10px)'
                     }}>
                         <i className="bi bi-calendar-event me-2"></i>
-                        {new Date().toLocaleDateString('en-IN', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                        })}
+                        {(() => {
+                            const d = new Date();
+                            const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                            return `${days[d.getDay()]}, ${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+                        })()}
                     </div>
                 </div>
             </div>

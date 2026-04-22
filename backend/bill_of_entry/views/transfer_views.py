@@ -47,7 +47,7 @@ class GenerateTransferLetterView(FormView):
                 'company_address_2': self.request.POST.get('company_address_line2'),
                 'today': str(datetime.now().date()),
                 'license': item.sr_number.license.license_number,
-                'license_date': item.sr_number.license_date.strftime("%d/%m/%Y"),
+                'license_date': item.sr_number.license_date.strftime("%d-%m-%Y"),
                 'file_number': item.sr_number.license.file_number,
                 'quantity': item.qty,
                 'v_allotment_inr': round(item.cif_inr, 2),

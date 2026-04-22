@@ -237,7 +237,7 @@ const LedgerUpload = () => {
         {/* Main Upload Card */}
         <div className="col-lg-8">
           <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+            <div className="card-header bg-white border-bottom py-2 px-3" style={{ borderRadius: '12px 12px 0 0' }}>
               <h6 className="mb-0 fw-semibold">
                 <i className="bi bi-cloud-upload me-2" style={{ color: '#4F46E5' }}></i>
                 Upload Files
@@ -245,56 +245,45 @@ const LedgerUpload = () => {
             </div>
             <div className="card-body" style={{ padding: '24px' }}>
               {/* Drop Zone */}
-              <div
-                className={`border-2 border-dashed rounded p-5 text-center mb-4 ${
-                  dragActive ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary bg-light'
-                }`}
+              <label
+                htmlFor="file-input"
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
                 style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  border: `2px dashed ${dragActive ? '#4F46E5' : '#d1d5db'}`,
+                  borderRadius: '12px',
+                  padding: '36px 24px',
+                  textAlign: 'center',
                   cursor: 'pointer',
-                  minHeight: '200px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  transition: 'all 0.2s ease'
+                  minHeight: '170px',
+                  background: dragActive ? 'rgba(79,70,229,0.04)' : 'white',
+                  transition: 'border-color 0.15s, background 0.15s',
+                  marginBottom: '16px',
                 }}
+                onMouseEnter={e => { if (!dragActive) e.currentTarget.style.borderColor = '#4F46E5'; }}
+                onMouseLeave={e => { if (!dragActive) e.currentTarget.style.borderColor = '#d1d5db'; }}
               >
-                <div className="mb-3">
-                  <i className={`bi bi-cloud-arrow-up display-1 ${dragActive ? 'text-primary' : 'text-muted'}`}></i>
-                </div>
-                <h5 className="mb-2">
-                  {dragActive ? 'Drop files here' : 'Drag & drop your CSV files'}
-                </h5>
-                <p className="text-muted mb-3">or</p>
-                <label htmlFor="file-input" className="btn btn-primary">
-                  <i className="bi bi-folder2-open me-2"></i>
-                  Browse Files
-                </label>
-                <input
-                  id="file-input"
-                  type="file"
-                  accept=".csv"
-                  multiple
-                  onChange={handleFileChange}
-                  className="d-none"
-                />
-                <p className="text-muted mt-3 mb-0 small">
-                  <i className="bi bi-info-circle me-1"></i>
-                  Supported format: CSV files only
-                </p>
-              </div>
+                <i className="bi bi-cloud-arrow-up d-block mb-2" style={{ fontSize: '2.5rem', color: dragActive ? '#4F46E5' : '#9ca3af' }}></i>
+                <p className="fw-semibold mb-1">{dragActive ? 'Drop files here' : 'Drag & drop your CSV files'}</p>
+                <small className="text-muted mb-3">or click to browse</small>
+                <span className="btn btn-sm" style={{ background: 'linear-gradient(135deg,#4F46E5,#4338CA)', color: 'white', border: 'none', pointerEvents: 'none', fontWeight: '600' }}>
+                  <i className="bi bi-folder2-open me-1"></i>Browse Files
+                </span>
+                <small className="text-muted mt-3 d-block">CSV files only · Max 50MB per file</small>
+                <input id="file-input" type="file" accept=".csv" multiple onChange={handleFileChange} className="d-none" />
+              </label>
 
               {/* Selected Files List */}
               {files.length > 0 && (
                 <div className="mb-4">
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h6 className="mb-0">
-                      <i className="bi bi-paperclip me-2"></i>
-                      Selected Files ({files.length})
-                    </h6>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="fw-semibold small" style={{ color: 'var(--text-secondary)' }}>
+                      <i className="bi bi-paperclip me-1"></i>
+                      {files.length} file{files.length > 1 ? 's' : ''} selected
+                    </span>
                     <button
                       className="btn btn-sm btn-outline-danger"
                       onClick={() => {
@@ -302,26 +291,25 @@ const LedgerUpload = () => {
                         document.getElementById('file-input').value = '';
                       }}
                       disabled={uploading}
+                      style={{ fontSize: '0.75rem', padding: '2px 8px' }}
                     >
-                      <i className="bi bi-trash me-1"></i>
-                      Clear All
+                      <i className="bi bi-trash me-1"></i>Clear All
                     </button>
                   </div>
-                  <div className="list-group">
+                  <div className="d-flex flex-column gap-2">
                     {files.map((file, index) => (
-                      <div key={index} className="list-group-item d-flex justify-content-between align-items-center">
-                        <div className="d-flex align-items-center">
-                          <i className="bi bi-file-earmark-text text-success fs-4 me-3"></i>
-                          <div>
-                            <div className="fw-medium">{file.name}</div>
-                            <small className="text-muted">{formatFileSize(file.size)}</small>
-                          </div>
+                      <div key={index} className="d-flex align-items-center gap-2 px-2 py-2" style={{ background: 'var(--bs-gray-50)', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                        <i className="bi bi-file-earmark-text text-success" style={{ fontSize: '1.1rem', flexShrink: 0 }}></i>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="fw-medium small text-truncate">{file.name}</div>
+                          <small className="text-muted">{formatFileSize(file.size)}</small>
                         </div>
                         <button
                           type="button"
                           className="btn btn-sm btn-outline-danger"
                           onClick={() => removeFile(index)}
                           disabled={uploading}
+                          style={{ padding: '2px 8px', flexShrink: 0 }}
                         >
                           <i className="bi bi-x-lg"></i>
                         </button>
@@ -385,6 +373,10 @@ const LedgerUpload = () => {
                   className="btn btn-primary btn-lg"
                   onClick={handleUpload}
                   disabled={files.length === 0 || uploading}
+                  style={{
+                    background: files.length === 0 || uploading ? undefined : 'linear-gradient(135deg,#4F46E5,#4338CA)',
+                    border: 'none', fontWeight: '600', borderRadius: '10px', padding: '12px'
+                  }}
                 >
                   {uploading ? (
                     <>
@@ -405,7 +397,7 @@ const LedgerUpload = () => {
           {/* Results Section (sync mode) */}
           {results.length > 0 && (
             <div className="card border-0 shadow-sm mt-3" style={{ borderRadius: '12px' }}>
-              <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+              <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2 px-3" style={{ borderRadius: '12px 12px 0 0' }}>
                 <h6 className="mb-0 fw-semibold">
                   <i className="bi bi-list-check me-2" style={{ color: '#10b981' }}></i>
                   Upload Results
@@ -479,34 +471,29 @@ const LedgerUpload = () => {
         {/* Instructions Sidebar */}
         <div className="col-lg-4">
           <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+            <div className="card-header bg-white border-bottom py-2 px-3" style={{ borderRadius: '12px 12px 0 0' }}>
               <h6 className="mb-0 fw-semibold">
                 <i className="bi bi-info-circle me-2" style={{ color: '#4F46E5' }}></i>
                 File Format Guide
               </h6>
             </div>
             <div className="card-body">
-              <h6 className="mb-3">Required CSV Columns:</h6>
-              <div className="mb-3">
+              <div className="fw-semibold small mb-2" style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', fontSize: '0.72rem' }}>Required CSV Columns</div>
+              <div className="d-flex flex-wrap gap-1 mb-3">
                 {['Regn.No.', 'Regn.Date', 'Lic.No.', 'Lic.Date', 'IEC', 'Scheme.Cd.', 'Port', 'Notification'].map(col => (
-                  <div key={col} className="d-flex align-items-center mb-2">
-                    <i className="bi bi-check-circle-fill text-success me-2"></i>
-                    <code>{col}</code>
-                  </div>
+                  <code key={col} style={{ fontSize: '0.75rem', background: '#e0e7ff', color: '#4F46E5', padding: '2px 8px', borderRadius: '4px', border: '1px solid #c7d2fe' }}>{col}</code>
                 ))}
               </div>
-              <div className="alert alert-info mb-0">
-                <h6 className="alert-heading">
-                  <i className="bi bi-lightbulb me-2"></i>
-                  Important Notes
-                </h6>
-                <ul className="mb-0 small ps-3">
-                  <li className="mb-1">Date format: DD/MM/YYYY</li>
-                  <li className="mb-1">License numbers zero-padded to 10 digits</li>
-                  <li className="mb-1">Credit and Debit transactions auto-processed</li>
-                  <li className="mb-1">Multiple files supported</li>
-                  <li className="mb-1"><strong>Max file size: 50MB</strong></li>
-                  <li className="mb-1"><strong>Async mode: each license runs in parallel</strong></li>
+              <div style={{ background: '#fef3c7', borderRadius: '8px', padding: '12px 14px', border: '1px solid #fde68a' }}>
+                <div className="fw-semibold small mb-2" style={{ color: '#92400e' }}>
+                  <i className="bi bi-lightbulb me-1"></i>Important Notes
+                </div>
+                <ul className="mb-0 ps-3">
+                  <li className="small text-muted mb-1">Date format: DD/MM/YYYY</li>
+                  <li className="small text-muted mb-1">License numbers zero-padded to 10 digits</li>
+                  <li className="small text-muted mb-1">Credit and Debit transactions auto-processed</li>
+                  <li className="small text-muted mb-1">Multiple files supported · Max 50MB</li>
+                  <li className="small text-muted mb-0"><strong>Async mode:</strong> each license runs in parallel</li>
                 </ul>
               </div>
             </div>

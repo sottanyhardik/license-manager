@@ -86,26 +86,24 @@ export default function MasterList() {
     const { confirmDelete, confirmDangerousAction, confirmDialog } = useConfirmDialog();
 
     const fetchData = useCallback(async (page = 1, size = 25, filters = {}) => {
-        // Abort any pending request
+        // Abort any pending request and clear its key — the replacement request must always proceed
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
+            pendingRequestRef.current = null;
         }
 
         // Create new AbortController for this request
         abortControllerRef.current = new AbortController();
 
-        // If there's already a pending request with same params, skip this one
         const requestKey = JSON.stringify({page, size, filters, entity: entityName});
-
-        if (pendingRequestRef.current === requestKey) {
-            return;
-        }
 
         // Mark this request as pending
         pendingRequestRef.current = requestKey;
 
         setLoading(true);
         setError("");
+
+        let aborted = false;
 
         try {
             const params = {
@@ -123,11 +121,11 @@ export default function MasterList() {
                 // Determine API endpoint
                 let apiPath;
                 if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
-                    apiPath = `/${entityName}/`;
+                    apiPath = `${entityName}/`;
                 } else if (entityName === 'incentive-licenses') {
-                    apiPath = `/incentive-licenses/`;
+                    apiPath = `incentive-licenses/`;
                 } else {
-                    apiPath = `/masters/${entityName}/`;
+                    apiPath = `masters/${entityName}/`;
                 }
 
                 const {data: apiResponse} = await api.get(apiPath, {
@@ -160,17 +158,22 @@ export default function MasterList() {
             setHasPrevious(response.has_previous || false);
 
         } catch (err) {
-            // Ignore abort errors (they're expected when a new request cancels the previous one)
+            // Ignore abort errors — they're expected when a new request cancels the previous one.
+            // Mark as aborted so finally doesn't clear loading (the new request is already in flight).
             if (err.name === 'AbortError' || err.name === 'CanceledError') {
+                aborted = true;
                 return;
             }
             const errorMsg = err.response?.data?.detail || "Failed to load data";
             setError(errorMsg);
             toast.error(errorMsg);
-        } finally{
-            setLoading(false);
-            // Clear the pending request marker
-            pendingRequestRef.current = null;
+        } finally {
+            // Don't stop the loading spinner for aborted requests — the replacement
+            // request has already called setLoading(true) and is still in progress.
+            if (!aborted) {
+                setLoading(false);
+                pendingRequestRef.current = null;
+            }
         }
     }, [entityName]);
 
@@ -318,9 +321,9 @@ export default function MasterList() {
             } else {
                 let apiPath;
                 if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades' || entityName === 'incentive-licenses') {
-                    apiPath = `/${entityName}/${item.id}/`;
+                    apiPath = `${entityName}/${item.id}/`;
                 } else {
-                    apiPath = `/masters/${entityName}/${item.id}/`;
+                    apiPath = `masters/${entityName}/${item.id}/`;
                 }
                 await api.delete(apiPath);
             }
@@ -344,11 +347,11 @@ export default function MasterList() {
         try {
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
-                apiPath = `/${entityName}/${item.id}/`;
+                apiPath = `${entityName}/${item.id}/`;
             } else if (entityName === 'bill-of-entries') {
-                apiPath = `/bill-of-entries/${item.id}/`;
+                apiPath = `bill-of-entries/${item.id}/`;
             } else {
-                apiPath = `/masters/${entityName}/${item.id}/`;
+                apiPath = `masters/${entityName}/${item.id}/`;
             }
 
             await api.patch(apiPath, { [field]: newValue });
@@ -373,11 +376,11 @@ export default function MasterList() {
         try {
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades') {
-                apiPath = `/${entityName}/${itemId}/`;
+                apiPath = `${entityName}/${itemId}/`;
             } else if (entityName === 'bill-of-entries') {
-                apiPath = `/bill-of-entries/${itemId}/`;
+                apiPath = `bill-of-entries/${itemId}/`;
             } else {
-                apiPath = `/masters/${entityName}/${itemId}/`;
+                apiPath = `masters/${entityName}/${itemId}/`;
             }
 
             await api.patch(apiPath, { [fieldName]: newValue });
@@ -416,15 +419,15 @@ export default function MasterList() {
 
                 let apiPath;
                 if (entityName === 'licenses') {
-                    apiPath = `/licenses/export/`;
+                    apiPath = `licenses/export/`;
                 } else if (entityName === 'allotments') {
-                    apiPath = `/allotments/download/`;
+                    apiPath = `allotments/download/`;
                 } else if (entityName === 'bill-of-entries') {
-                    apiPath = `/bill-of-entries/export/`;
+                    apiPath = `bill-of-entries/export/`;
                 } else if (entityName === 'trades') {
-                    apiPath = `/trades/export/`;
+                    apiPath = `trades/export/`;
                 } else {
-                    apiPath = `/masters/${entityName}/export/`;
+                    apiPath = `masters/${entityName}/export/`;
                 }
 
                 if (format === 'pdf') {
@@ -489,10 +492,10 @@ export default function MasterList() {
         .join(" ");
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
             {/* Professional Header with Gradient */}
             <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                 padding: '32px',
                 borderRadius: '12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -592,7 +595,7 @@ export default function MasterList() {
                                 setError("");
 
                                 try {
-                                    const response = await api.post(`/bill-of-entries/bulk-update-product-names/`);
+                                    const response = await api.post(`bill-of-entries/bulk-update-product-names/`);
 
                                     setLoading(false);
 
@@ -626,7 +629,7 @@ export default function MasterList() {
                             fontWeight: '600',
                             backgroundColor: 'white',
                             border: '2px solid white',
-                            color: '#667eea',
+                            color: 'var(--primary-color)',
                             boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                         }}
                         onClick={() => {
@@ -707,7 +710,7 @@ export default function MasterList() {
                                             return;
                                         }
                                         try {
-                                            const response = await api.get(`/trades/${item.id}/generate-bill-of-supply/`, {
+                                            const response = await api.get(`trades/${item.id}/generate-bill-of-supply/`, {
                                                 params: { include_signature: true },
                                                 responseType: 'blob'
                                             });
@@ -739,7 +742,7 @@ export default function MasterList() {
                                             return;
                                         }
                                         try {
-                                            const response = await api.get(`/trades/${item.id}/generate-bill-of-supply/`, {
+                                            const response = await api.get(`trades/${item.id}/generate-bill-of-supply/`, {
                                                 params: { include_signature: false },
                                                 responseType: 'blob'
                                             });
@@ -770,7 +773,7 @@ export default function MasterList() {
                                         }
                                         try {
                                             // Fetch full trade data
-                                            const response = await api.get(`/trades/${item.id}/`);
+                                            const response = await api.get(`trades/${item.id}/`);
                                             const purchaseTrade = response.data;
 
                                             // Create new SALE trade with swapped companies
@@ -811,7 +814,7 @@ export default function MasterList() {
                                                 payments: []  // Empty payments for new trade
                                             };
 
-                                            const newResponse = await api.post('/trades/', saleTradeData);
+                                            const newResponse = await api.post('trades/', saleTradeData);
                                             toast.success('SALE trade created successfully. Opening in edit mode...');
 
                                             // Save filter state before navigating
@@ -865,7 +868,7 @@ export default function MasterList() {
                                     className: 'btn btn-outline-primary',
                                     onClick: async (item) => {
                                         try {
-                                            const response = await api.get(`/license-actions/${item.id}/download-ledger/`, {
+                                            const response = await api.get(`license-actions/${item.id}/download-ledger/`, {
                                                 responseType: 'blob',
                                                 headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                             });
@@ -901,7 +904,7 @@ export default function MasterList() {
                                             return;
                                         }
                                         try {
-                                            const response = await api.post(`/allotments/${item.id}/copy/`);
+                                            const response = await api.post(`allotments/${item.id}/copy/`);
                                             const newAllotmentId = response.data.id;
                                             toast.success('Allotment copied successfully. Opening in edit mode...');
                                             // Save filter state before navigating
@@ -936,7 +939,7 @@ export default function MasterList() {
                                     className: 'btn btn-outline-danger',
                                     onClick: async (item) => {
                                         try {
-                                            const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
+                                            const response = await api.get(`allotment-actions/${item.id}/generate-pdf/`, {
                                                 responseType: 'blob',
                                                 headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                             });
@@ -969,7 +972,7 @@ export default function MasterList() {
                                             return;
                                         }
                                         try {
-                                            const response = await api.post(`/bill-of-entries/${item.id}/update-product-name/`);
+                                            const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                             toast.success(response.data.message || 'Product name updated successfully');
                                             // Refresh the list to show updated product name
                                             fetchData(currentPage, pageSize, filterParams);
@@ -991,10 +994,10 @@ export default function MasterList() {
                                 const soldStatus = item.sold_status;
                                 if (soldStatus === 'YES') {
                                     // Fully sold - Light Red
-                                    return { backgroundColor: '#ffcccc' };
+                                    return { backgroundColor: 'var(--row-danger-bg)' };
                                 } else if (soldStatus === 'PARTIAL') {
                                     // Partially sold - Yellow
-                                    return { backgroundColor: '#ffffcc' };
+                                    return { backgroundColor: 'var(--row-yellow-bg)' };
                                 }
                                 // Not sold - No background color (default white)
                                 return {};
@@ -1004,7 +1007,7 @@ export default function MasterList() {
                                     if (value === 'YES') {
                                         return (
                                             <span className="badge" style={{
-                                                backgroundColor: '#dc3545',
+                                                backgroundColor: 'var(--danger-color)',
                                                 color: 'white',
                                                 padding: '6px 12px',
                                                 fontSize: '0.85rem',
@@ -1016,8 +1019,8 @@ export default function MasterList() {
                                     } else if (value === 'PARTIAL') {
                                         return (
                                             <span className="badge" style={{
-                                                backgroundColor: '#ffc107',
-                                                color: '#000',
+                                                backgroundColor: 'var(--warning-color)',
+                                                color: '#000000',
                                                 padding: '6px 12px',
                                                 fontSize: '0.85rem',
                                                 fontWeight: '500'
@@ -1028,7 +1031,7 @@ export default function MasterList() {
                                     } else {
                                         return (
                                             <span className="badge" style={{
-                                                backgroundColor: '#28a745',
+                                                backgroundColor: 'var(--success-color)',
                                                 color: 'white',
                                                 padding: '6px 12px',
                                                 fontSize: '0.85rem',
@@ -1052,10 +1055,10 @@ export default function MasterList() {
                                                 onClick={(e) => e.stopPropagation()}
                                                 style={{
                                                     fontSize: '0.7rem',
-                                                    color: '#28a745',
+                                                    color: 'var(--success-color)',
                                                     textDecoration: 'none',
                                                     padding: '1px 4px',
-                                                    backgroundColor: '#d4edda',
+                                                    backgroundColor: 'var(--success-bg)',
                                                     borderRadius: '2px',
                                                     fontWeight: '500',
                                                     whiteSpace: 'nowrap'
@@ -1096,7 +1099,7 @@ export default function MasterList() {
                                     className: 'btn btn-outline-danger',
                                     onClick: async (item) => {
                                         try {
-                                            const response = await api.get(`/licenses/${item.id}/balance-pdf/`, {
+                                            const response = await api.get(`licenses/${item.id}/balance-pdf/`, {
                                                 responseType: 'blob',
                                                 headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                             });
@@ -1115,7 +1118,7 @@ export default function MasterList() {
                                     className: 'btn btn-outline-success',
                                     onClick: async (item) => {
                                         try {
-                                            const response = await api.get(`/licenses/${item.id}/balance-excel/`, {
+                                            const response = await api.get(`licenses/${item.id}/balance-excel/`, {
                                                 responseType: 'blob',
                                                 headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                             });
@@ -1158,7 +1161,7 @@ export default function MasterList() {
                                             return;
                                         }
                                         try {
-                                            const response = await api.post(`/allotments/${item.id}/copy/`);
+                                            const response = await api.post(`allotments/${item.id}/copy/`);
                                             const newAllotmentId = response.data.id;
                                             toast.success('Allotment copied successfully. Opening in edit mode...');
                                             // Save filter state before navigating
@@ -1193,7 +1196,7 @@ export default function MasterList() {
                                     className: 'btn btn-outline-danger',
                                     onClick: async (item) => {
                                         try {
-                                            const response = await api.get(`/allotment-actions/${item.id}/generate-pdf/`, {
+                                            const response = await api.get(`allotment-actions/${item.id}/generate-pdf/`, {
                                                 responseType: 'blob',
                                                 headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                             });
@@ -1226,7 +1229,7 @@ export default function MasterList() {
                                             return;
                                         }
                                         try {
-                                            const response = await api.post(`/bill-of-entries/${item.id}/update-product-name/`);
+                                            const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                             toast.success(response.data.message || 'Product name updated successfully');
                                             // Refresh the list to show updated product name
                                             fetchData(currentPage, pageSize, filterParams);

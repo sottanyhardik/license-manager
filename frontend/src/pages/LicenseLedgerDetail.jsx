@@ -34,7 +34,7 @@ export default function LicenseLedgerDetail() {
                 params.append('company', companyId);
             }
             const queryString = params.toString();
-            const url = `/license-ledger/${id}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
+            const url = `license-ledger/${id}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
             const response = await api.get(url);
             setLedger(response.data);
         } catch (err) {
@@ -550,10 +550,10 @@ export default function LicenseLedgerDetail() {
     };
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '0' }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '0' }}>
             {/* Tally-Style Header */}
             <div style={{
-                backgroundColor: '#2c3e50',
+                backgroundColor: 'var(--text-dark)',
                 color: 'white',
                 padding: '10px 20px',
                 borderBottom: '2px solid #34495e'
@@ -596,7 +596,7 @@ export default function LicenseLedgerDetail() {
             {/* Purchase Warning Alert */}
             {showPurchaseWarning && (
                 <div style={{
-                    backgroundColor: '#fff3cd',
+                    backgroundColor: 'var(--warning-bg)',
                     border: '1px solid #ffc107',
                     borderLeft: '5px solid #ffc107',
                     padding: '15px 20px',
@@ -605,12 +605,12 @@ export default function LicenseLedgerDetail() {
                     alignItems: 'center',
                     gap: '15px'
                 }}>
-                    <i className="bi bi-exclamation-triangle-fill" style={{ fontSize: '1.5rem', color: '#856404' }}></i>
+                    <i className="bi bi-exclamation-triangle-fill" style={{ fontSize: '1.5rem', color: 'var(--warning-text)' }}></i>
                     <div>
-                        <strong style={{ color: '#856404', display: 'block', marginBottom: '5px' }}>
+                        <strong style={{ color: 'var(--warning-text)', display: 'block', marginBottom: '5px' }}>
                             ⚠️ Action Required
                         </strong>
-                        <span style={{ color: '#856404' }}>
+                        <span style={{ color: 'var(--warning-text)' }}>
                             {!hasPurchases && isNegativeBalance &&
                                 'No purchase transactions found and balance is negative. Please add purchase entries to maintain proper accounting.'}
                             {!hasPurchases && !isNegativeBalance &&
@@ -632,13 +632,13 @@ export default function LicenseLedgerDetail() {
             }}>
                 <div className="row align-items-center">
                     <div className="col-md-8">
-                        <h4 style={{ marginBottom: '15px', color: '#2c3e50', fontWeight: '600' }}>
+                        <h4 style={{ marginBottom: '15px', color: 'var(--text-dark)', fontWeight: '600' }}>
                             {ledger.license_number}
                             <span style={{
                                 marginLeft: '15px',
                                 fontSize: '0.75rem',
                                 padding: '4px 12px',
-                                backgroundColor: isDFIA ? '#007bff' : '#17a2b8',
+                                backgroundColor: isDFIA ? 'var(--primary-color)' : 'var(--info-color)',
                                 color: 'white',
                                 borderRadius: '4px',
                                 fontWeight: '500'
@@ -648,17 +648,17 @@ export default function LicenseLedgerDetail() {
                         </h4>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.95rem' }}>
                             <div>
-                                <span style={{ color: '#6c757d', marginRight: '10px' }}>Exporter:</span>
+                                <span style={{ color: 'var(--bs-gray-500)', marginRight: '10px' }}>Exporter:</span>
                                 <strong>{ledger.exporter || 'N/A'}</strong>
                             </div>
                             <div>
-                                <span style={{ color: '#6c757d', marginRight: '10px' }}>License Date:</span>
+                                <span style={{ color: 'var(--bs-gray-500)', marginRight: '10px' }}>License Date:</span>
                                 <strong>{formatDate(ledger.license_date)}</strong>
                             </div>
                             {isDFIA && (
                                 <div>
-                                    <span style={{ color: '#6c757d', marginRight: '10px' }}>SION Norms:</span>
-                                    <strong style={{ color: '#17a2b8' }}>
+                                    <span style={{ color: 'var(--bs-gray-500)', marginRight: '10px' }}>SION Norms:</span>
+                                    <strong style={{ color: 'var(--info-color)' }}>
                                         {(() => {
                                             const allNorms = [...new Set(
                                                 ledger.transactions
@@ -671,12 +671,12 @@ export default function LicenseLedgerDetail() {
                                 </div>
                             )}
                             <div>
-                                <span style={{ color: '#6c757d', marginRight: '10px' }}>Expiry Date:</span>
+                                <span style={{ color: 'var(--bs-gray-500)', marginRight: '10px' }}>Expiry Date:</span>
                                 <strong>{formatDate(ledger.expiry_date)}</strong>
                             </div>
                             <div>
-                                <span style={{ color: '#6c757d', marginRight: '10px' }}>Total Value:</span>
-                                <strong style={{ color: '#007bff' }}>
+                                <span style={{ color: 'var(--bs-gray-500)', marginRight: '10px' }}>Total Value:</span>
+                                <strong style={{ color: 'var(--primary-color)' }}>
                                     {formatCurrency(ledger.total_value, isDFIA ? 'USD' : 'INR')}
                                 </strong>
                             </div>
@@ -685,17 +685,17 @@ export default function LicenseLedgerDetail() {
                     <div className="col-md-4 text-end">
                         <div style={{
                             padding: '20px',
-                            backgroundColor: '#f8f9fa',
+                            backgroundColor: 'var(--bs-gray-50)',
                             borderRadius: '8px',
                             border: '2px solid #e9ecef'
                         }}>
-                            <div style={{ fontSize: '0.85rem', color: '#6c757d', marginBottom: '8px', fontWeight: '500' }}>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--bs-gray-500)', marginBottom: '8px', fontWeight: '500' }}>
                                 CURRENT BALANCE
                             </div>
                             <div style={{
                                 fontSize: '1.75rem',
                                 fontWeight: '700',
-                                color: currentBalance >= 0 ? '#28a745' : '#dc3545'
+                                color: currentBalance >= 0 ? 'var(--success-color)' : 'var(--danger-color)'
                             }}>
                                 {formatCurrency(currentBalance, isDFIA ? 'USD' : 'INR')}
                             </div>
@@ -716,11 +716,11 @@ export default function LicenseLedgerDetail() {
                 overflow: 'hidden'
             }}>
                 <div style={{
-                    backgroundColor: '#f8f9fa',
+                    backgroundColor: 'var(--bs-gray-50)',
                     padding: '15px 20px',
                     borderBottom: '2px solid #dee2e6'
                 }}>
-                    <h5 style={{ margin: '0', color: '#2c3e50', fontWeight: '600' }}>
+                    <h5 style={{ margin: '0', color: 'var(--text-dark)', fontWeight: '600' }}>
                         <i className="bi bi-journal-text me-2"></i>
                         Transaction Ledger
                     </h5>
@@ -733,7 +733,7 @@ export default function LicenseLedgerDetail() {
                     {/* Header */}
                     <thead>
                         <tr style={{
-                            backgroundColor: '#2c3e50',
+                            backgroundColor: 'var(--text-dark)',
                             color: 'white',
                             borderBottom: '2px solid #1a252f'
                         }}>
@@ -762,18 +762,18 @@ export default function LicenseLedgerDetail() {
 
                             return (
                                 <tr key={index} style={{
-                                    backgroundColor: index % 2 === 0 ? 'white' : '#f8f9fa',
+                                    backgroundColor: index % 2 === 0 ? 'white' : 'var(--bs-gray-50)',
                                     borderBottom: '1px solid #e9ecef',
                                     transition: 'background-color 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e3f2fd'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'white' : '#f8f9fa'}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--indigo-50)'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'white' : 'var(--bs-gray-50)'}
                                 >
                                     <td style={{
                                         padding: '12px 15px',
                                         borderRight: '1px solid #e9ecef',
                                         fontWeight: isOpening ? '600' : 'normal',
-                                        color: '#495057'
+                                        color: 'var(--bs-gray-600)'
                                     }}>
                                         {formatDate(txn.date)}
                                     </td>
@@ -783,13 +783,13 @@ export default function LicenseLedgerDetail() {
                                         fontWeight: isOpening ? '600' : 'normal'
                                     }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            {isOpening && <span style={{ color: '#17a2b8', fontSize: '0.9rem' }}>●</span>}
-                                            {isPurchase && <span style={{ color: '#ffc107', fontSize: '0.9rem' }}>●</span>}
-                                            {isSale && <span style={{ color: '#28a745', fontSize: '0.9rem' }}>●</span>}
+                                            {isOpening && <span style={{ color: 'var(--info-color)', fontSize: '0.9rem' }}>●</span>}
+                                            {isPurchase && <span style={{ color: 'var(--warning-color)', fontSize: '0.9rem' }}>●</span>}
+                                            {isSale && <span style={{ color: 'var(--success-color)', fontSize: '0.9rem' }}>●</span>}
                                             <div>
-                                                <div style={{ color: '#212529' }}>{txn.particular}</div>
+                                                <div style={{ color: 'var(--bs-gray-800)' }}>{txn.particular}</div>
                                                 {txn.invoice_number && (
-                                                    <div style={{ fontSize: '0.8rem', color: '#6c757d', marginTop: '3px' }}>
+                                                    <div style={{ fontSize: '0.8rem', color: 'var(--bs-gray-500)', marginTop: '3px' }}>
                                                         Invoice: {txn.invoice_number}
                                                     </div>
                                                 )}
@@ -801,7 +801,7 @@ export default function LicenseLedgerDetail() {
                                             padding: '12px 15px',
                                             borderRight: '1px solid #e9ecef',
                                             fontSize: '0.85rem',
-                                            color: '#495057'
+                                            color: 'var(--bs-gray-600)'
                                         }}>
                                             {txn.items || '-'}
                                         </td>
@@ -812,7 +812,7 @@ export default function LicenseLedgerDetail() {
                                                 padding: '12px 15px',
                                                 textAlign: 'right',
                                                 borderRight: '1px solid #e9ecef',
-                                                color: txn.debit_cif ? '#dc3545' : '#6c757d',
+                                                color: txn.debit_cif ? 'var(--danger-color)' : 'var(--bs-gray-500)',
                                                 fontWeight: txn.debit_cif ? '500' : 'normal'
                                             }}>
                                                 {txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '-'}
@@ -821,7 +821,7 @@ export default function LicenseLedgerDetail() {
                                                 padding: '12px 15px',
                                                 textAlign: 'right',
                                                 borderRight: '1px solid #e9ecef',
-                                                color: txn.credit_cif ? '#28a745' : '#6c757d',
+                                                color: txn.credit_cif ? 'var(--success-color)' : 'var(--bs-gray-500)',
                                                 fontWeight: txn.credit_cif ? '500' : 'normal'
                                             }}>
                                                 {txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : '-'}
@@ -834,7 +834,7 @@ export default function LicenseLedgerDetail() {
                                                 padding: '12px 15px',
                                                 textAlign: 'right',
                                                 borderRight: '1px solid #e9ecef',
-                                                color: txn.debit_license_value ? '#dc3545' : '#6c757d',
+                                                color: txn.debit_license_value ? 'var(--danger-color)' : 'var(--bs-gray-500)',
                                                 fontWeight: txn.debit_license_value ? '500' : 'normal'
                                             }}>
                                                 {txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '-'}
@@ -843,7 +843,7 @@ export default function LicenseLedgerDetail() {
                                                 padding: '12px 15px',
                                                 textAlign: 'right',
                                                 borderRight: '1px solid #e9ecef',
-                                                color: txn.credit_license_value ? '#28a745' : '#6c757d',
+                                                color: txn.credit_license_value ? 'var(--success-color)' : 'var(--bs-gray-500)',
                                                 fontWeight: txn.credit_license_value ? '500' : 'normal'
                                             }}>
                                                 {txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : '-'}
@@ -854,7 +854,7 @@ export default function LicenseLedgerDetail() {
                                         padding: '12px 15px',
                                         textAlign: 'right',
                                         borderRight: '1px solid #e9ecef',
-                                        color: '#495057'
+                                        color: 'var(--bs-gray-600)'
                                     }}>
                                         {txn.rate ? formatIndianNumber(txn.rate, 2) : '-'}
                                     </td>
@@ -862,7 +862,7 @@ export default function LicenseLedgerDetail() {
                                         padding: '12px 15px',
                                         textAlign: 'right',
                                         borderRight: '1px solid #e9ecef',
-                                        color: txn.debit_amount ? '#dc3545' : '#6c757d',
+                                        color: txn.debit_amount ? 'var(--danger-color)' : 'var(--bs-gray-500)',
                                         fontWeight: txn.debit_amount ? '600' : 'normal'
                                     }}>
                                         {txn.debit_amount ? formatIndianNumber(txn.debit_amount, 2) : '-'}
@@ -871,7 +871,7 @@ export default function LicenseLedgerDetail() {
                                         padding: '12px 15px',
                                         textAlign: 'right',
                                         borderRight: '1px solid #e9ecef',
-                                        color: txn.credit_amount ? '#28a745' : '#6c757d',
+                                        color: txn.credit_amount ? 'var(--success-color)' : 'var(--bs-gray-500)',
                                         fontWeight: txn.credit_amount ? '600' : 'normal'
                                     }}>
                                         {txn.credit_amount ? formatIndianNumber(txn.credit_amount, 2) : '-'}
@@ -880,8 +880,8 @@ export default function LicenseLedgerDetail() {
                                         padding: '12px 15px',
                                         textAlign: 'right',
                                         fontWeight: '700',
-                                        backgroundColor: '#f1f3f5',
-                                        color: '#212529',
+                                        backgroundColor: 'var(--bs-gray-50)',
+                                        color: 'var(--bs-gray-800)',
                                         borderRight: '1px solid #e9ecef'
                                     }}>
                                         {formatIndianNumber(txn.balance, 2)}
@@ -890,7 +890,7 @@ export default function LicenseLedgerDetail() {
                                         padding: '12px 15px',
                                         textAlign: 'right',
                                         fontWeight: '700',
-                                        color: isProfitable ? '#28a745' : isLoss ? '#dc3545' : '#6c757d'
+                                        color: isProfitable ? 'var(--success-color)' : isLoss ? 'var(--danger-color)' : 'var(--bs-gray-500)'
                                     }}>
                                         {txn.type === 'SALE' && profitLoss !== 0 ? (
                                             <>
@@ -905,7 +905,7 @@ export default function LicenseLedgerDetail() {
 
                         {/* Totals Row */}
                         <tr style={{
-                            backgroundColor: '#34495e',
+                            backgroundColor: 'var(--text-medium)',
                             color: 'white',
                             fontWeight: '700',
                             borderTop: '2px solid #2c3e50'
@@ -961,8 +961,8 @@ export default function LicenseLedgerDetail() {
                             </td>
                             <td style={{ padding: '15px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f' }}>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ color: '#adb5bd' }}>Closing:</span>
-                                    <span style={{ color: currentBalance >= 0 ? '#51cf66' : '#ff6b6b' }}>
+                                    <span style={{ color: 'var(--bs-gray-400)' }}>Closing:</span>
+                                    <span style={{ color: currentBalance >= 0 ? 'var(--success-color)' : 'var(--danger-color)' }}>
                                         {formatIndianNumber(currentBalance, 2)}
                                     </span>
                                 </div>
@@ -974,7 +974,7 @@ export default function LicenseLedgerDetail() {
                                         ? salesTransactions[salesTransactions.length - 1].profit_loss
                                         : 0;
                                     return (
-                                        <span style={{ color: totalPL >= 0 ? '#51cf66' : '#ff6b6b' }}>
+                                        <span style={{ color: totalPL >= 0 ? 'var(--success-color)' : 'var(--danger-color)' }}>
                                             {totalPL >= 0 ? '+ ' : '- '}
                                             {formatIndianNumber(Math.abs(totalPL), 2)}
                                         </span>
@@ -998,25 +998,25 @@ export default function LicenseLedgerDetail() {
             }}>
                 <div className="row text-center" style={{ fontFamily: 'monospace' }}>
                     <div className="col-3">
-                        <div style={{ color: '#6c757d', fontSize: '0.75rem', marginBottom: '5px' }}>TRANSACTIONS</div>
+                        <div style={{ color: 'var(--bs-gray-500)', fontSize: '0.75rem', marginBottom: '5px' }}>TRANSACTIONS</div>
                         <div style={{ fontSize: '1.1rem', fontWeight: '700' }}>
                             {ledger.transactions.length - 1}
                         </div>
                     </div>
                     <div className="col-3">
-                        <div style={{ color: '#6c757d', fontSize: '0.75rem', marginBottom: '5px' }}>PURCHASES</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#856404' }}>
+                        <div style={{ color: 'var(--bs-gray-500)', fontSize: '0.75rem', marginBottom: '5px' }}>PURCHASES</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--warning-text)' }}>
                             {ledger.transactions.filter(t => t.type === 'PURCHASE').length}
                         </div>
                     </div>
                     <div className="col-3">
-                        <div style={{ color: '#6c757d', fontSize: '0.75rem', marginBottom: '5px' }}>SALES</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#155724' }}>
+                        <div style={{ color: 'var(--bs-gray-500)', fontSize: '0.75rem', marginBottom: '5px' }}>SALES</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--success-text)' }}>
                             {ledger.transactions.filter(t => t.type === 'SALE').length}
                         </div>
                     </div>
                     <div className="col-3">
-                        <div style={{ color: '#6c757d', fontSize: '0.75rem', marginBottom: '5px' }}>NET PROFIT/LOSS</div>
+                        <div style={{ color: 'var(--bs-gray-500)', fontSize: '0.75rem', marginBottom: '5px' }}>NET PROFIT/LOSS</div>
                         <div style={{
                             fontSize: '1.1rem',
                             fontWeight: '700',
@@ -1025,7 +1025,7 @@ export default function LicenseLedgerDetail() {
                                 const lastProfit = salesTransactions.length > 0
                                     ? salesTransactions[salesTransactions.length - 1].profit_loss
                                     : 0;
-                                return lastProfit >= 0 ? '#28a745' : '#dc3545';
+                                return lastProfit >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
                             })()
                         }}>
                             {(() => {

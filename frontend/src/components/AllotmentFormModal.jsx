@@ -37,7 +37,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
     const fetchAllotmentData = async () => {
         setInitialLoad(true);
         try {
-            const { data } = await api.get(`/allotments/${allotmentId}/`);
+            const { data } = await api.get(`allotments/${allotmentId}/`);
 
             setFormData({
                 company: data.company ? { value: data.company, label: data.company_name } : null,
@@ -67,7 +67,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
         setInitialLoad(true);
         try {
             // Fetch the latest exchange rate
-            const { data } = await api.get('/masters/exchange-rates/', {
+            const { data } = await api.get('masters/exchange-rates/', {
                 params: { page_size: 1, ordering: '-date' }
             });
 
@@ -115,7 +115,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
     const loadCompanyOptions = async (inputValue) => {
         try {
-            const { data } = await api.get('/masters/companies/', {
+            const { data } = await api.get('masters/companies/', {
                 params: { search: inputValue, page_size: 50 }
             });
             return data.results.map(company => ({
@@ -130,7 +130,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
     const loadPortOptions = async (inputValue) => {
         try {
-            const { data } = await api.get('/masters/ports/', {
+            const { data } = await api.get('masters/ports/', {
                 params: { search: inputValue, page_size: 50 }
             });
             return data.results.map(port => ({
@@ -169,10 +169,10 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
             let savedId = allotmentId;
             if (mode === 'edit') {
-                await api.put(`/allotments/${allotmentId}/`, payload);
+                await api.put(`allotments/${allotmentId}/`, payload);
                 toast.success('Allotment updated successfully');
             } else {
-                const response = await api.post('/allotments/', payload);
+                const response = await api.post('allotments/', payload);
                 savedId = response.data.id;
                 toast.success('Allotment created successfully');
             }
@@ -278,7 +278,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                     border: 'none'
                 }}>
                     <div className="modal-header" style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                         color: 'white',
                         borderTopLeftRadius: '12px',
                         borderTopRightRadius: '12px',
@@ -303,7 +303,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                     </div>
 
                     <form onSubmit={handleSubmit}>
-                        <div className="modal-body" style={{ padding: '2rem', backgroundColor: '#f8f9fa' }}>
+                        <div className="modal-body" style={{ padding: '2rem', backgroundColor: 'var(--bs-gray-50)' }}>
                             {/* Non-Field Errors */}
                             {nonFieldErrors.length > 0 && (
                                 <div className="alert alert-danger mb-3" role="alert">
@@ -316,7 +316,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
                             {initialLoad ? (
                                 <div className="text-center py-5">
-                                    <div className="spinner-border" style={{ color: '#667eea' }}></div>
+                                    <div className="spinner-border" style={{ color: 'var(--primary-color)' }}></div>
                                     <p className="mt-2">Loading...</p>
                                 </div>
                             ) : (
@@ -531,7 +531,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                         </div>
 
                         <div className="modal-footer" style={{
-                            backgroundColor: '#f8f9fa',
+                            backgroundColor: 'var(--bs-gray-50)',
                             borderTop: '1px solid #dee2e6',
                             padding: '1rem 2rem'
                         }}>
@@ -548,7 +548,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                 className="btn"
                                 disabled={loading || initialLoad}
                                 style={{
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                     color: 'white',
                                     border: 'none'
                                 }}

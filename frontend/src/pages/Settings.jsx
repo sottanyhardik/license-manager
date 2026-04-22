@@ -110,10 +110,10 @@ export default function Settings() {
     }
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
             {/* Professional Header with Gradient */}
             <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                 padding: '32px',
                 borderRadius: '12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -141,42 +141,9 @@ export default function Settings() {
                 </div>
             </div>
 
-            {/* Ledger Upload Section */}
-            <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                <div className="card-body" style={{ padding: '24px' }}>
-                    <div className="d-flex align-items-start">
-                        <div style={{
-                            width: '56px',
-                            height: '56px',
-                            borderRadius: '12px',
-                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: '20px',
-                            boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)'
-                        }}>
-                            <i className="bi bi-file-earmark-spreadsheet text-white" style={{ fontSize: '1.5rem' }}></i>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <h5 style={{ fontWeight: '600', marginBottom: '8px', color: '#2c3e50' }}>Ledger Upload</h5>
-                            <p className="text-muted mb-3" style={{ fontSize: '0.9rem' }}>Upload license ledger files to update the system</p>
-                            <button
-                                className="btn btn-success"
-                                onClick={() => navigate('/ledger-upload')}
-                                style={{ padding: '10px 24px', fontWeight: '500' }}
-                            >
-                                <i className="bi bi-upload me-2"></i>
-                                Go to Ledger Upload
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {/* User Management Section */}
             <div className="d-flex justify-content-between align-items-center mb-3">
-                <h3 style={{ fontWeight: '600', color: '#2c3e50', marginBottom: '0' }}>
+                <h3 style={{ fontWeight: '600', color: 'var(--text-dark)', marginBottom: '0' }}>
                     <i className="bi bi-people me-2"></i>
                     User Management
                 </h3>
@@ -186,7 +153,7 @@ export default function Settings() {
                     style={{
                         padding: '10px 24px',
                         fontWeight: '500',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                         border: 'none'
                     }}
                 >

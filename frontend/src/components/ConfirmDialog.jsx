@@ -52,25 +52,25 @@ export const ConfirmDialog = ({
   const severityConfig = {
     danger: {
       icon: 'bi-exclamation-triangle-fill',
-      iconColor: '#dc3545',
+      iconColor: 'var(--danger-color)',
       confirmClass: 'btn-danger',
       headerClass: 'bg-danger-subtle'
     },
     warning: {
       icon: 'bi-exclamation-triangle',
-      iconColor: '#ffc107',
+      iconColor: 'var(--warning-color)',
       confirmClass: 'btn-warning',
       headerClass: 'bg-warning-subtle'
     },
     info: {
       icon: 'bi-info-circle',
-      iconColor: '#0dcaf0',
+      iconColor: 'var(--info-color)',
       confirmClass: 'btn-info',
       headerClass: 'bg-info-subtle'
     },
     success: {
       icon: 'bi-check-circle',
-      iconColor: '#198754',
+      iconColor: 'var(--success-color)',
       confirmClass: 'btn-success',
       headerClass: 'bg-success-subtle'
     }
@@ -210,7 +210,7 @@ export const ConfirmDialog = ({
 
           {/* Body */}
           <div className="modal-body" style={{ padding: '1.5rem' }}>
-            <p id="confirm-dialog-message" style={{ marginBottom: 0, fontSize: '0.95rem', color: '#495057' }}>
+            <p id="confirm-dialog-message" style={{ marginBottom: 0, fontSize: '0.95rem', color: 'var(--bs-gray-600)' }}>
               {message}
             </p>
           </div>

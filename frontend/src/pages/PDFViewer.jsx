@@ -157,7 +157,7 @@ export default function PDFViewer() {
                     bottom: '20px',
                     right: '20px',
                     zIndex: 1000,
-                    backgroundColor: '#0d6efd',
+                    backgroundColor: 'var(--primary-color)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '50%',

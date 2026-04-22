@@ -44,7 +44,7 @@ export const AuthProvider = ({children}) => {
     const logout = useCallback(async (reason) => {
         clearTimers();
         try {
-            await api.post("/auth/logout/", {
+            await api.post("auth/logout/", {
                 refresh: localStorage.getItem("refresh")
             });
         } catch {
@@ -131,7 +131,7 @@ export const AuthProvider = ({children}) => {
         }
 
         try {
-            const {data} = await api.get("/auth/me/");
+            const {data} = await api.get("auth/me/");
             setUser(data);
             localStorage.setItem("user", JSON.stringify(data));
         } catch {

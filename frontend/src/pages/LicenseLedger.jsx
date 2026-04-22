@@ -121,7 +121,7 @@ export default function LicenseLedger() {
         setLoading(true);
         try {
             const params = buildFilterParams();
-            const response = await api.get(`/license-ledger/?${params.toString()}`);
+            const response = await api.get(`license-ledger/?${params.toString()}`);
 
             // Handle multiple response formats
             const data = response.data;
@@ -154,7 +154,7 @@ export default function LicenseLedger() {
 
         try {
             const params = buildFilterParams();
-            const response = await api.get(`/license-ledger/summary/?${params.toString()}`);
+            const response = await api.get(`license-ledger/summary/?${params.toString()}`);
             setSummary(response.data);
         } catch (error) {
             toast.error('Failed to load summary data.');
@@ -592,12 +592,12 @@ export default function LicenseLedger() {
     };
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
             {/* Professional Header */}
             <div className="row mb-4">
                 <div className="col-12">
                     <div style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                         padding: '32px',
                         borderRadius: '12px',
                         boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -651,7 +651,7 @@ export default function LicenseLedger() {
                                         width: '48px',
                                         height: '48px',
                                         borderRadius: '12px',
-                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -660,7 +660,7 @@ export default function LicenseLedger() {
                                         <i className="bi bi-globe text-white" style={{ fontSize: '24px' }}></i>
                                     </div>
                                     <div>
-                                        <h5 className="mb-0" style={{ fontSize: '1.25rem', fontWeight: '700', color: '#2c3e50' }}>
+                                        <h5 className="mb-0" style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-dark)' }}>
                                             DFIA Licenses
                                         </h5>
                                         <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
@@ -671,39 +671,39 @@ export default function LicenseLedger() {
 
                                 <div className="row g-3 mb-3">
                                     <div className="col-6">
-                                        <div style={{ padding: '16px', background: '#f8f9fa', borderRadius: '8px' }}>
+                                        <div style={{ padding: '16px', background: 'var(--bs-gray-50)', borderRadius: '8px' }}>
                                             <p className="text-muted mb-1" style={{ fontSize: '0.85rem', fontWeight: '500' }}>
                                                 Total Value
                                             </p>
-                                            <h4 className="mb-0" style={{ fontSize: '1.5rem', fontWeight: '700', color: '#4285f4' }}>
+                                            <h4 className="mb-0" style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary-color)' }}>
                                                 $ {formatIndianNumber(summary.dfia.total_value_usd, 2)}
                                             </h4>
                                         </div>
                                     </div>
                                     <div className="col-6">
-                                        <div style={{ padding: '16px', background: '#e8f5e9', borderRadius: '8px' }}>
+                                        <div style={{ padding: '16px', background: 'var(--success-bg)', borderRadius: '8px' }}>
                                             <p className="text-muted mb-1" style={{ fontSize: '0.85rem', fontWeight: '500' }}>
                                                 Available Balance
                                             </p>
-                                            <h4 className="mb-0" style={{ fontSize: '1.5rem', fontWeight: '700', color: '#2e7d32' }}>
+                                            <h4 className="mb-0" style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--success-text)' }}>
                                                 $ {formatIndianNumber(summary.dfia.balance_value_usd, 2)}
                                             </h4>
                                         </div>
                                     </div>
                                 </div>
 
-                                <hr style={{ margin: '20px 0', borderColor: '#dee2e6' }} />
+                                <hr style={{ margin: '20px 0', borderColor: 'var(--bs-gray-200)' }} />
 
                                 <div className="row g-3">
                                     <div className="col-4">
                                         <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Purchase (₹)</p>
-                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#f57c00' }}>
+                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: 'var(--warning-color)' }}>
                                             ₹ {formatIndianNumber(summary.dfia.purchase_amount_inr, 0)}
                                         </p>
                                     </div>
                                     <div className="col-4">
                                         <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Sold (₹)</p>
-                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#1976d2' }}>
+                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: 'var(--primary-dark)' }}>
                                             ₹ {formatIndianNumber(summary.dfia.sale_amount_inr, 0)}
                                         </p>
                                     </div>
@@ -712,7 +712,7 @@ export default function LicenseLedger() {
                                         <p className="mb-0" style={{
                                             fontSize: '1.1rem',
                                             fontWeight: '700',
-                                            color: summary.dfia.profit_loss_inr >= 0 ? '#2e7d32' : '#d32f2f'
+                                            color: summary.dfia.profit_loss_inr >= 0 ? 'var(--success-text)' : 'var(--danger-color)'
                                         }}>
                                             {summary.dfia.profit_loss_inr >= 0 ? '+' : ''}₹ {formatIndianNumber(Math.abs(summary.dfia.profit_loss_inr), 2)}
                                         </p>
@@ -739,7 +739,7 @@ export default function LicenseLedger() {
                                         <i className="bi bi-trophy text-white" style={{ fontSize: '24px' }}></i>
                                     </div>
                                     <div>
-                                        <h5 className="mb-0" style={{ fontSize: '1.25rem', fontWeight: '700', color: '#2c3e50' }}>
+                                        <h5 className="mb-0" style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-dark)' }}>
                                             Incentive Licenses
                                         </h5>
                                         <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
@@ -750,39 +750,39 @@ export default function LicenseLedger() {
 
                                 <div className="row g-3 mb-3">
                                     <div className="col-6">
-                                        <div style={{ padding: '16px', background: '#f8f9fa', borderRadius: '8px' }}>
+                                        <div style={{ padding: '16px', background: 'var(--bs-gray-50)', borderRadius: '8px' }}>
                                             <p className="text-muted mb-1" style={{ fontSize: '0.85rem', fontWeight: '500' }}>
                                                 Total Value
                                             </p>
-                                            <h4 className="mb-0" style={{ fontSize: '1.5rem', fontWeight: '700', color: '#00acc1' }}>
+                                            <h4 className="mb-0" style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--info-color)' }}>
                                                 ₹ {formatIndianNumber(summary.incentive.total_value_inr, 2)}
                                             </h4>
                                         </div>
                                     </div>
                                     <div className="col-6">
-                                        <div style={{ padding: '16px', background: '#e8f5e9', borderRadius: '8px' }}>
+                                        <div style={{ padding: '16px', background: 'var(--success-bg)', borderRadius: '8px' }}>
                                             <p className="text-muted mb-1" style={{ fontSize: '0.85rem', fontWeight: '500' }}>
                                                 Available Balance
                                             </p>
-                                            <h4 className="mb-0" style={{ fontSize: '1.5rem', fontWeight: '700', color: '#2e7d32' }}>
+                                            <h4 className="mb-0" style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--success-text)' }}>
                                                 ₹ {formatIndianNumber(summary.incentive.balance_value_inr, 2)}
                                             </h4>
                                         </div>
                                     </div>
                                 </div>
 
-                                <hr style={{ margin: '20px 0', borderColor: '#dee2e6' }} />
+                                <hr style={{ margin: '20px 0', borderColor: 'var(--bs-gray-200)' }} />
 
                                 <div className="row g-3">
                                     <div className="col-4">
                                         <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Purchase (₹)</p>
-                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#f57c00' }}>
+                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: 'var(--warning-color)' }}>
                                             ₹ {formatIndianNumber(summary.incentive.purchase_amount_inr, 0)}
                                         </p>
                                     </div>
                                     <div className="col-4">
                                         <p className="text-muted mb-1" style={{ fontSize: '0.8rem' }}>Sold (₹)</p>
-                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#1976d2' }}>
+                                        <p className="mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: 'var(--primary-dark)' }}>
                                             ₹ {formatIndianNumber(summary.incentive.sale_amount_inr, 0)}
                                         </p>
                                     </div>
@@ -791,7 +791,7 @@ export default function LicenseLedger() {
                                         <p className="mb-0" style={{
                                             fontSize: '1.1rem',
                                             fontWeight: '700',
-                                            color: summary.incentive.profit_loss_inr >= 0 ? '#2e7d32' : '#d32f2f'
+                                            color: summary.incentive.profit_loss_inr >= 0 ? 'var(--success-text)' : 'var(--danger-color)'
                                         }}>
                                             {summary.incentive.profit_loss_inr >= 0 ? '+' : ''}₹ {formatIndianNumber(Math.abs(summary.incentive.profit_loss_inr), 2)}
                                         </p>
@@ -809,7 +809,7 @@ export default function LicenseLedger() {
                     <div className="d-flex align-items-center justify-content-between mb-3">
                         <div className="d-flex align-items-center">
                             <i className="bi bi-funnel text-primary me-2" style={{ fontSize: '1.25rem' }}></i>
-                            <h5 className="mb-0" style={{ fontWeight: '600', color: '#2c3e50' }}>Filters & Search</h5>
+                            <h5 className="mb-0" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>Filters & Search</h5>
                             {filters.company && (
                                 <span className="badge bg-info ms-3" style={{ fontSize: '0.85rem' }}>
                                     <i className="bi bi-building me-1"></i>
@@ -830,7 +830,7 @@ export default function LicenseLedger() {
                     </div>
                     <div className="row g-3">
                         <div className="col-lg-3 col-md-5">
-                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#5a6c7d' }}>
+                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 <i className="bi bi-building me-1"></i>
                                 Company Filter
                             </label>
@@ -847,14 +847,14 @@ export default function LicenseLedger() {
                             <small className="text-muted">Filter by trades with specific company</small>
                         </div>
                         <div className="col-lg-2 col-md-4">
-                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#5a6c7d' }}>
+                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 License Type
                             </label>
                             <select
                                 className="form-select"
                                 value={filters.license_type}
                                 onChange={(e) => handleFilterChange('license_type', e.target.value)}
-                                style={{ borderColor: '#ced4da', fontSize: '0.95rem' }}
+                                style={{ borderColor: 'var(--bs-gray-300)', fontSize: '0.95rem' }}
                             >
                                 {licenseTypeOptions.map(opt => (
                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -862,7 +862,7 @@ export default function LicenseLedger() {
                             </select>
                         </div>
                         <div className="col-lg-2 col-md-3">
-                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#5a6c7d' }}>
+                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 Min Balance
                             </label>
                             <input
@@ -872,11 +872,11 @@ export default function LicenseLedger() {
                                 onChange={(e) => handleFilterChange('min_balance', e.target.value)}
                                 placeholder="0"
                                 step="100"
-                                style={{ borderColor: '#ced4da', fontSize: '0.95rem' }}
+                                style={{ borderColor: 'var(--bs-gray-300)', fontSize: '0.95rem' }}
                             />
                         </div>
                         <div className="col-lg-3 col-md-5">
-                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#5a6c7d' }}>
+                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 Search
                             </label>
                             <div className="input-group">
@@ -894,14 +894,14 @@ export default function LicenseLedger() {
                             </div>
                         </div>
                         <div className="col-lg-2 col-md-4">
-                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#5a6c7d' }}>
+                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 Sort By
                             </label>
                             <select
                                 className="form-select"
                                 value={filters.ordering}
                                 onChange={(e) => handleFilterChange('ordering', e.target.value)}
-                                style={{ borderColor: '#ced4da', fontSize: '0.95rem' }}
+                                style={{ borderColor: 'var(--bs-gray-300)', fontSize: '0.95rem' }}
                             >
                                 <option value="-license_date">Latest First</option>
                                 <option value="license_date">Oldest First</option>
@@ -932,7 +932,7 @@ export default function LicenseLedger() {
                             <div className="d-flex align-items-center justify-content-between mb-2">
                                 <div className="d-flex align-items-center">
                                     <i className="bi bi-calendar-range text-primary me-2"></i>
-                                    <strong style={{ fontSize: '0.9rem', color: '#5a6c7d' }}>Purchase Date Range</strong>
+                                    <strong style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Purchase Date Range</strong>
                                     <small className="text-muted ms-2" style={{ fontSize: '0.8rem' }}>(Defaults to current FY: Apr-Mar)</small>
                                 </div>
                                 <div className="btn-group" role="group">
@@ -965,7 +965,7 @@ export default function LicenseLedger() {
                             </div>
                         </div>
                         <div className="col-lg-3 col-md-4">
-                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#5a6c7d' }}>
+                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 <i className="bi bi-calendar-check me-1"></i>From Date
                             </label>
                             <input
@@ -973,11 +973,11 @@ export default function LicenseLedger() {
                                 className="form-control"
                                 value={filters.purchase_date_from}
                                 onChange={(e) => handleFilterChange('purchase_date_from', e.target.value)}
-                                style={{ borderColor: '#ced4da', fontSize: '0.95rem' }}
+                                style={{ borderColor: 'var(--bs-gray-300)', fontSize: '0.95rem' }}
                             />
                         </div>
                         <div className="col-lg-3 col-md-4">
-                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#5a6c7d' }}>
+                            <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
                                 <i className="bi bi-calendar-x me-1"></i>To Date
                             </label>
                             <input
@@ -985,7 +985,7 @@ export default function LicenseLedger() {
                                 className="form-control"
                                 value={filters.purchase_date_to}
                                 onChange={(e) => handleFilterChange('purchase_date_to', e.target.value)}
-                                style={{ borderColor: '#ced4da', fontSize: '0.95rem' }}
+                                style={{ borderColor: 'var(--bs-gray-300)', fontSize: '0.95rem' }}
                             />
                         </div>
                     </div>
@@ -996,7 +996,7 @@ export default function LicenseLedger() {
             <div className="card border-0 shadow-sm">
                 <div className="card-header bg-white border-0 pt-4 px-4 pb-0">
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h5 className="mb-0" style={{ fontWeight: '600', color: '#2c3e50' }}>
+                        <h5 className="mb-0" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
                             <i className="bi bi-table text-primary me-2"></i>
                             License Listings
                         </h5>
@@ -1008,39 +1008,39 @@ export default function LicenseLedger() {
                 <div className="card-body p-0">
                     <div style={{ overflowX: 'auto' }}>
                         <table className="table table-hover mb-0" style={{ minWidth: '1200px' }}>
-                            <thead style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                            <thead style={{ backgroundColor: 'var(--bs-gray-50)', borderBottom: '2px solid #dee2e6' }}>
                                 <tr>
-                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         Type
                                     </th>
-                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         License #
                                     </th>
-                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         Issue Date
                                     </th>
-                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         Expiry
                                     </th>
-                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         Exporter
                                     </th>
-                                    <th className="text-end" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th className="text-end" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         Total Value
                                     </th>
-                                    <th className="text-end" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th className="text-end" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         Balance
                                     </th>
-                                    <th className="text-end" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th className="text-end" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         Purchase (₹)
                                     </th>
-                                    <th className="text-end" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th className="text-end" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         P/L (₹)
                                     </th>
-                                    <th className="text-center" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th className="text-center" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         Status
                                     </th>
-                                    <th className="text-center" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: '#495057', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    <th className="text-center" style={{ padding: '16px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--bs-gray-600)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         Actions
                                     </th>
                                 </tr>
@@ -1049,8 +1049,8 @@ export default function LicenseLedger() {
                                 {!filters.company ? (
                                     <tr>
                                         <td colSpan="11" className="text-center py-5">
-                                            <i className="bi bi-building" style={{ fontSize: '4rem', color: '#cbd5e0' }}></i>
-                                            <h4 className="mt-4 mb-2" style={{ color: '#2d3748', fontWeight: '600' }}>Select a Company</h4>
+                                            <i className="bi bi-building" style={{ fontSize: '4rem', color: 'var(--bs-gray-300)' }}></i>
+                                            <h4 className="mt-4 mb-2" style={{ color: 'var(--text-dark)', fontWeight: '600' }}>Select a Company</h4>
                                             <p className="text-muted mb-0" style={{ fontSize: '1rem' }}>
                                                 Choose a company from the filter above to view their license ledger
                                             </p>
@@ -1081,7 +1081,7 @@ export default function LicenseLedger() {
                                                 borderBottom: '1px solid #f0f0f0',
                                                 transition: 'all 0.2s ease'
                                             }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bs-gray-50)'}
                                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                         >
                                             <td style={{ padding: '16px', verticalAlign: 'middle' }}>
@@ -1091,15 +1091,15 @@ export default function LicenseLedger() {
                                                 </span>
                                             </td>
                                             <td style={{ padding: '16px', verticalAlign: 'middle' }}>
-                                                <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#2c3e50' }}>
+                                                <span style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-dark)' }}>
                                                     {license.license_number}
                                                 </span>
                                             </td>
-                                            <td style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.9rem', color: '#5a6c7d' }}>
+                                            <td style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                                                 {formatDate(license.license_date)}
                                             </td>
                                             <td style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.9rem' }}>
-                                                <span style={{ color: license.is_expired ? '#d32f2f' : '#5a6c7d' }}>
+                                                <span style={{ color: license.is_expired ? 'var(--danger-color)' : 'var(--text-secondary)' }}>
                                                     {formatDate(license.license_expiry_date)}
                                                 </span>
                                                 {license.is_expired && (
@@ -1108,32 +1108,32 @@ export default function LicenseLedger() {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.9rem', color: '#5a6c7d', maxWidth: '200px' }}>
+                                            <td style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '200px' }}>
                                                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                                     title={license.exporter_name}>
                                                     {license.exporter_name}
                                                 </div>
                                             </td>
-                                            <td className="text-end" style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.95rem', fontWeight: '600', color: '#2c3e50' }}>
+                                            <td className="text-end" style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-dark)' }}>
                                                 {formatCurrency(license.total_value, license.currency)}
                                             </td>
                                             <td className="text-end" style={{ padding: '16px', verticalAlign: 'middle' }}>
                                                 <span style={{
                                                     fontSize: '1rem',
                                                     fontWeight: '700',
-                                                    color: license.balance_value > 0 ? '#2e7d32' : '#9e9e9e'
+                                                    color: license.balance_value > 0 ? 'var(--success-text)' : 'var(--bs-gray-400)'
                                                 }}>
                                                     {formatCurrency(license.balance_value, license.currency)}
                                                 </span>
                                             </td>
-                                            <td className="text-end" style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.9rem', color: '#f57c00', fontWeight: '600' }}>
+                                            <td className="text-end" style={{ padding: '16px', verticalAlign: 'middle', fontSize: '0.9rem', color: 'var(--warning-color)', fontWeight: '600' }}>
                                                 ₹ {formatIndianNumber(license.purchase_amount || 0, 0)}
                                             </td>
                                             <td className="text-end" style={{ padding: '16px', verticalAlign: 'middle' }}>
                                                 <span style={{
                                                     fontSize: '0.95rem',
                                                     fontWeight: '700',
-                                                    color: (license.profit_loss || 0) >= 0 ? '#2e7d32' : '#d32f2f'
+                                                    color: (license.profit_loss || 0) >= 0 ? 'var(--success-text)' : 'var(--danger-color)'
                                                 }}>
                                                     {(license.profit_loss || 0) >= 0 ? '+' : ''}₹ {formatIndianNumber(Math.abs(license.profit_loss || 0), 0)}
                                                 </span>
@@ -1149,7 +1149,7 @@ export default function LicenseLedger() {
                                                     style={{
                                                         backgroundColor: 'rgba(102, 126, 234, 0.1)',
                                                         border: '1px solid rgba(102, 126, 234, 0.3)',
-                                                        color: '#667eea',
+                                                        color: 'var(--primary-color)',
                                                         padding: '6px 12px',
                                                         borderRadius: '6px',
                                                         fontSize: '0.85rem',

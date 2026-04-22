@@ -19,7 +19,7 @@ export default function Sidebar() {
             boxShadow: '2px 0 8px rgba(0, 0, 0, 0.1)'
         }}>
             <div className="d-flex align-items-center justify-content-center mb-4 mt-2">
-                <i className="bi bi-grid-3x3-gap-fill me-2" style={{color: '#3b82f6', fontSize: '1.5rem'}}></i>
+                <i className="bi bi-grid-3x3-gap-fill me-2" style={{color: 'var(--primary-light)', fontSize: '1.5rem'}}></i>
                 <h5 className="mb-0 fw-bold">Dashboard</h5>
             </div>
 
@@ -35,11 +35,11 @@ export default function Sidebar() {
                                     borderRadius: '8px',
                                     padding: '0.65rem 1rem',
                                     transition: 'all 0.2s ease',
-                                    backgroundColor: isActive(r.path) ? '#2563eb' : 'transparent',
+                                    backgroundColor: isActive(r.path) ? 'var(--primary-color)' : 'transparent',
                                 }}
                                 onMouseEnter={(e) => {
                                     if (!isActive(r.path)) {
-                                        e.target.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
+                                        e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.12)';
                                     }
                                 }}
                                 onMouseLeave={(e) => {
@@ -63,12 +63,12 @@ export default function Sidebar() {
                                 borderRadius: '8px',
                                 padding: '0.65rem 1rem',
                                 transition: 'all 0.2s ease',
-                                backgroundColor: isActive("/reports") ? '#2563eb' : 'transparent',
+                                backgroundColor: isActive("/reports") ? 'var(--primary-color)' : 'transparent',
                                 border: 'none'
                             }}
                             onMouseEnter={(e) => {
                                 if (!isActive("/reports")) {
-                                    e.target.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
+                                    e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.12)';
                                 }
                             }}
                             onMouseLeave={(e) => {
@@ -96,11 +96,11 @@ export default function Sidebar() {
                                                 padding: '0.5rem 1rem',
                                                 fontSize: '0.85rem',
                                                 transition: 'all 0.2s ease',
-                                                backgroundColor: isActive(report.path) ? '#2563eb' : 'transparent',
+                                                backgroundColor: isActive(report.path) ? 'var(--primary-color)' : 'transparent',
                                             }}
                                             onMouseEnter={(e) => {
                                                 if (!isActive(report.path)) {
-                                                    e.target.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                                                    e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.10)';
                                                 }
                                             }}
                                             onMouseLeave={(e) => {
@@ -127,12 +127,12 @@ export default function Sidebar() {
                                 borderRadius: '8px',
                                 padding: '0.65rem 1rem',
                                 transition: 'all 0.2s ease',
-                                backgroundColor: isActive("/masters") ? '#2563eb' : 'transparent',
+                                backgroundColor: isActive("/masters") ? 'var(--primary-color)' : 'transparent',
                                 border: 'none'
                             }}
                             onMouseEnter={(e) => {
                                 if (!isActive("/masters")) {
-                                    e.target.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
+                                    e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.12)';
                                 }
                             }}
                             onMouseLeave={(e) => {
@@ -160,11 +160,11 @@ export default function Sidebar() {
                                                 padding: '0.5rem 1rem',
                                                 fontSize: '0.85rem',
                                                 transition: 'all 0.2s ease',
-                                                backgroundColor: isActive(master.path) ? '#2563eb' : 'transparent',
+                                                backgroundColor: isActive(master.path) ? 'var(--primary-color)' : 'transparent',
                                             }}
                                             onMouseEnter={(e) => {
                                                 if (!isActive(master.path)) {
-                                                    e.target.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                                                    e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.10)';
                                                 }
                                             }}
                                             onMouseLeave={(e) => {

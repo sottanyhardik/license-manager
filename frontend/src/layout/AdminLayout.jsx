@@ -1,11 +1,13 @@
 import TopNav from "../components/TopNav";
 import {useLocation, useNavigate} from "react-router-dom";
 import {useEffect, useState} from "react";
+import {usePageTitle} from "../hooks/usePageTitle";
 
 export default function AdminLayout({children}) {
     const location = useLocation();
     const navigate = useNavigate();
     const [isInIframe, setIsInIframe] = useState(false);
+    usePageTitle();
 
     useEffect(() => {
         // Check if the page is loaded in an iframe
@@ -14,10 +16,6 @@ export default function AdminLayout({children}) {
 
     return (
         <div className="d-flex flex-column" style={{minHeight: "100vh"}}>
-            {/* Skip navigation link for keyboard accessibility */}
-            <a href="#main-content" className="skip-link">
-                Skip to main content
-            </a>
             {!isInIframe && <TopNav/>}
             <main id="main-content" className="flex-grow-1" style={{
                 backgroundColor: 'var(--background-color)',
@@ -55,7 +53,7 @@ export default function AdminLayout({children}) {
                                     className="btn btn-sm"
                                     onClick={() => navigate('/licenses/create')}
                                     style={{
-                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                         color: 'white',
                                         border: 'none',
                                         fontWeight: '500',
@@ -88,8 +86,8 @@ export default function AdminLayout({children}) {
                             </div>
                         </div>
                         <div className="col-md-4 text-end">
-                            <small style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                                Made with <span style={{color: '#dc3545'}}>❤️</span> by Hardik Sottany
+                            <small style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                                Made with <span style={{color: 'var(--danger-color)'}}>❤️</span> by Hardik Sottany
                             </small>
                         </div>
                     </div>

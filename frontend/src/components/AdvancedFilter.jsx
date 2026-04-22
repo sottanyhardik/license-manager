@@ -32,6 +32,7 @@ export default function AdvancedFilter({
     const {search: _search, ...initialFiltersWithoutSearch} = initialFilters;
     const [filterValues, setFilterValues] = useState({...defaultFilters, ...initialFiltersWithoutSearch});
     const isInitialMount = useRef(true);
+    const isAutoApplyInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
     const skipNextAutoApply = useRef(false);
 
@@ -66,6 +67,12 @@ export default function AdvancedFilter({
 
     // Auto-apply filters with debounce
     useEffect(() => {
+        // Skip on initial mount — the parent already fires fetchData with the correct filters
+        if (isAutoApplyInitialMount.current) {
+            isAutoApplyInitialMount.current = false;
+            return;
+        }
+
         // Skip auto-apply if the change came from parent (initialFilters update)
         if (skipNextAutoApply.current) {
             skipNextAutoApply.current = false;

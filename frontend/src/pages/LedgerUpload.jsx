@@ -151,7 +151,7 @@ const LedgerUpload = () => {
     removeFile,
     clearFiles,
   } = useFileUpload({
-    endpoint: '/upload-ledger/',
+    endpoint: 'upload-ledger/',
     fileFieldName: 'ledger',
     uploadMode: 'sequential',
     multiple: true,
@@ -200,10 +200,10 @@ const LedgerUpload = () => {
   };
 
   return (
-    <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+    <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
       {/* Header */}
       <div style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
         padding: '32px',
         borderRadius: '12px',
         boxShadow: '0 4px 20px rgba(0,0,0,0.12)',

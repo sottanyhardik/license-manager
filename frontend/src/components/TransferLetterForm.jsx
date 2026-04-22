@@ -37,7 +37,7 @@ export default function TransferLetterForm({
 
     const loadCompanyOptions = async (inputValue) => {
         try {
-            const {data} = await api.get(`/masters/companies/?search=${inputValue}`);
+            const {data} = await api.get(`masters/companies/?search=${inputValue}`);
             const results = data.results || data || [];
             return results.map(company => ({
                 value: company.id,
@@ -51,7 +51,7 @@ export default function TransferLetterForm({
 
     const loadTransferLetterOptions = async (inputValue) => {
         try {
-            const {data} = await api.get(`/masters/transfer-letters/?search=${inputValue || ''}`);
+            const {data} = await api.get(`masters/transfer-letters/?search=${inputValue || ''}`);
             const results = data.results || data || [];
             return results.map(tl => ({
                 value: tl.id,
@@ -71,7 +71,7 @@ export default function TransferLetterForm({
         // Fetch and populate address if company is selected from existing options (not created)
         if (selectedCompany && selectedCompany.value && actionMeta.action !== 'create-option') {
             try {
-                const {data} = await api.get(`/masters/companies/${selectedCompany.value}/`);
+                const {data} = await api.get(`masters/companies/${selectedCompany.value}/`);
 
                 setTransferLetterData(prev => ({
                     ...prev,

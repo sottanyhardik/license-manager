@@ -27,7 +27,7 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
-            const response = await api.get("/dashboard/");
+            const response = await api.get("dashboard/");
             const data = response.data;
 
             // Set license stats with safe defaults
@@ -95,10 +95,10 @@ export default function Dashboard() {
     }
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
             {/* Professional Header with Gradient */}
             <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                 padding: '32px',
                 borderRadius: '12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -150,7 +150,7 @@ export default function Dashboard() {
                             <div className="d-flex justify-content-between align-items-start">
                                 <div style={{ flex: 1 }}>
                                     <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Total Licenses</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#2c3e50' }}>{stats.licenses.total}</h3>
+                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: 'var(--text-dark)' }}>{stats.licenses.total}</h3>
                                     <small className="text-success d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
                                         <i className="bi bi-check-circle me-1"></i>
                                         All licenses
@@ -160,7 +160,7 @@ export default function Dashboard() {
                                     width: '56px',
                                     height: '56px',
                                     borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -189,7 +189,7 @@ export default function Dashboard() {
                             <div className="d-flex justify-content-between align-items-start">
                                 <div style={{ flex: 1 }}>
                                     <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Active Licenses</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#10b981' }}>{stats.licenses.active}</h3>
+                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: 'var(--success-color)' }}>{stats.licenses.active}</h3>
                                     <small className="text-success d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
                                         <i className="bi bi-activity me-1"></i>
                                         Currently valid
@@ -199,7 +199,7 @@ export default function Dashboard() {
                                     width: '56px',
                                     height: '56px',
                                     borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                    background: 'linear-gradient(135deg, var(--success-color) 0%, var(--success-color) 100%)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -228,7 +228,7 @@ export default function Dashboard() {
                             <div className="d-flex justify-content-between align-items-start">
                                 <div style={{ flex: 1 }}>
                                     <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Expired Licenses</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#ef4444' }}>{stats.licenses.expired}</h3>
+                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: 'var(--danger-color)' }}>{stats.licenses.expired}</h3>
                                     <small className="text-danger d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
                                         <i className="bi bi-x-circle me-1"></i>
                                         Need renewal
@@ -267,7 +267,7 @@ export default function Dashboard() {
                             <div className="d-flex justify-content-between align-items-start">
                                 <div style={{ flex: 1 }}>
                                     <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Null DFIA</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#6b7280' }}>{stats.licenses.null_dfia}</h3>
+                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: 'var(--text-secondary)' }}>{stats.licenses.null_dfia}</h3>
                                     <small className="text-muted d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
                                         <i className="bi bi-dash-circle me-1"></i>
                                         Balance &lt; $500
@@ -310,7 +310,7 @@ export default function Dashboard() {
                             <div className="d-flex justify-content-between align-items-start">
                                 <div style={{ flex: 1 }}>
                                     <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Expiring Soon</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#f59e0b' }}>{stats.licenses.expiring_soon}</h3>
+                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: 'var(--warning-color)' }}>{stats.licenses.expiring_soon}</h3>
                                     <small className="text-warning d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
                                         <i className="bi bi-clock-history me-1"></i>
                                         Within 30 days
@@ -352,7 +352,7 @@ export default function Dashboard() {
                             <div className="d-flex justify-content-between align-items-start">
                                 <div style={{ flex: 1 }}>
                                     <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Pending Bills of Entry</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#2c3e50' }}>{stats.allotments.total}</h3>
+                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: 'var(--text-dark)' }}>{stats.allotments.total}</h3>
                                     <small className="text-info d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
                                         <i className="bi bi-box-seam me-1"></i>
                                         License allocations
@@ -391,7 +391,7 @@ export default function Dashboard() {
                             <div className="d-flex justify-content-between align-items-start">
                                 <div style={{ flex: 1 }}>
                                     <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Bills of Entry</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#2c3e50' }}>{stats.boe.total}</h3>
+                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: 'var(--text-dark)' }}>{stats.boe.total}</h3>
                                     <small className="text-primary d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
                                         <i className="bi bi-receipt me-1"></i>
                                         All till date
@@ -401,7 +401,7 @@ export default function Dashboard() {
                                     width: '56px',
                                     height: '56px',
                                     borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                    background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -430,7 +430,7 @@ export default function Dashboard() {
                             <div className="d-flex justify-content-between align-items-start">
                                 <div style={{ flex: 1 }}>
                                     <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Pending Invoices</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#f59e0b' }}>{stats.boe.pending_invoices}</h3>
+                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: 'var(--warning-color)' }}>{stats.boe.pending_invoices}</h3>
                                     <small className="text-warning d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
                                         <i className="bi bi-hourglass-split me-1"></i>
                                         No invoice number

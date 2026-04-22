@@ -78,10 +78,10 @@ export default function Profile() {
     }
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
             {/* Professional Header with Gradient */}
             <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                 padding: '32px',
                 borderRadius: '12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -113,7 +113,7 @@ export default function Profile() {
                             style={{
                                 backgroundColor: 'white',
                                 border: '2px solid white',
-                                color: '#667eea',
+                                color: 'var(--primary-color)',
                                 fontWeight: '600',
                                 padding: '10px 24px',
                                 boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
@@ -154,11 +154,11 @@ export default function Profile() {
                             )}
 
                             <div className="mb-4">
-                                <label className="form-label" style={{ fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                                <label className="form-label" style={{ fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                                     <i className="bi bi-person-badge me-2"></i>
                                     Username
                                 </label>
-                                <div className="form-control" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
+                                <div className="form-control" style={{ backgroundColor: 'var(--bs-gray-50)', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
                                     {user.username}
                                 </div>
                                 <small className="text-muted" style={{ fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
@@ -168,7 +168,7 @@ export default function Profile() {
                             </div>
 
                             <div className="mb-4">
-                                <label className="form-label" style={{ fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                                <label className="form-label" style={{ fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                                     <i className="bi bi-person me-2"></i>
                                     First Name
                                 </label>
@@ -183,14 +183,14 @@ export default function Profile() {
                                         style={{ borderRadius: '8px', padding: '12px', border: '1px solid #d1d5db' }}
                                     />
                                 ) : (
-                                    <div className="form-control" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
+                                    <div className="form-control" style={{ backgroundColor: 'var(--bs-gray-50)', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
                                         {user.first_name || <em className="text-muted">Not set</em>}
                                     </div>
                                 )}
                             </div>
 
                             <div className="mb-4">
-                                <label className="form-label" style={{ fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                                <label className="form-label" style={{ fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                                     <i className="bi bi-person me-2"></i>
                                     Last Name
                                 </label>
@@ -205,14 +205,14 @@ export default function Profile() {
                                         style={{ borderRadius: '8px', padding: '12px', border: '1px solid #d1d5db' }}
                                     />
                                 ) : (
-                                    <div className="form-control" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
+                                    <div className="form-control" style={{ backgroundColor: 'var(--bs-gray-50)', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
                                         {user.last_name || <em className="text-muted">Not set</em>}
                                     </div>
                                 )}
                             </div>
 
                             <div className="mb-4">
-                                <label className="form-label" style={{ fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                                <label className="form-label" style={{ fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                                     <i className="bi bi-envelope me-2"></i>
                                     Email
                                 </label>
@@ -227,7 +227,7 @@ export default function Profile() {
                                         style={{ borderRadius: '8px', padding: '12px', border: '1px solid #d1d5db' }}
                                     />
                                 ) : (
-                                    <div className="form-control" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
+                                    <div className="form-control" style={{ backgroundColor: 'var(--bs-gray-50)', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
                                         {user.email || <em className="text-muted">Not set</em>}
                                     </div>
                                 )}
@@ -243,7 +243,7 @@ export default function Profile() {
                                             padding: '12px 32px',
                                             fontWeight: '600',
                                             fontSize: '1rem',
-                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                             border: 'none',
                                             borderRadius: '8px'
                                         }}

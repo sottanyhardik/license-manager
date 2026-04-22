@@ -78,7 +78,7 @@ export default function DebouncedSearchInput({
                         style={{ zIndex: 10, marginRight: '8px' }}
                         type="button"
                     >
-                        <i className="bi bi-x-circle" style={{ color: '#6c757d' }}></i>
+                        <i className="bi bi-x-circle" style={{ color: 'var(--bs-gray-500)' }}></i>
                     </button>
                 )}
             </div>

@@ -10,7 +10,7 @@ import api from '../../api/axios';
  * Fetch license list with filters
  */
 export const fetchLicenseList = async (params = {}) => {
-    const response = await api.get('/licenses/', {params});
+    const response = await api.get('licenses/', {params});
     return response.data;
 };
 
@@ -18,7 +18,7 @@ export const fetchLicenseList = async (params = {}) => {
  * Fetch single license details
  */
 export const fetchLicense = async (id) => {
-    const response = await api.get(`/licenses/${id}/`);
+    const response = await api.get(`licenses/${id}/`);
     return response.data;
 };
 
@@ -26,7 +26,7 @@ export const fetchLicense = async (id) => {
  * Create new license
  */
 export const createLicense = async (data) => {
-    const response = await api.post('/licenses/', data);
+    const response = await api.post('licenses/', data);
     return response.data;
 };
 
@@ -34,7 +34,7 @@ export const createLicense = async (data) => {
  * Update license
  */
 export const updateLicense = async (id, data) => {
-    const response = await api.put(`/licenses/${id}/`, data);
+    const response = await api.put(`licenses/${id}/`, data);
     return response.data;
 };
 
@@ -42,7 +42,7 @@ export const updateLicense = async (id, data) => {
  * Delete license
  */
 export const deleteLicense = async (id) => {
-    const response = await api.delete(`/licenses/${id}/`);
+    const response = await api.delete(`licenses/${id}/`);
     return response.data;
 };
 
@@ -50,7 +50,7 @@ export const deleteLicense = async (id) => {
  * Fetch license import items
  */
 export const fetchLicenseImportItems = async (licenseId) => {
-    const response = await api.get(`/licenses/${licenseId}/import-items/`);
+    const response = await api.get(`licenses/${licenseId}/import-items/`);
     return response.data;
 };
 
@@ -58,7 +58,7 @@ export const fetchLicenseImportItems = async (licenseId) => {
  * Fetch license export items
  */
 export const fetchLicenseExportItems = async (licenseId) => {
-    const response = await api.get(`/licenses/${licenseId}/export-items/`);
+    const response = await api.get(`licenses/${licenseId}/export-items/`);
     return response.data;
 };
 
@@ -66,7 +66,7 @@ export const fetchLicenseExportItems = async (licenseId) => {
  * Fetch license balance summary
  */
 export const fetchLicenseBalance = async (licenseId) => {
-    const response = await api.get(`/licenses/${licenseId}/balance/`);
+    const response = await api.get(`licenses/${licenseId}/balance/`);
     return response.data;
 };
 
@@ -74,7 +74,7 @@ export const fetchLicenseBalance = async (licenseId) => {
  * Export license ledger to PDF
  */
 export const exportLicenseLedgerPDF = async (licenseId) => {
-    const response = await api.get(`/licenses/${licenseId}/ledger-pdf/`, {
+    const response = await api.get(`licenses/${licenseId}/ledger-pdf/`, {
         responseType: 'blob'
     });
     return response.data;
@@ -84,7 +84,7 @@ export const exportLicenseLedgerPDF = async (licenseId) => {
  * Export license item report
  */
 export const exportLicenseItemReport = async (licenseId, params = {}) => {
-    const response = await api.get(`/licenses/${licenseId}/item-report/`, {
+    const response = await api.get(`licenses/${licenseId}/item-report/`, {
         params,
         responseType: 'blob'
     });
@@ -95,7 +95,7 @@ export const exportLicenseItemReport = async (licenseId, params = {}) => {
  * Fetch license documents
  */
 export const fetchLicenseDocuments = async (licenseId) => {
-    const response = await api.get(`/licenses/${licenseId}/documents/`);
+    const response = await api.get(`licenses/${licenseId}/documents/`);
     return response.data;
 };
 
@@ -119,7 +119,7 @@ export const uploadLicenseDocument = async (licenseId, formData) => {
  * Fetch license transactions (BOE entries)
  */
 export const fetchLicenseTransactions = async (licenseId, params = {}) => {
-    const response = await api.get(`/licenses/${licenseId}/transactions/`, {params});
+    const response = await api.get(`licenses/${licenseId}/transactions/`, {params});
     return response.data;
 };
 
@@ -127,7 +127,7 @@ export const fetchLicenseTransactions = async (licenseId, params = {}) => {
  * Fetch license allocations
  */
 export const fetchLicenseAllocations = async (licenseId, params = {}) => {
-    const response = await api.get(`/licenses/${licenseId}/allocations/`, {params});
+    const response = await api.get(`licenses/${licenseId}/allocations/`, {params});
     return response.data;
 };
 
@@ -135,7 +135,7 @@ export const fetchLicenseAllocations = async (licenseId, params = {}) => {
  * Check license validity
  */
 export const checkLicenseValidity = async (licenseId) => {
-    const response = await api.get(`/licenses/${licenseId}/check-validity/`);
+    const response = await api.get(`licenses/${licenseId}/check-validity/`);
     return response.data;
 };
 
@@ -143,7 +143,7 @@ export const checkLicenseValidity = async (licenseId) => {
  * Update license flags (is_active, is_expired, etc.)
  */
 export const updateLicenseFlags = async (licenseId) => {
-    const response = await api.post(`/licenses/${licenseId}/update-flags/`);
+    const response = await api.post(`licenses/${licenseId}/update-flags/`);
     return response.data;
 };
 

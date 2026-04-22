@@ -81,11 +81,11 @@ export default function MasterForm({
         try {
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `/${entityName}/`;
+                apiPath = `${entityName}/`;
             } else if (entityName === 'incentive-licenses') {
-                apiPath = `/incentive-licenses/`;
+                apiPath = `incentive-licenses/`;
             } else {
-                apiPath = `/masters/${entityName}/`;
+                apiPath = `masters/${entityName}/`;
             }
 
             // Use GET to fetch metadata (custom structure with form_fields, field_meta, etc.)
@@ -156,11 +156,11 @@ export default function MasterForm({
         try {
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `/${entityName}/${recordId}/`;
+                apiPath = `${entityName}/${recordId}/`;
             } else if (entityName === 'incentive-licenses') {
-                apiPath = `/incentive-licenses/${recordId}/`;
+                apiPath = `incentive-licenses/${recordId}/`;
             } else {
-                apiPath = `/masters/${entityName}/${recordId}/`;
+                apiPath = `masters/${entityName}/${recordId}/`;
             }
             const {data} = await api.get(apiPath);
             setFormData(data);
@@ -229,7 +229,7 @@ export default function MasterForm({
                     let firstCompany = null;
 
                     for (const allotmentId of allotmentIds) {
-                        const {data} = await api.get(`/bill-of-entries/fetch-allotment-details/?allotment_id=${allotmentId}`);
+                        const {data} = await api.get(`bill-of-entries/fetch-allotment-details/?allotment_id=${allotmentId}`);
 
                         // Use exchange_rate, product_name, port, and company from first allotment
                         if (!firstExchangeRate && data.exchange_rate) {
@@ -360,7 +360,7 @@ export default function MasterForm({
 
         try {
             // Fetch the SION norm class with its import items
-            const {data: sionData} = await api.get(`/masters/sion-classes/${exportItem.norm_class}/`);
+            const {data: sionData} = await api.get(`masters/sion-classes/${exportItem.norm_class}/`);
 
             if (!sionData.import_norm || sionData.import_norm.length === 0) {
                 alert("No import items found for this SION norm class");
@@ -676,11 +676,11 @@ export default function MasterForm({
         try {
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `/${entityName}/`;
+                apiPath = `${entityName}/`;
             } else if (entityName === 'incentive-licenses') {
-                apiPath = `/incentive-licenses/`;
+                apiPath = `incentive-licenses/`;
             } else {
-                apiPath = `/masters/${entityName}/`;
+                apiPath = `masters/${entityName}/`;
             }
 
             // Check if formData contains any File objects (including nested)
@@ -1169,10 +1169,10 @@ export default function MasterForm({
     }
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
             {/* Professional Header with Gradient */}
             <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                 padding: '32px',
                 borderRadius: '12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -1236,7 +1236,7 @@ export default function MasterForm({
                                                 <div className="form-group-material">
                                                     <label className={`form-label ${fieldMeta.required ? 'required' : ''}`} style={{
                                                         fontWeight: '500',
-                                                        color: '#374151',
+                                                        color: 'var(--text-secondary)',
                                                         marginBottom: '8px',
                                                         fontSize: '0.875rem'
                                                     }}>
@@ -1254,7 +1254,7 @@ export default function MasterForm({
                                                     )}
                                                     {helpText && !hasError && (
                                                         <small className="form-text d-block mt-1" style={{
-                                                            color: '#6b7280',
+                                                            color: 'var(--text-secondary)',
                                                             fontSize: '0.75rem'
                                                         }}>
                                                             <i className="bi bi-info-circle me-1"></i>
@@ -1294,7 +1294,7 @@ export default function MasterForm({
                                             padding: '12px 32px',
                                             fontWeight: '600',
                                             fontSize: '1rem',
-                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                             border: 'none'
                                         }}
                                     >

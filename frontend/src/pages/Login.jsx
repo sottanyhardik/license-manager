@@ -25,6 +25,8 @@ export default function Login() {
         reason === 'session_expired' ? 'Your session has expired. Please log in again.' :
         null;
 
+    useEffect(() => { document.title = 'Login | License Manager'; }, []);
+
     // Redirect if already logged in
     useEffect(() => {
         if (!authLoading && user) {
@@ -61,7 +63,7 @@ export default function Login() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
             padding: '20px'
         }}>
             <div className="card border-0 shadow-lg" style={{
@@ -72,7 +74,7 @@ export default function Login() {
             }}>
                 {/* Header Section */}
                 <div style={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                     padding: '40px 32px',
                     textAlign: 'center',
                     color: 'white'
@@ -123,7 +125,7 @@ export default function Login() {
                         <div className="mb-3">
                             <label className="form-label" style={{
                                 fontWeight: '500',
-                                color: '#374151',
+                                color: 'var(--text-secondary)',
                                 marginBottom: '8px',
                                 fontSize: '0.875rem'
                             }}>
@@ -150,7 +152,7 @@ export default function Login() {
                         <div className="mb-4">
                             <label className="form-label" style={{
                                 fontWeight: '500',
-                                color: '#374151',
+                                color: 'var(--text-secondary)',
                                 marginBottom: '8px',
                                 fontSize: '0.875rem'
                             }}>
@@ -182,7 +184,7 @@ export default function Login() {
                                 padding: '14px 24px',
                                 fontWeight: '600',
                                 fontSize: '1rem',
-                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                 border: 'none',
                                 borderRadius: '10px',
                                 color: 'white',
@@ -207,12 +209,12 @@ export default function Login() {
                 {/* Footer */}
                 <div style={{
                     padding: '24px 32px',
-                    backgroundColor: '#f8f9fa',
+                    backgroundColor: 'var(--bs-gray-50)',
                     textAlign: 'center',
                     borderTop: '1px solid #e5e7eb'
                 }}>
-                    <small style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                        Made with <span style={{color: '#dc3545'}}>❤️</span> by Hardik Sottany
+                    <small style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        Made with <span style={{color: 'var(--danger-color)'}}>❤️</span> by Hardik Sottany
                     </small>
                 </div>
             </div>

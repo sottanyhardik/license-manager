@@ -421,10 +421,10 @@ export default function ItemReport() {
     const itemNameOptions = availableItems;
 
     return (
-        <div className="container-fluid" style={{backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px'}}>
+        <div className="container-fluid" style={{backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px'}}>
             {/* Professional Header with Gradient */}
             <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                 padding: '32px',
                 borderRadius: '12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -456,7 +456,7 @@ export default function ItemReport() {
                         style={{
                             backgroundColor: 'white',
                             border: '2px solid white',
-                            color: '#667eea',
+                            color: 'var(--primary-color)',
                             fontWeight: '600',
                             padding: '10px 24px',
                             boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
@@ -486,11 +486,11 @@ export default function ItemReport() {
                         <div
                             className="card-header bg-white border-bottom d-flex justify-content-between align-items-center"
                             style={{ padding: '20px 24px', borderRadius: '12px 12px 0 0' }}>
-                            <h5 className="mb-0" style={{ fontWeight: '600', color: '#2c3e50' }}>
+                            <h5 className="mb-0" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
                                 <i className="bi bi-sliders me-2"></i>
                                 Filters
                                 {isPending && (
-                                    <span className="ms-2" style={{ fontSize: '0.85rem', color: '#6c757d' }}>
+                                    <span className="ms-2" style={{ fontSize: '0.85rem', color: 'var(--bs-gray-500)' }}>
                                         <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
                                         Updating...
                                     </span>
@@ -501,7 +501,7 @@ export default function ItemReport() {
                                     className="btn btn-sm"
                                     onClick={handleClearFilters}
                                     style={{
-                                        backgroundColor: '#6c757d',
+                                        backgroundColor: 'var(--bs-gray-500)',
                                         border: 'none',
                                         color: 'white',
                                         fontWeight: '500',
@@ -890,7 +890,7 @@ export default function ItemReport() {
                     {!loading && selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-tag" style={{fontSize: '3rem', color: '#667eea'}}></i>
+                                <i className="bi bi-tag" style={{fontSize: '3rem', color: 'var(--primary-color)'}}></i>
                                 <h5 className="mt-3 text-primary">Select Filters to View Report</h5>
                                 <p className="text-muted">Please select item names, search by product description, or search by HSN code to load the report data</p>
                             </div>
@@ -900,7 +900,7 @@ export default function ItemReport() {
                     {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length === 0 && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
+                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--bs-gray-300)'}}></i>
                                 <h5 className="mt-3 text-muted">No items found</h5>
                                 <p className="text-muted">Try adjusting your filters to see more results.</p>
                                 <div className="mt-3 text-start" style={{maxWidth: '600px', margin: '0 auto'}}>
@@ -927,7 +927,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: 0,
                                                 zIndex: 11,
-                                                backgroundColor: '#f8f9fa',
+                                                backgroundColor: 'var(--bs-gray-50)',
                                                 minWidth: '60px'
                                             }}>Sr No
                                             </th>
@@ -935,7 +935,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: '60px',
                                                 zIndex: 11,
-                                                backgroundColor: '#f8f9fa',
+                                                backgroundColor: 'var(--bs-gray-50)',
                                                 minWidth: '150px'
                                             }}>License No
                                             </th>
@@ -943,7 +943,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: '210px',
                                                 zIndex: 11,
-                                                backgroundColor: '#f8f9fa',
+                                                backgroundColor: 'var(--bs-gray-50)',
                                                 minWidth: '120px'
                                             }}>License Date
                                             </th>
@@ -951,7 +951,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: '330px',
                                                 zIndex: 11,
-                                                backgroundColor: '#f8f9fa',
+                                                backgroundColor: 'var(--bs-gray-50)',
                                                 minWidth: '140px',
                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                 borderRight: '2px solid #dee2e6'
@@ -1004,7 +1004,7 @@ export default function ItemReport() {
                                                                             left: 0,
                                                                             zIndex: 9,
                                                                             verticalAlign: 'middle',
-                                                                            backgroundColor: '#f8f9fa',
+                                                                            backgroundColor: 'var(--bs-gray-50)',
                                                                             fontWeight: '500'
                                                                         }}>{srNo - itemIdx}</td>
                                                                     <td rowSpan={rowSpan} style={{
@@ -1012,7 +1012,7 @@ export default function ItemReport() {
                                                                         left: '60px',
                                                                         zIndex: 9,
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa',
+                                                                        backgroundColor: 'var(--bs-gray-50)',
                                                                         fontWeight: '600'
                                                                     }}>
                                                                         <div
@@ -1038,20 +1038,20 @@ export default function ItemReport() {
                                                                         left: '210px',
                                                                         zIndex: 9,
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>{formatDate(firstItem.license_date)}</td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         position: 'sticky',
                                                                         left: '330px',
                                                                         zIndex: 9,
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa',
+                                                                        backgroundColor: 'var(--bs-gray-50)',
                                                                         boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                                         borderRight: '2px solid #dee2e6'
                                                                     }}>{formatDate(firstItem.license_expiry_date)}</td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>{firstItem.exporter_name || '-'}</td>
                                                                 </>
                                                             )}
@@ -1086,17 +1086,17 @@ export default function ItemReport() {
                                                                     <td className="text-end text-success fw-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>{firstItem.available_balance.toFixed(2)}</td>
                                                                     <td className="text-end text-primary fw-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>{firstItem.balance_cif.toFixed(2)}</td>
                                                                     <td className="text-center" rowSpan={rowSpan}
                                                                         style={{
                                                                             verticalAlign: 'middle',
-                                                                            backgroundColor: '#f8f9fa'
+                                                                            backgroundColor: 'var(--bs-gray-50)'
                                                                         }}>
                                                                         <span
                                                                             style={{cursor: togglingRestriction[firstItem.id] ? 'wait' : 'pointer', display: 'inline-block'}}
@@ -1120,7 +1120,7 @@ export default function ItemReport() {
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>
                                                                         {editingCell?.itemId === firstItem.id && editingCell?.field === 'notes' ? (
                                                                             <div className="d-flex gap-1">
@@ -1157,7 +1157,7 @@ export default function ItemReport() {
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>
                                                                         {editingCell?.itemId === firstItem.id && editingCell?.field === 'condition_sheet' ? (
                                                                             <div className="d-flex gap-1">
@@ -1194,7 +1194,7 @@ export default function ItemReport() {
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa',
+                                                                        backgroundColor: 'var(--bs-gray-50)',
                                                                         fontSize: '0.85rem',
                                                                         lineHeight: '1.4'
                                                                     }}>
@@ -1218,7 +1218,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: 0,
                                                 zIndex: 11,
-                                                backgroundColor: '#e2e3e5',
+                                                backgroundColor: 'var(--bs-gray-200)',
                                                 fontWeight: '600'
                                             }}>
                                                 Total:

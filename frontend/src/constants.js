@@ -135,14 +135,14 @@ export const ANIMATION_DURATION = {
 
 // Colors (for consistency)
 export const COLORS = {
-    PRIMARY: '#667eea',
-    SECONDARY: '#764ba2',
-    SUCCESS: '#28a745',
-    DANGER: '#dc3545',
-    WARNING: '#ffc107',
-    INFO: '#17a2b8',
-    LIGHT: '#f8f9fa',
-    DARK: '#343a40'
+    PRIMARY: 'var(--primary-color)',
+    SECONDARY: 'var(--primary-dark)',
+    SUCCESS: 'var(--success-color)',
+    DANGER: 'var(--danger-color)',
+    WARNING: 'var(--warning-color)',
+    INFO: 'var(--info-color)',
+    LIGHT: 'var(--bs-gray-50)',
+    DARK: 'var(--bs-gray-700)'
 };
 
 // Export Format Options

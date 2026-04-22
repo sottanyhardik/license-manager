@@ -149,7 +149,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const fetchAllotmentInfo = async () => {
         try {
             // Fetch just the allotment info without available items
-            const {data} = await api.get(`/allotments/${id}/`);
+            const {data} = await api.get(`allotments/${id}/`);
             setAllotment(data);
         } catch (err) {
             setError(err.response?.data?.detail || "Failed to load allotment info");
@@ -177,7 +177,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 }
             });
 
-            const {data} = await api.get(`/allotment-actions/${id}/available-licenses/`, {
+            const {data} = await api.get(`allotment-actions/${id}/available-licenses/`, {
                 params
             });
             setAllotment(data.allotment);
@@ -376,7 +376,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         setSuccess("");
 
         try {
-            const {data} = await api.post(`/allotment-actions/${id}/allocate-items/`, {
+            const {data} = await api.post(`allotment-actions/${id}/allocate-items/`, {
                 allocations: [{
                     item_id: item.id,
                     qty: allocation.qty,
@@ -488,7 +488,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         setSuccess("");
 
         try {
-            const {data} = await api.delete(`/allotment-actions/${id}/delete-item/${allotmentItemId}/`);
+            const {data} = await api.delete(`allotment-actions/${id}/delete-item/${allotmentItemId}/`);
             const successMsg = data.message || "Successfully removed allocation";
             setSuccess(successMsg);
             toast.success(successMsg);
@@ -510,13 +510,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             height: isModal ? '100%' : 'auto',
             display: 'flex',
             flexDirection: 'column',
-            backgroundColor: isModal ? 'transparent' : '#f8f9fa',
+            backgroundColor: isModal ? 'transparent' : 'var(--bs-gray-50)',
             padding: isModal ? '0' : '24px',
             minHeight: isModal ? 'auto' : '100vh'
         }}>
             {!isModal && (
                 <div style={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                     padding: '32px',
                     borderRadius: '12px',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -563,7 +563,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 return;
                             }
                             try {
-                                const response = await api.post(`/allotments/${id}/copy/`);
+                                const response = await api.post(`allotments/${id}/copy/`);
                                 toast.success('Allotment copied successfully!');
                                 // Navigate to edit page of the new allotment
                                 navigate(`/allotments/${response.data.id}/edit`);
@@ -587,7 +587,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         className="btn"
                         onClick={async () => {
                             try {
-                                const response = await api.get(`/allotment-actions/${id}/generate-pdf/`, {
+                                const response = await api.get(`allotment-actions/${id}/generate-pdf/`, {
                                     responseType: 'blob'
                                 });
                                 const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
@@ -606,7 +606,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         style={{
                             backgroundColor: 'white',
                             border: '2px solid white',
-                            color: '#667eea',
+                            color: 'var(--primary-color)',
                             fontWeight: '600',
                             boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                         }}
@@ -678,51 +678,51 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 return (
                     <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
                         <div className="card-body" style={{ padding: '24px' }}>
-                            <h5 className="card-title mb-4" style={{ fontWeight: '600', color: '#333' }}>
-                                <i className="bi bi-info-circle me-2" style={{ color: '#667eea' }}></i>
+                            <h5 className="card-title mb-4" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
+                                <i className="bi bi-info-circle me-2" style={{ color: 'var(--primary-color)' }}></i>
                                 Allotment Details - {allotment.item_name}
                             </h5>
                             <div className="row g-3">
                                 <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #17a2b8' }}>
+                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #17a2b8' }}>
                                         <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Unit Price</small>
-                                        <strong style={{ fontSize: '1.1rem', color: '#17a2b8' }}>{unitPrice.toFixed(3)}</strong>
+                                        <strong style={{ fontSize: '1.1rem', color: 'var(--info-color)' }}>{unitPrice.toFixed(3)}</strong>
                                     </div>
                                 </div>
                                 <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #6c757d' }}>
+                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #6c757d' }}>
                                         <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Required Quantity</small>
-                                        <strong style={{ fontSize: '1.1rem', color: '#333' }}>{requiredQty.toLocaleString()}</strong>
+                                        <strong style={{ fontSize: '1.1rem', color: 'var(--text-dark)' }}>{requiredQty.toLocaleString()}</strong>
                                     </div>
                                 </div>
                                 <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #6c757d' }}>
+                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #6c757d' }}>
                                         <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Required Value</small>
-                                        <strong style={{ fontSize: '1.1rem', color: '#333' }}>{requiredValue.toFixed(2)}</strong>
+                                        <strong style={{ fontSize: '1.1rem', color: 'var(--text-dark)' }}>{requiredValue.toFixed(2)}</strong>
                                     </div>
                                 </div>
                                 <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #28a745' }}>
+                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #28a745' }}>
                                         <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Allotted Quantity</small>
-                                        <strong style={{ fontSize: '1.1rem', color: '#28a745' }}>{allotedQty.toLocaleString()}</strong>
+                                        <strong style={{ fontSize: '1.1rem', color: 'var(--success-color)' }}>{allotedQty.toLocaleString()}</strong>
                                     </div>
                                 </div>
                                 <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #28a745' }}>
+                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #28a745' }}>
                                         <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Allotted Value</small>
-                                        <strong style={{ fontSize: '1.1rem', color: '#28a745' }}>{allotedValue.toFixed(2)}</strong>
+                                        <strong style={{ fontSize: '1.1rem', color: 'var(--success-color)' }}>{allotedValue.toFixed(2)}</strong>
                                     </div>
                                 </div>
                                 <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #667eea' }}>
+                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #4F46E5' }}>
                                         <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Balance Quantity</small>
-                                        <strong style={{ fontSize: '1.1rem', color: '#667eea' }}>{balanceQty.toLocaleString()}</strong>
+                                        <strong style={{ fontSize: '1.1rem', color: 'var(--primary-color)' }}>{balanceQty.toLocaleString()}</strong>
                                     </div>
                                 </div>
                                 <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', borderLeft: '3px solid #667eea' }}>
+                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #4F46E5' }}>
                                         <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Balance Value</small>
-                                        <strong style={{ fontSize: '1.1rem', color: '#667eea' }}>
+                                        <strong style={{ fontSize: '1.1rem', color: 'var(--primary-color)' }}>
                                             {balanceValue.toFixed(2)}
                                             <small className="text-muted d-block" style={{ fontSize: '0.65rem', fontWeight: '400' }}>(+$20 buffer)</small>
                                         </strong>
@@ -739,8 +739,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
                     <div className="card-body" style={{ padding: '24px' }}>
                         <div className="d-flex justify-content-between align-items-center mb-3">
-                            <h5 className="mb-0" style={{ fontWeight: '600', color: '#333' }}>
-                                <i className="bi bi-check-square me-2" style={{ color: '#28a745' }}></i>
+                            <h5 className="mb-0" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
+                                <i className="bi bi-check-square me-2" style={{ color: 'var(--success-color)' }}></i>
                                 Allotted Items ({allotment.allotment_details.length})
                             </h5>
                             <button
@@ -748,7 +748,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 style={{
                                     backgroundColor: 'rgba(102, 126, 234, 0.1)',
                                     border: '1px solid rgba(102, 126, 234, 0.3)',
-                                    color: '#667eea',
+                                    color: 'var(--primary-color)',
                                     fontWeight: '500',
                                     padding: '6px 16px',
                                     borderRadius: '6px'
@@ -784,7 +784,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </div>
                         <div style={{overflowX: 'auto', borderRadius: '8px'}}>
                             <table className="table table-sm table-hover" style={{width: '100%', marginBottom: '0'}}>
-                                <thead style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                                <thead style={{ backgroundColor: 'var(--bs-gray-50)', borderBottom: '2px solid #dee2e6' }}>
                                 <tr>
                                     <th style={{minWidth: '120px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>License</th>
                                     <th style={{minWidth: '70px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Serial</th>
@@ -881,8 +881,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
                 <div className="card-body" style={{ padding: '24px' }}>
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h5 className="mb-0" style={{ fontWeight: '600', color: '#333' }}>
-                            <i className="bi bi-list-check me-2" style={{ color: '#667eea' }}></i>
+                        <h5 className="mb-0" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
+                            <i className="bi bi-list-check me-2" style={{ color: 'var(--primary-color)' }}></i>
                             Available License Items
                         </h5>
                     </div>
@@ -903,7 +903,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </div>
                     )}
 
-                    <div className="card mb-3 border-0 shadow-sm" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                    <div className="card mb-3 border-0 shadow-sm" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px' }}>
                         <div className="card-body" style={{ padding: '20px' }}>
                             <div className="row g-3">
                                 <div className="col-md-12">
@@ -924,7 +924,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <div className="col-md-3">
                                     <label className="form-label">Norm Class</label>
                                     <HybridSelect
-                                        fieldMeta={{endpoint: "/masters/sion-classes/", label_field: "norm_class"}}
+                                        fieldMeta={{endpoint: "masters/sion-classes/", label_field: "norm_class"}}
                                         value={filters.norm_class}
                                         onChange={(value) => setFilters({...filters, norm_class: value})}
                                         placeholder="All Norm Classes"
@@ -969,7 +969,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <div className="col-md-3">
                                     <label className="form-label">Exporter</label>
                                     <HybridSelect
-                                        fieldMeta={{endpoint: "/masters/companies/", label_field: "name"}}
+                                        fieldMeta={{endpoint: "masters/companies/", label_field: "name"}}
                                         value={filters.exporter}
                                         onChange={(value) => setFilters({...filters, exporter: value})}
                                         placeholder="All Exporters"
@@ -979,7 +979,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <div className="col-md-3">
                                     <label className="form-label">Exclude Exporter</label>
                                     <HybridSelect
-                                        fieldMeta={{endpoint: "/masters/companies/", label_field: "name"}}
+                                        fieldMeta={{endpoint: "masters/companies/", label_field: "name"}}
                                         value={filters.exclude_exporter}
                                         onChange={(value) => setFilters({...filters, exclude_exporter: value})}
                                         placeholder="None"
@@ -1100,7 +1100,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         <button
                                             className="btn btn-sm"
                                             style={{
-                                                backgroundColor: '#6c757d',
+                                                backgroundColor: 'var(--bs-gray-500)',
                                                 border: 'none',
                                                 color: 'white',
                                                 fontWeight: '500',
@@ -1138,7 +1138,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                     <div className="table-responsive" style={{ borderRadius: '8px', maxHeight: '600px', overflowY: 'auto', overflowX: 'auto' }}>
                         <table className="table table-sm table-hover" style={{fontSize: '0.875rem', marginBottom: '0'}}>
-                            <thead className="sticky-top" style={{backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6', zIndex: 10}}>
+                            <thead className="sticky-top" style={{backgroundColor: 'var(--bs-gray-50)', borderBottom: '2px solid #dee2e6', zIndex: 10}}>
                             <tr>
                                 <th style={{minWidth: '100px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>License</th>
                                 <th style={{minWidth: '50px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Serial</th>
@@ -1155,7 +1155,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <th style={{minWidth: '150px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Notes</th>
                                 <th style={{minWidth: '160px', width: '160px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Qty</th>
                                 <th style={{minWidth: '160px', width: '160px', fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Allocate Value</th>
-                                <th style={{minWidth: '130px', position: 'sticky', right: 0, backgroundColor: '#f8f9fa', zIndex: 5, fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Action</th>
+                                <th style={{minWidth: '130px', position: 'sticky', right: 0, backgroundColor: 'var(--bs-gray-50)', zIndex: 5, fontWeight: '600', fontSize: '0.85rem', padding: '12px 8px'}}>Action</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -1249,7 +1249,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <button
                                                 className="btn btn-sm w-100"
                                                 style={{
-                                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                                     border: 'none',
                                                     color: 'white',
                                                     fontWeight: '500',
@@ -1331,9 +1331,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                     <button
                                                         className="page-link"
                                                         style={{
-                                                            background: pagination.currentPage === pageNum ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+                                                            background: pagination.currentPage === pageNum ? 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)' : 'white',
                                                             border: pagination.currentPage === pageNum ? 'none' : '1px solid #dee2e6',
-                                                            color: pagination.currentPage === pageNum ? 'white' : '#667eea',
+                                                            color: pagination.currentPage === pageNum ? 'white' : 'var(--primary-color)',
                                                             fontWeight: '500'
                                                         }}
                                                         onClick={() => setPagination(prev => ({...prev, currentPage: pageNum}))}

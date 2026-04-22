@@ -20,7 +20,7 @@ export default function SionNormReport({ sionNorm, title }) {
         try {
             setLoading(true);
             const params = new URLSearchParams(filters).toString();
-            const response = await api.get(`/licenses/active-dfia-report/?${params}`);
+            const response = await api.get(`licenses/active-dfia-report/?${params}`);
             setData(response.data);
         } catch (error) {
             toast.error('Failed to load report data. Please try again.');

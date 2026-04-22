@@ -21,7 +21,7 @@ export default function TradeTransferLetter({ tradeId: propId, isModal = false, 
 
     const fetchTrade = async () => {
         try {
-            const {data} = await api.get(`/trades/${id}/`);
+            const {data} = await api.get(`trades/${id}/`);
             setTrade(data);
         } catch (err) {
             setError("Failed to load Trade details");

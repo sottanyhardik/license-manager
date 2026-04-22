@@ -21,7 +21,7 @@ export default function BOETransferLetter({ boeId: propId, isModal = false, onCl
 
     const fetchBOE = async () => {
         try {
-            const {data} = await api.get(`/bill-of-entries/${id}/`);
+            const {data} = await api.get(`bill-of-entries/${id}/`);
             setBoe(data);
         } catch (err) {
             setError("Failed to load BOE details");

@@ -90,7 +90,7 @@ export default function TradeForm() {
         try {
             // boe can be either ID or object with id
             const boeId = typeof formData.boe === 'object' ? formData.boe.id : formData.boe;
-            const { data } = await api.get(`/bill-of-entries/${boeId}/`);
+            const { data } = await api.get(`bill-of-entries/${boeId}/`);
 
             // Create lines from BOE item_details
             const lines = data.item_details?.map(item => ({
@@ -152,7 +152,7 @@ export default function TradeForm() {
 
     const fetchTrade = async () => {
         try {
-            const { data } = await api.get(`/trades/${id}/`);
+            const { data } = await api.get(`trades/${id}/`);
 
             // Parse date fields using centralized date parser
             if (data.invoice_date) {
@@ -180,7 +180,7 @@ export default function TradeForm() {
                     data.incentive_lines.map(async (line) => {
                         if (line.incentive_license && typeof line.incentive_license === 'number') {
                             try {
-                                const { data: licenseData } = await api.get(`/incentive-licenses/${line.incentive_license}/`);
+                                const { data: licenseData } = await api.get(`incentive-licenses/${line.incentive_license}/`);
                                 return {
                                     ...line,
                                     incentive_license: licenseData.id // Keep as ID for HybridSelect
@@ -223,7 +223,7 @@ export default function TradeForm() {
         if (val) {
             try {
                 const companyId = typeof val === 'object' ? val.id : val;
-                const { data } = await api.get(`/masters/companies/${companyId}/`);
+                const { data } = await api.get(`masters/companies/${companyId}/`);
                 setFormData(prev => ({
                     ...prev,
                     from_company: val,
@@ -245,7 +245,7 @@ export default function TradeForm() {
         if (val) {
             try {
                 const companyId = typeof val === 'object' ? val.id : val;
-                const { data } = await api.get(`/masters/companies/${companyId}/`);
+                const { data } = await api.get(`masters/companies/${companyId}/`);
                 setFormData(prev => ({
                     ...prev,
                     to_company: val,
@@ -279,7 +279,7 @@ export default function TradeForm() {
         try {
             // Company can be either ID or object with id
             const companyId = typeof relevantCompany === 'object' ? relevantCompany.id : relevantCompany;
-            const { data } = await api.get(`/trades/prefill-invoice-number/`, {
+            const { data } = await api.get(`trades/prefill-invoice-number/`, {
                 params: {
                     direction: formData.direction,
                     company_id: companyId,
@@ -345,7 +345,7 @@ export default function TradeForm() {
         // If incentive license is selected, fetch full details and auto-fill license_value
         if (field === 'incentive_license' && value) {
             try {
-                const { data } = await api.get(`/incentive-licenses/${value}/`);
+                const { data } = await api.get(`incentive-licenses/${value}/`);
                 line.license_value = parseFloat(data.license_value) || 0;
 
                 // Trigger recalculation of amount if rate is already set
@@ -773,9 +773,9 @@ export default function TradeForm() {
             }
 
             if (isEdit) {
-                await api.patch(`/trades/${id}/`, payload, { headers });
+                await api.patch(`trades/${id}/`, payload, { headers });
             } else {
-                await api.post(`/trades/`, payload, { headers });
+                await api.post(`trades/`, payload, { headers });
             }
 
             toast.success(isEdit ? "Trade updated successfully" : "Trade created successfully");
@@ -834,7 +834,7 @@ export default function TradeForm() {
         }
 
         try {
-            const response = await api.get(`/trades/${id}/generate-bill-of-supply/`, {
+            const response = await api.get(`trades/${id}/generate-bill-of-supply/`, {
                 params: {
                     include_signature: includeSignature
                 },
@@ -871,7 +871,7 @@ export default function TradeForm() {
         }
 
         try {
-            const response = await api.get(`/trades/${id}/generate-purchase-invoice/`, {
+            const response = await api.get(`trades/${id}/generate-purchase-invoice/`, {
                 params: {
                     include_signature: includeSignature
                 },
@@ -896,10 +896,10 @@ export default function TradeForm() {
     };
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
             {/* Professional Header with Gradient */}
             <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                 padding: '32px',
                 borderRadius: '12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',

@@ -315,10 +315,10 @@ export default function ItemPivotReport() {
 
 
     return (
-        <div className="container-fluid" style={{backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px'}}>
+        <div className="container-fluid" style={{backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px'}}>
             {/* Professional Header with Gradient */}
             <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                 padding: '32px',
                 borderRadius: '12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -391,7 +391,7 @@ export default function ItemPivotReport() {
                             style={{
                                 backgroundColor: 'white',
                                 border: '2px solid white',
-                                color: '#667eea',
+                                color: 'var(--primary-color)',
                                 fontWeight: '600',
                                 boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                             }}
@@ -429,7 +429,7 @@ export default function ItemPivotReport() {
                                         className="btn btn-sm"
                                         onClick={handleClearFilters}
                                         style={{
-                                            backgroundColor: '#6c757d',
+                                            backgroundColor: 'var(--bs-gray-500)',
                                             border: 'none',
                                             color: 'white',
                                             fontWeight: '500',
@@ -658,7 +658,7 @@ export default function ItemPivotReport() {
                     {!loading && activeNormTab && reportData?.licenses_by_norm_notification && (!reportData?.licenses_by_norm_notification?.[activeNormTab] || Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length === 0) && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
+                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--bs-gray-300)'}}></i>
                                 <h5 className="mt-3 text-muted">No licenses found for {activeNormTab}</h5>
                                 <p className="text-muted">Try adjusting your filters to see more results.</p>
                             </div>
@@ -674,7 +674,7 @@ export default function ItemPivotReport() {
                                     <div className="card shadow-sm border-0">
                                         <div
                                             className="card-header bg-gradient text-primary d-flex justify-content-between align-items-center"
-                                            style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
+                                            style={{background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)'}}>
                                             <div>
                                                 <h5 className="mb-0">
                                                     <i className="bi bi-bell-fill me-2"></i>
@@ -703,7 +703,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 11,
-                                                            backgroundColor: '#f8f9fa',
+                                                            backgroundColor: 'var(--bs-gray-50)',
                                                             minWidth: '60px'
                                                         }}>Sr No
                                                         </th>
@@ -711,7 +711,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '60px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#f8f9fa',
+                                                            backgroundColor: 'var(--bs-gray-50)',
                                                             minWidth: '120px'
                                                         }}>DFIA No
                                                         </th>
@@ -719,7 +719,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '180px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#f8f9fa',
+                                                            backgroundColor: 'var(--bs-gray-50)',
                                                             minWidth: '100px'
                                                         }}>DFIA Dt
                                                         </th>
@@ -727,7 +727,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '280px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#f8f9fa',
+                                                            backgroundColor: 'var(--bs-gray-50)',
                                                             minWidth: '100px'
                                                         }}>Expiry Dt
                                                         </th>
@@ -735,7 +735,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '380px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#f8f9fa',
+                                                            backgroundColor: 'var(--bs-gray-50)',
                                                             minWidth: '150px'
                                                         }}>Exporter
                                                         </th>
@@ -743,7 +743,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '530px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#f8f9fa',
+                                                            backgroundColor: 'var(--bs-gray-50)',
                                                             minWidth: '120px'
                                                         }}>Notif No
                                                         </th>
@@ -751,7 +751,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '650px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#f8f9fa',
+                                                            backgroundColor: 'var(--bs-gray-50)',
                                                             minWidth: '100px'
                                                         }}>Total CIF
                                                         </th>
@@ -759,7 +759,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '750px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#f8f9fa',
+                                                            backgroundColor: 'var(--bs-gray-50)',
                                                             minWidth: '100px'
                                                         }}>Alloted CIF
                                                         </th>
@@ -767,7 +767,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '850px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#f8f9fa',
+                                                            backgroundColor: 'var(--bs-gray-50)',
                                                             minWidth: '110px',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid #dee2e6'
@@ -790,55 +790,55 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 11,
-                                                            backgroundColor: '#e2e3e5'
+                                                            backgroundColor: 'var(--bs-gray-200)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '60px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#e2e3e5'
+                                                            backgroundColor: 'var(--bs-gray-200)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '180px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#e2e3e5'
+                                                            backgroundColor: 'var(--bs-gray-200)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '280px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#e2e3e5'
+                                                            backgroundColor: 'var(--bs-gray-200)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '380px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#e2e3e5'
+                                                            backgroundColor: 'var(--bs-gray-200)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '530px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#e2e3e5'
+                                                            backgroundColor: 'var(--bs-gray-200)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '650px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#e2e3e5'
+                                                            backgroundColor: 'var(--bs-gray-200)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '750px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#e2e3e5'
+                                                            backgroundColor: 'var(--bs-gray-200)'
                                                         }}></th>
                                                         <th style={{
                                                             position: 'sticky',
                                                             left: '850px',
                                                             zIndex: 11,
-                                                            backgroundColor: '#e2e3e5',
+                                                            backgroundColor: 'var(--bs-gray-200)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid #dee2e6'
                                                         }}></th>
@@ -905,13 +905,13 @@ export default function ItemPivotReport() {
                                                                 position: 'sticky',
                                                                 left: 0,
                                                                 zIndex: 1,
-                                                                backgroundColor: '#fff'
+                                                                backgroundColor: '#ffffff'
                                                             }}>{idx + 1}</td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
                                                                 left: '60px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#fff'
+                                                                backgroundColor: '#ffffff'
                                                             }}>
                                                                 <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
                                                                     <span>{license.license_number}</span>
@@ -923,7 +923,7 @@ export default function ItemPivotReport() {
                                                                                 e.preventDefault();
                                                                                 e.stopPropagation();
                                                                                 try {
-                                                                                    const response = await api.get(`/licenses/${license.id}/merged-documents/`, {
+                                                                                    const response = await api.get(`licenses/${license.id}/merged-documents/`, {
                                                                                         responseType: 'blob',
                                                                                         headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                                                                     });
@@ -937,10 +937,10 @@ export default function ItemPivotReport() {
                                                                             }}
                                                                             style={{
                                                                                 fontSize: '0.7rem',
-                                                                                color: '#28a745',
+                                                                                color: 'var(--success-color)',
                                                                                 textDecoration: 'none',
                                                                                 padding: '1px 4px',
-                                                                                backgroundColor: '#d4edda',
+                                                                                backgroundColor: 'var(--success-bg)',
                                                                                 borderRadius: '2px',
                                                                                 fontWeight: '500',
                                                                                 whiteSpace: 'nowrap'
@@ -955,19 +955,19 @@ export default function ItemPivotReport() {
                                                                 position: 'sticky',
                                                                 left: '180px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#fff'
+                                                                backgroundColor: '#ffffff'
                                                             }}>{formatDate(license.license_date)}</td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
                                                                 left: '280px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#fff'
+                                                                backgroundColor: '#ffffff'
                                                             }}>{formatDate(license.license_expiry_date)}</td>
                                                             <td className="text-truncate" style={{
                                                                 position: 'sticky',
                                                                 left: '380px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#fff',
+                                                                backgroundColor: '#ffffff',
                                                                 maxWidth: '150px'
                                                             }} title={license.exporter}>
                                                                 {license.exporter}
@@ -976,7 +976,7 @@ export default function ItemPivotReport() {
                                                                 position: 'sticky',
                                                                 left: '530px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#fff'
+                                                                backgroundColor: '#ffffff'
                                                             }}>
                                                                 {license.notification_number}
                                                                 {license.notification_number === 'Unknown' && (
@@ -988,19 +988,19 @@ export default function ItemPivotReport() {
                                                                 position: 'sticky',
                                                                 left: '650px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#fff'
+                                                                backgroundColor: '#ffffff'
                                                             }}>{license.total_cif.toFixed(2)}</td>
                                                             <td className="text-end fw-semibold text-info" style={{
                                                                 position: 'sticky',
                                                                 left: '750px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#fff'
+                                                                backgroundColor: '#ffffff'
                                                             }}>{(license.alloted_cif || 0).toFixed(2)}</td>
                                                             <td className="text-end fw-semibold text-success" style={{
                                                                 position: 'sticky',
                                                                 left: '850px',
                                                                 zIndex: 1,
-                                                                backgroundColor: '#fff',
+                                                                backgroundColor: '#ffffff',
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                                 borderRight: '2px solid #dee2e6'
                                                             }}>{license.balance_cif.toFixed(2)}</td>
@@ -1024,7 +1024,7 @@ export default function ItemPivotReport() {
                                                                         <td className={`text-end ${hasData ? 'bg-light fw-semibold text-primary' : ''}`}>
                                                                             {itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light' : ''}`} style={hasData ? {color: '#d97706'} : {}}>
+                                                                        <td className={`text-end ${hasData ? 'bg-light' : ''}`} style={hasData ? {color: 'var(--warning-color)'} : {}}>
                                                                             {itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         <td className={`text-end ${hasData ? 'bg-light text-success fw-semibold' : ''}`}>
@@ -1054,7 +1054,7 @@ export default function ItemPivotReport() {
                                                         </tr>
                                                         {/* Notes, Condition Sheet and Latest Transfer Row */}
                                                         {(license.balance_report_notes || license.condition_sheet || license.latest_transfer) && (
-                                                            <tr key={`${license.license_number}-details`} style={{ backgroundColor: '#f8f9fa' }}>
+                                                            <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--bs-gray-50)' }}>
                                                                 <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 6 : 4))} style={{
                                                                     padding: '10px 15px',
                                                                     borderTop: 'none'
@@ -1063,15 +1063,15 @@ export default function ItemPivotReport() {
                                                                         {license.condition_sheet && (
                                                                             <div style={{
                                                                                 marginBottom: (license.balance_report_notes || license.latest_transfer) ? '8px' : '0',
-                                                                                backgroundColor: '#ffff00',
+                                                                                backgroundColor: 'var(--row-yellow-bg)',
                                                                                 padding: '6px 10px',
                                                                                 borderRadius: '4px'
                                                                             }}>
-                                                                                <strong style={{ color: '#000' }}>
+                                                                                <strong style={{ color: '#000000' }}>
                                                                                     <i className="bi bi-file-earmark-text me-1"></i>
                                                                                     Condition Sheet:
                                                                                 </strong>
-                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
+                                                                                <span style={{ color: '#000000', marginLeft: '8px' }}>
                                                                                     {license.condition_sheet}
                                                                                 </span>
                                                                             </div>
@@ -1079,30 +1079,30 @@ export default function ItemPivotReport() {
                                                                         {license.balance_report_notes && (
                                                                             <div style={{
                                                                                 marginBottom: license.latest_transfer ? '8px' : '0',
-                                                                                backgroundColor: '#ff6b6b',
+                                                                                backgroundColor: 'var(--danger-color)',
                                                                                 padding: '6px 10px',
                                                                                 borderRadius: '4px'
                                                                             }}>
-                                                                                <strong style={{ color: '#000' }}>
+                                                                                <strong style={{ color: '#000000' }}>
                                                                                     <i className="bi bi-sticky me-1"></i>
                                                                                     Notes:
                                                                                 </strong>
-                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
+                                                                                <span style={{ color: '#000000', marginLeft: '8px' }}>
                                                                                     {license.balance_report_notes}
                                                                                 </span>
                                                                             </div>
                                                                         )}
                                                                         {license.latest_transfer && (
                                                                             <div style={{
-                                                                                backgroundColor: '#4dd0e1',
+                                                                                backgroundColor: 'var(--info-color)',
                                                                                 padding: '6px 10px',
                                                                                 borderRadius: '4px'
                                                                             }}>
-                                                                                <strong style={{ color: '#000' }}>
+                                                                                <strong style={{ color: '#000000' }}>
                                                                                     <i className="bi bi-arrow-left-right me-1"></i>
                                                                                     Latest Transfer:
                                                                                 </strong>
-                                                                                <span style={{ color: '#000', marginLeft: '8px' }}>
+                                                                                <span style={{ color: '#000000', marginLeft: '8px' }}>
                                                                                     {license.latest_transfer}
                                                                                 </span>
                                                                             </div>
@@ -1116,13 +1116,13 @@ export default function ItemPivotReport() {
                                                     <tr className="table-warning fw-bold" style={{
                                                         position: 'sticky',
                                                         bottom: 0,
-                                                        backgroundColor: '#fff3cd'
+                                                        backgroundColor: 'var(--warning-bg)'
                                                     }}>
                                                         <td className="text-uppercase" style={{
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 1,
-                                                            backgroundColor: '#fff3cd'
+                                                            backgroundColor: 'var(--warning-bg)'
                                                         }} colSpan="5">
                                                             <i className="bi bi-calculator me-2"></i>
                                                             TOTAL
@@ -1131,13 +1131,13 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '530px',
                                                             zIndex: 1,
-                                                            backgroundColor: '#fff3cd'
+                                                            backgroundColor: 'var(--warning-bg)'
                                                         }}></td>
                                                         <td className="text-end text-primary" style={{
                                                             position: 'sticky',
                                                             left: '650px',
                                                             zIndex: 1,
-                                                            backgroundColor: '#fff3cd'
+                                                            backgroundColor: 'var(--warning-bg)'
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + lic.total_cif, 0).toFixed(2)}
                                                         </td>
@@ -1145,7 +1145,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '750px',
                                                             zIndex: 1,
-                                                            backgroundColor: '#fff3cd'
+                                                            backgroundColor: 'var(--warning-bg)'
                                                         }}>
                                                             {licenses.reduce((sum, lic) => sum + (lic.alloted_cif || 0), 0).toFixed(2)}
                                                         </td>
@@ -1153,7 +1153,7 @@ export default function ItemPivotReport() {
                                                             position: 'sticky',
                                                             left: '850px',
                                                             zIndex: 1,
-                                                            backgroundColor: '#fff3cd',
+                                                            backgroundColor: 'var(--warning-bg)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid #dee2e6'
                                                         }}>
@@ -1185,7 +1185,7 @@ export default function ItemPivotReport() {
                                                                     <td className="text-end text-primary">
                                                                         {totalAllotted > 0 ? totalAllotted.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-end" style={{color: '#d97706'}}>
+                                                                    <td className="text-end" style={{color: 'var(--warning-color)'}}>
                                                                         {totalDebited > 0 ? totalDebited.toFixed(3) : '-'}
                                                                     </td>
                                                                     <td className="text-end text-success">
@@ -1370,7 +1370,7 @@ export default function ItemPivotReport() {
                     {!loading && !activeNormTab && availableNorms.length > 0 && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-tag" style={{fontSize: '3rem', color: '#667eea'}}></i>
+                                <i className="bi bi-tag" style={{fontSize: '3rem', color: 'var(--primary-color)'}}></i>
                                 <h5 className="mt-3 text-primary">Select a Norm to View Report</h5>
                                 <p className="text-muted">Click on any norm tab above to load the report data</p>
                             </div>
@@ -1381,7 +1381,7 @@ export default function ItemPivotReport() {
                     {!loading && availableNorms.length === 0 && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
+                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--bs-gray-300)'}}></i>
                                 <h5 className="mt-3 text-muted">No Norms Available</h5>
                                 <p className="text-muted">No active norm classes found in the system.</p>
                             </div>

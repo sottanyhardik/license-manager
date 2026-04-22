@@ -16,7 +16,7 @@ const LedgerCSVUpload = () => {
     handleUpload,
     removeFile,
   } = useFileUpload({
-    endpoint: '/api/licenses/ledger-csv-upload/',
+    endpoint: 'ledger-csv-upload/',
     fileFieldName: 'file',
     multiple: false, // Single file mode
     accept: '.csv',
@@ -35,7 +35,7 @@ const LedgerCSVUpload = () => {
 
   const fetchTemplateInfo = async () => {
     try {
-      const response = await api.get('/api/licenses/ledger-csv-upload/');
+      const response = await api.get('ledger-csv-upload/');
       setTemplateInfo(response.data);
       setShowTemplate(true);
     } catch (err) {

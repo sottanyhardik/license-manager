@@ -14,10 +14,22 @@ export default function DownloadLicense() {
         setLoading(true);
         try {
             const url = licenseStatus === "expiring"
-                ? `reports/expiring-licenses/?format=excel&days=${days}`
-                : `reports/active-licenses/?format=excel&days=${days}`;
+                ? `reports/expiring-licenses/?days=${days}`
+                : `reports/active-licenses/?days=${days}`;
 
-            const response = await api.get(url, {responseType: 'blob'});
+            const jsonResponse = await api.get(url);
+            const licenseNumbers = jsonResponse.data.licenses.map(l => l.license_number);
+
+            if (licenseNumbers.length === 0) {
+                toast.error('No licenses found for the selected criteria.');
+                return;
+            }
+
+            const response = await api.post(
+                'licenses/bulk-balance-excel/',
+                {license_numbers: licenseNumbers},
+                {responseType: 'blob'}
+            );
 
             const link = document.createElement('a');
             link.href = window.URL.createObjectURL(new Blob([response.data]));
@@ -26,7 +38,7 @@ export default function DownloadLicense() {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(link.href);
-            toast.success('License report downloaded successfully');
+            toast.success(`Downloaded Excel for ${licenseNumbers.length} license(s)`);
         } catch (error) {
             toast.error(error?.response?.data?.error || 'Failed to download. Please try again.');
         } finally {

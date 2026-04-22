@@ -682,50 +682,66 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <i className="bi bi-info-circle me-2" style={{ color: 'var(--primary-color)' }}></i>
                                 Allotment Details - {allotment.item_name}
                             </h5>
-                            <div className="row g-3">
-                                <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #17a2b8' }}>
-                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Unit Price</small>
-                                        <strong style={{ fontSize: '1.1rem', color: 'var(--info-color)' }}>{unitPrice.toFixed(3)}</strong>
+                            <div className="row g-3 align-items-stretch">
+                                {/* Unit Price */}
+                                <div className="col-lg-2 col-md-4">
+                                    <div className="h-100 p-3 d-flex flex-column justify-content-center" style={{ backgroundColor: 'rgba(23,162,184,0.06)', borderRadius: '8px', border: '1px solid rgba(23,162,184,0.2)' }}>
+                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.7rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Unit Price</small>
+                                        <strong style={{ fontSize: '1.15rem', color: 'var(--info-color)' }}>{unitPrice.toFixed(3)}</strong>
                                     </div>
                                 </div>
-                                <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #6c757d' }}>
-                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Required Quantity</small>
-                                        <strong style={{ fontSize: '1.1rem', color: 'var(--text-dark)' }}>{requiredQty.toLocaleString()}</strong>
+
+                                {/* Required group */}
+                                <div className="col-lg-3 col-md-8">
+                                    <div className="h-100 p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', border: '1px solid #e9ecef', borderTop: '3px solid #6c757d' }}>
+                                        <small className="d-block mb-2" style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6c757d' }}>Required</small>
+                                        <div className="d-flex gap-3">
+                                            <div>
+                                                <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>Quantity</small>
+                                                <strong style={{ fontSize: '1.05rem', color: 'var(--text-dark)' }}>{requiredQty.toLocaleString()}</strong>
+                                            </div>
+                                            <div style={{ width: 1, backgroundColor: '#dee2e6' }} />
+                                            <div>
+                                                <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>Value</small>
+                                                <strong style={{ fontSize: '1.05rem', color: 'var(--text-dark)' }}>{requiredValue.toFixed(2)}</strong>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #6c757d' }}>
-                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Required Value</small>
-                                        <strong style={{ fontSize: '1.1rem', color: 'var(--text-dark)' }}>{requiredValue.toFixed(2)}</strong>
+
+                                {/* Allotted group */}
+                                <div className="col-lg-3 col-md-6">
+                                    <div className="h-100 p-3" style={{ backgroundColor: 'rgba(40,167,69,0.04)', borderRadius: '8px', border: '1px solid rgba(40,167,69,0.2)', borderTop: '3px solid #28a745' }}>
+                                        <small className="d-block mb-2" style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#28a745' }}>Allotted</small>
+                                        <div className="d-flex gap-3">
+                                            <div>
+                                                <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>Quantity</small>
+                                                <strong style={{ fontSize: '1.05rem', color: 'var(--success-color)' }}>{allotedQty.toLocaleString()}</strong>
+                                            </div>
+                                            <div style={{ width: 1, backgroundColor: 'rgba(40,167,69,0.2)' }} />
+                                            <div>
+                                                <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>Value</small>
+                                                <strong style={{ fontSize: '1.05rem', color: 'var(--success-color)' }}>{allotedValue.toFixed(2)}</strong>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #28a745' }}>
-                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Allotted Quantity</small>
-                                        <strong style={{ fontSize: '1.1rem', color: 'var(--success-color)' }}>{allotedQty.toLocaleString()}</strong>
-                                    </div>
-                                </div>
-                                <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #28a745' }}>
-                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Allotted Value</small>
-                                        <strong style={{ fontSize: '1.1rem', color: 'var(--success-color)' }}>{allotedValue.toFixed(2)}</strong>
-                                    </div>
-                                </div>
-                                <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #4F46E5' }}>
-                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Balance Quantity</small>
-                                        <strong style={{ fontSize: '1.1rem', color: 'var(--primary-color)' }}>{balanceQty.toLocaleString()}</strong>
-                                    </div>
-                                </div>
-                                <div className="col-md-3 col-lg-2">
-                                    <div className="p-3" style={{ backgroundColor: 'var(--bs-gray-50)', borderRadius: '8px', borderLeft: '3px solid #4F46E5' }}>
-                                        <small className="text-muted d-block mb-1" style={{ fontSize: '0.75rem', fontWeight: '500' }}>Balance Value</small>
-                                        <strong style={{ fontSize: '1.1rem', color: 'var(--primary-color)' }}>
-                                            {balanceValue.toFixed(2)}
-                                            <small className="text-muted d-block" style={{ fontSize: '0.65rem', fontWeight: '400' }}>(+$20 buffer)</small>
-                                        </strong>
+
+                                {/* Balance group */}
+                                <div className="col-lg-4 col-md-6">
+                                    <div className="h-100 p-3" style={{ backgroundColor: 'rgba(79,70,229,0.04)', borderRadius: '8px', border: '1px solid rgba(79,70,229,0.2)', borderTop: '3px solid #4F46E5' }}>
+                                        <small className="d-block mb-2" style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#4F46E5' }}>Balance</small>
+                                        <div className="d-flex gap-3 align-items-end">
+                                            <div>
+                                                <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>Quantity</small>
+                                                <strong style={{ fontSize: '1.05rem', color: 'var(--primary-color)' }}>{balanceQty.toLocaleString()}</strong>
+                                            </div>
+                                            <div style={{ width: 1, backgroundColor: 'rgba(79,70,229,0.2)' }} />
+                                            <div>
+                                                <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>Value <span className="text-muted" style={{ fontWeight: '400' }}>(+$20 buffer)</span></small>
+                                                <strong style={{ fontSize: '1.05rem', color: 'var(--primary-color)' }}>{balanceValue.toFixed(2)}</strong>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -872,8 +888,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             cif_fc: detail.cif_fc || 0,
                             purchase_status: detail.purchase_status || 'N/A'
                         }))}
-                        onSuccess={(msg) => setSuccess(msg)}
-                        onError={(msg) => setError(msg)}
+                        onSuccess={(msg) => toast.success(msg)}
+                        onError={(msg) => toast.error(msg)}
                     />
                 </div>
             )}

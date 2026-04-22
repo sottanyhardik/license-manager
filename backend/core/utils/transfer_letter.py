@@ -32,14 +32,14 @@ def merge_license_documents(licenses, output_path):
         True if successful, False otherwise
     """
     try:
-        from PyPDF2 import PdfMerger, PdfReader
+        from pypdf import PdfWriter, PdfReader
         from PIL import Image
         from reportlab.pdfgen import canvas as pdf_canvas
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.utils import ImageReader
         import io
 
-        merger = PdfMerger()
+        merger = PdfWriter()
         added_count = 0
 
         # Sort documents: TRANSFER LETTER first, then LICENSE COPY, then OTHER
@@ -129,8 +129,8 @@ def merge_license_documents(licenses, output_path):
 
         if added_count > 0:
             # Write merged PDF
-            merger.write(output_path)
-            merger.close()
+            with open(output_path, 'wb') as f:
+                merger.write(f)
             logger.info("Merged %d license documents into %s", added_count, os.path.basename(output_path))
             return True
         else:
@@ -155,7 +155,7 @@ def merge_tl_with_license_copy(tl_pdf_path, license_copy_path, output_path):
         True if successful, False otherwise
     """
     try:
-        from PyPDF2 import PdfMerger
+        from pypdf import PdfWriter
 
         # Check if both files exist
         if not os.path.exists(tl_pdf_path):
@@ -166,15 +166,15 @@ def merge_tl_with_license_copy(tl_pdf_path, license_copy_path, output_path):
             logger.error("License copy PDF not found: %s", license_copy_path)
             return False
 
-        merger = PdfMerger()
+        merger = PdfWriter()
 
         # Add transfer letter first, then license copy
         merger.append(tl_pdf_path)
         merger.append(license_copy_path)
 
         # Write merged PDF
-        merger.write(output_path)
-        merger.close()
+        with open(output_path, 'wb') as f:
+            merger.write(f)
 
         logger.info("Created FS PDF: %s", os.path.basename(output_path))
         return True
@@ -184,9 +184,131 @@ def merge_tl_with_license_copy(tl_pdf_path, license_copy_path, output_path):
         return False
 
 
+def _cleanup_tl_files(media_root, prefix=None):
+    """
+    Remove all TL_ALLOT_*, TL_BOE_*, TL_TRADE_* files and folders from media_root.
+    If prefix is given, also ensures that specific entry is removed.
+    """
+    import shutil
+    tl_prefixes = ('TL_ALLOT_', 'TL_BOE_', 'TL_TRADE_')
+    try:
+        for entry in os.listdir(media_root):
+            if any(entry.startswith(p) for p in tl_prefixes):
+                full_path = os.path.join(media_root, entry)
+                try:
+                    if os.path.isdir(full_path):
+                        shutil.rmtree(full_path)
+                    elif os.path.isfile(full_path):
+                        os.remove(full_path)
+                except OSError as e:
+                    logger.warning("Cleanup failed for %s: %s", full_path, str(e))
+    except OSError as e:
+        logger.warning("Could not list media root for cleanup: %s", str(e))
+
+
+def _collect_unique_licenses(instance, instance_type):
+    """Collect unique license objects from an instance."""
+    unique_licenses = set()
+    if instance_type == 'allotment':
+        for item in instance.allotment_details.all():
+            if item.item and item.item.license:
+                unique_licenses.add(item.item.license)
+    elif instance_type == 'boe':
+        for item in instance.item_details.all():
+            if item.sr_number and item.sr_number.license:
+                unique_licenses.add(item.sr_number.license)
+    elif instance_type == 'trade':
+        for line in instance.lines.all():
+            if line.sr_number and line.sr_number.license:
+                unique_licenses.add(line.sr_number.license)
+    return unique_licenses
+
+
+def _build_license_copy_map(unique_licenses, output_dir):
+    """Generate merged license copy PDFs and return a map of license_number -> pdf_path."""
+    import shutil
+    license_copy_map = {}
+    temp_dir = os.path.join(output_dir, '__license_copies__')
+    os.makedirs(temp_dir, exist_ok=True)
+    for license_obj in unique_licenses:
+        license_number = license_obj.license_number.replace('/', '_')
+        pdf_path = os.path.join(temp_dir, f'{license_number} - Copy.pdf')
+        merge_license_documents([license_obj], pdf_path)
+        if os.path.exists(pdf_path):
+            license_copy_map[license_number] = pdf_path
+    return license_copy_map, temp_dir
+
+
+def _apply_license_copies_to_dir(output_dir, license_copy_map):
+    """Single-party: TL + license copy → FS PDF per license number. Removes originals."""
+    import shutil
+    successfully_merged = []
+    for filename in os.listdir(output_dir):
+        if not filename.endswith('.pdf'):
+            continue
+        if filename.endswith(' - Copy.pdf') or filename.endswith(' - FS.pdf'):
+            continue
+        license_number = filename.split('_')[0]
+        if license_number not in license_copy_map:
+            continue
+        tl_pdf = os.path.join(output_dir, filename)
+        copy_dest = os.path.join(output_dir, f'{license_number} - Copy.pdf')
+        shutil.copy2(license_copy_map[license_number], copy_dest)
+        fs_pdf = os.path.join(output_dir, f'{license_number} - FS.pdf')
+        if merge_tl_with_license_copy(tl_pdf, copy_dest, fs_pdf):
+            successfully_merged.append((tl_pdf, copy_dest))
+            logger.info("Created FS PDF: %s", os.path.basename(fs_pdf))
+    for tl_p, copy_p in successfully_merged:
+        for f in (tl_p, copy_p):
+            try:
+                os.remove(f)
+            except OSError as e:
+                logger.warning("Could not delete %s: %s", os.path.basename(f), str(e))
+
+
+def _apply_license_copies_multi_party(output_root, license_copy_map):
+    """
+    Multi-party: for each license number, merge ALL party TLs + one license copy
+    into a single FS PDF. Removes the individual TL files afterward.
+    """
+    from collections import defaultdict
+    from pypdf import PdfWriter
+
+    license_tl_files = defaultdict(list)
+    for fname in sorted(os.listdir(output_root)):
+        if not fname.endswith('.pdf'):
+            continue
+        if fname.endswith(' - Copy.pdf') or fname.endswith(' - FS.pdf'):
+            continue
+        license_number = fname.split('_')[0]
+        license_tl_files[license_number].append(os.path.join(output_root, fname))
+
+    for license_number, tl_files in license_tl_files.items():
+        if license_number not in license_copy_map:
+            continue
+        fs_pdf = os.path.join(output_root, f'{license_number} - FS.pdf')
+        try:
+            writer = PdfWriter()
+            for tl_file in tl_files:
+                writer.append(tl_file)
+            writer.append(license_copy_map[license_number])
+            with open(fs_pdf, 'wb') as f:
+                writer.write(f)
+            logger.info("Created merged FS PDF: %s", os.path.basename(fs_pdf))
+            for tl_file in tl_files:
+                try:
+                    os.remove(tl_file)
+                except OSError as e:
+                    logger.warning("Could not delete %s: %s", os.path.basename(tl_file), str(e))
+        except Exception as e:
+            logger.error("Error creating FS PDF for %s: %s", license_number, str(e))
+
+
 def generate_transfer_letter_generic(instance, request, instance_type='allotment'):
     """
     Generate transfer letter for Allotment, BOE, or Trade.
+    Supports multiple parties via the `parties` request field.
+    Each party can have its own template.
 
     Args:
         instance: AllotmentModel, BillOfEntryModel, or LicenseTrade instance
@@ -196,205 +318,193 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
     Returns:
         Response with zip file or error message
     """
+    import shutil, re
+
     try:
-        # Extract request data
-        company_name = request.data.get('company_name', '').strip()
-        address_line1 = request.data.get('address_line1', '').strip()
-        address_line2 = request.data.get('address_line2', '').strip()
-        template_id = request.data.get('template_id')
         cif_edits = request.data.get('cif_edits', {})
-        include_license_copy = request.data.get('include_license_copy', True)  # Default: True (with license copy)
-        selected_items = request.data.get('selected_items', [])  # List of item IDs to include
-        include_todays_date = request.data.get('include_todays_date', False)  # Include today's date in template
+        include_license_copy = request.data.get('include_license_copy', True)
+        selected_items = request.data.get('selected_items', [])
+        include_todays_date = request.data.get('include_todays_date', False)
 
-        if not template_id:
-            return Response({
-                'error': 'Template ID is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # --- Party extraction ---
+        # Each party carries its own template_id.
+        # Fall back to flat fields + global template_id for backward compatibility.
+        raw_parties = request.data.get('parties', None)
+        global_template_id = request.data.get('template_id')
 
-        # Get transfer letter template
-        transfer_letter = get_object_or_404(TransferLetterModel, pk=template_id)
+        if raw_parties and isinstance(raw_parties, list) and len(raw_parties) > 0:
+            parties = [
+                {
+                    'company_name': p.get('company_name', '').strip(),
+                    'address_line1': p.get('address_line1', '').strip(),
+                    'address_line2': p.get('address_line2', '').strip(),
+                    'template_id': p.get('template_id') or global_template_id,
+                }
+                for p in raw_parties
+            ]
+        else:
+            parties = [{
+                'company_name': request.data.get('company_name', '').strip(),
+                'address_line1': request.data.get('address_line1', '').strip(),
+                'address_line2': request.data.get('address_line2', '').strip(),
+                'template_id': global_template_id,
+            }]
 
-        # Validate template file
-        if not transfer_letter.tl:
-            return Response({
-                'error': 'Transfer letter template file not found'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Validate all parties have a template
+        for idx, party in enumerate(parties):
+            if not party['template_id']:
+                label = f"party {idx + 1} ({party['company_name']})" if party['company_name'] else f"party {idx + 1}"
+                return Response(
+                    {'error': f'Template ID is required for {label}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        tl_path = transfer_letter.tl.path
-
-        if not os.path.exists(tl_path):
-            return Response({
-                'error': f'Transfer letter template file does not exist at: {tl_path}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        if not tl_path.lower().endswith('.docx'):
-            return Response({
-                'error': 'Only DOCX templates are supported. Please upload a .docx file.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Prepare data based on instance type
-        data = []
-
+        # Build output directory prefix
         if instance_type == 'allotment':
-            data = _prepare_allotment_data(
-                instance, company_name, address_line1, address_line2, cif_edits, selected_items
-            )
             prefix = f'TL_ALLOT_{instance.id}'
         elif instance_type == 'boe':
-            data = _prepare_boe_data(
-                instance, company_name, address_line1, address_line2, cif_edits, selected_items
-            )
-            # Use BOE number from instance (e.g., "1234567" from bill_of_entry_number)
             boe_number = instance.bill_of_entry_number or instance.id
             prefix = f'TL_BOE_{boe_number}'
         elif instance_type == 'trade':
-            data = _prepare_trade_data(
-                instance, company_name, address_line1, address_line2, cif_edits, selected_items
-            )
-            # Use trade invoice number or ID
-            trade_ref = instance.invoice_number or instance.id
+            trade_ref = (instance.invoice_number or instance.id)
             prefix = f'TL_TRADE_{trade_ref}'.replace('/', '_')
         else:
-            return Response({
-                'error': f'Invalid instance type: {instance_type}'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': f'Invalid instance type: {instance_type}'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate that we have data to process
-        if not data:
+        dir_name = prefix
+        output_root = os.path.join(settings.MEDIA_ROOT, dir_name)
+
+        # Clean up any previous generation files for this instance
+        _cleanup_tl_files(settings.MEDIA_ROOT, prefix)
+        os.makedirs(output_root, exist_ok=True)
+
+        additional_context = {}
+        if include_todays_date:
+            additional_context['todays_date'] = datetime.now().strftime('%d-%m-%Y')
+
+        from allotment.scripts.aro import generate_tl_software
+
+        # Pre-build license copy map once (shared across all parties)
+        license_copy_map = {}
+        temp_copy_dir = None
+        if include_license_copy:
+            unique_licenses = _collect_unique_licenses(instance, instance_type)
+            if unique_licenses:
+                license_copy_map, temp_copy_dir = _build_license_copy_map(unique_licenses, output_root)
+
+        multi_party = len(parties) > 1
+        any_data_generated = False
+
+        for idx, party in enumerate(parties):
+            company_name = party['company_name']
+            address_line1 = party['address_line1']
+            address_line2 = party['address_line2']
+            template_id = party['template_id']
+
+            # Load this party's template
+            try:
+                transfer_letter = TransferLetterModel.objects.get(pk=template_id)
+            except TransferLetterModel.DoesNotExist:
+                logger.warning("Template %s not found for party %d, skipping", template_id, idx + 1)
+                continue
+
+            if not transfer_letter.tl:
+                logger.warning("Template %s has no file for party %d, skipping", template_id, idx + 1)
+                continue
+
+            template_path = transfer_letter.tl.path
+            if not os.path.exists(template_path) or not template_path.lower().endswith('.docx'):
+                logger.warning("Template file invalid for party %d, skipping", idx + 1)
+                continue
+
+            if instance_type == 'allotment':
+                data = _prepare_allotment_data(instance, company_name, address_line1, address_line2, cif_edits, selected_items)
+            elif instance_type == 'boe':
+                data = _prepare_boe_data(instance, company_name, address_line1, address_line2, cif_edits, selected_items)
+            elif instance_type == 'trade':
+                data = _prepare_trade_data(instance, company_name, address_line1, address_line2, cif_edits, selected_items)
+            else:
+                data = []
+
+            if not data:
+                logger.warning("No data for party %d (%s), skipping", idx + 1, company_name)
+                continue
+
+            any_data_generated = True
+
+            if multi_party:
+                # Generate to temp dir, then move files to root with party name as suffix
+                temp_party_dir = os.path.join(output_root, f'__party_{idx}__')
+                os.makedirs(temp_party_dir, exist_ok=True)
+
+                generate_tl_software(
+                    data=data,
+                    tl_path=template_path,
+                    path=temp_party_dir,
+                    transfer_letter_name=transfer_letter.name.replace(' ', '_'),
+                    additional_context=additional_context
+                )
+
+                # Rename: suffix party name onto each file (keeps license number at start)
+                safe_name = re.sub(r'[^\w\s-]', '', company_name)[:20].strip().replace(' ', '_')
+                party_suffix = f'_{safe_name}' if safe_name else f'_Party{idx + 1}'
+                for fname in os.listdir(temp_party_dir):
+                    if fname.endswith('.pdf'):
+                        base, ext = os.path.splitext(fname)
+                        os.rename(
+                            os.path.join(temp_party_dir, fname),
+                            os.path.join(temp_party_dir, f'{base}{party_suffix}{ext}')
+                        )
+
+                # Move all renamed files flat into output root
+                for fname in os.listdir(temp_party_dir):
+                    shutil.move(os.path.join(temp_party_dir, fname), os.path.join(output_root, fname))
+                shutil.rmtree(temp_party_dir)
+            else:
+                generate_tl_software(
+                    data=data,
+                    tl_path=template_path,
+                    path=output_root,
+                    transfer_letter_name=transfer_letter.name.replace(' ', '_'),
+                    additional_context=additional_context
+                )
+
+        # Apply license copies after all parties are done
+        if include_license_copy and license_copy_map:
+            if multi_party:
+                # One FS per license number = all party TLs + one license copy merged
+                _apply_license_copies_multi_party(output_root, license_copy_map)
+            else:
+                _apply_license_copies_to_dir(output_root, license_copy_map)
+
+        # Clean up shared license copies temp directory
+        if temp_copy_dir and os.path.exists(temp_copy_dir):
+            shutil.rmtree(temp_copy_dir)
+
+        if not any_data_generated:
             return Response({
                 'error': 'No valid items found with license information. Please ensure the selected items have license numbers linked.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create output directory
-        dir_name = f'{prefix}_{transfer_letter.name.replace(" ", "_")}'
-        file_path = os.path.join(settings.MEDIA_ROOT, dir_name)
-
-        # Clean up old directory if it exists (always generate fresh)
-        import shutil
-        if os.path.exists(file_path):
-            shutil.rmtree(file_path)
-
-        os.makedirs(file_path, exist_ok=True)
-
-        # Generate transfer letters
-        from allotment.scripts.aro import generate_tl_software
-
-        # Add today's date to context if requested
-        additional_context = {}
-        if include_todays_date:
-            from datetime import datetime
-            additional_context['todays_date'] = datetime.now().strftime('%d-%m-%Y')
-
-        generate_tl_software(
-            data=data,
-            tl_path=tl_path,
-            path=file_path,
-            transfer_letter_name=transfer_letter.name.replace(' ', '_'),
-            additional_context=additional_context
-        )
-
-        # Only include license copy if requested
-        if include_license_copy:
-            # Collect unique licenses from the data
-            unique_licenses = set()
-            if instance_type == 'allotment':
-                for allotment_item in instance.allotment_details.all():
-                    if allotment_item.item and allotment_item.item.license:
-                        unique_licenses.add(allotment_item.item.license)
-            elif instance_type == 'boe':
-                for item in instance.item_details.all():
-                    if item.sr_number and item.sr_number.license:
-                        unique_licenses.add(item.sr_number.license)
-            elif instance_type == 'trade':
-                for line in instance.lines.all():
-                    if line.sr_number and line.sr_number.license:
-                        unique_licenses.add(line.sr_number.license)
-
-            # Create separate merged PDF for each license
-            license_copy_map = {}  # Map license_number -> license_copy_path
-            if unique_licenses:
-                for license_obj in unique_licenses:
-                    # Create filename: "LICENSE_NUMBER - Copy.pdf"
-                    license_number = license_obj.license_number.replace('/', '_')
-                    merged_filename = f'{license_number} - Copy.pdf'
-                    merged_pdf_path = os.path.join(file_path, merged_filename)
-
-                    # Merge documents for this specific license only
-                    merge_license_documents([license_obj], merged_pdf_path)
-
-                    # Store mapping for FS merge
-                    if os.path.exists(merged_pdf_path):
-                        license_copy_map[license_number] = merged_pdf_path
-
-            # Create FS PDFs: merge each TL PDF with its corresponding License Copy
-            # Keep track of which TL and Copy PDFs have FS created successfully
-            successfully_merged = []  # List of (tl_path, copy_path) tuples
-
-            # Look for all PDF files in the directory (these are the TL PDFs)
-            for filename in os.listdir(file_path):
-                if not filename.endswith('.pdf'):
-                    continue
-
-                # Skip the "- Copy.pdf" files themselves
-                if filename.endswith(' - Copy.pdf'):
-                    continue
-
-                # Skip already created "- FS.pdf" files
-                if filename.endswith(' - FS.pdf'):
-                    continue
-
-                # Extract license number from filename (first part before _)
-                # Example: "0311044439_1_CO.pdf" -> "0311044439"
-                license_number = filename.split('_')[0]
-
-                # Check if we have a license copy for this license number
-                if license_number in license_copy_map:
-                    tl_pdf_path = os.path.join(file_path, filename)
-                    license_copy_path = license_copy_map[license_number]
-                    # Create filename: "LICENSE_NUMBER - FS.pdf"
-                    fs_filename = f'{license_number} - FS.pdf'
-                    fs_pdf_path = os.path.join(file_path, fs_filename)
-
-                    # Merge TL + License Copy -> FS
-                    if merge_tl_with_license_copy(tl_pdf_path, license_copy_path, fs_pdf_path):
-                        # FS PDF created successfully - track for deletion
-                        successfully_merged.append((tl_pdf_path, license_copy_path))
-                        logger.info("Created FS PDF: %s", fs_filename)
-
-            # Delete only the TL and Copy PDFs that have FS successfully created
-            for tl_path, copy_path in successfully_merged:
-                try:
-                    os.remove(tl_path)
-                    logger.debug("Deleted TL PDF: %s", os.path.basename(tl_path))
-                except OSError as e:
-                    logger.warning("Could not delete TL PDF %s: %s", os.path.basename(tl_path), str(e))
-
-                try:
-                    os.remove(copy_path)
-                    logger.debug("Deleted Copy PDF: %s", os.path.basename(copy_path))
-                except OSError as e:
-                    logger.warning("Could not delete Copy PDF %s: %s", os.path.basename(copy_path), str(e))
-
-        # Create zip file
+        # Create zip, read into memory, then clean up server files immediately
         file_name = f'{dir_name}.zip'
-        path_to_zip = make_archive(file_path.rstrip('/'), 'zip', file_path.rstrip('/'))
+        path_to_zip = make_archive(output_root.rstrip('/'), 'zip', output_root.rstrip('/'))
 
-        # Return zip file
         with open(path_to_zip, 'rb') as zip_file:
-            response = HttpResponse(zip_file.read(), content_type='application/zip')
-            response['Content-Disposition'] = f'attachment; filename="{file_name}"'
-            return response
+            zip_content = zip_file.read()
 
-    except TransferLetterModel.DoesNotExist:
-        return Response({
-            'error': 'Transfer letter template not found'
-        }, status=status.HTTP_404_NOT_FOUND)
+        _cleanup_tl_files(settings.MEDIA_ROOT, prefix)
+
+        response = HttpResponse(zip_content, content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+        return response
+
     except Exception as e:
         logger.exception("Failed to generate transfer letter")
-        return Response({
-            'error': f'Failed to generate transfer letter: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {'error': f'Failed to generate transfer letter: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 def _prepare_allotment_data(allotment, company_name, address_line1, address_line2, cif_edits, selected_items=None):

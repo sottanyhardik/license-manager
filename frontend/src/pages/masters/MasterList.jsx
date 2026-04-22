@@ -1137,8 +1137,206 @@ export default function MasterList() {
                         )
                     )}
 
+                    {/* Trades Card Layout */}
+                    {entityName === 'trades' && (
+                        loading ? (
+                            <div className="text-center py-5"><div className="spinner-border text-primary" role="status"></div><div className="mt-2 text-muted">Loading Trades...</div></div>
+                        ) : data.length === 0 ? (
+                            <div className="text-center py-5 text-muted"><i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i><div className="mt-2">No trades found</div></div>
+                        ) : (
+                            <div>
+                                {data.map(item => {
+                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
+                                    const dirColor = item.direction === 'SALE' ? { border: '#86efac', left: '#22c55e', bg: '#dcfce7', text: '#166534' }
+                                        : item.direction === 'PURCHASE' ? { border: '#93c5fd', left: '#3b82f6', bg: '#dbeafe', text: '#1d4ed8' }
+                                        : item.direction === 'COMMISSION_SALE' ? { border: '#fdba74', left: '#f97316', bg: '#ffedd5', text: '#9a3412' }
+                                        : { border: '#c4b5fd', left: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6' };
+                                    return (
+                                        <div key={item.id} style={{ display: 'block', background: '#ffffff', border: `1px solid ${dirColor.border}`, borderLeft: `4px solid ${dirColor.left}`, borderRadius: '10px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                                            {/* Row 1: Identity */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
+                                                    {item.invoice_number || <span style={{ fontStyle: 'italic', color: '#94a3b8', fontWeight: '400', fontSize: '0.875rem' }}>No Invoice</span>}
+                                                </span>
+                                                <span style={{ fontSize: '0.78rem', fontWeight: '700', color: dirColor.text, background: dirColor.bg, padding: '2px 8px', borderRadius: '4px' }}>
+                                                    {item.direction_label || item.direction}
+                                                </span>
+                                                {item.license_type_label && (
+                                                    <span style={{ fontSize: '0.78rem', color: '#475569', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>{item.license_type_label}</span>
+                                                )}
+                                                {item.invoice_date && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        <i className="bi bi-calendar3 me-1"></i>{item.invoice_date}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* Row 2: From → To + BOE */}
+                                            <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '200px' }}>
+                                                        <div>
+                                                            <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>From</div>
+                                                            <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.from_company_label || '-'}</div>
+                                                        </div>
+                                                        <i className="bi bi-arrow-right" style={{ color: '#94a3b8', fontSize: '1rem' }}></i>
+                                                        <div>
+                                                            <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>To</div>
+                                                            <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.to_company_label || '-'}</div>
+                                                        </div>
+                                                    </div>
+                                                    {item.boe_label && (
+                                                        <div style={{ minWidth: '100px' }}>
+                                                            <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BOE</div>
+                                                            <div style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '500' }}>{item.boe_label}</div>
+                                                        </div>
+                                                    )}
+                                                    {item.incentive_license && (
+                                                        <div style={{ minWidth: '100px' }}>
+                                                            <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Incentive Lic</div>
+                                                            <div style={{ fontSize: '0.82rem', color: '#059669', fontWeight: '500' }}>{item.incentive_license}</div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Row 3: Stats + Actions */}
+                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
+                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total</div><div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.total_amount)}</div></div>
+                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Paid/Rcvd</div><div style={{ fontSize: '0.875rem', color: '#059669', fontWeight: '600' }}>{fmtInr(item.paid_or_received)}</div></div>
+                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Due</div><div style={{ fontSize: '0.875rem', color: item.due_amount > 0 ? '#b91c1c' : '#64748b', fontWeight: '600' }}>{fmtInr(item.due_amount)}</div></div>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                                    <button onClick={() => { setTransferLetterType('trade'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); }} title="Transfer Letter" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-file-earmark-text"></i> TL
+                                                    </button>
+                                                    {item.direction === 'SALE' && (<>
+                                                        <button onClick={async () => {
+                                                            try {
+                                                                const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: true }, responseType: 'blob' });
+                                                                const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+                                                                const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_with_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
+                                                                window.URL.revokeObjectURL(url);
+                                                            } catch (err) { toast.error('Failed to generate invoice'); }
+                                                        }} title="Invoice (With Sign)" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                            <i className="bi bi-file-pdf"></i> +Sign
+                                                        </button>
+                                                        <button onClick={async () => {
+                                                            try {
+                                                                const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: false }, responseType: 'blob' });
+                                                                const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+                                                                const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_without_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
+                                                                window.URL.revokeObjectURL(url);
+                                                            } catch (err) { toast.error('Failed to generate invoice'); }
+                                                        }} title="Invoice (Without Sign)" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                            <i className="bi bi-file-pdf"></i> -Sign
+                                                        </button>
+                                                    </>)}
+                                                    {item.direction === 'PURCHASE' && (
+                                                        <button onClick={async () => {
+                                                            if (!window.confirm('Create a SALE trade from this PURCHASE trade?')) return;
+                                                            try {
+                                                                const resp = await api.get(`trades/${item.id}/`);
+                                                                const p = resp.data;
+                                                                const saleData = { direction: 'SALE', license_type: p.license_type || 'DFIA', from_company: p.to_company?.id || p.to_company, to_company: p.from_company?.id || p.from_company, boe: p.boe?.id || p.boe, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], remarks: p.remarks || '', from_pan: p.to_pan, from_gst: p.to_gst, from_addr_line_1: p.to_addr_line_1, from_addr_line_2: p.to_addr_line_2, to_pan: p.from_pan, to_gst: p.from_gst, to_addr_line_1: p.from_addr_line_1, to_addr_line_2: p.from_addr_line_2, lines: (p.lines || []).map(l => ({ sr_number: l.sr_number, description: l.description, hsn_code: l.hsn_code, mode: l.mode, qty_kg: l.qty_kg, rate_inr_per_kg: l.rate_inr_per_kg, cif_fc: l.cif_fc, exc_rate: l.exc_rate, cif_inr: l.cif_inr, fob_inr: l.fob_inr, pct: l.pct, amount_inr: l.amount_inr })), incentive_lines: [], payments: [] };
+                                                                const nr = await api.post('trades/', saleData);
+                                                                toast.success('SALE trade created. Opening in edit mode...');
+                                                                saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
+                                                                navigate(`/trades/${nr.data.id}/edit`);
+                                                            } catch (err) { toast.error(err.response?.data?.non_field_errors?.[0] || 'Failed to copy trade'); }
+                                                        }} title="Copy to Sale" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                            <i className="bi bi-arrow-left-right"></i>
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
+                    )}
+
+                    {/* Incentive Licenses Card Layout */}
+                    {entityName === 'incentive-licenses' && (
+                        loading ? (
+                            <div className="text-center py-5"><div className="spinner-border text-primary" role="status"></div><div className="mt-2 text-muted">Loading Incentive Licenses...</div></div>
+                        ) : data.length === 0 ? (
+                            <div className="text-center py-5 text-muted"><i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i><div className="mt-2">No incentive licenses found</div></div>
+                        ) : (
+                            <div>
+                                {data.map(item => {
+                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
+                                    const parseIndianDate = (s) => { if (!s) return null; const p = s.split('-'); return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null; };
+                                    const isExpired = item.license_expiry_date && parseIndianDate(item.license_expiry_date) < new Date();
+                                    const soldStyle = item.sold_status === 'YES' ? { border: '#fca5a5', left: '#ef4444', badge: '#fff1f2', badgeText: '#b91c1c', label: 'Sold' }
+                                        : item.sold_status === 'PARTIAL' ? { border: '#fde68a', left: '#f59e0b', badge: '#fef3c7', badgeText: '#92400e', label: 'Partial' }
+                                        : { border: '#86efac', left: '#22c55e', badge: '#dcfce7', badgeText: '#166534', label: 'Available' };
+                                    return (
+                                        <div key={item.id} style={{ display: 'block', background: '#ffffff', border: `1px solid ${soldStyle.border}`, borderLeft: `4px solid ${soldStyle.left}`, borderRadius: '10px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                                            {/* Row 1: Identity */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>{item.license_number || '-'}</span>
+                                                {item.license_type && (
+                                                    <span style={{ fontSize: '0.78rem', color: '#475569', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>{item.license_type}</span>
+                                                )}
+                                                {item.license_date && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        <i className="bi bi-calendar3 me-1"></i>{item.license_date}
+                                                    </span>
+                                                )}
+                                                {item.license_expiry_date && (
+                                                    <span style={{ fontSize: '0.8rem', color: isExpired ? '#b91c1c' : '#64748b', background: isExpired ? '#fff1f2' : '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        <i className="bi bi-calendar-x me-1"></i>Exp: {item.license_expiry_date}
+                                                    </span>
+                                                )}
+                                                {item.port_name && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-geo-alt me-1"></i>{item.port_name}
+                                                    </span>
+                                                )}
+                                                {item.exporter_name && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-building me-1"></i>{item.exporter_name}
+                                                    </span>
+                                                )}
+                                                <span style={{ fontSize: '0.75rem', color: soldStyle.badgeText, background: soldStyle.badge, padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                                                    {soldStyle.label}
+                                                </span>
+                                                {!item.is_active && (
+                                                    <span style={{ fontSize: '0.72rem', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>Inactive</span>
+                                                )}
+                                            </div>
+
+                                            {/* Row 3: Stats + Actions */}
+                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
+                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>License Value</div><div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.license_value)}</div></div>
+                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Sold Value</div><div style={{ fontSize: '0.875rem', color: '#b91c1c', fontWeight: '600' }}>{fmtInr(item.sold_value)}</div></div>
+                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Balance</div><div style={{ fontSize: '0.875rem', color: item.balance_value > 0 ? '#059669' : '#94a3b8', fontWeight: '600' }}>{fmtInr(item.balance_value)}</div></div>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/masters/incentive-licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
+                    )}
+
                     {/* Use AccordionTable for entities with nested fields (except licenses, allotments, bill-of-entries), regular DataTable for others */}
-                    {entityName !== 'bill-of-entries' && entityName !== 'allotments' && entityName !== 'licenses' && (metadata.nested_field_defs && Object.keys(metadata.nested_field_defs).length > 0 ? (
+                    {entityName !== 'bill-of-entries' && entityName !== 'allotments' && entityName !== 'licenses' && entityName !== 'trades' && entityName !== 'incentive-licenses' && (metadata.nested_field_defs && Object.keys(metadata.nested_field_defs).length > 0 ? (
                         <AccordionTable
                             data={data}
                             columns={metadata.list_display || []}
@@ -1451,283 +1649,91 @@ export default function MasterList() {
                             onInlineUpdate={handleInlineUpdate}
                         />
                     ) : (
-                        <DataTable
-                            data={data}
-                            columns={metadata.list_display || []}
-                            getRowStyle={entityName === 'incentive-licenses' ? (item) => {
-                                const soldStatus = item.sold_status;
-                                if (soldStatus === 'YES') {
-                                    // Fully sold - Light Red
-                                    return { backgroundColor: 'var(--row-danger-bg)' };
-                                } else if (soldStatus === 'PARTIAL') {
-                                    // Partially sold - Yellow
-                                    return { backgroundColor: 'var(--row-yellow-bg)' };
-                                }
-                                // Not sold - No background color (default white)
-                                return {};
-                            } : null}
-                            customCellRender={entityName === 'incentive-licenses' ? {
-                                sold_status: (item, value) => {
-                                    if (value === 'YES') {
-                                        return (
-                                            <span className="badge" style={{
-                                                backgroundColor: 'var(--danger-color)',
-                                                color: 'white',
-                                                padding: '6px 12px',
-                                                fontSize: '0.85rem',
-                                                fontWeight: '500'
-                                            }}>
-                                                Yes
-                                            </span>
-                                        );
-                                    } else if (value === 'PARTIAL') {
-                                        return (
-                                            <span className="badge" style={{
-                                                backgroundColor: 'var(--warning-color)',
-                                                color: '#000000',
-                                                padding: '6px 12px',
-                                                fontSize: '0.85rem',
-                                                fontWeight: '500'
-                                            }}>
-                                                Partial
-                                            </span>
-                                        );
-                                    } else {
-                                        return (
-                                            <span className="badge" style={{
-                                                backgroundColor: 'var(--success-color)',
-                                                color: 'white',
-                                                padding: '6px 12px',
-                                                fontSize: '0.85rem',
-                                                fontWeight: '500'
-                                            }}>
-                                                No
-                                            </span>
-                                        );
-                                    }
-                                }
-                            } : entityName === 'licenses' ? {
-                                license_number: (item, value) => (
-                                    <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
-                                        <span style={{ fontWeight: '500' }}>{value || '-'}</span>
-                                        {(item.has_tl || item.has_copy) && (
-                                            <a
-                                                href={`/api/licenses/${item.id}/merged-documents/`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                title="View merged documents"
-                                                onClick={(e) => e.stopPropagation()}
-                                                style={{
-                                                    fontSize: '0.7rem',
-                                                    color: 'var(--success-color)',
-                                                    textDecoration: 'none',
-                                                    padding: '1px 4px',
-                                                    backgroundColor: 'var(--success-bg)',
-                                                    borderRadius: '2px',
-                                                    fontWeight: '500',
-                                                    whiteSpace: 'nowrap'
-                                                }}
-                                            >
-                                                Copy
-                                            </a>
-                                        )}
-                                    </div>
-                                )
-                            } : {}}
-                            customActions={entityName === 'licenses' ? [
-                                {
-                                    label: 'Edit',
-                                    icon: 'bi bi-pencil',
-                                    className: 'btn btn-outline-primary',
-                                    onClick: (item) => {
-                                        saveFilterState(entityName, {
-                                            filters: filterParams,
-                                            pagination: { currentPage, pageSize },
-                                            search: ''
-                                        });
-                                        navigate(`/licenses/${item.id}/edit`);
-                                    }
-                                },
-                                {
-                                    label: 'View Balance',
-                                    icon: 'bi bi-eye',
-                                    className: 'btn btn-outline-info',
-                                    onClick: (item) => {
-                                        setSelectedLicenseId(item.id);
-                                        setShowBalanceModal(true);
-                                    }
-                                },
-                                {
-                                    label: 'Download PDF',
-                                    icon: 'bi bi-file-pdf',
-                                    className: 'btn btn-outline-danger',
-                                    onClick: async (item) => {
-                                        try {
-                                            const response = await api.get(`licenses/${item.id}/balance-pdf/`, {
-                                                responseType: 'blob',
-                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
-                                            });
-                                            const blob = new Blob([response.data], { type: 'application/pdf' });
-                                            const url = window.URL.createObjectURL(blob);
-                                            window.open(url, '_blank');
-                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
-                                        } catch (err) {
-                                            toast.error(err?.response?.data?.error || 'Failed to generate PDF');
-                                        }
-                                    }
-                                },
-                                {
-                                    label: 'Download Excel',
-                                    icon: 'bi bi-file-earmark-excel',
-                                    className: 'btn btn-outline-success',
-                                    onClick: async (item) => {
-                                        try {
-                                            const response = await api.get(`licenses/${item.id}/balance-excel/`, {
-                                                responseType: 'blob',
-                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
-                                            });
-                                            const blob = new Blob([response.data], {
-                                                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                                            });
-                                            const url = window.URL.createObjectURL(blob);
-                                            const a = document.createElement('a');
-                                            a.href = url;
-                                            a.download = `${item.license_number || item.id}-balance.xlsx`;
-                                            document.body.appendChild(a);
-                                            a.click();
-                                            document.body.removeChild(a);
-                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
-                                        } catch (err) {
-                                            toast.error(err?.response?.data?.error || 'Failed to generate Excel');
-                                        }
-                                    }
-                                }
-                            ] : entityName === 'allotments' ? [
-                                {
-                                    label: 'Edit',
-                                    icon: 'bi bi-pencil',
-                                    className: 'btn btn-outline-primary',
-                                    onClick: (item) => {
-                                        saveFilterState(entityName, {
-                                            filters: filterParams,
-                                            pagination: { currentPage, pageSize },
-                                            search: ''
-                                        });
-                                        navigate(`/allotments/${item.id}/edit`);
-                                    }
-                                },
-                                {
-                                    label: 'Copy',
-                                    icon: 'bi bi-copy',
-                                    className: 'btn btn-outline-info',
-                                    onClick: async (item) => {
-                                        if (!window.confirm(`Create a copy of allotment ${item.invoice_number || 'this allotment'}?`)) {
-                                            return;
-                                        }
-                                        try {
-                                            const response = await api.post(`allotments/${item.id}/copy/`);
-                                            const newAllotmentId = response.data.id;
-                                            toast.success('Allotment copied successfully. Opening in edit mode...');
-                                            // Save filter state before navigating
-                                            saveFilterState(entityName, {
-                                                filters: filterParams,
-                                                pagination: { currentPage, pageSize },
-                                                search: ''
-                                            });
-                                            // Navigate to edit page of the new copy
-                                            navigate(`/allotments/${newAllotmentId}/edit`);
-                                        } catch (err) {
-                                            toast.error(err.response?.data?.error || 'Failed to copy allotment');
-                                        }
-                                    }
-                                },
-                                {
-                                    label: 'Allocate',
-                                    icon: 'bi bi-box-arrow-in-down',
-                                    className: 'btn btn-outline-success',
-                                    onClick: (item) => {
-                                        saveFilterState(entityName, {
-                                            filters: filterParams,
-                                            pagination: { currentPage, pageSize },
-                                            search: ''
-                                        });
-                                        navigate(`/allotments/${item.id}/allocate`);
-                                    }
-                                },
-                                {
-                                    label: 'PDF',
-                                    icon: 'bi bi-file-pdf',
-                                    className: 'btn btn-outline-danger',
-                                    onClick: async (item) => {
-                                        try {
-                                            const response = await api.get(`allotment-actions/${item.id}/generate-pdf/`, {
-                                                responseType: 'blob',
-                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
-                                            });
-                                            const blob = new Blob([response.data], { type: 'application/pdf' });
-                                            const url = window.URL.createObjectURL(blob);
-                                            window.open(url, '_blank');
-                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
-                                        } catch (err) {
-                                            toast.error(err.response?.data?.error || 'Failed to generate PDF');
-                                        }
-                                    }
-                                }
-                            ] : entityName === 'bill-of-entries' ? [
-                                {
-                                    label: 'Transfer Letter',
-                                    icon: 'bi bi-file-earmark-text',
-                                    className: 'btn btn-outline-warning',
-                                    onClick: (item) => {
-                                        setTransferLetterType('boe');
-                                        setTransferLetterEntityId(item.id);
-                                        setShowTransferLetterModal(true);
-                                    }
-                                },
-                                {
-                                    label: 'Update Product Name',
-                                    icon: 'bi bi-arrow-repeat',
-                                    className: 'btn btn-outline-info',
-                                    onClick: async (item) => {
-                                        if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) {
-                                            return;
-                                        }
-                                        try {
-                                            const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
-                                            toast.success(response.data.message || 'Product name updated successfully');
-                                            // Refresh the list to show updated product name
-                                            fetchData(currentPage, pageSize, filterParams);
-                                        } catch (err) {
-                                            toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
-                                        }
-                                    },
-                                    showIf: (item) => !item.product_name || item.product_name.trim() === ''
-                                }
-                            ] : [
-                                // Default Edit button for all master entities
-                                {
-                                    label: 'Edit',
-                                    icon: 'bi bi-pencil',
-                                    className: 'btn btn-outline-primary',
-                                    onClick: (item) => {
-                                        saveFilterState(entityName, {
-                                            filters: filterParams,
-                                            pagination: { currentPage, pageSize },
-                                            search: ''
-                                        });
-                                        navigate(`/masters/${entityName}/${item.id}/edit`);
-                                    }
-                                }
-                            ]}
-                            loading={loading}
-                            onDelete={handleDelete}
-                            basePath={entityName === 'licenses' ? '/licenses' :
-                                     entityName === 'allotments' ? '/allotments' :
-                                     (entityName === 'trades' ? '/trades' :
-                                     `/masters/${entityName}`)}
-                            inlineEditable={metadata.inline_editable || []}
-                            onInlineUpdate={handleInlineUpdate}
-                        />
+                        loading ? (
+                            <div className="text-center py-5">
+                                <div className="spinner-border text-primary" role="status"></div>
+                                <div className="mt-2 text-muted">Loading {entityTitle}...</div>
+                            </div>
+                        ) : data.length === 0 ? (
+                            <div className="text-center py-5 text-muted">
+                                <i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i>
+                                <div className="mt-2">No {entityTitle ? entityTitle.toLowerCase() : 'records'} found</div>
+                            </div>
+                        ) : (
+                            <div>
+                                {data.map(item => {
+                                    // list_display is array of strings (field names)
+                                    const cols = metadata.list_display || [];
+                                    const fmtLabel = (col) => col.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                    const getVal = (col) => {
+                                        const fieldKey = col.replace(/__/g, '_');
+                                        const val = item[fieldKey] !== undefined ? item[fieldKey] : item[col];
+                                        if (val === null || val === undefined || val === '') return null;
+                                        if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+                                        if (typeof val === 'object') return JSON.stringify(val);
+                                        return String(val);
+                                    };
+                                    const primaryCol = cols[0];
+                                    const primaryVal = primaryCol ? getVal(primaryCol) : null;
+                                    const badgeCols = cols.slice(1, 5);
+                                    const extraCols = cols.slice(5);
+                                    return (
+                                        <div key={item.id} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            background: '#ffffff',
+                                            border: '1px solid #e2e8f0',
+                                            borderLeft: '4px solid #4f46e5',
+                                            borderRadius: '8px',
+                                            marginBottom: '6px',
+                                            padding: '10px 14px',
+                                            gap: '12px',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                                        }}>
+                                            {/* Fields row — equal-width columns so all rows align */}
+                                            <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'flex-start', minWidth: 0 }}>
+                                                {cols.map((col, idx) => {
+                                                    const v = getVal(col);
+                                                    return (
+                                                        <div key={col} style={{ flex: '1 1 0', minWidth: 0 }}>
+                                                            <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {fmtLabel(col)}
+                                                            </div>
+                                                            <div style={{
+                                                                fontSize: '0.875rem',
+                                                                color: idx === 0 ? '#1e1b4b' : '#334155',
+                                                                fontWeight: idx === 0 ? '600' : '400',
+                                                                wordBreak: 'break-word',
+                                                            }}>
+                                                                {v ?? <span style={{ color: '#cbd5e1' }}>—</span>}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Actions — always right-pinned */}
+                                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignSelf: 'center' }}>
+                                                <button
+                                                    onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/masters/${entityName}/${item.id}/edit`); }}
+                                                    title="Edit"
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 10px', cursor: 'pointer' }}
+                                                >
+                                                    <i className="bi bi-pencil"></i> Edit
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(item)}
+                                                    title="Delete"
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
+                                                >
+                                                    <i className="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
                     ))}
 
                     {/* Pagination */}

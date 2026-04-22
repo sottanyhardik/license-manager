@@ -219,6 +219,48 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
     }
 
 
+def delete_stale_boe_rows(license, new_debit_row, skip_signals=False):
+    """
+    Delete debit RowDetails for this license that no longer appear in the
+    freshly uploaded ledger CSV.  Returns the count of deleted rows.
+    """
+    from django.db.models.signals import post_delete
+    from bill_of_entry.models import delete_stock
+
+    # Build the set of (boe_id, sr_number_id) present in the new upload
+    new_row_keys = set()
+    for data in new_debit_row:
+        boe = data.get('boe')
+        licence = data.get('licence')
+        if boe and licence:
+            new_row_keys.add((boe.id, licence.id))
+
+    # Fetch all existing debit RowDetails for this license
+    existing_rows = RowDetails.objects.filter(
+        sr_number__license=license,
+        transaction_type='D'
+    ).select_related('bill_of_entry', 'sr_number')
+
+    stale_ids = [
+        rd.id for rd in existing_rows
+        if (rd.bill_of_entry_id, rd.sr_number_id) not in new_row_keys
+    ]
+
+    if not stale_ids:
+        return 0
+
+    if skip_signals:
+        post_delete.disconnect(delete_stock, sender=RowDetails)
+
+    try:
+        deleted_count, _ = RowDetails.objects.filter(id__in=stale_ids).delete()
+    finally:
+        if skip_signals:
+            post_delete.connect(delete_stock, sender=RowDetails)
+
+    return deleted_count
+
+
 def bulk_get_or_create_boe(boe_row, skip_signals=False):
     """
     Bulk create or update BOE row details.
@@ -354,6 +396,9 @@ def create_object(data_dict):
     # Disable signals during bulk operations to avoid firing 100+ times
     bulk_get_or_create_boe(debit_row, skip_signals=True)
     bulk_get_or_create_boe(credit_row, skip_signals=True)
+
+    # Remove debit rows that were in the DB but are no longer in the new CSV
+    delete_stale_boe_rows(license, debit_row, skip_signals=True)
 
     # Trigger balance updates ONCE at the end for all items
     for import_item in license.import_license.all():

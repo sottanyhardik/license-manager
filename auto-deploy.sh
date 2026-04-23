@@ -94,6 +94,9 @@ echo -e "\${BLUE}→ Installing/upgrading Python dependencies...\${NC}"
 cd backend
 pip install --upgrade -r requirements.txt --quiet
 
+echo -e "\${BLUE}→ Creating new migrations if needed...\${NC}"
+python manage.py makemigrations
+
 echo -e "\${BLUE}→ Running database migrations...\${NC}"
 if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
     # Check if the error is about insufficient privileges
@@ -294,7 +297,7 @@ echo -e "\${BLUE}================================================\${NC}"
 echo -e "\${GREEN}✅ Code pulled from $BRANCH\${NC}"
 echo -e "\${GREEN}✅ Frontend built and deployed\${NC}"
 echo -e "\${GREEN}✅ Backend dependencies installed\${NC}"
-echo -e "\${GREEN}✅ Database migrations applied\${NC}"
+echo -e "\${GREEN}✅ Migrations created and applied\${NC}"
 echo -e "\${GREEN}✅ Static files collected\${NC}"
 echo -e "\${GREEN}✅ Services restarted\${NC}"
 echo ""

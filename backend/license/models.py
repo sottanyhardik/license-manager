@@ -1004,7 +1004,7 @@ class LicenseImportItemsModel(models.Model):
         # PRIORITY 4 & 5: Original logic - use centralized methods where possible
         license_balance = self.license.get_balance_cif
 
-        if not self.cif_fc or self.cif_fc in (Decimal("0"), Decimal("0.1"), Decimal("0.01")):
+        if not self.cif_fc or self.cif_fc == Decimal("0"):
             # Item has no own CIF FC — the full license balance is available
             return license_balance
         else:

@@ -372,6 +372,19 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
                 post_delete.connect(delete_stock, sender=RowDetails)
 
 
+def _recalculate_boe_exchange_rates_for_rows(debit_row):
+    """After bulk_create (which skips signals), force-recalculate exchange_rate for
+    each unique BOE in the debit rows. force=True always writes the computed rate,
+    overriding whatever was stored before (ledger is the authoritative source)."""
+    from bill_of_entry.models import _recalculate_boe_exchange_rate
+    seen = set()
+    for data in debit_row:
+        boe = data.get('boe')
+        if boe and boe.pk and boe.pk not in seen:
+            seen.add(boe.pk)
+            _recalculate_boe_exchange_rate(boe.pk, force=True)
+
+
 def create_object(data_dict):
     """
     Create or update license and related objects from parsed ledger data.
@@ -456,6 +469,10 @@ def _create_object_inner(data_dict):
 
     # Remove debit rows that were in the DB but are no longer in the new CSV
     delete_stale_boe_rows(license, debit_row, skip_signals=True)
+
+    # Recalculate exchange rate for each debit BOE — bulk_create skips signals so
+    # the post_save recalc never fires; we must do it explicitly here.
+    _recalculate_boe_exchange_rates_for_rows(debit_row)
 
     # Trigger balance updates ONCE at the end for all items
     for import_item in license.import_license.all():

@@ -103,6 +103,17 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_on', 'modified_on', 'created_by', 'modified_by']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Auto-calculate exchange_rate from row totals when stored value is 0 or null
+        exc = data.get('exchange_rate')
+        if not exc or float(exc) == 0:
+            total_fc = float(data.get('total_fc') or 0)
+            total_inr = float(data.get('total_inr') or 0)
+            if total_fc > 0:
+                data['exchange_rate'] = round(total_inr / total_fc, 4)
+        return data
+
     def to_internal_value(self, data):
         """Parse JSON strings or flattened FormData from multipart/form-data"""
         import json

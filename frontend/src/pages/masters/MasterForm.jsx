@@ -384,7 +384,9 @@ export default function MasterForm({
                     }
 
                     // Update form fields with fetched data
-                    if (firstExchangeRate) {
+                    // Only set exchange_rate from allotment if the BOE doesn't already have one
+                    const currentExcRate = parseFloat(formData.exchange_rate);
+                    if (firstExchangeRate && (!currentExcRate || currentExcRate === 0)) {
                         updates.exchange_rate = firstExchangeRate;
                     }
                     if (firstProductName) {

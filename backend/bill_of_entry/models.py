@@ -326,12 +326,15 @@ def delete_stock(sender, instance, **kwargs):
         _job()
 
 
-def _recalculate_boe_exchange_rate(boe_id: int) -> None:
+def _recalculate_boe_exchange_rate(boe_id: int, force: bool = False) -> None:
     """Recalculate and persist the exchange rate on a BOE from its row totals.
 
     Uses .update() (not .save()) to avoid re-triggering BillOfEntryModel.save()
     and the associated signals — preventing any infinite-loop risk.
-    Only writes when the new rate differs from the stored rate by more than 1.
+
+    When force=True (ledger upload), always writes the computed rate regardless of
+    the current stored value. When force=False (signal-triggered), only updates
+    when the new rate differs by more than 1 to prevent spurious writes.
     """
     try:
         boe = BillOfEntryModel.objects.get(pk=boe_id)
@@ -341,9 +344,12 @@ def _recalculate_boe_exchange_rate(boe_id: int) -> None:
             new_ex = (total_inr / total_fc).quantize(DEC_EX_0)
         else:
             return  # No FC totals — nothing to update
-        current = _to_decimal(boe.exchange_rate, DEC_EX_0)
-        if abs(new_ex - current) > Decimal("1"):
+        if force:
             BillOfEntryModel.objects.filter(pk=boe_id).update(exchange_rate=new_ex)
+        else:
+            current = _to_decimal(boe.exchange_rate, DEC_EX_0)
+            if abs(new_ex - current) > Decimal("1"):
+                BillOfEntryModel.objects.filter(pk=boe_id).update(exchange_rate=new_ex)
     except (BillOfEntryModel.DoesNotExist, DivisionByZero, ZeroDivisionError, InvalidOperation, TypeError):
         pass
 

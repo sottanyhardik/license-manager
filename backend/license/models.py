@@ -967,10 +967,12 @@ class LicenseImportItemsModel(models.Model):
             return DEC_0
 
         # PRIORITY 1: Check is_restricted flag
-        # If is_restricted=False (not restricted), always use license-level balance
+        # Non-restricted items with no own CIF FC share the full license balance.
+        # Non-restricted items that DO have their own CIF FC use item-level calc (fall through).
         if not self.is_restricted:
-            # Non-restricted item: use license-level balance
-            return self.license.get_balance_cif
+            if not self.cif_fc or self.cif_fc == Decimal("0"):
+                return self.license.get_balance_cif
+            # else: fall through to item-level calculation below
 
         # PRIORITY 2: If is_restricted=True, check if item has restriction percentage
         restriction_balance = self._calculate_head_restriction_balance()

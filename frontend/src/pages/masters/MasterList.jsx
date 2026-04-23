@@ -442,7 +442,7 @@ export default function MasterList() {
                 }
 
                 if (format === 'pdf') {
-                    // For PDF, use blob download with Authorization header
+                    // For PDF, use blob with Authorization header
                     const response = await api.get(apiPath, {
                         params,
                         responseType: 'blob',
@@ -450,9 +450,18 @@ export default function MasterList() {
                     });
                     const blob = new Blob([response.data], { type: 'application/pdf' });
                     const url = window.URL.createObjectURL(blob);
+                    // Open in new browser tab for viewing
                     window.open(url, '_blank');
-                    // Clean up blob URL after a delay
-                    setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                    // Also trigger download
+                    const today = new Date().toISOString().split('T')[0];
+                    const dlLink = document.createElement('a');
+                    dlLink.href = url;
+                    dlLink.setAttribute('download', `BOE-Report-${today}.pdf`);
+                    document.body.appendChild(dlLink);
+                    dlLink.click();
+                    dlLink.remove();
+                    // Revoke after enough time for both tab and download to complete
+                    setTimeout(() => window.URL.revokeObjectURL(url), 30000);
                 } else {
                     // For Excel, download as before
                     const response = await api.get(apiPath, {

@@ -90,9 +90,9 @@ source venv/bin/activate
 echo -e "\${BLUE}→ Upgrading pip to latest version...\${NC}"
 pip install --upgrade pip --quiet
 
-echo -e "\${BLUE}→ Installing Python dependencies...\${NC}"
+echo -e "\${BLUE}→ Installing/upgrading Python dependencies...\${NC}"
 cd backend
-pip install -r requirements.txt --quiet
+pip install --upgrade -r requirements.txt --quiet
 
 echo -e "\${BLUE}→ Running database migrations...\${NC}"
 if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
@@ -199,7 +199,7 @@ except Exception as e:
 echo -e "\${BLUE}→ Warming up critical caches...\${NC}"
 python manage.py shell -c "
 from django.core.cache import cache
-from core.models import CompanyModel, PurchaseStatusModel
+from core.models import CompanyModel, PurchaseStatus
 import json
 
 try:
@@ -208,7 +208,7 @@ try:
     cache.set('active_companies_list', json.dumps(companies), 3600)
 
     # Cache purchase statuses
-    statuses = list(PurchaseStatusModel.objects.all().values('id', 'code', 'name'))
+    statuses = list(PurchaseStatus.objects.all().values('id', 'code', 'label'))
     cache.set('purchase_statuses_list', json.dumps(statuses), 3600)
 
     print(f'✅ Cached {len(companies)} companies and {len(statuses)} purchase statuses')

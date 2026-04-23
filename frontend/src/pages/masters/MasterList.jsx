@@ -977,10 +977,23 @@ export default function MasterList() {
                                                             const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
                                                             const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
                                                             window.open(url, '_blank');
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                            setTimeout(() => window.URL.revokeObjectURL(url), 30000);
                                                         } catch (err) { toast.error(err.response?.data?.error || 'Failed to generate PDF'); }
-                                                    }} title="PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-file-pdf"></i>
+                                                    }} title="Preview Allotment" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-eye"></i>
+                                                    </button>
+                                                    <button onClick={async () => {
+                                                        try {
+                                                            const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
+                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+                                                            const a = document.createElement('a');
+                                                            a.href = url;
+                                                            a.download = `Allotment-${item.invoice || item.id}.pdf`;
+                                                            document.body.appendChild(a); a.click(); a.remove();
+                                                            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to download PDF'); }
+                                                    }} title="Download Allotment" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1e40af', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-download"></i>
                                                     </button>
                                                     <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-trash"></i>
@@ -1605,9 +1618,9 @@ export default function MasterList() {
                                     }
                                 },
                                 {
-                                    label: 'PDF',
-                                    icon: 'bi bi-file-pdf',
-                                    className: 'btn btn-outline-danger',
+                                    label: 'Preview',
+                                    icon: 'bi bi-eye',
+                                    className: 'btn btn-outline-warning',
                                     onClick: async (item) => {
                                         try {
                                             const response = await api.get(`allotment-actions/${item.id}/generate-pdf/`, {
@@ -1617,9 +1630,31 @@ export default function MasterList() {
                                             const blob = new Blob([response.data], { type: 'application/pdf' });
                                             const url = window.URL.createObjectURL(blob);
                                             window.open(url, '_blank');
-                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                            setTimeout(() => window.URL.revokeObjectURL(url), 30000);
                                         } catch (err) {
-                                            toast.error(err.response?.data?.error || 'Failed to generate PDF');
+                                            toast.error(err.response?.data?.error || 'Failed to preview PDF');
+                                        }
+                                    }
+                                },
+                                {
+                                    label: 'Download',
+                                    icon: 'bi bi-download',
+                                    className: 'btn btn-outline-primary',
+                                    onClick: async (item) => {
+                                        try {
+                                            const response = await api.get(`allotment-actions/${item.id}/generate-pdf/`, {
+                                                responseType: 'blob',
+                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                            });
+                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = `Allotment-${item.invoice_number || item.id}.pdf`;
+                                            document.body.appendChild(a); a.click(); a.remove();
+                                            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+                                        } catch (err) {
+                                            toast.error(err.response?.data?.error || 'Failed to download PDF');
                                         }
                                     }
                                 }

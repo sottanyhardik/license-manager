@@ -204,7 +204,7 @@ import json
 
 try:
     # Cache active companies
-    companies = list(CompanyModel.objects.filter(is_active=True).values('id', 'name'))
+    companies = list(CompanyModel.objects.all().values('id', 'name'))
     cache.set('active_companies_list', json.dumps(companies), 3600)
 
     # Cache purchase statuses

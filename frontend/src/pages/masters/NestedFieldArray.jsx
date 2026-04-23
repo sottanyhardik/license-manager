@@ -566,12 +566,19 @@ export default function NestedFieldArray({
                 </div>
             ) : (
                 <div className="d-flex flex-column gap-2">
-                    {value.map((item, index) => (
-                        <div key={index} className="card border-0 shadow-sm" style={{ borderRadius: '10px' }}>
-                            <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2 px-3" style={{ borderRadius: '10px 10px 0 0' }}>
+                    {value.map((item, index) => {
+                        const isFrozen = fieldKey === 'item_details' && item.is_frozen;
+                        return (
+                        <div key={index} className="card border-0 shadow-sm" style={{ borderRadius: '10px', opacity: isFrozen ? 0.92 : 1 }}>
+                            <div className="card-header border-bottom d-flex justify-content-between align-items-center py-2 px-3" style={{ borderRadius: '10px 10px 0 0', background: isFrozen ? '#f0f4ff' : 'white' }}>
                                 <span className="fw-semibold small d-flex align-items-center gap-2" style={{ color: '#6366F1', minWidth: 0 }}>
                                     <i className="bi bi-hash flex-shrink-0"></i>
                                     <span className="flex-shrink-0">Item {index + 1}</span>
+                                    {isFrozen && (
+                                        <span className="badge" style={{ background: '#e0e7ff', color: '#4338CA', fontSize: '0.68rem', fontWeight: 600 }}>
+                                            <i className="bi bi-lock-fill me-1"></i>Ledger
+                                        </span>
+                                    )}
                                     {getItemTitle(item) && (
                                         <span className="fw-normal text-muted text-truncate" style={{ fontSize: '0.78rem', maxWidth: 300 }}>
                                             — {getItemTitle(item)}
@@ -598,14 +605,21 @@ export default function NestedFieldArray({
                                         type="button"
                                         className="btn btn-sm btn-outline-danger"
                                         onClick={() => handleRemove(index)}
-                                        title="Remove item"
+                                        disabled={isFrozen}
+                                        title={isFrozen ? "Ledger rows cannot be deleted" : "Remove item"}
                                         style={{ borderRadius: '6px' }}
                                     >
-                                        <i className="bi bi-trash"></i>
+                                        <i className={`bi ${isFrozen ? 'bi-lock' : 'bi-trash'}`}></i>
                                     </button>
                                 </div>
                             </div>
                             <div className="card-body p-3">
+                                {isFrozen && (
+                                    <div className="alert d-flex align-items-center gap-2 py-2 mb-3" style={{ background: '#e0e7ff', border: '1px solid #c7d2fe', borderRadius: '8px', color: '#4338CA' }}>
+                                        <i className="bi bi-lock-fill flex-shrink-0"></i>
+                                        <small>This row was imported from the ledger and is read-only.</small>
+                                    </div>
+                                )}
                                 {errors[index]?.non_field_errors && (
                                     <div className="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3">
                                         <i className="bi bi-exclamation-circle-fill flex-shrink-0"></i>
@@ -617,14 +631,14 @@ export default function NestedFieldArray({
 
                                 <div className="row g-3">
                                     {fields
-                                        .filter(f => f.name !== "id")
+                                        .filter(f => f.name !== "id" && f.name !== "is_frozen")
                                         .map((field) => {
                                             const isTextarea = field.type === "textarea" ||
                                                 (field.name.includes("note") || field.name.includes("comment"));
                                             const colClass = FIELD_WIDTHS[fieldKey]?.[field.name]
                                                 || (isTextarea ? "col-12" : "col-md-4");
                                             return (
-                                                <div key={field.name} className={colClass}>
+                                                <div key={field.name} className={colClass} style={{ pointerEvents: isFrozen ? 'none' : undefined, opacity: isFrozen ? 0.7 : undefined }}>
                                                     <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 4 }}>
                                                         {field.label || field.name.replace(/_/g, ' ')}
                                                         {field.required && <span className="text-danger ms-1">*</span>}
@@ -644,7 +658,8 @@ export default function NestedFieldArray({
                                 </div>
                             </div>
                         </div>
-                    ))}
+                    );
+                    })}
                 </div>
             )}
 

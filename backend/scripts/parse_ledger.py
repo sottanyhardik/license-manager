@@ -311,7 +311,8 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
             transaction_type=item['type'],
             cif_inr=item['cif_inr'],
             cif_fc=item['cif_fc'],
-            qty=item['qty']
+            qty=item['qty'],
+            is_frozen=True,  # Rows from ledger upload are frozen — cannot be edited from frontend
         ) for item in valid_items
     ]
 
@@ -357,6 +358,7 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
                 update_row.cif_inr = row.cif_inr
                 update_row.cif_fc = row.cif_fc
                 update_row.qty = row.qty
+                update_row.is_frozen = True
                 update_rows.append(update_row)
 
         if skip_signals:
@@ -365,7 +367,7 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
 
         try:
             RowDetails.objects.bulk_create(new_rows, ignore_conflicts=False)
-            RowDetails.objects.bulk_update(update_rows, ['cif_inr', 'cif_fc', 'qty'])
+            RowDetails.objects.bulk_update(update_rows, ['cif_inr', 'cif_fc', 'qty', 'is_frozen'])
         finally:
             if skip_signals:
                 post_save.connect(update_stock, sender=RowDetails, dispatch_uid="update_stock_on_save")

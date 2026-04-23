@@ -27,11 +27,13 @@ class RowDetailsSerializer(serializers.ModelSerializer):
             'cif_inr',
             'cif_fc',
             'qty',
+            'is_frozen',
             'license_number',
             'item_description',
             'hs_code',
             'purchase_status',
         ]
+        read_only_fields = ['is_frozen']
 
 
 class BillOfEntrySerializer(serializers.ModelSerializer):
@@ -239,6 +241,10 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                     # Update existing item
                     try:
                         item_instance = RowDetails.objects.get(id=item_id, bill_of_entry=instance)
+                        # Skip frozen rows — they come from ledger and cannot be edited
+                        if item_instance.is_frozen:
+                            updated_item_ids.append(item_id)
+                            continue
                         # Update all fields
                         for key, value in item_data_clean.items():
                             setattr(item_instance, key, value)
@@ -258,6 +264,15 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                         updated_item_ids.append(item_instance.id)
                 else:
                     # No ID provided - use update_or_create to handle duplicates
+                    # Check if existing row is frozen before overwriting
+                    existing = RowDetails.objects.filter(
+                        bill_of_entry=instance,
+                        sr_number_id=sr_number_id,
+                        transaction_type=transaction_type,
+                    ).first()
+                    if existing and existing.is_frozen:
+                        updated_item_ids.append(existing.id)
+                        continue
                     item_data_clean['sr_number_id'] = sr_number_id
                     item_instance, created = RowDetails.objects.update_or_create(
                         bill_of_entry=instance,

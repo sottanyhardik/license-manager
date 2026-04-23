@@ -258,6 +258,10 @@ class RowDetails(AuditModel):
         default=DEC_000,
         validators=[MinValueValidator(DEC_000)],
     )
+    is_frozen = models.BooleanField(
+        default=False,
+        help_text="Set to True when this row is created/updated from a ledger upload. Frozen rows cannot be edited from the frontend.",
+    )
 
     admin_search_fields = (
         "sr_number__license__license_number",

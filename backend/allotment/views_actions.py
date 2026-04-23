@@ -538,7 +538,7 @@ class AllotmentActionViewSet(ViewSet):
             # Get unit from first allotment detail item
             first_detail = allotment.allotment_details.select_related('item').first()
             raw_unit = (first_detail.item.unit if first_detail and first_detail.item else None) or 'kg'
-            unit_display = {'kg': 'Kg', 'nos': 'NOS', 'mt': 'MT', 'ltr': 'Ltr'}.get(raw_unit.lower(), raw_unit.upper())
+            unit_display = {'kg': 'Kgs', 'kgs': 'Kgs', 'pcs': 'Pcs', 'nos': 'Nos', 'mts': 'Mts', 'mt': 'Mts', 'ltr': 'Ltr'}.get(raw_unit.lower(), raw_unit.upper())
             subject = f"<b>Subject:</b> License Allotment for {item_name} Invoice No. {invoice} for {total_qty:,} {unit_display}"
             elements.append(Paragraph(subject, header_style))
             elements.append(Spacer(1, 12))
@@ -586,7 +586,7 @@ class AllotmentActionViewSet(ViewSet):
                     license_obj.registration_number if license_obj else 'N/A')
 
                 item_unit = (detail.item.unit if detail.item else None) or 'kg'
-                item_unit_display = {'kg': 'Kg', 'nos': 'NOS', 'mt': 'MT', 'ltr': 'Ltr'}.get(item_unit.lower(), item_unit.upper())
+                item_unit_display = {'kg': 'Kgs', 'kgs': 'Kgs', 'pcs': 'Pcs', 'nos': 'Nos', 'mts': 'Mts', 'mt': 'Mts', 'ltr': 'Ltr'}.get(item_unit.lower(), item_unit.upper())
                 row = [
                     license_num_date,
                     reg_num_date,

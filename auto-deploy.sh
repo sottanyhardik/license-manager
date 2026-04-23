@@ -73,6 +73,9 @@ cd $SERVER_PATH
 echo -e "\${BLUE}→ Stashing local changes if any...\${NC}"
 git stash
 
+echo -e "\${BLUE}→ Removing untracked files that would block merge...\${NC}"
+git clean -fd
+
 echo -e "\${BLUE}→ Pulling latest code from $BRANCH...\${NC}"
 git pull origin $BRANCH
 

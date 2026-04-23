@@ -246,40 +246,54 @@ echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null |
 echo -e "\${BLUE}→ Restarting license-manager service...\${NC}"
 echo '$PASSWORD' | sudo -S supervisorctl restart license-manager
 
-echo -e "\${BLUE}→ Purging Celery queue (removing all pending tasks)...\${NC}"
-cd $SERVER_PATH/backend
-source $SERVER_PATH/venv/bin/activate
-celery -A lmanagement purge -f 2>/dev/null || echo -e "\${YELLOW}  ⚠️  Could not purge Celery queue (queue might be empty)\${NC}"
-echo -e "\${GREEN}  ✅ Celery queue purged\${NC}"
-
-echo -e "\${BLUE}→ Ensuring Celery worker listens on 'celery,ledger' queues...\${NC}"
+echo -e "\${BLUE}→ Updating Celery supervisor config (worker --beat -Q celery,ledger)...\${NC}"
+CELERY_BIN="$SERVER_PATH/venv/bin/celery"
 CELERY_CONF=\$(echo '$PASSWORD' | sudo -S find /etc/supervisor/conf.d/ -name "*celery*" ! -name "*beat*" 2>/dev/null | head -1)
 if [ -n "\$CELERY_CONF" ]; then
-    if ! echo '$PASSWORD' | sudo -S grep -q "\-Q celery,ledger" "\$CELERY_CONF" 2>/dev/null; then
-        echo '$PASSWORD' | sudo -S sed -i 's/\(command=.*celery.*worker.*\)/\1 -Q celery,ledger/' "\$CELERY_CONF"
-        echo '$PASSWORD' | sudo -S supervisorctl reread
-        echo '$PASSWORD' | sudo -S supervisorctl update
-        echo -e "\${GREEN}  ✅ Celery worker queue config updated to celery,ledger\${NC}"
-    else
-        echo -e "\${GREEN}  ✅ Celery worker already configured for celery,ledger queues\${NC}"
-    fi
+    echo -e "\${BLUE}  → Found conf: \$CELERY_CONF\${NC}"
+    echo '$PASSWORD' | sudo -S sed -i "s|^command=.*celery.*|command=\$CELERY_BIN -A lmanagement worker --beat -Q celery,ledger -l info|" "\$CELERY_CONF"
+    echo '$PASSWORD' | sudo -S supervisorctl reread
+    echo '$PASSWORD' | sudo -S supervisorctl update
+    echo -e "\${GREEN}  ✅ Supervisor config updated: celery worker --beat -Q celery,ledger -l info\${NC}"
 else
-    echo -e "\${YELLOW}  ⚠️  Celery supervisor conf not found, skipping queue config\${NC}"
+    echo -e "\${YELLOW}  ⚠️  Celery supervisor conf not found, skipping\${NC}"
 fi
 
-echo -e "\${BLUE}→ Checking and restarting Celery if configured...\${NC}"
+echo -e "\${BLUE}→ Stopping all Celery processes (worker + beat)...\${NC}"
 if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery &>/dev/null; then
-    echo '$PASSWORD' | sudo -S supervisorctl restart license-manager-celery
-    echo -e "\${GREEN}  ✅ Celery worker restarted\${NC}"
-else
-    echo -e "\${YELLOW}  ⚠️  Celery not configured\${NC}"
+    echo '$PASSWORD' | sudo -S supervisorctl stop license-manager-celery
+    echo -e "\${GREEN}  ✅ Celery worker stopped\${NC}"
+fi
+if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery-beat &>/dev/null; then
+    echo '$PASSWORD' | sudo -S supervisorctl stop license-manager-celery-beat
+    echo -e "\${GREEN}  ✅ Celery beat stopped\${NC}"
 fi
 
-if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery-beat &>/dev/null; then
-    echo '$PASSWORD' | sudo -S supervisorctl restart license-manager-celery-beat
-    echo -e "\${GREEN}  ✅ Celery beat restarted\${NC}"
+echo -e "\${BLUE}→ Killing any orphaned Celery processes...\${NC}"
+echo '$PASSWORD' | sudo -S pkill -9 -f "celery" 2>/dev/null || true
+sleep 2
+echo -e "\${GREEN}  ✅ Orphaned Celery processes cleared\${NC}"
+
+echo -e "\${BLUE}→ Clearing all Celery tasks (queue purge)...\${NC}"
+cd $SERVER_PATH/backend
+source $SERVER_PATH/venv/bin/activate
+celery -A lmanagement purge -f 2>/dev/null || true
+echo -e "\${GREEN}  ✅ All Celery tasks cleared\${NC}"
+
+echo -e "\${BLUE}→ Starting Celery worker...\${NC}"
+if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery &>/dev/null; then
+    echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery
+    echo -e "\${GREEN}  ✅ Celery worker started\${NC}"
 else
-    echo -e "\${YELLOW}  ⚠️  Celery Beat not configured\${NC}"
+    echo -e "\${YELLOW}  ⚠️  Celery not configured in supervisor\${NC}"
+fi
+
+echo -e "\${BLUE}→ Starting Celery beat...\${NC}"
+if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery-beat &>/dev/null; then
+    echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery-beat
+    echo -e "\${GREEN}  ✅ Celery beat started\${NC}"
+else
+    echo -e "\${YELLOW}  ⚠️  Celery Beat not configured in supervisor\${NC}"
 fi
 
 echo -e "\${BLUE}→ Reloading Nginx...\${NC}"

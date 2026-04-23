@@ -966,57 +966,18 @@ class LicenseImportItemsModel(models.Model):
         if not self.license:
             return DEC_0
 
-        # PRIORITY 1: Check is_restricted flag
-        # Non-restricted items with no own CIF FC share the full license balance.
-        # Non-restricted items that DO have their own CIF FC use item-level calc (fall through).
-        if not self.is_restricted:
-            if not self.cif_fc or self.cif_fc == Decimal("0"):
-                return self.license.get_balance_cif
-            # else: fall through to item-level calculation below
-
-        # PRIORITY 2: If is_restricted=True, check if item has restriction percentage
-        restriction_balance = self._calculate_head_restriction_balance()
-        has_restriction_pct = self.items.filter(
-            sion_norm_class__isnull=False,
-            restriction_percentage__gt=DEC_0
-        ).exists()
-
-        if has_restriction_pct:
-            # This item has restrictions, use restriction calculation
-            # BUT: Cannot exceed license-level balance (if license only has 151.86, restricted item can't show 1367.07)
-            license_balance = self.license.get_balance_cif
-            return min(restriction_balance, license_balance)
-
-        # PRIORITY 3: Check if business logic applies: all other items have zero CIF and this is serial_number 1
-        if self.serial_number == 1:
-            all_items = LicenseImportItemsModel.objects.filter(license=self.license)
-            other_items = [item for item in all_items if item.serial_number != 1]
-
-            # Check if all other items have zero CIF
-            all_others_zero_cif = all(
-                _to_decimal(item.cif_fc or DEC_0, DEC_0) == DEC_0 and
-                _to_decimal(item.cif_inr or DEC_0, DEC_0) == DEC_0
-                for item in other_items
-            ) if other_items else False
-
-            if all_others_zero_cif:
-                # Return the license's balance directly - use centralized calculation
-                return self.license.get_balance_cif
-
-        # PRIORITY 4 & 5: Original logic - use centralized methods where possible
         license_balance = self.license.get_balance_cif
 
         if not self.cif_fc or self.cif_fc == Decimal("0"):
-            # Item has no own CIF FC — the full license balance is available
+            # No own CIF FC — the full license balance is available for this row
             return license_balance
-        else:
-            # Item has its own CIF FC — use item-level credit/debit/allotment,
-            # but cap at license balance so it never shows more than the license has left.
-            credit = _to_decimal(self.cif_fc or DEC_0, DEC_0)
-            debit = self._calculate_item_debit()
-            allotment = self._calculate_item_allotment()
-            item_balance = max(credit - debit - allotment, DEC_0)
-            return min(item_balance, license_balance)
+
+        # Row has its own CIF FC — use item-level calculation capped at license balance
+        credit = _to_decimal(self.cif_fc, DEC_0)
+        debit = self._calculate_item_debit()
+        allotment = self._calculate_item_allotment()
+        item_balance = max(credit - debit - allotment, DEC_0)
+        return min(item_balance, license_balance)
 
     @property
     def available_value_calculated(self) -> Decimal:

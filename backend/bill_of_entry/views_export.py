@@ -61,7 +61,12 @@ def add_grouped_export_action(viewset_class):
             return HttpResponse("Invalid export format. Use 'pdf', 'xlsx', or 'port_xlsx'.", status=400)
 
     def _export_grouped_pdf(self, queryset):
-        """Export grouped bill of entries to PDF with business-level presentation"""
+        """Export grouped bill of entries to PDF grouped by Company → Item → Port"""
+        from reportlab.lib.units import inch
+        from reportlab.platypus import TableStyle, Paragraph
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.lib.colors import HexColor
+
         pdf_exporter = create_pdf_exporter(
             title="Bill of Entry Report",
             filename_prefix="Bill_of_Entries",
@@ -99,169 +104,162 @@ def add_grouped_export_action(viewset_class):
 
         elements = []
 
+        # Item sub-header style
+        item_style = ParagraphStyle(
+            'ItemHeader',
+            fontName='Helvetica-Bold',
+            fontSize=9,
+            textColor=HexColor('#1e40af'),
+            spaceAfter=2,
+            spaceBefore=4,
+            leftIndent=0,
+        )
+
         # Add title with totals
         subtitle = (f"Total CIF (FC): ${pdf_exporter.format_number(total_fc)} | "
                     f"Total CIF (INR): {pdf_exporter.format_number(total_inr)}")
         pdf_exporter.add_title(elements, subtitle=subtitle)
 
+        # Table column widths (19 columns)
+        col_widths = [
+            0.28 * inch,  # Sr No
+            0.6 * inch,   # BOE Number
+            0.52 * inch,  # BOE Date
+            0.48 * inch,  # Port
+            0.52 * inch,  # Quantity (KGS)
+            0.48 * inch,  # Unit Price ($)
+            0.6 * inch,   # Value ($)
+            0.48 * inch,  # Exchange Rate
+            0.72 * inch,  # Total CIF INR
+            0.7 * inch,   # Item Name
+            0.52 * inch,  # Invoice
+            0.75 * inch,  # Exporter
+            0.68 * inch,  # License No.
+            0.52 * inch,  # License Date
+            0.48 * inch,  # License Port
+            0.35 * inch,  # Item Sr.
+            0.48 * inch,  # BOE Qty.
+            0.52 * inch,  # BOE $.
+            0.6 * inch    # BOE CIF
+        ]
+
+        table_header = [
+            'Sr\nNo', 'BOE\nNumber', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
+            'Unit\nPrice ($)', 'Value\n($)', 'Exchange\nRate', 'Total CIF\nINR', 'Item\nName', 'Invoice',
+            'Exporter', 'License\nNo.', 'License\nDate', 'License\nPort', 'Item\nSr.',
+            'BOE\nQty.', 'BOE\n$.', 'BOE\nCIF'
+        ]
+
         # Process each company (sorted alphabetically, None values last)
         for company_name, license_dict in sorted(grouped_data.items(), key=lambda x: (x[0] is None, x[0] or '')):
-            # Company header
             pdf_exporter.add_company_header(elements, company_name)
 
-            # Track company totals
             company_total_qty = 0
             company_total_inr = 0
             company_total_fc = 0
 
-            # Flatten all BOEs for this company into a single list grouped by port
-            company_boes_by_port = defaultdict(list)
+            # Merge license_serial level → group by product → port (same as xlsx)
+            merged_products = defaultdict(lambda: defaultdict(list))
             for license_serial, products_dict in license_dict.items():
                 for product_name, ports_dict in products_dict.items():
                     for port_code, boe_list in ports_dict.items():
-                        for boe in boe_list:
-                            company_boes_by_port[port_code].append(boe)
+                        merged_products[product_name][port_code].extend(boe_list)
 
-            # Create single consolidated table for entire company
-            sr_no = 1
+            # Process each item (product) within this company
+            for product_name in sorted(merged_products.keys()):
+                ports_dict = merged_products[product_name]
 
-            # Table header - 18 columns (added Exporter and Exchange Rate)
-            table_data = [[
-                'Sr\nNo', 'BOE\nNumber', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
-                'Unit\nPrice ($)', 'Value\n($)', 'Exchange\nRate', 'Total CIF\nINR', 'Item\nName', 'Invoice',
-                'Exporter', 'License\nNo.', 'License\nDate', 'License\nPort', 'Item\nSr.',
-                'BOE\nQty.', 'BOE\n$.', 'BOE\nCIF'
-            ]]
+                # Item sub-header
+                elements.append(Paragraph(f"Item: {product_name}", item_style))
 
-            # Process each port and its BOEs
-            for port_code in sorted(company_boes_by_port.keys()):
-                boe_list = company_boes_by_port[port_code]
-                port_total_qty = 0
-                port_total_value = 0
-                port_total_inr = 0
+                table_data = [table_header]
+                sr_no = 1
 
-                for boe in boe_list:
-                    # Main BOE row (first license detail)
-                    if boe['license_details']:
-                        first_detail = boe['license_details'][0]
+                for port_code in sorted(ports_dict.keys()):
+                    port_total_qty = 0
+                    port_total_value = 0
+                    port_total_inr = 0
 
-                        table_data.append([
-                            str(sr_no),
-                            boe['boe_number'],
-                            boe['boe_date'],
-                            port_code,
-                            pdf_exporter.format_number(boe['total_quantity'], decimals=0),
-                            pdf_exporter.format_number(
-                                boe['total_fc'] / boe['total_quantity'] if boe['total_quantity'] > 0 else 0
-                            ),
-                            pdf_exporter.format_number(boe['total_fc']),
-                            pdf_exporter.format_number(boe['exchange_rate']),
-                            pdf_exporter.format_number(boe['total_inr']),
-                            boe['product_name'],  # Use the product_name from boe data
-                            boe['invoice_no'],
-                            first_detail['exporter_name'],  # Exporter name
-                            first_detail['license_no'],     # License number only
-                            first_detail['license_date'],
-                            first_detail['license_port'],
-                            first_detail['item_sr_no'],
-                            pdf_exporter.format_number(first_detail['qty'], decimals=0),
-                            pdf_exporter.format_number(first_detail['cif_fc']),
-                            pdf_exporter.format_number(first_detail['cif_inr'])
-                        ])
+                    for boe in ports_dict[port_code]:
+                        if boe['license_details']:
+                            first_detail = boe['license_details'][0]
 
-                        # Additional license detail rows (if multiple licenses)
-                        for detail in boe['license_details'][1:]:
                             table_data.append([
-                                '', '', '', '', '', '', '', '', '',  # Empty main BOE info columns
-                                '', '',  # Item Name, Invoice
-                                detail['exporter_name'],  # Exporter name
-                                detail['license_no'],     # License number only
-                                detail['license_date'],
-                                detail['license_port'],
-                                detail['item_sr_no'],
-                                pdf_exporter.format_number(detail['qty'], decimals=0),
-                                pdf_exporter.format_number(detail['cif_fc']),
-                                pdf_exporter.format_number(detail['cif_inr'])
+                                str(sr_no),
+                                boe['boe_number'],
+                                boe['boe_date'],
+                                port_code,
+                                pdf_exporter.format_number(boe['total_quantity'], decimals=0),
+                                pdf_exporter.format_number(
+                                    boe['total_fc'] / boe['total_quantity'] if boe['total_quantity'] > 0 else 0
+                                ),
+                                pdf_exporter.format_number(boe['total_fc']),
+                                pdf_exporter.format_number(boe['exchange_rate']),
+                                pdf_exporter.format_number(boe['total_inr']),
+                                boe['product_name'],
+                                boe['invoice_no'],
+                                first_detail['exporter_name'],
+                                first_detail['license_no'],
+                                first_detail['license_date'],
+                                first_detail['license_port'],
+                                first_detail['item_sr_no'],
+                                pdf_exporter.format_number(first_detail['qty'], decimals=0),
+                                pdf_exporter.format_number(first_detail['cif_fc']),
+                                pdf_exporter.format_number(first_detail['cif_inr'])
                             ])
 
-                    sr_no += 1
-                    port_total_qty += boe['total_quantity']
-                    port_total_value += boe['total_fc']
-                    port_total_inr += boe['total_inr']
-                    company_total_qty += boe['total_quantity']
-                    company_total_inr += boe['total_inr']
-                    company_total_fc += boe['total_fc']
+                            for detail in boe['license_details'][1:]:
+                                table_data.append([
+                                    '', '', '', '', '', '', '', '', '',
+                                    '', '',
+                                    detail['exporter_name'],
+                                    detail['license_no'],
+                                    detail['license_date'],
+                                    detail['license_port'],
+                                    detail['item_sr_no'],
+                                    pdf_exporter.format_number(detail['qty'], decimals=0),
+                                    pdf_exporter.format_number(detail['cif_fc']),
+                                    pdf_exporter.format_number(detail['cif_inr'])
+                                ])
 
-                # Add port totals row (18 columns now) - properly aligned
-                table_data.append([
-                    '',  # Sr No
-                    '',  # BOE Number
-                    '',  # BOE Date
-                    f'Port Total ({port_code})',  # Port
-                    pdf_exporter.format_number(port_total_qty, decimals=0),  # Quantity (KGS)
-                    '',  # Unit Price ($)
-                    pdf_exporter.format_number(port_total_value),  # Value ($)
-                    '',  # Exchange Rate
-                    pdf_exporter.format_number(port_total_inr),  # Total CIF INR
-                    '',  # Item Name
-                    '',  # Invoice
-                    '',  # Exporter
-                    '',  # License No.
-                    '',  # License Date
-                    '',  # License Port
-                    '',  # Item Sr.
-                    '',  # BOE Qty.
-                    '',  # BOE $.
-                    ''   # BOE CIF
-                ])
+                        sr_no += 1
+                        port_total_qty += boe['total_quantity']
+                        port_total_value += boe['total_fc']
+                        port_total_inr += boe['total_inr']
 
-            # Create table with column widths (18 columns) - optimized to fit A4 landscape with small margins
-            from reportlab.lib.units import inch
-            col_widths = [
-                0.28 * inch,  # Sr No
-                0.6 * inch,   # BOE Number
-                0.52 * inch,  # BOE Date
-                0.48 * inch,  # Port
-                0.52 * inch,  # Quantity (KGS)
-                0.48 * inch,  # Unit Price ($)
-                0.6 * inch,   # Value ($)
-                0.48 * inch,  # Exchange Rate
-                0.72 * inch,  # Total CIF INR
-                0.7 * inch,   # Item Name
-                0.52 * inch,  # Invoice
-                0.75 * inch,  # Exporter
-                0.68 * inch,  # License No.
-                0.52 * inch,  # License Date
-                0.48 * inch,  # License Port
-                0.35 * inch,  # Item Sr.
-                0.48 * inch,  # BOE Qty.
-                0.52 * inch,  # BOE $.
-                0.6 * inch    # BOE CIF
-            ]  # Total: ~10.78 inches
+                    # Port total row
+                    table_data.append([
+                        '', '', '',
+                        f'Port Total ({port_code})',
+                        pdf_exporter.format_number(port_total_qty, decimals=0),
+                        '',
+                        pdf_exporter.format_number(port_total_value),
+                        '',
+                        pdf_exporter.format_number(port_total_inr),
+                        '', '', '', '', '', '', '', '', '', ''
+                    ])
 
-            table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1)
+                    company_total_qty += port_total_qty
+                    company_total_inr += port_total_inr
+                    company_total_fc += port_total_value
 
-            # Apply number column alignment for columns: 4, 5, 6, 7, 8, 15, 16, 17, 18 (0-indexed)
-            from reportlab.platypus import TableStyle
-            additional_styles = []
-            for col_idx in [4, 5, 6, 7, 8, 15, 16, 17]:
-                additional_styles.append(
-                    ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
-                )
+                table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1)
 
-            # Find rows where Port Total appears and make them bold
-            for row_idx, row in enumerate(table_data):
-                if row[3] and 'Port Total' in str(row[3]):
-                    additional_styles.append(('FONTNAME', (0, row_idx), (-1, row_idx), 'Helvetica-Bold'))
-                    additional_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), pdf_exporter.HEADER_BG))
+                additional_styles = []
+                for col_idx in [4, 5, 6, 7, 8, 15, 16, 17]:
+                    additional_styles.append(
+                        ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
+                    )
+                for row_idx, row in enumerate(table_data):
+                    if row[3] and 'Port Total' in str(row[3]):
+                        additional_styles.append(('FONTNAME', (0, row_idx), (-1, row_idx), 'Helvetica-Bold'))
+                        additional_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), pdf_exporter.HEADER_BG))
 
-            # Apply additional styles
-            table.setStyle(TableStyle(additional_styles))
+                table.setStyle(TableStyle(additional_styles))
+                elements.append(table)
+                pdf_exporter.add_spacer(elements, 0.15)
 
-            elements.append(table)
-            pdf_exporter.add_spacer(elements, 0.2)
-
-            # Add company total summary
+            # Company grand total
             summary_data = [[
                 'Grand Total:',
                 f"Qty: {pdf_exporter.format_number(company_total_qty, decimals=0)} KGS",

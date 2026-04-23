@@ -132,9 +132,21 @@ export default function NestedFieldArray({
         onChange(newArray);
     };
 
-    const renderNestedField = (field, item, index) => {
+    const renderNestedField = (field, item, index, isFrozen = false) => {
         // Use nullish coalescing to preserve 0 values
         const fieldValue = item[field.name] ?? "";
+
+        // Frozen number fields (cif_inr, cif_fc, qty) render as read-only display
+        if (isFrozen && ['cif_inr', 'cif_fc', 'qty'].includes(field.name)) {
+            const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
+            return (
+                <div className="form-control form-control-sm d-flex align-items-center justify-content-between"
+                    style={{ background: '#eff6ff', color: '#1d4ed8', fontWeight: '600', borderColor: '#bfdbfe', cursor: 'default' }}>
+                    <span>{displayVal}</span>
+                    <i className="bi bi-lock-fill" style={{ fontSize: '0.7rem', opacity: 0.5, color: '#3b82f6' }}></i>
+                </div>
+            );
+        }
 
         // Check if this field was recently updated
         const fieldPath = `${fieldKey}.${index}.${field.name}`;
@@ -643,7 +655,7 @@ export default function NestedFieldArray({
                                                         {field.label || field.name.replace(/_/g, ' ')}
                                                         {field.required && <span className="text-danger ms-1">*</span>}
                                                     </label>
-                                                    {renderNestedField(field, item, index)}
+                                                    {renderNestedField(field, item, index, isFrozen)}
                                                     {errors[index]?.[field.name] && (
                                                         <div className="invalid-feedback d-block" style={{ fontSize: '0.75rem' }}>
                                                             <i className="bi bi-exclamation-circle me-1"></i>

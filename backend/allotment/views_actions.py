@@ -535,7 +535,11 @@ class AllotmentActionViewSet(ViewSet):
             total_qty = int(allotment.required_quantity or 0)
             invoice = allotment.invoice or "N/A"
             item_name = allotment.item_name or "N/A"
-            subject = f"<b>Subject:</b> License Allotment for {item_name} Invoice No. {invoice} for {total_qty:,} Kg"
+            # Get unit from first allotment detail item
+            first_detail = allotment.allotment_details.select_related('item').first()
+            raw_unit = (first_detail.item.unit if first_detail and first_detail.item else None) or 'kg'
+            unit_display = {'kg': 'Kg', 'nos': 'NOS', 'mt': 'MT', 'ltr': 'Ltr'}.get(raw_unit.lower(), raw_unit.upper())
+            subject = f"<b>Subject:</b> License Allotment for {item_name} Invoice No. {invoice} for {total_qty:,} {unit_display}"
             elements.append(Paragraph(subject, header_style))
             elements.append(Spacer(1, 12))
 
@@ -581,13 +585,15 @@ class AllotmentActionViewSet(ViewSet):
                 reg_num_date = f"{license_obj.registration_number}\n{license_obj.registration_date.strftime('%d-%m-%Y')}" if license_obj and license_obj.registration_date else (
                     license_obj.registration_number if license_obj else 'N/A')
 
+                item_unit = (detail.item.unit if detail.item else None) or 'kg'
+                item_unit_display = {'kg': 'Kg', 'nos': 'NOS', 'mt': 'MT', 'ltr': 'Ltr'}.get(item_unit.lower(), item_unit.upper())
                 row = [
                     license_num_date,
                     reg_num_date,
                     license_obj.port if license_obj else 'N/A',
                     'DFIA',  # Default duty type
                     str(detail.item.serial_number) if detail.item else 'N/A',
-                    f"{int(detail.qty):,}",
+                    f"{int(detail.qty):,} {item_unit_display}",
                     f"{float(detail.cif_fc):,.2f}",
                     license_obj.notification_number if license_obj else 'N/A',
                 ]
@@ -598,7 +604,7 @@ class AllotmentActionViewSet(ViewSet):
             total_cif = sum(float(d.cif_fc) for d in allotment.allotment_details.all())
             detail_data.append([
                 'Total', '', '', '', '',
-                f"{total_qty_allotted:,}",
+                f"{total_qty_allotted:,} {unit_display}",
                 f"{total_cif:,.2f}",
                 ''
             ])

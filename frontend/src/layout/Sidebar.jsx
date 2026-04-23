@@ -11,6 +11,23 @@ export default function Sidebar() {
         return location.pathname === path || location.pathname.startsWith(path);
     };
 
+    const navLinkStyle = (active, sub = false) => ({
+        borderRadius: sub ? '6px' : '8px',
+        padding: sub ? '0.5rem 1rem' : '0.65rem 1rem',
+        fontSize: sub ? '0.85rem' : '0.9rem',
+        transition: 'all 0.2s ease',
+        backgroundColor: active ? 'var(--primary-color)' : 'transparent',
+        color: 'white',
+    });
+
+    const handleMouseEnter = (active) => (e) => {
+        if (!active) e.currentTarget.style.backgroundColor = 'rgba(79, 70, 229, 0.12)';
+    };
+
+    const handleMouseLeave = (active) => (e) => {
+        if (!active) e.currentTarget.style.backgroundColor = 'transparent';
+    };
+
     return (
         <div className="text-white sidebar p-3" style={{
             width: "260px",
@@ -29,158 +46,89 @@ export default function Sidebar() {
                     .map((r) => (
                         <li key={r.path} className="nav-item mb-1">
                             <Link
-                                className={`nav-link text-white d-flex align-items-center ${isActive(r.path) ? "active" : ""}`}
+                                className={`nav-link d-flex align-items-center ${isActive(r.path) ? "active" : ""}`}
                                 to={r.path}
-                                style={{
-                                    borderRadius: '8px',
-                                    padding: '0.65rem 1rem',
-                                    transition: 'all 0.2s ease',
-                                    backgroundColor: isActive(r.path) ? 'var(--primary-color)' : 'transparent',
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (!isActive(r.path)) {
-                                        e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.12)';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!isActive(r.path)) {
-                                        e.target.style.backgroundColor = 'transparent';
-                                    }
-                                }}
+                                style={navLinkStyle(isActive(r.path))}
+                                onMouseEnter={handleMouseEnter(isActive(r.path))}
+                                onMouseLeave={handleMouseLeave(isActive(r.path))}
                             >
                                 <i className={`bi bi-${r.icon} me-2`} style={{fontSize: '1.1rem'}}/>
-                                <span style={{fontSize: '0.9rem'}}>{r.label}</span>
+                                <span>{r.label}</span>
                             </Link>
                         </li>
                     ))}
 
                 {/* Reports Dropdown */}
                 <li className="nav-item mb-1">
-                        <button
-                            className={`nav-link text-white w-100 text-start d-flex align-items-center justify-content-between ${isActive("/reports") ? "active" : ""}`}
-                            onClick={() => setReportsOpen(!reportsOpen)}
-                            style={{
-                                borderRadius: '8px',
-                                padding: '0.65rem 1rem',
-                                transition: 'all 0.2s ease',
-                                backgroundColor: isActive("/reports") ? 'var(--primary-color)' : 'transparent',
-                                border: 'none'
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!isActive("/reports")) {
-                                    e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.12)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!isActive("/reports")) {
-                                    e.target.style.backgroundColor = 'transparent';
-                                }
-                            }}
-                        >
-                            <div className="d-flex align-items-center">
-                                <i className="bi bi-file-earmark-bar-graph me-2" style={{fontSize: '1.1rem'}}/>
-                                <span style={{fontSize: '0.9rem'}}>Reports</span>
-                            </div>
-                            <i className={`bi bi-chevron-${reportsOpen ? "up" : "down"}`} style={{fontSize: '0.8rem'}}/>
-                        </button>
+                    <button
+                        className={`nav-link w-100 text-start d-flex align-items-center justify-content-between ${isActive("/reports") ? "active" : ""}`}
+                        onClick={() => setReportsOpen(!reportsOpen)}
+                        style={{ ...navLinkStyle(isActive("/reports")), border: 'none' }}
+                        onMouseEnter={handleMouseEnter(isActive("/reports"))}
+                        onMouseLeave={handleMouseLeave(isActive("/reports"))}
+                    >
+                        <div className="d-flex align-items-center">
+                            <i className="bi bi-file-earmark-bar-graph me-2" style={{fontSize: '1.1rem'}}/>
+                            <span>Reports</span>
+                        </div>
+                        <i className={`bi bi-chevron-${reportsOpen ? "up" : "down"}`} style={{fontSize: '0.8rem'}}/>
+                    </button>
 
-                        {reportsOpen && (
-                            <ul className="nav flex-column ms-2 mt-1">
-                                {reportEntities.map((report) => (
-                                    <li key={report.path} className="nav-item mb-1">
-                                        <Link
-                                            className={`nav-link text-white ${isActive(report.path) ? "active" : ""}`}
-                                            to={report.path}
-                                            style={{
-                                                borderRadius: '6px',
-                                                padding: '0.5rem 1rem',
-                                                fontSize: '0.85rem',
-                                                transition: 'all 0.2s ease',
-                                                backgroundColor: isActive(report.path) ? 'var(--primary-color)' : 'transparent',
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                if (!isActive(report.path)) {
-                                                    e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.10)';
-                                                }
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                if (!isActive(report.path)) {
-                                                    e.target.style.backgroundColor = 'transparent';
-                                                }
-                                            }}
-                                        >
-                                            <i className={`bi bi-${report.icon} me-2`} style={{fontSize: '0.9rem'}}/>
-                                            {report.label}
-                                        </Link>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </li>
+                    {reportsOpen && (
+                        <ul className="nav flex-column ms-2 mt-1">
+                            {reportEntities.map((report) => (
+                                <li key={report.path} className="nav-item mb-1">
+                                    <Link
+                                        className={`nav-link ${isActive(report.path) ? "active" : ""}`}
+                                        to={report.path}
+                                        style={navLinkStyle(isActive(report.path), true)}
+                                        onMouseEnter={handleMouseEnter(isActive(report.path))}
+                                        onMouseLeave={handleMouseLeave(isActive(report.path))}
+                                    >
+                                        <i className={`bi bi-${report.icon} me-2`} style={{fontSize: '0.9rem'}}/>
+                                        {report.label}
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </li>
 
                 {/* Masters Dropdown */}
                 <li className="nav-item mb-1">
-                        <button
-                            className={`nav-link text-white w-100 text-start d-flex align-items-center justify-content-between ${isActive("/masters") ? "active" : ""}`}
-                            onClick={() => setMastersOpen(!mastersOpen)}
-                            style={{
-                                borderRadius: '8px',
-                                padding: '0.65rem 1rem',
-                                transition: 'all 0.2s ease',
-                                backgroundColor: isActive("/masters") ? 'var(--primary-color)' : 'transparent',
-                                border: 'none'
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!isActive("/masters")) {
-                                    e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.12)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!isActive("/masters")) {
-                                    e.target.style.backgroundColor = 'transparent';
-                                }
-                            }}
-                        >
-                            <div className="d-flex align-items-center">
-                                <i className="bi bi-database me-2" style={{fontSize: '1.1rem'}}/>
-                                <span style={{fontSize: '0.9rem'}}>Masters</span>
-                            </div>
-                            <i className={`bi bi-chevron-${mastersOpen ? "up" : "down"}`} style={{fontSize: '0.8rem'}}/>
-                        </button>
+                    <button
+                        className={`nav-link w-100 text-start d-flex align-items-center justify-content-between ${isActive("/masters") ? "active" : ""}`}
+                        onClick={() => setMastersOpen(!mastersOpen)}
+                        style={{ ...navLinkStyle(isActive("/masters")), border: 'none' }}
+                        onMouseEnter={handleMouseEnter(isActive("/masters"))}
+                        onMouseLeave={handleMouseLeave(isActive("/masters"))}
+                    >
+                        <div className="d-flex align-items-center">
+                            <i className="bi bi-database me-2" style={{fontSize: '1.1rem'}}/>
+                            <span>Masters</span>
+                        </div>
+                        <i className={`bi bi-chevron-${mastersOpen ? "up" : "down"}`} style={{fontSize: '0.8rem'}}/>
+                    </button>
 
-                        {mastersOpen && (
-                            <ul className="nav flex-column ms-2 mt-1">
-                                {masterEntities.map((master) => (
-                                    <li key={master.path} className="nav-item mb-1">
-                                        <Link
-                                            className={`nav-link text-white ${isActive(master.path) ? "active" : ""}`}
-                                            to={master.path}
-                                            style={{
-                                                borderRadius: '6px',
-                                                padding: '0.5rem 1rem',
-                                                fontSize: '0.85rem',
-                                                transition: 'all 0.2s ease',
-                                                backgroundColor: isActive(master.path) ? 'var(--primary-color)' : 'transparent',
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                if (!isActive(master.path)) {
-                                                    e.target.style.backgroundColor = 'rgba(79, 70, 229, 0.10)';
-                                                }
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                if (!isActive(master.path)) {
-                                                    e.target.style.backgroundColor = 'transparent';
-                                                }
-                                            }}
-                                        >
-                                            <i className={`bi bi-${master.icon} me-2`} style={{fontSize: '0.9rem'}}/>
-                                            {master.label}
-                                        </Link>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </li>
+                    {mastersOpen && (
+                        <ul className="nav flex-column ms-2 mt-1">
+                            {masterEntities.map((master) => (
+                                <li key={master.path} className="nav-item mb-1">
+                                    <Link
+                                        className={`nav-link ${isActive(master.path) ? "active" : ""}`}
+                                        to={master.path}
+                                        style={navLinkStyle(isActive(master.path), true)}
+                                        onMouseEnter={handleMouseEnter(isActive(master.path))}
+                                        onMouseLeave={handleMouseLeave(isActive(master.path))}
+                                    >
+                                        <i className={`bi bi-${master.icon} me-2`} style={{fontSize: '0.9rem'}}/>
+                                        {master.label}
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </li>
             </ul>
         </div>
     );

@@ -259,15 +259,9 @@ else
     echo -e "\${YELLOW}  ⚠️  Celery supervisor conf not found, skipping\${NC}"
 fi
 
-echo -e "\${BLUE}→ Stopping all Celery processes (worker + beat)...\${NC}"
-if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery &>/dev/null; then
-    echo '$PASSWORD' | sudo -S supervisorctl stop license-manager-celery
-    echo -e "\${GREEN}  ✅ Celery worker stopped\${NC}"
-fi
-if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery-beat &>/dev/null; then
-    echo '$PASSWORD' | sudo -S supervisorctl stop license-manager-celery-beat
-    echo -e "\${GREEN}  ✅ Celery beat stopped\${NC}"
-fi
+echo -e "\${BLUE}→ Stopping Celery (worker + beat combined)...\${NC}"
+echo '$PASSWORD' | sudo -S supervisorctl stop license-manager-celery 2>/dev/null || true
+echo -e "\${GREEN}  ✅ Celery stopped\${NC}"
 
 echo -e "\${BLUE}→ Killing any orphaned Celery processes...\${NC}"
 echo '$PASSWORD' | sudo -S pkill -9 -f "celery" 2>/dev/null || true
@@ -280,21 +274,9 @@ source $SERVER_PATH/venv/bin/activate
 celery -A lmanagement purge -f 2>/dev/null || true
 echo -e "\${GREEN}  ✅ All Celery tasks cleared\${NC}"
 
-echo -e "\${BLUE}→ Starting Celery worker...\${NC}"
-if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery &>/dev/null; then
-    echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery
-    echo -e "\${GREEN}  ✅ Celery worker started\${NC}"
-else
-    echo -e "\${YELLOW}  ⚠️  Celery not configured in supervisor\${NC}"
-fi
-
-echo -e "\${BLUE}→ Starting Celery beat...\${NC}"
-if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery-beat &>/dev/null; then
-    echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery-beat
-    echo -e "\${GREEN}  ✅ Celery beat started\${NC}"
-else
-    echo -e "\${YELLOW}  ⚠️  Celery Beat not configured in supervisor\${NC}"
-fi
+echo -e "\${BLUE}→ Starting Celery (worker + beat combined)...\${NC}"
+echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery
+echo -e "\${GREEN}  ✅ Celery started (worker --beat -Q celery,ledger)\${NC}"
 
 echo -e "\${BLUE}→ Reloading Nginx...\${NC}"
 echo '$PASSWORD' | sudo -S systemctl reload nginx

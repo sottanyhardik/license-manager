@@ -135,6 +135,8 @@ const LedgerUpload = () => {
   const [asyncFileTasks, setAsyncFileTasks] = useState([]);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [useAsyncMode, setUseAsyncMode] = useState(true);
+  const [asyncError, setAsyncError] = useState(null);
+  const [asyncUploading, setAsyncUploading] = useState(false);
 
   const {
     files,
@@ -169,6 +171,9 @@ const LedgerUpload = () => {
   const handleAsyncUpload = async () => {
     if (files.length === 0) return;
 
+    setAsyncError(null);
+    setAsyncUploading(true);
+
     const formData = new FormData();
     files.forEach((file) => {
       formData.append('ledger', file);
@@ -188,6 +193,10 @@ const LedgerUpload = () => {
       }
     } catch (err) {
       console.error('Upload error:', err);
+      const msg = err.response?.data?.error || err.message || 'Upload failed. Please try again.';
+      setAsyncError(msg);
+    } finally {
+      setAsyncUploading(false);
     }
   };
 
@@ -320,10 +329,10 @@ const LedgerUpload = () => {
               )}
 
               {/* Error Alert */}
-              {error && (
+              {(error || asyncError) && (
                 <div className="alert alert-danger d-flex align-items-center mb-4" role="alert">
                   <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                  <div>{error}</div>
+                  <div>{error || asyncError}</div>
                 </div>
               )}
 
@@ -372,16 +381,16 @@ const LedgerUpload = () => {
                 <button
                   className="btn btn-primary btn-lg"
                   onClick={handleUpload}
-                  disabled={files.length === 0 || uploading}
+                  disabled={files.length === 0 || uploading || asyncUploading}
                   style={{
-                    background: files.length === 0 || uploading ? undefined : 'linear-gradient(135deg,#4F46E5,#4338CA)',
+                    background: files.length === 0 || uploading || asyncUploading ? undefined : 'linear-gradient(135deg,#4F46E5,#4338CA)',
                     border: 'none', fontWeight: '600', borderRadius: '10px', padding: '12px'
                   }}
                 >
-                  {uploading ? (
+                  {(uploading || asyncUploading) ? (
                     <>
                       <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                      Processing {files.length} file{files.length > 1 ? 's' : ''}...
+                      Uploading {files.length} file{files.length > 1 ? 's' : ''}...
                     </>
                   ) : (
                     <>

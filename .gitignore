@@ -62,3 +62,6 @@ Thumbs.db
 /.venv/bin/sqlformat
 /.venv/bin/wheel
 /.venv/pyvenv.cfg
+/backend/celerybeat-schedule
+/backend/celerybeat-schedule-shm
+/backend/celerybeat-schedule-wal

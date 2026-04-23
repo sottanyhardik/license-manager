@@ -274,6 +274,17 @@ class RowDetails(AuditModel):
         verbose_name = "Item Detail"
         verbose_name_plural = "Item Details"
 
+    def save(self, *args, **kwargs):
+        # Frozen rows can only be modified by the ledger upload (which uses bulk_create/bulk_update).
+        # Any regular save() on a frozen row is silently blocked.
+        if self.pk:
+            try:
+                if RowDetails.objects.filter(pk=self.pk, is_frozen=True).exists():
+                    return
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return str(self.sr_number)
 

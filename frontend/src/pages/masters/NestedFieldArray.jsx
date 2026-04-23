@@ -74,6 +74,15 @@ export default function NestedFieldArray({
         const newArray = [...value];
         const updates = {[fieldName]: fieldValue};
 
+        // Enforce max 3 decimal places for BOE numeric fields
+        if (fieldKey === 'item_details' && ['cif_inr', 'cif_fc', 'qty'].includes(fieldName) && fieldValue !== '' && fieldValue !== null) {
+            const strVal = String(fieldValue);
+            const dotIdx = strVal.indexOf('.');
+            if (dotIdx !== -1 && strVal.length - dotIdx - 1 > 3) {
+                updates[fieldName] = parseFloat(fieldValue).toFixed(3);
+            }
+        }
+
         // Bill of Entry calculations for item_details
         if (entityName === "bill-of-entries" && fieldKey === "item_details") {
             const currentItem = {...newArray[index], ...updates};
@@ -428,7 +437,7 @@ export default function NestedFieldArray({
                 return (
                     <input
                         type="number"
-                        step="0.01"
+                        step={['cif_inr', 'cif_fc', 'qty'].includes(field.name) ? "0.001" : "0.01"}
                         className={`form-control form-control-sm ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}

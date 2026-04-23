@@ -242,13 +242,13 @@ class RowDetails(AuditModel):
     transaction_type = models.CharField(max_length=2, choices=TYPE_CHOICES, default=TYPE_CHOICES[1][0])
     cif_inr = models.DecimalField(
         max_digits=15,
-        decimal_places=2,
+        decimal_places=3,
         default=DEC_0,
         validators=[MinValueValidator(DEC_0)],
     )
     cif_fc = models.DecimalField(
         max_digits=15,
-        decimal_places=2,
+        decimal_places=3,
         default=DEC_0,
         validators=[MinValueValidator(DEC_0)],
     )

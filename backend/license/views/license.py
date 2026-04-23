@@ -2725,20 +2725,23 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 if not doc.file:
                     continue
 
-                file_path = doc.file.path
-                if not os.path.exists(file_path):
-                    logger.warning(f"File not found, skipping: {file_path}")
+                # Use Django storage API so this works for local, S3, or any backend
+                storage = doc.file.storage
+                file_name = doc.file.name
+
+                if not storage.exists(file_name):
+                    logger.warning(f"File not found in storage: {file_name}")
                     continue
 
-                file_ext = os.path.splitext(file_path)[1].lower()
+                file_ext = os.path.splitext(file_name)[1].lower()
 
                 if file_ext == '.pdf':
                     # Add PDF directly
-                    with open(file_path, 'rb') as f:
+                    with storage.open(file_name, 'rb') as f:
                         reader = PdfReader(f)
                         for page in reader.pages:
                             writer.add_page(page)
-                    logger.info(f"Added PDF: {file_path}")
+                    logger.info(f"Added PDF: {file_name}")
                 elif file_ext in ['.doc', '.docx']:
                     # Convert DOCX/DOC to PDF
                     try:
@@ -2749,8 +2752,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
                         import tempfile
 
-                        # Read DOCX content
-                        doc = Document(file_path)
+                        # Read DOCX content using storage API
+                        with storage.open(file_name, 'rb') as docx_f:
+                            doc_bytes = io.BytesIO(docx_f.read())
+                        doc = Document(doc_bytes)
 
                         # Create temporary PDF file
                         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
@@ -2796,11 +2801,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                             pass
 
                     except Exception as e:
-                        logger.error(f"Error converting DOCX file {file_path}: {str(e)}")
+                        logger.error(f"Error converting DOCX file {file_name}: {str(e)}")
                         continue
                 elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
                     # Convert image to PDF
-                    img = Image.open(file_path)
+                    with storage.open(file_name, 'rb') as img_f:
+                        img = Image.open(io.BytesIO(img_f.read()))
 
                     # Convert to RGB if necessary
                     if img.mode != 'RGB':
@@ -2833,7 +2839,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     img_pdf_reader = PdfReader(img_buffer)
                     for page in img_pdf_reader.pages:
                         writer.add_page(page)
-                    logger.info(f"Converted and added image: {file_path}")
+                    logger.info(f"Converted and added image: {file_name}")
 
             if len(writer.pages) == 0:
                 return HttpResponse("Document files are missing from the server storage. The files may not have been synced to this environment.", status=404)

@@ -1002,18 +1002,19 @@ class LicenseImportItemsModel(models.Model):
                 return self.license.get_balance_cif
 
         # PRIORITY 4 & 5: Original logic - use centralized methods where possible
+        license_balance = self.license.get_balance_cif
+
         if not self.cif_fc or self.cif_fc in (Decimal("0"), Decimal("0.1"), Decimal("0.01")):
-            # License-level calculation - use centralized methods
-            credit = self.license._calculate_license_credit()
-            debit = self.license._calculate_license_debit()
-            allotment = self.license._calculate_license_allotment()
-            return credit - debit - allotment
+            # Item has no own CIF FC — the full license balance is available
+            return license_balance
         else:
-            # Item-level calculation
+            # Item has its own CIF FC — use item-level credit/debit/allotment,
+            # but cap at license balance so it never shows more than the license has left.
             credit = _to_decimal(self.cif_fc or DEC_0, DEC_0)
             debit = self._calculate_item_debit()
             allotment = self._calculate_item_allotment()
-            return credit - debit - allotment
+            item_balance = max(credit - debit - allotment, DEC_0)
+            return min(item_balance, license_balance)
 
     @property
     def available_value_calculated(self) -> Decimal:

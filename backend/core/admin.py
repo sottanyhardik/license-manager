@@ -4,12 +4,12 @@ from django.contrib import admin
 from django.contrib import admin
 from django.apps import apps
 
-from core.models import HSCodeModel, ExchangeRateModel
+from core.models import HSCodeModel, ExchangeRateModel, PurchaseStatus
 
 app = apps.get_app_config('core')
 for model_name, model in app.models.items():
     try:
-        if model_name not in ['hscodemodel', 'exchangeratemodel']:
+        if model_name not in ['hscodemodel', 'exchangeratemodel', 'purchasestatus']:
             model_admin = type(model_name + "Admin", (admin.ModelAdmin,), {})
             model_admin.list_display = model.admin_list_display if hasattr(model, 'admin_list_display') else tuple(
                 [field.name for field in model._meta.fields])
@@ -21,6 +21,15 @@ for model_name, model in app.models.items():
             admin.site.register(model, model_admin)
     except Exception:
         pass
+
+
+@admin.register(PurchaseStatus)
+class PurchaseStatusAdmin(admin.ModelAdmin):
+    list_display = ('code', 'label', 'display_order', 'is_active')
+    list_display_links = ('code', 'label')
+    search_fields = ('code', 'label')
+    list_filter = ('is_active',)
+    ordering = ('display_order', 'label')
 
 
 @admin.register(HSCodeModel)

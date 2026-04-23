@@ -12,7 +12,6 @@ with advanced features like:
 """
 
 from rest_framework import filters
-from rest_framework.compat import coreapi, coreschema
 from django_filters import rest_framework as django_filters
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _

@@ -248,7 +248,7 @@ class LicenseTrade(models.Model):
             # A) from_company and to_company must differ (NULLs allowed)
             models.CheckConstraint(
                 name="chk_from_to_companies_different",
-                check=Q(from_company__isnull=True) | Q(to_company__isnull=True) | ~Q(from_company=F("to_company")),
+                condition=Q(from_company__isnull=True) | Q(to_company__isnull=True) | ~Q(from_company=F("to_company")),
             ),
             # B) Prevent duplicate supplier + invoice_number + direction for PURCHASE (ignore blanks)
             models.UniqueConstraint(

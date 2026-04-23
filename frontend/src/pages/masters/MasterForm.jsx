@@ -399,7 +399,15 @@ export default function MasterForm({
                         updates.company = firstCompany;
                     }
                     if (allItemDetails.length > 0) {
-                        updates.item_details = allItemDetails;
+                        // Preserve frozen (ledger-imported) rows — never overwrite them
+                        const existingItems = formData.item_details || [];
+                        const frozenItems = existingItems.filter(item => item.is_frozen);
+                        const frozenSrNumbers = new Set(frozenItems.map(item => item.sr_number));
+                        const filteredAllotmentItems = allItemDetails.filter(item => !frozenSrNumbers.has(item.sr_number));
+                        updates.item_details = [...frozenItems, ...filteredAllotmentItems];
+                    } else if ((formData.item_details || []).some(item => item.is_frozen)) {
+                        // No new allotment items but frozen rows exist — keep them
+                        updates.item_details = (formData.item_details || []).filter(item => item.is_frozen);
                     }
                 } catch (err) {
                     toast.error("Failed to fetch allotment details: " + (err.response?.data?.error || err.message));

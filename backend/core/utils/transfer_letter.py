@@ -282,6 +282,7 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
         include_license_copy = request.data.get('include_license_copy', True)
         selected_items = request.data.get('selected_items', [])
         include_todays_date = request.data.get('include_todays_date', False)
+        output_format = request.data.get('format', 'zip')  # 'zip' | 'pdf'
 
         # --- Party extraction ---
         # Each party carries its own template_id.
@@ -460,6 +461,27 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
             return Response({
                 'error': 'No valid items found with license information. Please ensure the selected items have license numbers linked.'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        if output_format == 'pdf':
+            # Merge all TL PDFs in output_root into a single PDF and return directly
+            import io
+            from pypdf import PdfWriter
+            merger = PdfWriter()
+            pdf_files = sorted(
+                f for f in os.listdir(output_root) if f.lower().endswith('.pdf')
+            )
+            for pdf_file in pdf_files:
+                merger.append(os.path.join(output_root, pdf_file))
+
+            pdf_buffer = io.BytesIO()
+            merger.write(pdf_buffer)
+            pdf_content = pdf_buffer.getvalue()
+
+            _cleanup_tl_files(settings.MEDIA_ROOT, prefix)
+
+            response = HttpResponse(pdf_content, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{dir_name}.pdf"'
+            return response
 
         # Create zip, read into memory, then clean up server files immediately
         file_name = f'{dir_name}.zip'

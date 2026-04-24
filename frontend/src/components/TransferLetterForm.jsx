@@ -23,7 +23,7 @@ export default function TransferLetterForm({
     ]);
     const [companyOptions, setCompanyOptions] = useState([]);
     const [licenseEdits, setLicenseEdits] = useState({}); // {license_number: edited_total_cif}
-    const [generating, setGenerating] = useState(null); // null | 'with_copy' | 'without_copy'
+    const [generating, setGenerating] = useState(null); // null | 'with_copy' | 'without_copy' | 'pdf'
     const [selectedItems, setSelectedItems] = useState(items?.map(item => item.id) || []);
 
     useEffect(() => {
@@ -131,7 +131,7 @@ export default function TransferLetterForm({
 
     const validParties = parties.filter(p => (p.company?.label || '').trim() && p.template);
 
-    const handleGenerate = async (includeLicenseCopy = true) => {
+    const handleGenerate = async (includeLicenseCopy = true, format = 'zip') => {
         const partiesWithoutTemplate = parties.filter(p => (p.company?.label || '').trim() && !p.template);
         if (partiesWithoutTemplate.length > 0) {
             onError?.(`Please select a template for all parties`);
@@ -149,7 +149,11 @@ export default function TransferLetterForm({
             return;
         }
 
-        setGenerating(includeLicenseCopy ? 'with_copy' : 'without_copy');
+        if (format === 'pdf') {
+            setGenerating('pdf');
+        } else {
+            setGenerating(includeLicenseCopy ? 'with_copy' : 'without_copy');
+        }
 
         // Build per-item cif_edits from license-level edits:
         // set first item in group to edited total, remaining items to 0
@@ -172,9 +176,10 @@ export default function TransferLetterForm({
                 template_id: p.template?.value || p.template,
             })),
             cif_edits: filteredCifEdits,
-            include_license_copy: includeLicenseCopy,
+            include_license_copy: format === 'zip' ? includeLicenseCopy : false,
             selected_items: selectedItems,
             include_todays_date: true,
+            format,
         };
 
         try {
@@ -186,18 +191,26 @@ export default function TransferLetterForm({
 
             const response = await api.post(endpoint, requestData, {responseType: 'blob'});
 
+            const identifier = instanceIdentifier || instanceId;
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            const copyType = includeLicenseCopy ? 'WithCopy' : 'WithoutCopy';
-            const identifier = instanceIdentifier || instanceId;
-            link.setAttribute('download', `TransferLetter_${instanceType}_${identifier}_${copyType}.zip`);
+
+            if (format === 'pdf') {
+                link.setAttribute('download', `TransferLetter_${instanceType}_${identifier}.pdf`);
+            } else {
+                const copyType = includeLicenseCopy ? 'WithCopy' : 'WithoutCopy';
+                link.setAttribute('download', `TransferLetter_${instanceType}_${identifier}_${copyType}.zip`);
+            }
+
             document.body.appendChild(link);
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
 
-            const msg = validParties.length > 1
+            const msg = format === 'pdf'
+                ? `Transfer letter PDF generated successfully`
+                : validParties.length > 1
                 ? `Transfer letters for ${validParties.length} parties generated successfully`
                 : `Transfer letter ${includeLicenseCopy ? 'with' : 'without'} license copy generated successfully`;
             onSuccess?.(msg);
@@ -441,14 +454,37 @@ export default function TransferLetterForm({
                 )}
 
                 {/* Generate Buttons */}
-                <div className="d-flex justify-content-end gap-2">
+                <div className="d-flex justify-content-end gap-2 flex-wrap">
+                    <button
+                        type="button"
+                        className="btn btn-success"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (generating === null) handleGenerate(false, 'pdf');
+                        }}
+                        disabled={generating !== null || disabled || validParties.length === 0 || selectedItems.length === 0 || groupedItems.filter(g => isGroupSelected(g.license_number)).length === 0}
+                        title="Download all TL pages merged into a single PDF"
+                    >
+                        {generating === 'pdf' ? (
+                            <>
+                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <i className="bi bi-file-earmark-pdf me-2"></i>
+                                Download PDF
+                            </>
+                        )}
+                    </button>
                     <button
                         type="button"
                         className="btn btn-primary"
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (generating === null) handleGenerate(true);
+                            if (generating === null) handleGenerate(true, 'zip');
                         }}
                         disabled={generating !== null || disabled || validParties.length === 0 || selectedItems.length === 0 || groupedItems.filter(g => isGroupSelected(g.license_number)).length === 0}
                     >
@@ -459,7 +495,7 @@ export default function TransferLetterForm({
                             </>
                         ) : (
                             <>
-                                <i className="bi bi-file-earmark-text me-2"></i>
+                                <i className="bi bi-file-earmark-zip me-2"></i>
                                 With Copy ({groupedItems.filter(g => isGroupSelected(g.license_number)).length}{validParties.length > 1 ? ` × ${validParties.length} parties` : ''})
                             </>
                         )}
@@ -470,7 +506,7 @@ export default function TransferLetterForm({
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (generating === null) handleGenerate(false);
+                            if (generating === null) handleGenerate(false, 'zip');
                         }}
                         disabled={generating !== null || disabled || validParties.length === 0 || selectedItems.length === 0 || groupedItems.filter(g => isGroupSelected(g.license_number)).length === 0}
                     >
@@ -481,7 +517,7 @@ export default function TransferLetterForm({
                             </>
                         ) : (
                             <>
-                                <i className="bi bi-file-earmark-text me-2"></i>
+                                <i className="bi bi-file-earmark-zip me-2"></i>
                                 Without Copy ({groupedItems.filter(g => isGroupSelected(g.license_number)).length}{validParties.length > 1 ? ` × ${validParties.length} parties` : ''})
                             </>
                         )}

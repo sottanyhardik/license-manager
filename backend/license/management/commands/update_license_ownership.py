@@ -18,6 +18,13 @@ SERVER_AUTH_URL = f"{SERVER_BASE_URL}/api/auth/login/"
 SERVER_USERNAME = os.getenv('SERVER_USERNAME', 'admin')
 SERVER_PASSWORD = os.getenv('SERVER_PASSWORD', 'admin@123')
 
+# IP fallbacks for when DNS is down (maps domain → direct IP URL)
+SERVER_IP_FALLBACKS = {
+    'license-manager.duckdns.org': 'https://143.110.252.201',
+    'labdhi.duckdns.org': 'https://139.59.92.226',
+    'license-tractor.duckdns.org': 'http://165.232.185.220',
+}
+
 # DGFT API Config
 APP_ID = "204000000"
 SESSION_ID = "ECDCCFE06566EB25ECD234D0B7159888"
@@ -100,54 +107,63 @@ def build_payload(dfia, data, fetched_iec=None):
 def authenticate(server_url=None):
     """
     Authenticate with server and get JWT token.
+    Tries domain first, then IP fallback if DNS fails.
+    Returns (success: bool, resolved_url: str)
     """
     global auth_token
 
-    # Use provided server_url or fallback to SERVER_BASE_URL
     if server_url is None:
         server_url = SERVER_BASE_URL
 
-    auth_url = f"{server_url}/api/auth/login/"
+    from urllib.parse import urlparse
+    domain = urlparse(server_url).hostname or ''
 
-    try:
-        print(f"   Connecting to: {auth_url}")
-        print(f"   Username: {SERVER_USERNAME}")
+    # Build list of URLs to try: domain first, then IP fallback if available
+    urls_to_try = [server_url]
+    if domain in SERVER_IP_FALLBACKS:
+        ip_url = SERVER_IP_FALLBACKS[domain]
+        if ip_url != server_url:
+            urls_to_try.append(ip_url)
 
-        response = requests.post(
-            auth_url,
-            json={
-                'username': SERVER_USERNAME,
-                'password': SERVER_PASSWORD
-            },
-            verify=True,  # SSL verification
-            timeout=30
-        )
+    for attempt_url in urls_to_try:
+        auth_url = f"{attempt_url}/api/auth/login/"
+        try:
+            print(f"   Connecting to: {auth_url}")
+            print(f"   Username: {SERVER_USERNAME}")
 
-        if response.status_code == 200:
-            data = response.json()
-            auth_token = data.get('access')
-            print(f"✅ Authenticated successfully")
-            print(f"   Token: {auth_token[:50]}...")
-            return True
-        else:
-            print(f"❌ Authentication failed: {response.status_code}")
-            print(f"   Response: {response.text}")
-            return False
-    except requests.exceptions.SSLError as e:
-        print(f"❌ SSL Error: {e}")
-        print(f"   Try adding verify=False for testing (not recommended for production)")
-        return False
-    except requests.exceptions.ConnectionError as e:
-        print(f"❌ Connection Error: {e}")
-        return False
-    except requests.exceptions.Timeout as e:
-        print(f"❌ Timeout Error: {e}")
-        return False
-    except Exception as e:
-        print(f"❌ Authentication error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+            response = requests.post(
+                auth_url,
+                json={'username': SERVER_USERNAME, 'password': SERVER_PASSWORD},
+                verify=False,
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                auth_token = data.get('access')
+                print(f"✅ Authenticated successfully (via {attempt_url})")
+                return True, attempt_url
+            else:
+                print(f"❌ Authentication failed: {response.status_code}")
+                print(f"   Response: {response.text}")
+                return False, attempt_url
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            print(f"⚠️  Could not reach {attempt_url}: {e}")
+            if attempt_url != urls_to_try[-1]:
+                print(f"   Trying fallback IP...")
+            continue
+        except requests.exceptions.SSLError as e:
+            print(f"❌ SSL Error on {attempt_url}: {e}")
+            continue
+        except Exception as e:
+            print(f"❌ Authentication error: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, attempt_url
+
+    print(f"❌ All connection attempts failed for {server_url}")
+    return False, server_url
 
 
 def save_ownership_locally(dfia, data, fetched_iec=None):
@@ -404,6 +420,7 @@ def bulk_sync_to_server(payloads, server_url):
             f"{server_url}/api/license-actions/bulk-update-license-transfer/",
             json=batch_payload,
             headers=headers,
+            verify=False,
             timeout=300  # 5 minutes for bulk operation
         )
 
@@ -416,12 +433,14 @@ def bulk_sync_to_server(payloads, server_url):
             }
         elif res.status_code == 401:
             # Retry with re-authentication
-            if authenticate(server_url):
+            auth_ok, _ = authenticate(server_url)
+            if auth_ok:
                 headers['Authorization'] = f'Bearer {auth_token}'
                 res = requests.post(
                     f"{server_url}/api/license-actions/bulk-update-license-transfer/",
                     json=batch_payload,
                     headers=headers,
+                    verify=False,
                     timeout=300
                 )
                 if res.status_code in [200, 201]:
@@ -566,10 +585,15 @@ class Command(BaseCommand):
         # Authenticate with server if syncing
         if not local_only:
             self.stdout.write("\n🔐 Authenticating with server...")
-            if not authenticate(server_url):
-                self.stdout.write(self.style.ERROR("Failed to authenticate."))
-                self.stdout.write(self.style.WARNING("Continuing in LOCAL ONLY mode..."))
-                local_only = True
+            auth_ok, resolved_url = authenticate(server_url)
+            if not auth_ok:
+                self.stdout.write(self.style.ERROR(
+                    f"\n❌ Cannot authenticate with server at {server_url}.\n"
+                    "   Check network/VPN, credentials, or use --local-only to skip server sync."
+                ))
+                return
+            # Use the URL that actually worked (may be IP fallback instead of domain)
+            server_url = resolved_url
 
         # Fetch licenses - either specific ones, all licenses, or eligible ones
         if license_numbers_str:

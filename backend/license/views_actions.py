@@ -255,10 +255,26 @@ class LicenseActionViewSet(ViewSet):
             failed_count = 0
             errors = []
 
-            # Use bulk operations for better performance
-            with transaction.atomic():
-                for license_data in licenses_data:
-                    try:
+            from datetime import datetime
+            from django.utils import timezone
+
+            def parse_datetime(date_str):
+                if not date_str:
+                    return None
+                try:
+                    if 'T' in date_str:
+                        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    else:
+                        dt = datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
+                    if timezone.is_naive(dt):
+                        dt = timezone.make_aware(dt)
+                    return dt
+                except ValueError:
+                    return None
+
+            for license_data in licenses_data:
+                try:
+                    with transaction.atomic():
                         license_number = license_data.get('license_number')
                         current_owner_data = license_data.get('current_owner')
 
@@ -281,7 +297,6 @@ class LicenseActionViewSet(ViewSet):
                         # Update validity/expiry date if provided
                         validity = license_data.get('validity')
                         if validity:
-                            from datetime import datetime
                             try:
                                 if '/' in validity:
                                     parsed_validity = datetime.strptime(validity, '%d/%m/%Y').date()
@@ -317,9 +332,6 @@ class LicenseActionViewSet(ViewSet):
                         transfers = license_data.get('transfers', [])
 
                         if transfers:
-                            from datetime import datetime
-                            from django.utils import timezone
-
                             for transfer_data in transfers:
                                 # Parse transfer_date if it's a string
                                 transfer_date = transfer_data.get('transfer_date')
@@ -331,23 +343,6 @@ class LicenseActionViewSet(ViewSet):
                                             transfer_date = datetime.strptime(transfer_date, '%Y-%m-%d').date()
                                     except ValueError:
                                         transfer_date = None
-
-                                # Parse datetime fields
-                                def parse_datetime(date_str):
-                                    if not date_str:
-                                        return None
-                                    try:
-                                        if 'T' in date_str:
-                                            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                                        else:
-                                            dt = datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
-
-                                        # Make timezone-aware if naive
-                                        if timezone.is_naive(dt):
-                                            dt = timezone.make_aware(dt)
-                                        return dt
-                                    except ValueError:
-                                        return None
 
                                 # Find or create from_company
                                 from_company = None
@@ -388,9 +383,9 @@ class LicenseActionViewSet(ViewSet):
 
                         success_count += 1
 
-                    except Exception as e:
-                        errors.append(f"License {license_data.get('license_number', 'unknown')}: {str(e)}")
-                        failed_count += 1
+                except Exception as e:
+                    errors.append(f"License {license_data.get('license_number', 'unknown')}: {str(e)}")
+                    failed_count += 1
 
             return Response({
                 'success': success_count,

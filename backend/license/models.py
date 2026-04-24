@@ -139,6 +139,7 @@ class LicenseDetailsModel(AuditModel):
         "core.CompanyModel", on_delete=models.PROTECT, null=True, blank=True, related_name="online_data"
     )
     file_transfer_status = models.TextField(null=True, blank=True)
+    last_ownership_fetch = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("license_expiry_date", "license_date")

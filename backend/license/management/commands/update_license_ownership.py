@@ -45,25 +45,61 @@ auth_token = None
 
 def fetch_eligible_licenses():
     """
-    Get licenses with:
-    - Expiry date > today (not expired)
+    Return licenses that should be fetched from DGFT:
+    - Never fetched before (last_ownership_fetch is None), OR
+    - Still active (license_expiry_date > today)
+
+    Expired licenses that have already been fetched at least once are skipped —
+    their ownership data won't change after expiry.
     """
     from datetime import date
+    from django.db.models import Q
 
     today = date.today()
-
     return LicenseDetailsModel.objects.filter(
-        license_expiry_date__gt=today
+        Q(last_ownership_fetch__isnull=True) | Q(license_expiry_date__gt=today)
     ).order_by("-license_expiry_date")
+
+
+def _derive_current_owner_from_transfers(transfers, api_current_owner):
+    """
+    DGFT's meisScripCurrentOwnerDtls reflects the querying IEC's perspective,
+    not necessarily the true current owner.  Derive it instead from the last
+    Approved transfer's toIEC, which matches what the DGFT portal displays.
+    Falls back to api_current_owner when no approved transfers exist.
+    """
+    from datetime import datetime
+
+    approved = [t for t in transfers if (t.get("transferStatus") or "").strip().lower() == "approved"]
+    if not approved:
+        return api_current_owner
+
+    def _parse_dt(t):
+        for key in ("transferInitiationDate", "transferDate", "transferacceptanceDate"):
+            raw = (t.get(key) or "").split("+")[0].strip()
+            for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S"):
+                try:
+                    return datetime.strptime(raw, fmt)
+                except (ValueError, AttributeError):
+                    continue
+        return datetime.min
+
+    latest = max(approved, key=_parse_dt)
+    to_iec = latest.get("toIEC")
+    if to_iec:
+        return {"iec": to_iec, "firm": latest.get("toIecEntityName")}
+    return api_current_owner
 
 
 def build_payload(dfia, data, fetched_iec=None):
     """
     Build payload to post to server from ownership API response.
     """
-    current_owner = data.get("meisScripCurrentOwnerDtls", {})
     original_owner = data.get("meisScripOriginalOwnerDtls", {})
     transfers = data.get("scripTransfer", [])
+    current_owner = _derive_current_owner_from_transfers(
+        transfers, data.get("meisScripCurrentOwnerDtls", {})
+    )
 
     # Get exporter IEC from license, original owner, or the IEC used to fetch
     exporter_iec = None
@@ -78,7 +114,8 @@ def build_payload(dfia, data, fetched_iec=None):
         "license_number": dfia.license_number,
         "license_date": dfia.license_date.strftime('%Y-%m-%d') if dfia.license_date else None,
         "exporter_iec": exporter_iec,
-        "validity": original_owner.get("validity"),  # Add validity date
+        "validity": original_owner.get("validity"),
+        "last_ownership_fetch": dfia.last_ownership_fetch.isoformat() if dfia.last_ownership_fetch else None,
         "current_owner": {
             "iec": current_owner.get("iec"),
             "name": current_owner.get("firm")
@@ -174,9 +211,11 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
     from core.models import CompanyModel
 
     try:
-        current_owner = data.get("meisScripCurrentOwnerDtls", {})
         original_owner = data.get("meisScripOriginalOwnerDtls", {})
         transfers = data.get("scripTransfer", [])
+        current_owner = _derive_current_owner_from_transfers(
+            transfers, data.get("meisScripCurrentOwnerDtls", {})
+        )
 
         # Update license exporter if not set - try to get from original owner
         if not dfia.exporter and original_owner.get("iec"):
@@ -326,6 +365,10 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
                         'user_id_acceptance': transfer_data.get("userIdAcceptance"),
                     }
                 )
+
+        # Record the timestamp of this successful fetch
+        dfia.last_ownership_fetch = timezone.now()
+        dfia.save(update_fields=['last_ownership_fetch'])
 
         return True
     except Exception as e:
@@ -571,7 +614,7 @@ class Command(BaseCommand):
         if not local_only:
             self.stdout.write(f"Server: {server_url}")
         self.stdout.write(f"Mode: {'LOCAL ONLY' if local_only else 'LOCAL + BULK SERVER SYNC'}")
-        self.stdout.write(f"License Filter: {'ALL (including expired)' if fetch_all else 'Non-expired only'}")
+        self.stdout.write(f"License Filter: Never-fetched + Active (expired+fetched licenses skipped)")
         self.stdout.write(f"Retry Count: {retry_count}")
         self.stdout.write(f"Skip Errors: {'Yes' if skip_errors else 'No'}")
         if proxy:
@@ -608,13 +651,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(
                     f"\n⚠️  Licenses not found: {', '.join(sorted(missing_numbers))}"
                 ))
-        elif fetch_all:
-            # Fetch ALL licenses (including expired)
-            licenses = LicenseDetailsModel.objects.all().order_by("-license_expiry_date")
-            if limit:
-                licenses = licenses[:limit]
         else:
-            # Fetch only non-expired licenses
             licenses = fetch_eligible_licenses()
             if limit:
                 licenses = licenses[:limit]

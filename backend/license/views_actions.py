@@ -1,6 +1,7 @@
 # license/views_actions.py
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
@@ -310,6 +311,17 @@ class LicenseActionViewSet(ViewSet):
                                     update_fields.append('license_expiry_date')
                             except (ValueError, AttributeError):
                                 pass  # Skip invalid validity dates
+
+                        # Update last_ownership_fetch timestamp
+                        last_fetch_raw = license_data.get('last_ownership_fetch')
+                        if last_fetch_raw:
+                            try:
+                                last_fetch_dt = parse_datetime(last_fetch_raw)
+                                if last_fetch_dt:
+                                    license_obj.last_ownership_fetch = last_fetch_dt
+                                    update_fields.append('last_ownership_fetch')
+                            except (ValueError, AttributeError):
+                                pass
 
                         # Update current owner if provided
                         if current_owner_data and current_owner_data.get('iec'):

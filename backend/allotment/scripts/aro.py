@@ -351,7 +351,8 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
 
         except Exception as e:
             logger.exception("Error generating transfer letter %s", idx)
-            raise
+            # On any rendering/save error, keep whatever was written so it lands in the zip
+            continue
 
     if conversion_failed_count > 0:
         print(f"\nWarning: {conversion_failed_count} file(s) could not be converted to PDF.")

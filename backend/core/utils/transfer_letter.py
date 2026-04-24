@@ -229,92 +229,36 @@ def _collect_unique_licenses(instance, instance_type):
     return unique_licenses
 
 
-def _build_license_copy_map(unique_licenses, output_dir):
-    """Generate merged license copy PDFs and return a map of license_number -> pdf_path."""
+def _copy_license_docs_to_output(unique_licenses, output_dir):
+    """
+    Copy all license documents from storage directly into the output directory
+    so they are included as individual files in the zip alongside the TL.
+    Files from the same license that share a basename are prefixed with the
+    license number to prevent collisions.
+    """
     import shutil
-    license_copy_map = {}
-    temp_dir = os.path.join(output_dir, '__license_copies__')
-    os.makedirs(temp_dir, exist_ok=True)
     for license_obj in unique_licenses:
         license_number = license_obj.license_number.replace('/', '_')
-        pdf_path = os.path.join(temp_dir, f'{license_number} - Copy.pdf')
-        merge_license_documents([license_obj], pdf_path)
-        if os.path.exists(pdf_path):
-            license_copy_map[license_number] = pdf_path
-    return license_copy_map, temp_dir
-
-
-def _apply_license_copies_to_dir(output_dir, license_copy_map):
-    """Single-party: TL + license copy → FS PDF per license number. Removes originals."""
-    import shutil
-    successfully_merged = []
-    for filename in os.listdir(output_dir):
-        if not filename.endswith('.pdf'):
-            continue
-        if filename.endswith(' - Copy.pdf') or filename.endswith(' - FS.pdf'):
-            continue
-        license_number = next(
-            (key for key in license_copy_map if filename.startswith(key + '_') or filename == key + '.pdf'),
-            None
-        )
-        if license_number is None:
-            continue
-        tl_pdf = os.path.join(output_dir, filename)
-        copy_dest = os.path.join(output_dir, f'{license_number} - Copy.pdf')
-        shutil.copy2(license_copy_map[license_number], copy_dest)
-        fs_pdf = os.path.join(output_dir, f'{license_number} - FS.pdf')
-        if merge_tl_with_license_copy(tl_pdf, copy_dest, fs_pdf):
-            successfully_merged.append((tl_pdf, copy_dest))
-            logger.info("Created FS PDF: %s", os.path.basename(fs_pdf))
-    for tl_p, copy_p in successfully_merged:
-        for f in (tl_p, copy_p):
+        for doc in license_obj.license_documents.all():
+            if not doc.file:
+                continue
+            storage = doc.file.storage
+            file_name = doc.file.name
+            if not storage.exists(file_name):
+                logger.warning("License doc not found in storage, skipping: %s", file_name)
+                continue
+            base_name = os.path.basename(file_name)
+            dest_path = os.path.join(output_dir, base_name)
+            if os.path.exists(dest_path):
+                name, ext = os.path.splitext(base_name)
+                dest_path = os.path.join(output_dir, f'{license_number}_{name}{ext}')
             try:
-                os.remove(f)
-            except OSError as e:
-                logger.warning("Could not delete %s: %s", os.path.basename(f), str(e))
-
-
-def _apply_license_copies_multi_party(output_root, license_copy_map):
-    """
-    Multi-party: for each license number, merge ALL party TLs + one license copy
-    into a single FS PDF. Removes the individual TL files afterward.
-    """
-    from collections import defaultdict
-    from pypdf import PdfWriter
-
-    license_tl_files = defaultdict(list)
-    for fname in sorted(os.listdir(output_root)):
-        if not fname.endswith('.pdf'):
-            continue
-        if fname.endswith(' - Copy.pdf') or fname.endswith(' - FS.pdf'):
-            continue
-        license_number = next(
-            (key for key in license_copy_map if fname.startswith(key + '_') or fname == key + '.pdf'),
-            None
-        )
-        if license_number is None:
-            continue
-        license_tl_files[license_number].append(os.path.join(output_root, fname))
-
-    for license_number, tl_files in license_tl_files.items():
-        if license_number not in license_copy_map:
-            continue
-        fs_pdf = os.path.join(output_root, f'{license_number} - FS.pdf')
-        try:
-            writer = PdfWriter()
-            for tl_file in tl_files:
-                writer.append(tl_file)
-            writer.append(license_copy_map[license_number])
-            with open(fs_pdf, 'wb') as f:
-                writer.write(f)
-            logger.info("Created merged FS PDF: %s", os.path.basename(fs_pdf))
-            for tl_file in tl_files:
-                try:
-                    os.remove(tl_file)
-                except OSError as e:
-                    logger.warning("Could not delete %s: %s", os.path.basename(tl_file), str(e))
-        except Exception as e:
-            logger.error("Error creating FS PDF for %s: %s", license_number, str(e))
+                with storage.open(file_name, 'rb') as src:
+                    with open(dest_path, 'wb') as dst:
+                        shutil.copyfileobj(src, dst)
+                logger.info("Included license doc in zip: %s", os.path.basename(dest_path))
+            except Exception as e:
+                logger.error("Failed to copy license doc %s: %s", file_name, str(e))
 
 
 def generate_transfer_letter_generic(instance, request, instance_type='allotment'):
@@ -397,13 +341,10 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
         from allotment.scripts.aro import generate_tl_software
 
-        # Pre-build license copy map once (shared across all parties)
-        license_copy_map = {}
-        temp_copy_dir = None
+        # Collect unique licenses once (used after TL generation)
+        unique_licenses = set()
         if include_license_copy:
             unique_licenses = _collect_unique_licenses(instance, instance_type)
-            if unique_licenses:
-                license_copy_map, temp_copy_dir = _build_license_copy_map(unique_licenses, output_root)
 
         multi_party = len(parties) > 1
         any_data_generated = False
@@ -462,7 +403,7 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                 safe_name = re.sub(r'[^\w\s-]', '', company_name)[:20].strip().replace(' ', '_')
                 party_suffix = f'_{safe_name}' if safe_name else f'_Party{idx + 1}'
                 for fname in os.listdir(temp_party_dir):
-                    if fname.endswith('.pdf'):
+                    if fname.endswith('.pdf') or fname.endswith('.docx'):
                         base, ext = os.path.splitext(fname)
                         os.rename(
                             os.path.join(temp_party_dir, fname),
@@ -482,17 +423,9 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                     additional_context=additional_context
                 )
 
-        # Apply license copies after all parties are done
-        if include_license_copy and license_copy_map:
-            if multi_party:
-                # One FS per license number = all party TLs + one license copy merged
-                _apply_license_copies_multi_party(output_root, license_copy_map)
-            else:
-                _apply_license_copies_to_dir(output_root, license_copy_map)
-
-        # Clean up shared license copies temp directory
-        if temp_copy_dir and os.path.exists(temp_copy_dir):
-            shutil.rmtree(temp_copy_dir)
+        # Copy original license documents into the output dir for inclusion in zip
+        if include_license_copy and unique_licenses:
+            _copy_license_docs_to_output(unique_licenses, output_root)
 
         if not any_data_generated:
             return Response({

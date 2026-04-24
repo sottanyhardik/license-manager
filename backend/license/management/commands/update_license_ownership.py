@@ -77,11 +77,20 @@ def _derive_current_owner_from_transfers(transfers, api_current_owner):
     def _parse_dt(t):
         for key in ("transferInitiationDate", "transferDate", "transferacceptanceDate"):
             raw = (t.get(key) or "").split("+")[0].strip()
-            for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S"):
-                try:
-                    return datetime.strptime(raw, fmt)
-                except (ValueError, AttributeError):
-                    continue
+            # Normalise fractional seconds: "13:12:0.0" → "13:12:0" so strptime handles it
+            raw_norm = raw.split(".")[0].strip()
+            for candidate in (raw_norm, raw):
+                for fmt in (
+                    "%Y-%m-%d %H:%M:%S",   # DGFT: "2026-02-02 13:12:0" (space, no frac)
+                    "%d/%m/%Y %H:%M:%S",   # "02/02/2026 13:12:00"
+                    "%Y-%m-%dT%H:%M:%S",   # ISO with T
+                    "%d/%m/%Y",            # date only
+                    "%Y-%m-%d",            # date only ISO
+                ):
+                    try:
+                        return datetime.strptime(candidate, fmt)
+                    except (ValueError, AttributeError):
+                        continue
         return datetime.min
 
     latest = max(approved, key=_parse_dt)

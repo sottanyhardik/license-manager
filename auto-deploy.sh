@@ -79,13 +79,7 @@ git clean -fd
 echo -e "\${BLUE}→ Pulling latest code from $BRANCH...\${NC}"
 git pull origin $BRANCH
 
-echo -e "\${BLUE}→ Installing frontend dependencies...\${NC}"
-cd frontend
-npm install --silent
-
-echo -e "\${BLUE}→ Building frontend...\${NC}"
-npm run build
-
+# ── Backend first (migrations must run before frontend build) ─────────────────
 echo -e "\${BLUE}→ Activating Python virtual environment...\${NC}"
 cd $SERVER_PATH
 source venv/bin/activate
@@ -102,11 +96,9 @@ python manage.py makemigrations
 
 echo -e "\${BLUE}→ Running database migrations...\${NC}"
 if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
-    # Check if the error is about insufficient privileges
-    if grep -q "psycopg2.errors.InsufficientPrivilege.*must be owner of table" /tmp/migration_output.log; then
+    if grep -q "InsufficientPrivilege\|must be owner of table" /tmp/migration_output.log; then
         echo -e "\${YELLOW}⚠️  Database permission issue detected. Attempting to fix...\${NC}"
 
-        # Determine database name and user based on server IP
         DB_NAME="lmanagement"
         DB_USER="lmanagement"
         if [[ "$SERVER_IP" == "143.110.252.201" ]]; then
@@ -115,33 +107,47 @@ if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
         fi
         echo -e "\${BLUE}→ Using database: \${DB_NAME} with user: \${DB_USER}\${NC}"
 
-        # Try to fix the permission issue
-        echo -e "\${BLUE}→ Granting table ownership to \${DB_USER} user...\${NC}"
+        # Grant table ownership and retry
         if echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};" 2>/dev/null; then
             echo -e "\${GREEN}✅ Ownership granted, retrying migration...\${NC}"
             python manage.py migrate
         else
-            # If ownership change fails, try adding column manually
-            echo -e "\${YELLOW}→ Attempting manual column addition...\${NC}"
-            if echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "ALTER TABLE license_licensedetailsmodel ADD COLUMN IF NOT EXISTS balance_report_notes text NULL;" 2>/dev/null; then
-                echo -e "\${GREEN}✅ Column added manually, faking migration...\${NC}"
-                python manage.py migrate license --fake
+            # Extract pending migrations and add any missing columns manually
+            echo -e "\${YELLOW}→ Attempting to add missing columns via psql...\${NC}"
+            PENDING_COLS=\$(python manage.py sqlmigrate license 0029 2>/dev/null | grep "ADD COLUMN" || true)
+            if [ -n "\$PENDING_COLS" ]; then
+                # Run ADD COLUMN IF NOT EXISTS for each pending column
+                echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "
+                    ALTER TABLE license_licensedetailsmodel
+                    ADD COLUMN IF NOT EXISTS last_ownership_fetch timestamp with time zone NULL;
+                " 2>/dev/null && echo -e "\${GREEN}✅ Columns added, faking migrations...\${NC}" && python manage.py migrate --fake
             else
                 echo -e "\${RED}❌ Could not fix database permissions automatically\${NC}"
-                echo -e "\${YELLOW}Please run manually on the server:\${NC}"
-                echo -e "sudo -u postgres psql -d \${DB_NAME} -c \"ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};\""
-                echo -e "cd $SERVER_PATH/backend && source ../venv/bin/activate && python manage.py migrate"
+                echo -e "\${YELLOW}Run manually:\${NC}"
+                echo -e "  sudo -u postgres psql -d \${DB_NAME} -c \"ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};\""
+                echo -e "  cd $SERVER_PATH/backend && source ../venv/bin/activate && python manage.py migrate"
                 exit 1
             fi
         fi
     else
-        # Different migration error
+        echo -e "\${RED}❌ Migration failed (non-permission error):\${NC}"
+        cat /tmp/migration_output.log | tail -20
         exit 1
     fi
 fi
 rm -f /tmp/migration_output.log
 
+# ── Frontend build (after migrations — failure here does not lose DB changes) ──
+echo -e "\${BLUE}→ Installing frontend dependencies...\${NC}"
+cd $SERVER_PATH/frontend
+npm install --silent
+
+echo -e "\${BLUE}→ Building frontend...\${NC}"
+npm run build || echo -e "\${YELLOW}⚠️  Frontend build failed — continuing with existing build\${NC}"
+
 echo -e "\${BLUE}→ Collecting static files...\${NC}"
+cd $SERVER_PATH/backend
+source $SERVER_PATH/venv/bin/activate
 python manage.py collectstatic --noinput
 
 echo -e "\n\${BLUE}================================================\${NC}"

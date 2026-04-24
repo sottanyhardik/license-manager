@@ -186,6 +186,15 @@ def convert_docx_to_pdf(docx_path, pdf_path):
                 env['HOME'] = lo_home
                 logger.debug("LibreOffice HOME: %s", lo_home)
 
+                # Supervisor/gunicorn often strips PATH to only the venv bin.
+                # The soffice shell script needs dirname, basename, grep, sed, uname etc.
+                # which live in /usr/bin and /bin — inject them if missing.
+                current_path = env.get('PATH', '')
+                system_paths = '/usr/bin:/bin:/usr/local/bin:/usr/sbin:/sbin'
+                if '/usr/bin' not in current_path:
+                    env['PATH'] = f'{current_path}:{system_paths}' if current_path else system_paths
+                    logger.debug("Augmented PATH for soffice: %s", env['PATH'])
+
                 result = subprocess.run([
                     soffice_path,
                     '--headless',

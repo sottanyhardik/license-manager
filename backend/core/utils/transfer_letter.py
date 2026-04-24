@@ -480,33 +480,35 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
             try:
                 if multi_party:
-                    # Generate to temp dir, then move files to root with party name as suffix
+                    # Generate to temp dir, then move files to root with party name suffix
                     temp_party_dir = os.path.join(output_root, f'__party_{idx}__')
                     os.makedirs(temp_party_dir, exist_ok=True)
 
-                    generate_tl_software(
+                    generated = generate_tl_software(
                         data=data,
                         tl_path=template_path,
                         path=temp_party_dir,
                         transfer_letter_name=transfer_letter.name.replace(' ', '_'),
                         additional_context=additional_context
-                    )
+                    ) or []
 
-                    # Rename: suffix party name onto each file (keeps license number at start)
+                    # Rename in-place using the returned file list (avoids os.listdir race)
                     safe_name = re.sub(r'[^\w\s-]', '', company_name)[:20].strip().replace(' ', '_')
                     party_suffix = f'_{safe_name}' if safe_name else f'_Party{idx + 1}'
-                    for fname in os.listdir(temp_party_dir):
-                        if fname.endswith('.pdf') or fname.endswith('.docx'):
-                            base, ext = os.path.splitext(fname)
-                            os.rename(
-                                os.path.join(temp_party_dir, fname),
-                                os.path.join(temp_party_dir, f'{base}{party_suffix}{ext}')
-                            )
+                    renamed = []
+                    for fpath in generated:
+                        if os.path.exists(fpath):
+                            base, ext = os.path.splitext(os.path.basename(fpath))
+                            new_name = f'{base}{party_suffix}{ext}'
+                            new_path = os.path.join(temp_party_dir, new_name)
+                            os.rename(fpath, new_path)
+                            renamed.append(new_path)
 
-                    # Move all renamed files flat into output root
-                    for fname in os.listdir(temp_party_dir):
-                        shutil.move(os.path.join(temp_party_dir, fname), os.path.join(output_root, fname))
-                    shutil.rmtree(temp_party_dir)
+                    # Move renamed files to output root
+                    for fpath in renamed:
+                        if os.path.exists(fpath):
+                            shutil.move(fpath, os.path.join(output_root, os.path.basename(fpath)))
+                    shutil.rmtree(temp_party_dir, ignore_errors=True)
                 else:
                     generate_tl_software(
                         data=data,

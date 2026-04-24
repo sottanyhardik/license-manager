@@ -307,10 +307,11 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
             logger.exception("Error rendering transfer letter %s", idx)
 
     if not pending_conversions:
-        return
+        return []
 
     # Step 2: Convert all DOCX→PDF in parallel (each uses its own LO profile dir)
     conversion_failed_count = 0
+    generated_files = []
 
     def _convert(args):
         docx_p, pdf_p = args
@@ -324,9 +325,11 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
                     os.remove(docx_p)
                 except OSError:
                     pass
+                generated_files.append(pdf_p)
             else:
                 conversion_failed_count += 1
                 print(f"Warning: Could not convert {os.path.basename(docx_p)} to PDF. Keeping DOCX file.")
+                generated_files.append(docx_p)  # keep DOCX in output
 
     if conversion_failed_count > 0:
         print(f"\nWarning: {conversion_failed_count} file(s) could not be converted to PDF.")
@@ -334,3 +337,5 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
         print("  macOS: Microsoft Office (preferred) or LibreOffice (brew install --cask libreoffice)")
         print("  Ubuntu/Debian: sudo apt-get install libreoffice")
         print("  RHEL/CentOS: sudo yum install libreoffice")
+
+    return generated_files

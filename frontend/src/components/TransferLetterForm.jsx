@@ -176,7 +176,7 @@ export default function TransferLetterForm({
                 template_id: p.template?.value || p.template,
             })),
             cif_edits: filteredCifEdits,
-            include_license_copy: format === 'zip' ? includeLicenseCopy : false,
+            include_license_copy: format === 'pdf' ? true : includeLicenseCopy,
             selected_items: selectedItems,
             include_todays_date: true,
             format,
@@ -461,7 +461,7 @@ export default function TransferLetterForm({
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (generating === null) handleGenerate(false, 'pdf');
+                            if (generating === null) handleGenerate(true, 'pdf');
                         }}
                         disabled={generating !== null || disabled || validParties.length === 0 || selectedItems.length === 0 || groupedItems.filter(g => isGroupSelected(g.license_number)).length === 0}
                         title="Download all TL pages merged into a single PDF"

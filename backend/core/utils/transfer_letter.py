@@ -261,6 +261,66 @@ def _copy_license_docs_to_output(unique_licenses, output_dir):
                 logger.error("Failed to copy license doc %s: %s", file_name, str(e))
 
 
+def _create_license_fs_pdfs(unique_licenses, output_dir, tl_files_before):
+    """
+    For each license, merge its generated TL PDF(s) with its copied license doc PDFs
+    into a single {license_number}_FS.pdf, then remove the originals.
+    tl_files_before: set of filenames that existed before _copy_license_docs_to_output ran.
+    """
+    try:
+        from pypdf import PdfWriter
+    except ImportError:
+        logger.error("pypdf not installed — cannot create FS PDFs")
+        return
+
+    all_files_now = set(os.listdir(output_dir))
+    copy_files = all_files_now - tl_files_before  # files added by _copy_license_docs_to_output
+
+    for license_obj in unique_licenses:
+        license_number = license_obj.license_number.replace('/', '_')
+
+        # TL PDFs for this license: were present before copy step, start with license_number + '_'
+        tl_pdfs = sorted(
+            f for f in tl_files_before
+            if f.startswith(license_number + '_') and f.lower().endswith('.pdf')
+            and os.path.exists(os.path.join(output_dir, f))
+        )
+
+        # Copy PDFs for this license: added during copy step, contain license_number
+        copy_pdfs = sorted(
+            f for f in copy_files
+            if license_number in f and f.lower().endswith('.pdf')
+            and os.path.exists(os.path.join(output_dir, f))
+        )
+
+        if not tl_pdfs:
+            continue
+
+        try:
+            merger = PdfWriter()
+            for fname in tl_pdfs:
+                merger.append(os.path.join(output_dir, fname))
+            for fname in copy_pdfs:
+                try:
+                    merger.append(os.path.join(output_dir, fname))
+                except Exception as e:
+                    logger.warning("Skipping copy PDF %s in FS merge: %s", fname, e)
+
+            fs_path = os.path.join(output_dir, f'{license_number}_FS.pdf')
+            with open(fs_path, 'wb') as f:
+                merger.write(f)
+            logger.info("Created FS PDF: %s", f'{license_number}_FS.pdf')
+
+            # Remove originals — keep any DOCX files (failed conversions)
+            for fname in tl_pdfs + copy_pdfs:
+                try:
+                    os.remove(os.path.join(output_dir, fname))
+                except OSError:
+                    pass
+        except Exception as e:
+            logger.error("Failed to create FS PDF for license %s: %s", license_number, e)
+
+
 def generate_transfer_letter_generic(instance, request, instance_type='allotment'):
     """
     Generate transfer letter for Allotment, BOE, or Trade.
@@ -453,9 +513,14 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                 except OSError:
                     pass
 
+        # Snapshot TL files before copying license docs so we can distinguish them later
+        tl_files_before = set(os.listdir(output_root)) if os.path.exists(output_root) else set()
+
         # Copy original license documents into the output dir for inclusion in zip
         if include_license_copy and unique_licenses:
             _copy_license_docs_to_output(unique_licenses, output_root)
+            # Merge each license's TL PDF + Copy PDFs into a single {license}_FS.pdf
+            _create_license_fs_pdfs(unique_licenses, output_root, tl_files_before)
 
         if not any_data_generated:
             return Response({

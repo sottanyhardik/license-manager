@@ -513,6 +513,22 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                 except OSError:
                     pass
 
+        # Include the allotment PDF (same as "Download Allotment" action) in the output
+        if instance_type == 'allotment':
+            try:
+                from allotment.scripts.allotment_pdf import generate_allotment_pdf_bytes, allotment_pdf_filename
+                allotment_qs = instance.__class__.objects.select_related('company', 'port').prefetch_related(
+                    'allotment_details__item__license__exporter',
+                    'allotment_details__item__hs_code',
+                ).get(pk=instance.pk)
+                pdf_bytes = generate_allotment_pdf_bytes(allotment_qs)
+                fname = allotment_pdf_filename(allotment_qs)
+                with open(os.path.join(output_root, fname), 'wb') as f:
+                    f.write(pdf_bytes)
+                logger.info("Included allotment PDF in output: %s", fname)
+            except Exception as e:
+                logger.warning("Could not generate allotment PDF for zip: %s", e)
+
         # Snapshot TL files before copying license docs so we can distinguish them later
         tl_files_before = set(os.listdir(output_root)) if os.path.exists(output_root) else set()
 

@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
 import { formatDate as formatDateUtil } from '../utils/dateFormatter';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -303,38 +303,10 @@ export default function LicenseLedgerDetail() {
         doc.save(filename);
     };
 
-    const handleDownloadExcel = () => {
-        // Prepare formal Tally-style data with proper formatting
-        const data = [];
-        let currentRow = 0;
+    const handleDownloadExcel = async () => {
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('License Ledger');
 
-        // Main Title - Professional header
-        data.push(['LICENSE LEDGER STATEMENT']);
-        currentRow++;
-
-        // License Type subtitle
-        data.push([`[ ${ledger.license_type} ]`]);
-        currentRow++;
-
-        // Blank row for separation
-        data.push([]);
-        currentRow++;
-
-        // Section: License Information
-        data.push(['LICENSE DETAILS']);
-        currentRow++;
-
-        // License details in formal key: value format
-        data.push(['License Number:', ledger.license_number, '', '', '', 'License Date:', formatDate(ledger.license_date)]);
-        data.push(['Exporter Name:', ledger.exporter || 'N/A', '', '', '', 'Expiry Date:', formatDate(ledger.expiry_date)]);
-        data.push(['Total License Value:', formatCurrency(ledger.total_value, isDFIA ? 'USD' : 'INR'), '', '', '', 'Available Balance:', formatCurrency(currentBalance, isDFIA ? 'USD' : 'INR')]);
-        currentRow += 3;
-
-        // Separator row
-        data.push([]);
-        currentRow++;
-
-        // Table headers with proper alignment
         const headers = ['Date', 'Particulars'];
         if (isDFIA) {
             headers.push('Items', 'CIF $ Dr', 'CIF $ Cr');
@@ -342,211 +314,153 @@ export default function LicenseLedgerDetail() {
             headers.push('Value Dr', 'Value Cr');
         }
         headers.push('Rate', 'Debit (₹)', 'Credit (₹)', 'Balance (₹)', 'P/L (₹)');
-        data.push(headers);
-        const headerRow = currentRow;
-        currentRow++;
+        const numCols = headers.length;
 
-        // Transaction data with proper number formatting
-        ledger.transactions.forEach(txn => {
-            const row = [
-                formatDate(txn.date),
-                txn.particular + (txn.invoice_number ? ` (${txn.invoice_number})` : '')
-            ];
-
-            if (isDFIA) {
-                row.push(
-                    txn.items || '',
-                    txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '',
-                    txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : ''
-                );
-            } else {
-                row.push(
-                    txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '',
-                    txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : ''
-                );
-            }
-
-            row.push(
-                txn.rate ? formatIndianNumber(txn.rate, 2) : '',
-                txn.debit_amount ? formatIndianNumber(txn.debit_amount, 2) : '',
-                txn.credit_amount ? formatIndianNumber(txn.credit_amount, 2) : '',
-                formatIndianNumber(txn.balance, 2),
-                txn.type === 'SALE' && txn.profit_loss ? formatIndianNumber(Math.abs(txn.profit_loss), 2) : ''
-            );
-
-            data.push(row);
-            currentRow++;
+        const thinBorder = (argb = 'FF000000') => ({ style: 'thin', color: { argb } });
+        const allThin = (argb = 'FF000000') => ({
+            top: thinBorder(argb), bottom: thinBorder(argb),
+            left: thinBorder(argb), right: thinBorder(argb),
         });
 
-        // Totals row
+        // Row 1: Main title
+        ws.addRow(['LICENSE LEDGER STATEMENT']);
+        ws.mergeCells(1, 1, 1, numCols);
+        const titleCell = ws.getCell(1, 1);
+        titleCell.font = { bold: true, size: 16, color: { argb: 'FF2C3E50' } };
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECF0F1' } };
+        titleCell.border = { bottom: { style: 'medium', color: { argb: 'FF2C3E50' } } };
+        ws.getRow(1).height = 30;
+
+        // Row 2: License type subtitle
+        ws.addRow([`[ ${ledger.license_type} ]`]);
+        ws.mergeCells(2, 1, 2, numCols);
+        const subtitleCell = ws.getCell(2, 1);
+        subtitleCell.font = { bold: true, size: 12, color: { argb: 'FF3498DB' } };
+        subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(2).height = 22;
+
+        // Row 3: blank separator
+        ws.addRow([]);
+
+        // Row 4: LICENSE DETAILS section header
+        ws.addRow(['LICENSE DETAILS']);
+        ws.mergeCells(4, 1, 4, numCols);
+        const detailsHeaderCell = ws.getCell(4, 1);
+        detailsHeaderCell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+        detailsHeaderCell.alignment = { horizontal: 'left', vertical: 'middle' };
+        detailsHeaderCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF34495E' } };
+        detailsHeaderCell.border = allThin();
+        ws.getRow(4).height = 24;
+
+        // Rows 5–7: license detail key-value pairs
+        ws.addRow(['License Number:', ledger.license_number, '', '', '', 'License Date:', formatDate(ledger.license_date)]);
+        ws.addRow(['Exporter Name:', ledger.exporter || 'N/A', '', '', '', 'Expiry Date:', formatDate(ledger.expiry_date)]);
+        ws.addRow(['Total License Value:', formatCurrency(ledger.total_value, isDFIA ? 'USD' : 'INR'), '', '', '', 'Available Balance:', formatCurrency(currentBalance, isDFIA ? 'USD' : 'INR')]);
+
+        // Row 8: blank separator
+        ws.addRow([]);
+
+        // Row 9: table header
+        const headerRowNum = 9;
+        ws.addRow(headers);
+        for (let col = 1; col <= numCols; col++) {
+            const cell = ws.getCell(headerRowNum, col);
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            cell.border = allThin();
+        }
+        ws.getRow(headerRowNum).height = 25;
+
+        // Totals used in both data rows and totals row
         const totalDebit = ledger.transactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
         const totalCredit = ledger.transactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
         const salesTransactions = ledger.transactions.filter(t => t.type === 'SALE');
         const totalPL = salesTransactions.length > 0 ? salesTransactions[salesTransactions.length - 1].profit_loss : 0;
 
+        // Data rows starting at row 10
+        let dataRowNum = headerRowNum + 1;
+        ledger.transactions.forEach(txn => {
+            const row = [
+                formatDate(txn.date),
+                txn.particular + (txn.invoice_number ? ` (${txn.invoice_number})` : ''),
+            ];
+            if (isDFIA) {
+                row.push(
+                    txn.items || '',
+                    txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '',
+                    txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : '',
+                );
+            } else {
+                row.push(
+                    txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '',
+                    txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : '',
+                );
+            }
+            row.push(
+                txn.rate ? formatIndianNumber(txn.rate, 2) : '',
+                txn.debit_amount ? formatIndianNumber(txn.debit_amount, 2) : '',
+                txn.credit_amount ? formatIndianNumber(txn.credit_amount, 2) : '',
+                formatIndianNumber(txn.balance, 2),
+                txn.type === 'SALE' && txn.profit_loss ? formatIndianNumber(Math.abs(txn.profit_loss), 2) : '',
+            );
+            ws.addRow(row);
+            for (let col = 1; col <= numCols; col++) {
+                const cell = ws.getCell(dataRowNum, col);
+                cell.border = allThin('FFCCCCCC');
+                cell.alignment = { horizontal: col > 2 ? 'right' : 'left' };
+            }
+            dataRowNum++;
+        });
+
+        // Totals row
+        const totalsRowNum = dataRowNum;
         const totalsRow = ['', 'TOTAL'];
         if (isDFIA) {
-            totalsRow.push('', '', '');  // Items, CIF $ Dr, CIF $ Cr
+            totalsRow.push('', '', '');
         } else {
             totalsRow.push('', '');
         }
-        totalsRow.push('',
+        totalsRow.push(
+            '',
             formatIndianNumber(totalDebit, 2),
             formatIndianNumber(totalCredit, 2),
             formatIndianNumber(currentBalance, 2),
-            formatIndianNumber(Math.abs(totalPL), 2)
+            formatIndianNumber(Math.abs(totalPL), 2),
         );
-        data.push(totalsRow);
-        const totalsRowIndex = currentRow;
-        currentRow++;
-
-        // Create worksheet
-        const ws = XLSX.utils.aoa_to_sheet(data);
-
-        // Apply Tally-style formatting
-        const range = XLSX.utils.decode_range(ws['!ref']);
-
-        // Style main title row (row 0) - Professional header
-        if (ws['A1']) {
-            ws['A1'].s = {
-                font: { bold: true, sz: 16, color: { rgb: "2C3E50" } },
-                alignment: { horizontal: 'center', vertical: 'center' },
-                fill: { fgColor: { rgb: "ECF0F1" } },
-                border: {
-                    bottom: { style: 'medium', color: { rgb: "2C3E50" } }
-                }
+        ws.addRow(totalsRow);
+        for (let col = 1; col <= numCols; col++) {
+            const cell = ws.getCell(totalsRowNum, col);
+            cell.font = { bold: true };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
+            cell.border = {
+                top: { style: 'double', color: { argb: 'FF000000' } },
+                bottom: { style: 'double', color: { argb: 'FF000000' } },
+                left: thinBorder(),
+                right: thinBorder(),
             };
+            cell.alignment = { horizontal: col > 2 ? 'right' : 'left' };
         }
+        ws.getRow(totalsRowNum).height = 24;
 
-        // Style license type subtitle (row 1)
-        if (ws['A2']) {
-            ws['A2'].s = {
-                font: { bold: true, sz: 12, color: { rgb: "3498DB" } },
-                alignment: { horizontal: 'center', vertical: 'center' }
-            };
-        }
+        // Column widths
+        const colWidths = isDFIA
+            ? [12, 40, 20, 14, 14, 12, 16, 16, 18, 16]
+            : [12, 40, 14, 14, 12, 16, 16, 18, 16];
+        colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
-        // Style "LICENSE DETAILS" section header (row 3)
-        if (ws['A4']) {
-            ws['A4'].s = {
-                font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } },
-                alignment: { horizontal: 'left', vertical: 'center' },
-                fill: { fgColor: { rgb: "34495E" } },
-                border: {
-                    top: { style: 'thin', color: { rgb: "000000" } },
-                    bottom: { style: 'thin', color: { rgb: "000000" } },
-                    left: { style: 'thin', color: { rgb: "000000" } },
-                    right: { style: 'thin', color: { rgb: "000000" } }
-                }
-            };
-        }
-
-        // Merge title and subtitle across all columns
-        ws['!merges'] = ws['!merges'] || [];
-        ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }); // Main title
-        ws['!merges'].push({ s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } }); // Subtitle
-        ws['!merges'].push({ s: { r: 3, c: 0 }, e: { r: 3, c: headers.length - 1 } }); // LICENSE DETAILS header
-
-        // Style header row - dark background with white text
-        for (let col = 0; col < headers.length; col++) {
-            const cellRef = XLSX.utils.encode_cell({ r: headerRow, c: col });
-            if (ws[cellRef]) {
-                ws[cellRef].s = {
-                    font: { bold: true, color: { rgb: "FFFFFF" } },
-                    fill: { fgColor: { rgb: "2C3E50" } },
-                    border: {
-                        top: { style: 'thin', color: { rgb: "000000" } },
-                        bottom: { style: 'thin', color: { rgb: "000000" } },
-                        left: { style: 'thin', color: { rgb: "000000" } },
-                        right: { style: 'thin', color: { rgb: "000000" } }
-                    },
-                    alignment: { horizontal: 'center', vertical: 'center' }
-                };
-            }
-        }
-
-        // Style totals row - bold with borders
-        for (let col = 0; col < headers.length; col++) {
-            const cellRef = XLSX.utils.encode_cell({ r: totalsRowIndex, c: col });
-            if (ws[cellRef]) {
-                ws[cellRef].s = {
-                    font: { bold: true },
-                    fill: { fgColor: { rgb: "E8E8E8" } },
-                    border: {
-                        top: { style: 'double', color: { rgb: "000000" } },
-                        bottom: { style: 'double', color: { rgb: "000000" } },
-                        left: { style: 'thin', color: { rgb: "000000" } },
-                        right: { style: 'thin', color: { rgb: "000000" } }
-                    },
-                    alignment: { horizontal: col > 1 ? 'right' : 'left' }
-                };
-            }
-        }
-
-        // Add borders to all data cells
-        for (let row = headerRow + 1; row < totalsRowIndex; row++) {
-            for (let col = 0; col < headers.length; col++) {
-                const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
-                if (ws[cellRef]) {
-                    ws[cellRef].s = {
-                        border: {
-                            top: { style: 'thin', color: { rgb: "CCCCCC" } },
-                            bottom: { style: 'thin', color: { rgb: "CCCCCC" } },
-                            left: { style: 'thin', color: { rgb: "CCCCCC" } },
-                            right: { style: 'thin', color: { rgb: "CCCCCC" } }
-                        },
-                        alignment: { horizontal: col > 1 ? 'right' : 'left' }
-                    };
-
-                    // Number formatting for numeric columns
-                    if (col > 2 && ws[cellRef].v !== '') {
-                        ws[cellRef].z = '#,##0.00';
-                    }
-                }
-            }
-        }
-
-        // Column widths - Tally style
-        ws['!cols'] = isDFIA
-            ? [
-                { wch: 12 },  // Date
-                { wch: 40 },  // Particulars
-                { wch: 20 },  // Items
-                { wch: 14 },  // CIF $ Dr
-                { wch: 14 },  // CIF $ Cr
-                { wch: 12 },  // Rate
-                { wch: 16 },  // Debit
-                { wch: 16 },  // Credit
-                { wch: 18 },  // Balance
-                { wch: 16 }   // P/L
-            ]
-            : [
-                { wch: 12 },  // Date
-                { wch: 40 },  // Particulars
-                { wch: 14 },  // Value Dr
-                { wch: 14 },  // Value Cr
-                { wch: 12 },  // Rate
-                { wch: 16 },  // Debit
-                { wch: 16 },  // Credit
-                { wch: 18 },  // Balance
-                { wch: 16 }   // P/L
-            ];
-
-        // Row heights for better readability and professional appearance
-        ws['!rows'] = ws['!rows'] || [];
-        ws['!rows'][0] = { hpt: 30 };  // Main title row height
-        ws['!rows'][1] = { hpt: 22 };  // Subtitle row height
-        ws['!rows'][3] = { hpt: 24 };  // LICENSE DETAILS header row height
-        ws['!rows'][headerRow] = { hpt: 25 }; // Table header row height
-        ws['!rows'][totalsRowIndex] = { hpt: 24 }; // Totals row height
-
-        // Create workbook and add worksheet
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'License Ledger');
-
-        // Download with Tally-style name
-        const fileName = `${ledger.license_number.replace(/\//g, '-')}_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`;
-        XLSX.writeFile(wb, fileName, { cellStyles: true });
+        // Download
+        const buffer = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${ledger.license_number.replace(/\//g, '-')}_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     };
 
     return (

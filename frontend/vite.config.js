@@ -100,6 +100,13 @@ export default defineConfig({
     target: 'es2015',
   },
 
+  resolve: {
+    alias: {
+      // Use the pre-built browser bundle to avoid Node.js fs/stream polyfill issues
+      'exceljs': 'exceljs/dist/exceljs.min.js',
+    },
+  },
+
   // Optimize dependencies
   optimizeDeps: {
     include: [

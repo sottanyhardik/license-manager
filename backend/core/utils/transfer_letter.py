@@ -53,47 +53,52 @@ def merge_license_documents(licenses, output_path):
                 if not doc.file:
                     continue
 
-                file_path = doc.file.path
-                if not os.path.exists(file_path):
+                # Use Django storage API so this works for local, S3, or any backend
+                storage = doc.file.storage
+                file_name = doc.file.name
+
+                if not storage.exists(file_name):
+                    logger.warning("File not found in storage, skipping: %s", file_name)
                     continue
 
-                file_ext = os.path.splitext(file_path)[1].lower()
+                file_ext = os.path.splitext(file_name)[1].lower()
 
                 if file_ext == '.pdf':
-                    # Add PDF directly
-                    merger.append(file_path)
+                    with storage.open(file_name, 'rb') as f:
+                        merger.append(io.BytesIO(f.read()))
                     added_count += 1
                 elif file_ext in ['.doc', '.docx']:
-                    # Convert DOCX/DOC to PDF using proper conversion
                     try:
                         import tempfile
 
-                        # Create temporary PDF file
+                        # Download to a local temp file (convert_docx_to_pdf needs a local path)
+                        with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as tmp_docx:
+                            tmp_docx_path = tmp_docx.name
+                            with storage.open(file_name, 'rb') as f:
+                                tmp_docx.write(f.read())
+
                         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
                             tmp_pdf_path = tmp_pdf.name
 
-                        # Use the reliable convert_docx_to_pdf function from aro.py
-                        if convert_docx_to_pdf(file_path, tmp_pdf_path):
-                            # Add converted PDF to merger
+                        if convert_docx_to_pdf(tmp_docx_path, tmp_pdf_path):
                             merger.append(tmp_pdf_path)
                             added_count += 1
-                            logger.debug("Converted DOCX to PDF: %s", os.path.basename(file_path))
+                            logger.debug("Converted DOCX to PDF: %s", os.path.basename(file_name))
+                        else:
+                            logger.warning("Failed to convert DOCX file: %s", os.path.basename(file_name))
 
-                            # Clean up temp file after adding to merger
+                        for p in (tmp_docx_path, tmp_pdf_path):
                             try:
-                                os.remove(tmp_pdf_path)
+                                os.remove(p)
                             except OSError:
                                 pass
-                        else:
-                            logger.warning("Failed to convert DOCX file: %s", os.path.basename(file_path))
-                            continue
 
                     except Exception as e:
-                        logger.error("Error converting DOCX file %s: %s", os.path.basename(file_path), str(e))
+                        logger.error("Error converting DOCX file %s: %s", os.path.basename(file_name), str(e))
                         continue
                 elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-                    # Convert image to PDF
-                    img = Image.open(file_path)
+                    with storage.open(file_name, 'rb') as img_f:
+                        img = Image.open(io.BytesIO(img_f.read()))
 
                     # Convert to RGB if necessary
                     if img.mode != 'RGB':
@@ -248,8 +253,11 @@ def _apply_license_copies_to_dir(output_dir, license_copy_map):
             continue
         if filename.endswith(' - Copy.pdf') or filename.endswith(' - FS.pdf'):
             continue
-        license_number = filename.split('_')[0]
-        if license_number not in license_copy_map:
+        license_number = next(
+            (key for key in license_copy_map if filename.startswith(key + '_') or filename == key + '.pdf'),
+            None
+        )
+        if license_number is None:
             continue
         tl_pdf = os.path.join(output_dir, filename)
         copy_dest = os.path.join(output_dir, f'{license_number} - Copy.pdf')
@@ -280,7 +288,12 @@ def _apply_license_copies_multi_party(output_root, license_copy_map):
             continue
         if fname.endswith(' - Copy.pdf') or fname.endswith(' - FS.pdf'):
             continue
-        license_number = fname.split('_')[0]
+        license_number = next(
+            (key for key in license_copy_map if fname.startswith(key + '_') or fname == key + '.pdf'),
+            None
+        )
+        if license_number is None:
+            continue
         license_tl_files[license_number].append(os.path.join(output_root, fname))
 
     for license_number, tl_files in license_tl_files.items():

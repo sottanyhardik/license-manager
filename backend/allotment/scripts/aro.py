@@ -317,7 +317,7 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
         docx_p, pdf_p = args
         return docx_p, pdf_p, convert_docx_to_pdf(docx_p, pdf_p)
 
-    max_workers = min(4, len(pending_conversions))
+    max_workers = min(2, len(pending_conversions))  # cap at 2 on low-memory servers
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         for docx_p, pdf_p, success in executor.map(_convert, pending_conversions):
             if success:

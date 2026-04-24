@@ -55,15 +55,26 @@ def fetch_eligible_licenses(order=None, expired_only=False):
     from datetime import date
     from django.db.models import F, Q
 
+    from django.db.models.functions import TruncDate
+
     today = date.today()
     if expired_only:
+        # Expired licenses where:
+        #   - never fetched (last_ownership_fetch IS NULL), OR
+        #   - expiry date is AFTER the last fetch date (expired after we last checked — new info may exist)
+        # Skips licenses already fetched post-expiry (last fetch >= expiry date).
         qs = LicenseDetailsModel.objects.filter(
             license_expiry_date__isnull=False,
             license_expiry_date__lte=today,
+        ).filter(
+            Q(last_ownership_fetch__isnull=True) |
+            Q(license_expiry_date__gt=TruncDate('last_ownership_fetch'))
         )
     else:
+        # Only active licenses (expiry > today) or licenses with no expiry date.
+        # Expired licenses are always skipped — last_ownership_fetch is not a reason to re-include them.
         qs = LicenseDetailsModel.objects.filter(
-            Q(last_ownership_fetch__isnull=True) | Q(license_expiry_date__gt=today)
+            Q(license_expiry_date__isnull=True) | Q(license_expiry_date__gt=today)
         )
     if order == 'asc':
         qs = qs.order_by(F('license_expiry_date').asc(nulls_first=True))

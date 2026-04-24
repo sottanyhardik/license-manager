@@ -43,22 +43,33 @@ BATCH_SIZE = 20  # Number of licenses to send to server in each batch
 auth_token = None
 
 
-def fetch_eligible_licenses():
+def fetch_eligible_licenses(order=None, expired_only=False):
     """
-    Return licenses that should be fetched from DGFT:
-    - Never fetched before (last_ownership_fetch is None), OR
-    - Still active (license_expiry_date > today)
+    Return licenses to fetch from DGFT.
 
-    Expired licenses that have already been fetched at least once are skipped —
-    their ownership data won't change after expiry.
+    expired_only=True  → only expired licenses (license_expiry_date <= today)
+    expired_only=False → never-fetched OR still-active licenses (default)
+
+    order: 'asc' (soonest/None-first), 'desc' (latest/None-last, default)
     """
     from datetime import date
     from django.db.models import F, Q
 
     today = date.today()
-    return LicenseDetailsModel.objects.filter(
-        Q(last_ownership_fetch__isnull=True) | Q(license_expiry_date__gt=today)
-    ).order_by(F('license_expiry_date').desc(nulls_last=True))
+    if expired_only:
+        qs = LicenseDetailsModel.objects.filter(
+            license_expiry_date__isnull=False,
+            license_expiry_date__lte=today,
+        )
+    else:
+        qs = LicenseDetailsModel.objects.filter(
+            Q(last_ownership_fetch__isnull=True) | Q(license_expiry_date__gt=today)
+        )
+    if order == 'asc':
+        qs = qs.order_by(F('license_expiry_date').asc(nulls_first=True))
+    else:
+        qs = qs.order_by(F('license_expiry_date').desc(nulls_last=True))
+    return qs
 
 
 def _derive_current_owner_from_transfers(transfers, api_current_owner):
@@ -569,6 +580,19 @@ class Command(BaseCommand):
             action='store_true',
             help='Fetch ALL licenses including expired ones (by default only fetches non-expired licenses)',
         )
+        parser.add_argument(
+            '--order',
+            type=str,
+            choices=['asc', 'desc'],
+            default=None,
+            help='Order licenses by expiry date: asc (soonest first) or desc (latest first, default)',
+        )
+        parser.add_argument(
+            '--expired',
+            action='store_true',
+            default=False,
+            help='Only process expired DFIA licenses (license_expiry_date <= today)',
+        )
 
     def handle(self, *args, **options):
         local_only = options['local_only']
@@ -577,6 +601,8 @@ class Command(BaseCommand):
         retry_count = options['retry_count']
         proxy = options['proxy'] or DGFT_PROXY
         license_numbers_str = options['licenses']
+        order = options['order']
+        expired_only = options['expired']
         server_url = options['server']
         default_iec = options['iec']  # Default IEC for licenses without exporter
         fetch_all = options['fetch_all']  # Fetch all licenses including expired
@@ -620,7 +646,8 @@ class Command(BaseCommand):
         if not local_only:
             self.stdout.write(f"Server: {server_url}")
         self.stdout.write(f"Mode: {'LOCAL ONLY' if local_only else 'LOCAL + BULK SERVER SYNC'}")
-        self.stdout.write(f"License Filter: Never-fetched + Active (expired+fetched licenses skipped)")
+        filter_label = "Expired only" if expired_only else "Never-fetched + Active (expired+fetched skipped)"
+        self.stdout.write(f"License Filter: {filter_label}")
         self.stdout.write(f"Retry Count: {retry_count}")
         self.stdout.write(f"Skip Errors: {'Yes' if skip_errors else 'No'}")
         if proxy:
@@ -658,7 +685,7 @@ class Command(BaseCommand):
                     f"\n⚠️  Licenses not found: {', '.join(sorted(missing_numbers))}"
                 ))
         else:
-            licenses = fetch_eligible_licenses()
+            licenses = fetch_eligible_licenses(order=order, expired_only=expired_only)
             if limit:
                 licenses = licenses[:limit]
 

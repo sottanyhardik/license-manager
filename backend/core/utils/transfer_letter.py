@@ -256,7 +256,11 @@ def _copy_license_docs_to_output(unique_licenses, output_dir):
             base_name = os.path.basename(file_name)
             # Always prefix with license number so _create_license_fs_pdfs can
             # reliably match every copied doc regardless of its original filename.
-            dest_name = f'{license_number}_{base_name}'
+            # Skip the prefix if the filename already starts with the license number.
+            if base_name.startswith(license_number):
+                dest_name = base_name
+            else:
+                dest_name = f'{license_number}_{base_name}'
             dest_path = os.path.join(output_dir, dest_name)
             if os.path.exists(dest_path):
                 name, ext = os.path.splitext(dest_name)

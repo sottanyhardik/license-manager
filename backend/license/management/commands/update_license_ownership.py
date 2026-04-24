@@ -18,10 +18,10 @@ SERVER_AUTH_URL = f"{SERVER_BASE_URL}/api/auth/login/"
 SERVER_USERNAME = os.getenv('SERVER_USERNAME', 'admin')
 SERVER_PASSWORD = os.getenv('SERVER_PASSWORD', 'admin@123')
 
-# IP fallbacks for when DNS is down (maps domain → direct IP URL)
+# IP fallbacks use plain HTTP so SSL certificates are not involved — no verify=False needed
 SERVER_IP_FALLBACKS = {
-    'license-manager.duckdns.org': 'https://143.110.252.201',
-    'labdhi.duckdns.org': 'https://139.59.92.226',
+    'license-manager.duckdns.org': 'http://143.110.252.201',
+    'labdhi.duckdns.org': 'http://139.59.92.226',
     'license-tractor.duckdns.org': 'http://165.232.185.220',
 }
 
@@ -171,7 +171,6 @@ def authenticate(server_url=None):
             response = requests.post(
                 auth_url,
                 json={'username': SERVER_USERNAME, 'password': SERVER_PASSWORD},
-                verify=False,
                 timeout=30
             )
 
@@ -463,7 +462,6 @@ def bulk_sync_to_server(payloads, server_url):
             f"{server_url}/api/license-actions/bulk-update-license-transfer/",
             json=batch_payload,
             headers=headers,
-            verify=False,
             timeout=300  # 5 minutes for bulk operation
         )
 
@@ -483,7 +481,6 @@ def bulk_sync_to_server(payloads, server_url):
                     f"{server_url}/api/license-actions/bulk-update-license-transfer/",
                     json=batch_payload,
                     headers=headers,
-                    verify=False,
                     timeout=300
                 )
                 if res.status_code in [200, 201]:

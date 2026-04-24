@@ -53,12 +53,12 @@ def fetch_eligible_licenses():
     their ownership data won't change after expiry.
     """
     from datetime import date
-    from django.db.models import Q
+    from django.db.models import F, Q
 
     today = date.today()
     return LicenseDetailsModel.objects.filter(
         Q(last_ownership_fetch__isnull=True) | Q(license_expiry_date__gt=today)
-    ).order_by("-license_expiry_date")
+    ).order_by(F('license_expiry_date').desc(nulls_last=True))
 
 
 def _derive_current_owner_from_transfers(transfers, api_current_owner):

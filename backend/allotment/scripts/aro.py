@@ -175,10 +175,16 @@ def convert_docx_to_pdf(docx_path, pdf_path):
 
                 logger.debug(f"Running soffice command from: {soffice_path}")
 
-                # Set explicit environment to ensure LibreOffice can run
+                # LibreOffice needs a writable HOME to create its user profile.
+                # Use a stable directory under /tmp rather than falling back to /tmp itself,
+                # which may be noexec on hardened Linux servers.
                 env = os.environ.copy()
-                if not os.path.exists(os.path.expanduser('~')):
-                    env['HOME'] = '/tmp'  # Temporary home for LibreOffice user profile
+                lo_home = os.path.expanduser('~')
+                if not os.path.exists(lo_home) or not os.access(lo_home, os.W_OK):
+                    lo_home = '/tmp/django-libreoffice-home'
+                    os.makedirs(lo_home, exist_ok=True)
+                env['HOME'] = lo_home
+                logger.debug("LibreOffice HOME: %s", lo_home)
 
                 result = subprocess.run([
                     soffice_path,

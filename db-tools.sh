@@ -14,8 +14,8 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 # Server configurations (using indexed arrays for compatibility)
-SERVER_NAMES=("Global" "Labdhi")
-SERVER_HOSTS=("django@143.110.252.201" "django@139.59.92.226")
+SERVER_NAMES=("Global" "Labdhi" "Server3")
+SERVER_HOSTS=("django@143.110.252.201" "django@139.59.92.226" "django@165.232.185.220")
 
 # Database configurations (common for all servers)
 REMOTE_DB_NAME="lmanagement"
@@ -356,6 +356,43 @@ sync_media() {
     sync_media_files
 }
 
+# Function: Install/update dependencies on all servers
+install_all_servers() {
+    print_header "📦 Install Dependencies on All Servers"
+
+    local REMOTE_APP="/home/django/license-manager"
+    local VENV="$REMOTE_APP/venv/bin"
+
+    for i in "${!SERVER_NAMES[@]}"; do
+        local name="${SERVER_NAMES[$i]}"
+        local host="${SERVER_HOSTS[$i]}"
+        echo ""
+        print_info "[$name] $host  (sudo password may be required)"
+
+        # -t allocates a pseudo-TTY so sudo can prompt for password interactively
+        ssh -t "$host" "
+            set -e
+            echo '→ Installing system packages...'
+            sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libreoffice unoconv
+            echo '→ Installing Python packages...'
+            $VENV/pip install -q -r $REMOTE_APP/backend/requirements.txt
+            echo '→ Testing LibreOffice...'
+            soffice --version
+            echo '✅ Done'
+        "
+
+        if [ $? -eq 0 ]; then
+            print_success "[$name] Installed successfully"
+        else
+            print_error "[$name] Installation failed"
+        fi
+    done
+
+    echo ""
+    print_success "All servers updated"
+}
+
 # Main script
 if [ $# -eq 0 ]; then
     show_usage
@@ -383,6 +420,9 @@ case $COMMAND in
         ;;
     media)
         sync_media
+        ;;
+    install)
+        install_all_servers
         ;;
     *)
         echo "Unknown command: $COMMAND"

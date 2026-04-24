@@ -366,9 +366,31 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
                 logger.warning("Template %s has no file for party %d, skipping", template_id, idx + 1)
                 continue
 
-            template_path = transfer_letter.tl.path
-            if not os.path.exists(template_path) or not template_path.lower().endswith('.docx'):
-                logger.warning("Template file invalid for party %d, skipping", idx + 1)
+            tl_file_name = transfer_letter.tl.name
+            if not tl_file_name.lower().endswith('.docx'):
+                logger.warning("Template %s is not a .docx file for party %d, skipping", tl_file_name, idx + 1)
+                continue
+
+            # Download template to a local temp file — storage-agnostic (works for local, S3, etc.)
+            import tempfile
+            tl_storage = transfer_letter.tl.storage
+            if not tl_storage.exists(tl_file_name):
+                logger.warning("Template file not found in storage: %s (party %d)", tl_file_name, idx + 1)
+                continue
+
+            tmp_tl = tempfile.NamedTemporaryFile(suffix='.docx', delete=False)
+            try:
+                with tl_storage.open(tl_file_name, 'rb') as src:
+                    tmp_tl.write(src.read())
+                tmp_tl.close()
+                template_path = tmp_tl.name
+            except Exception as e:
+                tmp_tl.close()
+                try:
+                    os.remove(tmp_tl.name)
+                except OSError:
+                    pass
+                logger.error("Failed to download template %s for party %d: %s", tl_file_name, idx + 1, str(e))
                 continue
 
             if instance_type == 'allotment':
@@ -386,42 +408,49 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
 
             any_data_generated = True
 
-            if multi_party:
-                # Generate to temp dir, then move files to root with party name as suffix
-                temp_party_dir = os.path.join(output_root, f'__party_{idx}__')
-                os.makedirs(temp_party_dir, exist_ok=True)
+            try:
+                if multi_party:
+                    # Generate to temp dir, then move files to root with party name as suffix
+                    temp_party_dir = os.path.join(output_root, f'__party_{idx}__')
+                    os.makedirs(temp_party_dir, exist_ok=True)
 
-                generate_tl_software(
-                    data=data,
-                    tl_path=template_path,
-                    path=temp_party_dir,
-                    transfer_letter_name=transfer_letter.name.replace(' ', '_'),
-                    additional_context=additional_context
-                )
+                    generate_tl_software(
+                        data=data,
+                        tl_path=template_path,
+                        path=temp_party_dir,
+                        transfer_letter_name=transfer_letter.name.replace(' ', '_'),
+                        additional_context=additional_context
+                    )
 
-                # Rename: suffix party name onto each file (keeps license number at start)
-                safe_name = re.sub(r'[^\w\s-]', '', company_name)[:20].strip().replace(' ', '_')
-                party_suffix = f'_{safe_name}' if safe_name else f'_Party{idx + 1}'
-                for fname in os.listdir(temp_party_dir):
-                    if fname.endswith('.pdf') or fname.endswith('.docx'):
-                        base, ext = os.path.splitext(fname)
-                        os.rename(
-                            os.path.join(temp_party_dir, fname),
-                            os.path.join(temp_party_dir, f'{base}{party_suffix}{ext}')
-                        )
+                    # Rename: suffix party name onto each file (keeps license number at start)
+                    safe_name = re.sub(r'[^\w\s-]', '', company_name)[:20].strip().replace(' ', '_')
+                    party_suffix = f'_{safe_name}' if safe_name else f'_Party{idx + 1}'
+                    for fname in os.listdir(temp_party_dir):
+                        if fname.endswith('.pdf') or fname.endswith('.docx'):
+                            base, ext = os.path.splitext(fname)
+                            os.rename(
+                                os.path.join(temp_party_dir, fname),
+                                os.path.join(temp_party_dir, f'{base}{party_suffix}{ext}')
+                            )
 
-                # Move all renamed files flat into output root
-                for fname in os.listdir(temp_party_dir):
-                    shutil.move(os.path.join(temp_party_dir, fname), os.path.join(output_root, fname))
-                shutil.rmtree(temp_party_dir)
-            else:
-                generate_tl_software(
-                    data=data,
-                    tl_path=template_path,
-                    path=output_root,
-                    transfer_letter_name=transfer_letter.name.replace(' ', '_'),
-                    additional_context=additional_context
-                )
+                    # Move all renamed files flat into output root
+                    for fname in os.listdir(temp_party_dir):
+                        shutil.move(os.path.join(temp_party_dir, fname), os.path.join(output_root, fname))
+                    shutil.rmtree(temp_party_dir)
+                else:
+                    generate_tl_software(
+                        data=data,
+                        tl_path=template_path,
+                        path=output_root,
+                        transfer_letter_name=transfer_letter.name.replace(' ', '_'),
+                        additional_context=additional_context
+                    )
+            finally:
+                # Always clean up the locally downloaded template temp file
+                try:
+                    os.remove(template_path)
+                except OSError:
+                    pass
 
         # Copy original license documents into the output dir for inclusion in zip
         if include_license_copy and unique_licenses:

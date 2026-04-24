@@ -11,6 +11,7 @@ from decimal import Decimal
 from shutil import make_archive
 
 from django.conf import settings
+from django.db.models import prefetch_related_objects
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -45,7 +46,9 @@ def merge_license_documents(licenses, output_path):
         # Sort documents: TRANSFER LETTER first, then LICENSE COPY, then OTHER
         type_order = {'TRANSFER LETTER': 0, 'LICENSE COPY': 1, 'OTHER': 2}
 
-        for license_obj in licenses:
+        license_list = list(licenses)
+        prefetch_related_objects(license_list, 'license_documents')
+        for license_obj in license_list:
             documents = license_obj.license_documents.all()
             sorted_docs = sorted(documents, key=lambda doc: type_order.get(doc.type, 3))
 
@@ -237,7 +240,10 @@ def _copy_license_docs_to_output(unique_licenses, output_dir):
     license number to prevent collisions.
     """
     import shutil
-    for license_obj in unique_licenses:
+    license_list = list(unique_licenses)
+    # Batch-fetch all license documents in a single query instead of N queries.
+    prefetch_related_objects(license_list, 'license_documents')
+    for license_obj in license_list:
         license_number = license_obj.license_number.replace('/', '_')
         for doc in license_obj.license_documents.all():
             if not doc.file:

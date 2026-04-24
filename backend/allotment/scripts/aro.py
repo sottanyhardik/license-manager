@@ -3,11 +3,13 @@ Transfer Letter Generation Module
 Generates transfer letters from DOCX templates and converts to PDF
 """
 import os
+import shutil
 import subprocess
 import tempfile
-import fcntl
 import time
+import uuid
 import logging
+import concurrent.futures
 from docxtpl import DocxTemplate
 
 logger = logging.getLogger(__name__)
@@ -121,156 +123,115 @@ def convert_docx_to_pdf(docx_path, pdf_path):
     except Exception as e:
         logger.warning(f"unoconv error: {str(e)}, falling back to LibreOffice")
 
-    # Method 2: Fall back to LibreOffice with file locking
+    # Method 2: Fall back to LibreOffice using a unique per-conversion user profile.
+    # This allows concurrent conversions without conflicts — no global lock needed.
     output_dir = os.path.dirname(pdf_path)
-    lock_file_path = '/tmp/libreoffice_conversion.lock'
+    profile_dir = f'/tmp/soffice_profile_{os.getpid()}_{uuid.uuid4().hex}'
 
-    # Use file lock to ensure only one LibreOffice conversion at a time
-    # This prevents concurrent LibreOffice processes from conflicting
     try:
-        with open(lock_file_path, 'w') as lock_file:
-            # Try to acquire exclusive lock with timeout
-            max_wait = 300  # 5 minutes max wait
-            wait_interval = 0.5  # Check every 0.5 seconds
-            waited = 0
+        soffice_paths = [
+            '/usr/bin/soffice',          # Linux
+            '/opt/homebrew/bin/soffice', # macOS (Apple Silicon)
+            '/usr/local/bin/soffice',    # macOS (Intel)
+            'soffice'                    # Fallback to PATH
+        ]
 
-            logger.debug("Attempting to acquire lock...")
-            while waited < max_wait:
-                try:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    logger.debug(f"Lock acquired after {waited}s")
-                    break
-                except IOError:
-                    # Lock is held by another process, wait
-                    time.sleep(wait_interval)
-                    waited += wait_interval
-            else:
-                msg = f"✗ Timeout waiting for LibreOffice lock: {os.path.basename(docx_path)}"
-                logger.error(msg)
-                print(msg)
-                return False
+        soffice_path = None
+        for path in soffice_paths:
+            if path == 'soffice' or os.path.exists(path):
+                soffice_path = path
+                break
 
-            # Lock acquired, proceed with conversion
+        if not soffice_path:
+            msg = f"✗ LibreOffice (soffice) not found in PATH"
+            logger.error(msg)
+            print(msg)
+            return False
+
+        logger.debug(f"Running soffice command from: {soffice_path}")
+
+        env = os.environ.copy()
+        lo_home = os.path.expanduser('~')
+        if not os.path.exists(lo_home) or not os.access(lo_home, os.W_OK):
+            lo_home = '/tmp/django-libreoffice-home'
+            os.makedirs(lo_home, exist_ok=True)
+        env['HOME'] = lo_home
+
+        current_path = env.get('PATH', '')
+        system_paths = '/usr/bin:/bin:/usr/local/bin:/usr/sbin:/sbin'
+        if '/usr/bin' not in current_path:
+            env['PATH'] = f'{current_path}:{system_paths}' if current_path else system_paths
+
+        result = subprocess.run([
+            soffice_path,
+            '--headless',
+            '--norestore',
+            '--nofirststartwizard',
+            '--nologo',
+            f'-env:UserInstallation=file://{profile_dir}',
+            '--convert-to', 'pdf',
+            '--outdir', output_dir,
+            docx_path
+        ], capture_output=True, timeout=60, text=True, env=env)
+
+        logger.debug(f"soffice exit code: {result.returncode}")
+        if result.stdout:
+            logger.debug(f"soffice stdout: {result.stdout}")
+        if result.stderr:
+            logger.warning(f"soffice stderr: {result.stderr}")
+
+        expected_pdf = os.path.join(output_dir, os.path.basename(docx_path).replace('.docx', '.pdf'))
+
+        if os.path.exists(expected_pdf):
+            if expected_pdf != pdf_path:
+                os.rename(expected_pdf, pdf_path)
             try:
-                # Run soffice in headless mode with simple environment
-                # Try multiple possible paths for soffice (Linux and macOS)
-                soffice_paths = [
-                    '/usr/bin/soffice',  # Linux
-                    '/opt/homebrew/bin/soffice',  # macOS (Apple Silicon)
-                    '/usr/local/bin/soffice',  # macOS (Intel)
-                    'soffice'  # Fallback to PATH
-                ]
+                with open(debug_log, "a") as f:
+                    f.write(f"SUCCESS: LibreOffice converted successfully\n")
+                    f.write(f"PDF size: {os.path.getsize(pdf_path)} bytes\n")
+                    f.flush()
+            except OSError:
+                pass
+            msg = f"✓ Successfully converted {os.path.basename(docx_path)} to PDF"
+            logger.info(msg)
+            print(msg)
+            return True
+        else:
+            try:
+                with open(debug_log, "a") as f:
+                    f.write(f"FAILED: PDF not created at {expected_pdf}\n")
+                    f.write(f"Exit code: {result.returncode}\n")
+                    f.write(f"Stdout: {result.stdout}\n")
+                    f.write(f"Stderr: {result.stderr}\n")
+                    f.flush()
+            except OSError:
+                pass
+            msg = f"✗ PDF not created: {os.path.basename(docx_path)}"
+            logger.error(msg)
+            print(msg)
+            if result.stdout:
+                print(f"  stdout: {result.stdout}")
+            if result.stderr:
+                print(f"  stderr: {result.stderr}")
+            return False
 
-                soffice_path = None
-                for path in soffice_paths:
-                    if path == 'soffice' or os.path.exists(path):
-                        soffice_path = path
-                        break
-
-                if not soffice_path:
-                    msg = f"✗ LibreOffice (soffice) not found in PATH"
-                    logger.error(msg)
-                    print(msg)
-                    return False
-
-                logger.debug(f"Running soffice command from: {soffice_path}")
-
-                # LibreOffice needs a writable HOME to create its user profile.
-                # Use a stable directory under /tmp rather than falling back to /tmp itself,
-                # which may be noexec on hardened Linux servers.
-                env = os.environ.copy()
-                lo_home = os.path.expanduser('~')
-                if not os.path.exists(lo_home) or not os.access(lo_home, os.W_OK):
-                    lo_home = '/tmp/django-libreoffice-home'
-                    os.makedirs(lo_home, exist_ok=True)
-                env['HOME'] = lo_home
-                logger.debug("LibreOffice HOME: %s", lo_home)
-
-                # Supervisor/gunicorn often strips PATH to only the venv bin.
-                # The soffice shell script needs dirname, basename, grep, sed, uname etc.
-                # which live in /usr/bin and /bin — inject them if missing.
-                current_path = env.get('PATH', '')
-                system_paths = '/usr/bin:/bin:/usr/local/bin:/usr/sbin:/sbin'
-                if '/usr/bin' not in current_path:
-                    env['PATH'] = f'{current_path}:{system_paths}' if current_path else system_paths
-                    logger.debug("Augmented PATH for soffice: %s", env['PATH'])
-
-                result = subprocess.run([
-                    soffice_path,
-                    '--headless',
-                    '--norestore',
-                    '--nofirststartwizard',
-                    '--nologo',
-                    '--convert-to', 'pdf',
-                    '--outdir', output_dir,
-                    docx_path
-                ], capture_output=True, timeout=60, text=True, env=env)
-
-                logger.debug(f"soffice exit code: {result.returncode}")
-                if result.stdout:
-                    logger.debug(f"soffice stdout: {result.stdout}")
-                if result.stderr:
-                    logger.warning(f"soffice stderr: {result.stderr}")
-
-                # LibreOffice creates PDF with same name as DOCX in the output directory
-                expected_pdf = os.path.join(output_dir, os.path.basename(docx_path).replace('.docx', '.pdf'))
-                logger.debug(f"Expected PDF location: {expected_pdf}")
-
-                # Check if PDF was created
-                if os.path.exists(expected_pdf):
-                    if expected_pdf != pdf_path:
-                        logger.debug(f"Renaming {expected_pdf} to {pdf_path}")
-                        os.rename(expected_pdf, pdf_path)
-                    try:
-                        with open(debug_log, "a") as f:
-                            f.write(f"SUCCESS: LibreOffice converted successfully\n")
-                            f.write(f"PDF size: {os.path.getsize(pdf_path)} bytes\n")
-                            f.flush()
-                    except OSError:
-                        pass
-                    msg = f"✓ Successfully converted {os.path.basename(docx_path)} to PDF"
-                    logger.info(msg)
-                    print(msg)
-                    return True
-                else:
-                    try:
-                        with open(debug_log, "a") as f:
-                            f.write(f"FAILED: PDF not created at {expected_pdf}\n")
-                            f.write(f"Exit code: {result.returncode}\n")
-                            f.write(f"Stdout: {result.stdout}\n")
-                            f.write(f"Stderr: {result.stderr}\n")
-                            f.flush()
-                    except OSError:
-                        pass
-                    msg = f"✗ PDF not created: {os.path.basename(docx_path)}"
-                    logger.error(msg)
-                    print(msg)
-                    if result.stdout:
-                        print(f"  stdout: {result.stdout}")
-                    if result.stderr:
-                        print(f"  stderr: {result.stderr}")
-                    return False
-
-            except subprocess.TimeoutExpired:
-                msg = f"✗ Conversion timeout for {os.path.basename(docx_path)}"
-                logger.error(msg)
-                print(msg)
-                return False
-            except FileNotFoundError:
-                msg = f"✗ LibreOffice (soffice) not found in PATH"
-                logger.error(msg)
-                print(msg)
-                return False
-            finally:
-                # Release lock automatically when exiting the with block
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-                logger.debug("Lock released")
-
+    except subprocess.TimeoutExpired:
+        msg = f"✗ Conversion timeout for {os.path.basename(docx_path)}"
+        logger.error(msg)
+        print(msg)
+        return False
+    except FileNotFoundError:
+        msg = f"✗ LibreOffice (soffice) not found in PATH"
+        logger.error(msg)
+        print(msg)
+        return False
     except Exception as e:
         msg = f"✗ Conversion error for {os.path.basename(docx_path)}: {type(e).__name__}: {str(e)}"
         logger.exception(msg)
         print(msg)
         return False
+    finally:
+        shutil.rmtree(profile_dir, ignore_errors=True)
 
     # Try using macOS textutil + cupsfilter
     try:
@@ -308,66 +269,64 @@ def generate_tl_software(data, tl_path, path, transfer_letter_name, be_number=No
         be_number: Optional BOE number
         additional_context: Optional dict of additional context variables (e.g., {'todays_date': '31/12/2025'})
     """
-    # Create output directory if it doesn't exist
     os.makedirs(path, exist_ok=True)
 
-    conversion_failed_count = 0
-
-    # Generate a transfer letter for each data item
+    # Step 1: Render all DOCX files (fast — sequential is fine)
+    pending_conversions = []  # list of (docx_path, pdf_path)
     for idx, context in enumerate(data, start=1):
         try:
-            # Merge additional context if provided
             if additional_context:
                 context = {**context, **additional_context}
 
-            # DOCX template processing
             doc = DocxTemplate(tl_path)
             doc.render(context)
 
-            # Build filename: license_number + serial_number + purchase_status + BOE_number + template_name
             license_number = context.get('license', 'LICENSE').replace('/', '_')
             serial_number = context.get('serial_number', idx)
             purchase_status = context.get('status', '')
             boe_info = context.get('boe', '')
 
-            # Create descriptive filename
             filename_parts = [license_number, str(serial_number)]
             if purchase_status:
                 filename_parts.append(purchase_status)
             if boe_info and 'BE NUMBER:' in boe_info:
-                # Extract BE number from "BE NUMBER: XXXXX"
                 be_num = boe_info.replace('BE NUMBER:', '').strip().replace('/', '_')
                 filename_parts.append(be_num)
-
-            # Add template name to filename
             if transfer_letter_name:
-                # Clean template name for filename (remove spaces and special chars)
                 clean_template_name = transfer_letter_name.replace(' ', '_').replace('/', '_')
                 filename_parts.append(clean_template_name)
 
             base_filename = '_'.join(filename_parts)
+            docx_path = os.path.join(path, f"{base_filename}.docx")
+            pdf_path = os.path.join(path, f"{base_filename}.pdf")
 
-            # Save as DOCX first
-            docx_filename = f"{base_filename}.docx"
-            docx_path = os.path.join(path, docx_filename)
             doc.save(docx_path)
+            pending_conversions.append((docx_path, pdf_path))
 
-            # Convert DOCX to PDF
-            pdf_filename = f"{base_filename}.pdf"
-            pdf_path = os.path.join(path, pdf_filename)
+        except Exception:
+            logger.exception("Error rendering transfer letter %s", idx)
 
-            if convert_docx_to_pdf(docx_path, pdf_path):
-                # Successful conversion - delete DOCX
-                os.remove(docx_path)
+    if not pending_conversions:
+        return
+
+    # Step 2: Convert all DOCX→PDF in parallel (each uses its own LO profile dir)
+    conversion_failed_count = 0
+
+    def _convert(args):
+        docx_p, pdf_p = args
+        return docx_p, pdf_p, convert_docx_to_pdf(docx_p, pdf_p)
+
+    max_workers = min(4, len(pending_conversions))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for docx_p, pdf_p, success in executor.map(_convert, pending_conversions):
+            if success:
+                try:
+                    os.remove(docx_p)
+                except OSError:
+                    pass
             else:
-                # Conversion failed - keep DOCX
                 conversion_failed_count += 1
-                print(f"Warning: Could not convert {docx_filename} to PDF. Keeping DOCX file.")
-
-        except Exception as e:
-            logger.exception("Error generating transfer letter %s", idx)
-            # On any rendering/save error, keep whatever was written so it lands in the zip
-            continue
+                print(f"Warning: Could not convert {os.path.basename(docx_p)} to PDF. Keeping DOCX file.")
 
     if conversion_failed_count > 0:
         print(f"\nWarning: {conversion_failed_count} file(s) could not be converted to PDF.")

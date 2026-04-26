@@ -336,6 +336,12 @@ class LicenseActionViewSet(ViewSet):
                             license_obj.current_owner = owner_company
                             update_fields.append('current_owner')
 
+                        # Update file_transfer_status (pending/withdrawn label from latest transfer)
+                        file_transfer_status = license_data.get('file_transfer_status')
+                        if file_transfer_status != license_obj.file_transfer_status:
+                            license_obj.file_transfer_status = file_transfer_status
+                            update_fields.append('file_transfer_status')
+
                         # Save if any fields were updated
                         if update_fields:
                             license_obj.save(update_fields=update_fields)

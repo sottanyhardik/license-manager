@@ -83,6 +83,50 @@ def fetch_eligible_licenses(order=None, expired_only=False):
     return qs
 
 
+def _parse_transfer_dt(t):
+    """Parse the initiation datetime of a transfer record. Returns datetime.min on failure."""
+    from datetime import datetime
+    for key in ("transferInitiationDate", "transferDate", "transferacceptanceDate"):
+        raw = (t.get(key) or "").split("+")[0].strip()
+        raw_norm = raw.split(".")[0].strip()
+        for candidate in (raw_norm, raw):
+            for fmt in (
+                "%Y-%m-%d %H:%M:%S",
+                "%d/%m/%Y %H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S",
+                "%d/%m/%Y",
+                "%Y-%m-%d",
+            ):
+                try:
+                    return datetime.strptime(candidate, fmt)
+                except (ValueError, AttributeError):
+                    continue
+    return __import__('datetime').datetime.min
+
+
+def _derive_file_transfer_status(transfers):
+    """
+    Returns a human-readable file_transfer_status string based on the LATEST transfer
+    (by initiation date, regardless of status).
+
+    - If latest is Approved → return None (ownership already captured in current_owner)
+    - Otherwise → "Transfer - Pending Acceptance → AWL AGRI BUSINESS LIMITED"
+    """
+    if not transfers:
+        return None
+
+    latest = max(transfers, key=_parse_transfer_dt)
+    status = (latest.get("transferStatus") or "").strip()
+
+    if status.lower() == "approved":
+        return None  # Not pending — no extra label needed
+
+    to_name = (latest.get("toIecEntityName") or "").strip()
+    if to_name:
+        return f"{status} \u2192 {to_name}"
+    return status or None
+
+
 def _derive_current_owner_from_transfers(transfers, api_current_owner):
     """
     DGFT's meisScripCurrentOwnerDtls reflects the querying IEC's perspective,
@@ -90,32 +134,11 @@ def _derive_current_owner_from_transfers(transfers, api_current_owner):
     Approved transfer's toIEC, which matches what the DGFT portal displays.
     Falls back to api_current_owner when no approved transfers exist.
     """
-    from datetime import datetime
-
     approved = [t for t in transfers if (t.get("transferStatus") or "").strip().lower() == "approved"]
     if not approved:
         return api_current_owner
 
-    def _parse_dt(t):
-        for key in ("transferInitiationDate", "transferDate", "transferacceptanceDate"):
-            raw = (t.get(key) or "").split("+")[0].strip()
-            # Normalise fractional seconds: "13:12:0.0" → "13:12:0" so strptime handles it
-            raw_norm = raw.split(".")[0].strip()
-            for candidate in (raw_norm, raw):
-                for fmt in (
-                    "%Y-%m-%d %H:%M:%S",   # DGFT: "2026-02-02 13:12:0" (space, no frac)
-                    "%d/%m/%Y %H:%M:%S",   # "02/02/2026 13:12:00"
-                    "%Y-%m-%dT%H:%M:%S",   # ISO with T
-                    "%d/%m/%Y",            # date only
-                    "%Y-%m-%d",            # date only ISO
-                ):
-                    try:
-                        return datetime.strptime(candidate, fmt)
-                    except (ValueError, AttributeError):
-                        continue
-        return datetime.min
-
-    latest = max(approved, key=_parse_dt)
+    latest = max(approved, key=_parse_transfer_dt)
     to_iec = latest.get("toIEC")
     if to_iec:
         return {"iec": to_iec, "firm": latest.get("toIecEntityName")}
@@ -147,6 +170,7 @@ def build_payload(dfia, data, fetched_iec=None):
         "exporter_iec": exporter_iec,
         "validity": original_owner.get("validity"),
         "last_ownership_fetch": dfia.last_ownership_fetch.isoformat() if dfia.last_ownership_fetch else None,
+        "file_transfer_status": _derive_file_transfer_status(transfers),
         "current_owner": {
             "iec": current_owner.get("iec"),
             "name": current_owner.get("firm")
@@ -321,6 +345,12 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
 
             dfia.current_owner = owner_company
             update_fields.append('current_owner')
+
+        # Set file_transfer_status from the latest transfer (pending/withdrawn shows here)
+        file_transfer_status = _derive_file_transfer_status(transfers)
+        if file_transfer_status != dfia.file_transfer_status:
+            dfia.file_transfer_status = file_transfer_status
+            update_fields.append('file_transfer_status')
 
         if update_fields:
             dfia.save(update_fields=update_fields)

@@ -1,40 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useFileUpload } from '../hooks';
 import axios from 'axios';
 import api from '../api/axios';
+
+const UPLOAD_BATCH_SIZE = 20;
+const POLL_CONCURRENT = 5; // simultaneous status requests per tick
 
 // Defined outside LedgerUpload so React doesn't remount it on every parent render,
 // which would destroy polling intervals.
 const TaskStatusModal = ({ fileTasks, show, onHide }) => {
   const [taskStatuses, setTaskStatuses] = useState({});
+  const doneRef = useRef(new Set());
 
   useEffect(() => {
     if (!show || fileTasks.length === 0) return;
 
-    const allTasks = fileTasks.flatMap(f => f.tasks);
-    const intervals = [];
+    doneRef.current = new Set();
+    const allTaskIds = fileTasks.flatMap(f => f.tasks.map(t => t.task_id));
 
-    allTasks.forEach((task) => {
-      const interval = setInterval(async () => {
+    // Single interval polls POLL_CONCURRENT pending tasks per tick instead of
+    // one interval per task (which would be 320 parallel requests every 2s).
+    const interval = setInterval(async () => {
+      const pending = allTaskIds.filter(id => !doneRef.current.has(id));
+      if (pending.length === 0) {
+        clearInterval(interval);
+        return;
+      }
+
+      const batch = pending.slice(0, POLL_CONCURRENT);
+      await Promise.allSettled(batch.map(async (task_id) => {
         try {
-          const response = await api.get(`ledger-task-status/${task.task_id}/`);
-          setTaskStatuses((prev) => ({ ...prev, [task.task_id]: response.data }));
+          const response = await api.get(`ledger-task-status/${task_id}/`);
+          setTaskStatuses(prev => ({ ...prev, [task_id]: response.data }));
           if (response.data.state === 'SUCCESS' || response.data.state === 'FAILURE') {
-            clearInterval(interval);
+            doneRef.current.add(task_id);
           }
         } catch (err) {
-          console.error('Error fetching task status:', err);
+          console.error('Error polling task:', task_id, err);
         }
-      }, 2000);
-      intervals.push(interval);
-    });
+      }));
+    }, 1000);
 
-    return () => intervals.forEach(clearInterval);
+    return () => clearInterval(interval);
   }, [fileTasks, show]);
 
   // Reset statuses when a new batch of tasks comes in
   useEffect(() => {
     setTaskStatuses({});
+    doneRef.current = new Set();
   }, [fileTasks]);
 
   if (!show) return null;
@@ -137,6 +150,7 @@ const LedgerUpload = () => {
   const [useAsyncMode, setUseAsyncMode] = useState(true);
   const [asyncError, setAsyncError] = useState(null);
   const [asyncUploading, setAsyncUploading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(null); // { current, total }
 
   const {
     files,
@@ -174,22 +188,41 @@ const LedgerUpload = () => {
     setAsyncError(null);
     setAsyncUploading(true);
 
-    const formData = new FormData();
-    files.forEach((file) => {
-      formData.append('ledger', file);
-    });
-    formData.append('async', 'true');
+    const totalBatches = Math.ceil(files.length / UPLOAD_BATCH_SIZE);
+    setBatchProgress({ current: 0, total: totalBatches });
+
+    const allFileTasks = [];
+    const allErrors = [];
 
     try {
-      const response = await api.post('upload-ledger/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      for (let i = 0; i < files.length; i += UPLOAD_BATCH_SIZE) {
+        const batch = files.slice(i, i + UPLOAD_BATCH_SIZE);
+        setBatchProgress({ current: Math.floor(i / UPLOAD_BATCH_SIZE) + 1, total: totalBatches });
 
-      if (response.data.file_tasks) {
-        setAsyncFileTasks(response.data.file_tasks);
+        const formData = new FormData();
+        batch.forEach((file) => formData.append('ledger', file));
+        formData.append('async', 'true');
+
+        const response = await api.post('upload-ledger/', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        if (response.data.file_tasks) {
+          allFileTasks.push(...response.data.file_tasks);
+        }
+        if (response.data.errors?.length) {
+          allErrors.push(...response.data.errors);
+        }
+      }
+
+      if (allFileTasks.length > 0) {
+        setAsyncFileTasks(allFileTasks);
         setShowTaskModal(true);
         clearFiles();
         document.getElementById('file-input').value = '';
+      }
+      if (allErrors.length > 0) {
+        setAsyncError(`${allErrors.length} file(s) failed: ${allErrors.map(e => e.file).join(', ')}`);
       }
     } catch (err) {
       console.error('Upload error:', err);
@@ -197,6 +230,7 @@ const LedgerUpload = () => {
       setAsyncError(msg);
     } finally {
       setAsyncUploading(false);
+      setBatchProgress(null);
     }
   };
 
@@ -390,7 +424,9 @@ const LedgerUpload = () => {
                   {(uploading || asyncUploading) ? (
                     <>
                       <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                      Uploading {files.length} file{files.length > 1 ? 's' : ''}...
+                      {batchProgress
+                        ? `Uploading batch ${batchProgress.current}/${batchProgress.total}...`
+                        : `Uploading ${files.length} file${files.length > 1 ? 's' : ''}...`}
                     </>
                   ) : (
                     <>

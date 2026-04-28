@@ -93,6 +93,33 @@ export default function MasterList() {
         });
     };
 
+    const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+    const [invoiceDraft, setInvoiceDraft] = useState('');
+    const [invoiceSaving, setInvoiceSaving] = useState(false);
+
+    const startInvoiceEdit = (item) => {
+        setEditingInvoiceId(item.id);
+        setInvoiceDraft(item.invoice_no || '');
+    };
+
+    const cancelInvoiceEdit = () => {
+        setEditingInvoiceId(null);
+        setInvoiceDraft('');
+    };
+
+    const saveInvoiceEdit = async (itemId) => {
+        setInvoiceSaving(true);
+        try {
+            await api.patch(`bill-of-entries/${itemId}/`, { invoice_no: invoiceDraft.trim() });
+            setData(prev => prev.map(d => d.id === itemId ? { ...d, invoice_no: invoiceDraft.trim() } : d));
+            setEditingInvoiceId(null);
+        } catch (e) {
+            console.error('Failed to update invoice_no:', e);
+        } finally {
+            setInvoiceSaving(false);
+        }
+    };
+
     // Confirmation dialog hook
     const { confirmDelete, confirmDangerousAction, confirmDialog } = useConfirmDialog();
 
@@ -743,9 +770,32 @@ export default function MasterList() {
                                                         <i className="bi bi-building me-1"></i>{item.company_name}
                                                     </span>
                                                 )}
-                                                {item.invoice_no && (
-                                                    <span style={{ fontSize: '0.78rem', color: '#059669', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px' }}>
-                                                        Inv: {item.invoice_no}
+                                                {editingInvoiceId === item.id ? (
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <input
+                                                            autoFocus
+                                                            value={invoiceDraft}
+                                                            onChange={e => setInvoiceDraft(e.target.value)}
+                                                            onKeyDown={e => { if (e.key === 'Enter') saveInvoiceEdit(item.id); if (e.key === 'Escape') cancelInvoiceEdit(); }}
+                                                            placeholder="Invoice number"
+                                                            style={{ fontSize: '0.78rem', padding: '2px 6px', borderRadius: '4px', border: '1px solid #059669', width: '160px', outline: 'none' }}
+                                                        />
+                                                        <button onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} style={{ fontSize: '0.72rem', padding: '2px 7px', borderRadius: '4px', background: '#059669', color: 'white', border: 'none', cursor: 'pointer' }}>
+                                                            {invoiceSaving ? '…' : 'Save'}
+                                                        </button>
+                                                        <button onClick={cancelInvoiceEdit} style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px', background: '#e5e7eb', color: '#374151', border: 'none', cursor: 'pointer' }}>✕</button>
+                                                    </span>
+                                                ) : (
+                                                    <span
+                                                        onClick={() => startInvoiceEdit(item)}
+                                                        title="Click to edit invoice number"
+                                                        style={{ fontSize: '0.78rem', color: '#059669', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                                    >
+                                                        {item.invoice_no
+                                                            ? <><i className="bi bi-receipt"></i> {item.invoice_no}</>
+                                                            : <><i className="bi bi-plus-circle"></i> Add Invoice No</>
+                                                        }
+                                                        <i className="bi bi-pencil-fill" style={{ fontSize: '0.6rem', opacity: 0.6 }}></i>
                                                     </span>
                                                 )}
                                             </div>

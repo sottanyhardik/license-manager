@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from scripts.parse_ledger import parse_license_data, create_object
+from scripts.parse_ledger_htm import parse_license_data_htm
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +51,20 @@ class LedgerUploadView(APIView):
             return self._handle_async(files, MAX_FILE_SIZE)
         return self._handle_sync(files, MAX_FILE_SIZE)
 
+    @staticmethod
+    def _is_htm(filename):
+        return filename.lower().endswith(('.htm', '.html'))
+
+    def _read_raw(self, uploaded_file):
+        """Read uploaded file bytes."""
+        content = b''
+        for chunk in uploaded_file.chunks(chunk_size=1024 * 1024):
+            content += chunk
+        return content
+
     def _decode_file(self, uploaded_file):
         """Read, decode and pre-process an uploaded CSV file."""
-        file_content = b''
-        for chunk in uploaded_file.chunks(chunk_size=1024 * 1024):
-            file_content += chunk
+        file_content = self._read_raw(uploaded_file)
 
         try:
             decoded = file_content.decode('utf-8-sig')
@@ -65,6 +75,21 @@ class LedgerUploadView(APIView):
         decoded = decoded.replace(' ', '')
         decoded = decoded.replace(':\xa0', '')
         return decoded
+
+    def _parse_file(self, uploaded_file):
+        """
+        Parse an uploaded ledger file (CSV or HTM/HTML) and return a dict_list
+        in the same format expected by create_object().
+        """
+        if self._is_htm(uploaded_file.name):
+            raw = self._read_raw(uploaded_file)
+            return parse_license_data_htm(raw)
+        else:
+            decoded_file = self._decode_file(uploaded_file)
+            csvfile = io.StringIO(decoded_file)
+            reader = csv.reader(csvfile)
+            rows = [row for row in reader if any(f.strip() for f in row)]
+            return parse_license_data(rows)
 
     def _serialize_for_celery(self, dict_data):
         """Convert date/datetime objects to strings for JSON-safe Celery transport."""
@@ -86,8 +111,8 @@ class LedgerUploadView(APIView):
         errors = []
 
         for uploaded_file in files:
-            if not uploaded_file.name.endswith('.csv'):
-                errors.append({'file': uploaded_file.name, 'error': 'Only CSV files are supported'})
+            if not (uploaded_file.name.endswith('.csv') or self._is_htm(uploaded_file.name)):
+                errors.append({'file': uploaded_file.name, 'error': 'Only CSV and HTM/HTML files are supported'})
                 continue
 
             if uploaded_file.size > max_file_size:
@@ -98,12 +123,7 @@ class LedgerUploadView(APIView):
                 continue
 
             try:
-                decoded_file = self._decode_file(uploaded_file)
-                csvfile = io.StringIO(decoded_file)
-                reader = csv.reader(csvfile)
-                rows = [row for row in reader if any(f.strip() for f in row)]
-
-                dict_list = parse_license_data(rows)
+                dict_list = self._parse_file(uploaded_file)
                 logger.info(f"Parsed {len(dict_list)} licenses from {uploaded_file.name}, dispatching tasks")
 
                 tasks = []
@@ -139,11 +159,11 @@ class LedgerUploadView(APIView):
             try:
                 logger.info(f"Processing file {file_sequence_number}/{len(files)}: {uploaded_file.name}")
 
-                if not uploaded_file.name.endswith('.csv'):
+                if not (uploaded_file.name.endswith('.csv') or self._is_htm(uploaded_file.name)):
                     all_results.append({
                         'file': uploaded_file.name,
                         'success': False,
-                        'error': 'Only CSV files are supported'
+                        'error': 'Only CSV and HTM/HTML files are supported'
                     })
                     continue
 
@@ -155,19 +175,7 @@ class LedgerUploadView(APIView):
                     })
                     continue
 
-                decoded_file = self._decode_file(uploaded_file)
-                csvfile = io.StringIO(decoded_file)
-                reader = csv.reader(csvfile)
-
-                rows = []
-                for row in reader:
-                    if not any(field.strip() for field in row):
-                        continue
-                    rows.append(row)
-
-                logger.info(f"Read {len(rows)} rows from {uploaded_file.name}")
-
-                dict_list = parse_license_data(rows)
+                dict_list = self._parse_file(uploaded_file)
                 logger.info(f"Parsed {len(dict_list)} license(s) from {uploaded_file.name}")
 
                 created_license_numbers = []

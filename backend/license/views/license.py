@@ -105,7 +105,8 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "purchase_status_label",
             "balance_cif",
             "latest_transfer",
-            "get_norm_class"
+            "get_norm_class",
+            "ledger_date"
         ],
         "form_fields": [
             "scheme_code",
@@ -1252,6 +1253,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
             license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
             license_expiry_str = license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-'
+            ledger_date_str = license_obj.ledger_date.strftime('%d-%m-%Y') if license_obj.ledger_date else '-'
             lic_no = license_obj.license_number or '-'
 
             summary_rows = []
@@ -1346,13 +1348,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 ('License No', lic_no),
                 ('License Date', license_date_str),
                 ('Expiry Date', license_expiry_str),
-                ('Total CIF', f"{total_license_cif:,.2f}")
+                ('Total CIF', f"{total_license_cif:,.2f}"),
+                ('Ledger Date', ledger_date_str),
             ], 1):
                 c = ws.cell(row=r, column=col, value=f"{label}: {val}")
                 c.fill = EXPIRY_FILL if col == 3 else INFO_FILL
                 c.font = INFO_FONT
                 c.border = THIN_BORDER
-                c.alignment = Alignment(horizontal='left' if col < 4 else 'right', vertical='center')
+                c.alignment = Alignment(horizontal='right' if col == 4 else 'left', vertical='center')
             r += 1
 
             ws.merge_cells(f'A{r}:G{r}')
@@ -1965,6 +1968,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
         license_expiry_str = license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-'
+        ledger_date_str = license_obj.ledger_date.strftime('%d-%m-%Y') if license_obj.ledger_date else '-'
         lic_no = license_obj.license_number or '-'
 
         # ── Collect summary rows ──────────────────────────────────────────────
@@ -2065,13 +2069,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             ('License No', lic_no),
             ('License Date', license_date_str),
             ('Expiry Date', license_expiry_str),
-            ('Total CIF', f"{total_license_cif:,.2f}")
+            ('Total CIF', f"{total_license_cif:,.2f}"),
+            ('Ledger Date', ledger_date_str),
         ], 1):
             c = ws.cell(row=r, column=col, value=f"{label}: {val}")
             c.fill = EXPIRY_FILL if col == 3 else INFO_FILL
             c.font = INFO_FONT
             c.border = THIN_BORDER
-            c.alignment = Alignment(horizontal='left' if col < 4 else 'right', vertical='center')
+            c.alignment = Alignment(horizontal='right' if col == 4 else 'left', vertical='center')
         r += 1
 
         # ══════════════════════════════════════════════════════════════════════

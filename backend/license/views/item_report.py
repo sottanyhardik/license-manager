@@ -209,6 +209,7 @@ class ItemReportView(View):
                 'license_number': item.license.license_number,
                 'license_date': item.license.license_date.isoformat() if item.license.license_date else None,
                 'license_expiry_date': item.license.license_expiry_date.isoformat() if item.license.license_expiry_date else None,
+                'ledger_date': item.license.ledger_date.isoformat() if item.license.ledger_date else None,
                 'exporter_name': item.license.exporter.name if item.license.exporter else None,
                 'current_owner': item.license.current_owner.name if item.license.current_owner else None,
                 'latest_transfer': latest_transfer_info,
@@ -257,7 +258,7 @@ class ItemReportView(View):
 
         # Headers
         headers = [
-            'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Exporter Name',
+            'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Ledger Date', 'Exporter Name',
             'Serial Number', 'HSN Code', 'Product Description', 'Item Name',
             'Available Quantity', 'Available Balance', 'Balance CIF', 'Notes', 'Condition Sheet', 'Transfer Status'
         ]
@@ -280,17 +281,18 @@ class ItemReportView(View):
             ws.column_dimensions['B'].width = 18  # License No
             ws.column_dimensions['C'].width = 15  # License Date
             ws.column_dimensions['D'].width = 18  # License Expiry Date
-            ws.column_dimensions['E'].width = 25  # Exporter Name
-            ws.column_dimensions['F'].width = 12  # Serial Number
-            ws.column_dimensions['G'].width = 12  # HSN Code
-            ws.column_dimensions['H'].width = 40  # Product Description
-            ws.column_dimensions['I'].width = 25  # Item Name
-            ws.column_dimensions['J'].width = 18  # Available Quantity
-            ws.column_dimensions['K'].width = 18  # Available Balance
-            ws.column_dimensions['L'].width = 18  # Balance CIF
-            ws.column_dimensions['M'].width = 30  # Notes
-            ws.column_dimensions['N'].width = 30  # Condition Sheet
-            ws.column_dimensions['O'].width = 35  # Transfer Status
+            ws.column_dimensions['E'].width = 15  # Ledger Date
+            ws.column_dimensions['F'].width = 25  # Exporter Name
+            ws.column_dimensions['G'].width = 12  # Serial Number
+            ws.column_dimensions['H'].width = 12  # HSN Code
+            ws.column_dimensions['I'].width = 40  # Product Description
+            ws.column_dimensions['J'].width = 25  # Item Name
+            ws.column_dimensions['K'].width = 18  # Available Quantity
+            ws.column_dimensions['L'].width = 18  # Available Balance
+            ws.column_dimensions['M'].width = 18  # Balance CIF
+            ws.column_dimensions['N'].width = 30  # Notes
+            ws.column_dimensions['O'].width = 30  # Condition Sheet
+            ws.column_dimensions['P'].width = 35  # Transfer Status
 
             # Group items by license
             grouped_items = {}
@@ -329,20 +331,20 @@ class ItemReportView(View):
                         ws.cell(row=current_row, column=2, value=item['license_number'])  # License No
                         ws.cell(row=current_row, column=3, value=item['license_date'])  # License Date
                         ws.cell(row=current_row, column=4, value=item['license_expiry_date'])  # License Expiry Date
-                        ws.cell(row=current_row, column=5, value=item['exporter_name'])  # Exporter Name
-                        ws.cell(row=current_row, column=11, value=item['available_balance'])  # Available Balance
-                        ws.cell(row=current_row, column=12, value=item['balance_cif'])  # Balance CIF
-                        ws.cell(row=current_row, column=13, value=item['notes'])  # Notes
-                        ws.cell(row=current_row, column=14, value=item['condition_sheet'])  # Condition Sheet
-                        # Transfer Status - use latest_transfer
-                        ws.cell(row=current_row, column=15, value=item.get('latest_transfer', ''))  # Transfer Status
+                        ws.cell(row=current_row, column=5, value=item.get('ledger_date'))  # Ledger Date
+                        ws.cell(row=current_row, column=6, value=item['exporter_name'])  # Exporter Name
+                        ws.cell(row=current_row, column=12, value=item['available_balance'])  # Available Balance
+                        ws.cell(row=current_row, column=13, value=item['balance_cif'])  # Balance CIF
+                        ws.cell(row=current_row, column=14, value=item['notes'])  # Notes
+                        ws.cell(row=current_row, column=15, value=item['condition_sheet'])  # Condition Sheet
+                        ws.cell(row=current_row, column=16, value=item.get('latest_transfer', ''))  # Transfer Status
 
                     # Item-level columns (for each row)
-                    ws.cell(row=current_row, column=6, value=item['serial_number'])  # Serial Number
-                    ws.cell(row=current_row, column=7, value=item['hs_code'])  # HSN Code
-                    ws.cell(row=current_row, column=8, value=item['product_description'])  # Product Description
-                    ws.cell(row=current_row, column=9, value=item_names_str)  # Item Name
-                    ws.cell(row=current_row, column=10, value=item['available_quantity'])  # Available Quantity
+                    ws.cell(row=current_row, column=7, value=item['serial_number'])  # Serial Number
+                    ws.cell(row=current_row, column=8, value=item['hs_code'])  # HSN Code
+                    ws.cell(row=current_row, column=9, value=item['product_description'])  # Product Description
+                    ws.cell(row=current_row, column=10, value=item_names_str)  # Item Name
+                    ws.cell(row=current_row, column=11, value=item['available_quantity'])  # Available Quantity
 
                     current_row += 1
 
@@ -358,21 +360,23 @@ class ItemReportView(View):
                     ws.merge_cells(start_row=start_row, start_column=3, end_row=end_row, end_column=3)
                     # Merge License Expiry Date (column D / 4)
                     ws.merge_cells(start_row=start_row, start_column=4, end_row=end_row, end_column=4)
-                    # Merge Exporter Name (column E / 5)
+                    # Merge Ledger Date (column E / 5)
                     ws.merge_cells(start_row=start_row, start_column=5, end_row=end_row, end_column=5)
-                    # Merge Available Balance (column K / 11)
-                    ws.merge_cells(start_row=start_row, start_column=11, end_row=end_row, end_column=11)
-                    # Merge Balance CIF (column L / 12)
+                    # Merge Exporter Name (column F / 6)
+                    ws.merge_cells(start_row=start_row, start_column=6, end_row=end_row, end_column=6)
+                    # Merge Available Balance (column L / 12)
                     ws.merge_cells(start_row=start_row, start_column=12, end_row=end_row, end_column=12)
-                    # Merge Notes (column M / 13)
+                    # Merge Balance CIF (column M / 13)
                     ws.merge_cells(start_row=start_row, start_column=13, end_row=end_row, end_column=13)
-                    # Merge Condition Sheet (column N / 14)
+                    # Merge Notes (column N / 14)
                     ws.merge_cells(start_row=start_row, start_column=14, end_row=end_row, end_column=14)
-                    # Merge Transfer Status (column O / 15)
+                    # Merge Condition Sheet (column O / 15)
                     ws.merge_cells(start_row=start_row, start_column=15, end_row=end_row, end_column=15)
+                    # Merge Transfer Status (column P / 16)
+                    ws.merge_cells(start_row=start_row, start_column=16, end_row=end_row, end_column=16)
 
                     # Apply vertical center alignment to merged cells
-                    for col in [1, 2, 3, 4, 5, 11, 12, 13, 14, 15]:
+                    for col in [1, 2, 3, 4, 5, 6, 12, 13, 14, 15, 16]:
                         cell = ws.cell(row=start_row, column=col)
                         cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
                         cell.border = thin_border

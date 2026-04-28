@@ -157,7 +157,7 @@ const LedgerUpload = () => {
     fileFieldName: 'ledger',
     uploadMode: 'sequential',
     multiple: true,
-    accept: '.csv',
+    accept: '.csv,.htm,.html',
     maxFileSize: 50 * 1024 * 1024,
     timeout: 300000,
     onSuccess: (results) => {
@@ -217,7 +217,7 @@ const LedgerUpload = () => {
             <i className="bi bi-file-earmark-spreadsheet me-2" style={{ color: '#4F46E5' }}></i>
             Ledger Upload
           </h4>
-          <small className="text-muted">Upload DFIA license ledger files in CSV format</small>
+          <small className="text-muted">Upload DFIA license ledger files in CSV or HTM/HTML format</small>
         </div>
         <div className="form-check form-switch mb-0">
           <input
@@ -276,13 +276,13 @@ const LedgerUpload = () => {
                 onMouseLeave={e => { if (!dragActive) e.currentTarget.style.borderColor = '#d1d5db'; }}
               >
                 <i className="bi bi-cloud-arrow-up d-block mb-2" style={{ fontSize: '2.5rem', color: dragActive ? '#4F46E5' : '#9ca3af' }}></i>
-                <p className="fw-semibold mb-1">{dragActive ? 'Drop files here' : 'Drag & drop your CSV files'}</p>
+                <p className="fw-semibold mb-1">{dragActive ? 'Drop files here' : 'Drag & drop your ledger files'}</p>
                 <small className="text-muted mb-3">or click to browse</small>
                 <span className="btn btn-sm" style={{ background: 'linear-gradient(135deg,#4F46E5,#4338CA)', color: 'white', border: 'none', pointerEvents: 'none', fontWeight: '600' }}>
                   <i className="bi bi-folder2-open me-1"></i>Browse Files
                 </span>
-                <small className="text-muted mt-3 d-block">CSV files only · Max 50MB per file</small>
-                <input id="file-input" type="file" accept=".csv" multiple onChange={handleFileChange} className="d-none" />
+                <small className="text-muted mt-3 d-block">CSV or HTM/HTML files · Max 50MB per file</small>
+                <input id="file-input" type="file" accept=".csv,.htm,.html" multiple onChange={handleFileChange} className="d-none" />
               </label>
 
               {/* Selected Files List */}

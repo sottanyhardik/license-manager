@@ -448,6 +448,7 @@ class ItemPivotReportView(View):
             'license_number': license_obj.license_number,
             'license_date': license_obj.license_date.isoformat() if license_obj.license_date else None,
             'license_expiry_date': license_obj.license_expiry_date.isoformat(),
+            'ledger_date': license_obj.ledger_date.isoformat() if license_obj.ledger_date else None,
             'exporter': str(license_obj.exporter) if license_obj.exporter else '',
             'port': str(license_obj.port) if license_obj.port else '',
             'notification_number': notification_display,
@@ -573,7 +574,8 @@ class ItemPivotReportView(View):
                     # Build headers
                     base_headers = [
                         'Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter',
-                        'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet'
+                        'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet',
+                        'Ledger Date'
                     ]
 
                     # Add item columns (HSN Code, Product Description, Total QTY, Debited QTY, Available QTY, Restriction %, Restriction Value, Unit Price for RUTILE)
@@ -630,6 +632,7 @@ class ItemPivotReportView(View):
                         row_data.append(license_data['balance_cif'])
                         row_data.append(license_data.get('balance_report_notes', ''))
                         row_data.append(license_data.get('condition_sheet', ''))
+                        row_data.append(license_data.get('ledger_date') or '')
 
                         # Item columns
                         for item in report_data['items']:

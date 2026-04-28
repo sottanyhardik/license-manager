@@ -1054,6 +1054,11 @@ export default function MasterList() {
                                                         <i className="bi bi-calendar-x me-1"></i>Exp: {item.license_expiry_date}
                                                     </span>
                                                 )}
+                                                {item.ledger_date && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#0f766e', background: '#ccfbf1', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        <i className="bi bi-journal-check me-1"></i>Ledger: {item.ledger_date}
+                                                    </span>
+                                                )}
                                                 {item.port_name && (
                                                     <span style={{ fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
                                                         <i className="bi bi-geo-alt me-1"></i>{item.port_name}

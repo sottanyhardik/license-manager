@@ -731,6 +731,10 @@ class LicenseDetailsModel(AuditModel):
             return f"Current Owner is {self.current_owner.name}"
         return "Data Not Found"
 
+    @property
+    def purchase_status_label(self):
+        return self.purchase_status.label if self.purchase_status else None
+
 
 # -----------------------------
 # Export Items

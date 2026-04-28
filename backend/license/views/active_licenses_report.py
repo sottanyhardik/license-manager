@@ -160,6 +160,7 @@ class ActiveLicensesReportView(View):
             'notification_number': license_obj.notification_number or '',
             'license_date': license_obj.license_date.isoformat() if license_obj.license_date else None,
             'license_expiry_date': license_obj.license_expiry_date.isoformat(),
+            'ledger_date': license_obj.ledger_date.isoformat() if license_obj.ledger_date else None,
             'days_until_expiry': days_until_expiry,
             'exporter': str(license_obj.exporter) if license_obj.exporter else '',
             'port': str(license_obj.port) if license_obj.port else '',
@@ -361,6 +362,7 @@ class ActiveLicensesReportView(View):
                     ['Notification Number:', license_data['notification_number'], 'License Date:', license_data['license_date']],
                     ['Exporter:', license_data['exporter'], 'Port:', license_data['port']],
                     ['SION Norms:', ', '.join(license_data['sion_norms']), 'Balance CIF:', f"${license_data['balance_cif']:.2f}"],
+                    ['Ledger Date:', license_data.get('ledger_date') or '-', '', ''],
                 ]
                 for detail_row in details:
                     for col_num, value in enumerate(detail_row, 1):

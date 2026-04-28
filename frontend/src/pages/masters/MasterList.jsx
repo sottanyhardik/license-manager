@@ -1326,6 +1326,9 @@ export default function MasterList() {
                                                             <i className="bi bi-arrow-left-right"></i>
                                                         </button>
                                                     )}
+                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/trades/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#4f46e5', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-pencil-fill"></i>
+                                                    </button>
                                                     <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-trash"></i>
                                                     </button>

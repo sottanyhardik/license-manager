@@ -71,9 +71,10 @@ class LedgerUploadView(APIView):
         except UnicodeDecodeError:
             decoded = file_content.decode('latin-1')
 
-        decoded = decoded.replace(': ', '')
-        decoded = decoded.replace(' ', '')
-        decoded = decoded.replace(':\xa0', '')
+        decoded = decoded.replace(':\xa0', '')  # colon + non-breaking space (must come first)
+        decoded = decoded.replace(': ', '')      # colon + regular space
+        decoded = decoded.replace('\xa0', '')    # any remaining non-breaking spaces
+        decoded = decoded.replace(' ', '')       # any remaining regular spaces (field trim)
         return decoded
 
     def _parse_file(self, uploaded_file):
@@ -88,7 +89,11 @@ class LedgerUploadView(APIView):
             decoded_file = self._decode_file(uploaded_file)
             csvfile = io.StringIO(decoded_file)
             reader = csv.reader(csvfile)
-            rows = [row for row in reader if any(f.strip() for f in row)]
+            rows = [
+                [cell.strip().replace('\xa0', '') for cell in row]
+                for row in reader
+                if any(cell.strip().replace('\xa0', '') for cell in row)
+            ]
             return parse_license_data(rows)
 
     def _serialize_for_celery(self, dict_data):

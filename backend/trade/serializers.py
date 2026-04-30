@@ -103,6 +103,26 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     paid_or_received = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
     due_amount = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
 
+    # Linked trade fields
+    auto_create_paired = serializers.BooleanField(write_only=True, required=False, default=False)
+    linked_trade_info = serializers.SerializerMethodField(read_only=True)
+
+    def get_linked_trade_info(self, obj):
+        lt = obj.linked_trade
+        if not lt:
+            lt = obj.paired_trades.first()
+        if not lt:
+            return None
+        return {
+            'id': lt.id,
+            'direction': lt.direction,
+            'direction_label': lt.get_direction_display(),
+            'invoice_number': lt.invoice_number,
+            'total_amount': str(lt.total_amount),
+            'paid_or_received': str(lt.paid_or_received),
+            'due_amount': str(lt.due_amount),
+        }
+
     def to_internal_value(self, data):
         """Parse JSON strings OR flattened FormData from multipart/form-data"""
         import json
@@ -246,6 +266,9 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                 'bill_of_entry_number': instance.boe.bill_of_entry_number,
             }
 
+        data['linked_trade_id'] = instance.linked_trade_id
+        data['linked_trade_info'] = self.get_linked_trade_info(instance)
+
         return data
 
     def create(self, validated_data):
@@ -256,6 +279,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         lines_data = validated_data.pop('lines', [])
         incentive_lines_data = validated_data.pop('incentive_lines', [])
         payments_data = validated_data.pop('payments', [])
+        auto_create_paired = validated_data.pop('auto_create_paired', False)
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("CREATE: lines=%d, incentive=%d, payments=%d", len(lines_data), len(incentive_lines_data), len(payments_data))
@@ -289,6 +313,71 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         if trade.boe and trade.invoice_number:
             trade.boe.invoice_no = trade.invoice_number
             trade.boe.save(update_fields=['invoice_no'])
+
+        # Auto-create the paired counterpart trade (Sale↔Purchase)
+        if auto_create_paired and trade.direction in ('PURCHASE', 'SALE', 'COMMISSION_PURCHASE', 'COMMISSION_SALE'):
+            from trade.models import get_next_invoice_number
+            direction_map = {
+                'PURCHASE': 'SALE', 'SALE': 'PURCHASE',
+                'COMMISSION_PURCHASE': 'COMMISSION_SALE', 'COMMISSION_SALE': 'COMMISSION_PURCHASE',
+            }
+            paired_direction = direction_map[trade.direction]
+            paired_from = trade.to_company
+            paired_to = trade.from_company
+
+            paired_invoice = get_next_invoice_number(
+                direction=paired_direction,
+                company_name=paired_from.name if paired_from else '',
+                invoice_date=trade.invoice_date,
+            )
+
+            paired_trade = LicenseTrade.objects.create(
+                direction=paired_direction,
+                license_type=trade.license_type,
+                incentive_license=trade.incentive_license,
+                boe=trade.boe,
+                from_company=paired_from,
+                to_company=paired_to,
+                invoice_number=paired_invoice,
+                invoice_date=trade.invoice_date,
+                remarks=trade.remarks,
+                linked_trade=trade,
+                created_by=trade.created_by,
+            )
+            paired_trade.snapshot_parties()
+
+            for line in trade.lines.all():
+                LicenseTradeLine.objects.create(
+                    trade=paired_trade,
+                    sr_number=line.sr_number,
+                    description=line.description,
+                    hsn_code=line.hsn_code,
+                    mode=line.mode,
+                    qty_kg=line.qty_kg,
+                    rate_inr_per_kg=line.rate_inr_per_kg,
+                    cif_fc=line.cif_fc,
+                    exc_rate=line.exc_rate,
+                    cif_inr=line.cif_inr,
+                    fob_inr=line.fob_inr,
+                    pct=line.pct,
+                    amount_inr=line.amount_inr,
+                )
+
+            for line in trade.incentive_lines.all():
+                IncentiveTradeLine.objects.create(
+                    trade=paired_trade,
+                    incentive_license=line.incentive_license,
+                    license_value=line.license_value,
+                    rate_pct=line.rate_pct,
+                    amount_inr=line.amount_inr,
+                )
+
+            paired_trade.recompute_totals()
+            paired_trade.refresh_from_db()
+
+            # Link primary trade back to the paired trade
+            LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=paired_trade)
+            trade.refresh_from_db()
 
         return trade
 

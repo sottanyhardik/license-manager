@@ -34,6 +34,7 @@ export default function TradeForm() {
     });
 
     const [billingMode, setBillingMode] = useState("CIF_INR");
+    const [autoCreatePaired, setAutoCreatePaired] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [fieldErrors, setFieldErrors] = useState({});
@@ -768,7 +769,8 @@ export default function TradeForm() {
                     // Nested data
                     lines: cleanedLines,
                     incentive_lines: cleanedIncentiveLines,
-                    payments: cleanedPayments
+                    payments: cleanedPayments,
+                    auto_create_paired: autoCreatePaired,
                 };
             }
 
@@ -778,7 +780,12 @@ export default function TradeForm() {
                 await api.post(`trades/`, payload, { headers });
             }
 
-            toast.success(isEdit ? "Trade updated successfully" : "Trade created successfully");
+            const successMsg = isEdit
+                ? "Trade updated successfully"
+                : autoCreatePaired
+                    ? `Trade created! Linked ${formData.direction === 'PURCHASE' ? 'Sale' : 'Purchase'} trade also created automatically.`
+                    : "Trade created successfully";
+            toast.success(successMsg);
             setHasUnsavedChanges(false); // Clear unsaved changes flag
             navigate("/trades");
         } catch (err) {
@@ -1001,6 +1008,21 @@ export default function TradeForm() {
                                 </div>
                             </div>
                         </div>
+                        {!id && ['PURCHASE', 'SALE'].includes(formData.direction) && (
+                            <div className="d-flex align-items-center gap-2 mt-3 p-2 rounded" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
+                                <input
+                                    type="checkbox"
+                                    id="autoCreatePaired"
+                                    checked={autoCreatePaired}
+                                    onChange={e => setAutoCreatePaired(e.target.checked)}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                                <label htmlFor="autoCreatePaired" style={{ cursor: 'pointer', fontSize: '0.875rem', color: '#0369a1', marginBottom: 0 }}>
+                                    <i className="bi bi-link-45deg me-1"></i>
+                                    Auto-create linked {formData.direction === 'PURCHASE' ? 'Sale' : 'Purchase'} trade with same lines
+                                </label>
+                            </div>
+                        )}
                     </div>
                 </div>
 

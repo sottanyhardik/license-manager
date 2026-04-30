@@ -470,6 +470,50 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
             "payments_count": trade.payments.count()
         })
 
+    @action(detail=True, methods=['post'], url_path='link-trade')
+    def link_trade(self, request, pk=None):
+        """
+        Bidirectionally link two trades.
+        POST body: {"partner_id": <int>}  — set link on both trades.
+        POST body: {"partner_id": null}   — clear link on both trades.
+        """
+        trade = self.get_object()
+        partner_id = request.data.get('partner_id')
+
+        # Unlink
+        if partner_id is None:
+            old_partner_id = trade.linked_trade_id
+            LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=None)
+            if old_partner_id:
+                LicenseTrade.objects.filter(pk=old_partner_id, linked_trade=trade.pk).update(linked_trade=None)
+            trade.refresh_from_db()
+            from trade.serializers import LicenseTradeSerializer
+            return Response(LicenseTradeSerializer(trade, context={'request': request}).data)
+
+        # Link
+        try:
+            partner = LicenseTrade.objects.get(pk=partner_id)
+        except LicenseTrade.DoesNotExist:
+            return Response({"error": "Partner trade not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if partner.pk == trade.pk:
+            return Response({"error": "Cannot link a trade to itself"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Clear any old links on both sides first
+        old_trade_partner = trade.linked_trade_id
+        old_partner_partner = partner.linked_trade_id
+        if old_trade_partner and old_trade_partner != partner.pk:
+            LicenseTrade.objects.filter(pk=old_trade_partner).update(linked_trade=None)
+        if old_partner_partner and old_partner_partner != trade.pk:
+            LicenseTrade.objects.filter(pk=old_partner_partner).update(linked_trade=None)
+
+        LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=partner)
+        LicenseTrade.objects.filter(pk=partner.pk).update(linked_trade=trade)
+
+        trade.refresh_from_db()
+        from trade.serializers import LicenseTradeSerializer
+        return Response(LicenseTradeSerializer(trade, context={'request': request}).data)
+
     @action(detail=True, methods=['post'], url_path='generate-transfer-letter')
     def generate_transfer_letter(self, request, pk=None):
         """

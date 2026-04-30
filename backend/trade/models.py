@@ -242,6 +242,15 @@ class LicenseTrade(models.Model):
         related_name='trades_modified'
     )
 
+    linked_trade = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='paired_trades',
+        help_text="Links this trade to its paired counterpart (Sale↔Purchase)"
+    )
+
     class Meta:
         ordering = ["-invoice_date", "-invoice_number", "-created_on"]
         constraints = [

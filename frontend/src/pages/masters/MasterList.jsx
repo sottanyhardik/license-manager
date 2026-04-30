@@ -83,6 +83,44 @@ export default function MasterList() {
     const [transferLetterEntityId, setTransferLetterEntityId] = useState(null);
 
     // BOE card expanded rows
+    const [linkModalTrade, setLinkModalTrade] = useState(null);
+    const [linkSearch, setLinkSearch] = useState('');
+    const [linkResults, setLinkResults] = useState([]);
+    const [linkSearching, setLinkSearching] = useState(false);
+
+    const openLinkModal = (trade) => { setLinkModalTrade(trade); setLinkSearch(''); setLinkResults([]); };
+    const closeLinkModal = () => { setLinkModalTrade(null); setLinkSearch(''); setLinkResults([]); };
+
+    const searchTradesForLink = async (query) => {
+        if (!query.trim()) { setLinkResults([]); return; }
+        setLinkSearching(true);
+        try {
+            const resp = await api.get('trades/', { params: { invoice_number: query, page_size: 10 } });
+            const results = (resp.data.results || resp.data || []).filter(t => t.id !== linkModalTrade?.id && !t.linked_trade_id && !t.linked_trade_info);
+            setLinkResults(results);
+        } catch { setLinkResults([]); }
+        finally { setLinkSearching(false); }
+    };
+
+    const confirmLink = async (partner) => {
+        try {
+            await api.post(`trades/${linkModalTrade.id}/link-trade/`, { partner_id: partner.id });
+            toast.success(`Linked: ${linkModalTrade.invoice_number} ↔ ${partner.invoice_number}`);
+            closeLinkModal();
+            fetchData();
+        } catch (err) { toast.error(err.response?.data?.error || 'Failed to link trades'); }
+    };
+
+    const [expandedPairs, setExpandedPairs] = useState(new Set());
+    const togglePair = (pairKey) => {
+        setExpandedPairs(prev => {
+            const next = new Set(prev);
+            if (next.has(pairKey)) next.delete(pairKey);
+            else next.add(pairKey);
+            return next;
+        });
+    };
+
     const [expandedBoeRows, setExpandedBoeRows] = useState(new Set());
     const toggleBoeRow = (id) => {
         setExpandedBoeRows(prev => {
@@ -314,6 +352,13 @@ export default function MasterList() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [metadata.default_filters]);
+
+    useEffect(() => {
+        if (!linkModalTrade) return;
+        const t = setTimeout(() => searchTradesForLink(linkSearch), 350);
+        return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [linkSearch, linkModalTrade]);
 
     const handleFilterChange = useCallback((filters) => {
         // Convert Django-style date filters back to UI format for state persistence
@@ -1220,125 +1265,190 @@ export default function MasterList() {
                             <div className="text-center py-5"><div className="spinner-border text-primary" role="status"></div><div className="mt-2 text-muted">Loading Trades...</div></div>
                         ) : data.length === 0 ? (
                             <div className="text-center py-5 text-muted"><i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i><div className="mt-2">No trades found</div></div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
-                                    const dirColor = item.direction === 'SALE' ? { border: '#86efac', left: '#22c55e', bg: '#dcfce7', text: '#166534' }
-                                        : item.direction === 'PURCHASE' ? { border: '#93c5fd', left: '#3b82f6', bg: '#dbeafe', text: '#1d4ed8' }
-                                        : item.direction === 'COMMISSION_SALE' ? { border: '#fdba74', left: '#f97316', bg: '#ffedd5', text: '#9a3412' }
-                                        : { border: '#c4b5fd', left: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6' };
-                                    return (
-                                        <div key={item.id} style={{ display: 'block', background: '#ffffff', border: `1px solid ${dirColor.border}`, borderLeft: `4px solid ${dirColor.left}`, borderRadius: '10px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                                            {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
-                                                    {item.invoice_number || <span style={{ fontStyle: 'italic', color: '#94a3b8', fontWeight: '400', fontSize: '0.875rem' }}>No Invoice</span>}
-                                                </span>
-                                                <span style={{ fontSize: '0.78rem', fontWeight: '700', color: dirColor.text, background: dirColor.bg, padding: '2px 8px', borderRadius: '4px' }}>
-                                                    {item.direction_label || item.direction}
-                                                </span>
-                                                {item.license_type_label && (
-                                                    <span style={{ fontSize: '0.78rem', color: '#475569', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>{item.license_type_label}</span>
-                                                )}
-                                                {item.invoice_date && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
-                                                        <i className="bi bi-calendar3 me-1"></i>{item.invoice_date}
-                                                    </span>
-                                                )}
-                                            </div>
+                        ) : (() => {
+                            const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
 
-                                            {/* Row 2: From → To + BOE */}
-                                            <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '200px' }}>
-                                                        <div>
-                                                            <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>From</div>
-                                                            <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.from_company_label || '-'}</div>
-                                                        </div>
-                                                        <i className="bi bi-arrow-right" style={{ color: '#94a3b8', fontSize: '1rem' }}></i>
-                                                        <div>
-                                                            <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>To</div>
-                                                            <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.to_company_label || '-'}</div>
-                                                        </div>
+                            const renderTradeCard = (item) => {
+                                const dirColor = item.direction === 'SALE' ? { border: '#86efac', left: '#22c55e', bg: '#dcfce7', text: '#166534' }
+                                    : item.direction === 'PURCHASE' ? { border: '#93c5fd', left: '#3b82f6', bg: '#dbeafe', text: '#1d4ed8' }
+                                    : item.direction === 'COMMISSION_SALE' ? { border: '#fdba74', left: '#f97316', bg: '#ffedd5', text: '#9a3412' }
+                                    : { border: '#c4b5fd', left: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6' };
+                                const isLinked = !!(item.linked_trade_id || item.linked_trade_info);
+                                return (
+                                    <div key={item.id} style={{ display: 'block', background: '#ffffff', border: `1px solid ${dirColor.border}`, borderLeft: `4px solid ${dirColor.left}`, borderRadius: '10px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                                        {/* Row 1: Identity */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                            <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
+                                                {item.invoice_number || <span style={{ fontStyle: 'italic', color: '#94a3b8', fontWeight: '400', fontSize: '0.875rem' }}>No Invoice</span>}
+                                            </span>
+                                            <span style={{ fontSize: '0.78rem', fontWeight: '700', color: dirColor.text, background: dirColor.bg, padding: '2px 8px', borderRadius: '4px' }}>
+                                                {item.direction_label || item.direction}
+                                            </span>
+                                            {item.license_type_label && (
+                                                <span style={{ fontSize: '0.78rem', color: '#475569', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>{item.license_type_label}</span>
+                                            )}
+                                            {item.invoice_date && (
+                                                <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    <i className="bi bi-calendar3 me-1"></i>{item.invoice_date}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Row 2: From → To + BOE */}
+                                        <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '200px' }}>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>From</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.from_company_label || '-'}</div>
                                                     </div>
-                                                    {item.boe_label && (
-                                                        <div style={{ minWidth: '100px' }}>
-                                                            <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BOE</div>
-                                                            <div style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '500' }}>{item.boe_label}</div>
-                                                        </div>
-                                                    )}
-                                                    {item.incentive_license && (
-                                                        <div style={{ minWidth: '100px' }}>
-                                                            <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Incentive Lic</div>
-                                                            <div style={{ fontSize: '0.82rem', color: '#059669', fontWeight: '500' }}>{item.incentive_license}</div>
-                                                        </div>
-                                                    )}
+                                                    <i className="bi bi-arrow-right" style={{ color: '#94a3b8', fontSize: '1rem' }}></i>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>To</div>
+                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.to_company_label || '-'}</div>
+                                                    </div>
                                                 </div>
-                                            </div>
-
-                                            {/* Row 3: Stats + Actions */}
-                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
-                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total</div><div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.total_amount)}</div></div>
-                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Paid/Rcvd</div><div style={{ fontSize: '0.875rem', color: '#059669', fontWeight: '600' }}>{fmtInr(item.paid_or_received)}</div></div>
-                                                    <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Due</div><div style={{ fontSize: '0.875rem', color: item.due_amount > 0 ? '#b91c1c' : '#64748b', fontWeight: '600' }}>{fmtInr(item.due_amount)}</div></div>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    <button onClick={() => { setTransferLetterType('trade'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); }} title="Transfer Letter" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-file-earmark-text"></i> TL
-                                                    </button>
-                                                    {item.direction === 'SALE' && (<>
-                                                        <button onClick={async () => {
-                                                            try {
-                                                                const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: true }, responseType: 'blob' });
-                                                                const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                                const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_with_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
-                                                                window.URL.revokeObjectURL(url);
-                                                            } catch (err) { toast.error('Failed to generate invoice'); }
-                                                        }} title="Invoice (With Sign)" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                            <i className="bi bi-file-pdf"></i> +Sign
-                                                        </button>
-                                                        <button onClick={async () => {
-                                                            try {
-                                                                const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: false }, responseType: 'blob' });
-                                                                const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                                const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_without_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
-                                                                window.URL.revokeObjectURL(url);
-                                                            } catch (err) { toast.error('Failed to generate invoice'); }
-                                                        }} title="Invoice (Without Sign)" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                            <i className="bi bi-file-pdf"></i> -Sign
-                                                        </button>
-                                                    </>)}
-                                                    {item.direction === 'PURCHASE' && (
-                                                        <button onClick={async () => {
-                                                            if (!window.confirm('Create a SALE trade from this PURCHASE trade?')) return;
-                                                            try {
-                                                                const resp = await api.get(`trades/${item.id}/`);
-                                                                const p = resp.data;
-                                                                const saleData = { direction: 'SALE', license_type: p.license_type || 'DFIA', from_company: p.to_company?.id || p.to_company, to_company: p.from_company?.id || p.from_company, boe: p.boe?.id || p.boe, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], remarks: p.remarks || '', from_pan: p.to_pan, from_gst: p.to_gst, from_addr_line_1: p.to_addr_line_1, from_addr_line_2: p.to_addr_line_2, to_pan: p.from_pan, to_gst: p.from_gst, to_addr_line_1: p.from_addr_line_1, to_addr_line_2: p.from_addr_line_2, lines: (p.lines || []).map(l => ({ sr_number: l.sr_number, description: l.description, hsn_code: l.hsn_code, mode: l.mode, qty_kg: l.qty_kg, rate_inr_per_kg: l.rate_inr_per_kg, cif_fc: l.cif_fc, exc_rate: l.exc_rate, cif_inr: l.cif_inr, fob_inr: l.fob_inr, pct: l.pct, amount_inr: l.amount_inr })), incentive_lines: [], payments: [] };
-                                                                const nr = await api.post('trades/', saleData);
-                                                                toast.success('SALE trade created. Opening in edit mode...');
-                                                                saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
-                                                                navigate(`/trades/${nr.data.id}/edit`);
-                                                            } catch (err) { toast.error(err.response?.data?.non_field_errors?.[0] || 'Failed to copy trade'); }
-                                                        }} title="Copy to Sale" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                            <i className="bi bi-arrow-left-right"></i>
-                                                        </button>
-                                                    )}
-                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/trades/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#4f46e5', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-pencil-fill"></i>
-                                                    </button>
-                                                    <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-trash"></i>
-                                                    </button>
-                                                </div>
+                                                {item.boe_label && (
+                                                    <div style={{ minWidth: '100px' }}>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BOE</div>
+                                                        <div style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '500' }}>{item.boe_label}</div>
+                                                    </div>
+                                                )}
+                                                {item.incentive_license && (
+                                                    <div style={{ minWidth: '100px' }}>
+                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Incentive Lic</div>
+                                                        <div style={{ fontSize: '0.82rem', color: '#059669', fontWeight: '500' }}>{item.incentive_license}</div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        )
+
+                                        {/* Row 3: Stats + Actions */}
+                                        <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
+                                            <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
+                                                <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total</div><div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.total_amount)}</div></div>
+                                                <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Paid/Rcvd</div><div style={{ fontSize: '0.875rem', color: '#059669', fontWeight: '600' }}>{fmtInr(item.paid_or_received)}</div></div>
+                                                <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Due</div><div style={{ fontSize: '0.875rem', color: item.due_amount > 0 ? '#b91c1c' : '#64748b', fontWeight: '600' }}>{fmtInr(item.due_amount)}</div></div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                                <button onClick={() => { setTransferLetterType('trade'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); }} title="Transfer Letter" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    <i className="bi bi-file-earmark-text"></i> TL
+                                                </button>
+                                                {item.direction === 'SALE' && (<>
+                                                    <button onClick={async () => {
+                                                        try {
+                                                            const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: true }, responseType: 'blob' });
+                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+                                                            const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_with_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
+                                                            window.URL.revokeObjectURL(url);
+                                                        } catch (err) { toast.error('Failed to generate invoice'); }
+                                                    }} title="Invoice (With Sign)" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-file-pdf"></i> +Sign
+                                                    </button>
+                                                    <button onClick={async () => {
+                                                        try {
+                                                            const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: false }, responseType: 'blob' });
+                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+                                                            const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_without_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
+                                                            window.URL.revokeObjectURL(url);
+                                                        } catch (err) { toast.error('Failed to generate invoice'); }
+                                                    }} title="Invoice (Without Sign)" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-file-pdf"></i> -Sign
+                                                    </button>
+                                                </>)}
+                                                {item.direction === 'PURCHASE' && !isLinked && (
+                                                    <button onClick={async () => {
+                                                        if (!window.confirm('Create a SALE trade from this PURCHASE trade?')) return;
+                                                        try {
+                                                            const resp = await api.get(`trades/${item.id}/`);
+                                                            const p = resp.data;
+                                                            const saleData = { direction: 'SALE', license_type: p.license_type || 'DFIA', from_company: p.to_company?.id || p.to_company, to_company: p.from_company?.id || p.from_company, boe: p.boe?.id || p.boe, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], remarks: p.remarks || '', from_pan: p.to_pan, from_gst: p.to_gst, from_addr_line_1: p.to_addr_line_1, from_addr_line_2: p.to_addr_line_2, to_pan: p.from_pan, to_gst: p.from_gst, to_addr_line_1: p.from_addr_line_1, to_addr_line_2: p.from_addr_line_2, lines: (p.lines || []).map(l => ({ sr_number: l.sr_number, description: l.description, hsn_code: l.hsn_code, mode: l.mode, qty_kg: l.qty_kg, rate_inr_per_kg: l.rate_inr_per_kg, cif_fc: l.cif_fc, exc_rate: l.exc_rate, cif_inr: l.cif_inr, fob_inr: l.fob_inr, pct: l.pct, amount_inr: l.amount_inr })), incentive_lines: [], payments: [] };
+                                                            const nr = await api.post('trades/', saleData);
+                                                            toast.success('SALE trade created. Opening in edit mode...');
+                                                            saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
+                                                            navigate(`/trades/${nr.data.id}/edit`);
+                                                        } catch (err) { toast.error(err.response?.data?.non_field_errors?.[0] || 'Failed to copy trade'); }
+                                                    }} title="Copy to Sale" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-arrow-left-right"></i>
+                                                    </button>
+                                                )}
+                                                {!isLinked && (
+                                                    <button onClick={() => openLinkModal(item)} title="Link to existing trade" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#6366f1', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-link-45deg"></i>
+                                                    </button>
+                                                )}
+                                                <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/trades/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#4f46e5', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    <i className="bi bi-pencil-fill"></i>
+                                                </button>
+                                                <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    <i className="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            };
+
+                            // Group linked trades into pairs; keep unpaired as singles
+                            const seen = new Set();
+                            const tradeGroups = [];
+                            data.forEach(trade => {
+                                if (seen.has(trade.id)) return;
+                                seen.add(trade.id);
+                                const linked = trade.linked_trade_info;
+                                if (linked) {
+                                    const partner = data.find(t => t.id === linked.id);
+                                    if (partner && !seen.has(partner.id)) {
+                                        seen.add(partner.id);
+                                        const sale = trade.direction.includes('SALE') ? trade : partner;
+                                        const purchase = trade.direction.includes('PURCHASE') ? trade : partner;
+                                        tradeGroups.push({ type: 'pair', sale, purchase, pairKey: `pair-${Math.min(trade.id, partner.id)}` });
+                                        return;
+                                    }
+                                }
+                                tradeGroups.push({ type: 'single', trade, pairKey: `single-${trade.id}` });
+                            });
+
+                            return (
+                                <div>
+                                    {tradeGroups.map(group => {
+                                        if (group.type === 'single') {
+                                            return renderTradeCard(group.trade);
+                                        }
+                                        // Paired group
+                                        const { sale, purchase, pairKey } = group;
+                                        const isExpanded = expandedPairs.has(pairKey);
+                                        const companies = `${sale.from_company_label || '-'} ↔ ${sale.to_company_label || '-'}`;
+                                        return (
+                                            <div key={pairKey} style={{ border: '1px solid #a5b4fc', borderLeft: '4px solid #6366f1', borderRadius: '10px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                                                <div
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#eef2ff', cursor: 'pointer', flexWrap: 'wrap' }}
+                                                    onClick={() => togglePair(pairKey)}
+                                                >
+                                                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#166534', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px' }}>Sale</span>
+                                                    <i className="bi bi-link-45deg" style={{ color: '#6366f1', fontSize: '1rem' }}></i>
+                                                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#1d4ed8', background: '#dbeafe', padding: '2px 8px', borderRadius: '4px' }}>Purchase</span>
+                                                    <span style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '600', flex: 1 }}>{companies}</span>
+                                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                                        {sale.invoice_date || ''}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                                        Sale: {fmtInr(sale.total_amount)} · Purchase: {fmtInr(purchase.total_amount)}
+                                                    </span>
+                                                    <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'}`} style={{ color: '#6366f1' }}></i>
+                                                </div>
+                                                {isExpanded && (
+                                                    <div style={{ padding: '8px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {renderTradeCard(sale)}
+                                                        {renderTradeCard(purchase)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()
                     )}
 
                     {/* Incentive Licenses Card Layout */}
@@ -1874,6 +1984,57 @@ export default function MasterList() {
 
             {/* Confirmation Dialog */}
             {confirmDialog}
+
+            {/* Link Trade Modal */}
+            {linkModalTrade && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1060, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeLinkModal}>
+                    <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', width: '480px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                            <h6 style={{ margin: 0, fontWeight: '700', color: '#1e1b4b' }}>
+                                <i className="bi bi-link-45deg me-2" style={{ color: '#6366f1' }}></i>
+                                Link Trade: <span style={{ color: '#6366f1' }}>{linkModalTrade.invoice_number || 'No Invoice'}</span>
+                            </h6>
+                            <button onClick={closeLinkModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#94a3b8' }}>
+                                <i className="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <input
+                            autoFocus
+                            type="text"
+                            className="form-control"
+                            placeholder="Search by invoice number..."
+                            value={linkSearch}
+                            onChange={e => setLinkSearch(e.target.value)}
+                            style={{ marginBottom: '12px' }}
+                        />
+                        {linkSearching && <div style={{ textAlign: 'center', color: '#94a3b8', padding: '12px' }}><div className="spinner-border spinner-border-sm text-primary me-2"></div>Searching...</div>}
+                        {!linkSearching && linkSearch && linkResults.length === 0 && (
+                            <div style={{ textAlign: 'center', color: '#94a3b8', padding: '12px', fontSize: '0.875rem' }}>No unlinked trades found for "{linkSearch}"</div>
+                        )}
+                        {linkResults.map(t => (
+                            <div key={t.id} onClick={() => confirmLink(t)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '8px', cursor: 'pointer', transition: 'background 0.15s' }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f0f9ff'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                <div>
+                                    <div style={{ fontWeight: '600', fontSize: '0.9rem', color: '#1e293b' }}>{t.invoice_number || 'No Invoice'}</div>
+                                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{t.from_company_label} → {t.to_company_label}</div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: '700', color: t.direction.includes('SALE') ? '#166534' : '#1d4ed8', background: t.direction.includes('SALE') ? '#dcfce7' : '#dbeafe', padding: '2px 8px', borderRadius: '4px' }}>
+                                        {t.direction_label || t.direction}
+                                    </span>
+                                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px' }}>
+                                        ₹{Number(t.total_amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {!linkSearch && (
+                            <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem', padding: '8px' }}>Type an invoice number to search</div>
+                        )}
+                    </div>
+                </div>
+            )}
 
         </div>
     );

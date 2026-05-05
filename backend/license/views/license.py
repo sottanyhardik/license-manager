@@ -1344,18 +1344,20 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     EXPIRY_FILL = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
             else:
                 EXPIRY_FILL = INFO_FILL
+            iec_val = license_obj.exporter.iec if license_obj.exporter else '-'
             for col, (label, val) in enumerate([
                 ('License No', lic_no),
+                ('IEC', iec_val),
                 ('License Date', license_date_str),
                 ('Expiry Date', license_expiry_str),
                 ('Total CIF', f"{total_license_cif:,.2f}"),
                 ('Ledger Date', ledger_date_str),
             ], 1):
                 c = ws.cell(row=r, column=col, value=f"{label}: {val}")
-                c.fill = EXPIRY_FILL if col == 3 else INFO_FILL
+                c.fill = EXPIRY_FILL if col == 4 else INFO_FILL
                 c.font = INFO_FONT
                 c.border = THIN_BORDER
-                c.alignment = Alignment(horizontal='right' if col == 4 else 'left', vertical='center')
+                c.alignment = Alignment(horizontal='right' if col == 5 else 'left', vertical='center')
             r += 1
 
             ws.merge_cells(f'A{r}:G{r}')

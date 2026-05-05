@@ -153,8 +153,17 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
         item_details_data = validated_data.pop('item_details', [])
         allotment_data = validated_data.pop('allotment', [])
 
-        # Create the BOE instance
-        boe = BillOfEntryModel.objects.create(**validated_data)
+        # Use update_or_create to avoid IntegrityError on the unique_together
+        # constraint (bill_of_entry_number, bill_of_entry_date, port).
+        boe_number = validated_data.pop('bill_of_entry_number')
+        boe_date = validated_data.pop('bill_of_entry_date', None)
+        port = validated_data.pop('port', None)
+        boe, _ = BillOfEntryModel.objects.update_or_create(
+            bill_of_entry_number=boe_number,
+            bill_of_entry_date=boe_date,
+            port=port,
+            defaults=validated_data,
+        )
 
         # Set many-to-many allotment field
         if allotment_data:

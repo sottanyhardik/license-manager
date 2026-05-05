@@ -533,6 +533,26 @@ def bulk_sync_to_server(payloads, server_url):
                 "failed": result.get("failed", 0),
                 "errors": result.get("errors", [])
             }
+        elif res.status_code == 429:
+            import time
+            for wait in [10, 30, 60]:
+                print(f"⏳ Rate limited (429). Retrying in {wait}s...")
+                time.sleep(wait)
+                res = requests.post(
+                    f"{server_url}/api/license-actions/bulk-update-license-transfer/",
+                    json=batch_payload,
+                    headers=headers,
+                    timeout=300
+                )
+                if res.status_code in [200, 201]:
+                    result = res.json()
+                    return {
+                        "success": result.get("success", len(payloads)),
+                        "failed": result.get("failed", 0),
+                        "errors": result.get("errors", [])
+                    }
+                if res.status_code != 429:
+                    break
         elif res.status_code == 401:
             # Retry with re-authentication
             auth_ok, _ = authenticate(server_url)

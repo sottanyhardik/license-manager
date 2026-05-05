@@ -129,24 +129,18 @@ class LedgerCSVUploadView(APIView):
         except LicenseImportItemsModel.MultipleObjectsReturned:
             raise ValueError(f'Multiple license items found: DFIA={dfia_number}, Sr.No={serial_number}')
 
-        # Get or create Bill of Entry
+        # Parse date before the BOE lookup so we can use the full unique tuple.
         be_number_str = row['BENO'].strip()
-        be_number, created = BillOfEntryModel.objects.get_or_create(
-            bill_of_entry_number=be_number_str
-        )
-
-        # Parse and set BE date
         be_date_str = row['BEDT'].strip()
+        be_date = None
         if be_date_str:
-            try:
-                # Try multiple date formats
-                for date_format in ['%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d']:
-                    try:
-                        be_number.bill_of_entry_date = datetime.strptime(be_date_str, date_format).date()
-                        break
-                    except ValueError:
-                        continue
-            except Exception:
+            for date_format in ['%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d']:
+                try:
+                    be_date = datetime.strptime(be_date_str, date_format).date()
+                    break
+                except ValueError:
+                    continue
+            if be_date is None:
                 results['warnings'].append({
                     'row': row_num,
                     'message': f'Invalid date format: {be_date_str}. Expected DD/MM/YYYY or DD/MM/YY'
@@ -154,22 +148,31 @@ class LedgerCSVUploadView(APIView):
 
         # Get or create Port
         port_code = row['PORT'].strip()
+        port = None
         if port_code:
             port, _ = PortModel.objects.get_or_create(code=port_code)
-            be_number.port = port
 
-        # Set product name based on item description
+        # Determine product name
         item_description = str(sr_number.item).upper()
         if 'BEARING' in item_description:
-            be_number.product_name = 'BEARING'
+            product_name = 'BEARING'
         elif 'ALLOY STEEL' in item_description:
-            be_number.product_name = 'ALLOY STEEL'
+            product_name = 'ALLOY STEEL'
         elif 'AIR FILTER' in item_description:
-            be_number.product_name = 'Air Filter'
+            product_name = 'Air Filter'
         else:
-            be_number.product_name = str(sr_number.item)[:100]  # Limit length
+            product_name = str(sr_number.item)[:100]
 
-        be_number.save()
+        # get_or_create on the full unique tuple to avoid IntegrityError.
+        be_number, created = BillOfEntryModel.objects.get_or_create(
+            bill_of_entry_number=be_number_str,
+            bill_of_entry_date=be_date,
+            port=port,
+            defaults={'product_name': product_name},
+        )
+        if not created and be_number.product_name != product_name:
+            be_number.product_name = product_name
+            be_number.save(update_fields=['product_name'])
 
         # Get or create Row Details
         row_details, created = RowDetails.objects.get_or_create(

@@ -204,7 +204,7 @@ REST_FRAMEWORK = {
         "sustained": "20000/day",     # 20000 requests per day
 
         # Resource-intensive operations
-        "upload": "50/hour",          # 50 file uploads per hour
+        "upload": "2000/hour",        # 2000 file uploads per hour
         "export": "100/hour",         # 100 exports (Excel/PDF) per hour
 
         # Security-sensitive operations

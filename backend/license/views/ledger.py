@@ -142,8 +142,9 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             except (ValueError, TypeError):
                 pass
 
-        # Filter by purchase date range
-        if purchase_date_from or purchase_date_to:
+        # Filter by purchase date range — skipped when a company filter is active
+        # (same rationale as active_only: show the full company history, not just one FY)
+        if (purchase_date_from or purchase_date_to) and not company_id:
             from trade.models import LicenseTrade
             from datetime import datetime
 
@@ -417,12 +418,20 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         # Apply search filter manually for combined data
         search = request.query_params.get('search')
         if search and isinstance(data, list):
-            search_lower = search.lower()
-            data = [
-                item for item in data
-                if search_lower in (item.get('license_number') or '').lower()
-                   or search_lower in (item.get('exporter_name') or '').lower()
-            ]
+            # Support comma-separated license numbers (e.g. "0311045100,0311045787")
+            terms = [t.strip().lower() for t in search.split(',') if t.strip()]
+            if len(terms) > 1:
+                data = [
+                    item for item in data
+                    if (item.get('license_number') or '').lower() in terms
+                ]
+            else:
+                search_lower = terms[0] if terms else ''
+                data = [
+                    item for item in data
+                    if search_lower in (item.get('license_number') or '').lower()
+                       or search_lower in (item.get('exporter_name') or '').lower()
+                ]
 
         # Apply ordering
         ordering = request.query_params.get('ordering', '-license_date')
@@ -1349,12 +1358,20 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         # Apply search filter manually for combined data
         search = request.query_params.get('search')
         if search and isinstance(data, list):
-            search_lower = search.lower()
-            data = [
-                item for item in data
-                if search_lower in (item.get('license_number') or '').lower()
-                   or search_lower in (item.get('exporter_name') or '').lower()
-            ]
+            # Support comma-separated license numbers (e.g. "0311045100,0311045787")
+            terms = [t.strip().lower() for t in search.split(',') if t.strip()]
+            if len(terms) > 1:
+                data = [
+                    item for item in data
+                    if (item.get('license_number') or '').lower() in terms
+                ]
+            else:
+                search_lower = terms[0] if terms else ''
+                data = [
+                    item for item in data
+                    if search_lower in (item.get('license_number') or '').lower()
+                       or search_lower in (item.get('exporter_name') or '').lower()
+                ]
 
         # Apply ordering
         ordering = request.query_params.get('ordering', '-license_date')

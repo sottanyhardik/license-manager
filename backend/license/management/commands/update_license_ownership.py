@@ -63,19 +63,21 @@ def fetch_eligible_licenses(order=None, expired_only=False):
         #   - never fetched (last_ownership_fetch IS NULL), OR
         #   - expiry date is AFTER the last fetch date (expired after we last checked — new info may exist)
         # Skips licenses already fetched post-expiry (last fetch >= expiry date).
+        # Also skips any license already fetched today.
         qs = LicenseDetailsModel.objects.filter(
             license_expiry_date__isnull=False,
             license_expiry_date__lte=today,
         ).filter(
             Q(last_ownership_fetch__isnull=True) |
             Q(license_expiry_date__gt=TruncDate('last_ownership_fetch'))
-        )
+        ).exclude(last_ownership_fetch__date=today)
     else:
         # Only active licenses (expiry > today) or licenses with no expiry date.
         # Expired licenses are always skipped — last_ownership_fetch is not a reason to re-include them.
+        # Skips any license already fetched today.
         qs = LicenseDetailsModel.objects.filter(
             Q(license_expiry_date__isnull=True) | Q(license_expiry_date__gt=today)
-        )
+        ).exclude(last_ownership_fetch__date=today)
     if order == 'asc':
         qs = qs.order_by(F('license_expiry_date').asc(nulls_first=True))
     else:
@@ -459,6 +461,8 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None,
     for attempt in range(max_retries):
         try:
             # Step 1: Fetch from PRC
+            if not dfia.license_date:
+                return (False, None, f"DFIA {dfia.license_number}: license_date is missing")
             response = fetch_scrip_ownership(
                 scrip_number=dfia.license_number,
                 scrip_issue_date=dfia.license_date.strftime('%d/%m/%Y'),
@@ -496,7 +500,7 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None,
         except AttributeError as e:
             if "'NoneType' object has no attribute 'json'" in str(e):
                 return (False, None, "PRC API returned empty response")
-            return (False, None, str(e))
+            return (False, None, f"DFIA {dfia.license_number}: {str(e)}")
         except Exception as e:
             return (False, None, str(e))
 
@@ -751,7 +755,7 @@ class Command(BaseCommand):
                 licenses = licenses[:limit]
 
         total = licenses.count()
-        self.stdout.write(f"\n🔎 Found {total} licenses to process")
+        self.stdout.write(f"\n🔎 Found {total} licenses to process (already fetched today are excluded)")
         self.stdout.write("-"*80)
 
         # Process licenses in batches: fetch batch, then sync to server

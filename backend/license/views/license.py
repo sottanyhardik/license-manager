@@ -101,6 +101,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "license_date",
             "license_expiry_date",
             "exporter__name",
+            "exporter__iec",
             "port__name",
             "purchase_status_label",
             "balance_cif",

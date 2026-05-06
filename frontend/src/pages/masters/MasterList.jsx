@@ -1164,6 +1164,11 @@ export default function MasterList() {
                                                         <i className="bi bi-building me-1"></i>{item.exporter_name}
                                                     </span>
                                                 )}
+                                                {item.exporter_iec && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-fingerprint me-1"></i>IEC: {item.exporter_iec}
+                                                    </span>
+                                                )}
                                                 {item.purchase_status_label && (
                                                     <span style={{ fontSize: '0.75rem', color: statusColor.text, background: statusColor.bg, padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
                                                         {item.purchase_status_label}
@@ -1492,6 +1497,11 @@ export default function MasterList() {
                                                 {item.exporter_name && (
                                                     <span style={{ fontSize: '0.8rem', color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
                                                         <i className="bi bi-building me-1"></i>{item.exporter_name}
+                                                    </span>
+                                                )}
+                                                {item.exporter_iec && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
+                                                        <i className="bi bi-fingerprint me-1"></i>IEC: {item.exporter_iec}
                                                     </span>
                                                 )}
                                                 <span style={{ fontSize: '0.75rem', color: soldStyle.badgeText, background: soldStyle.badge, padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>

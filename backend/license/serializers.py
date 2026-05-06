@@ -359,6 +359,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
     # Annotated fields for FK display
     exporter_name = serializers.CharField(read_only=True, required=False)
+    exporter_iec = serializers.CharField(read_only=True, required=False)
     port_name = serializers.CharField(read_only=True, required=False)
     purchase_status_code = serializers.SerializerMethodField()
     purchase_status_label = serializers.SerializerMethodField()

@@ -76,6 +76,9 @@ git stash
 echo -e "\${BLUE}→ Removing untracked files that would block merge...\${NC}"
 git clean -fd
 
+echo -e "\${BLUE}→ Checking out branch $BRANCH...\${NC}"
+git checkout $BRANCH
+
 echo -e "\${BLUE}→ Pulling latest code from $BRANCH...\${NC}"
 git pull origin $BRANCH
 

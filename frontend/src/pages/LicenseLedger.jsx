@@ -274,8 +274,8 @@ export default function LicenseLedger() {
     const fetchCompanyWise = async () => {
         setCompanyWiseLoading(true);
         try {
-            const params = new URLSearchParams();
-            if (filters.search) params.append('search', filters.search);
+            const params = buildFilterParams();
+            params.delete('company'); // company-wise view has no company selected
             const response = await api.get(`license-ledger/license-wise/?${params.toString()}`);
             setCompanyWiseData(response.data);
         } catch (error) {

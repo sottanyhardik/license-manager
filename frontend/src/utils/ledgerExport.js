@@ -33,17 +33,29 @@ function fmtCur(v, currency = 'INR') {
 
 function computeBalanceMap(license) {
     const isDFIA = license.license_type === 'DFIA';
-    const allSorted = sortTxns(license.transactions);
-    let running = 0;
     const balMap = new Map();
-    for (const txn of allSorted) {
-        if (txn.type === 'PURCHASE' || txn.type === 'OPENING') {
-            running += isDFIA ? (txn.debit_cif || 0) : (txn.debit_license_value || 0);
-        } else if (txn.type === 'SALE') {
-            running -= isDFIA ? (txn.credit_cif || 0) : (txn.credit_license_value || 0);
+
+    // Group by company so each company gets its own running balance
+    const byCompany = {};
+    (license.transactions || []).forEach(txn => {
+        const key = txn.company_id != null ? String(txn.company_id) : 'unknown';
+        if (!byCompany[key]) byCompany[key] = [];
+        byCompany[key].push(txn);
+    });
+
+    Object.values(byCompany).forEach(companyTxns => {
+        const sorted = sortTxns(companyTxns);
+        let running = 0;
+        for (const txn of sorted) {
+            if (txn.type === 'PURCHASE' || txn.type === 'OPENING') {
+                running += isDFIA ? (txn.debit_cif || 0) : (txn.debit_license_value || 0);
+            } else if (txn.type === 'SALE') {
+                running -= isDFIA ? (txn.credit_cif || 0) : (txn.credit_license_value || 0);
+            }
+            balMap.set(txn, running);
         }
-        balMap.set(txn, running);
-    }
+    });
+
     return balMap;
 }
 

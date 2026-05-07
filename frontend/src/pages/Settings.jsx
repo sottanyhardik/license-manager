@@ -26,9 +26,14 @@ export default function Settings() {
     const loadUsers = async () => {
         try {
             const response = await api.get("auth/users/");
-            setUsers(response.data);
+            // Handle both array and paginated response formats
+            const usersData = Array.isArray(response.data)
+                ? response.data
+                : response.data.results || [];
+            setUsers(usersData);
         } catch (error) {
             toast.error("Failed to load users");
+            setUsers([]); // Set empty array on error
         } finally{
             setLoading(false);
         }
@@ -98,132 +103,102 @@ export default function Settings() {
 
     if (loading) {
         return (
-            <div className="container mt-4">
-                <div className="text-center">Loading...</div>
+            <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <div className="placeholder-glow mb-1"><span className="placeholder col-3 rounded" style={{ height: 24 }}></span></div>
+                        <div className="placeholder-glow"><span className="placeholder col-5 rounded" style={{ height: 14 }}></span></div>
+                    </div>
+                </div>
+                <div className="card border-0 shadow-sm">
+                    <div className="card-body p-4 placeholder-glow">
+                        {[...Array(4)].map((_, i) => (
+                            <span key={i} className="placeholder col-12 rounded d-block mb-3" style={{ height: 40 }}></span>
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
-                <div className="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div style={{ marginBottom: '12px', opacity: '0.9' }}>
-                            <a
-                                href="/"
-                                onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                                style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
-                            >
-                                <i className="bi bi-house-door me-2"></i>Home
-                            </a>
-                            <span className="mx-2">/</span>
-                            <span style={{ fontSize: '0.9rem' }}>Settings</span>
-                        </div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
-                            <i className="bi bi-gear me-3"></i>
-                            Settings
-                        </h1>
-                    </div>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+            {/* Compact Header */}
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
+                        <i className="bi bi-gear me-2" style={{ color: 'var(--primary-color)' }}></i>
+                        Settings
+                    </h4>
+                    <small className="text-muted">Manage users and system configuration</small>
                 </div>
             </div>
 
-            {/* Ledger Upload Section */}
-            <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                <div className="card-body" style={{ padding: '24px' }}>
-                    <div className="d-flex align-items-start">
-                        <div style={{
-                            width: '56px',
-                            height: '56px',
-                            borderRadius: '12px',
-                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: '20px',
-                            boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)'
-                        }}>
-                            <i className="bi bi-file-earmark-spreadsheet text-white" style={{ fontSize: '1.5rem' }}></i>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <h5 style={{ fontWeight: '600', marginBottom: '8px', color: '#2c3e50' }}>Ledger Upload</h5>
-                            <p className="text-muted mb-3" style={{ fontSize: '0.9rem' }}>Upload license ledger files to update the system</p>
-                            <button
-                                className="btn btn-success"
-                                onClick={() => navigate('/ledger-upload')}
-                                style={{ padding: '10px 24px', fontWeight: '500' }}
-                            >
-                                <i className="bi bi-upload me-2"></i>
-                                Go to Ledger Upload
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* User Management Section */}
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h3 style={{ fontWeight: '600', color: '#2c3e50', marginBottom: '0' }}>
-                    <i className="bi bi-people me-2"></i>
-                    User Management
-                </h3>
-                <button
-                    className="btn btn-primary"
-                    onClick={() => handleOpenModal()}
-                    style={{
-                        padding: '10px 24px',
-                        fontWeight: '500',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        border: 'none'
-                    }}
-                >
-                    <i className="bi bi-plus-circle me-2"></i>
-                    Add User
-                </button>
-            </div>
-
+            {/* User Management Card */}
             <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                <div className="card-body" style={{ padding: '24px' }}>
+                <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                    <h6 className="mb-0 fw-semibold">
+                        <i className="bi bi-people me-2" style={{ color: '#4F46E5' }}></i>
+                        User Management
+                        <span className="badge ms-2" style={{ backgroundColor: '#4F46E522', color: '#4F46E5', fontSize: '0.7rem' }}>
+                            {users.length}
+                        </span>
+                    </h6>
+                    <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => handleOpenModal()}
+                        style={{ background: 'linear-gradient(135deg, #4F46E5, #4338CA)', border: 'none' }}
+                    >
+                        <i className="bi bi-plus-lg me-1"></i>Add User
+                    </button>
+                </div>
+                <div className="card-body p-0">
                     <div className="table-responsive">
-                        <table className="table table-hover">
-                            <thead>
+                        <table className="table table-hover table-sm mb-0">
+                            <thead className="table-light">
                             <tr>
-                                <th>Username</th>
+                                <th className="ps-3">Username</th>
                                 <th>Email</th>
                                 <th>Name</th>
                                 <th>Status</th>
-                                <th>Date Joined</th>
-                                <th>Actions</th>
+                                <th>Joined</th>
+                                <th className="text-end pe-3">Actions</th>
                             </tr>
                             </thead>
                             <tbody>
                             {users.map((user) => (
                                 <tr key={user.id}>
-                                    <td>
-                                        {user.username}
-                                        {user.is_superuser && (
-                                            <span className="badge bg-danger ms-2">Superuser</span>
-                                        )}
+                                    <td className="ps-3">
+                                        <div className="d-flex align-items-center gap-2">
+                                            <div style={{
+                                                width: 30, height: 30, borderRadius: '50%',
+                                                background: 'linear-gradient(135deg,#4F46E5,#6366F1)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                color: 'white', fontSize: '0.7rem', fontWeight: '700', flexShrink: 0
+                                            }}>
+                                                {user.username[0].toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <div className="fw-medium small">{user.username}</div>
+                                                {user.is_superuser && (
+                                                    <span className="badge bg-danger" style={{ fontSize: '0.65rem' }}>Superuser</span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </td>
-                                    <td>{user.email || "-"}</td>
-                                    <td>{user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : "-"}</td>
+                                    <td className="small text-muted">{user.email || '—'}</td>
+                                    <td className="small">{user.first_name || user.last_name ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : '—'}</td>
                                     <td>
-                      <span className={`badge ${user.is_active ? 'bg-success' : 'bg-secondary'}`}>
-                        {user.is_active ? 'Active' : 'Inactive'}
-                      </span>
+                                        <span className={`badge ${user.is_active ? 'bg-success' : 'bg-secondary'}`} style={{ fontSize: '0.7rem' }}>
+                                            {user.is_active ? 'Active' : 'Inactive'}
+                                        </span>
                                     </td>
-                                    <td>{new Date(user.date_joined).toLocaleDateString()}</td>
-                                    <td>
+                                    <td className="small text-muted">
+                                        {(() => { const d = new Date(user.date_joined); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; })()}
+                                    </td>
+                                    <td className="text-end pe-3">
                                         <button
-                                            className="btn btn-sm btn-outline-primary me-2"
+                                            className="btn btn-sm btn-outline-primary me-1"
                                             onClick={() => handleOpenModal(user)}
                                             title="Edit User"
                                         >
@@ -247,90 +222,125 @@ export default function Settings() {
 
             {/* User Create/Edit Modal */}
             {showModal && (
-                <div className="modal show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
                     <div className="modal-dialog modal-lg">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h5 className="modal-title">{editingUser ? 'Edit User' : 'Add User'}</h5>
-                                <button type="button" className="btn-close" onClick={handleCloseModal}></button>
+                        <div className="modal-content" style={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+                            <div className="modal-header" style={{
+                                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
+                                color: 'white',
+                                borderRadius: '12px 12px 0 0',
+                                padding: '1.25rem 1.5rem',
+                                borderBottom: 'none'
+                            }}>
+                                <h5 className="modal-title fw-semibold">
+                                    <i className={`bi bi-${editingUser ? 'pencil-square' : 'person-plus'} me-2`}></i>
+                                    {editingUser ? 'Edit User' : 'Add User'}
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={handleCloseModal}></button>
                             </div>
                             <form onSubmit={handleSubmit}>
-                                <div className="modal-body">
-                                    <div className="row">
-                                        <div className="col-md-6 mb-3">
-                                            <label className="form-label">Username *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={formData.username}
-                                                onChange={(e) => setFormData({...formData, username: e.target.value})}
-                                                required
-                                                disabled={editingUser !== null}
-                                            />
+                                <div className="modal-body" style={{ padding: '1.5rem', backgroundColor: 'var(--bs-gray-50)' }}>
+                                    <div className="d-flex flex-column gap-3">
+                                        {/* Account Credentials */}
+                                        <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #4F46E5' }}>
+                                            <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4F46E5', marginBottom: '14px' }}>
+                                                <i className="bi bi-shield-lock me-1"></i> Account Credentials
+                                            </div>
+                                            <div className="row g-3">
+                                                <div className="col-md-6">
+                                                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                                                        Username <span className="text-danger">*</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        value={formData.username}
+                                                        onChange={(e) => setFormData({...formData, username: e.target.value})}
+                                                        required
+                                                        disabled={editingUser !== null}
+                                                        placeholder="Enter username"
+                                                    />
+                                                    {editingUser && <small className="text-muted" style={{ fontSize: '0.75rem' }}><i className="bi bi-info-circle me-1"></i>Username cannot be changed</small>}
+                                                </div>
+                                                <div className="col-md-6">
+                                                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                                                        Password {!editingUser && <span className="text-danger">*</span>}
+                                                    </label>
+                                                    <input
+                                                        type="password"
+                                                        className="form-control"
+                                                        value={formData.password}
+                                                        onChange={(e) => setFormData({...formData, password: e.target.value})}
+                                                        required={!editingUser}
+                                                        placeholder={editingUser ? 'Leave blank to keep current' : 'Enter password'}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="col-md-6 mb-3">
-                                            <label className="form-label">Email</label>
-                                            <input
-                                                type="email"
-                                                className="form-control"
-                                                value={formData.email}
-                                                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                            />
+                                        {/* Personal Info */}
+                                        <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #10b981' }}>
+                                            <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10b981', marginBottom: '14px' }}>
+                                                <i className="bi bi-person me-1"></i> Personal Information
+                                            </div>
+                                            <div className="row g-3">
+                                                <div className="col-md-4">
+                                                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>First Name</label>
+                                                    <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        value={formData.first_name}
+                                                        onChange={(e) => setFormData({...formData, first_name: e.target.value})}
+                                                        placeholder="First name"
+                                                    />
+                                                </div>
+                                                <div className="col-md-4">
+                                                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Last Name</label>
+                                                    <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        value={formData.last_name}
+                                                        onChange={(e) => setFormData({...formData, last_name: e.target.value})}
+                                                        placeholder="Last name"
+                                                    />
+                                                </div>
+                                                <div className="col-md-4">
+                                                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Email</label>
+                                                    <input
+                                                        type="email"
+                                                        className="form-control"
+                                                        value={formData.email}
+                                                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                                        placeholder="email@example.com"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="row">
-                                        <div className="col-md-6 mb-3">
-                                            <label className="form-label">First Name</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={formData.first_name}
-                                                onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-                                            />
+                                        {/* Status */}
+                                        <div style={{ background: 'white', borderRadius: '10px', padding: '14px 20px', borderLeft: '3px solid #6366F1' }}>
+                                            <div className="form-check form-switch">
+                                                <input
+                                                    type="checkbox"
+                                                    className="form-check-input"
+                                                    role="switch"
+                                                    id="isActive"
+                                                    checked={formData.is_active}
+                                                    onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+                                                />
+                                                <label className="form-check-label" htmlFor="isActive" style={{ fontWeight: '500' }}>
+                                                    Active User
+                                                    <small className="text-muted ms-2">Allow this user to log in</small>
+                                                </label>
+                                            </div>
                                         </div>
-                                        <div className="col-md-6 mb-3">
-                                            <label className="form-label">Last Name</label>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={formData.last_name}
-                                                onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label">
-                                            Password {!editingUser && '*'}
-                                            {editingUser &&
-                                                <small className="text-muted"> (leave blank to keep current)</small>}
-                                        </label>
-                                        <input
-                                            type="password"
-                                            className="form-control"
-                                            value={formData.password}
-                                            onChange={(e) => setFormData({...formData, password: e.target.value})}
-                                            required={!editingUser}
-                                        />
-                                    </div>
-                                    <div className="mb-3 form-check">
-                                        <input
-                                            type="checkbox"
-                                            className="form-check-input"
-                                            id="isActive"
-                                            checked={formData.is_active}
-                                            onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
-                                        />
-                                        <label className="form-check-label" htmlFor="isActive">
-                                            Active
-                                        </label>
                                     </div>
                                 </div>
-                                <div className="modal-footer">
-                                    <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
-                                        Cancel
+                                <div className="modal-footer" style={{ backgroundColor: 'var(--bs-gray-50)', borderTop: '1px solid #dee2e6', padding: '1rem 1.5rem', borderRadius: '0 0 12px 12px' }}>
+                                    <button type="button" className="btn btn-outline-secondary" onClick={handleCloseModal}>
+                                        <i className="bi bi-x-lg me-1"></i>Cancel
                                     </button>
-                                    <button type="submit" className="btn btn-primary">
-                                        {editingUser ? 'Update' : 'Create'}
+                                    <button type="submit" className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #4F46E5, #4338CA)', border: 'none' }}>
+                                        <i className={`bi bi-${editingUser ? 'check-circle' : 'person-plus'} me-1`}></i>
+                                        {editingUser ? 'Update User' : 'Create User'}
                                     </button>
                                 </div>
                             </form>

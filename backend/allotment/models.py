@@ -273,6 +273,13 @@ class AllotmentItems(AuditModel):
         return getattr(self.item.license, "exporter", None)
 
     @cached_property
+    def hs_code(self) -> Optional[str]:
+        """Get HS code from the license import item"""
+        if self.item and hasattr(self.item, 'hs_code') and self.item.hs_code:
+            return self.item.hs_code.hs_code
+        return None
+
+    @cached_property
     def license_expiry(self):
         return getattr(self.item.license, "license_expiry_date", None)
 

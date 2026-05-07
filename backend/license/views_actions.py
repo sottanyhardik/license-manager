@@ -1,6 +1,7 @@
 # license/views_actions.py
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
@@ -155,7 +156,7 @@ class LicenseActionViewSet(ViewSet):
                                 transfer_date = datetime.strptime(transfer_date, '%d/%m/%Y').date()
                             else:
                                 transfer_date = datetime.strptime(transfer_date, '%Y-%m-%d').date()
-                        except:
+                        except ValueError:
                             transfer_date = None
 
                     # Parse datetime fields
@@ -166,7 +167,7 @@ class LicenseActionViewSet(ViewSet):
                             if 'T' in date_str:
                                 return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
                             return datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
-                        except:
+                        except ValueError:
                             return None
 
                     # Find or create from_company
@@ -255,10 +256,26 @@ class LicenseActionViewSet(ViewSet):
             failed_count = 0
             errors = []
 
-            # Use bulk operations for better performance
-            with transaction.atomic():
-                for license_data in licenses_data:
-                    try:
+            from datetime import datetime
+            from django.utils import timezone
+
+            def parse_datetime(date_str):
+                if not date_str:
+                    return None
+                try:
+                    if 'T' in date_str:
+                        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    else:
+                        dt = datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
+                    if timezone.is_naive(dt):
+                        dt = timezone.make_aware(dt)
+                    return dt
+                except ValueError:
+                    return None
+
+            for license_data in licenses_data:
+                try:
+                    with transaction.atomic():
                         license_number = license_data.get('license_number')
                         current_owner_data = license_data.get('current_owner')
 
@@ -275,6 +292,37 @@ class LicenseActionViewSet(ViewSet):
                             failed_count += 1
                             continue
 
+                        # Track fields to update
+                        update_fields = []
+
+                        # Update validity/expiry date if provided
+                        validity = license_data.get('validity')
+                        if validity:
+                            try:
+                                if '/' in validity:
+                                    parsed_validity = datetime.strptime(validity, '%d/%m/%Y').date()
+                                elif '-' in validity:
+                                    parsed_validity = datetime.strptime(validity, '%Y-%m-%d').date()
+                                else:
+                                    parsed_validity = None
+
+                                if parsed_validity and parsed_validity != license_obj.license_expiry_date:
+                                    license_obj.license_expiry_date = parsed_validity
+                                    update_fields.append('license_expiry_date')
+                            except (ValueError, AttributeError):
+                                pass  # Skip invalid validity dates
+
+                        # Update last_ownership_fetch timestamp
+                        last_fetch_raw = license_data.get('last_ownership_fetch')
+                        if last_fetch_raw:
+                            try:
+                                last_fetch_dt = parse_datetime(last_fetch_raw)
+                                if last_fetch_dt:
+                                    license_obj.last_ownership_fetch = last_fetch_dt
+                                    update_fields.append('last_ownership_fetch')
+                            except (ValueError, AttributeError):
+                                pass
+
                         # Update current owner if provided
                         if current_owner_data and current_owner_data.get('iec'):
                             owner_iec = current_owner_data.get('iec')
@@ -286,15 +334,22 @@ class LicenseActionViewSet(ViewSet):
                                 defaults={'name': owner_name or f"Company {owner_iec}"}
                             )
                             license_obj.current_owner = owner_company
-                            license_obj.save(update_fields=['current_owner'])
+                            update_fields.append('current_owner')
+
+                        # Update file_transfer_status (pending/withdrawn label from latest transfer)
+                        file_transfer_status = license_data.get('file_transfer_status')
+                        if file_transfer_status != license_obj.file_transfer_status:
+                            license_obj.file_transfer_status = file_transfer_status
+                            update_fields.append('file_transfer_status')
+
+                        # Save if any fields were updated
+                        if update_fields:
+                            license_obj.save(update_fields=update_fields)
 
                         # Store transfer data in LicenseTransferModel
                         transfers = license_data.get('transfers', [])
 
                         if transfers:
-                            from datetime import datetime
-                            from django.utils import timezone
-
                             for transfer_data in transfers:
                                 # Parse transfer_date if it's a string
                                 transfer_date = transfer_data.get('transfer_date')
@@ -304,25 +359,8 @@ class LicenseActionViewSet(ViewSet):
                                             transfer_date = datetime.strptime(transfer_date, '%d/%m/%Y').date()
                                         else:
                                             transfer_date = datetime.strptime(transfer_date, '%Y-%m-%d').date()
-                                    except:
+                                    except ValueError:
                                         transfer_date = None
-
-                                # Parse datetime fields
-                                def parse_datetime(date_str):
-                                    if not date_str:
-                                        return None
-                                    try:
-                                        if 'T' in date_str:
-                                            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                                        else:
-                                            dt = datetime.strptime(date_str, '%d/%m/%Y %H:%M:%S')
-
-                                        # Make timezone-aware if naive
-                                        if timezone.is_naive(dt):
-                                            dt = timezone.make_aware(dt)
-                                        return dt
-                                    except:
-                                        return None
 
                                 # Find or create from_company
                                 from_company = None
@@ -363,9 +401,9 @@ class LicenseActionViewSet(ViewSet):
 
                         success_count += 1
 
-                    except Exception as e:
-                        errors.append(f"License {license_data.get('license_number', 'unknown')}: {str(e)}")
-                        failed_count += 1
+                except Exception as e:
+                    errors.append(f"License {license_data.get('license_number', 'unknown')}: {str(e)}")
+                    failed_count += 1
 
             return Response({
                 'success': success_count,

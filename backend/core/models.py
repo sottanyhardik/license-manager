@@ -438,6 +438,13 @@ class NotificationNumber(models.Model):
 class PurchaseStatus(models.Model):
     code = models.CharField(max_length=2, unique=True)
     label = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True, help_text="Whether this purchase status is active and should be shown in UI")
+    display_order = models.IntegerField(default=0, help_text="Order for displaying in dropdowns")
+
+    class Meta:
+        ordering = ['display_order', 'label']
+        verbose_name = "Purchase Status"
+        verbose_name_plural = "Purchase Statuses"
 
     def __str__(self):
         return self.label

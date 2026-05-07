@@ -28,6 +28,7 @@ def create_norm_specific_items():
 
         # E5 Biscuits items
         'BISCUITS ADDITIVES & INGREDIENTS - E5',
+        'COCOA PASTE - E5',
         'EMULSIFIER - E5',
         'FOOD FLAVOUR - E5',
         'FRUIT/COCOA - E5',

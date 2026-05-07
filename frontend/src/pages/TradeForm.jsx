@@ -5,7 +5,9 @@ import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import {formatDateForInput} from "../utils/dateFormatter";
+import {formatDateForInput, parseDate} from "../utils/dateFormatter";
+import * as validateFormUtil from "../utils/formValidation";
+import { ValidationRules } from "../utils/formValidation";
 import TransferLetterModal from "../components/TransferLetterModal";
 import {navigateToList} from "../utils/navigationUtils";
 import {useBackButton} from "../hooks/useBackButton";
@@ -32,14 +34,37 @@ export default function TradeForm() {
     });
 
     const [billingMode, setBillingMode] = useState("CIF_INR");
+    const [autoCreatePaired, setAutoCreatePaired] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [fieldErrors, setFieldErrors] = useState({});
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
     const isInitialLoadRef = useRef(true);
+    const [initialFormData, setInitialFormData] = useState(null);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
     // Enable browser back button support with filter preservation
     useBackButton('trades');
+
+    // Track unsaved changes
+    useEffect(() => {
+        if (initialFormData) {
+            const hasChanges = JSON.stringify(formData) !== JSON.stringify(initialFormData);
+            setHasUnsavedChanges(hasChanges);
+        }
+    }, [formData, initialFormData]);
+
+    // Warn user before leaving page with unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges]);
 
     // Helper function to format Date object to YYYY-MM-DD for API
     const formatDateForAPI = (date) => {
@@ -53,10 +78,20 @@ export default function TradeForm() {
         if (!formData.boe) {
             return;
         }
+
+        // Only prefill if lines are empty (for create mode or when explicitly requested)
+        // Don't auto-prefill in edit mode if lines already exist
+        if (formData.lines && formData.lines.length > 0) {
+            return;
+        }
+
+        // Show loading state
+        const loadingToastId = toast.loading("Loading BOE details...");
+
         try {
             // boe can be either ID or object with id
             const boeId = typeof formData.boe === 'object' ? formData.boe.id : formData.boe;
-            const { data } = await api.get(`/bill-of-entries/${boeId}/`);
+            const { data } = await api.get(`bill-of-entries/${boeId}/`);
 
             // Create lines from BOE item_details
             const lines = data.item_details?.map(item => ({
@@ -78,10 +113,22 @@ export default function TradeForm() {
                 ...prev,
                 lines: lines
             }));
+
+            toast.update(loadingToastId, {
+                render: "BOE details loaded successfully",
+                type: "success",
+                isLoading: false,
+                autoClose: 2000
+            });
         } catch (err) {
-            toast.error("Failed to fetch BOE details");
+            toast.update(loadingToastId, {
+                render: "Failed to fetch BOE details",
+                type: "error",
+                isLoading: false,
+                autoClose: 3000
+            });
         }
-    }, [formData.boe, billingMode]);
+    }, [formData.boe, formData.lines, billingMode]);
 
     // Fetch existing trade if editing
     useEffect(() => {
@@ -90,52 +137,34 @@ export default function TradeForm() {
         } else {
             // In create mode, mark initial load as complete immediately
             isInitialLoadRef.current = false;
+            // Set initial form data for create mode
+            setInitialFormData(JSON.parse(JSON.stringify(formData)));
         }
     }, [isEdit, id]);
 
-    // Auto-prefill from BOE when BOE is selected (works in both create and edit mode)
-    // Skip during initial load to prevent overwriting existing trade data
+    // Auto-prefill from BOE when BOE is selected (only if lines are empty)
     useEffect(() => {
-        if (formData.boe && !isInitialLoadRef.current) {
+        if (formData.boe) {
             handlePrefillFromBOE();
         }
-    }, [formData.boe, handlePrefillFromBOE]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.boe]);
 
 
     const fetchTrade = async () => {
         try {
-            const { data } = await api.get(`/trades/${id}/`);
+            const { data } = await api.get(`trades/${id}/`);
 
-            // Parse date fields
+            // Parse date fields using centralized date parser
             if (data.invoice_date) {
-                const originalDate = data.invoice_date;
-                console.log('Original invoice_date from API:', originalDate);
-
-                const parts = data.invoice_date.split('-');
-
-                // Detect format: if first part is 4 digits, it's yyyy-MM-dd, else dd-MM-yyyy
-                let year, month, day;
-                if (parts[0].length === 4) {
-                    // Format: yyyy-MM-dd
-                    year = parseInt(parts[0]);
-                    month = parseInt(parts[1]) - 1; // JS months are 0-indexed
-                    day = parseInt(parts[2]);
-                } else {
-                    // Format: dd-MM-yyyy
-                    day = parseInt(parts[0]);
-                    month = parseInt(parts[1]) - 1; // JS months are 0-indexed
-                    year = parseInt(parts[2]);
-                }
-
-                data.invoice_date = new Date(year, month, day, 12, 0, 0);
-                console.log('Parsed to Date object:', data.invoice_date.toLocaleDateString(), data.invoice_date);
+                data.invoice_date = parseDate(data.invoice_date) || new Date();
             }
 
             // Parse payment dates
             if (data.payments) {
                 data.payments = data.payments.map(payment => ({
                     ...payment,
-                    date: payment.date ? new Date(payment.date + 'T12:00:00') : new Date()
+                    date: payment.date ? parseDate(payment.date) || new Date() : new Date()
                 }));
             }
 
@@ -152,7 +181,7 @@ export default function TradeForm() {
                     data.incentive_lines.map(async (line) => {
                         if (line.incentive_license && typeof line.incentive_license === 'number') {
                             try {
-                                const { data: licenseData } = await api.get(`/incentive-licenses/${line.incentive_license}/`);
+                                const { data: licenseData } = await api.get(`incentive-licenses/${line.incentive_license}/`);
                                 return {
                                     ...line,
                                     incentive_license: licenseData.id // Keep as ID for HybridSelect
@@ -174,6 +203,7 @@ export default function TradeForm() {
             }
 
             setFormData(data);
+            setInitialFormData(JSON.parse(JSON.stringify(data))); // Deep clone for initial snapshot
 
             // Set billing mode from first line if exists
             if (data.lines && data.lines.length > 0) {
@@ -194,7 +224,7 @@ export default function TradeForm() {
         if (val) {
             try {
                 const companyId = typeof val === 'object' ? val.id : val;
-                const { data } = await api.get(`/masters/companies/${companyId}/`);
+                const { data } = await api.get(`masters/companies/${companyId}/`);
                 setFormData(prev => ({
                     ...prev,
                     from_company: val,
@@ -216,7 +246,7 @@ export default function TradeForm() {
         if (val) {
             try {
                 const companyId = typeof val === 'object' ? val.id : val;
-                const { data } = await api.get(`/masters/companies/${companyId}/`);
+                const { data } = await api.get(`masters/companies/${companyId}/`);
                 setFormData(prev => ({
                     ...prev,
                     to_company: val,
@@ -250,7 +280,7 @@ export default function TradeForm() {
         try {
             // Company can be either ID or object with id
             const companyId = typeof relevantCompany === 'object' ? relevantCompany.id : relevantCompany;
-            const { data } = await api.get(`/trades/prefill-invoice-number/`, {
+            const { data } = await api.get(`trades/prefill-invoice-number/`, {
                 params: {
                     direction: formData.direction,
                     company_id: companyId,
@@ -315,18 +345,9 @@ export default function TradeForm() {
 
         // If incentive license is selected, fetch full details and auto-fill license_value
         if (field === 'incentive_license' && value) {
-            console.log('Selected incentive license ID:', value);
             try {
-                // Fetch the full license details from API
-                const { data } = await api.get(`/incentive-licenses/${value}/`);
-                console.log('Fetched incentive license data:', data);
-
-                // Keep the ID as the value (don't replace with full object)
-                // line.incentive_license is already set to 'value' on line 267
-
-                // Auto-fill license_value from fetched data
+                const { data } = await api.get(`incentive-licenses/${value}/`);
                 line.license_value = parseFloat(data.license_value) || 0;
-                console.log('Auto-filled license_value:', line.license_value);
 
                 // Trigger recalculation of amount if rate is already set
                 if (line.rate_pct > 0) {
@@ -486,13 +507,124 @@ export default function TradeForm() {
         }));
     };
 
+    // Validation function for trade form
+    const validateTradeForm = () => {
+        const errors = {};
+
+        // Basic field validation
+        const basicSchema = {
+            direction: { rules: [ValidationRules.REQUIRED], label: 'Direction' },
+            invoice_date: { rules: [ValidationRules.REQUIRED, ValidationRules.DATE], label: 'Invoice Date' }
+        };
+
+        // Validate based on direction
+        if (formData.direction === 'PURCHASE') {
+            basicSchema.from_company = { rules: [ValidationRules.REQUIRED], label: 'From Company' };
+        } else if (formData.direction === 'SALE') {
+            basicSchema.to_company = { rules: [ValidationRules.REQUIRED], label: 'To Company' };
+        }
+
+        // Validate basic fields
+        Object.keys(basicSchema).forEach(field => {
+            const config = basicSchema[field];
+            const value = formData[field];
+            const fieldErrors = validateFormUtil.validateField(value, config.rules, config.label);
+            if (fieldErrors.length > 0) {
+                errors[field] = fieldErrors;
+            }
+        });
+
+        // Validate lines
+        if (formData.lines.length === 0 && formData.incentive_lines.length === 0) {
+            errors.lines = ['At least one trade line or incentive line must be added'];
+        }
+
+        // Validate trade lines
+        if (formData.lines.length > 0) {
+            const lineSchema = {
+                sr_number: { rules: [ValidationRules.REQUIRED], label: 'License Item' },
+                amount_inr: { rules: [ValidationRules.REQUIRED, ValidationRules.NON_NEGATIVE], label: 'Amount (INR)' }
+            };
+            const lineErrors = validateFormUtil.validateNestedArray(formData.lines, lineSchema);
+            if (lineErrors.length > 0) {
+                errors.lines = lineErrors;
+            }
+        }
+
+        // Validate payments
+        if (formData.payments && formData.payments.length > 0) {
+            const paymentSchema = {
+                amount: { rules: [ValidationRules.REQUIRED, ValidationRules.POSITIVE_NUMBER], label: 'Payment Amount' },
+                mode: { rules: [ValidationRules.REQUIRED], label: 'Payment Mode' },
+                date: { rules: [ValidationRules.REQUIRED, ValidationRules.DATE], label: 'Payment Date' }
+            };
+            const paymentErrors = validateFormUtil.validateNestedArray(formData.payments, paymentSchema);
+            if (paymentErrors.length > 0) {
+                errors.payments = paymentErrors;
+            }
+        }
+
+        return errors;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSaving(true);
         setError("");
         setFieldErrors({});
 
+        // Frontend validation
+        const validationErrors = validateTradeForm();
+        if (Object.keys(validationErrors).length > 0) {
+            setFieldErrors(validationErrors);
+
+            // Create detailed error message
+            const errorDetails = [];
+            Object.entries(validationErrors).forEach(([field, errors]) => {
+                if (Array.isArray(errors)) {
+                    if (typeof errors[0] === 'string') {
+                        errorDetails.push(`${field}: ${errors.join(', ')}`);
+                    } else {
+                        // Nested array errors (like line items)
+                        errors.forEach((lineError, index) => {
+                            if (lineError && typeof lineError === 'object') {
+                                Object.entries(lineError).forEach(([lineField, lineErrors]) => {
+                                    errorDetails.push(`Line ${index + 1} - ${lineField}: ${lineErrors.join(', ')}`);
+                                });
+                            }
+                        });
+                    }
+                } else if (typeof errors === 'object') {
+                    Object.entries(errors).forEach(([subField, subErrors]) => {
+                        errorDetails.push(`${field}.${subField}: ${subErrors}`);
+                    });
+                }
+            });
+
+            const detailedErrorMsg = "Validation errors:\n" + errorDetails.join('\n');
+            setError(detailedErrorMsg);
+
+            // Show first few errors in toast
+            errorDetails.slice(0, 3).forEach(err => toast.error(err));
+            if (errorDetails.length > 3) {
+                toast.error(`And ${errorDetails.length - 3} more errors...`);
+            }
+
+            // Scroll to first error
+            setTimeout(() => {
+                const firstErrorField = document.querySelector('.is-invalid');
+                if (firstErrorField) {
+                    firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstErrorField.focus();
+                }
+            }, 100);
+
+            setSaving(false);
+            return;
+        }
+
         try {
+
             // Check if we have file upload
             const hasFile = formData.purchase_invoice_copy instanceof File;
 
@@ -509,6 +641,7 @@ export default function TradeForm() {
                 const boeId = typeof formData.boe === 'object' ? formData.boe?.id : formData.boe;
 
                 formDataObj.append('direction', formData.direction);
+                formDataObj.append('license_type', formData.license_type);
                 if (fromCompanyId) formDataObj.append('from_company', fromCompanyId);
                 if (toCompanyId) formDataObj.append('to_company', toCompanyId);
                 if (boeId) formDataObj.append('boe', boeId);
@@ -529,11 +662,15 @@ export default function TradeForm() {
                 // Add file
                 formDataObj.append('purchase_invoice_copy', formData.purchase_invoice_copy);
 
-                // Add lines as JSON string (clean up empty id fields)
+                // Add lines as JSON string (clean up empty id fields and extract sr_number ID)
                 const cleanedLines = formData.lines.map(line => {
                     const cleanedLine = {...line};
                     if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
                         delete cleanedLine.id;
+                    }
+                    // Extract sr_number ID if it's an object
+                    if (cleanedLine.sr_number && typeof cleanedLine.sr_number === 'object') {
+                        cleanedLine.sr_number = cleanedLine.sr_number.id;
                     }
                     // Always set HSN code to 49070000
                     cleanedLine.hsn_code = '49070000';
@@ -573,11 +710,15 @@ export default function TradeForm() {
                 const toCompanyId = typeof formData.to_company === 'object' ? formData.to_company?.id : formData.to_company;
                 const boeId = typeof formData.boe === 'object' ? formData.boe?.id : formData.boe;
 
-                // Clean up lines: remove empty id fields
+                // Clean up lines: remove empty id fields and extract sr_number ID
                 const cleanedLines = formData.lines.map(line => {
                     const cleanedLine = {...line};
                     if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
                         delete cleanedLine.id;
+                    }
+                    // Extract sr_number ID if it's an object
+                    if (cleanedLine.sr_number && typeof cleanedLine.sr_number === 'object') {
+                        cleanedLine.sr_number = cleanedLine.sr_number.id;
                     }
                     // Always set HSN code to 49070000
                     cleanedLine.hsn_code = '49070000';
@@ -607,40 +748,70 @@ export default function TradeForm() {
                 });
 
                 payload = {
-                    ...formData,
+                    // Only include writable fields, not read-only display fields
+                    direction: formData.direction,
+                    license_type: formData.license_type,
                     from_company: fromCompanyId,
                     to_company: toCompanyId,
                     boe: boeId || null,
                     invoice_number: formData.invoice_number?.trim() || '',
                     invoice_date: formatDateForAPI(formData.invoice_date),
+                    remarks: formData.remarks || '',
+                    // Company snapshot fields
+                    from_pan: formData.from_pan || '',
+                    from_gst: formData.from_gst || '',
+                    from_addr_line_1: formData.from_addr_line_1 || '',
+                    from_addr_line_2: formData.from_addr_line_2 || '',
+                    to_pan: formData.to_pan || '',
+                    to_gst: formData.to_gst || '',
+                    to_addr_line_1: formData.to_addr_line_1 || '',
+                    to_addr_line_2: formData.to_addr_line_2 || '',
+                    // Nested data
                     lines: cleanedLines,
                     incentive_lines: cleanedIncentiveLines,
-                    payments: cleanedPayments
+                    payments: cleanedPayments,
+                    auto_create_paired: autoCreatePaired,
                 };
             }
 
             if (isEdit) {
-                await api.patch(`/trades/${id}/`, payload, { headers });
+                await api.patch(`trades/${id}/`, payload, { headers });
             } else {
-                await api.post(`/trades/`, payload, { headers });
+                await api.post(`trades/`, payload, { headers });
             }
 
-            toast.success(isEdit ? "Trade updated successfully" : "Trade created successfully");
+            const successMsg = isEdit
+                ? "Trade updated successfully"
+                : autoCreatePaired
+                    ? `Trade created! Linked ${formData.direction === 'PURCHASE' ? 'Sale' : 'Purchase'} trade also created automatically.`
+                    : "Trade created successfully";
+            toast.success(successMsg);
+            setHasUnsavedChanges(false); // Clear unsaved changes flag
             navigate("/trades");
         } catch (err) {
-            // Handle field-level errors
+            console.error('Save error:', err.response?.data);
+
+            // Handle field-level errors with improved formatting
             if (err.response?.data && typeof err.response.data === 'object') {
-                setFieldErrors(err.response.data);
+                const formattedErrors = validateFormUtil.formatBackendErrors(err.response.data);
+                setFieldErrors(formattedErrors);
 
                 // Create user-friendly error message
                 const errorMessages = [];
                 Object.entries(err.response.data).forEach(([field, errors]) => {
                     if (Array.isArray(errors)) {
                         errors.forEach(error => {
-                            errorMessages.push(`${field}: ${error}`);
+                            // Make field name more readable
+                            const fieldLabel = field === 'non_field_errors'
+                                ? 'Error'
+                                : field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                            errorMessages.push(`${fieldLabel}: ${error}`);
                         });
                     } else {
-                        errorMessages.push(`${field}: ${errors}`);
+                        const fieldLabel = field === 'non_field_errors'
+                            ? 'Error'
+                            : field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        errorMessages.push(`${fieldLabel}: ${errors}`);
                     }
                 });
 
@@ -670,7 +841,7 @@ export default function TradeForm() {
         }
 
         try {
-            const response = await api.get(`/trades/${id}/generate-bill-of-supply/`, {
+            const response = await api.get(`trades/${id}/generate-bill-of-supply/`, {
                 params: {
                     include_signature: includeSignature
                 },
@@ -707,7 +878,7 @@ export default function TradeForm() {
         }
 
         try {
-            const response = await api.get(`/trades/${id}/generate-purchase-invoice/`, {
+            const response = await api.get(`trades/${id}/generate-purchase-invoice/`, {
                 params: {
                     include_signature: includeSignature
                 },
@@ -731,41 +902,43 @@ export default function TradeForm() {
         }
     };
 
+    const directionMeta = {
+        PURCHASE:           { label: 'Purchase',            icon: 'cart-check',   color: '#4F46E5' },
+        SALE:               { label: 'Sale',                icon: 'shop',         color: '#10b981' },
+        COMMISSION_PURCHASE:{ label: 'Commission Purchase', icon: 'percent',      color: '#f59e0b' },
+        COMMISSION_SALE:    { label: 'Commission Sale',     icon: 'graph-up',     color: '#6366F1' },
+    };
+
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+            {/* Compact Header */}
+            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
                 <div>
-                    <div style={{ marginBottom: '12px', opacity: '0.9' }}>
-                        <a
-                            href="#"
-                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                            style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
-                        >
-                            <i className="bi bi-house-door me-2"></i>Home
-                        </a>
-                        <span className="mx-2">/</span>
-                        <a
-                            href="#"
-                            onClick={(e) => { e.preventDefault(); navigate('/trades'); }}
-                            style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
-                        >
-                            Trades
-                        </a>
-                        <span className="mx-2">/</span>
-                        <span style={{ fontSize: '0.9rem' }}>{isEdit ? "Edit Trade" : "Create Trade"}</span>
-                    </div>
-                    <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
-                        <i className={`bi ${isEdit ? 'bi-pencil-square' : 'bi-plus-circle'} me-3`}></i>
-                        {isEdit ? "Edit Trade" : "Create Trade"}
-                    </h1>
+                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
+                        <i className="bi bi-arrow-left-right me-2" style={{ color: '#10b981' }}></i>
+                        {isEdit ? 'Edit Trade' : 'New Trade'}
+                    </h4>
+                    <small className="text-muted">
+                        {isEdit ? 'Update trade details' : 'Create a new trade transaction'}
+                        {formData.direction && (
+                            <span className="ms-2 badge" style={{ background: `${directionMeta[formData.direction]?.color}20`, color: directionMeta[formData.direction]?.color, fontSize: '0.75rem' }}>
+                                <i className={`bi bi-${directionMeta[formData.direction]?.icon} me-1`}></i>
+                                {directionMeta[formData.direction]?.label}
+                            </span>
+                        )}
+                    </small>
+                </div>
+                <div className="d-flex gap-2">
+                    {isEdit && (
+                        <button type="button" className="btn btn-sm btn-outline-secondary"
+                            onClick={() => setShowTransferLetterModal(true)}>
+                            <i className="bi bi-file-earmark-text me-1"></i>Transfer Letter
+                        </button>
+                    )}
+                    <button type="button" className="btn btn-sm btn-outline-secondary"
+                        onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}>
+                        <i className="bi bi-arrow-left me-1"></i>Back to Trades
+                    </button>
                 </div>
             </div>
 
@@ -781,82 +954,90 @@ export default function TradeForm() {
             )}
 
             <form onSubmit={handleSubmit}>
-                {/* Transaction Type Selector */}
+                {/* Transaction Type + License Type — combined card */}
                 <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                    <div className="card-body" style={{ padding: '24px' }}>
-                        <div className="row">
-                            <div className="col-md-12">
-                                <label className="form-label fw-bold">Transaction Type <span className="text-danger">*</span></label>
-                                <div className="d-flex gap-4 flex-wrap">
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="direction"
-                                            id="directionPurchase"
-                                            value="PURCHASE"
-                                            checked={formData.direction === "PURCHASE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="directionPurchase">
-                                            Purchase (Trade In)
-                                        </label>
-                                    </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="direction"
-                                            id="directionSale"
-                                            value="SALE"
-                                            checked={formData.direction === "SALE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="directionSale">
-                                            Sale (Trade Out)
-                                        </label>
-                                    </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="direction"
-                                            id="directionCommissionPurchase"
-                                            value="COMMISSION_PURCHASE"
-                                            checked={formData.direction === "COMMISSION_PURCHASE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="directionCommissionPurchase">
-                                            Commission Purchase
-                                        </label>
-                                    </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="direction"
-                                            id="directionCommissionSale"
-                                            value="COMMISSION_SALE"
-                                            checked={formData.direction === "COMMISSION_SALE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="directionCommissionSale">
-                                            Commission Sale
-                                        </label>
-                                    </div>
+                    <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                        <h6 className="mb-0 fw-semibold">
+                            <i className="bi bi-toggles me-2" style={{ color: '#10b981' }}></i>
+                            Trade Configuration
+                        </h6>
+                    </div>
+                    <div className="card-body p-4">
+                        <div className="row g-4">
+                            <div className="col-md-6">
+                                <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
+                                    TRANSACTION TYPE <span className="text-danger">*</span>
+                                </label>
+                                <div className="d-flex gap-2 flex-wrap">
+                                    {Object.entries(directionMeta).map(([val, m]) => (
+                                        <button key={val} type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, direction: val }))}
+                                            style={{
+                                                border: `2px solid ${formData.direction === val ? m.color : '#e5e7eb'}`,
+                                                background: formData.direction === val ? `${m.color}18` : 'white',
+                                                color: formData.direction === val ? m.color : '#6b7280',
+                                                borderRadius: '8px', padding: '8px 14px',
+                                                fontWeight: formData.direction === val ? '600' : '500',
+                                                fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
+                                            }}>
+                                            <i className={`bi bi-${m.icon} me-1`}></i>{m.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="col-md-6">
+                                <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
+                                    LICENSE TYPE <span className="text-danger">*</span>
+                                </label>
+                                <div className="d-flex gap-2">
+                                    {[{ val:'DFIA', label:'DFIA License', icon:'file-earmark-text', color:'#4F46E5' },
+                                      { val:'INCENTIVE', label:'Incentive License', icon:'award', color:'#f59e0b' }].map(m => (
+                                        <button key={m.val} type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, license_type: m.val, incentive_license: m.val === 'DFIA' ? null : prev.incentive_license }))}
+                                            style={{
+                                                border: `2px solid ${formData.license_type === m.val ? m.color : '#e5e7eb'}`,
+                                                background: formData.license_type === m.val ? `${m.color}18` : 'white',
+                                                color: formData.license_type === m.val ? m.color : '#6b7280',
+                                                borderRadius: '8px', padding: '8px 16px',
+                                                fontWeight: formData.license_type === m.val ? '600' : '500',
+                                                fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
+                                            }}>
+                                            <i className={`bi bi-${m.icon} me-1`}></i>{m.label}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
+                        {!id && ['PURCHASE', 'SALE'].includes(formData.direction) && (
+                            <div className="d-flex align-items-center gap-2 mt-3 p-2 rounded" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
+                                <input
+                                    type="checkbox"
+                                    id="autoCreatePaired"
+                                    checked={autoCreatePaired}
+                                    onChange={e => setAutoCreatePaired(e.target.checked)}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                                <label htmlFor="autoCreatePaired" style={{ cursor: 'pointer', fontSize: '0.875rem', color: '#0369a1', marginBottom: 0 }}>
+                                    <i className="bi bi-link-45deg me-1"></i>
+                                    Auto-create linked {formData.direction === 'PURCHASE' ? 'Sale' : 'Purchase'} trade with same lines
+                                </label>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Company Snapshots - Following Screenshot Layout */}
+                {/* Company Snapshots */}
                 <div className="row mb-4">
                     {/* From Company */}
                     <div className="col-md-6">
-                        <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                        <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-building me-2" style={{ color: '#4F46E5' }}></i>
+                                    From Company
+                                </h6>
+                            </div>
                             <div className="card-body" style={{ padding: '20px' }}>
-                                <h6>From Company Snapshot</h6>
 
                                 <div className="mb-3">
                                     <label className="form-label">From Company <span className="text-danger">*</span></label>
@@ -922,10 +1103,14 @@ export default function TradeForm() {
 
                     {/* To Company */}
                     <div className="col-md-6">
-                        <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                        <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-building me-2" style={{ color: '#10b981' }}></i>
+                                    To Company
+                                </h6>
+                            </div>
                             <div className="card-body" style={{ padding: '20px' }}>
-                                <h6>To Company Snapshot</h6>
-
                                 <div className="mb-3">
                                     <label className="form-label">To Company <span className="text-danger">*</span></label>
                                     <HybridSelect
@@ -989,14 +1174,22 @@ export default function TradeForm() {
                     </div>
                 </div>
 
-                {/* Invoice Details Section - Matching Screenshot Layout */}
+                {/* Invoice Details + BOE/Remarks card */}
+                <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                    <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                        <h6 className="mb-0 fw-semibold">
+                            <i className="bi bi-file-earmark-text me-2" style={{ color: '#f59e0b' }}></i>
+                            Invoice & Reference Details
+                        </h6>
+                    </div>
+                    <div className="card-body p-4">
                 <div className="row mb-3">
                     <div className="col-md-6">
                         <div className="d-flex justify-content-between align-items-center mb-2">
-                            <label className="form-label mb-0">Invoice Number (optional)</label>
+                            <label className="form-label mb-0" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Invoice Number (optional)</label>
                             <button
                                 type="button"
-                                className="btn btn-warning btn-sm"
+                                className="btn btn-outline-primary btn-sm"
                                 onClick={handlePrefillInvoiceNumber}
                                 disabled={
                                     !formData.direction ||
@@ -1033,7 +1226,7 @@ export default function TradeForm() {
                     <div className="col-md-6">
                         <label className="form-label">Invoice Date</label>
                         <DatePicker
-                            selected={formData.invoice_date instanceof Date ? formData.invoice_date : new Date(formData.invoice_date)}
+                            selected={formData.invoice_date instanceof Date ? formData.invoice_date : parseDate(formData.invoice_date)}
                             onChange={(date) => setFormData(prev => ({ ...prev, invoice_date: date }))}
                             dateFormat="dd-MM-yyyy"
                             className="form-control"
@@ -1095,10 +1288,10 @@ export default function TradeForm() {
 
 
                 {/* BOE and Remarks */}
-                <div className="row mb-4">
+                <div className="row mb-0">
                     {formData.direction !== 'PURCHASE' && (
                         <div className="col-md-6">
-                            <label className="form-label">BOE (optional)</label>
+                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>BOE (optional)</label>
                             <HybridSelect
                                 fieldMeta={{
                                     endpoint: (() => {
@@ -1129,7 +1322,7 @@ export default function TradeForm() {
                         </div>
                     )}
                     <div className={formData.direction === 'PURCHASE' ? 'col-md-12' : 'col-md-6'}>
-                        <label className="form-label">Remarks</label>
+                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Remarks</label>
                         <textarea
                             className="form-control"
                             rows="2"
@@ -1139,149 +1332,88 @@ export default function TradeForm() {
                         />
                     </div>
                 </div>
-
-                {/* License Type - Placed before Billing Mode */}
-                <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
-                    <div className="card-body" style={{ padding: '24px' }}>
-                        <div className="row">
-                            <div className="col-md-12">
-                                <label className="form-label fw-bold">License Type <span className="text-danger">*</span></label>
-                                <div className="d-flex gap-4">
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="license_type"
-                                            id="licenseTypeDFIA"
-                                            value="DFIA"
-                                            checked={formData.license_type === "DFIA"}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                license_type: e.target.value,
-                                                incentive_license: null // Clear incentive license when switching to DFIA
-                                            }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="licenseTypeDFIA">
-                                            DFIA License
-                                        </label>
-                                    </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="license_type"
-                                            id="licenseTypeIncentive"
-                                            value="INCENTIVE"
-                                            checked={formData.license_type === "INCENTIVE"}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, license_type: e.target.value }))}
-                                        />
-                                        <label className="form-check-label" htmlFor="licenseTypeIncentive">
-                                            Incentive License (RODTEP/ROSTL/MEIS)
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                     </div>
                 </div>
 
                 {/* Conditional rendering based on license type */}
                 {formData.license_type === "DFIA" && (
                     <>
-                        {/* Billing Mode - Only for DFIA */}
-                        <div className="mb-3">
-                            <label className="form-label fw-bold">Billing Mode</label>
-                            <div className="d-flex gap-4">
-                                <div className="form-check">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="billingMode"
-                                        id="modeQTY"
-                                        value="QTY"
-                                        checked={billingMode === "QTY"}
-                                        onChange={(e) => {
-                                            setBillingMode(e.target.value);
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
-                                            }));
-                                        }}
-                                    />
-                                    <label className="form-check-label" htmlFor="modeQTY">
-                                        By KG
-                                    </label>
-                                </div>
-                                <div className="form-check">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="billingMode"
-                                        id="modeCIF"
-                                        value="CIF_INR"
-                                        checked={billingMode === "CIF_INR"}
-                                        onChange={(e) => {
-                                            setBillingMode(e.target.value);
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
-                                            }));
-                                        }}
-                                    />
-                                    <label className="form-check-label" htmlFor="modeCIF">
-                                        By CIF INR (%)
-                                    </label>
-                                </div>
-                                <div className="form-check">
-                                    <input
-                                        className="form-check-input"
-                                        type="radio"
-                                        name="billingMode"
-                                        id="modeFOB"
-                                        value="FOB_INR"
-                                        checked={billingMode === "FOB_INR"}
-                                        onChange={(e) => {
-                                            setBillingMode(e.target.value);
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                lines: prev.lines.map(line => ({ ...line, mode: e.target.value }))
-                                            }));
-                                        }}
-                                    />
-                                    <label className="form-check-label" htmlFor="modeFOB">
-                                        By FOB INR (%)
-                                    </label>
+                        {/* Billing Mode card */}
+                        <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-calculator me-2" style={{ color: '#6366F1' }}></i>
+                                    Billing Mode
+                                </h6>
+                            </div>
+                            <div className="card-body p-4">
+                                <div className="d-flex gap-2 flex-wrap">
+                                    {[{ val:'QTY', label:'By Quantity (KG × Rate)', icon:'weight' },
+                                      { val:'CIF_INR', label:'By CIF INR (%)', icon:'currency-rupee' },
+                                      { val:'FOB_INR', label:'By FOB INR (%)', icon:'box-seam' }].map(m => (
+                                        <button key={m.val} type="button"
+                                            onClick={() => {
+                                                setBillingMode(m.val);
+                                                setFormData(prev => ({ ...prev, lines: prev.lines.map(line => ({ ...line, mode: m.val })) }));
+                                            }}
+                                            style={{
+                                                border: `2px solid ${billingMode === m.val ? '#6366F1' : '#e5e7eb'}`,
+                                                background: billingMode === m.val ? '#6366F118' : 'white',
+                                                color: billingMode === m.val ? '#6366F1' : '#6b7280',
+                                                borderRadius: '8px', padding: '8px 18px',
+                                                fontWeight: billingMode === m.val ? '600' : '500',
+                                                fontSize: '0.83rem', cursor: 'pointer', transition: 'all 0.15s',
+                                            }}>
+                                            <i className={`bi bi-${m.icon} me-2`}></i>{m.label}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Trade Lines Table - For DFIA */}
-                        <div className="table-responsive mb-3">
-                    <table className="table table-bordered table-sm">
-                        <thead className="table-light">
+                        {/* Trade Lines */}
+                        <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-list-ul me-2" style={{ color: '#4F46E5' }}></i>
+                                    Trade Lines
+                                    {formData.lines.length > 0 && (
+                                        <span className="badge ms-2 rounded-pill" style={{ backgroundColor: '#e0e7ff', color: '#4F46E5', fontSize: '0.7rem' }}>
+                                            {formData.lines.length}
+                                        </span>
+                                    )}
+                                </h6>
+                                <button type="button" className="btn btn-sm btn-outline-success"
+                                    onClick={handleAddLine} style={{ borderRadius: '8px' }}>
+                                    <i className="bi bi-plus-lg me-1"></i>Add Row
+                                </button>
+                            </div>
+                            <div className="card-body p-0">
+                        <div className="table-responsive">
+                    <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
+                        <thead style={{ background: 'var(--bs-gray-50)', borderBottom: '2px solid #e5e7eb' }}>
                             <tr>
-                                <th style={{ width: "3%" }}>#</th>
-                                <th style={{ width: "20%" }}>License (SR)</th>
-                                <th style={{ width: "10%" }}>HSN</th>
-                                <th style={{ width: "10%" }}>CIF $</th>
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "3%" }}>#</th>
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "22%" }}>License (SR)</th>
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "9%" }}>HSN</th>
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "9%" }}>CIF $</th>
                                 {billingMode === "CIF_INR" && (
                                     <>
-                                        <th style={{ width: "8%" }}>Exch Rate</th>
-                                        <th style={{ width: "10%" }}>CIF INR</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "8%" }}>Exch Rate</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "10%" }}>CIF INR</th>
                                     </>
                                 )}
                                 {billingMode === "FOB_INR" && (
-                                    <th style={{ width: "10%" }}>FOB INR</th>
+                                    <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "10%" }}>FOB INR</th>
                                 )}
                                 {billingMode === "QTY" && (
                                     <>
-                                        <th style={{ width: "10%" }}>Qty (KG)</th>
-                                        <th style={{ width: "10%" }}>Rate (INR/KG)</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "10%" }}>Qty (KG)</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "10%" }}>Rate (INR/KG)</th>
                                     </>
                                 )}
-                                {billingMode !== "QTY" && <th style={{ width: "8%" }}>Billing %</th>}
-                                <th style={{ width: "12%" }}>Amount</th>
+                                {billingMode !== "QTY" && <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "8%" }}>Billing %</th>}
+                                <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "12%" }}>Amount</th>
                                 <th style={{ width: "3%" }}></th>
                             </tr>
                         </thead>
@@ -1397,48 +1529,64 @@ export default function TradeForm() {
                                             placeholder="0.00"
                                         />
                                     </td>
-                                    <td className="text-center">
-                                        <button
-                                            type="button"
-                                            className="btn btn-danger btn-sm"
-                                            onClick={() => handleRemoveLine(index)}
-                                        >
+                                    <td className="text-center px-2">
+                                        <button type="button" className="btn btn-sm btn-outline-danger"
+                                            onClick={() => handleRemoveLine(index)} style={{ borderRadius: '6px', padding: '2px 8px' }}>
                                             <i className="bi bi-trash"></i>
                                         </button>
                                     </td>
                                 </tr>
                             ))}
-                            <tr className="table-secondary fw-bold">
-                                <td colSpan={billingMode === "QTY" ? 6 : (billingMode === "CIF_INR" ? 6 : 5)} className="text-end">Total</td>
-                                <td className="text-end">{calculateTotal().toFixed(2)}</td>
-                                <td></td>
-                            </tr>
+                            {formData.lines.length > 0 && (
+                                <tr style={{ background: '#f0fdf4', borderTop: '2px solid #a7f3d0' }}>
+                                    <td colSpan={billingMode === "QTY" ? 6 : (billingMode === "CIF_INR" ? 6 : 5)} className="text-end fw-semibold px-3 py-2" style={{ color: '#065f46' }}>Total Amount</td>
+                                    <td className="text-end fw-bold px-3 py-2" style={{ color: '#065f46' }}>₹{calculateTotal().toFixed(2)}</td>
+                                    <td></td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
-
-                <button
-                    type="button"
-                    className="btn btn-warning mb-4"
-                    onClick={handleAddLine}
-                >
-                    Add Row
-                </button>
+                </div>
+                </div>
+                {fieldErrors.lines && formData.lines.length === 0 && (
+                    <div className="alert alert-danger py-2 px-3 mt-2 small">
+                        <i className="bi bi-exclamation-circle me-1"></i>
+                        {Array.isArray(fieldErrors.lines) ? fieldErrors.lines[0] : fieldErrors.lines}
+                    </div>
+                )}
                     </>
                 )}
 
-                {/* Incentive License Lines Table - Only for INCENTIVE */}
+                {/* Incentive License Lines */}
                 {formData.license_type === "INCENTIVE" && (
                     <>
-                        <div className="table-responsive mb-3">
-                            <table className="table table-bordered table-sm">
-                                <thead className="table-light">
+                        <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '12px' }}>
+                            <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                                <h6 className="mb-0 fw-semibold">
+                                    <i className="bi bi-award me-2" style={{ color: '#f59e0b' }}></i>
+                                    Incentive Lines
+                                    {formData.incentive_lines.length > 0 && (
+                                        <span className="badge ms-2 rounded-pill" style={{ backgroundColor: '#fef3c7', color: '#92400e', fontSize: '0.7rem' }}>
+                                            {formData.incentive_lines.length}
+                                        </span>
+                                    )}
+                                </h6>
+                                <button type="button" className="btn btn-sm btn-outline-success"
+                                    onClick={handleAddIncentiveLine} style={{ borderRadius: '8px' }}>
+                                    <i className="bi bi-plus-lg me-1"></i>Add Row
+                                </button>
+                            </div>
+                            <div className="card-body p-0">
+                        <div className="table-responsive">
+                            <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
+                                <thead style={{ background: 'var(--bs-gray-50)', borderBottom: '2px solid #e5e7eb' }}>
                                     <tr>
-                                        <th style={{ width: "5%" }}>#</th>
-                                        <th style={{ width: "40%" }}>Incentive License</th>
-                                        <th style={{ width: "20%" }}>License Value (INR)</th>
-                                        <th style={{ width: "15%" }}>Rate (%)</th>
-                                        <th style={{ width: "15%" }}>Amount</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "5%" }}>#</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "40%" }}>Incentive License</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "20%" }}>License Value (INR)</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "15%" }}>Rate (%)</th>
+                                        <th className="px-3 py-2 text-muted fw-semibold" style={{ width: "15%" }}>Amount</th>
                                         <th style={{ width: "5%" }}></th>
                                     </tr>
                                 </thead>
@@ -1502,70 +1650,51 @@ export default function TradeForm() {
                                             </td>
                                         </tr>
                                     ))}
-                                    <tr className="table-secondary fw-bold">
-                                        <td colSpan={4} className="text-end">Total</td>
-                                        <td className="text-end">{calculateTotal().toFixed(2)}</td>
-                                        <td></td>
-                                    </tr>
+                                    {formData.incentive_lines.length > 0 && (
+                                        <tr style={{ background: '#f0fdf4', borderTop: '2px solid #a7f3d0' }}>
+                                            <td colSpan={4} className="text-end fw-semibold px-3 py-2" style={{ color: '#065f46' }}>Total Amount</td>
+                                            <td className="text-end fw-bold px-3 py-2" style={{ color: '#065f46' }}>₹{calculateTotal().toFixed(2)}</td>
+                                            <td></td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
-
-                        <button
-                            type="button"
-                            className="btn btn-warning mb-4"
-                            onClick={handleAddIncentiveLine}
-                        >
-                            Add Row
-                        </button>
+                        </div>
+                        </div>
+                        {fieldErrors.incentive_lines && formData.incentive_lines.length === 0 && (
+                            <div className="alert alert-danger py-2 px-3 mt-2 small">
+                                <i className="bi bi-exclamation-circle me-1"></i>
+                                {Array.isArray(fieldErrors.incentive_lines) ? fieldErrors.incentive_lines[0] : fieldErrors.incentive_lines}
+                            </div>
+                        )}
                     </>
                 )}
 
-                {/* Action Buttons - Matching Screenshot */}
-                <div className="d-flex gap-2 mb-4">
-                    <button
-                        type="submit"
-                        className="btn btn-warning"
-                        disabled={saving}
-                    >
-                        {saving ? "Saving..." : "Save Trade"}
+                {/* Action Buttons */}
+                <div className="d-flex align-items-center gap-2 mt-4 pt-3 mb-4" style={{ borderTop: '1px solid #e5e7eb' }}>
+                    <button type="submit" className="btn btn-primary" disabled={saving}
+                        style={{ padding: '10px 28px', fontWeight: '600', background: 'linear-gradient(135deg,#4F46E5,#4338CA)', border: 'none', borderRadius: '8px' }}>
+                        {saving ? <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</> : <><i className="bi bi-check-circle me-2"></i>Save Trade</>}
                     </button>
-                    <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}
-                    >
-                        <i className="bi bi-arrow-left me-2"></i>
-                        Back to Trades
+                    <button type="button" className="btn btn-outline-secondary" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}
+                        style={{ padding: '10px 20px', fontWeight: '500', borderRadius: '8px' }}>
+                        <i className="bi bi-x-lg me-2"></i>Cancel
                     </button>
                     {isEdit && (
                         <>
-                            <button
-                                type="button"
-                                className="btn btn-info"
-                                onClick={() => setShowTransferLetterModal(true)}
-                                title="Generate Transfer Letter"
-                            >
-                                <i className="bi bi-file-earmark-text me-1"></i>
-                                Generate Transfer Letter
+                            <button type="button" className="btn btn-outline-info" onClick={() => setShowTransferLetterModal(true)}
+                                style={{ padding: '10px 18px', fontWeight: '500', borderRadius: '8px' }}>
+                                <i className="bi bi-file-earmark-text me-1"></i>Transfer Letter
                             </button>
                             {formData.direction === 'SALE' && (
                                 <div className="btn-group">
-                                    <button
-                                        type="button"
-                                        className="btn btn-warning"
-                                        onClick={() => handleDownloadPDF(true)}
-                                        title="Download Bill of Supply with signature & stamp"
-                                    >
-                                        <i className="bi bi-file-pdf me-1"></i>
-                                        Bill of Supply
+                                    <button type="button" className="btn btn-outline-primary" onClick={() => handleDownloadPDF(true)}
+                                        style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
+                                        <i className="bi bi-file-pdf me-1"></i>Bill of Supply
                                     </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-warning dropdown-toggle dropdown-toggle-split"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false"
-                                    >
+                                    <button type="button" className="btn btn-outline-primary dropdown-toggle dropdown-toggle-split"
+                                        data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
                                         <span className="visually-hidden">Toggle Dropdown</span>
                                     </button>
                                     <ul className="dropdown-menu">
@@ -1600,21 +1729,12 @@ export default function TradeForm() {
                             )}
                             {formData.direction === 'PURCHASE' && (
                                 <div className="btn-group">
-                                    <button
-                                        type="button"
-                                        className="btn btn-success"
-                                        onClick={() => handleDownloadPurchaseInvoice(true)}
-                                        title="Download Purchase Invoice with signature & stamp"
-                                    >
-                                        <i className="bi bi-file-pdf me-1"></i>
-                                        Purchase Invoice
+                                    <button type="button" className="btn btn-outline-success" onClick={() => handleDownloadPurchaseInvoice(true)}
+                                        style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
+                                        <i className="bi bi-file-pdf me-1"></i>Purchase Invoice
                                     </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-success dropdown-toggle dropdown-toggle-split"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false"
-                                    >
+                                    <button type="button" className="btn btn-outline-success dropdown-toggle dropdown-toggle-split"
+                                        data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
                                         <span className="visually-hidden">Toggle Dropdown</span>
                                     </button>
                                     <ul className="dropdown-menu">

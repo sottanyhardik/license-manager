@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {useParams, useNavigate} from "react-router-dom";
+import { toast } from 'react-toastify';
 import api from "../api/axios";
 import TransferLetterForm from "../components/TransferLetterForm";
 
@@ -21,7 +22,7 @@ export default function BOETransferLetter({ boeId: propId, isModal = false, onCl
 
     const fetchBOE = async () => {
         try {
-            const {data} = await api.get(`/bill-of-entries/${id}/`);
+            const {data} = await api.get(`bill-of-entries/${id}/`);
             setBoe(data);
         } catch (err) {
             setError("Failed to load BOE details");
@@ -87,8 +88,8 @@ export default function BOETransferLetter({ boeId: propId, isModal = false, onCl
                             cif_fc: detail.cif_fc,
                             purchase_status: detail.purchase_status || 'N/A'
                         })) || []}
-                        onSuccess={(msg) => setSuccess(msg)}
-                        onError={(msg) => setError(msg)}
+                        onSuccess={(msg) => toast.success(msg)}
+                        onError={(msg) => toast.error(msg)}
                     />
                 </>
             )}

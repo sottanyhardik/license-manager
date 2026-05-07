@@ -1,338 +1,301 @@
-// Business-Grade Design System for License Manager
+// Design token system — all values reference CSS variables defined in App.css
 
 export const designTokens = {
-    // Color Palette - Professional Business Colors
     colors: {
-        // Primary - Professional Blue
         primary: {
-            50: '#e3f2fd',
-            100: '#bbdefb',
-            200: '#90caf9',
-            300: '#64b5f6',
-            400: '#42a5f5',
-            500: '#2196f3',
-            600: '#1e88e5',
-            700: '#1976d2',
-            800: '#1565c0',
-            900: '#0d47a1',
+            main:     'var(--primary-color)',
+            light:    'var(--primary-light)',
+            dark:     'var(--primary-dark)',
+            deeper:   'var(--primary-deeper)',
+            gradient: 'var(--primary-gradient)',
+            50:  'var(--indigo-50)',
+            100: 'var(--indigo-100)',
+            200: 'var(--indigo-200)',
+            300: 'var(--indigo-300)',
+            400: 'var(--indigo-400)',
+            500: 'var(--indigo-500)',
+            600: 'var(--indigo-600)',
+            700: 'var(--indigo-700)',
+            800: 'var(--indigo-800)',
+            900: 'var(--indigo-900)',
         },
-
-        // Secondary - Elegant Purple
-        secondary: {
-            50: '#f3e5f5',
-            100: '#e1bee7',
-            200: '#ce93d8',
-            300: '#ba68c8',
-            400: '#ab47bc',
-            500: '#9c27b0',
-            600: '#8e24aa',
-            700: '#7b1fa2',
-            800: '#6a1b9a',
-            900: '#4a148c',
-        },
-
-        // Success - Natural Green
         success: {
-            light: '#81c784',
-            main: '#2e7d32',
-            dark: '#1b5e20',
-            bg: '#e8f5e9',
+            main:   'var(--success-color)',
+            light:  'var(--success-light)',
+            bg:     'var(--success-bg)',
+            border: 'var(--success-border)',
+            text:   'var(--success-text)',
         },
-
-        // Warning - Warm Orange
+        danger: {
+            main:   'var(--danger-color)',
+            light:  'var(--danger-light)',
+            bg:     'var(--danger-bg)',
+            border: 'var(--danger-border)',
+            text:   'var(--danger-text)',
+        },
         warning: {
-            light: '#ffb74d',
-            main: '#f57c00',
-            dark: '#e65100',
-            bg: '#fff3e0',
+            main:   'var(--warning-color)',
+            light:  'var(--warning-light)',
+            bg:     'var(--warning-bg)',
+            border: 'var(--warning-border)',
+            text:   'var(--warning-text)',
         },
-
-        // Error - Refined Red
-        error: {
-            light: '#e57373',
-            main: '#d32f2f',
-            dark: '#c62828',
-            bg: '#ffebee',
-        },
-
-        // Info - Cool Cyan
         info: {
-            light: '#4fc3f7',
-            main: '#00acc1',
-            dark: '#00838f',
-            bg: '#e0f7fa',
+            main:   'var(--info-color)',
+            light:  'var(--info-light)',
+            bg:     'var(--info-bg)',
+            border: 'var(--info-border)',
+            text:   'var(--info-text)',
         },
-
-        // Neutrals - Professional Grays
+        secondary: {
+            main:  'var(--secondary-color)',
+            light: 'var(--secondary-light)',
+            dark:  'var(--secondary-dark)',
+        },
         neutral: {
-            0: '#ffffff',
-            50: '#fafafa',
-            100: '#f5f5f5',
-            200: '#eeeeee',
-            300: '#e0e0e0',
-            400: '#bdbdbd',
-            500: '#9e9e9e',
-            600: '#757575',
-            700: '#616161',
-            800: '#424242',
-            900: '#212121',
+            0:   'var(--surface-color)',
+            50:  'var(--gray-50)',
+            100: 'var(--gray-100)',
+            200: 'var(--gray-200)',
+            300: 'var(--gray-300)',
+            400: 'var(--gray-400)',
+            500: 'var(--gray-500)',
+            600: 'var(--gray-600)',
+            700: 'var(--gray-700)',
+            800: 'var(--gray-800)',
+            900: 'var(--gray-900)',
         },
-
-        // Text Colors
         text: {
-            primary: '#2c3e50',
-            secondary: '#5a6c7d',
-            disabled: '#9e9e9e',
-            white: '#ffffff',
+            primary:   'var(--text-primary)',
+            secondary: 'var(--text-secondary)',
+            tertiary:  'var(--text-tertiary)',
+            muted:     'var(--text-muted)',
+            dark:      'var(--text-dark)',
+            medium:    'var(--text-medium)',
+            light:     'var(--text-light)',
+            white:     '#ffffff',
         },
-
-        // Background Colors
         background: {
-            default: '#f8f9fa',
-            paper: '#ffffff',
-            elevated: '#ffffff',
+            default:  'var(--background-color)',
+            paper:    'var(--surface-color)',
+            hover:    'var(--surface-hover)',
+            elevated: 'var(--surface-color)',
         },
-
-        // Gradient Backgrounds
         gradients: {
-            primary: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            secondary: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-            success: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-            info: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-            warm: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-            cool: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+            primary:   'var(--primary-gradient)',
+            secondary: 'linear-gradient(135deg, var(--accent-color) 0%, var(--primary-dark) 100%)',
+            success:   'linear-gradient(135deg, var(--success-color) 0%, var(--success-light) 100%)',
+            info:      'linear-gradient(135deg, var(--info-color) 0%, var(--info-light) 100%)',
         },
     },
 
-    // Typography
     typography: {
         fontFamily: {
-            primary: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-            mono: '"Fira Code", "Courier New", monospace',
+            primary: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            mono:    '"Fira Code", "Courier New", monospace',
         },
         fontSize: {
-            xs: '0.75rem',      // 12px
-            sm: '0.875rem',     // 14px
-            base: '1rem',       // 16px
-            lg: '1.125rem',     // 18px
-            xl: '1.25rem',      // 20px
-            '2xl': '1.5rem',    // 24px
-            '3xl': '1.875rem',  // 30px
-            '4xl': '2.25rem',   // 36px
-            '5xl': '3rem',      // 48px
+            xs:   '0.75rem',
+            sm:   '0.875rem',
+            base: '1rem',
+            lg:   '1.125rem',
+            xl:   '1.25rem',
+            '2xl': '1.5rem',
+            '3xl': '1.875rem',
+            '4xl': '2.25rem',
+            '5xl': '3rem',
         },
         fontWeight: {
-            light: 300,
-            normal: 400,
-            medium: 500,
-            semibold: 600,
-            bold: 700,
+            light:     300,
+            normal:    400,
+            medium:    500,
+            semibold:  600,
+            bold:      700,
             extrabold: 800,
         },
         lineHeight: {
-            tight: 1.25,
-            normal: 1.5,
+            tight:   1.25,
+            normal:  1.5,
             relaxed: 1.75,
         },
     },
 
-    // Spacing Scale (8px base)
     spacing: {
         0: '0',
-        1: '0.25rem',   // 4px
-        2: '0.5rem',    // 8px
-        3: '0.75rem',   // 12px
-        4: '1rem',      // 16px
-        5: '1.25rem',   // 20px
-        6: '1.5rem',    // 24px
-        8: '2rem',      // 32px
-        10: '2.5rem',   // 40px
-        12: '3rem',     // 48px
-        16: '4rem',     // 64px
-        20: '5rem',     // 80px
+        1: '0.25rem',
+        2: '0.5rem',
+        3: '0.75rem',
+        4: '1rem',
+        5: '1.25rem',
+        6: '1.5rem',
+        8: '2rem',
+        10: '2.5rem',
+        12: '3rem',
+        16: '4rem',
+        20: '5rem',
     },
 
-    // Border Radius
     borderRadius: {
         none: '0',
-        sm: '0.25rem',      // 4px
-        base: '0.375rem',   // 6px
-        md: '0.5rem',       // 8px
-        lg: '0.75rem',      // 12px
-        xl: '1rem',         // 16px
-        '2xl': '1.5rem',    // 24px
+        sm:   '0.25rem',
+        base: '0.375rem',
+        md:   '0.5rem',
+        lg:   '0.75rem',
+        xl:   '1rem',
+        '2xl': '1.5rem',
         full: '9999px',
+        card: 'var(--card-radius)',
     },
 
-    // Shadows - Professional Depth
     shadows: {
         none: 'none',
-        sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-        base: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-        md: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-        lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-        xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-        '2xl': '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-        inner: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
+        sm:   'var(--shadow-sm)',
+        md:   'var(--shadow-md)',
+        lg:   'var(--shadow-lg)',
+        xl:   'var(--shadow-xl)',
+        card: 'var(--card-shadow)',
+        cardHover: 'var(--card-shadow-hover)',
+        modal: 'var(--card-shadow-modal)',
+        // Material elevation
+        e1: 'var(--elevation-1)',
+        e2: 'var(--elevation-2)',
+        e3: 'var(--elevation-3)',
+        e4: 'var(--elevation-4)',
+        e6: 'var(--elevation-6)',
     },
 
-    // Transitions
     transitions: {
-        fast: '150ms ease-in-out',
-        base: '200ms ease-in-out',
-        slow: '300ms ease-in-out',
+        fast:   '150ms ease-in-out',
+        base:   '200ms ease-in-out',
+        slow:   '300ms ease-in-out',
     },
 
-    // Z-Index Scale
     zIndex: {
-        dropdown: 1000,
-        sticky: 1020,
-        fixed: 1030,
+        dropdown:     1000,
+        sticky:       1020,
+        fixed:        1030,
         modalBackdrop: 1040,
-        modal: 1050,
-        popover: 1060,
-        tooltip: 1070,
+        modal:        1050,
+        popover:      1060,
+        tooltip:      1070,
     },
 };
 
-// Component Styles - Reusable Style Objects
+// Pre-built component style objects — import these in JSX instead of hardcoding colors
 export const componentStyles = {
-    // Card Styles
     card: {
         default: {
-            backgroundColor: designTokens.colors.background.paper,
-            borderRadius: designTokens.borderRadius.lg,
-            boxShadow: designTokens.shadows.sm,
-            border: 'none',
+            backgroundColor: 'var(--surface-color)',
+            borderRadius:    'var(--card-radius)',
+            boxShadow:       'var(--card-shadow)',
+            border:          'none',
         },
         elevated: {
-            backgroundColor: designTokens.colors.background.paper,
-            borderRadius: designTokens.borderRadius.lg,
-            boxShadow: designTokens.shadows.md,
-            border: 'none',
-        },
-        hoverable: {
-            transition: designTokens.transitions.base,
-            cursor: 'pointer',
-            ':hover': {
-                boxShadow: designTokens.shadows.lg,
-                transform: 'translateY(-2px)',
-            },
+            backgroundColor: 'var(--surface-color)',
+            borderRadius:    'var(--card-radius)',
+            boxShadow:       'var(--elevation-3)',
+            border:          'none',
         },
     },
 
-    // Button Styles
+    pageHeader: {
+        gradient: {
+            background:   'var(--primary-gradient)',
+            padding:      '32px',
+            borderRadius: 'var(--card-radius)',
+            boxShadow:    'var(--elevation-2)',
+            color:        '#ffffff',
+            marginBottom: '24px',
+        },
+        container: {
+            backgroundColor: 'var(--background-color)',
+            minHeight:       '100vh',
+            padding:         '24px',
+        },
+    },
+
     button: {
         base: {
-            fontWeight: designTokens.typography.fontWeight.medium,
-            borderRadius: designTokens.borderRadius.md,
-            transition: designTokens.transitions.base,
-            padding: `${designTokens.spacing[2]} ${designTokens.spacing[4]}`,
-            fontSize: designTokens.typography.fontSize.sm,
+            fontWeight:   500,
+            borderRadius: '0.5rem',
+            transition:   '200ms ease-in-out',
+            fontSize:     '0.875rem',
         },
         primary: {
-            background: designTokens.colors.gradients.primary,
-            color: designTokens.colors.text.white,
-            border: 'none',
+            background:   'var(--primary-gradient)',
+            color:        '#ffffff',
+            border:       'none',
         },
-        secondary: {
-            backgroundColor: designTokens.colors.neutral[100],
-            color: designTokens.colors.text.primary,
-            border: `1px solid ${designTokens.colors.neutral[300]}`,
-        },
-    },
-
-    // Input Styles
-    input: {
-        base: {
-            borderRadius: designTokens.borderRadius.md,
-            border: `1px solid ${designTokens.colors.neutral[300]}`,
-            padding: `${designTokens.spacing[2]} ${designTokens.spacing[3]}`,
-            fontSize: designTokens.typography.fontSize.sm,
-            transition: designTokens.transitions.base,
-            ':focus': {
-                outline: 'none',
-                borderColor: designTokens.colors.primary[500],
-                boxShadow: `0 0 0 3px ${designTokens.colors.primary[50]}`,
-            },
-        },
-        error: {
-            borderColor: designTokens.colors.error.main,
-            ':focus': {
-                boxShadow: `0 0 0 3px ${designTokens.colors.error.bg}`,
-            },
+        ghost: {
+            backgroundColor: 'rgba(255,255,255,0.15)',
+            border:          '1px solid rgba(255,255,255,0.3)',
+            color:           '#ffffff',
+            backdropFilter:  'blur(10px)',
         },
     },
 
-    // Badge Styles
     badge: {
-        base: {
-            fontSize: designTokens.typography.fontSize.xs,
-            fontWeight: designTokens.typography.fontWeight.semibold,
-            padding: `${designTokens.spacing[1]} ${designTokens.spacing[3]}`,
-            borderRadius: designTokens.borderRadius.base,
-        },
+        primary: { backgroundColor: 'var(--badge-primary-bg)', color: 'var(--badge-primary-color)', borderRadius: '6px', padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600 },
+        success: { backgroundColor: 'var(--badge-success-bg)', color: 'var(--badge-success-color)', borderRadius: '6px', padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600 },
+        danger:  { backgroundColor: 'var(--badge-danger-bg)',  color: 'var(--badge-danger-color)',  borderRadius: '6px', padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600 },
+        warning: { backgroundColor: 'var(--badge-warning-bg)', color: 'var(--badge-warning-color)', borderRadius: '6px', padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600 },
+        info:    { backgroundColor: 'var(--badge-info-bg)',    color: 'var(--badge-info-color)',    borderRadius: '6px', padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600 },
+        gray:    { backgroundColor: 'var(--badge-gray-bg)',    color: 'var(--badge-gray-color)',    borderRadius: '6px', padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600 },
     },
 
-    // Table Styles
     table: {
         header: {
-            backgroundColor: designTokens.colors.neutral[50],
-            borderBottom: `2px solid ${designTokens.colors.neutral[200]}`,
-            padding: designTokens.spacing[4],
-            fontSize: designTokens.typography.fontSize.xs,
-            fontWeight: designTokens.typography.fontWeight.bold,
-            color: designTokens.colors.text.secondary,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
+            backgroundColor: 'var(--gray-50)',
+            borderBottom:    '2px solid var(--divider-color)',
+            padding:         '1rem',
+            fontSize:        '0.75rem',
+            fontWeight:      700,
+            color:           'var(--text-secondary)',
+            textTransform:   'uppercase',
+            letterSpacing:   '0.5px',
         },
         cell: {
-            padding: designTokens.spacing[4],
-            borderBottom: `1px solid ${designTokens.colors.neutral[100]}`,
-            fontSize: designTokens.typography.fontSize.sm,
+            padding:      '1rem',
+            borderBottom: '1px solid var(--divider-color)',
+            fontSize:     '0.875rem',
             verticalAlign: 'middle',
-        },
-        row: {
-            transition: designTokens.transitions.fast,
-            ':hover': {
-                backgroundColor: designTokens.colors.neutral[50],
-            },
         },
     },
 
-    // Modal Styles
     modal: {
         backdrop: {
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            backdropFilter: 'blur(4px)',
+            backdropFilter:  'blur(4px)',
         },
         content: {
-            backgroundColor: designTokens.colors.background.paper,
-            borderRadius: designTokens.borderRadius.xl,
-            boxShadow: designTokens.shadows['2xl'],
-            maxWidth: '600px',
-            margin: 'auto',
+            backgroundColor: 'var(--surface-color)',
+            borderRadius:    'var(--card-radius)',
+            boxShadow:       'var(--card-shadow-modal)',
         },
     },
 
-    // Page Header Styles
-    pageHeader: {
-        gradient: {
-            background: designTokens.colors.gradients.primary,
-            padding: designTokens.spacing[8],
-            borderRadius: designTokens.borderRadius.xl,
-            boxShadow: designTokens.shadows.md,
-            color: designTokens.colors.text.white,
+    input: {
+        base: {
+            borderRadius:    '0.5rem',
+            border:          '1px solid var(--border-light)',
+            padding:         '0.5rem 0.75rem',
+            fontSize:        '0.875rem',
+            backgroundColor: 'var(--surface-color)',
         },
-        simple: {
-            marginBottom: designTokens.spacing[6],
-        },
+    },
+
+    // Status indicator strips (left-border cards)
+    statusStrip: {
+        success: { borderLeft: '4px solid var(--success-color)' },
+        danger:  { borderLeft: '4px solid var(--danger-color)' },
+        warning: { borderLeft: '4px solid var(--warning-color)' },
+        info:    { borderLeft: '4px solid var(--info-color)' },
+        primary: { borderLeft: '4px solid var(--primary-color)' },
     },
 };
 
-// Utility Functions
+// Utility functions
 export const utilities = {
-    // Format Indian Currency
     formatIndianCurrency: (value, decimals = 2) => {
         return new Intl.NumberFormat('en-IN', {
             minimumFractionDigits: decimals,
@@ -340,21 +303,20 @@ export const utilities = {
         }).format(value);
     },
 
-    // Get Color by Status
     getStatusColor: (status) => {
-        const statusColors = {
-            success: designTokens.colors.success.main,
-            warning: designTokens.colors.warning.main,
-            error: designTokens.colors.error.main,
-            info: designTokens.colors.info.main,
-            pending: designTokens.colors.warning.main,
-            active: designTokens.colors.success.main,
-            inactive: designTokens.colors.neutral[400],
+        const map = {
+            success:  'var(--success-color)',
+            warning:  'var(--warning-color)',
+            error:    'var(--danger-color)',
+            danger:   'var(--danger-color)',
+            info:     'var(--info-color)',
+            pending:  'var(--warning-color)',
+            active:   'var(--success-color)',
+            inactive: 'var(--gray-400)',
         };
-        return statusColors[status?.toLowerCase()] || designTokens.colors.neutral[500];
+        return map[status?.toLowerCase()] || 'var(--gray-500)';
     },
 
-    // Responsive Breakpoints
     breakpoints: {
         xs: '0px',
         sm: '576px',

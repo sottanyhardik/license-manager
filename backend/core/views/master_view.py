@@ -346,8 +346,8 @@ class MasterViewSet(viewsets.ModelViewSet):
                                 # Single value exact match
                                 q_objects.append(Q(**{field_name: value}))
 
-                    elif filter_type == "choice":
-                        # Choice field filter - supports multi-select (comma-separated values or array format)
+                    elif filter_type in ("choice", "button_group"):
+                        # Choice/button_group field filter - supports multi-select (comma-separated values or array format)
                         value = params.get(field_name)
                         array_values = params.getlist(f"{field_name}[]")  # Handle array format
 
@@ -654,7 +654,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                         try:
                             if len(str(cell.value)) > max_length:
                                 max_length = len(str(cell.value))
-                        except:
+                        except (TypeError, AttributeError):
                             pass
                     adjusted_width = min(max_length + 2, 50)
                     ws.column_dimensions[column_letter].width = adjusted_width

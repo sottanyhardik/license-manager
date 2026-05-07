@@ -175,7 +175,7 @@ class BaseExcelExporter(BaseExporter):
                 try:
                     if cell.value:
                         max_length = max(max_length, len(str(cell.value)))
-                except:
+                except (TypeError, AttributeError):
                     pass
 
             adjusted_width = min(max(max_length + 2, min_width), max_width)

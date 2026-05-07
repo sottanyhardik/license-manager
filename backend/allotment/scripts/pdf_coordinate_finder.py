@@ -9,7 +9,7 @@ Usage:
 """
 
 import sys
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 

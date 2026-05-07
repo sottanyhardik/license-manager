@@ -37,7 +37,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
     const fetchAllotmentData = async () => {
         setInitialLoad(true);
         try {
-            const { data } = await api.get(`/allotments/${allotmentId}/`);
+            const { data } = await api.get(`allotments/${allotmentId}/`);
 
             setFormData({
                 company: data.company ? { value: data.company, label: data.company_name } : null,
@@ -67,7 +67,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
         setInitialLoad(true);
         try {
             // Fetch the latest exchange rate
-            const { data } = await api.get('/masters/exchange-rates/', {
+            const { data } = await api.get('masters/exchange-rates/', {
                 params: { page_size: 1, ordering: '-date' }
             });
 
@@ -115,7 +115,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
     const loadCompanyOptions = async (inputValue) => {
         try {
-            const { data } = await api.get('/masters/companies/', {
+            const { data } = await api.get('masters/companies/', {
                 params: { search: inputValue, page_size: 50 }
             });
             return data.results.map(company => ({
@@ -130,7 +130,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
     const loadPortOptions = async (inputValue) => {
         try {
-            const { data } = await api.get('/masters/ports/', {
+            const { data } = await api.get('masters/ports/', {
                 params: { search: inputValue, page_size: 50 }
             });
             return data.results.map(port => ({
@@ -169,10 +169,10 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
             let savedId = allotmentId;
             if (mode === 'edit') {
-                await api.put(`/allotments/${allotmentId}/`, payload);
+                await api.put(`allotments/${allotmentId}/`, payload);
                 toast.success('Allotment updated successfully');
             } else {
-                const response = await api.post('/allotments/', payload);
+                const response = await api.post('allotments/', payload);
                 savedId = response.data.id;
                 toast.success('Allotment created successfully');
             }
@@ -278,7 +278,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                     border: 'none'
                 }}>
                     <div className="modal-header" style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                         color: 'white',
                         borderTopLeftRadius: '12px',
                         borderTopRightRadius: '12px',
@@ -303,7 +303,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                     </div>
 
                     <form onSubmit={handleSubmit}>
-                        <div className="modal-body" style={{ padding: '2rem', backgroundColor: '#f8f9fa' }}>
+                        <div className="modal-body" style={{ padding: '2rem', backgroundColor: 'var(--bs-gray-50)' }}>
                             {/* Non-Field Errors */}
                             {nonFieldErrors.length > 0 && (
                                 <div className="alert alert-danger mb-3" role="alert">
@@ -316,222 +316,253 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
                             {initialLoad ? (
                                 <div className="text-center py-5">
-                                    <div className="spinner-border" style={{ color: '#667eea' }}></div>
-                                    <p className="mt-2">Loading...</p>
+                                    <div className="spinner-border" style={{ color: 'var(--primary-color)' }}></div>
+                                    <p className="mt-2 text-muted">Loading...</p>
                                 </div>
                             ) : (
-                                <div className="row g-3">
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">Company *</label>
-                                        <AsyncSelect
-                                            cacheOptions
-                                            defaultOptions
-                                            value={formData.company}
-                                            loadOptions={loadCompanyOptions}
-                                            onChange={(value) => handleChange('company', value)}
-                                            placeholder="Search company..."
-                                            isClearable
-                                            required
-                                            className={getFieldError(fieldErrors, 'company') ? 'is-invalid' : ''}
-                                        />
-                                        {getFieldError(fieldErrors, 'company') && (
-                                            <div className="invalid-feedback d-block">
-                                                {getFieldError(fieldErrors, 'company')}
+                                <div className="d-flex flex-column gap-3">
+
+                                    {/* Section: Basic Information */}
+                                    <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #4F46E5' }}>
+                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4F46E5', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <i className="bi bi-building"></i> Basic Information
+                                        </div>
+                                        <div className="row g-3">
+                                            <div className="col-md-6">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Company <span className="text-danger">*</span></label>
+                                                <AsyncSelect
+                                                    cacheOptions
+                                                    defaultOptions
+                                                    value={formData.company}
+                                                    loadOptions={loadCompanyOptions}
+                                                    onChange={(value) => handleChange('company', value)}
+                                                    placeholder="Search company..."
+                                                    isClearable
+                                                    required
+                                                    className={getFieldError(fieldErrors, 'company') ? 'is-invalid' : ''}
+                                                />
+                                                {getFieldError(fieldErrors, 'company') && (
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>
+                                                        <i className="bi bi-exclamation-circle me-1"></i>{getFieldError(fieldErrors, 'company')}
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">Type</label>
-                                        <select
-                                            className="form-select"
-                                            value={formData.type}
-                                            onChange={(e) => handleChange('type', e.target.value)}
-                                        >
-                                            <option value="AT">Allotment</option>
-                                            <option value="UT">Utilization</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">Port *</label>
-                                        <AsyncSelect
-                                            cacheOptions
-                                            defaultOptions
-                                            value={formData.port}
-                                            loadOptions={loadPortOptions}
-                                            onChange={(value) => handleChange('port', value)}
-                                            placeholder="Search port..."
-                                            isClearable
-                                            required
-                                            className={getFieldError(fieldErrors, 'port') ? 'is-invalid' : ''}
-                                        />
-                                        {getFieldError(fieldErrors, 'port') && (
-                                            <div className="invalid-feedback d-block">
-                                                {getFieldError(fieldErrors, 'port')}
+                                            <div className="col-md-3">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Type</label>
+                                                <select
+                                                    className="form-select"
+                                                    value={formData.type}
+                                                    onChange={(e) => handleChange('type', e.target.value)}
+                                                >
+                                                    <option value="AT">Allotment</option>
+                                                    <option value="UT">Utilization</option>
+                                                </select>
                                             </div>
-                                        )}
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">Item Name</label>
-                                        <input
-                                            type="text"
-                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'item_name')}`}
-                                            value={formData.item_name}
-                                            onChange={(e) => handleChange('item_name', e.target.value)}
-                                            placeholder="Enter item name"
-                                        />
-                                        {getFieldError(fieldErrors, 'item_name') && (
-                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'item_name')}</div>
-                                        )}
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">Required Quantity</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'required_quantity')}`}
-                                            value={formData.required_quantity}
-                                            onChange={(e) => handleChange('required_quantity', e.target.value)}
-                                            placeholder="Enter required quantity"
-                                        />
-                                        {getFieldError(fieldErrors, 'required_quantity') && (
-                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'required_quantity')}</div>
-                                        )}
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">CIF INR</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'cif_inr')}`}
-                                            value={formData.cif_inr}
-                                            onChange={(e) => handleChange('cif_inr', e.target.value)}
-                                            placeholder="Enter CIF INR"
-                                        />
-                                        {getFieldError(fieldErrors, 'cif_inr') && (
-                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'cif_inr')}</div>
-                                        )}
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">Exchange Rate</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'exchange_rate')}`}
-                                            value={formData.exchange_rate}
-                                            onChange={(e) => handleChange('exchange_rate', e.target.value)}
-                                            placeholder="Enter exchange rate"
-                                        />
-                                        {getFieldError(fieldErrors, 'exchange_rate') && (
-                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'exchange_rate')}</div>
-                                        )}
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">CIF FC</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'cif_fc')}`}
-                                            value={formData.cif_fc}
-                                            onChange={(e) => handleChange('cif_fc', e.target.value)}
-                                            placeholder="Enter CIF FC"
-                                        />
-                                        {getFieldError(fieldErrors, 'cif_fc') && (
-                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'cif_fc')}</div>
-                                        )}
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">Unit Value Per Unit</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'unit_value_per_unit')}`}
-                                            value={formData.unit_value_per_unit}
-                                            onChange={(e) => handleChange('unit_value_per_unit', e.target.value)}
-                                            placeholder="Enter unit value"
-                                        />
-                                        {getFieldError(fieldErrors, 'unit_value_per_unit') && (
-                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'unit_value_per_unit')}</div>
-                                        )}
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">Invoice</label>
-                                        <input
-                                            type="text"
-                                            className={`form-control ${getFieldErrorClass(fieldErrors, 'invoice')}`}
-                                            value={formData.invoice}
-                                            onChange={(e) => handleChange('invoice', e.target.value)}
-                                            placeholder="Enter invoice"
-                                        />
-                                        {getFieldError(fieldErrors, 'invoice') && (
-                                            <div className="invalid-feedback">{getFieldError(fieldErrors, 'invoice')}</div>
-                                        )}
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <label className="form-label fw-bold">Estimated Arrival Date</label>
-                                        <input
-                                            type="date"
-                                            className="form-control"
-                                            value={formData.estimated_arrival_date}
-                                            onChange={(e) => handleChange('estimated_arrival_date', e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div className="col-md-12">
-                                        <label className="form-label fw-bold">BL Detail</label>
-                                        <textarea
-                                            className="form-control"
-                                            rows="2"
-                                            value={formData.bl_detail}
-                                            onChange={(e) => handleChange('bl_detail', e.target.value)}
-                                            placeholder="Enter BL detail"
-                                        />
-                                    </div>
-
-                                    <div className="col-md-6">
-                                        <div className="form-check">
-                                            <input
-                                                className="form-check-input"
-                                                type="checkbox"
-                                                id="isBoe"
-                                                checked={formData.is_boe}
-                                                onChange={(e) => handleChange('is_boe', e.target.checked)}
-                                            />
-                                            <label className="form-check-label fw-bold" htmlFor="isBoe">
-                                                Is BOE
-                                            </label>
+                                            <div className="col-md-3">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Port <span className="text-danger">*</span></label>
+                                                <AsyncSelect
+                                                    cacheOptions
+                                                    defaultOptions
+                                                    value={formData.port}
+                                                    loadOptions={loadPortOptions}
+                                                    onChange={(value) => handleChange('port', value)}
+                                                    placeholder="Search port..."
+                                                    isClearable
+                                                    required
+                                                    className={getFieldError(fieldErrors, 'port') ? 'is-invalid' : ''}
+                                                />
+                                                {getFieldError(fieldErrors, 'port') && (
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>
+                                                        <i className="bi bi-exclamation-circle me-1"></i>{getFieldError(fieldErrors, 'port')}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Item Name</label>
+                                                <input
+                                                    type="text"
+                                                    className={`form-control ${getFieldErrorClass(fieldErrors, 'item_name')}`}
+                                                    value={formData.item_name}
+                                                    onChange={(e) => handleChange('item_name', e.target.value)}
+                                                    placeholder="Enter item name"
+                                                />
+                                                {getFieldError(fieldErrors, 'item_name') && (
+                                                    <div className="invalid-feedback" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'item_name')}</div>
+                                                )}
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Required Quantity</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    className={`form-control ${getFieldErrorClass(fieldErrors, 'required_quantity')}`}
+                                                    value={formData.required_quantity}
+                                                    onChange={(e) => handleChange('required_quantity', e.target.value)}
+                                                    placeholder="0.00"
+                                                />
+                                                {getFieldError(fieldErrors, 'required_quantity') && (
+                                                    <div className="invalid-feedback" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'required_quantity')}</div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="col-md-6">
-                                        <div className="form-check">
-                                            <input
-                                                className="form-check-input"
-                                                type="checkbox"
-                                                id="isApproved"
-                                                checked={formData.is_approved}
-                                                onChange={(e) => handleChange('is_approved', e.target.checked)}
-                                            />
-                                            <label className="form-check-label fw-bold" htmlFor="isApproved">
-                                                Approved
-                                            </label>
+                                    {/* Section: Financial Details */}
+                                    <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #10b981' }}>
+                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10b981', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <i className="bi bi-currency-dollar"></i> Financial Details
+                                        </div>
+                                        <div className="row g-3">
+                                            <div className="col-md-3">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>CIF INR</label>
+                                                <div className="input-group">
+                                                    <span className="input-group-text" style={{ fontSize: '0.8rem' }}>₹</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        className={`form-control ${getFieldErrorClass(fieldErrors, 'cif_inr')}`}
+                                                        value={formData.cif_inr}
+                                                        onChange={(e) => handleChange('cif_inr', e.target.value)}
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                                {getFieldError(fieldErrors, 'cif_inr') && (
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'cif_inr')}</div>
+                                                )}
+                                            </div>
+                                            <div className="col-md-3">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Exchange Rate</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    className={`form-control ${getFieldErrorClass(fieldErrors, 'exchange_rate')}`}
+                                                    value={formData.exchange_rate}
+                                                    onChange={(e) => handleChange('exchange_rate', e.target.value)}
+                                                    placeholder="e.g. 83.50"
+                                                />
+                                                {getFieldError(fieldErrors, 'exchange_rate') && (
+                                                    <div className="invalid-feedback" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'exchange_rate')}</div>
+                                                )}
+                                            </div>
+                                            <div className="col-md-3">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>CIF FC</label>
+                                                <div className="input-group">
+                                                    <span className="input-group-text" style={{ fontSize: '0.8rem' }}>$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        className={`form-control ${getFieldErrorClass(fieldErrors, 'cif_fc')}`}
+                                                        value={formData.cif_fc}
+                                                        onChange={(e) => handleChange('cif_fc', e.target.value)}
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                                {getFieldError(fieldErrors, 'cif_fc') && (
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'cif_fc')}</div>
+                                                )}
+                                            </div>
+                                            <div className="col-md-3">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Unit Value / Unit</label>
+                                                <div className="input-group">
+                                                    <span className="input-group-text" style={{ fontSize: '0.8rem' }}>$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.001"
+                                                        className={`form-control ${getFieldErrorClass(fieldErrors, 'unit_value_per_unit')}`}
+                                                        value={formData.unit_value_per_unit}
+                                                        onChange={(e) => handleChange('unit_value_per_unit', e.target.value)}
+                                                        placeholder="0.000"
+                                                    />
+                                                </div>
+                                                {getFieldError(fieldErrors, 'unit_value_per_unit') && (
+                                                    <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'unit_value_per_unit')}</div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
+
+                                    {/* Section: Additional Info */}
+                                    <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #f59e0b' }}>
+                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#d97706', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <i className="bi bi-file-text"></i> Additional Info
+                                        </div>
+                                        <div className="row g-3">
+                                            <div className="col-md-4">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Invoice</label>
+                                                <input
+                                                    type="text"
+                                                    className={`form-control ${getFieldErrorClass(fieldErrors, 'invoice')}`}
+                                                    value={formData.invoice}
+                                                    onChange={(e) => handleChange('invoice', e.target.value)}
+                                                    placeholder="Invoice number"
+                                                />
+                                                {getFieldError(fieldErrors, 'invoice') && (
+                                                    <div className="invalid-feedback" style={{ fontSize: '0.78rem' }}>{getFieldError(fieldErrors, 'invoice')}</div>
+                                                )}
+                                            </div>
+                                            <div className="col-md-4">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Estimated Arrival Date</label>
+                                                <input
+                                                    type="date"
+                                                    className="form-control"
+                                                    value={formData.estimated_arrival_date}
+                                                    onChange={(e) => handleChange('estimated_arrival_date', e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="col-md-4">
+                                                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>BL Detail</label>
+                                                <textarea
+                                                    className="form-control"
+                                                    rows="1"
+                                                    value={formData.bl_detail}
+                                                    onChange={(e) => handleChange('bl_detail', e.target.value)}
+                                                    placeholder="BL detail"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Section: Status */}
+                                    <div style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #6366F1' }}>
+                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6366F1', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <i className="bi bi-toggle-on"></i> Status Flags
+                                        </div>
+                                        <div className="d-flex gap-4">
+                                            <div className="form-check form-switch">
+                                                <input
+                                                    className="form-check-input"
+                                                    type="checkbox"
+                                                    role="switch"
+                                                    id="isBoe"
+                                                    checked={formData.is_boe}
+                                                    onChange={(e) => handleChange('is_boe', e.target.checked)}
+                                                />
+                                                <label className="form-check-label" htmlFor="isBoe" style={{ fontWeight: '500' }}>
+                                                    Is BOE
+                                                </label>
+                                            </div>
+                                            <div className="form-check form-switch">
+                                                <input
+                                                    className="form-check-input"
+                                                    type="checkbox"
+                                                    role="switch"
+                                                    id="isApproved"
+                                                    checked={formData.is_approved}
+                                                    onChange={(e) => handleChange('is_approved', e.target.checked)}
+                                                />
+                                                <label className="form-check-label" htmlFor="isApproved" style={{ fontWeight: '500' }}>
+                                                    Approved
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                 </div>
                             )}
                         </div>
 
                         <div className="modal-footer" style={{
-                            backgroundColor: '#f8f9fa',
+                            backgroundColor: 'var(--bs-gray-50)',
                             borderTop: '1px solid #dee2e6',
                             padding: '1rem 2rem'
                         }}>
@@ -548,7 +579,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                 className="btn"
                                 disabled={loading || initialLoad}
                                 style={{
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                     color: 'white',
                                     border: 'none'
                                 }}

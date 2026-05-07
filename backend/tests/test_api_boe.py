@@ -54,6 +54,15 @@ class TestBillOfEntryAPI:
         
         assert response.status_code == status.HTTP_200_OK
 
+    def test_search_boe_by_license_number(self, authenticated_client, test_bill_of_entry):
+        """Test GET /bill-of-entries/?search={license_number}"""
+        url = reverse('billofentry-list')
+        response = authenticated_client.get(url, {'search': test_bill_of_entry.license.license_number})
+
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data.get('results', response.data)
+        assert any(item['id'] == test_bill_of_entry.id for item in results)
+
 
 @pytest.mark.api
 @pytest.mark.integration

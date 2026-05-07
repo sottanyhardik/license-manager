@@ -1,9 +1,10 @@
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useState, useMemo} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
 import {toast} from "react-toastify";
 import Select from "react-select";
+import {useDebouncedFilters} from "../../hooks/useDebounce";
 
 export default function ItemReport() {
     const [reportData, setReportData] = useState(null);
@@ -20,11 +21,37 @@ export default function ItemReport() {
     const [excludeCompanies, setExcludeCompanies] = useState([]);
     const [isRestricted, setIsRestricted] = useState('all'); // 'all', 'true', 'false'
     const [purchaseStatus, setPurchaseStatus] = useState(['GE', 'MI', 'SM']); // Default: GE, MI, SM
+    const [productDescSearch, setProductDescSearch] = useState('');
+    const [hsnCodeSearch, setHsnCodeSearch] = useState('');
+    const [selectedNorms, setSelectedNorms] = useState([]);
+    const [selectedNotifications, setSelectedNotifications] = useState([]);
+    const [expiryDateFrom, setExpiryDateFrom] = useState('');
+    const [expiryDateTo, setExpiryDateTo] = useState('');
 
     // Inline edit states
     const [editingCell, setEditingCell] = useState(null); // {itemId, field}
     const [editValue, setEditValue] = useState("");
     const [togglingRestriction, setTogglingRestriction] = useState({});
+
+    // Debounce all filters together - wait 500ms after last change
+    const filters = useMemo(() => ({
+        selectedItemNames,
+        minBalance,
+        minAvailQty,
+        licenseStatus,
+        selectedCompanies,
+        excludeCompanies,
+        isRestricted,
+        purchaseStatus,
+        productDescSearch,
+        hsnCodeSearch,
+        selectedNorms,
+        selectedNotifications,
+        expiryDateFrom,
+        expiryDateTo
+    }), [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus, productDescSearch, hsnCodeSearch, selectedNorms, selectedNotifications, expiryDateFrom, expiryDateTo]);
+
+    const { debouncedFilters, isPending } = useDebouncedFilters(filters, 500);
 
     useEffect(() => {
         let isMounted = true;
@@ -52,42 +79,80 @@ export default function ItemReport() {
     }, []);
 
     useEffect(() => {
-        // Only load report if at least one item name is selected
-        if (selectedItemNames.length > 0) {
+        // Load report if at least one item name is selected OR if searching by product description or HSN code
+        // Uses debounced filters to avoid excessive API calls
+        if (debouncedFilters.selectedItemNames.length > 0 || debouncedFilters.productDescSearch || debouncedFilters.hsnCodeSearch) {
             loadReport();
         } else {
             setReportData(null);
         }
-    }, [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus]);
+    }, [debouncedFilters]);
 
     const loadReport = async () => {
         setLoading(true);
         try {
             let url = `reports/item-report/?format=json`;
 
-            if (selectedItemNames.length > 0) {
-                url += `&item_names=${selectedItemNames.join(',')}`;
+            // Use debounced filter values
+            const {
+                selectedItemNames: items,
+                selectedCompanies: companies,
+                excludeCompanies: excluded,
+                minBalance: minBal,
+                minAvailQty: minQty,
+                licenseStatus: status,
+                isRestricted: restricted,
+                purchaseStatus: pStatus,
+                productDescSearch: prodDesc,
+                hsnCodeSearch: hsnCode,
+                selectedNorms: norms,
+                selectedNotifications: notifications,
+                expiryDateFrom: expFrom,
+                expiryDateTo: expTo
+            } = debouncedFilters;
+
+            if (items.length > 0) {
+                url += `&item_names=${items.join(',')}`;
             }
 
-            if (selectedCompanies.length > 0) {
-                url += `&company_ids=${selectedCompanies.join(',')}`;
+            if (companies.length > 0) {
+                url += `&company_ids=${companies.join(',')}`;
             }
 
-            if (excludeCompanies.length > 0) {
-                url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
+            if (excluded.length > 0) {
+                url += `&exclude_company_ids=${excluded.join(',')}`;
             }
 
-            url += `&min_balance=${minBalance}`;
-            url += `&min_avail_qty=${minAvailQty}`;
-            url += `&license_status=${licenseStatus}`;
+            url += `&min_balance=${minBal}`;
+            url += `&min_avail_qty=${minQty}`;
+            url += `&license_status=${status}`;
 
-            if (isRestricted !== 'all') {
-                url += `&is_restricted=${isRestricted}`;
+            if (restricted !== 'all') {
+                url += `&is_restricted=${restricted}`;
             }
 
-            if (purchaseStatus.length > 0) {
-                url += `&purchase_status=${purchaseStatus.join(',')}`;
+            if (pStatus.length > 0) {
+                url += `&purchase_status=${pStatus.join(',')}`;
             }
+
+            if (prodDesc) {
+                url += `&product_description=${encodeURIComponent(prodDesc)}`;
+            }
+
+            if (hsnCode) {
+                url += `&hsn_code=${encodeURIComponent(hsnCode)}`;
+            }
+
+            if (norms.length > 0) {
+                url += `&norms=${norms.join(',')}`;
+            }
+
+            if (notifications.length > 0) {
+                url += `&notification_numbers=${notifications.join(',')}`;
+            }
+
+            if (expFrom) url += `&expiry_date_from=${expFrom}`;
+            if (expTo) url += `&expiry_date_to=${expTo}`;
 
             const response = await api.get(url);
             setReportData(response.data);
@@ -128,6 +193,25 @@ export default function ItemReport() {
                 url += `&purchase_status=${purchaseStatus.join(',')}`;
             }
 
+            if (productDescSearch) {
+                url += `&product_description=${encodeURIComponent(productDescSearch)}`;
+            }
+
+            if (hsnCodeSearch) {
+                url += `&hsn_code=${encodeURIComponent(hsnCodeSearch)}`;
+            }
+
+            if (selectedNorms.length > 0) {
+                url += `&norms=${selectedNorms.join(',')}`;
+            }
+
+            if (selectedNotifications.length > 0) {
+                url += `&notification_numbers=${selectedNotifications.join(',')}`;
+            }
+
+            if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
+            if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
+
             const response = await api.get(url, {
                 responseType: 'blob',
             });
@@ -163,6 +247,14 @@ export default function ItemReport() {
         setPurchaseStatus(values || []);
     };
 
+    const handleNormsChange = (values) => {
+        setSelectedNorms(values || []);
+    };
+
+    const handleNotificationsChange = (values) => {
+        setSelectedNotifications(values || []);
+    };
+
     const handleClearFilters = () => {
         setSelectedItemNames([]);
         setMinBalance(200);
@@ -172,9 +264,15 @@ export default function ItemReport() {
         setExcludeCompanies([]);
         setIsRestricted('all');
         setPurchaseStatus(['GE', 'MI', 'SM']);
+        setProductDescSearch('');
+        setHsnCodeSearch('');
+        setSelectedNorms([]);
+        setSelectedNotifications([]);
+        setExpiryDateFrom('');
+        setExpiryDateTo('');
     };
 
-    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || (purchaseStatus.length !== 3 || !purchaseStatus.includes('GE') || !purchaseStatus.includes('MI') || !purchaseStatus.includes('SM'));
+    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || (purchaseStatus.length !== 3 || !purchaseStatus.includes('GE') || !purchaseStatus.includes('MI') || !purchaseStatus.includes('SM')) || productDescSearch !== '' || hsnCodeSearch !== '' || selectedNorms.length > 0 || selectedNotifications.length > 0 || expiryDateFrom !== '' || expiryDateTo !== '';
 
     // Inline editing handlers
     const startEdit = (itemId, field, currentValue) => {
@@ -323,10 +421,10 @@ export default function ItemReport() {
     const itemNameOptions = availableItems;
 
     return (
-        <div className="container-fluid" style={{backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px'}}>
+        <div className="container-fluid" style={{backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px'}}>
             {/* Professional Header with Gradient */}
             <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                 padding: '32px',
                 borderRadius: '12px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
@@ -354,11 +452,11 @@ export default function ItemReport() {
                     <button
                         className="btn"
                         onClick={handleExport}
-                        disabled={downloading || selectedItemNames.length === 0}
+                        disabled={downloading || (selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch)}
                         style={{
                             backgroundColor: 'white',
                             border: '2px solid white',
-                            color: '#667eea',
+                            color: 'var(--primary-color)',
                             fontWeight: '600',
                             padding: '10px 24px',
                             boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
@@ -388,16 +486,22 @@ export default function ItemReport() {
                         <div
                             className="card-header bg-white border-bottom d-flex justify-content-between align-items-center"
                             style={{ padding: '20px 24px', borderRadius: '12px 12px 0 0' }}>
-                            <h5 className="mb-0" style={{ fontWeight: '600', color: '#2c3e50' }}>
+                            <h5 className="mb-0" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
                                 <i className="bi bi-sliders me-2"></i>
                                 Filters
+                                {isPending && (
+                                    <span className="ms-2" style={{ fontSize: '0.85rem', color: 'var(--bs-gray-500)' }}>
+                                        <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                        Updating...
+                                    </span>
+                                )}
                             </h5>
                             {hasActiveFilters && (
                                 <button
                                     className="btn btn-sm"
                                     onClick={handleClearFilters}
                                     style={{
-                                        backgroundColor: '#6c757d',
+                                        backgroundColor: 'var(--bs-gray-500)',
                                         border: 'none',
                                         color: 'white',
                                         fontWeight: '500',
@@ -467,6 +571,32 @@ export default function ItemReport() {
                                     </select>
                                 </div>
 
+                                <div className="col-lg-2 col-md-6">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-calendar-range me-1"></i>
+                                        Expiry Date From
+                                    </label>
+                                    <input
+                                        type="date"
+                                        className="form-control"
+                                        value={expiryDateFrom}
+                                        onChange={(e) => setExpiryDateFrom(e.target.value)}
+                                    />
+                                </div>
+
+                                <div className="col-lg-2 col-md-6">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-calendar-range me-1"></i>
+                                        Expiry Date To
+                                    </label>
+                                    <input
+                                        type="date"
+                                        className="form-control"
+                                        value={expiryDateTo}
+                                        onChange={(e) => setExpiryDateTo(e.target.value)}
+                                    />
+                                </div>
+
                                 <div className="col-lg-3 col-md-6">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-building me-1"></i>
@@ -523,7 +653,7 @@ export default function ItemReport() {
                                     </select>
                                 </div>
 
-                                <div className="col-lg-9 col-md-6">
+                                <div className="col-lg-6 col-md-6">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-cart-check me-1"></i>
                                         Purchase Status
@@ -550,6 +680,85 @@ export default function ItemReport() {
                                         placeholder="Select purchase status..."
                                         className="basic-multi-select"
                                         classNamePrefix="select"
+                                    />
+                                </div>
+
+                                <div className="col-lg-3 col-md-6">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-tags me-1"></i>
+                                        Norms
+                                    </label>
+                                    <Select
+                                        isMulti
+                                        value={[
+                                            {value: 'E1', label: 'E1'},
+                                            {value: 'E5', label: 'E5'},
+                                            {value: 'E126', label: 'E126'},
+                                            {value: 'E132', label: 'E132'}
+                                        ].filter(opt => selectedNorms.includes(opt.value))}
+                                        onChange={(selected) => handleNormsChange(selected ? selected.map(s => s.value) : [])}
+                                        options={[
+                                            {value: 'E1', label: 'E1'},
+                                            {value: 'E5', label: 'E5'},
+                                            {value: 'E126', label: 'E126'},
+                                            {value: 'E132', label: 'E132'}
+                                        ]}
+                                        placeholder="Select norms..."
+                                        className="basic-multi-select"
+                                        classNamePrefix="select"
+                                    />
+                                </div>
+
+                                <div className="col-lg-3 col-md-6">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-bell me-1"></i>
+                                        Notification
+                                    </label>
+                                    <Select
+                                        isMulti
+                                        value={[
+                                            {value: '019/2015', label: '019/2015'},
+                                            {value: '098/2009', label: '098/2009'},
+                                            {value: '025/2023', label: '025/2023'}
+                                        ].filter(opt => selectedNotifications.includes(opt.value))}
+                                        onChange={(selected) => handleNotificationsChange(selected ? selected.map(s => s.value) : [])}
+                                        options={[
+                                            {value: '019/2015', label: '019/2015'},
+                                            {value: '098/2009', label: '098/2009'},
+                                            {value: '025/2023', label: '025/2023'}
+                                        ]}
+                                        placeholder="Select notification..."
+                                        className="basic-multi-select"
+                                        classNamePrefix="select"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="row g-3 mt-2">
+                                <div className="col-lg-6 col-md-12">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-file-text me-1"></i>
+                                        Product Description
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Search by product description..."
+                                        value={productDescSearch}
+                                        onChange={(e) => setProductDescSearch(e.target.value)}
+                                    />
+                                </div>
+                                <div className="col-lg-6 col-md-12">
+                                    <label className="form-label fw-bold mb-2">
+                                        <i className="bi bi-upc-scan me-1"></i>
+                                        HSN Code
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Search by HSN code..."
+                                        value={hsnCodeSearch}
+                                        onChange={(e) => setHsnCodeSearch(e.target.value)}
                                     />
                                 </div>
                             </div>
@@ -588,6 +797,9 @@ export default function ItemReport() {
                                             {isRestricted !== 'all' && <span className="badge bg-primary ms-2">Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span>}
                                             {purchaseStatus.length > 0 && purchaseStatus.length < 6 && <span className="badge bg-primary ms-2">Purchase Status: {purchaseStatus.length}</span>}
                                             {selectedItemNames.length > 0 && <span className="badge bg-primary ms-2">Item Names: {selectedItemNames.length}</span>}
+                                            {productDescSearch !== '' && <span className="badge bg-primary ms-2">Product Desc: "{productDescSearch}"</span>}
+                                            {hsnCodeSearch !== '' && <span className="badge bg-primary ms-2">HSN Code: "{hsnCodeSearch}"</span>}
+                                            {selectedNorms.length > 0 && <span className="badge bg-primary ms-2">Norms: {selectedNorms.length}</span>}
                                         </div>
                                     </div>
                                 </div>
@@ -598,7 +810,7 @@ export default function ItemReport() {
             </div>
 
             {/* Sticky Totals Bar */}
-            {!loading && selectedItemNames.length > 0 && reportData && reportData.items.length > 0 && (
+            {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
                 <div className="row mb-3">
                     <div className="col-12">
                         <div className="card shadow-sm border-0" style={{
@@ -635,6 +847,23 @@ export default function ItemReport() {
                                             })()}
                                         </span>
                                     </div>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <span className="text-muted small">Balance CIF:</span>
+                                        <span className="fw-bold text-primary">
+                                            {(() => {
+                                                const uniqueLicenses = {};
+                                                reportData.items.forEach(item => {
+                                                    if (!uniqueLicenses[item.license_id]) {
+                                                        uniqueLicenses[item.license_id] = item.balance_cif || 0;
+                                                    }
+                                                });
+                                                return Object.values(uniqueLicenses).reduce((sum, val) => sum + val, 0).toLocaleString('en-IN', {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2
+                                                });
+                                            })()}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -658,28 +887,35 @@ export default function ItemReport() {
                         </div>
                     )}
 
-                    {!loading && selectedItemNames.length === 0 && (
+                    {!loading && selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-tag" style={{fontSize: '3rem', color: '#667eea'}}></i>
-                                <h5 className="mt-3 text-primary">Select Item Names to View Report</h5>
-                                <p className="text-muted">Please select at least one item name from the filter above to
-                                    load the report data</p>
+                                <i className="bi bi-tag" style={{fontSize: '3rem', color: 'var(--primary-color)'}}></i>
+                                <h5 className="mt-3 text-primary">Select Filters to View Report</h5>
+                                <p className="text-muted">Please select item names, search by product description, or search by HSN code to load the report data</p>
                             </div>
                         </div>
                     )}
 
-                    {!loading && selectedItemNames.length > 0 && reportData && reportData.items.length === 0 && (
+                    {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length === 0 && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: '#ccc'}}></i>
+                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--bs-gray-300)'}}></i>
                                 <h5 className="mt-3 text-muted">No items found</h5>
                                 <p className="text-muted">Try adjusting your filters to see more results.</p>
+                                <div className="mt-3 text-start" style={{maxWidth: '600px', margin: '0 auto'}}>
+                                    <p className="small text-muted mb-2"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
+                                    <ul className="small text-muted">
+                                        <li>Setting License Status to "All"</li>
+                                        <li>Lowering the Min Balance (CIF) to 100</li>
+                                        <li>Checking if your search term matches exactly (case-insensitive partial match)</li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {!loading && selectedItemNames.length > 0 && reportData && reportData.items.length > 0 && (
+                    {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
                         <div className="card shadow-sm border-0">
                             <div className="card-body p-0">
                                 <div className="table-responsive" style={{overflowX: 'auto'}}>
@@ -691,7 +927,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: 0,
                                                 zIndex: 11,
-                                                backgroundColor: '#f8f9fa',
+                                                backgroundColor: 'var(--bs-gray-50)',
                                                 minWidth: '60px'
                                             }}>Sr No
                                             </th>
@@ -699,7 +935,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: '60px',
                                                 zIndex: 11,
-                                                backgroundColor: '#f8f9fa',
+                                                backgroundColor: 'var(--bs-gray-50)',
                                                 minWidth: '150px'
                                             }}>License No
                                             </th>
@@ -707,7 +943,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: '210px',
                                                 zIndex: 11,
-                                                backgroundColor: '#f8f9fa',
+                                                backgroundColor: 'var(--bs-gray-50)',
                                                 minWidth: '120px'
                                             }}>License Date
                                             </th>
@@ -715,7 +951,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: '330px',
                                                 zIndex: 11,
-                                                backgroundColor: '#f8f9fa',
+                                                backgroundColor: 'var(--bs-gray-50)',
                                                 minWidth: '140px',
                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                 borderRight: '2px solid #dee2e6'
@@ -728,6 +964,7 @@ export default function ItemReport() {
                                             <th style={{minWidth: '200px'}}>Item Name</th>
                                             <th className="text-end" style={{minWidth: '140px'}}>Avail Qty</th>
                                             <th className="text-end" style={{minWidth: '140px'}}>Avail Bal</th>
+                                            <th className="text-end" style={{minWidth: '140px'}}>Balance CIF</th>
                                             <th className="text-center" style={{minWidth: '120px'}}>Is Restricted</th>
                                             <th style={{minWidth: '200px'}}>Notes</th>
                                             <th style={{minWidth: '200px'}}>Condition Sheet</th>
@@ -767,7 +1004,7 @@ export default function ItemReport() {
                                                                             left: 0,
                                                                             zIndex: 9,
                                                                             verticalAlign: 'middle',
-                                                                            backgroundColor: '#f8f9fa',
+                                                                            backgroundColor: 'var(--bs-gray-50)',
                                                                             fontWeight: '500'
                                                                         }}>{srNo - itemIdx}</td>
                                                                     <td rowSpan={rowSpan} style={{
@@ -775,7 +1012,7 @@ export default function ItemReport() {
                                                                         left: '60px',
                                                                         zIndex: 9,
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa',
+                                                                        backgroundColor: 'var(--bs-gray-50)',
                                                                         fontWeight: '600'
                                                                     }}>
                                                                         <div
@@ -801,20 +1038,20 @@ export default function ItemReport() {
                                                                         left: '210px',
                                                                         zIndex: 9,
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>{formatDate(firstItem.license_date)}</td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         position: 'sticky',
                                                                         left: '330px',
                                                                         zIndex: 9,
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa',
+                                                                        backgroundColor: 'var(--bs-gray-50)',
                                                                         boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                                         borderRight: '2px solid #dee2e6'
                                                                     }}>{formatDate(firstItem.license_expiry_date)}</td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>{firstItem.exporter_name || '-'}</td>
                                                                 </>
                                                             )}
@@ -849,12 +1086,17 @@ export default function ItemReport() {
                                                                     <td className="text-end text-success fw-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>{firstItem.available_balance.toFixed(2)}</td>
+                                                                    <td className="text-end text-primary fw-semibold"
+                                                                        rowSpan={rowSpan} style={{
+                                                                        verticalAlign: 'middle',
+                                                                        backgroundColor: 'var(--bs-gray-50)'
+                                                                    }}>{firstItem.balance_cif.toFixed(2)}</td>
                                                                     <td className="text-center" rowSpan={rowSpan}
                                                                         style={{
                                                                             verticalAlign: 'middle',
-                                                                            backgroundColor: '#f8f9fa'
+                                                                            backgroundColor: 'var(--bs-gray-50)'
                                                                         }}>
                                                                         <span
                                                                             style={{cursor: togglingRestriction[firstItem.id] ? 'wait' : 'pointer', display: 'inline-block'}}
@@ -878,7 +1120,7 @@ export default function ItemReport() {
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>
                                                                         {editingCell?.itemId === firstItem.id && editingCell?.field === 'notes' ? (
                                                                             <div className="d-flex gap-1">
@@ -915,7 +1157,7 @@ export default function ItemReport() {
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa'
+                                                                        backgroundColor: 'var(--bs-gray-50)'
                                                                     }}>
                                                                         {editingCell?.itemId === firstItem.id && editingCell?.field === 'condition_sheet' ? (
                                                                             <div className="d-flex gap-1">
@@ -952,7 +1194,7 @@ export default function ItemReport() {
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
-                                                                        backgroundColor: '#f8f9fa',
+                                                                        backgroundColor: 'var(--bs-gray-50)',
                                                                         fontSize: '0.85rem',
                                                                         lineHeight: '1.4'
                                                                     }}>
@@ -976,7 +1218,7 @@ export default function ItemReport() {
                                                 position: 'sticky',
                                                 left: 0,
                                                 zIndex: 11,
-                                                backgroundColor: '#e2e3e5',
+                                                backgroundColor: 'var(--bs-gray-200)',
                                                 fontWeight: '600'
                                             }}>
                                                 Total:

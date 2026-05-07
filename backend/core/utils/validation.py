@@ -309,16 +309,16 @@ def validate_conditional_required(
 ) -> None:
     """
     Validate that a field is required when another field has a specific value.
-    
+
     Args:
         data: Dictionary of data
         field: Field to validate
         condition_field: Field that determines if field is required
         condition_value: Value that makes field required
-        
+
     Raises:
         ValidationError: If conditional validation fails
-        
+
     Examples:
         >>> data = {'type': 'custom', 'custom_value': ''}
         >>> validate_conditional_required(data, 'custom_value', 'type', 'custom')
@@ -329,3 +329,273 @@ def validate_conditional_required(
             raise ValidationError(
                 f"{field} is required when {condition_field} is {condition_value}"
             )
+
+
+def validate_license_number(value: str) -> str:
+    """
+    Sanitize and validate license number.
+
+    Removes extra whitespace, converts to uppercase, and validates format.
+
+    Args:
+        value: License number string
+
+    Returns:
+        Sanitized license number
+
+    Raises:
+        ValidationError: If license number format is invalid
+
+    Examples:
+        >>> validate_license_number('  abc123  ')
+        'ABC123'
+        >>> validate_license_number('')
+        ValidationError: License number cannot be empty
+    """
+    if not value:
+        raise ValidationError("License number cannot be empty")
+
+    # Remove extra whitespace and convert to uppercase
+    sanitized = value.strip().upper()
+
+    if not sanitized:
+        raise ValidationError("License number cannot be empty")
+
+    # Check minimum length (adjust as needed for your business rules)
+    if len(sanitized) < 3:
+        raise ValidationError("License number must be at least 3 characters")
+
+    return sanitized
+
+
+def validate_nested_items(
+    items: List[Dict[str, Any]],
+    validators: List[callable],
+    field_name: str = 'items'
+) -> None:
+    """
+    Generic validation for nested items with custom validators.
+
+    Args:
+        items: List of item dictionaries to validate
+        validators: List of validator functions that take (item, index) as arguments
+        field_name: Name of the field (for error messages)
+
+    Raises:
+        ValidationError: If any validation fails
+
+    Examples:
+        >>> def check_amount(item, idx):
+        ...     if item.get('amount', 0) < 0:
+        ...         raise ValidationError(f"Amount cannot be negative")
+        >>> items = [{'amount': 100}, {'amount': -50}]
+        >>> validate_nested_items(items, [check_amount], 'lines')
+        ValidationError: lines[1]: Amount cannot be negative
+    """
+    if not isinstance(items, list):
+        raise ValidationError(f"{field_name} must be a list")
+
+    errors = {}
+
+    for idx, item in enumerate(items):
+        for validator in validators:
+            try:
+                validator(item, idx)
+            except ValidationError as e:
+                error_key = f"{field_name}[{idx}]"
+                if error_key not in errors:
+                    errors[error_key] = []
+                errors[error_key].append(str(e))
+            except Exception as e:
+                error_key = f"{field_name}[{idx}]"
+                if error_key not in errors:
+                    errors[error_key] = []
+                errors[error_key].append("Validation error occurred")
+
+    if errors:
+        # Format errors as a readable message
+        error_messages = []
+        for key, msgs in errors.items():
+            error_messages.append(f"{key}: {'; '.join(msgs)}")
+        raise ValidationError('; '.join(error_messages))
+
+
+def normalize_empty_fields(
+    data: Dict[str, Any],
+    field_configs: Dict[str, Union[type, Any]]
+) -> Dict[str, Any]:
+    """
+    Normalize empty string fields to None or default values.
+
+    Converts empty strings to None for nullable fields, or to default values
+    (like 0 for Decimal fields) based on field configuration.
+
+    Args:
+        data: Dictionary of data to normalize
+        field_configs: Dict mapping field names to their types or default values
+                      - None: convert empty string to None
+                      - Decimal: convert empty string to Decimal('0')
+                      - int: convert empty string to 0
+                      - Any other value: use as default
+
+    Returns:
+        Dictionary with normalized fields
+
+    Examples:
+        >>> data = {'name': '', 'amount': '', 'qty': ''}
+        >>> configs = {'name': None, 'amount': Decimal, 'qty': 0}
+        >>> normalize_empty_fields(data, configs)
+        {'name': None, 'amount': Decimal('0'), 'qty': 0}
+    """
+    normalized = data.copy()
+
+    for field, config in field_configs.items():
+        if field in normalized and normalized[field] == '':
+            if config is None:
+                normalized[field] = None
+            elif config is Decimal:
+                normalized[field] = Decimal('0')
+            elif config is int:
+                normalized[field] = 0
+            elif config is float:
+                normalized[field] = 0.0
+            else:
+                # Use config value as default
+                normalized[field] = config
+
+    return normalized
+
+
+def validate_iec_number(value: str) -> str:
+    """
+    Validate and sanitize IEC (Importer-Exporter Code) number.
+
+    IEC is a 10-digit code issued by DGFT (Directorate General of Foreign Trade).
+
+    Args:
+        value: IEC number string
+
+    Returns:
+        Sanitized IEC number
+
+    Raises:
+        ValidationError: If IEC format is invalid
+
+    Examples:
+        >>> validate_iec_number('1234567890')
+        '1234567890'
+        >>> validate_iec_number('ABC123')
+        ValidationError: IEC must be exactly 10 digits
+    """
+    if not value:
+        raise ValidationError("IEC number cannot be empty")
+
+    # Remove whitespace
+    sanitized = value.strip()
+
+    # Check if exactly 10 characters
+    if len(sanitized) != 10:
+        raise ValidationError("IEC must be exactly 10 characters")
+
+    # Check if all characters are alphanumeric (typically all digits, but some may have letters)
+    if not sanitized.isalnum():
+        raise ValidationError("IEC must contain only alphanumeric characters")
+
+    return sanitized.upper()
+
+
+def validate_gst_number(value: str) -> str:
+    """
+    Validate and sanitize GST (Goods and Services Tax) number.
+
+    GST number format: 2 digits (state code) + 10 characters (PAN) +
+    1 digit (entity number) + 1 letter (Z) + 1 check digit
+    Total: 15 characters
+
+    Args:
+        value: GST number string
+
+    Returns:
+        Sanitized GST number
+
+    Raises:
+        ValidationError: If GST format is invalid
+
+    Examples:
+        >>> validate_gst_number('27AAPFU0939F1ZV')
+        '27AAPFU0939F1ZV'
+        >>> validate_gst_number('ABC123')
+        ValidationError: GST number must be 15 characters
+    """
+    if not value:
+        raise ValidationError("GST number cannot be empty")
+
+    # Remove whitespace and convert to uppercase
+    sanitized = value.strip().upper()
+
+    # Check length
+    if len(sanitized) != 15:
+        raise ValidationError("GST number must be 15 characters")
+
+    # Basic format validation
+    if not sanitized[:2].isdigit():
+        raise ValidationError("GST number must start with 2-digit state code")
+
+    if not sanitized[2:12].isalnum():
+        raise ValidationError("Invalid GST number format (PAN section)")
+
+    if not sanitized[12].isdigit():
+        raise ValidationError("Invalid GST number format (entity number)")
+
+    if sanitized[13] != 'Z':
+        raise ValidationError("Invalid GST number format (must have 'Z' at position 14)")
+
+    if not sanitized[14].isalnum():
+        raise ValidationError("Invalid GST number format (check digit)")
+
+    return sanitized
+
+
+def validate_pan_number(value: str) -> str:
+    """
+    Validate and sanitize PAN (Permanent Account Number).
+
+    PAN format: 5 letters + 4 digits + 1 letter
+    Total: 10 characters
+
+    Args:
+        value: PAN number string
+
+    Returns:
+        Sanitized PAN number
+
+    Raises:
+        ValidationError: If PAN format is invalid
+
+    Examples:
+        >>> validate_pan_number('AAPFU0939F')
+        'AAPFU0939F'
+        >>> validate_pan_number('ABC123')
+        ValidationError: PAN must be 10 characters
+    """
+    if not value:
+        raise ValidationError("PAN number cannot be empty")
+
+    # Remove whitespace and convert to uppercase
+    sanitized = value.strip().upper()
+
+    # Check length
+    if len(sanitized) != 10:
+        raise ValidationError("PAN must be 10 characters")
+
+    # Validate format: 5 letters + 4 digits + 1 letter
+    if not sanitized[:5].isalpha():
+        raise ValidationError("PAN must start with 5 letters")
+
+    if not sanitized[5:9].isdigit():
+        raise ValidationError("PAN must have 4 digits after first 5 letters")
+
+    if not sanitized[9].isalpha():
+        raise ValidationError("PAN must end with a letter")
+
+    return sanitized

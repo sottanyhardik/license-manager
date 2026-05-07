@@ -165,7 +165,7 @@ class LedgerParser:
         """Safely parse string to Decimal."""
         try:
             return Decimal(str(value).strip()) if value else Decimal('0')
-        except:
+        except Exception:
             return Decimal('0')
 
 

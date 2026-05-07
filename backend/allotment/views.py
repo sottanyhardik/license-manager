@@ -8,7 +8,10 @@ from allotment.models import AllotmentModel
 from allotment.serializers import AllotmentSerializer
 from allotment.views_export import add_grouped_export_action
 from core.constants import ROW_TYPE_CHOICES
+from core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
+from core.filtersets import AllotmentFilterSet
 from core.views.master_view import MasterViewSet
+from django_filters.rest_framework import DjangoFilterBackend
 
 
 def _get_active_usd_rate():
@@ -46,6 +49,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
         "search": ["item_name", "company__name", "invoice", "bl_detail",
                    "allotment_details__item__license__license_number"],
         "filter": {
+            "license_number": {"type": "text", "label": "License Number"},
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
                                 "filter_field": "company"},
@@ -106,7 +110,13 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "company": {
                 "type": "fk",
                 "fk_endpoint": "/masters/companies/",
-                "label_field": "name"
+                "label_field": "name",
+                "required": True
+            },
+            "item_name": {
+                "type": "text",
+                "required": True,
+                "label": "Item Name"
             },
             "port": {
                 "type": "fk",
@@ -139,8 +149,12 @@ AllotmentViewSet = MasterViewSet.create_viewset(
 # Add grouped export functionality
 AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)
 
-# Add permission classes
+# Add permission classes and filter backends
 AllotmentViewSet.permission_classes = [AllotmentPermission]
+AllotmentViewSet.filterset_class = AllotmentFilterSet
+AllotmentViewSet.filter_backends = [DjangoFilterBackend, CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
+AllotmentViewSet.search_fields = ['item_name', 'company__name', 'invoice', 'bl_detail', 'port__name']
+AllotmentViewSet.ordering_fields = ['estimated_arrival_date', 'modified_on', 'company__name', 'item_name']
 
 # Add default filters and performance optimizations
 original_get_queryset = AllotmentViewSet.get_queryset
@@ -165,11 +179,12 @@ def custom_get_queryset_with_defaults(self):
     action = getattr(self, 'action', None)
     kwargs = getattr(self, 'kwargs', {})
 
-    if action in ['retrieve', 'update', 'partial_update', 'destroy'] or 'pk' in kwargs:
+    # For detail views (retrieve, update, delete), skip all default filters
+    if action in ['retrieve', 'update', 'partial_update', 'destroy'] or kwargs.get('pk'):
         # For detail views, return all records without default filters
         return qs
 
-    # Handle is_boe filter
+    # Handle is_boe filter (only for list views)
     is_boe_param = params.get('is_boe', '')
 
     if is_boe_param == 'false_or_current':

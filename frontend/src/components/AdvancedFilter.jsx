@@ -1,5 +1,6 @@
 import {useEffect, useRef, useState} from "react";
-import AsyncSelectField from "./AsyncSelectField";
+import DebouncedAsyncSelect from "./DebouncedAsyncSelect";
+import DebouncedSearchInput from "./DebouncedSearchInput";
 import Select from "react-select";
 
 /**
@@ -31,6 +32,7 @@ export default function AdvancedFilter({
     const {search: _search, ...initialFiltersWithoutSearch} = initialFilters;
     const [filterValues, setFilterValues] = useState({...defaultFilters, ...initialFiltersWithoutSearch});
     const isInitialMount = useRef(true);
+    const isAutoApplyInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
     const skipNextAutoApply = useRef(false);
 
@@ -65,6 +67,12 @@ export default function AdvancedFilter({
 
     // Auto-apply filters with debounce
     useEffect(() => {
+        // Skip on initial mount — the parent already fires fetchData with the correct filters
+        if (isAutoApplyInitialMount.current) {
+            isAutoApplyInitialMount.current = false;
+            return;
+        }
+
         // Skip auto-apply if the change came from parent (initialFilters update)
         if (skipNextAutoApply.current) {
             skipNextAutoApply.current = false;
@@ -324,11 +332,11 @@ export default function AdvancedFilter({
                 );
 
             case "fk":
-                // Foreign Key filter with async multi-select
+                // Foreign Key filter with async multi-select (debounced)
                 return (
                     <div key={fieldName} className="col-md-4">
                         <label className="form-label">{label}</label>
-                        <AsyncSelectField
+                        <DebouncedAsyncSelect
                             endpoint={config.fk_endpoint || config.endpoint}
                             labelField={config.label_field || "name"}
                             value={filterValues[fieldName] || ""}
@@ -336,6 +344,7 @@ export default function AdvancedFilter({
                             placeholder={`Select ${label.toLowerCase()}`}
                             isClearable
                             isMulti
+                            debounceDelay={300}
                         />
                     </div>
                 );
@@ -448,11 +457,11 @@ export default function AdvancedFilter({
                 );
 
             case "exclude_fk":
-                // Exclude Foreign Key filter with async multi-select
+                // Exclude Foreign Key filter with async multi-select (debounced)
                 return (
                     <div key={fieldName} className="col-md-4">
                         <label className="form-label">{label}</label>
-                        <AsyncSelectField
+                        <DebouncedAsyncSelect
                             endpoint={config.fk_endpoint || config.endpoint}
                             labelField={config.label_field || "name"}
                             value={filterValues[fieldName] || ""}
@@ -460,6 +469,7 @@ export default function AdvancedFilter({
                             placeholder={`Exclude ${label.toLowerCase()}`}
                             isClearable
                             isMulti
+                            debounceDelay={300}
                         />
                     </div>
                 );
@@ -492,27 +502,13 @@ export default function AdvancedFilter({
             {/* Search Bar on Top */}
             {searchFields.length > 0 && (
                 <div className="mb-3">
-                    <div className="input-group input-group-lg">
-                        <span className="input-group-text bg-white">
-                            <i className="bi bi-search"></i>
-                        </span>
-                        <input
-                            type="text"
-                            className="form-control form-control-lg"
-                            placeholder={`Search by ${searchFields.join(", ")}`}
-                            value={searchTerm}
-                            onChange={handleSearchChange}
-                        />
-                        {searchTerm && (
-                            <button
-                                className="btn btn-outline-secondary"
-                                type="button"
-                                onClick={() => setSearchTerm("")}
-                            >
-                                <i className="bi bi-x-lg"></i>
-                            </button>
-                        )}
-                    </div>
+                    <DebouncedSearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        delay={800}
+                        placeholder={`Search by ${searchFields.join(", ")}`}
+                        className="form-control form-control-lg"
+                    />
                 </div>
             )}
 

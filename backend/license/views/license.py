@@ -6,12 +6,23 @@ from accounts.permissions import LicensePermission
 from core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, \
     NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
+from core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
+from core.filtersets import LicenseFilterSet
 from core.views.master_view import MasterViewSet
 from license.models import LicenseDetailsModel
 from license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, \
     LicenseDocumentSerializer
 from license.views.active_dfia_report import add_active_dfia_report_action
 from license.views.license_report import add_license_report_action
+
+
+# Helper function to get default purchase status IDs from codes
+def get_default_purchase_status_ids():
+    """Convert default purchase status codes to IDs"""
+    from core.models import PurchaseStatus
+    default_codes = ['GE', 'MI', 'CO']  # GE Purchase, GE Operating, Conversion
+    ids = list(PurchaseStatus.objects.filter(code__in=default_codes).values_list('id', flat=True))
+    return ','.join(map(str, ids)) if ids else ''
 
 # Nested field definitions for LicenseDetails
 license_nested_field_defs = {
@@ -74,7 +85,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "export_license__norm_class": {"type": "fk", "fk_endpoint": "/masters/sion-classes/",
                                            "label_field": "norm_class"},
             "notification_number": {"type": "choice", "choices": list(NOTIFICATION_NORM_CHOICES)},
-            "purchase_status": {"type": "choice", "choices": list(LICENCE_PURCHASE_CHOICES_ACTIVE)},
+            "purchase_status": {"type": "fk", "fk_endpoint": "/masters/purchase-statuses/", "label_field": "label", "filter_params": {"is_active": "true"}},
             "license_date": {"type": "date_range"},
             "license_expiry_date": {"type": "date_range"},
             "balance_cif": {"type": "range"},
@@ -84,18 +95,19 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
         "default_filters": {
             "is_expired": "False",
             "is_null": "False",
-            "purchase_status": "GE,NP,SM,CO"
         },
         "list_display": [
             "license_number",
             "license_date",
             "license_expiry_date",
             "exporter__name",
+            "exporter__iec",
             "port__name",
-            "purchase_status",
+            "purchase_status_label",
             "balance_cif",
             "latest_transfer",
-            "get_norm_class"
+            "get_norm_class",
+            "ledger_date"
         ],
         "form_fields": [
             "scheme_code",
@@ -137,8 +149,10 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
                 "label_field": "name"
             },
             "purchase_status": {
-                "type": "select",
-                "choices": list(LICENCE_PURCHASE_CHOICES)
+                "type": "fk",
+                "fk_endpoint": "/masters/purchase-statuses/",
+                "label_field": "label",
+                "filter_params": {"is_active": "true"}
             },
             "scheme_code": {
                 "type": "select",
@@ -166,6 +180,24 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     """
     permission_classes = [LicensePermission]
     lookup_value_regex = '[^/]+'  # Allow both numbers and strings
+
+    # Apply advanced filter backends
+    filterset_class = LicenseFilterSet
+    filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
+    search_fields = ['license_number', 'file_number', 'exporter__name']
+    ordering_fields = ['license_date', 'license_expiry_date', 'balance_cif', 'exporter__name', 'license_number']
+
+    def list(self, request, *args, **kwargs):
+        """Override list to add dynamic purchase_status default to metadata"""
+        response = super().list(request, *args, **kwargs)
+
+        # Add purchase_status default to metadata if present
+        if isinstance(response.data, dict) and 'default_filters' in response.data:
+            default_ps_ids = get_default_purchase_status_ids()
+            if default_ps_ids:
+                response.data['default_filters']['purchase_status'] = default_ps_ids
+
+        return response
 
     def get_object(self):
         """
@@ -230,7 +262,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         For detail view (retrieve/update/partial_update), don't apply default filters so expired licenses can be edited.
         """
         # For detail view actions, skip default filters by temporarily clearing them
-        skip_default_filters = self.action in ['retrieve', 'update', 'partial_update', 'destroy', 'nested_items', 'item_usage', 'balance_pdf']
+        skip_default_filters = self.action in ['retrieve', 'update', 'partial_update', 'destroy', 'nested_items', 'item_usage', 'balance_pdf', 'balance_excel']
 
         if skip_default_filters:
             # Save original default filters
@@ -308,26 +340,21 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 # Show non-null licenses: balance_cif >= 200
                 qs = qs.filter(balance_cif__gte=200)
 
-        # Handle purchase_status filter - apply default if not provided
-        purchase_status_value = params.get('purchase_status')
-
-        # If purchase_status not provided or empty, apply default
-        if not purchase_status_value or purchase_status_value == "":
-            purchase_status_value = default_filters.get('purchase_status')
-
-        # Call parent method for remaining filters (exclude is_expired and is_null from parent processing)
-        # Create a new QueryDict-like object without is_expired and is_null
+        # Call parent method for remaining filters (exclude is_expired and is_null)
+        # Create a new QueryDict-like object
         from django.http import QueryDict
         filtered_params = QueryDict(mutable=True)
         for key, value in params.items():
             if key not in ('is_expired', 'is_null'):
-                filtered_params[key] = value
+                # Handle array format for purchase_status
+                if key == 'purchase_status[]':
+                    # Frontend sends purchase_status[] for multi-select
+                    for val in params.getlist(key):
+                        filtered_params.appendlist('purchase_status[]', val)
+                else:
+                    filtered_params[key] = value
 
-        # Add purchase_status default if needed
-        if purchase_status_value and 'purchase_status' not in filtered_params:
-            filtered_params['purchase_status'] = purchase_status_value
-
-        # Create a copy of filter_config without is_expired and is_null
+        # Create a copy of filter_config without custom-handled fields
         filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null')}
 
         # Call parent method with filtered params and config
@@ -457,6 +484,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         from reportlab.lib.enums import TA_CENTER, TA_LEFT
         import io
         from datetime import date
+        from bill_of_entry.models import RowDetails
+        from allotment.models import AllotmentItems
 
         license_obj = self.get_object()
 
@@ -622,9 +651,6 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             ]))
             elements.append(import_section_header)
 
-            from bill_of_entry.models import RowDetails
-            from allotment.models import AllotmentItems
-
             for item in license_obj.import_license.all():
                 # Main item data
                 item_names = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else '-'
@@ -702,9 +728,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
                         boe_data.append([
                             detail.bill_of_entry.bill_of_entry_number,
-                            detail.bill_of_entry.bill_of_entry_date.strftime('%d/%m/%Y') if detail.bill_of_entry.bill_of_entry_date else '-',
+                            detail.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if detail.bill_of_entry.bill_of_entry_date else '-',
                             Paragraph(detail.bill_of_entry.port.name if detail.bill_of_entry.port else '-', styles['Normal']),
-                            Paragraph(detail.bill_of_entry.company.name if detail.bill_of_entry.company else '-', styles['Normal']),
+                            Paragraph(detail.bill_of_entry.company.name or '-' if detail.bill_of_entry.company else '-', styles['Normal']),
                             f"{float(detail.qty):.2f}",
                             f"{float(detail.cif_fc):.2f}",
                             f"{float(detail.cif_inr):.2f}"
@@ -858,6 +884,291 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             ]))
             elements.append(notes_content)
 
+        # ── End-of-PDF Summary Table ─────────────────────────────────────────
+        # One flat row per BOE/Allotment per item — easy to copy-paste to Excel
+        # Light green = BOE rows, Light red = Allotment rows
+        COLOR_BOE   = colors.HexColor('#d9ead3')   # light green
+        COLOR_ALLOT = colors.HexColor('#fce8e6')   # light red
+        COLOR_HDR   = colors.HexColor('#1a1a1a')
+
+        # Paragraph style for wrapping text in summary cells
+        wrap_style = ParagraphStyle('wrap', parent=styles['Normal'], fontSize=7.5, leading=10)
+
+        def P(text):
+            return Paragraph(str(text), wrap_style)
+
+        # Collect all rows — sort by item name before building table
+        # Columns: License No | License Date | Item | Type | Company | Reference | Qty | Rate | CIF Value (FC)
+        # BOE Reference  = "BOE number\nDate"
+        # Allot Reference = "Invoice\nETA: date" (if available)
+        summary_data = [['License No', 'License Date', 'Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']]
+        summary_rows = []  # (sort_key, row_cells, color)
+        total_cif    = 0.0
+
+        license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
+        lic_no = license_obj.license_number or '-'
+
+        # Pre-aggregate by item name across all sr numbers.
+        from collections import defaultdict
+        from decimal import Decimal as _Dec
+        from django.db.models import Sum as _Sum, DecimalField as _DF, Value as _Val
+        from django.db.models.functions import Coalesce as _Coalesce
+
+        _bal_agg = defaultdict(lambda: {'qty': 0.0, 'is_restricted': False, 'restriction_pct': None, 'sr_ids': [], 'description': '', 'hs_code': ''})
+        for _item in license_obj.import_license.all():
+            _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
+            _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+            _bal_agg[_key]['sr_ids'].append(_item.id)
+            if _item.is_restricted:
+                _bal_agg[_key]['is_restricted'] = True
+                if _bal_agg[_key]['restriction_pct'] is None:
+                    # Get restriction_percentage directly from linked ItemNameModel
+                    # (without sion_norm_class requirement, which may be null)
+                    _rpct_val = _item.items.filter(
+                        restriction_percentage__gt=0
+                    ).values_list('restriction_percentage', flat=True).first()
+                    if _rpct_val:
+                        _bal_agg[_key]['restriction_pct'] = _Dec(str(_rpct_val))
+            if not _bal_agg[_key]['description']:
+                _bal_agg[_key]['description'] = _item.description or _key
+            if not _bal_agg[_key]['hs_code']:
+                _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
+
+        for item in license_obj.import_license.all():
+            item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
+
+            boes = RowDetails.objects.filter(
+                sr_number_id=item.id, transaction_type='D'
+            ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+
+            for rd in boes:
+                qty     = float(rd.qty or 0)
+                cif     = float(rd.cif_fc or 0)
+                rate    = cif / qty if qty else 0.0
+                total_cif += cif
+                boe_company = rd.bill_of_entry.company.name if rd.bill_of_entry.company else '-'
+                ref_no  = rd.bill_of_entry.bill_of_entry_number or '-'
+                ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else ''
+                ref_str = f"{ref_no}\n{ref_date}" if ref_date else ref_no
+                product = rd.bill_of_entry.product_name or item_name
+                summary_rows.append((product.lower(), [
+                    P(lic_no), P(license_date_str), P(product),
+                    P('BOE'), P(boe_company), P(ref_str),
+                    P(f"{qty:,.2f}"), P(f"{rate:.2f}"), P(f"{cif:,.2f}"),
+                ], COLOR_BOE))
+
+            allotments = AllotmentItems.objects.filter(
+                item_id=item.id, allotment__bill_of_entry__isnull=True
+            ).select_related('allotment', 'allotment__company')
+
+            for ai in allotments:
+                qty     = float(ai.qty or 0)
+                cif     = float(ai.cif_fc or 0)
+                rate    = cif / qty if qty else 0.0
+                total_cif += cif
+                company = ai.allotment.company.name if ai.allotment.company else '-'
+                invoice = ai.allotment.invoice or '-'
+                eta     = ai.allotment.estimated_arrival_date.strftime('%d-%m-%Y') if ai.allotment.estimated_arrival_date else ''
+                ref_str = f"{invoice}\nETA: {eta}" if eta else invoice
+                product = ai.allotment.item_name or item_name
+                summary_rows.append((product.lower(), [
+                    P(lic_no), P(license_date_str), P(product),
+                    P('Allotment'), P(company), P(ref_str),
+                    P(f"{qty:,.2f}"), P(f"{rate:.2f}"), P(f"{cif:,.2f}"),
+                ], COLOR_ALLOT))
+
+        # Sort by item name
+        summary_rows.sort(key=lambda x: x[0])
+        row_colors = []
+        for _, row_cells, color in summary_rows:
+            summary_data.append(row_cells)
+            row_colors.append(color)
+
+        if len(summary_data) > 1:
+            # Total row
+            summary_data.append([P(''), P(''), P(''), P(''), P('TOTAL'), P(''), P(''), P(''), P(f"{total_cif:,.2f}")])
+            row_colors.append(colors.HexColor('#f2f2f2'))
+
+            # ── License info mini-header (License No | License Date | Total CIF) ──
+            total_license_cif = total_cif + float(license_obj.balance_cif or 0)
+            info_style = ParagraphStyle('info', parent=styles['Normal'], fontSize=8, leading=11,
+                                        textColor=colors.white, fontName='Helvetica-Bold')
+            def IP(label, value):
+                return Paragraph(f"<b>{label}:</b> {value}", info_style)
+
+            info_row = Table([[
+                IP('License No', lic_no),
+                IP('License Date', license_date_str),
+                IP('Total CIF', f"{total_license_cif:,.2f}"),
+            ]], colWidths=[92*mm, 92*mm, 93*mm])
+            info_row.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), COLOR_HDR),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(Spacer(1, 10))
+            elements.append(info_row)
+
+            # Section header
+            summ_hdr = Table([['Summary (BOE & Allotments)']], colWidths=[277*mm])
+            summ_hdr.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), COLOR_HDR),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            elements.append(summ_hdr)
+
+            # col widths: lic_no, lic_date, item, type, company, reference, qty, rate, cif = 277mm
+            col_w = [28*mm, 22*mm, 55*mm, 18*mm, 40*mm, 35*mm, 20*mm, 22*mm, 37*mm]
+            summ_table = Table(summary_data, colWidths=col_w)
+
+            style_cmds = [
+                # Header row
+                ('BACKGROUND', (0, 0), (-1, 0), COLOR_HDR),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 7.5),
+                # Data rows
+                ('FONTSIZE', (0, 1), (-1, -1), 7.5),
+                ('ALIGN', (6, 0), (-1, -1), 'RIGHT'),   # qty, rate, cif right-aligned
+                ('ALIGN', (0, 0), (5, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                # Total row bold
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f2f2f2')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ]
+            # Apply per-row background colours (skip header row at index 0)
+            for i, bg in enumerate(row_colors, start=1):
+                if i < len(summary_data):  # skip total row (handled above)
+                    style_cmds.append(('BACKGROUND', (0, i), (-1, i), bg))
+
+            summ_table.setStyle(TableStyle(style_cmds))
+            elements.append(summ_table)
+
+        # ── Balance Summary Table ─────────────────────────────────────────────
+        if _bal_agg:
+            total_bal_cif_fc = float(license_obj.balance_cif or 0)
+            COLOR_YELLOW = colors.HexColor('#ffff00')
+
+            # "Summary (Balance Quantity)" section header
+            bal_hdr = Table([['Summary (Balance Quantity)']], colWidths=[277*mm])
+            bal_hdr.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), COLOR_HDR),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            elements.append(Spacer(1, 8))
+            elements.append(bal_hdr)
+
+            # col widths: hsn, item_name, bal_qty, unit_price, cif_fc = 277mm
+            # 30 + 87 + 45 + 45 + 70 = 277mm
+            bal_col_w = [30*mm, 87*mm, 45*mm, 45*mm, 70*mm]
+
+            Pb      = ParagraphStyle('balwrap',     parent=styles['Normal'], fontSize=8, leading=11)
+            Pb_hdr  = ParagraphStyle('balwrap_hdr', parent=styles['Normal'], fontSize=8, leading=11,
+                                     textColor=colors.white, fontName='Helvetica-Bold')
+            Pb_yel  = ParagraphStyle('balwrap_yel', parent=styles['Normal'], fontSize=9, leading=12,
+                                     fontName='Helvetica-Bold')
+
+            def BP(text):
+                return Paragraph(str(text), Pb)
+            def BH(text):   # white bold header cell
+                return Paragraph(str(text), Pb_hdr)
+            def BY(text):   # yellow-cell (black bold)
+                return Paragraph(str(text), Pb_yel)
+
+            _license_balance = float(license_obj.balance_cif or 0)
+            _total_export_cif = _Dec(str(license_obj._calculate_license_credit() or 0))
+
+            bal_table_data = [
+                # Row 0: cols 0-3 merged "BALANCE CIF $" | col 4 = total (yellow)
+                [BH('BALANCE CIF $'), '', '', '', BY(f"{total_bal_cif_fc:,.2f}")],
+                # Row 1: column headers
+                [BH('HSN Code'), BH('Item Name'), BH('Bal Qty'), BH('Unit Price'), BH('CIF FC')],
+            ]
+            for item_key in sorted(_bal_agg.keys()):
+                b_qty = _bal_agg[item_key]['qty']
+                # Restricted items: compute per-group balance = (export_cif × pct/100) − group_debits − group_allotments
+                # Non-restricted items: show license-level balance
+                if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
+                    _rpct = _bal_agg[item_key]['restriction_pct']
+                    _sr_ids = _bal_agg[item_key]['sr_ids']
+                    _grp_debits = RowDetails.objects.filter(
+                        sr_number_id__in=_sr_ids, transaction_type='D'
+                    ).aggregate(
+                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                    )['total'] or _Dec('0')
+                    _grp_allots = AllotmentItems.objects.filter(
+                        item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
+                    ).aggregate(
+                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                    )['total'] or _Dec('0')
+                    _allowed = _total_export_cif * _rpct / _Dec('100')
+                    b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+                else:
+                    b_cif = _license_balance
+                unit_price = b_cif / b_qty if b_qty else 0.0
+                desc       = _bal_agg[item_key]['description'] or item_key
+                hs         = _bal_agg[item_key]['hs_code']
+                bal_table_data.append([
+                    BP(hs),
+                    BP(desc),
+                    BP(f"{b_qty:,.2f}"),
+                    BP(f"{unit_price:,.2f}"),
+                    BP(f"{b_cif:,.2f}"),
+                ])
+
+            bal_table = Table(bal_table_data, colWidths=bal_col_w)
+            bal_style = TableStyle([
+                # Row 0: merge cols 0-3, dark header | col 4 yellow
+                ('SPAN', (0, 0), (3, 0)),
+                ('BACKGROUND', (0, 0), (3, 0), COLOR_HDR),
+                ('BACKGROUND', (4, 0), (4, 0), COLOR_YELLOW),
+                ('TEXTCOLOR', (4, 0), (4, 0), colors.black),
+                ('ALIGN', (0, 0), (3, 0), 'CENTER'),
+                ('ALIGN', (4, 0), (4, 0), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                # Row 1: column headers
+                ('BACKGROUND', (0, 1), (-1, 1), COLOR_HDR),
+                ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 1), (-1, 1), 8),
+                # Data rows: cols 2-4 right-aligned
+                ('FONTSIZE', (0, 2), (-1, -1), 8),
+                ('ALIGN', (2, 2), (-1, -1), 'RIGHT'),
+                ('ALIGN', (0, 2), (1, -1), 'LEFT'),
+                ('ROWBACKGROUNDS', (0, 2), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+                # All cells
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ])
+            bal_table.setStyle(bal_style)
+            elements.append(Spacer(1, 8))
+            elements.append(bal_table)
+
         # Build PDF
         doc.build(elements)
 
@@ -872,6 +1183,1513 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         return response
 
+    @action(detail=False, methods=['post'], url_path='bulk-balance-excel')
+    def bulk_balance_excel(self, request):
+        """
+        Generate a multi-sheet Excel with one sheet per license.
+        Sheet name = license number. Same layout as balance_excel.
+        POST body: {"license_numbers": ["3011007415", "3011007018", ...]}
+        """
+        from django.http import HttpResponse
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter as _gcl
+        from io import BytesIO
+        from decimal import Decimal as _Dec
+        from collections import defaultdict
+        from django.db.models import Sum as _Sum, DecimalField as _DF, Value as _Val
+        from django.db.models.functions import Coalesce as _Coalesce
+        from bill_of_entry.models import RowDetails
+        from allotment.models import AllotmentItems
+
+        license_numbers = request.data.get('license_numbers', [])
+        if not license_numbers:
+            return Response({'error': 'No license numbers provided.'}, status=400)
+
+        licenses = LicenseDetailsModel.objects.filter(
+            license_number__in=license_numbers
+        ).prefetch_related('import_license', 'import_license__items')
+
+        if not licenses.exists():
+            return Response({'error': 'No matching licenses found.'}, status=404)
+
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)  # remove default empty sheet
+
+        # ── Shared styles ──────────────────────────────────────────────────────
+        HDR_FILL   = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+        HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
+        BOE_FILL   = PatternFill(start_color="DEEAF1", end_color="DEEAF1", fill_type="solid")
+        ALLOT_FILL = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+        TOTAL_FILL = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        YEL_FILL   = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+        ALT_FILL   = PatternFill(start_color="F9F9F9", end_color="F9F9F9", fill_type="solid")
+        BOLD       = Font(bold=True, size=9)
+        NORM       = Font(size=9)
+        THIN_BORDER = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
+        )
+
+        def _hdr(ws, row, col, value):
+            c = ws.cell(row=row, column=col, value=value)
+            c.fill = HDR_FILL; c.font = HDR_FONT
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            return c
+
+        def _cell(ws, row, col, value, fill=None, bold=False, align='left', num_fmt=None):
+            c = ws.cell(row=row, column=col, value=value)
+            if fill: c.fill = fill
+            c.font = BOLD if bold else NORM
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal=align, vertical='center', wrap_text=True)
+            if num_fmt: c.number_format = num_fmt
+            return c
+
+        def _write_license_sheet(wb, license_obj):
+            from datetime import date as _date_cls
+            sheet_name = str(license_obj.license_number)[:31]
+            ws = wb.create_sheet(title=sheet_name)
+
+            license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
+            license_expiry_str = license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-'
+            ledger_date_str = license_obj.ledger_date.strftime('%d-%m-%Y') if license_obj.ledger_date else '-'
+            lic_no = license_obj.license_number or '-'
+
+            summary_rows = []
+            total_cif = 0.0
+
+            for item in license_obj.import_license.all():
+                item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
+
+                boes = RowDetails.objects.filter(
+                    sr_number_id=item.id, transaction_type='D'
+                ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+
+                for rd in boes:
+                    qty  = float(rd.qty or 0)
+                    cif  = float(rd.cif_fc or 0)
+                    rate = cif / qty if qty else 0.0
+                    total_cif += cif
+                    boe_company = rd.bill_of_entry.company.name if rd.bill_of_entry.company else '-'
+                    ref_no   = rd.bill_of_entry.bill_of_entry_number or '-'
+                    ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else ''
+                    ref_str  = f"{ref_no} / {ref_date}" if ref_date else ref_no
+                    product  = rd.bill_of_entry.product_name or item_name
+                    _sort_dt = rd.bill_of_entry.bill_of_entry_date or _date_cls.min
+                    summary_rows.append((0, _sort_dt, {
+                        'item': product, 'type': 'BOE', 'company': boe_company,
+                        'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
+                    }, True))
+
+                allotments = AllotmentItems.objects.filter(
+                    item_id=item.id, allotment__bill_of_entry__isnull=True
+                ).select_related('allotment', 'allotment__company')
+
+                for ai in allotments:
+                    qty     = float(ai.qty or 0)
+                    cif     = float(ai.cif_fc or 0)
+                    rate    = cif / qty if qty else 0.0
+                    total_cif += cif
+                    company = ai.allotment.company.name if ai.allotment.company else '-'
+                    invoice = ai.allotment.invoice or '-'
+                    eta     = ai.allotment.estimated_arrival_date.strftime('%d-%m-%Y') if ai.allotment.estimated_arrival_date else ''
+                    ref_str = f"{invoice} / ETA: {eta}" if eta else invoice
+                    product = ai.allotment.item_name or item_name
+                    _sort_dt = ai.allotment.estimated_arrival_date or _date_cls.min
+                    summary_rows.append((1, _sort_dt, {
+                        'item': product, 'type': 'Allotment', 'company': company,
+                        'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
+                    }, False))
+
+            # BOEs first (sorted by BOE date), then allotments (sorted by allotment date)
+            summary_rows.sort(key=lambda x: (x[0], x[1]))
+
+            _bal_agg = defaultdict(lambda: {
+                'qty': 0.0, 'is_restricted': False, 'restriction_pct': None,
+                'sr_ids': [], 'description': '', 'hs_code': ''
+            })
+            for _item in license_obj.import_license.all():
+                _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
+                _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+                _bal_agg[_key]['sr_ids'].append(_item.id)
+                if _item.is_restricted:
+                    _bal_agg[_key]['is_restricted'] = True
+                    if _bal_agg[_key]['restriction_pct'] is None:
+                        _rpct_val = _item.items.filter(
+                            restriction_percentage__gt=0
+                        ).values_list('restriction_percentage', flat=True).first()
+                        if _rpct_val:
+                            _bal_agg[_key]['restriction_pct'] = _Dec(str(_rpct_val))
+                if not _bal_agg[_key]['description']:
+                    _bal_agg[_key]['description'] = _item.description or _key
+                if not _bal_agg[_key]['hs_code']:
+                    _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
+
+            _license_balance = float(license_obj.balance_cif or 0)
+            _total_export_cif = _Dec(str(license_obj._calculate_license_credit() or 0))
+            total_license_cif = total_cif + _license_balance
+
+            r = 1
+            _today = _date_cls.today()
+            INFO_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+            INFO_FONT = Font(bold=True, color="FFFFFF", size=9)
+            if license_obj.license_expiry_date:
+                _days = (license_obj.license_expiry_date - _today).days
+                if _days < 0:
+                    EXPIRY_FILL = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+                elif _days <= 90:
+                    EXPIRY_FILL = PatternFill(start_color="ED7D31", end_color="ED7D31", fill_type="solid")
+                else:
+                    EXPIRY_FILL = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+            else:
+                EXPIRY_FILL = INFO_FILL
+            iec_val = license_obj.exporter.iec if license_obj.exporter else '-'
+            for col, (label, val) in enumerate([
+                ('License No', lic_no),
+                ('IEC', iec_val),
+                ('License Date', license_date_str),
+                ('Expiry Date', license_expiry_str),
+                ('Total CIF', f"{total_license_cif:,.2f}"),
+                ('Ledger Date', ledger_date_str),
+            ], 1):
+                c = ws.cell(row=r, column=col, value=f"{label}: {val}")
+                c.fill = EXPIRY_FILL if col == 4 else INFO_FILL
+                c.font = INFO_FONT
+                c.border = THIN_BORDER
+                c.alignment = Alignment(horizontal='right' if col == 5 else 'left', vertical='center')
+            r += 1
+
+            ws.merge_cells(f'A{r}:G{r}')
+            sh = ws[f'A{r}']
+            sh.value = 'Summary (BOE & Allotments)'
+            sh.fill = HDR_FILL; sh.font = Font(bold=True, color="FFFFFF", size=10)
+            sh.alignment = Alignment(horizontal='center', vertical='center')
+            r += 1
+
+            SUMM_COLS = ['Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']
+            for col, h in enumerate(SUMM_COLS, 1):
+                _hdr(ws, r, col, h)
+            r += 1
+
+            for _s, _sd, row_data, is_boe in summary_rows:
+                fill = BOE_FILL if is_boe else ALLOT_FILL
+                _cell(ws, r, 1, row_data['item'],      fill=fill)
+                _cell(ws, r, 2, row_data['type'],      fill=fill)
+                _cell(ws, r, 3, row_data['company'],   fill=fill)
+                _cell(ws, r, 4, row_data['reference'], fill=fill)
+                _cell(ws, r, 5, row_data['qty'],       fill=fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 6, row_data['rate'],      fill=fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 7, row_data['cif'],       fill=fill, align='right', num_fmt='#,##0.00')
+                r += 1
+
+            if summary_rows:
+                _cell(ws, r, 1, '', fill=TOTAL_FILL); _cell(ws, r, 2, '', fill=TOTAL_FILL)
+                _cell(ws, r, 3, '', fill=TOTAL_FILL)
+                _cell(ws, r, 4, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
+                _cell(ws, r, 5, '', fill=TOTAL_FILL); _cell(ws, r, 6, '', fill=TOTAL_FILL)
+                _cell(ws, r, 7, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                r += 1
+
+            r += 1
+
+            # ── Norm check for utilization planning ──────────────────────────
+            _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
+            _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
+            _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
+            _util_return = {
+                'lic_no': lic_no, 'norm_type': 'other',
+                'balance_cif': _license_balance,
+                'planned': {}, 'qty_per_cat': {}, 'total_planned': _license_balance, 'categories': []
+            }
+            if _is_e1:
+                _UTIL_PLAN = [
+                    ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
+                    ('FRUIT JUICE',                                   3.0, [],       ['fruit juice']),
+                    ('TARTARIC ACID / CITRIC ACID',                   0.7, [],       ['tartaric', 'citric']),
+                    ('POLYPROPYLENE',                                  1.0, [],       ['polypropylene']),
+                    ('PAPER & PAPER BOARD',                           0.7, [],       ['paper']),
+                ]
+                def _cat_match(hs, desc, hs_kw, name_kw):
+                    return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
+                _cat_totals = {label: 0.0 for label, *_ in _UTIL_PLAN}
+                _unclassified = []
+                for _ik in _bal_agg:
+                    _bq = _bal_agg[_ik]['qty']
+                    _de = _bal_agg[_ik]['description'] or _ik
+                    _hs = _bal_agg[_ik]['hs_code']
+                    _found = False
+                    for _lbl, _rt, _hskw, _nkw in _UTIL_PLAN:
+                        if _cat_match(_hs, _de, _hskw, _nkw):
+                            _cat_totals[_lbl] += _bq
+                            _found = True
+                            break
+                    if not _found:
+                        _unclassified.append((_de, _hs, _bq))
+            elif _is_e5:
+                _E5_CATS = [
+                    ('DIETARY FIBRE',            2.7,   ['0802']),
+                    ('VEGETABLE OIL (1513)',      2.26,  ['1513']),
+                    ('VEGETABLE OIL (15119020)',  1.2,   ['15119020']),
+                    ('MILK (0404)',               3.75,  ['0404']),
+                    ('MILK (3502)',               14.0,  ['3502']),
+                ]
+                _e5_totals = {label: 0.0 for label, *_ in _E5_CATS}
+                _e5_unclassified = []
+                _wf_qty = 0.0
+                _WF_HS = ['11010000']
+                for _ik in _bal_agg:
+                    _bq = _bal_agg[_ik]['qty']
+                    _hs = (_bal_agg[_ik]['hs_code'] or '').lower()
+                    _de = _bal_agg[_ik]['description'] or _ik
+                    _found = False
+                    for _lbl, _rt, _hskw in _E5_CATS:
+                        if any(k in _hs for k in _hskw):
+                            _e5_totals[_lbl] += _bq
+                            _found = True
+                            break
+                    if not _found:
+                        if any(k in _hs for k in _WF_HS):
+                            _wf_qty += _bq
+                        else:
+                            _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+
+            ws.merge_cells(f'A{r}:E{r}')
+            bh = ws[f'A{r}']
+            bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
+            bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
+            bh.alignment = Alignment(horizontal='center', vertical='center')
+            r += 1
+
+            ws.merge_cells(f'A{r}:D{r}')
+            bc = ws[f'A{r}']
+            bc.value = 'BALANCE CIF $'
+            bc.fill = HDR_FILL; bc.font = Font(bold=True, color="FFFFFF", size=9)
+            bc.alignment = Alignment(horizontal='center', vertical='center')
+            bc.border = THIN_BORDER
+            yc = ws.cell(row=r, column=5, value=_license_balance)
+            yc.fill = YEL_FILL; yc.font = Font(bold=True, size=9)
+            yc.border = THIN_BORDER
+            yc.alignment = Alignment(horizontal='right', vertical='center')
+            yc.number_format = '#,##0.00'
+            r += 1
+
+            if _is_e1:
+                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+
+                _total_planned = 0.0
+                _e1_remaining = _license_balance
+                _planned_per_cat = {}
+                for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
+                    _bq = _cat_totals[_lbl]
+                    _pc = min(_rt * _bq, _e1_remaining)
+                    _planned_per_cat[_lbl] = _pc
+                    _up = _pc / _bq if _bq else 0.0
+                    _e1_remaining -= _pc
+                    _total_planned += _pc
+                    _rf = None if _idx % 2 == 0 else ALT_FILL
+                    _cell(ws, r, 1, _lbl, fill=_rf)
+                    _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    r += 1
+
+                if _unclassified:
+                    r += 1
+                    ws.merge_cells(f'A{r}:E{r}')
+                    _uh = ws[f'A{r}']
+                    _uh.value = 'UNCLASSIFIED ITEMS'
+                    _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
+                    _uh.alignment = Alignment(horizontal='center', vertical='center')
+                    _uh.border = THIN_BORDER
+                    r += 1
+                    for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                        _hdr(ws, r, col, h)
+                    r += 1
+                    for _i2, (_de2, _hs2, _bq2) in enumerate(_unclassified):
+                        _rf2 = None if _i2 % 2 == 0 else ALT_FILL
+                        _cell(ws, r, 1, _de2, fill=_rf2)
+                        _cell(ws, r, 2, _hs2, fill=_rf2)
+                        _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 4, '',   fill=_rf2)
+                        _cell(ws, r, 5, '',   fill=_rf2)
+                        r += 1
+
+                r += 1
+                _cell(ws, r, 1, '', fill=TOTAL_FILL)
+                _cell(ws, r, 2, '', fill=TOTAL_FILL)
+                _cell(ws, r, 3, '', fill=TOTAL_FILL)
+                _cell(ws, r, 4, 'TOTAL PLANNED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+                _cell(ws, r, 5, _total_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                r += 1
+                _rem = _license_balance - _total_planned
+                _RF = PatternFill(start_color="C00000" if _rem < 0 else "1F4E79",
+                                  end_color="C00000" if _rem < 0 else "1F4E79", fill_type="solid")
+                for _ci in range(1, 5):
+                    _cx = ws.cell(row=r, column=_ci)
+                    _cx.fill = _RF; _cx.border = THIN_BORDER
+                _rc = ws.cell(row=r, column=4, value='REMAINING BALANCE CIF $')
+                _rc.fill = _RF; _rc.font = Font(bold=True, color="FFFFFF", size=9)
+                _rc.border = THIN_BORDER; _rc.alignment = Alignment(horizontal='right', vertical='center')
+                _rc2 = ws.cell(row=r, column=5, value=_rem)
+                _rc2.fill = _RF; _rc2.font = Font(bold=True, color="FFFFFF", size=9)
+                _rc2.border = THIN_BORDER
+                _rc2.alignment = Alignment(horizontal='right', vertical='center')
+                _rc2.number_format = '#,##0.00'
+                r += 1
+                _util_return.update({
+                    'norm_type': 'E1', 'planned': _planned_per_cat,
+                    'qty_per_cat': dict(_cat_totals),
+                    'total_planned': _total_planned,
+                    'categories': [lbl for lbl, *_ in _UTIL_PLAN]
+                })
+            elif _is_e5:
+                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+
+                _e5_planned = 0.0
+                _e5_remaining = _license_balance
+                _e5_planned_per_cat = {}
+                for _idx, (_lbl, _rt, _hskw) in enumerate(_E5_CATS):
+                    _bq = _e5_totals[_lbl]
+                    _pc = min(_rt * _bq, _e5_remaining)
+                    _e5_planned_per_cat[_lbl] = _pc
+                    _up = _pc / _bq if _bq else 0.0
+                    _e5_remaining -= _pc
+                    _e5_planned += _pc
+                    _rf = None if _idx % 2 == 0 else ALT_FILL
+                    _cell(ws, r, 1, _lbl, fill=_rf)
+                    _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    r += 1
+
+                # WHEAT FLOUR row — last priority, remaining balance
+                _wf = _e5_remaining
+                _wf_up = _wf / _wf_qty if _wf_qty else 0.0
+                _wf_rf = None if len(_E5_CATS) % 2 == 0 else ALT_FILL
+                _cell(ws, r, 1, 'WHEAT FLOUR', fill=_wf_rf)
+                _cell(ws, r, 2, '-', fill=_wf_rf, align='center')
+                _cell(ws, r, 3, _wf_qty if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.00' if _wf_qty else None)
+                _cell(ws, r, 4, _wf_up if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.000000' if _wf_qty else None)
+                _cell(ws, r, 5, _wf, fill=_wf_rf, align='right', num_fmt='#,##0.00')
+                r += 1
+
+                if _e5_unclassified:
+                    r += 1
+                    ws.merge_cells(f'A{r}:E{r}')
+                    _uh = ws[f'A{r}']
+                    _uh.value = 'UNCLASSIFIED ITEMS'
+                    _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
+                    _uh.alignment = Alignment(horizontal='center', vertical='center')
+                    _uh.border = THIN_BORDER
+                    r += 1
+                    for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                        _hdr(ws, r, col, h)
+                    r += 1
+                    for _i2, (_de2, _hs2, _bq2) in enumerate(_e5_unclassified):
+                        _rf2 = None if _i2 % 2 == 0 else ALT_FILL
+                        _cell(ws, r, 1, _de2, fill=_rf2)
+                        _cell(ws, r, 2, _hs2, fill=_rf2)
+                        _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 4, '',   fill=_rf2)
+                        _cell(ws, r, 5, '',   fill=_rf2)
+                        r += 1
+
+                r += 1
+                _cell(ws, r, 1, '', fill=TOTAL_FILL)
+                _cell(ws, r, 2, '', fill=TOTAL_FILL)
+                _cell(ws, r, 3, '', fill=TOTAL_FILL)
+                _cell(ws, r, 4, 'TOTAL ALLOCATED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+                _cell(ws, r, 5, _e5_planned + _wf, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                r += 1
+                _e5_planned_per_cat['WHEAT FLOUR'] = _wf
+                _e5_qty = dict(_e5_totals)
+                _e5_qty['WHEAT FLOUR'] = _wf_qty
+                _util_return.update({
+                    'norm_type': 'E5', 'planned': _e5_planned_per_cat,
+                    'qty_per_cat': _e5_qty,
+                    'total_planned': _e5_planned + _wf,
+                    'categories': [lbl for lbl, *_ in _E5_CATS] + ['WHEAT FLOUR']
+                })
+            else:
+                BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
+                for col, h in enumerate(BAL_COLS, 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+
+                for idx, item_key in enumerate(sorted(_bal_agg.keys())):
+                    b_qty = _bal_agg[item_key]['qty']
+                    if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
+                        _rpct  = _bal_agg[item_key]['restriction_pct']
+                        _sr_ids = _bal_agg[item_key]['sr_ids']
+                        _grp_debits = RowDetails.objects.filter(
+                            sr_number_id__in=_sr_ids, transaction_type='D'
+                        ).aggregate(
+                            total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                        )['total'] or _Dec('0')
+                        _grp_allots = AllotmentItems.objects.filter(
+                            item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
+                        ).aggregate(
+                            total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                        )['total'] or _Dec('0')
+                        _allowed = _total_export_cif * _rpct / _Dec('100')
+                        b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+                    else:
+                        b_cif = _license_balance
+
+                    unit_price = b_cif / b_qty if b_qty else 0.0
+                    desc = _bal_agg[item_key]['description'] or item_key
+                    hs   = _bal_agg[item_key]['hs_code']
+                    row_fill = None if idx % 2 == 0 else ALT_FILL
+
+                    _cell(ws, r, 1, hs,         fill=row_fill)
+                    _cell(ws, r, 2, desc,       fill=row_fill)
+                    _cell(ws, r, 3, b_qty,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                    r += 1
+
+            ws.column_dimensions['A'].width = 14
+            ws.column_dimensions['B'].width = 14
+            ws.column_dimensions['C'].width = 40
+            ws.column_dimensions['D'].width = 22
+            ws.column_dimensions['E'].width = 25
+            ws.column_dimensions['F'].width = 28
+            ws.column_dimensions['G'].width = 14
+            ws.column_dimensions['H'].width = 14
+            ws.column_dimensions['I'].width = 16
+            ws.freeze_panes = 'A2'
+            return _util_return
+
+        def _norm_sort_key(lic):
+            norms = list(lic.export_license.values_list('norm_class__norm_class', flat=True))
+            norm_str = ', '.join(sorted(str(n) for n in norms if n)) or 'ZZZ'
+            # Group order: E1 first, E5 second, rest alphabetically
+            if any('E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in norms if n):
+                return ('0_E1', norm_str)
+            if any(str(n).strip() == 'E5' for n in norms if n):
+                return ('1_E5', norm_str)
+            return ('2_' + norm_str, norm_str)
+
+        sorted_licenses = sorted(licenses, key=_norm_sort_key)
+
+        _util_summaries = []
+        for license_obj in sorted_licenses:
+            _util_summaries.append(_write_license_sheet(wb, license_obj))
+
+        # ── Create Utilization Planning Summary as first sheet ─────────────────
+        _E1_CATS_LABELS = [
+            'OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS',
+            'FRUIT JUICE',
+            'TARTARIC ACID / CITRIC ACID',
+            'POLYPROPYLENE',
+            'PAPER & PAPER BOARD',
+        ]
+        _E5_CATS_LABELS = [
+            'DIETARY FIBRE',
+            'VEGETABLE OIL (1513)',
+            'VEGETABLE OIL (15119020)',
+            'MILK (0404)',
+            'MILK (3502)',
+            'WHEAT FLOUR',
+        ]
+        _e1_rows = [s for s in _util_summaries if s['norm_type'] == 'E1']
+        _e5_rows = [s for s in _util_summaries if s['norm_type'] == 'E5']
+        _other_rows = [s for s in _util_summaries if s['norm_type'] == 'other']
+
+        _sw = wb.create_sheet(title="Utilization Planning Summary")
+        wb.move_sheet(_sw, offset=-(len(wb.worksheets) - 1))
+
+        _sr = 1
+
+        def _shdr(ws, row, col, value, span=1):
+            c = ws.cell(row=row, column=col, value=value)
+            c.fill = HDR_FILL; c.font = HDR_FONT
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            return c
+
+        def _scell(ws, row, col, value, fill=None, bold=False, align='left', num_fmt=None):
+            c = ws.cell(row=row, column=col, value=value)
+            if fill: c.fill = fill
+            c.font = BOLD if bold else NORM
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal=align, vertical='center', wrap_text=True)
+            if num_fmt: c.number_format = num_fmt
+            return c
+
+        # E1: 2 fixed + 5 cats×2 + 1 total + 1 wastage = 14
+        # E5: 2 fixed + 6 cats×2 + 1 total + 1 wastage = 16
+        _E1_TOTAL_COL  = 2 + len(_E1_CATS_LABELS) * 2 + 1   # 13
+        _E1_WASTE_COL  = _E1_TOTAL_COL + 1                   # 14
+        _E5_TOTAL_COL  = 2 + len(_E5_CATS_LABELS) * 2 + 1   # 15
+        _E5_WASTE_COL  = _E5_TOTAL_COL + 1                   # 16
+        _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 2)
+
+        WASTE_FILL = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
+
+        def _merge_hdr(ws, r, c1, c2, value, fill_color="1F4E79"):
+            ws.merge_cells(f'{_gcl(c1)}{r}:{_gcl(c2)}{r}')
+            c = ws[f'{_gcl(c1)}{r}']
+            c.value = value
+            c.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+            c.font = Font(bold=True, color="FFFFFF", size=9)
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        # Title row
+        _sw.merge_cells(f'A{_sr}:{_gcl(_MAX_COL)}{_sr}')
+        _tc = _sw[f'A{_sr}']
+        _tc.value = 'UTILIZATION PLANNING SUMMARY'
+        _tc.fill = HDR_FILL; _tc.font = Font(bold=True, color="FFFFFF", size=12)
+        _tc.alignment = Alignment(horizontal='center', vertical='center')
+        _sr += 1
+
+        # ── E1 section ────────────────────────────────────────────────────────
+        if _e1_rows:
+            _merge_hdr(_sw, _sr, 1, _E1_WASTE_COL, 'E1 NORM LICENSES', "2E75B6")
+            _sr += 1
+
+            _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'License No')
+            _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'Balance CIF $')
+            for _ci, _cat in enumerate(_E1_CATS_LABELS):
+                _cc = 3 + _ci * 2
+                _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+1)}{_sr}')
+                _shdr(_sw, _sr, _cc, _cat)
+            _sw.merge_cells(f'{_gcl(_E1_TOTAL_COL)}{_sr}:{_gcl(_E1_TOTAL_COL)}{_sr+1}')
+            _shdr(_sw, _sr, _E1_TOTAL_COL, 'TOTAL PLANNED CIF $')
+            _sw.merge_cells(f'{_gcl(_E1_WASTE_COL)}{_sr}:{_gcl(_E1_WASTE_COL)}{_sr+1}')
+            _c = _sw.cell(row=_sr, column=_E1_WASTE_COL, value='Wastage $')
+            _c.fill = WASTE_FILL; _c.font = Font(bold=True, size=9)
+            _c.border = THIN_BORDER
+            _c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            _sr += 1
+            for _ci in range(len(_E1_CATS_LABELS)):
+                _cc = 3 + _ci * 2
+                _shdr(_sw, _sr, _cc,     'Bal Qty')
+                _shdr(_sw, _sr, _cc + 1, 'Planned CIF ($)')
+            _sr += 1
+
+            _e1_tot = {'bal': 0.0, 'planned': 0.0, 'waste': 0.0,
+                       'qty': {c: 0.0 for c in _E1_CATS_LABELS},
+                       'cif': {c: 0.0 for c in _E1_CATS_LABELS}}
+            for _i, _row in enumerate(_e1_rows):
+                _rf = None if _i % 2 == 0 else ALT_FILL
+                _waste = _row['balance_cif'] - _row['total_planned']
+                _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
+                _scell(_sw, _sr, 2, _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                for _ci, _cat in enumerate(_E1_CATS_LABELS):
+                    _cc = 3 + _ci * 2
+                    _q = _row['qty_per_cat'].get(_cat, 0.0)
+                    _p = _row['planned'].get(_cat, 0.0)
+                    _scell(_sw, _sr, _cc,     _q, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _scell(_sw, _sr, _cc + 1, _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _e1_tot['qty'][_cat] += _q
+                    _e1_tot['cif'][_cat] += _p
+                _scell(_sw, _sr, _E1_TOTAL_COL, _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
+                _wc = _sw.cell(row=_sr, column=_E1_WASTE_COL, value=_waste)
+                _wc.fill = WASTE_FILL; _wc.font = Font(bold=True, size=9)
+                _wc.border = THIN_BORDER; _wc.alignment = Alignment(horizontal='right', vertical='center')
+                _wc.number_format = '#,##0.00'
+                _e1_tot['bal']     += _row['balance_cif']
+                _e1_tot['planned'] += _row['total_planned']
+                _e1_tot['waste']   += _waste
+                _sr += 1
+
+            # E1 total row
+            _scell(_sw, _sr, 1, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
+            _scell(_sw, _sr, 2, _e1_tot['bal'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            for _ci, _cat in enumerate(_E1_CATS_LABELS):
+                _cc = 3 + _ci * 2
+                _scell(_sw, _sr, _cc,     _e1_tot['qty'][_cat], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 1, _e1_tot['cif'][_cat], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, _E1_TOTAL_COL, _e1_tot['planned'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _wt = _sw.cell(row=_sr, column=_E1_WASTE_COL, value=_e1_tot['waste'])
+            _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
+            _wt.border = THIN_BORDER; _wt.alignment = Alignment(horizontal='right', vertical='center')
+            _wt.number_format = '#,##0.00'
+            _sr += 2
+
+        # ── E5 section ────────────────────────────────────────────────────────
+        if _e5_rows:
+            _merge_hdr(_sw, _sr, 1, _E5_WASTE_COL, 'E5 NORM LICENSES', "375623")
+            _sr += 1
+
+            _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'License No')
+            _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'Balance CIF $')
+            for _ci, _cat in enumerate(_E5_CATS_LABELS):
+                _cc = 3 + _ci * 2
+                _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+1)}{_sr}')
+                _shdr(_sw, _sr, _cc, _cat)
+            _sw.merge_cells(f'{_gcl(_E5_TOTAL_COL)}{_sr}:{_gcl(_E5_TOTAL_COL)}{_sr+1}')
+            _shdr(_sw, _sr, _E5_TOTAL_COL, 'TOTAL ALLOCATED CIF $')
+            _sw.merge_cells(f'{_gcl(_E5_WASTE_COL)}{_sr}:{_gcl(_E5_WASTE_COL)}{_sr+1}')
+            _c = _sw.cell(row=_sr, column=_E5_WASTE_COL, value='Wastage $')
+            _c.fill = WASTE_FILL; _c.font = Font(bold=True, size=9)
+            _c.border = THIN_BORDER
+            _c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            _sr += 1
+            for _ci in range(len(_E5_CATS_LABELS)):
+                _cc = 3 + _ci * 2
+                _shdr(_sw, _sr, _cc,     'Bal Qty')
+                _shdr(_sw, _sr, _cc + 1, 'Planned CIF ($)')
+            _sr += 1
+
+            _e5_tot = {'bal': 0.0, 'planned': 0.0, 'waste': 0.0,
+                       'qty': {c: 0.0 for c in _E5_CATS_LABELS},
+                       'cif': {c: 0.0 for c in _E5_CATS_LABELS}}
+            for _i, _row in enumerate(_e5_rows):
+                _rf = None if _i % 2 == 0 else ALT_FILL
+                _waste = _row['balance_cif'] - _row['total_planned']
+                _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
+                _scell(_sw, _sr, 2, _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                for _ci, _cat in enumerate(_E5_CATS_LABELS):
+                    _cc = 3 + _ci * 2
+                    _q = _row['qty_per_cat'].get(_cat, 0.0)
+                    _p = _row['planned'].get(_cat, 0.0)
+                    _scell(_sw, _sr, _cc,     _q, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _scell(_sw, _sr, _cc + 1, _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _e5_tot['qty'][_cat] += _q
+                    _e5_tot['cif'][_cat] += _p
+                _scell(_sw, _sr, _E5_TOTAL_COL, _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
+                _wc = _sw.cell(row=_sr, column=_E5_WASTE_COL, value=_waste)
+                _wc.fill = WASTE_FILL; _wc.font = Font(bold=True, size=9)
+                _wc.border = THIN_BORDER; _wc.alignment = Alignment(horizontal='right', vertical='center')
+                _wc.number_format = '#,##0.00'
+                _e5_tot['bal']     += _row['balance_cif']
+                _e5_tot['planned'] += _row['total_planned']
+                _e5_tot['waste']   += _waste
+                _sr += 1
+
+            # E5 total row
+            _scell(_sw, _sr, 1, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
+            _scell(_sw, _sr, 2, _e5_tot['bal'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            for _ci, _cat in enumerate(_E5_CATS_LABELS):
+                _cc = 3 + _ci * 2
+                _scell(_sw, _sr, _cc,     _e5_tot['qty'][_cat], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 1, _e5_tot['cif'][_cat], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, _E5_TOTAL_COL, _e5_tot['planned'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _wt = _sw.cell(row=_sr, column=_E5_WASTE_COL, value=_e5_tot['waste'])
+            _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
+            _wt.border = THIN_BORDER; _wt.alignment = Alignment(horizontal='right', vertical='center')
+            _wt.number_format = '#,##0.00'
+            _sr += 2
+
+        # ── Other licenses section ─────────────────────────────────────────────
+        if _other_rows:
+            _merge_hdr(_sw, _sr, 1, 2, 'OTHER LICENSES', "595959")
+            _sr += 1
+            _shdr(_sw, _sr, 1, 'License No')
+            _shdr(_sw, _sr, 2, 'Balance CIF $')
+            _sr += 1
+            for _i, _row in enumerate(_other_rows):
+                _rf = None if _i % 2 == 0 else ALT_FILL
+                _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
+                _scell(_sw, _sr, 2, _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                _sr += 1
+
+        # Column widths for summary sheet
+        _sw.column_dimensions['A'].width = 18
+        _sw.column_dimensions['B'].width = 16
+        for _col_idx in range(3, _MAX_COL + 1):
+            _sw.column_dimensions[_gcl(_col_idx)].width = 14
+        _sw.freeze_panes = 'A4'
+
+        excel_file = BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+
+        response = HttpResponse(
+            excel_file.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="bulk_license_summary.xlsx"'
+        return response
+
+    @action(detail=True, methods=['get'], url_path='balance-excel')
+    def balance_excel(self, request, pk=None):
+        """
+        Generate Excel summary report matching the two bottom tables in balance_pdf:
+        1. Summary (BOE & Allotments)
+        2. Summary (Balance Quantity)
+        """
+        from django.http import HttpResponse
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
+        from io import BytesIO
+        from decimal import Decimal as _Dec
+        from collections import defaultdict
+        from django.db.models import Sum as _Sum, DecimalField as _DF, Value as _Val
+        from django.db.models.functions import Coalesce as _Coalesce
+        from bill_of_entry.models import RowDetails
+        from allotment.models import AllotmentItems
+
+        license_obj = self.get_object()
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Summary"
+
+        # ── Styles ────────────────────────────────────────────────────────────
+        HDR_FILL   = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+        HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
+        BOE_FILL   = PatternFill(start_color="DEEAF1", end_color="DEEAF1", fill_type="solid")
+        ALLOT_FILL = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+        TOTAL_FILL = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+        YEL_FILL   = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+        ALT_FILL   = PatternFill(start_color="F9F9F9", end_color="F9F9F9", fill_type="solid")
+        BOLD       = Font(bold=True, size=9)
+        NORM       = Font(size=9)
+        THIN_BORDER = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
+        )
+
+        def _hdr(ws, row, col, value):
+            c = ws.cell(row=row, column=col, value=value)
+            c.fill = HDR_FILL; c.font = HDR_FONT
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            return c
+
+        def _cell(ws, row, col, value, fill=None, bold=False, align='left', num_fmt=None):
+            c = ws.cell(row=row, column=col, value=value)
+            if fill: c.fill = fill
+            c.font = BOLD if bold else NORM
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal=align, vertical='center', wrap_text=True)
+            if num_fmt: c.number_format = num_fmt
+            return c
+
+        license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
+        license_expiry_str = license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-'
+        ledger_date_str = license_obj.ledger_date.strftime('%d-%m-%Y') if license_obj.ledger_date else '-'
+        lic_no = license_obj.license_number or '-'
+
+        # ── Collect summary rows ──────────────────────────────────────────────
+        from datetime import date as _date_cls
+        summary_rows = []   # (group, sort_date, row_data_dict, is_boe)
+        total_cif = 0.0
+
+        for item in license_obj.import_license.all():
+            item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
+
+            boes = RowDetails.objects.filter(
+                sr_number_id=item.id, transaction_type='D'
+            ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+
+            for rd in boes:
+                qty  = float(rd.qty or 0)
+                cif  = float(rd.cif_fc or 0)
+                rate = cif / qty if qty else 0.0
+                total_cif += cif
+                boe_company = rd.bill_of_entry.company.name if rd.bill_of_entry.company else '-'
+                ref_no   = rd.bill_of_entry.bill_of_entry_number or '-'
+                ref_date = rd.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if rd.bill_of_entry.bill_of_entry_date else ''
+                ref_str  = f"{ref_no} / {ref_date}" if ref_date else ref_no
+                product  = rd.bill_of_entry.product_name or item_name
+                _sort_dt = rd.bill_of_entry.bill_of_entry_date or _date_cls.min
+                summary_rows.append((0, _sort_dt, {
+                    'item': product, 'type': 'BOE', 'company': boe_company,
+                    'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
+                }, True))
+
+            allotments = AllotmentItems.objects.filter(
+                item_id=item.id, allotment__bill_of_entry__isnull=True
+            ).select_related('allotment', 'allotment__company')
+
+            for ai in allotments:
+                qty     = float(ai.qty or 0)
+                cif     = float(ai.cif_fc or 0)
+                rate    = cif / qty if qty else 0.0
+                total_cif += cif
+                company = ai.allotment.company.name if ai.allotment.company else '-'
+                invoice = ai.allotment.invoice or '-'
+                eta     = ai.allotment.estimated_arrival_date.strftime('%d-%m-%Y') if ai.allotment.estimated_arrival_date else ''
+                ref_str = f"{invoice} / ETA: {eta}" if eta else invoice
+                product = ai.allotment.item_name or item_name
+                _sort_dt = ai.allotment.estimated_arrival_date or _date_cls.min
+                summary_rows.append((1, _sort_dt, {
+                    'item': product, 'type': 'Allotment', 'company': company,
+                    'reference': ref_str, 'qty': qty, 'rate': rate, 'cif': cif
+                }, False))
+
+        # BOEs first (sorted by BOE date), then allotments (sorted by allotment date)
+        summary_rows.sort(key=lambda x: (x[0], x[1]))
+
+        # ── Pre-aggregate balance data ─────────────────────────────────────────
+        _bal_agg = defaultdict(lambda: {
+            'qty': 0.0, 'is_restricted': False, 'restriction_pct': None,
+            'sr_ids': [], 'description': '', 'hs_code': ''
+        })
+        for _item in license_obj.import_license.all():
+            _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
+            _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+            _bal_agg[_key]['sr_ids'].append(_item.id)
+            if _item.is_restricted:
+                _bal_agg[_key]['is_restricted'] = True
+                if _bal_agg[_key]['restriction_pct'] is None:
+                    _rpct_val = _item.items.filter(
+                        restriction_percentage__gt=0
+                    ).values_list('restriction_percentage', flat=True).first()
+                    if _rpct_val:
+                        _bal_agg[_key]['restriction_pct'] = _Dec(str(_rpct_val))
+            if not _bal_agg[_key]['description']:
+                _bal_agg[_key]['description'] = _item.description or _key
+            if not _bal_agg[_key]['hs_code']:
+                _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
+
+        _license_balance = float(license_obj.balance_cif or 0)
+        _total_export_cif = _Dec(str(license_obj._calculate_license_credit() or 0))
+        total_license_cif = total_cif + _license_balance
+
+        # ══════════════════════════════════════════════════════════════════════
+        # Section 1: License info row
+        # ══════════════════════════════════════════════════════════════════════
+        r = 1
+        _today = _date_cls.today()
+        INFO_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+        INFO_FONT = Font(bold=True, color="FFFFFF", size=9)
+        if license_obj.license_expiry_date:
+            _days = (license_obj.license_expiry_date - _today).days
+            if _days < 0:
+                EXPIRY_FILL = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+            elif _days <= 90:
+                EXPIRY_FILL = PatternFill(start_color="ED7D31", end_color="ED7D31", fill_type="solid")
+            else:
+                EXPIRY_FILL = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+        else:
+            EXPIRY_FILL = INFO_FILL
+        for col, (label, val) in enumerate([
+            ('License No', lic_no),
+            ('License Date', license_date_str),
+            ('Expiry Date', license_expiry_str),
+            ('Total CIF', f"{total_license_cif:,.2f}"),
+            ('Ledger Date', ledger_date_str),
+        ], 1):
+            c = ws.cell(row=r, column=col, value=f"{label}: {val}")
+            c.fill = EXPIRY_FILL if col == 3 else INFO_FILL
+            c.font = INFO_FONT
+            c.border = THIN_BORDER
+            c.alignment = Alignment(horizontal='right' if col == 4 else 'left', vertical='center')
+        r += 1
+
+        # ══════════════════════════════════════════════════════════════════════
+        # Section 2: Summary (BOE & Allotments)
+        # ══════════════════════════════════════════════════════════════════════
+        # Section header (merged A:G)
+        ws.merge_cells(f'A{r}:G{r}')
+        sh = ws[f'A{r}']
+        sh.value = 'Summary (BOE & Allotments)'
+        sh.fill = HDR_FILL; sh.font = Font(bold=True, color="FFFFFF", size=10)
+        sh.alignment = Alignment(horizontal='center', vertical='center')
+        r += 1
+
+        # Column headers
+        SUMM_COLS = ['Item', 'Type', 'Company', 'Reference', 'Qty', 'Rate', 'CIF Value (FC)']
+        for col, h in enumerate(SUMM_COLS, 1):
+            _hdr(ws, r, col, h)
+        r += 1
+
+        # Data rows
+        for _s, _sd, row_data, is_boe in summary_rows:
+            fill = BOE_FILL if is_boe else ALLOT_FILL
+            _cell(ws, r, 1, row_data['item'],      fill=fill)
+            _cell(ws, r, 2, row_data['type'],      fill=fill)
+            _cell(ws, r, 3, row_data['company'],   fill=fill)
+            _cell(ws, r, 4, row_data['reference'], fill=fill)
+            _cell(ws, r, 5, row_data['qty'],       fill=fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 6, row_data['rate'],      fill=fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 7, row_data['cif'],       fill=fill, align='right', num_fmt='#,##0.00')
+            r += 1
+
+        # Total row
+        if summary_rows:
+            _cell(ws, r, 1, '', fill=TOTAL_FILL)
+            _cell(ws, r, 2, '', fill=TOTAL_FILL)
+            _cell(ws, r, 3, '', fill=TOTAL_FILL)
+            _cell(ws, r, 4, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
+            _cell(ws, r, 5, '', fill=TOTAL_FILL)
+            _cell(ws, r, 6, '', fill=TOTAL_FILL)
+            _cell(ws, r, 7, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            r += 1
+
+        r += 1  # blank row
+
+        # ══════════════════════════════════════════════════════════════════════
+        # Section 3: Utilization Planning (E1) / Summary (Balance Quantity)
+        # ══════════════════════════════════════════════════════════════════════
+        _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
+        _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
+        _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
+        if _is_e1:
+            _UTIL_PLAN = [
+                ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
+                ('FRUIT JUICE',                                   3.0, [],       ['fruit juice']),
+                ('TARTARIC ACID / CITRIC ACID',                   0.7, [],       ['tartaric', 'citric']),
+                ('POLYPROPYLENE',                                  1.0, [],       ['polypropylene']),
+                ('PAPER & PAPER BOARD',                           0.7, [],       ['paper']),
+            ]
+            def _cat_match(hs, desc, hs_kw, name_kw):
+                return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
+            _cat_totals = {label: 0.0 for label, *_ in _UTIL_PLAN}
+            _unclassified = []
+            for _ik in _bal_agg:
+                _bq = _bal_agg[_ik]['qty']
+                _de = _bal_agg[_ik]['description'] or _ik
+                _hs = _bal_agg[_ik]['hs_code']
+                _found = False
+                for _lbl, _rt, _hskw, _nkw in _UTIL_PLAN:
+                    if _cat_match(_hs, _de, _hskw, _nkw):
+                        _cat_totals[_lbl] += _bq
+                        _found = True
+                        break
+                if not _found:
+                    _unclassified.append((_de, _hs, _bq))
+
+        ws.merge_cells(f'A{r}:E{r}')
+        bh = ws[f'A{r}']
+        bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
+        bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
+        bh.alignment = Alignment(horizontal='center', vertical='center')
+        r += 1
+
+        # BALANCE CIF $ row: cols A-D merged + col E yellow
+        ws.merge_cells(f'A{r}:D{r}')
+        bc = ws[f'A{r}']
+        bc.value = 'BALANCE CIF $'
+        bc.fill = HDR_FILL; bc.font = Font(bold=True, color="FFFFFF", size=9)
+        bc.alignment = Alignment(horizontal='center', vertical='center')
+        bc.border = THIN_BORDER
+        yc = ws.cell(row=r, column=5, value=_license_balance)
+        yc.fill = YEL_FILL; yc.font = Font(bold=True, size=9)
+        yc.border = THIN_BORDER
+        yc.alignment = Alignment(horizontal='right', vertical='center')
+        yc.number_format = '#,##0.00'
+        r += 1
+
+        if _is_e1:
+            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                _hdr(ws, r, col, h)
+            r += 1
+
+            _total_planned = 0.0
+            _e1_remaining = _license_balance
+            for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
+                _bq = _cat_totals[_lbl]
+                _pc = min(_rt * _bq, _e1_remaining)
+                _up = _pc / _bq if _bq else 0.0
+                _e1_remaining -= _pc
+                _total_planned += _pc
+                _rf = None if _idx % 2 == 0 else ALT_FILL
+                _cell(ws, r, 1, _lbl, fill=_rf)
+                _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                r += 1
+
+            if _unclassified:
+                r += 1
+                ws.merge_cells(f'A{r}:E{r}')
+                _uh = ws[f'A{r}']
+                _uh.value = 'UNCLASSIFIED ITEMS'
+                _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
+                _uh.alignment = Alignment(horizontal='center', vertical='center')
+                _uh.border = THIN_BORDER
+                r += 1
+                for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+                for _i2, (_de2, _hs2, _bq2) in enumerate(_unclassified):
+                    _rf2 = None if _i2 % 2 == 0 else ALT_FILL
+                    _cell(ws, r, 1, _de2, fill=_rf2)
+                    _cell(ws, r, 2, _hs2, fill=_rf2)
+                    _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, '',   fill=_rf2)
+                    _cell(ws, r, 5, '',   fill=_rf2)
+                    r += 1
+
+            r += 1
+            _cell(ws, r, 1, '', fill=TOTAL_FILL)
+            _cell(ws, r, 2, '', fill=TOTAL_FILL)
+            _cell(ws, r, 3, '', fill=TOTAL_FILL)
+            _cell(ws, r, 4, 'TOTAL PLANNED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+            _cell(ws, r, 5, _total_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            r += 1
+            _rem = _license_balance - _total_planned
+            _RF = PatternFill(start_color="C00000" if _rem < 0 else "1F4E79",
+                              end_color="C00000" if _rem < 0 else "1F4E79", fill_type="solid")
+            for _ci in range(1, 5):
+                _cx = ws.cell(row=r, column=_ci)
+                _cx.fill = _RF; _cx.border = THIN_BORDER
+            _rc = ws.cell(row=r, column=4, value='REMAINING BALANCE CIF $')
+            _rc.fill = _RF; _rc.font = Font(bold=True, color="FFFFFF", size=9)
+            _rc.border = THIN_BORDER; _rc.alignment = Alignment(horizontal='right', vertical='center')
+            _rc2 = ws.cell(row=r, column=5, value=_rem)
+            _rc2.fill = _RF; _rc2.font = Font(bold=True, color="FFFFFF", size=9)
+            _rc2.border = THIN_BORDER
+            _rc2.alignment = Alignment(horizontal='right', vertical='center')
+            _rc2.number_format = '#,##0.00'
+            r += 1
+        elif _is_e5:
+            _E5_CATS = [
+                ('DIETARY FIBRE',            2.7,  ['0802']),
+                ('VEGETABLE OIL (1513)',      2.26, ['1513']),
+                ('VEGETABLE OIL (15119020)',  1.2,  ['15119020']),
+                ('MILK (0404)',               3.75, ['0404']),
+                ('MILK (3502)',               14.0, ['3502']),
+            ]
+            _e5_totals = {lbl: 0.0 for lbl, *_ in _E5_CATS}
+            _e5_unclassified = []
+            _wf_qty = 0.0
+            _WF_HS = ['11010000']
+            for _ik in _bal_agg:
+                _bq = _bal_agg[_ik]['qty']
+                _hs = (_bal_agg[_ik]['hs_code'] or '').lower()
+                _de = _bal_agg[_ik]['description'] or _ik
+                _found = False
+                for _lbl, _rt, _hskw in _E5_CATS:
+                    if any(k in _hs for k in _hskw):
+                        _e5_totals[_lbl] += _bq
+                        _found = True
+                        break
+                if not _found:
+                    if any(k in _hs for k in _WF_HS):
+                        _wf_qty += _bq
+                    else:
+                        _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+
+            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                _hdr(ws, r, col, h)
+            r += 1
+
+            _e5_planned = 0.0
+            _e5_remaining = _license_balance
+            for _idx, (_lbl, _rt, _hskw) in enumerate(_E5_CATS):
+                _bq = _e5_totals[_lbl]
+                _pc = min(_rt * _bq, _e5_remaining)
+                _up = _pc / _bq if _bq else 0.0
+                _e5_remaining -= _pc
+                _e5_planned += _pc
+                _rf = None if _idx % 2 == 0 else ALT_FILL
+                _cell(ws, r, 1, _lbl, fill=_rf)
+                _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                r += 1
+
+            # WHEAT FLOUR row — last priority, remaining balance
+            _wf = _e5_remaining
+            _wf_up = _wf / _wf_qty if _wf_qty else 0.0
+            _wf_rf = None if len(_E5_CATS) % 2 == 0 else ALT_FILL
+            _cell(ws, r, 1, 'WHEAT FLOUR', fill=_wf_rf)
+            _cell(ws, r, 2, '-', fill=_wf_rf, align='center')
+            _cell(ws, r, 3, _wf_qty if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.00' if _wf_qty else None)
+            _cell(ws, r, 4, _wf_up if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.000000' if _wf_qty else None)
+            _cell(ws, r, 5, _wf, fill=_wf_rf, align='right', num_fmt='#,##0.00')
+            r += 1
+
+            if _e5_unclassified:
+                r += 1
+                ws.merge_cells(f'A{r}:E{r}')
+                _uh = ws[f'A{r}']
+                _uh.value = 'UNCLASSIFIED ITEMS'
+                _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
+                _uh.alignment = Alignment(horizontal='center', vertical='center')
+                _uh.border = THIN_BORDER
+                r += 1
+                for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+                for _i2, (_de2, _hs2, _bq2) in enumerate(_e5_unclassified):
+                    _rf2 = None if _i2 % 2 == 0 else ALT_FILL
+                    _cell(ws, r, 1, _de2, fill=_rf2)
+                    _cell(ws, r, 2, _hs2, fill=_rf2)
+                    _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, '',   fill=_rf2)
+                    _cell(ws, r, 5, '',   fill=_rf2)
+                    r += 1
+
+            r += 1
+            _cell(ws, r, 1, '', fill=TOTAL_FILL)
+            _cell(ws, r, 2, '', fill=TOTAL_FILL)
+            _cell(ws, r, 3, '', fill=TOTAL_FILL)
+            _cell(ws, r, 4, 'TOTAL ALLOCATED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+            _cell(ws, r, 5, _e5_planned + _wf, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            r += 1
+        else:
+            # Column headers
+            BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
+            for col, h in enumerate(BAL_COLS, 1):
+                _hdr(ws, r, col, h)
+            r += 1
+
+            # Data rows
+            for idx, item_key in enumerate(sorted(_bal_agg.keys())):
+                b_qty = _bal_agg[item_key]['qty']
+                if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
+                    _rpct  = _bal_agg[item_key]['restriction_pct']
+                    _sr_ids = _bal_agg[item_key]['sr_ids']
+                    _grp_debits = RowDetails.objects.filter(
+                        sr_number_id__in=_sr_ids, transaction_type='D'
+                    ).aggregate(
+                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                    )['total'] or _Dec('0')
+                    _grp_allots = AllotmentItems.objects.filter(
+                        item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
+                    ).aggregate(
+                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
+                    )['total'] or _Dec('0')
+                    _allowed = _total_export_cif * _rpct / _Dec('100')
+                    b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+                else:
+                    b_cif = _license_balance
+
+                unit_price = b_cif / b_qty if b_qty else 0.0
+                desc = _bal_agg[item_key]['description'] or item_key
+                hs   = _bal_agg[item_key]['hs_code']
+                row_fill = None if idx % 2 == 0 else ALT_FILL
+
+                _cell(ws, r, 1, hs,         fill=row_fill)
+                _cell(ws, r, 2, desc,       fill=row_fill)
+                _cell(ws, r, 3, b_qty,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                r += 1
+
+        # ── Column widths ─────────────────────────────────────────────────────
+        ws.column_dimensions['A'].width = 14
+        ws.column_dimensions['B'].width = 14
+        ws.column_dimensions['C'].width = 40
+        ws.column_dimensions['D'].width = 22
+        ws.column_dimensions['E'].width = 25
+        ws.column_dimensions['F'].width = 28
+        ws.column_dimensions['G'].width = 14
+        ws.column_dimensions['H'].width = 14
+        ws.column_dimensions['I'].width = 16
+
+        ws.freeze_panes = 'A2'
+
+        # ── Save ──────────────────────────────────────────────────────────────
+        excel_file = BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+
+        response = HttpResponse(
+            excel_file.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{license_obj.license_number}-summary.xlsx"'
+        return response
+
+    @action(detail=True, methods=['get'], url_path='balance-excel-unused')
+    def balance_excel_unused(self, request, pk=None):
+        """Original full balance Excel — kept for reference, no longer exposed."""
+        from django.http import HttpResponse
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from io import BytesIO
+        from datetime import date
+
+        license_obj = self.get_object()
+
+        # Create workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "License Balance"
+
+        # Header styling
+        header_fill = PatternFill(start_color="2c3e50", end_color="2c3e50", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        data_fill = PatternFill(start_color="ecf0f1", end_color="ecf0f1", fill_type="solid")
+        section_fill = PatternFill(start_color="667eea", end_color="667eea", fill_type="solid")
+        section_font = Font(bold=True, color="FFFFFF", size=12)
+
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # Title
+        current_row = 1
+        ws.merge_cells(f'A{current_row}:J{current_row}')
+        title_cell = ws[f'A{current_row}']
+        title_cell.value = "License Balance Report"
+        title_cell.font = Font(bold=True, size=14)
+        title_cell.alignment = Alignment(horizontal='center', vertical='center')
+        current_row += 2
+
+        # License Header Information
+        # Row 1 Headers
+        headers_row1 = ['License Number', 'License Date', 'License Expiry Date', 'Exporter Name', 'Port Name']
+        for col_num, header in enumerate(headers_row1, 1):
+            cell = ws.cell(row=current_row, column=col_num, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal='left', vertical='center')
+        current_row += 1
+
+        # Row 1 Values
+        values_row1 = [
+            license_obj.license_number or '-',
+            license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-',
+            license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-',
+            license_obj.exporter.name if license_obj.exporter else '-',
+            license_obj.port.name if license_obj.port else '-'
+        ]
+        for col_num, value in enumerate(values_row1, 1):
+            cell = ws.cell(row=current_row, column=col_num, value=value)
+            cell.fill = data_fill
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal='left', vertical='center')
+        current_row += 2
+
+        # Row 2 Headers
+        headers_row2 = ['Purchase Status', 'Balance CIF', 'Get Norm Class', 'Latest Transfer']
+        for col_num, header in enumerate(headers_row2, 1):
+            cell = ws.cell(row=current_row, column=col_num, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal='left', vertical='center')
+        current_row += 1
+
+        # Row 2 Values
+        values_row2 = [
+            str(license_obj.purchase_status) if license_obj.purchase_status else '-',
+            f"{float(license_obj.balance_cif or 0):.2f}",
+            license_obj.get_norm_class or '-',
+            str(license_obj.latest_transfer) if license_obj.latest_transfer else '-'
+        ]
+        for col_num, value in enumerate(values_row2, 1):
+            cell = ws.cell(row=current_row, column=col_num, value=value)
+            cell.fill = data_fill
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal='left', vertical='center')
+        current_row += 2
+
+        # Export Items Section
+        if license_obj.export_license.exists():
+            # Section header
+            ws.merge_cells(f'A{current_row}:C{current_row}')
+            section_cell = ws[f'A{current_row}']
+            section_cell.value = "Export Items"
+            section_cell.fill = section_fill
+            section_cell.font = section_font
+            section_cell.alignment = Alignment(horizontal='center', vertical='center')
+            current_row += 1
+
+            # Export items headers
+            export_headers = ['Item', 'Total CIF', 'Balance CIF']
+            for col_num, header in enumerate(export_headers, 1):
+                cell = ws.cell(row=current_row, column=col_num, value=header)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.border = thin_border
+            current_row += 1
+
+            # Export items data
+            for item in license_obj.export_license.all():
+                item_desc = item.description or (str(item.norm_class) if item.norm_class else None) or 'None'
+                values = [
+                    item_desc,
+                    f"{float(item.cif_fc or item.fob_fc or 0):.2f}",
+                    f"{float(license_obj.balance_cif or 0):.2f}"
+                ]
+                for col_num, value in enumerate(values, 1):
+                    cell = ws.cell(row=current_row, column=col_num, value=value)
+                    cell.border = thin_border
+                current_row += 1
+
+            current_row += 1
+
+        # Import Items Section
+        if license_obj.import_license.exists():
+            from bill_of_entry.models import RowDetails
+            from allotment.models import AllotmentItems
+
+            # Section header
+            ws.merge_cells(f'A{current_row}:J{current_row}')
+            section_cell = ws[f'A{current_row}']
+            section_cell.value = "Import Items"
+            section_cell.fill = section_fill
+            section_cell.font = section_font
+            section_cell.alignment = Alignment(horizontal='center', vertical='center')
+            current_row += 1
+
+            for item in license_obj.import_license.all():
+                # Item headers
+                item_headers = ['Sr', 'HS Code', 'Description', 'Item', 'Total Qty',
+                               'Allotted', 'Debited', 'Available', 'CIF FC', 'Bal CIF']
+                for col_num, header in enumerate(item_headers, 1):
+                    cell = ws.cell(row=current_row, column=col_num, value=header)
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.border = thin_border
+                current_row += 1
+
+                # Item data
+                item_names = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else '-'
+                hs_code_display = str(item.hs_code.hs_code if item.hs_code else '-')
+
+                item_values = [
+                    str(item.serial_number or '-'),
+                    hs_code_display,
+                    str(item.description or '-'),
+                    item_names,
+                    f"{float(item.quantity or 0):.2f}",
+                    f"{float(item.allotted_quantity or 0):.2f}",
+                    f"{float(item.debited_quantity or 0):.2f}",
+                    f"{float(item.available_quantity or 0):.2f}",
+                    f"{float(item.cif_fc or 0):.2f}",
+                    f"{float(item.balance_cif_fc or 0):.2f}"
+                ]
+                for col_num, value in enumerate(item_values, 1):
+                    cell = ws.cell(row=current_row, column=col_num, value=value)
+                    cell.fill = data_fill
+                    cell.border = thin_border
+                current_row += 1
+
+                # BOE Details
+                boes = RowDetails.objects.filter(
+                    sr_number_id=item.id,
+                    transaction_type='D'
+                ).select_related('bill_of_entry', 'bill_of_entry__port', 'bill_of_entry__company')
+                if boes.exists():
+                    current_row += 1
+                    ws.merge_cells(f'A{current_row}:G{current_row}')
+                    boe_header_cell = ws[f'A{current_row}']
+                    boe_header_cell.value = "BOEs"
+                    boe_header_cell.fill = PatternFill(start_color="3498db", end_color="3498db", fill_type="solid")
+                    boe_header_cell.font = Font(bold=True, color="FFFFFF")
+                    current_row += 1
+
+                    boe_headers = ['BOE Number', 'Date', 'Port', 'Company', 'Qty', 'CIF $', 'CIF INR']
+                    for col_num, header in enumerate(boe_headers, 1):
+                        cell = ws.cell(row=current_row, column=col_num, value=header)
+                        cell.fill = PatternFill(start_color="3498db", end_color="3498db", fill_type="solid")
+                        cell.font = Font(bold=True, color="FFFFFF")
+                        cell.border = thin_border
+                    current_row += 1
+
+                    for boe in boes:
+                        boe_values = [
+                            boe.bill_of_entry.bill_of_entry_number if boe.bill_of_entry else '-',
+                            boe.bill_of_entry.bill_of_entry_date.strftime('%d-%m-%Y') if boe.bill_of_entry and boe.bill_of_entry.bill_of_entry_date else '-',
+                            boe.bill_of_entry.port.name if boe.bill_of_entry and boe.bill_of_entry.port else '-',
+                            boe.bill_of_entry.company.name if boe.bill_of_entry and boe.bill_of_entry.company else '-',
+                            f"{float(boe.qty or 0):.2f}",
+                            f"{float(boe.cif_fc or 0):.2f}",
+                            f"{float(boe.cif_inr or 0):.2f}"
+                        ]
+                        for col_num, value in enumerate(boe_values, 1):
+                            cell = ws.cell(row=current_row, column=col_num, value=value)
+                            cell.border = thin_border
+                        current_row += 1
+
+                # Allotment Details
+                # Only show allotments where bill_of_entry is NULL (not yet converted to BOE)
+                allotments = AllotmentItems.objects.filter(
+                    item=item,
+                    allotment__bill_of_entry__isnull=True
+                ).select_related('allotment', 'allotment__company')
+                if allotments.exists():
+                    current_row += 1
+                    ws.merge_cells(f'A{current_row}:D{current_row}')
+                    allot_header_cell = ws[f'A{current_row}']
+                    allot_header_cell.value = "Allotments"
+                    allot_header_cell.fill = PatternFill(start_color="e67e22", end_color="e67e22", fill_type="solid")
+                    allot_header_cell.font = Font(bold=True, color="FFFFFF")
+                    current_row += 1
+
+                    allot_headers = ['Company', 'Qty', 'CIF $', 'CIF INR']
+                    for col_num, header in enumerate(allot_headers, 1):
+                        cell = ws.cell(row=current_row, column=col_num, value=header)
+                        cell.fill = PatternFill(start_color="e67e22", end_color="e67e22", fill_type="solid")
+                        cell.font = Font(bold=True, color="FFFFFF")
+                        cell.border = thin_border
+                    current_row += 1
+
+                    for allot in allotments:
+                        allot_values = [
+                            allot.allotment.company.name if allot.allotment and allot.allotment.company else '-',
+                            f"{float(allot.qty or 0):.2f}",
+                            f"{float(allot.cif_fc or 0):.2f}",
+                            f"{float(allot.cif_inr or 0):.2f}"
+                        ]
+                        for col_num, value in enumerate(allot_values, 1):
+                            cell = ws.cell(row=current_row, column=col_num, value=value)
+                            cell.border = thin_border
+                        current_row += 1
+
+                # Balance calculation
+                current_row += 1
+                balance = float(item.quantity or 0) - float(item.debited_quantity or 0) - float(item.allotted_quantity or 0)
+                ws.merge_cells(f'A{current_row}:J{current_row}')
+                balance_cell = ws[f'A{current_row}']
+                balance_cell.value = f"Balance Quantity: {balance:.2f}"
+                balance_cell.fill = PatternFill(start_color="e8e8e8", end_color="e8e8e8", fill_type="solid")
+                balance_cell.font = Font(bold=True, color="e74c3c")
+                balance_cell.border = thin_border
+                current_row += 2
+
+        # Notes Section
+        if license_obj.balance_report_notes:
+            current_row += 1
+            ws.merge_cells(f'A{current_row}:J{current_row}')
+            notes_header_cell = ws[f'A{current_row}']
+            notes_header_cell.value = "Notes"
+            notes_header_cell.fill = section_fill
+            notes_header_cell.font = section_font
+            notes_header_cell.alignment = Alignment(horizontal='center', vertical='center')
+            current_row += 1
+
+            ws.merge_cells(f'A{current_row}:J{current_row}')
+            notes_cell = ws[f'A{current_row}']
+            notes_cell.value = license_obj.balance_report_notes
+            notes_cell.fill = PatternFill(start_color="fffacd", end_color="fffacd", fill_type="solid")
+            notes_cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+            notes_cell.border = thin_border
+            ws.row_dimensions[current_row].height = 60
+
+        # Set column widths
+        ws.column_dimensions['A'].width = 15
+        ws.column_dimensions['B'].width = 15
+        ws.column_dimensions['C'].width = 30
+        ws.column_dimensions['D'].width = 25
+        ws.column_dimensions['E'].width = 15
+        ws.column_dimensions['F'].width = 15
+        ws.column_dimensions['G'].width = 15
+        ws.column_dimensions['H'].width = 15
+        ws.column_dimensions['I'].width = 15
+        ws.column_dimensions['J'].width = 15
+
+        # Save to bytes
+        excel_file = BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+
+        # Create response
+        response = HttpResponse(
+            excel_file.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{license_obj.license_number}-balance.xlsx"'
+        return response
+
     @action(detail=True, methods=['get'], url_path='merged-documents')
     def merged_documents(self, request, pk=None):
         """
@@ -884,7 +2702,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         import logging
 
         logger = logging.getLogger(__name__)
-        license_obj = LicenseDetailsModel.objects.get(pk=pk)
+        try:
+            license_obj = LicenseDetailsModel.objects.get(pk=pk)
+        except LicenseDetailsModel.DoesNotExist:
+            from django.http import HttpResponse
+            return HttpResponse("License not found", status=404)
         documents = license_obj.license_documents.all()
 
         if not documents.exists():
@@ -892,16 +2714,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         # Check if required libraries are installed
         try:
-            from PyPDF2 import PdfMerger, PdfReader
+            from pypdf import PdfWriter, PdfReader
             from PIL import Image
             from reportlab.pdfgen import canvas
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.utils import ImageReader
         except ImportError as e:
-            return HttpResponse(f"Missing required library: {str(e)}. Please install PyPDF2 and Pillow.", status=500)
+            return HttpResponse(f"Missing required library: {str(e)}. Please install pypdf and Pillow.", status=500)
 
         try:
-            merger = PdfMerger()
+            writer = PdfWriter()
 
             # Sort documents: TRANSFER LETTER first, then LICENSE COPY, then OTHER
             type_order = {'TRANSFER LETTER': 0, 'LICENSE COPY': 1, 'OTHER': 2}
@@ -911,20 +2733,88 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 if not doc.file:
                     continue
 
-                file_path = doc.file.path
-                file_ext = os.path.splitext(file_path)[1].lower()
+                # Use Django storage API so this works for local, S3, or any backend
+                storage = doc.file.storage
+                file_name = doc.file.name
+
+                if not storage.exists(file_name):
+                    logger.warning(f"File not found in storage: {file_name}")
+                    continue
+
+                file_ext = os.path.splitext(file_name)[1].lower()
 
                 if file_ext == '.pdf':
                     # Add PDF directly
-                    merger.append(file_path)
-                    logger.info(f"Added PDF: {file_path}")
+                    with storage.open(file_name, 'rb') as f:
+                        reader = PdfReader(f)
+                        for page in reader.pages:
+                            writer.add_page(page)
+                    logger.info(f"Added PDF: {file_name}")
                 elif file_ext in ['.doc', '.docx']:
-                    # Skip DOCX/DOC files - don't convert them
-                    logger.info(f"Skipping DOCX/DOC file: {file_path}")
-                    continue
+                    # Convert DOCX/DOC to PDF
+                    try:
+                        from docx import Document
+                        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+                        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                        from reportlab.lib.pagesizes import A4
+                        from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
+                        import tempfile
+
+                        # Read DOCX content using storage API
+                        with storage.open(file_name, 'rb') as docx_f:
+                            doc_bytes = io.BytesIO(docx_f.read())
+                        doc = Document(doc_bytes)
+
+                        # Create temporary PDF file
+                        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
+                            tmp_pdf_path = tmp_pdf.name
+
+                        # Create PDF
+                        pdf = SimpleDocTemplate(tmp_pdf_path, pagesize=A4)
+                        story = []
+                        styles = getSampleStyleSheet()
+
+                        # Add custom style
+                        normal_style = ParagraphStyle(
+                            'CustomNormal',
+                            parent=styles['Normal'],
+                            fontSize=10,
+                            leading=14,
+                            alignment=TA_LEFT
+                        )
+
+                        # Convert paragraphs to PDF
+                        for paragraph in doc.paragraphs:
+                            if paragraph.text.strip():
+                                # Escape special characters for reportlab
+                                text = paragraph.text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                                p = Paragraph(text, normal_style)
+                                story.append(p)
+                                story.append(Spacer(1, 6))
+
+                        # Build PDF
+                        pdf.build(story)
+
+                        # Add converted PDF pages to writer
+                        with open(tmp_pdf_path, 'rb') as tmp_f:
+                            tmp_reader = PdfReader(tmp_f)
+                            for page in tmp_reader.pages:
+                                writer.add_page(page)
+                        logger.info(f"Converted and added DOCX/DOC: {file_path}")
+
+                        # Clean up temp file
+                        try:
+                            os.remove(tmp_pdf_path)
+                        except OSError:
+                            pass
+
+                    except Exception as e:
+                        logger.error(f"Error converting DOCX file {file_name}: {str(e)}")
+                        continue
                 elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
                     # Convert image to PDF
-                    img = Image.open(file_path)
+                    with storage.open(file_name, 'rb') as img_f:
+                        img = Image.open(io.BytesIO(img_f.read()))
 
                     # Convert to RGB if necessary
                     if img.mode != 'RGB':
@@ -952,30 +2842,33 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     pdf_canvas.drawImage(img_reader, x, y, width=new_width, height=new_height)
                     pdf_canvas.save()
 
-                    # Rewind buffer and create PdfReader from it
+                    # Add image-converted PDF pages to writer
                     img_buffer.seek(0)
-                    pdf_reader = PdfReader(img_buffer)
-                    merger.append(pdf_reader)
-                    logger.info(f"Converted and added image: {file_path}")
+                    img_pdf_reader = PdfReader(img_buffer)
+                    for page in img_pdf_reader.pages:
+                        writer.add_page(page)
+                    logger.info(f"Converted and added image: {file_name}")
+
+            if len(writer.pages) == 0:
+                return HttpResponse("Document files are missing from the server storage. The files may not have been synced to this environment.", status=404)
 
             # Write merged PDF to buffer
             output_buffer = io.BytesIO()
-            merger.write(output_buffer)
-            merger.close()
+            writer.write(output_buffer)
             output_buffer.seek(0)
 
             # Return merged PDF
-            response = FileResponse(
-                output_buffer,
-                content_type='application/pdf',
-                as_attachment=False,
-                filename=f'license_{license_obj.license_number}_documents.pdf'
-            )
+            import traceback as tb
+            pdf_bytes = output_buffer.getvalue()
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="license_{license_obj.license_number}_documents.pdf"'
             return response
 
         except Exception as e:
-            logger.error(f"Error merging documents: {str(e)}", exc_info=True)
-            return HttpResponse(f"Error merging documents: {str(e)}", status=500)
+            import traceback as tb
+            full_trace = tb.format_exc()
+            logger.error(f"Error merging documents: {full_trace}")
+            return HttpResponse(f"Error: {str(e)}\n\n{full_trace}", status=500, content_type='text/plain')
 
 
 # Add license report actions to viewset

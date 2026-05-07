@@ -77,201 +77,152 @@ export default function Profile() {
         );
     }
 
+    const initials = ((user.first_name?.[0] || '') + (user.last_name?.[0] || '') || user.username?.[0] || '?').toUpperCase();
+
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
-                <div className="d-flex justify-content-between align-items-center flex-wrap">
-                    <div>
-                        <div style={{ marginBottom: '12px', opacity: '0.9' }}>
-                            <a
-                                href="/"
-                                onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                                style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
-                            >
-                                <i className="bi bi-house-door me-2"></i>Home
-                            </a>
-                            <span className="mx-2">/</span>
-                            <span style={{ fontSize: '0.9rem' }}>Profile</span>
-                        </div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
-                            <i className="bi bi-person-circle me-3"></i>
-                            My Profile
-                        </h1>
-                    </div>
-                    {!editing && (
-                        <button
-                            className="btn"
-                            onClick={handleEdit}
-                            style={{
-                                backgroundColor: 'white',
-                                border: '2px solid white',
-                                color: '#667eea',
-                                fontWeight: '600',
-                                padding: '10px 24px',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                                marginTop: '12px'
-                            }}
-                        >
-                            <i className="bi bi-pencil me-2"></i>
-                            Edit Profile
-                        </button>
-                    )}
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+            {/* Compact Header */}
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
+                        <i className="bi bi-person-circle me-2" style={{ color: 'var(--primary-color)' }}></i>
+                        My Profile
+                    </h4>
+                    <small className="text-muted">Manage your account information</small>
                 </div>
+                {!editing && (
+                    <button className="btn btn-sm btn-outline-primary" onClick={handleEdit}>
+                        <i className="bi bi-pencil me-1"></i>Edit Profile
+                    </button>
+                )}
             </div>
 
-            <div className="row">
-                <div className="col-lg-8 mx-auto">
+            {error && (
+                <div className="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-3">
+                    <i className="bi bi-exclamation-circle-fill flex-shrink-0"></i>
+                    <span>{error}</span>
+                    <button type="button" className="btn-close ms-auto" onClick={() => setError("")}></button>
+                </div>
+            )}
+            {success && (
+                <div className="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-3">
+                    <i className="bi bi-check-circle-fill flex-shrink-0"></i>
+                    <span>{success}</span>
+                    <button type="button" className="btn-close ms-auto" onClick={() => setSuccess("")}></button>
+                </div>
+            )}
+
+            <div className="row g-3">
+                {/* Avatar card */}
+                <div className="col-lg-3">
+                    <div className="card border-0 shadow-sm text-center" style={{ borderRadius: '12px' }}>
+                        <div className="card-body py-4">
+                            <div style={{
+                                width: 80, height: 80, borderRadius: '50%',
+                                background: 'linear-gradient(135deg, #4F46E5, #6366F1)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '1.75rem', fontWeight: '700', color: 'white',
+                                margin: '0 auto 16px'
+                            }}>
+                                {initials}
+                            </div>
+                            <h6 className="fw-bold mb-1">
+                                {user.first_name || user.last_name
+                                    ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+                                    : user.username}
+                            </h6>
+                            <small className="text-muted">@{user.username}</small>
+                            <div className="mt-2">
+                                <span className="badge bg-success" style={{ fontSize: '0.7rem' }}>Active</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Form card */}
+                <div className="col-lg-9">
                     <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                        <div className="card-body" style={{ padding: '32px' }}>
-                            {error && (
-                                <div className="alert alert-danger alert-dismissible fade show">
-                                    {error}
-                                    <button
-                                        type="button"
-                                        className="btn-close"
-                                        onClick={() => setError("")}
-                                    ></button>
-                                </div>
-                            )}
-
-                            {success && (
-                                <div className="alert alert-success alert-dismissible fade show">
-                                    {success}
-                                    <button
-                                        type="button"
-                                        className="btn-close"
-                                        onClick={() => setSuccess("")}
-                                    ></button>
-                                </div>
-                            )}
-
-                            <div className="mb-4">
-                                <label className="form-label" style={{ fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
-                                    <i className="bi bi-person-badge me-2"></i>
-                                    Username
-                                </label>
-                                <div className="form-control" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
-                                    {user.username}
-                                </div>
-                                <small className="text-muted" style={{ fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
-                                    <i className="bi bi-info-circle me-1"></i>
-                                    Username cannot be changed
-                                </small>
-                            </div>
-
-                            <div className="mb-4">
-                                <label className="form-label" style={{ fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
-                                    <i className="bi bi-person me-2"></i>
-                                    First Name
-                                </label>
-                                {editing ? (
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        name="first_name"
-                                        value={formData.first_name}
-                                        onChange={handleChange}
-                                        placeholder="Enter first name"
-                                        style={{ borderRadius: '8px', padding: '12px', border: '1px solid #d1d5db' }}
-                                    />
-                                ) : (
-                                    <div className="form-control" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
-                                        {user.first_name || <em className="text-muted">Not set</em>}
+                        <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                            <h6 className="mb-0 fw-semibold">
+                                <i className="bi bi-person me-2" style={{ color: '#4F46E5' }}></i>
+                                Account Details
+                            </h6>
+                        </div>
+                        <div className="card-body p-4">
+                            <div className="d-flex flex-column gap-3">
+                                {/* Account info section */}
+                                <div style={{ background: 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #6b7280' }}>
+                                    <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', marginBottom: '14px' }}>
+                                        <i className="bi bi-shield-lock me-1"></i> Account
                                     </div>
-                                )}
-                            </div>
-
-                            <div className="mb-4">
-                                <label className="form-label" style={{ fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
-                                    <i className="bi bi-person me-2"></i>
-                                    Last Name
-                                </label>
-                                {editing ? (
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        name="last_name"
-                                        value={formData.last_name}
-                                        onChange={handleChange}
-                                        placeholder="Enter last name"
-                                        style={{ borderRadius: '8px', padding: '12px', border: '1px solid #d1d5db' }}
-                                    />
-                                ) : (
-                                    <div className="form-control" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
-                                        {user.last_name || <em className="text-muted">Not set</em>}
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Username</label>
+                                        <div className="form-control" style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', color: 'var(--text-secondary)', cursor: 'not-allowed' }}>
+                                            {user.username}
+                                        </div>
+                                        <small className="text-muted" style={{ fontSize: '0.73rem' }}>
+                                            <i className="bi bi-info-circle me-1"></i>Username cannot be changed
+                                        </small>
                                     </div>
-                                )}
-                            </div>
+                                </div>
 
-                            <div className="mb-4">
-                                <label className="form-label" style={{ fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
-                                    <i className="bi bi-envelope me-2"></i>
-                                    Email
-                                </label>
-                                {editing ? (
-                                    <input
-                                        type="email"
-                                        className="form-control"
-                                        name="email"
-                                        value={formData.email}
-                                        onChange={handleChange}
-                                        placeholder="Enter email"
-                                        style={{ borderRadius: '8px', padding: '12px', border: '1px solid #d1d5db' }}
-                                    />
-                                ) : (
-                                    <div className="form-control" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
-                                        {user.email || <em className="text-muted">Not set</em>}
+                                {/* Personal info section */}
+                                <div style={{ background: editing ? 'white' : 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #4F46E5', border: editing ? '1px solid #e0e7ff' : undefined }}>
+                                    <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4F46E5', marginBottom: '14px' }}>
+                                        <i className="bi bi-person me-1"></i> Personal Information
+                                        {editing && <span className="badge ms-2" style={{ backgroundColor: '#4F46E522', color: '#4F46E5', fontSize: '0.6rem' }}>Editing</span>}
                                     </div>
-                                )}
+                                    <div className="row g-3">
+                                        <div className="col-md-6">
+                                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>First Name</label>
+                                            {editing ? (
+                                                <input type="text" className="form-control" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First name" />
+                                            ) : (
+                                                <div className="form-control" style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                                                    {user.first_name || <em className="text-muted small">Not set</em>}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Last Name</label>
+                                            {editing ? (
+                                                <input type="text" className="form-control" name="last_name" value={formData.last_name} onChange={handleChange} placeholder="Last name" />
+                                            ) : (
+                                                <div className="form-control" style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                                                    {user.last_name || <em className="text-muted small">Not set</em>}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="col-12">
+                                            <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>Email</label>
+                                            {editing ? (
+                                                <input type="email" className="form-control" name="email" value={formData.email} onChange={handleChange} placeholder="email@example.com" />
+                                            ) : (
+                                                <div className="form-control" style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                                                    {user.email || <em className="text-muted small">Not set</em>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             {editing && (
-                                <div className="mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
+                                <div className="d-flex gap-2 mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
                                     <button
-                                        className="btn btn-primary me-2"
+                                        className="btn btn-primary"
                                         onClick={handleSave}
                                         disabled={saving}
-                                        style={{
-                                            padding: '12px 32px',
-                                            fontWeight: '600',
-                                            fontSize: '1rem',
-                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                            border: 'none',
-                                            borderRadius: '8px'
-                                        }}
+                                        style={{ padding: '10px 28px', fontWeight: '600', background: 'linear-gradient(135deg, #4F46E5, #4338CA)', border: 'none', borderRadius: '8px' }}
                                     >
                                         {saving ? (
-                                            <>
-                                                <span className="spinner-border spinner-border-sm me-2"></span>
-                                                Saving...
-                                            </>
+                                            <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>
                                         ) : (
-                                            <>
-                                                <i className="bi bi-check-circle me-2"></i>
-                                                Save Changes
-                                            </>
+                                            <><i className="bi bi-check-circle me-2"></i>Save Changes</>
                                         )}
                                     </button>
-                                    <button
-                                        className="btn btn-outline-secondary"
-                                        onClick={handleCancel}
-                                        disabled={saving}
-                                        style={{
-                                            padding: '12px 24px',
-                                            fontWeight: '500',
-                                            borderRadius: '8px'
-                                        }}
-                                    >
-                                        <i className="bi bi-x-circle me-2"></i>
-                                        Cancel
+                                    <button className="btn btn-outline-secondary" onClick={handleCancel} disabled={saving} style={{ padding: '10px 20px', borderRadius: '8px' }}>
+                                        <i className="bi bi-x-lg me-2"></i>Cancel
                                     </button>
                                 </div>
                             )}

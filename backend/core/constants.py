@@ -31,9 +31,15 @@ ROW_TYPE_CHOICES = (
 # Units
 # ───────────────────────────────
 KG = "kg"
+PCS = "pcs"
+NOS = "nos"
+MTS = "mts"
 
 UNIT_CHOICES = (
-    (KG, "kg"),
+    (KG, "Kgs"),
+    (PCS, "Pcs"),
+    (NOS, "Nos"),
+    (MTS, "Mts"),
 )
 
 # ───────────────────────────────

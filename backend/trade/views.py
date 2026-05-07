@@ -1,5 +1,6 @@
 # trade/views.py
 
+from datetime import datetime, date
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
@@ -14,6 +15,29 @@ from .serializers import (
 )
 
 
+def _parse_date_strict(date_str):
+    """
+    Parse date string in strict ISO format (YYYY-MM-DD) only.
+
+    Args:
+        date_str: Date string to parse
+
+    Returns:
+        date object if successful, None otherwise
+
+    Raises:
+        ValueError: If date string is not in YYYY-MM-DD format
+    """
+    if not date_str:
+        return None
+
+    try:
+        # Only accept ISO format YYYY-MM-DD
+        return datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError as e:
+        raise ValueError(f"Invalid date format. Expected YYYY-MM-DD, got: {date_str}") from e
+
+
 # Trade transactions ViewSet
 LicenseTradeViewSet = MasterViewSet.create_viewset(
     LicenseTrade,
@@ -23,7 +47,10 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
             "invoice_number",
             "from_company__name",
             "to_company__name",
-            "remarks"
+            "remarks",
+            "lines__sr_number__license__license_number",  # DFIA license number
+            "incentive_license__license_number",  # Incentive license number (header)
+            "incentive_lines__incentive_license__license_number"  # Incentive license number (lines)
         ],
         "filter": {
             "direction": {
@@ -65,7 +92,7 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
             "invoice_date",
             "from_company_label",
             "to_company_label",
-            "incentive_license_label",
+            "incentive_license",
             "total_amount",
             "paid_or_received",
             "due_amount"
@@ -254,6 +281,23 @@ LicenseTradeViewSet.permission_classes = [TradePermission]
 
 # Add custom actions to TradeViewSet
 class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
+    def create(self, request, *args, **kwargs):
+        """Override create to log request data"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("VIEW CREATE called")
+            logger.debug("request.data keys: %s", list(request.data.keys()))
+            logger.debug("request.content_type: %s", request.content_type)
+
+            if 'lines' in request.data:
+                logger.debug("request.data['lines'] type: %s", type(request.data['lines']).__name__)
+            else:
+                logger.debug("'lines' NOT in request.data")
+
+        return super().create(request, *args, **kwargs)
+
     @action(detail=True, methods=['get'], url_path='generate-bill-of-supply')
     def generate_bill_of_supply(self, request, pk=None):
         """
@@ -382,21 +426,16 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Parse invoice_date string to date object (support both formats)
+        # Parse invoice_date string to date object (strict ISO format only)
         invoice_date = None
         if invoice_date_str:
             try:
-                # Try YYYY-MM-DD first
-                invoice_date = datetime.strptime(invoice_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                try:
-                    # Try dd-mm-YYYY
-                    invoice_date = datetime.strptime(invoice_date_str, '%d-%m-%Y').date()
-                except ValueError:
-                    return Response(
-                        {"error": "Invalid date format. Use YYYY-MM-DD or dd-mm-yyyy"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                invoice_date = _parse_date_strict(invoice_date_str)
+            except ValueError as e:
+                return Response(
+                    {"error": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         from core.models import CompanyModel
         try:
@@ -430,6 +469,50 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
             "lines_count": trade.lines.count(),
             "payments_count": trade.payments.count()
         })
+
+    @action(detail=True, methods=['post'], url_path='link-trade')
+    def link_trade(self, request, pk=None):
+        """
+        Bidirectionally link two trades.
+        POST body: {"partner_id": <int>}  — set link on both trades.
+        POST body: {"partner_id": null}   — clear link on both trades.
+        """
+        trade = self.get_object()
+        partner_id = request.data.get('partner_id')
+
+        # Unlink
+        if partner_id is None:
+            old_partner_id = trade.linked_trade_id
+            LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=None)
+            if old_partner_id:
+                LicenseTrade.objects.filter(pk=old_partner_id, linked_trade=trade.pk).update(linked_trade=None)
+            trade.refresh_from_db()
+            from trade.serializers import LicenseTradeSerializer
+            return Response(LicenseTradeSerializer(trade, context={'request': request}).data)
+
+        # Link
+        try:
+            partner = LicenseTrade.objects.get(pk=partner_id)
+        except LicenseTrade.DoesNotExist:
+            return Response({"error": "Partner trade not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if partner.pk == trade.pk:
+            return Response({"error": "Cannot link a trade to itself"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Clear any old links on both sides first
+        old_trade_partner = trade.linked_trade_id
+        old_partner_partner = partner.linked_trade_id
+        if old_trade_partner and old_trade_partner != partner.pk:
+            LicenseTrade.objects.filter(pk=old_trade_partner).update(linked_trade=None)
+        if old_partner_partner and old_partner_partner != trade.pk:
+            LicenseTrade.objects.filter(pk=old_partner_partner).update(linked_trade=None)
+
+        LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=partner)
+        LicenseTrade.objects.filter(pk=partner.pk).update(linked_trade=trade)
+
+        trade.refresh_from_db()
+        from trade.serializers import LicenseTradeSerializer
+        return Response(LicenseTradeSerializer(trade, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='generate-transfer-letter')
     def generate_transfer_letter(self, request, pk=None):

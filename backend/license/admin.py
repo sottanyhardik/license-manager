@@ -45,5 +45,5 @@ for model_name, model in app.models.items():
     model_admin.list_filter = model.list_filter if hasattr(model, 'list_filter') else ()
     try:
         admin.site.register(model, model_admin)
-    except:
+    except Exception:
         pass

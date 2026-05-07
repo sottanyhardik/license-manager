@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 SERVER_USER="django"
 SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
-BRANCH="develop"
+BRANCH="version-4.4"
 PASSWORD="admin"
 
 print_header() {
@@ -73,31 +73,32 @@ cd $SERVER_PATH
 echo -e "\${BLUE}→ Stashing local changes if any...\${NC}"
 git stash
 
+echo -e "\${BLUE}→ Removing untracked files that would block merge...\${NC}"
+git clean -fd
+
 echo -e "\${BLUE}→ Pulling latest code from $BRANCH...\${NC}"
 git pull origin $BRANCH
 
-echo -e "\${BLUE}→ Installing frontend dependencies...\${NC}"
-cd frontend
-npm install --silent
-
-echo -e "\${BLUE}→ Building frontend...\${NC}"
-npm run build
-
+# ── Backend first (migrations must run before frontend build) ─────────────────
 echo -e "\${BLUE}→ Activating Python virtual environment...\${NC}"
 cd $SERVER_PATH
 source venv/bin/activate
 
-echo -e "\${BLUE}→ Installing Python dependencies...\${NC}"
+echo -e "\${BLUE}→ Upgrading pip to latest version...\${NC}"
+pip install --upgrade pip --quiet
+
+echo -e "\${BLUE}→ Installing/upgrading Python dependencies...\${NC}"
 cd backend
-pip install -r requirements.txt --quiet
+pip install --upgrade -r requirements.txt --quiet
+
+echo -e "\${BLUE}→ Creating new migrations if needed...\${NC}"
+python manage.py makemigrations
 
 echo -e "\${BLUE}→ Running database migrations...\${NC}"
 if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
-    # Check if the error is about insufficient privileges
-    if grep -q "psycopg2.errors.InsufficientPrivilege.*must be owner of table" /tmp/migration_output.log; then
+    if grep -q "InsufficientPrivilege\|must be owner of table" /tmp/migration_output.log; then
         echo -e "\${YELLOW}⚠️  Database permission issue detected. Attempting to fix...\${NC}"
 
-        # Determine database name and user based on server IP
         DB_NAME="lmanagement"
         DB_USER="lmanagement"
         if [[ "$SERVER_IP" == "143.110.252.201" ]]; then
@@ -106,36 +107,144 @@ if ! python manage.py migrate 2>&1 | tee /tmp/migration_output.log; then
         fi
         echo -e "\${BLUE}→ Using database: \${DB_NAME} with user: \${DB_USER}\${NC}"
 
-        # Try to fix the permission issue
-        echo -e "\${BLUE}→ Granting table ownership to \${DB_USER} user...\${NC}"
+        # Grant table ownership and retry
         if echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};" 2>/dev/null; then
             echo -e "\${GREEN}✅ Ownership granted, retrying migration...\${NC}"
             python manage.py migrate
         else
-            # If ownership change fails, try adding column manually
-            echo -e "\${YELLOW}→ Attempting manual column addition...\${NC}"
-            if echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "ALTER TABLE license_licensedetailsmodel ADD COLUMN IF NOT EXISTS balance_report_notes text NULL;" 2>/dev/null; then
-                echo -e "\${GREEN}✅ Column added manually, faking migration...\${NC}"
-                python manage.py migrate license --fake
+            # Extract pending migrations and add any missing columns manually
+            echo -e "\${YELLOW}→ Attempting to add missing columns via psql...\${NC}"
+            PENDING_COLS=\$(python manage.py sqlmigrate license 0029 2>/dev/null | grep "ADD COLUMN" || true)
+            if [ -n "\$PENDING_COLS" ]; then
+                # Run ADD COLUMN IF NOT EXISTS for each pending column
+                echo '$PASSWORD' | sudo -S -u postgres psql -d \${DB_NAME} -c "
+                    ALTER TABLE license_licensedetailsmodel
+                    ADD COLUMN IF NOT EXISTS last_ownership_fetch timestamp with time zone NULL;
+                " 2>/dev/null && echo -e "\${GREEN}✅ Columns added, faking migrations...\${NC}" && python manage.py migrate --fake
             else
                 echo -e "\${RED}❌ Could not fix database permissions automatically\${NC}"
-                echo -e "\${YELLOW}Please run manually on the server:\${NC}"
-                echo -e "sudo -u postgres psql -d \${DB_NAME} -c \"ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};\""
-                echo -e "cd $SERVER_PATH/backend && source ../venv/bin/activate && python manage.py migrate"
+                echo -e "\${YELLOW}Run manually:\${NC}"
+                echo -e "  sudo -u postgres psql -d \${DB_NAME} -c \"ALTER TABLE license_licensedetailsmodel OWNER TO \${DB_USER};\""
+                echo -e "  cd $SERVER_PATH/backend && source ../venv/bin/activate && python manage.py migrate"
                 exit 1
             fi
         fi
     else
-        # Different migration error
+        echo -e "\${RED}❌ Migration failed (non-permission error):\${NC}"
+        cat /tmp/migration_output.log | tail -20
         exit 1
     fi
 fi
 rm -f /tmp/migration_output.log
 
+# ── Frontend build (after migrations — failure here does not lose DB changes) ──
+echo -e "\${BLUE}→ Installing frontend dependencies...\${NC}"
+cd $SERVER_PATH/frontend
+npm install --silent
+
+echo -e "\${BLUE}→ Building frontend...\${NC}"
+npm run build || echo -e "\${YELLOW}⚠️  Frontend build failed — continuing with existing build\${NC}"
+
 echo -e "\${BLUE}→ Collecting static files...\${NC}"
+cd $SERVER_PATH/backend
+source $SERVER_PATH/venv/bin/activate
 python manage.py collectstatic --noinput
 
-echo -e "\${BLUE}→ Setting file permissions...\${NC}"
+echo -e "\n\${BLUE}================================================\${NC}"
+echo -e "\${BLUE}📊 Database Optimization & Setup\${NC}"
+echo -e "\${BLUE}================================================\${NC}"
+
+echo -e "\${BLUE}→ Creating materialized views...\${NC}"
+python manage.py shell -c "
+from core.materialized_views import create_all_materialized_views
+try:
+    create_all_materialized_views()
+    print('✅ Materialized views created successfully')
+except Exception as e:
+    print(f'⚠️  Materialized views may already exist or error: {e}')
+" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Materialized views check completed\${NC}"
+
+echo -e "\${BLUE}→ Refreshing materialized views with data...\${NC}"
+python manage.py refresh_materialized_views --all 2>&1 | tail -5 || echo -e "\${YELLOW}  ⚠️  Materialized views refresh completed with warnings\${NC}"
+
+echo -e "\${BLUE}→ Verifying database indexes...\${NC}"
+python manage.py shell -c "
+from django.db import connection
+with connection.cursor() as cursor:
+    cursor.execute('''
+        SELECT
+            schemaname,
+            tablename,
+            indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+        AND (
+            indexname LIKE '%composite%'
+            OR indexname LIKE '%performance%'
+            OR indexname LIKE '%_idx'
+        )
+        ORDER BY tablename, indexname
+    ''')
+    indexes = cursor.fetchall()
+    print(f'✅ Found {len(indexes)} performance indexes')
+    for schema, table, index in indexes[:5]:
+        print(f'  - {table}.{index}')
+    if len(indexes) > 5:
+        print(f'  ... and {len(indexes) - 5} more')
+" 2>&1 | grep -E '✅|Found' || echo -e "\${YELLOW}  ⚠️  Index verification completed\${NC}"
+
+echo -e "\${BLUE}→ Checking Redis cache connection...\${NC}"
+python manage.py shell -c "
+from django.core.cache import cache
+try:
+    cache.set('deployment_test_key', 'deployment_test_value', 10)
+    value = cache.get('deployment_test_key')
+    if value == 'deployment_test_value':
+        print('✅ Redis cache is working correctly')
+        cache.delete('deployment_test_key')
+    else:
+        print('⚠️  Redis cache connection issue')
+except Exception as e:
+    print(f'⚠️  Redis cache error: {e}')
+" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Redis check completed\${NC}"
+
+echo -e "\${BLUE}→ Warming up critical caches...\${NC}"
+python manage.py shell -c "
+from django.core.cache import cache
+from core.models import CompanyModel, PurchaseStatus
+import json
+
+try:
+    # Cache active companies
+    companies = list(CompanyModel.objects.all().values('id', 'name'))
+    cache.set('active_companies_list', json.dumps(companies), 3600)
+
+    # Cache purchase statuses
+    statuses = list(PurchaseStatus.objects.all().values('id', 'code', 'label'))
+    cache.set('purchase_statuses_list', json.dumps(statuses), 3600)
+
+    print(f'✅ Cached {len(companies)} companies and {len(statuses)} purchase statuses')
+except Exception as e:
+    print(f'⚠️  Cache warmup error: {e}')
+" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Cache warmup completed\${NC}"
+
+echo -e "\${BLUE}→ Checking throttle system health...\${NC}"
+python manage.py shell -c "
+from django.core.cache import cache
+try:
+    # Test throttle cache
+    cache.set('throttle_health_check', 'ok', 10)
+    test = cache.get('throttle_health_check')
+    if test == 'ok':
+        print('✅ Throttling system ready')
+        cache.delete('throttle_health_check')
+    else:
+        print('⚠️  Throttling cache issue')
+except Exception as e:
+    print(f'⚠️  Throttling system error: {e}')
+" 2>&1 | grep -E '✅|⚠️' || echo -e "\${YELLOW}  ⚠️  Throttling check completed\${NC}"
+
+echo -e "\n\${BLUE}→ Setting file permissions...\${NC}"
 echo '$PASSWORD' | sudo -S chown -R django:django $SERVER_PATH/backend/media 2>/dev/null || true
 echo '$PASSWORD' | sudo -S chmod -R 775 $SERVER_PATH/backend/media 2>/dev/null || true
 echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null || true
@@ -143,26 +252,37 @@ echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null |
 echo -e "\${BLUE}→ Restarting license-manager service...\${NC}"
 echo '$PASSWORD' | sudo -S supervisorctl restart license-manager
 
-echo -e "\${BLUE}→ Purging Celery queue (removing all pending tasks)...\${NC}"
+echo -e "\${BLUE}→ Updating Celery supervisor config (worker --beat -Q celery,ledger)...\${NC}"
+CELERY_BIN="$SERVER_PATH/venv/bin/celery"
+CELERY_CONF=\$(echo '$PASSWORD' | sudo -S find /etc/supervisor/conf.d/ -name "*celery*" ! -name "*beat*" 2>/dev/null | head -1)
+if [ -n "\$CELERY_CONF" ]; then
+    echo -e "\${BLUE}  → Found conf: \$CELERY_CONF\${NC}"
+    echo '$PASSWORD' | sudo -S sed -i "s|^command=.*celery.*|command=\$CELERY_BIN -A lmanagement worker --beat -Q celery,ledger -l info|" "\$CELERY_CONF"
+    echo '$PASSWORD' | sudo -S supervisorctl reread
+    echo '$PASSWORD' | sudo -S supervisorctl update
+    echo -e "\${GREEN}  ✅ Supervisor config updated: celery worker --beat -Q celery,ledger -l info\${NC}"
+else
+    echo -e "\${YELLOW}  ⚠️  Celery supervisor conf not found, skipping\${NC}"
+fi
+
+echo -e "\${BLUE}→ Stopping Celery (worker + beat combined)...\${NC}"
+echo '$PASSWORD' | sudo -S supervisorctl stop license-manager-celery 2>/dev/null || true
+echo -e "\${GREEN}  ✅ Celery stopped\${NC}"
+
+echo -e "\${BLUE}→ Killing any orphaned Celery processes...\${NC}"
+echo '$PASSWORD' | sudo -S pkill -9 -f "celery" 2>/dev/null || true
+sleep 2
+echo -e "\${GREEN}  ✅ Orphaned Celery processes cleared\${NC}"
+
+echo -e "\${BLUE}→ Clearing all Celery tasks (queue purge)...\${NC}"
 cd $SERVER_PATH/backend
 source $SERVER_PATH/venv/bin/activate
-celery -A lmanagement purge -f 2>/dev/null || echo -e "\${YELLOW}  ⚠️  Could not purge Celery queue (queue might be empty)\${NC}"
-echo -e "\${GREEN}  ✅ Celery queue purged\${NC}"
+celery -A lmanagement purge -f 2>/dev/null || true
+echo -e "\${GREEN}  ✅ All Celery tasks cleared\${NC}"
 
-echo -e "\${BLUE}→ Checking and restarting Celery if configured...\${NC}"
-if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery &>/dev/null; then
-    echo '$PASSWORD' | sudo -S supervisorctl restart license-manager-celery
-    echo -e "\${GREEN}  ✅ Celery worker restarted\${NC}"
-else
-    echo -e "\${YELLOW}  ⚠️  Celery not configured\${NC}"
-fi
-
-if echo '$PASSWORD' | sudo -S supervisorctl status license-manager-celery-beat &>/dev/null; then
-    echo '$PASSWORD' | sudo -S supervisorctl restart license-manager-celery-beat
-    echo -e "\${GREEN}  ✅ Celery beat restarted\${NC}"
-else
-    echo -e "\${YELLOW}  ⚠️  Celery Beat not configured\${NC}"
-fi
+echo -e "\${BLUE}→ Starting Celery (worker + beat combined)...\${NC}"
+echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery
+echo -e "\${GREEN}  ✅ Celery started (worker --beat -Q celery,ledger)\${NC}"
 
 echo -e "\${BLUE}→ Reloading Nginx...\${NC}"
 echo '$PASSWORD' | sudo -S systemctl reload nginx
@@ -182,7 +302,7 @@ echo -e "\${BLUE}================================================\${NC}"
 echo -e "\${GREEN}✅ Code pulled from $BRANCH\${NC}"
 echo -e "\${GREEN}✅ Frontend built and deployed\${NC}"
 echo -e "\${GREEN}✅ Backend dependencies installed\${NC}"
-echo -e "\${GREEN}✅ Database migrations applied\${NC}"
+echo -e "\${GREEN}✅ Migrations created and applied\${NC}"
 echo -e "\${GREEN}✅ Static files collected\${NC}"
 echo -e "\${GREEN}✅ Services restarted\${NC}"
 echo ""

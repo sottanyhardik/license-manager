@@ -52,7 +52,20 @@ def license_path(instance, filename):
     - OTHER -> licenses/<license_number>/<license_number> Other.ext
     """
     import os
-    license_number = instance.license.license_number
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Safely get license number with fallback
+    try:
+        if not instance.license:
+            logger.error(f"license_path called with instance.license=None, filename={filename}")
+            license_number = 'temp'
+        else:
+            license_number = instance.license.license_number or 'unknown'
+    except Exception as e:
+        logger.error(f"Error in license_path: {e}, instance={instance}, filename={filename}")
+        license_number = 'temp'
+
     file_ext = os.path.splitext(filename)[1]  # Get original extension
 
     # Map document type to suffix
@@ -62,7 +75,10 @@ def license_path(instance, filename):
         'OTHER': 'Other',
     }
 
-    suffix = type_suffix_map.get(instance.type, instance.type)
+    # Safely get type with fallback
+    doc_type = getattr(instance, 'type', 'OTHER')
+    suffix = type_suffix_map.get(doc_type, 'Document')
+
     return f"licenses/{license_number}/{license_number} {suffix}{file_ext}"
 
 
@@ -70,8 +86,13 @@ def license_path(instance, filename):
 # License Header
 # -----------------------------
 class LicenseDetailsModel(AuditModel):
-    purchase_status = models.CharField(
-        choices=LICENCE_PURCHASE_CHOICES, max_length=2, default=GE
+    purchase_status = models.ForeignKey(
+        'core.PurchaseStatus',
+        on_delete=models.PROTECT,
+        related_name='licenses',
+        help_text='Purchase status for this license',
+        null=True,
+        blank=True
     )
     scheme_code = models.CharField(choices=SCHEME_CODE_CHOICES, max_length=10, default=SCHEME_CODE_CHOICES[0][0])
     notification_number = models.CharField(
@@ -106,19 +127,11 @@ class LicenseDetailsModel(AuditModel):
     balance_cif = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
                                       validators=[MinValueValidator(DEC_0)])
 
-    export_item = models.CharField(max_length=255, null=True, blank=True)
     is_incomplete = models.BooleanField(default=False)
     is_expired = models.BooleanField(default=False)
     is_individual = models.BooleanField(default=False)
 
     ge_file_number = models.IntegerField(default=0)
-
-    fob = models.IntegerField(default=0, null=True, blank=True)
-
-    billing_rate = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
-                                       validators=[MinValueValidator(DEC_0)])
-    billing_amount = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0,
-                                         validators=[MinValueValidator(DEC_0)])
 
     admin_search_fields = ("license_number",)
 
@@ -126,6 +139,7 @@ class LicenseDetailsModel(AuditModel):
         "core.CompanyModel", on_delete=models.PROTECT, null=True, blank=True, related_name="online_data"
     )
     file_transfer_status = models.TextField(null=True, blank=True)
+    last_ownership_fetch = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("license_expiry_date", "license_date")
@@ -134,12 +148,14 @@ class LicenseDetailsModel(AuditModel):
             models.Index(fields=['file_number']),
             models.Index(fields=['exporter', 'license_date']),
             models.Index(fields=['port', 'license_date']),
-            models.Index(fields=['purchase_status']),
+            # purchase_status index is auto-created by ForeignKey, no need to add explicitly
             models.Index(fields=['license_date']),
             models.Index(fields=['license_expiry_date']),
             models.Index(fields=['is_active', 'is_expired']),
             models.Index(fields=['balance_cif']),
             models.Index(fields=['current_owner']),
+            models.Index(fields=['notification_number']),
+            models.Index(fields=['scheme_code']),
         ]
 
     def __str__(self) -> str:
@@ -177,12 +193,6 @@ class LicenseDetailsModel(AuditModel):
                 "total"]
         return _to_decimal(total, DEC_0)
 
-    def opening_cif_inr(self) -> Decimal:
-        total = \
-            self.export_license.aggregate(total=Coalesce(Sum("cif_inr"), Value(DEC_0), output_field=DecimalField()))[
-                "total"]
-        return _to_decimal(total, DEC_0)
-
     @property
     def get_total_debit(self) -> Decimal:
         """Total BOE debit. Uses centralized service."""
@@ -208,11 +218,6 @@ class LicenseDetailsModel(AuditModel):
         from license.services.balance_calculator import LicenseBalanceCalculator
         return LicenseBalanceCalculator.calculate_allotment(self)
 
-    def _calculate_license_trade(self) -> Decimal:
-        """Calculate total trade (no invoice) using centralized service"""
-        from license.services.balance_calculator import LicenseBalanceCalculator
-        return LicenseBalanceCalculator.calculate_trade(self)
-
     @property
     def get_balance_cif(self) -> Decimal:
         """
@@ -234,9 +239,6 @@ class LicenseDetailsModel(AuditModel):
         from license.services.restriction_calculator import RestrictionCalculator
         total_export_cif = self._calculate_license_credit()
         return RestrictionCalculator.calculate_all_restriction_balances(self, total_export_cif)
-
-    def get_party_name(self) -> str:
-        return str(self.exporter)[:8]
 
     # ---------- grouped import summaries ----------
     @cached_property
@@ -660,14 +662,15 @@ class LicenseDetailsModel(AuditModel):
     def get_starch_confectionery(self):
         return self.get_item_data("EMULSIFIER")
 
-    @cached_property
     def get_per_cif(self) -> Optional[Dict[str, Decimal]]:
         """
         Compute restriction budgets based on export norm class.
         Returns decimals in the dict values.
+        NOTE: Removed @cached_property to ensure fresh calculation after updates.
         """
         available_value = self.get_balance_cif
-        credit = _to_decimal(self.opening_balance or DEC_0, DEC_0)
+        # Use total export CIF as credit for restriction calculations
+        credit = _to_decimal(self._calculate_license_credit() or DEC_0, DEC_0)
 
         first_norm = self.export_license.all().values_list("norm_class__norm_class", flat=True).first()
         if not first_norm:
@@ -727,6 +730,10 @@ class LicenseDetailsModel(AuditModel):
         if self.current_owner:
             return f"Current Owner is {self.current_owner.name}"
         return "Data Not Found"
+
+    @property
+    def purchase_status_label(self):
+        return self.purchase_status.label if self.purchase_status else None
 
 
 # -----------------------------
@@ -879,7 +886,7 @@ class LicenseImportItemsModel(models.Model):
         from core.constants import N2009, CO
 
         # Check exception: 098/2009 OR Conversion - restrictions do not apply
-        if self.license and (self.license.notification_number == N2009 or self.license.purchase_status == CO):
+        if self.license and (self.license.notification_number == N2009 or (self.license.purchase_status and self.license.purchase_status.code == CO)):
             return DEC_0  # No restriction applies
 
         # Get all item names linked to this import item
@@ -965,10 +972,12 @@ class LicenseImportItemsModel(models.Model):
             return DEC_0
 
         # PRIORITY 1: Check is_restricted flag
-        # If is_restricted=False (not restricted), always use license-level balance
+        # Non-restricted items with no own CIF FC share the full license balance.
+        # Non-restricted items that DO have their own CIF FC use item-level calc (fall through).
         if not self.is_restricted:
-            # Non-restricted item: use license-level balance
-            return self.license.get_balance_cif
+            if not self.cif_fc or self.cif_fc == Decimal("0"):
+                return self.license.get_balance_cif
+            # else: fall through to item-level calculation below
 
         # PRIORITY 2: If is_restricted=True, check if item has restriction percentage
         restriction_balance = self._calculate_head_restriction_balance()
@@ -1000,18 +1009,19 @@ class LicenseImportItemsModel(models.Model):
                 return self.license.get_balance_cif
 
         # PRIORITY 4 & 5: Original logic - use centralized methods where possible
-        if not self.cif_fc or self.cif_fc in (Decimal("0"), Decimal("0.1"), Decimal("0.01")):
-            # License-level calculation - use centralized methods
-            credit = self.license._calculate_license_credit()
-            debit = self.license._calculate_license_debit()
-            allotment = self.license._calculate_license_allotment()
-            return credit - debit - allotment
+        license_balance = self.license.get_balance_cif
+
+        if not self.cif_fc or self.cif_fc == Decimal("0"):
+            # Item has no own CIF FC — the full license balance is available
+            return license_balance
         else:
-            # Item-level calculation
+            # Item has its own CIF FC — use item-level credit/debit/allotment,
+            # but cap at license balance so it never shows more than the license has left.
             credit = _to_decimal(self.cif_fc or DEC_0, DEC_0)
             debit = self._calculate_item_debit()
             allotment = self._calculate_item_allotment()
-            return credit - debit - allotment
+            item_balance = max(credit - debit - allotment, DEC_0)
+            return min(item_balance, license_balance)
 
     @property
     def available_value_calculated(self) -> Decimal:

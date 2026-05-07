@@ -6,13 +6,15 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
+from django.core.cache import cache
 from django.db.models import Q
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from allotment.models import AllotmentModel
 from bill_of_entry.models import BillOfEntryModel
+from core.cache_utils import CACHE_TIMEOUT_MEDIUM
 from license.models import LicenseDetailsModel
 
 
@@ -27,10 +29,23 @@ class DashboardDataView(APIView):
         - Expiring licenses (top 5)
         - BOE monthly trend (last 6 months)
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Get all dashboard data"""
+        """
+        Get all dashboard data with caching.
+
+        Cache key: dashboard:data
+        TTL: 5 minutes
+        """
+        cache_key = 'view:dashboard:data'
+
+        # Try cache first
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        # Cache miss - compute dashboard data
         try:
             # Prepare response data structure
             data = {
@@ -40,6 +55,9 @@ class DashboardDataView(APIView):
                 'expiring_licenses': self._get_expiring_licenses(),
                 'boe_monthly_trend': self._get_boe_monthly_trend(),
             }
+
+            # Cache for 5 minutes
+            cache.set(cache_key, data, CACHE_TIMEOUT_MEDIUM)
 
             return Response(data)
         except Exception as e:
@@ -125,7 +143,7 @@ class DashboardDataView(APIView):
         # Recent 5 BOE ordered by bill_of_entry_date (all BOE records)
         recent_boe = BillOfEntryModel.objects.filter(
             bill_of_entry_date__isnull=False
-        ).order_by('-bill_of_entry_date')[:5]
+        ).select_related('company').order_by('-bill_of_entry_date')[:5]
 
         recent_data = []
         for boe in recent_boe:

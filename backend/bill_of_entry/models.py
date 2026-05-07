@@ -98,16 +98,25 @@ class BillOfEntryModel(AuditModel):
         return self.bill_of_entry_number
 
     def save(self, *args, **kwargs):
-        """Auto-calculate exchange rate if not explicitly set (Decimal-safe)."""
-        if not self.exchange_rate or _to_decimal(self.exchange_rate, DEC_EX_0) == DEC_EX_0:
+        """Recalculate exchange rate from row totals when the BOE already has rows (pk exists).
+        Only updates the rate when the newly-computed value differs by more than 1 from the
+        current value, preventing spurious writes and infinite-loop risk.
+        """
+        if self.pk:
+            # Rows are queryable only after the BOE is persisted
             try:
                 total_fc = self.get_total_fc
                 total_inr = self.get_total_inr
                 if total_fc > DEC_0:
-                    # compute precise division, quantize to 4 dp
-                    ex = (total_inr / total_fc).quantize(DEC_EX_0)
-                    self.exchange_rate = ex
+                    new_ex = (total_inr / total_fc).quantize(DEC_EX_0)
+                    current = _to_decimal(self.exchange_rate, DEC_EX_0)
+                    if abs(new_ex - current) > Decimal("1"):
+                        self.exchange_rate = new_ex
             except (DivisionByZero, ZeroDivisionError, TypeError, InvalidOperation):
+                pass
+        else:
+            # New record with no rows yet — default to zero if unset
+            if not self.exchange_rate:
                 self.exchange_rate = DEC_EX_0
         super().save(*args, **kwargs)
 
@@ -233,13 +242,13 @@ class RowDetails(AuditModel):
     transaction_type = models.CharField(max_length=2, choices=TYPE_CHOICES, default=TYPE_CHOICES[1][0])
     cif_inr = models.DecimalField(
         max_digits=15,
-        decimal_places=2,
+        decimal_places=3,
         default=DEC_0,
         validators=[MinValueValidator(DEC_0)],
     )
     cif_fc = models.DecimalField(
         max_digits=15,
-        decimal_places=2,
+        decimal_places=3,
         default=DEC_0,
         validators=[MinValueValidator(DEC_0)],
     )
@@ -248,6 +257,10 @@ class RowDetails(AuditModel):
         decimal_places=3,
         default=DEC_000,
         validators=[MinValueValidator(DEC_000)],
+    )
+    is_frozen = models.BooleanField(
+        default=False,
+        help_text="Set to True when this row is created/updated from a ledger upload. Frozen rows cannot be edited from the frontend.",
     )
 
     admin_search_fields = (
@@ -260,6 +273,17 @@ class RowDetails(AuditModel):
         unique_together = ("bill_of_entry", "sr_number", "transaction_type")
         verbose_name = "Item Detail"
         verbose_name_plural = "Item Details"
+
+    def save(self, *args, **kwargs):
+        # Frozen rows can only be modified by the ledger upload (which uses bulk_create/bulk_update).
+        # Any regular save() on a frozen row is silently blocked.
+        if self.pk:
+            try:
+                if RowDetails.objects.filter(pk=self.pk, is_frozen=True).exists():
+                    return
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return str(self.sr_number)
@@ -314,4 +338,66 @@ def delete_stock(sender, instance, **kwargs):
         transaction.on_commit(_job)
     except Exception:
         # fallback immediate invocation in environments without on_commit
+        _job()
+
+
+def _recalculate_boe_exchange_rate(boe_id: int, force: bool = False) -> None:
+    """Recalculate and persist the exchange rate on a BOE from its row totals.
+
+    Uses .update() (not .save()) to avoid re-triggering BillOfEntryModel.save()
+    and the associated signals — preventing any infinite-loop risk.
+
+    When force=True (ledger upload), always writes the computed rate regardless of
+    the current stored value. When force=False (signal-triggered), only updates
+    when the new rate differs by more than 1 to prevent spurious writes.
+    """
+    try:
+        boe = BillOfEntryModel.objects.get(pk=boe_id)
+        total_fc = boe.get_total_fc
+        total_inr = boe.get_total_inr
+        if total_fc > DEC_0:
+            new_ex = (total_inr / total_fc).quantize(DEC_EX_0)
+        else:
+            return  # No FC totals — nothing to update
+        if force:
+            BillOfEntryModel.objects.filter(pk=boe_id).update(exchange_rate=new_ex)
+        else:
+            current = _to_decimal(boe.exchange_rate, DEC_EX_0)
+            if abs(new_ex - current) > Decimal("1"):
+                BillOfEntryModel.objects.filter(pk=boe_id).update(exchange_rate=new_ex)
+    except (BillOfEntryModel.DoesNotExist, DivisionByZero, ZeroDivisionError, InvalidOperation, TypeError):
+        pass
+
+
+@receiver(post_save, sender=RowDetails, dispatch_uid="recalc_exchange_rate_on_save")
+def recalc_exchange_rate_on_row_save(sender, instance, **kwargs):
+    """Recalculate BOE exchange rate after a RowDetails row is saved."""
+    if not instance.bill_of_entry_id:
+        return
+
+    boe_id = instance.bill_of_entry_id
+
+    def _job():
+        _recalculate_boe_exchange_rate(boe_id)
+
+    try:
+        transaction.on_commit(_job)
+    except Exception:
+        _job()
+
+
+@receiver(post_delete, sender=RowDetails, dispatch_uid="recalc_exchange_rate_on_delete")
+def recalc_exchange_rate_on_row_delete(sender, instance, **kwargs):
+    """Recalculate BOE exchange rate after a RowDetails row is deleted."""
+    if not instance.bill_of_entry_id:
+        return
+
+    boe_id = instance.bill_of_entry_id
+
+    def _job():
+        _recalculate_boe_exchange_rate(boe_id)
+
+    try:
+        transaction.on_commit(_job)
+    except Exception:
         _job()

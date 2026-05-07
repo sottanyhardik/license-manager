@@ -448,6 +448,15 @@ def get_item_filters():
             ]
         },
         {
+            'base_name': 'COCOA PASTE',
+            'norms': ['E5'],
+            'filters': [
+                Q(description__icontains="Cocoa Paste") |
+                Q(description__icontains="1803") |
+                Q(hs_code__hs_code__startswith="1803")
+            ]
+        },
+        {
             'base_name': 'FRUIT/COCOA',
             'norms': ['E1', 'E5'],
             'filters': [
@@ -455,13 +464,24 @@ def get_item_filters():
                   Q(description__icontains="Coco Powder") |
                   Q(description__icontains="Cocoa Powder") |
                   Q(description__icontains="1802") |
-                  Q(description__icontains="1803") |
                   Q(description__icontains="1804") |
                   Q(description__icontains="18050000") |
                   Q(description__icontains='COCO POWDER') |
                   Q(hs_code__hs_code__startswith='18050000') |
                   Q(description__icontains="fruit/cocoa"))
                 & ~Q(description__icontains="actual user")
+                # Exclude Cocoa Paste items (go to COCOA PASTE category instead)
+                & ~Q(description__icontains="Cocoa Paste")
+                & ~Q(description__icontains="1803")
+                & ~Q(hs_code__hs_code__startswith="1803")
+                # Exclude oil-category items (HSN 1511/1513, Vegetable Oil, Palmolein, Palm Kernel)
+                & ~Q(hs_code__hs_code__startswith="1511")
+                & ~Q(hs_code__hs_code__startswith="1513")
+                & ~Q(description__icontains="Vegetable Oil")
+                & ~Q(description__icontains="Palmolein")
+                & ~Q(description__icontains="Palm Kernel")
+                & ~Q(description__icontains="1511")
+                & ~Q(description__icontains="1513")
             ]
         },
         {

@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from core.throttling import LoginRateThrottle
 from ..serializers import UserSerializer
 
 User = get_user_model()
@@ -16,6 +17,7 @@ User = get_user_model()
 class LoginView(APIView):
     authentication_classes = []  # Disable authentication
     permission_classes = [AllowAny]  # Allow unauthenticated access
+    throttle_classes = [LoginRateThrottle]  # Apply strict login throttling
 
     def post(self, request, *args, **kwargs):
         username = request.data.get("username")

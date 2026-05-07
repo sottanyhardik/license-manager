@@ -48,7 +48,6 @@ class AllotmentActionViewSet(ViewSet):
         - notification_number: Filter by license notification number
         - norm_class: Filter by license norm class (export license)
         - hs_code: Filter by HS code
-        - is_expired: Filter expired licenses (true/false)
         - is_restricted: Filter by is_restricted flag (true/false/all)
         - purchase_status: Filter by purchase status (comma-separated)
         - license_status: Filter by license status (active/expired/expiring_soon/all)
@@ -70,15 +69,17 @@ class AllotmentActionViewSet(ViewSet):
         notification_number = request.query_params.get('notification_number', '')
         norm_class = request.query_params.get('norm_class', '')
         hs_code = request.query_params.get('hs_code', '')
-        is_expired = request.query_params.get('is_expired', '')
         is_restricted = request.query_params.get('is_restricted', '')
         purchase_status = request.query_params.get('purchase_status', '')
         license_status = request.query_params.get('license_status', '')
         item_names = request.query_params.get('item_names', '')
+        expiry_date_from = request.query_params.get('expiry_date_from', '')
+        expiry_date_to = request.query_params.get('expiry_date_to', '')
 
         # Get available license import items with available quantity
         # Show all items with available quantity > 0 (including partially allocated ones)
-        queryset = LicenseImportItemsModel.objects.filter(
+        # Note: We explicitly use .all() to avoid any default manager filters
+        queryset = LicenseImportItemsModel.objects.all().filter(
             available_quantity__gt=0
         ).select_related(
             'license',
@@ -120,13 +121,8 @@ class AllotmentActionViewSet(ViewSet):
                 Q(hs_code__product_description__iexact=description)  # Exact match on HS product description
             ).distinct()
 
-            exact_count = exact_queryset.count()
-            logger.info(f"Exact match count: {exact_count}")
-
-            if exact_count > 0:
-                # Found exact matches, use them
+            if exact_queryset.exists():
                 queryset = exact_queryset
-                logger.info(f"Using exact matches for '{description}'")
             else:
                 # No exact matches, try partial matches
                 queryset = queryset.filter(
@@ -135,7 +131,6 @@ class AllotmentActionViewSet(ViewSet):
                     Q(hs_code__hs_code__icontains=description) |
                     Q(hs_code__product_description__icontains=description)
                 ).distinct()
-                logger.info(f"Using partial matches for '{description}', count: {queryset.count()}")
 
         # Apply exporter filter (after description to ensure AND logic)
         if exporter:
@@ -179,15 +174,6 @@ class AllotmentActionViewSet(ViewSet):
         if hs_code:
             queryset = queryset.filter(hs_code__hs_code__startswith=hs_code)
 
-        # Apply is_expired filter
-        if is_expired:
-            from django.utils import timezone
-            today = timezone.now().date()
-            if is_expired.lower() in ['true', '1', 'yes']:
-                queryset = queryset.filter(license__license_expiry_date__lt=today)
-            elif is_expired.lower() in ['false', '0', 'no']:
-                queryset = queryset.filter(license__license_expiry_date__gte=today)
-
         # Apply exclude exporter filter
         if exclude_exporter:
             queryset = queryset.exclude(license__exporter_id=exclude_exporter)
@@ -203,7 +189,7 @@ class AllotmentActionViewSet(ViewSet):
         if purchase_status:
             status_list = [s.strip() for s in purchase_status.split(',') if s.strip()]
             if status_list:
-                queryset = queryset.filter(license__purchase_status__in=status_list)
+                queryset = queryset.filter(license__purchase_status__code__in=status_list)
 
         # Apply license_status filter
         if license_status and license_status.lower() != 'all':
@@ -221,6 +207,21 @@ class AllotmentActionViewSet(ViewSet):
                     license__license_expiry_date__gte=today,
                     license__license_expiry_date__lte=expiring_date
                 )
+
+        # Apply expiry date range filter
+        if expiry_date_from:
+            try:
+                from datetime import datetime as _dt
+                queryset = queryset.filter(license__license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date())
+            except (ValueError, TypeError):
+                pass
+
+        if expiry_date_to:
+            try:
+                from datetime import datetime as _dt
+                queryset = queryset.filter(license__license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date())
+            except (ValueError, TypeError):
+                pass
 
         # Apply item_names filter
         if item_names:
@@ -330,7 +331,7 @@ class AllotmentActionViewSet(ViewSet):
                     is_exception = (
                         license_item.license and (
                             license_item.license.notification_number == "098/2009" or
-                            license_item.license.purchase_status == "CO"
+                            (license_item.license.purchase_status and license_item.license.purchase_status.code == "CO")
                         )
                     )
 
@@ -470,6 +471,7 @@ class AllotmentActionViewSet(ViewSet):
         """
         Generate allotment letter PDF with allotment details and license information.
         """
+        from allotment.scripts.allotment_pdf import generate_allotment_pdf_bytes, allotment_pdf_filename
         try:
             allotment = get_object_or_404(
                 AllotmentModel.objects.select_related('company', 'port').prefetch_related(
@@ -478,159 +480,10 @@ class AllotmentActionViewSet(ViewSet):
                 ),
                 pk=pk
             )
-
-            # Create the HttpResponse object with PDF headers
-            response = HttpResponse(content_type='application/pdf')
-            # Use invoice number in filename if available, otherwise use timestamp
-            if allotment.invoice:
-                filename = f'Allotment-{allotment.invoice}.pdf'
-            else:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f'Allotment_{allotment.company.name}_{timestamp}.pdf'
+            pdf_bytes = generate_allotment_pdf_bytes(allotment)
+            filename = allotment_pdf_filename(allotment)
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
             response['Content-Disposition'] = f'inline; filename="{filename}"'
-
-            # Create the PDF object using BytesIO buffer
-            buffer = BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5 * inch, bottomMargin=0.5 * inch)
-
-            # Container for the 'Flowable' objects
-            elements = []
-
-            # Define styles
-            styles = getSampleStyleSheet()
-            title_style = ParagraphStyle(
-                'CustomTitle',
-                parent=styles['Heading1'],
-                fontSize=14,
-                textColor=colors.black,
-                spaceAfter=12,
-                alignment=TA_CENTER
-            )
-
-            header_style = ParagraphStyle(
-                'CustomHeader',
-                parent=styles['Normal'],
-                fontSize=10,
-                textColor=colors.black,
-                spaceAfter=6,
-                alignment=TA_LEFT
-            )
-
-            # Header with timestamp
-            header_text = f"Allotment Time: {datetime.now().strftime('%d %B %Y %H:%M')}"
-            elements.append(Paragraph(header_text, header_style))
-            elements.append(Spacer(1, 12))
-
-            # Company details
-            company_name = allotment.company.name if allotment.company else "N/A"
-            company_address = getattr(allotment.company, 'address', '') or ''
-            elements.append(Paragraph(f"<b>To,</b>", header_style))
-            elements.append(Paragraph(f"<b>{company_name}</b>", header_style))
-            if company_address:
-                elements.append(Paragraph(company_address, header_style))
-            elements.append(Spacer(1, 12))
-
-            # Subject line
-            total_qty = int(allotment.required_quantity or 0)
-            invoice = allotment.invoice or "N/A"
-            item_name = allotment.item_name or "N/A"
-            subject = f"<b>Subject:</b> License Allotment for {item_name} Invoice No. {invoice} for {total_qty:,} Kg"
-            elements.append(Paragraph(subject, header_style))
-            elements.append(Spacer(1, 12))
-
-            # Summary table
-            summary_data = [
-                ['Date', 'Item', 'Port Of Discharge'],
-                [
-                    allotment.estimated_arrival_date.strftime(
-                        '%d/%m/%Y') if allotment.estimated_arrival_date else 'N/A',
-                    item_name,
-                    allotment.port.code if allotment.port else 'N/A'
-                ]
-            ]
-
-            summary_table = Table(summary_data, colWidths=[1.2 * inch, 1.5 * inch, 1.2 * inch, 1.5 * inch, 1.5 * inch])
-            summary_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                ('TOPPADDING', (0, 1), (-1, -1), 6),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ]))
-            elements.append(summary_table)
-            elements.append(Spacer(1, 18))
-
-            # Detailed DFIA table
-            detail_data = [
-                ['DFIA No', 'Reg No', 'Port Code', 'Duty Type',
-                 'Item Sr.No', 'Qty', 'CIF $', 'NTF No']
-            ]
-
-            # Add allotment details
-            for detail in allotment.allotment_details.all():
-                license_obj = detail.item.license if detail.item else None
-                license_num_date = f"{license_obj.license_number}\n{license_obj.license_date.strftime('%d/%m/%Y')}" if license_obj and license_obj.license_date else (
-                    license_obj.license_number if license_obj else 'N/A')
-                reg_num_date = f"{license_obj.registration_number}\n{license_obj.registration_date.strftime('%d/%m/%Y')}" if license_obj and license_obj.registration_date else (
-                    license_obj.registration_number if license_obj else 'N/A')
-
-                row = [
-                    license_num_date,
-                    reg_num_date,
-                    license_obj.port if license_obj else 'N/A',
-                    'DFIA',  # Default duty type
-                    str(detail.item.serial_number) if detail.item else 'N/A',
-                    f"{int(detail.qty):,}",
-                    f"{float(detail.cif_fc):,.2f}",
-                    license_obj.notification_number if license_obj else 'N/A',
-                ]
-                detail_data.append(row)
-
-            # Add totals row
-            total_qty_allotted = sum(int(d.qty) for d in allotment.allotment_details.all())
-            total_cif = sum(float(d.cif_fc) for d in allotment.allotment_details.all())
-            detail_data.append([
-                'Total', '', '', '', '',
-                f"{total_qty_allotted:,}",
-                f"{total_cif:,.2f}",
-                ''
-            ])
-
-            detail_table = Table(detail_data,
-                                 colWidths=[1.2 * inch, 1.2 * inch, 0.8 * inch, 0.7 * inch, 0.8 * inch,
-                                            0.8 * inch, 0.9 * inch, 1.1 * inch])
-            detail_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 8),
-                ('FONTSIZE', (0, 1), (-1, -1), 7),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                ('TOPPADDING', (0, 1), (-1, -1), 4),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                # Make totals row bold
-                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-            ]))
-            elements.append(detail_table)
-
-            # Build PDF
-            doc.build(elements)
-
-            # Get the value of the BytesIO buffer and write it to the response
-            pdf = buffer.getvalue()
-            buffer.close()
-            response.write(pdf)
-
             return response
 
         except Exception as e:

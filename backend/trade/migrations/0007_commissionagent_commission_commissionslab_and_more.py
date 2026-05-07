@@ -86,6 +86,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='commissionslab',
-            constraint=models.CheckConstraint(check=models.Q(('max_amount__isnull', True), ('max_amount__gt', models.F('min_amount')), _connector='OR'), name='chk_min_less_than_max'),
+            constraint=models.CheckConstraint(condition=models.Q(('max_amount__isnull', True), ('max_amount__gt', models.F('min_amount')), _connector='OR'), name='chk_min_less_than_max'),
         ),
     ]

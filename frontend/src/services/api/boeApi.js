@@ -79,6 +79,14 @@ export const exportBOEPortExcel = async (params = {}) => {
     return response.data;
 };
 
+/**
+ * Merge source BOE into target BOE
+ */
+export const mergeBOE = async (targetId, sourceId) => {
+    const response = await api.post(`bill-of-entries/${targetId}/merge/`, { source_boe_id: sourceId });
+    return response.data;
+};
+
 export default {
     fetchBOEList,
     fetchBOE,
@@ -88,4 +96,5 @@ export default {
     exportBOEListPDF,
     exportBOEListExcel,
     exportBOEPortExcel,
+    mergeBOE,
 };

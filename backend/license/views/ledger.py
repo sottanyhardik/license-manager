@@ -2768,11 +2768,24 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         search = request.query_params.get('search', '').strip()
         terms = [t.strip() for t in search.split(',') if t.strip()] if search else []
+        license_type = request.query_params.get('license_type', 'ALL')
+        purchase_date_from = request.query_params.get('purchase_date_from', '')
+        purchase_date_to = request.query_params.get('purchase_date_to', '')
 
         qs = LicenseTrade.objects.select_related('from_company', 'to_company').prefetch_related(
             'lines__sr_number__license',
             'incentive_lines__incentive_license',
         ).filter(direction__in=['PURCHASE', 'SALE'])
+
+        if license_type and license_type != 'ALL':
+            if license_type == 'INCENTIVE':
+                qs = qs.filter(license_type__in=['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'])
+            else:
+                qs = qs.filter(license_type=license_type)
+        if purchase_date_from:
+            qs = qs.filter(invoice_date__gte=purchase_date_from)
+        if purchase_date_to:
+            qs = qs.filter(invoice_date__lte=purchase_date_to)
 
         if terms:
             if len(terms) == 1:

@@ -466,3 +466,79 @@ def update_product_name(self, request, pk=None):
 
 
 BillOfEntryViewSet.update_product_name = update_product_name
+
+
+# Add merge BOE action
+@action(detail=True, methods=['post'], url_path='merge')
+def merge_boe(self, request, pk=None):
+    """
+    Merge a source BOE into this (target) BOE.
+
+    - Moves RowDetails from source to target (skips duplicate sr_number+transaction_type)
+    - Transfers allotments from source to target
+    - Updates target's port to source's port
+    - Deletes source BOE
+
+    Request body:
+    - source_boe_id: ID of the BOE to merge from (will be deleted)
+    """
+    from django.db import transaction as db_transaction
+    from django.shortcuts import get_object_or_404
+
+    target_boe = get_object_or_404(BillOfEntryModel, id=pk)
+    source_boe_id = request.data.get('source_boe_id')
+
+    if not source_boe_id:
+        return Response({'error': 'source_boe_id is required'}, status=400)
+
+    try:
+        source_boe = BillOfEntryModel.objects.prefetch_related('item_details', 'allotment').get(id=source_boe_id)
+    except BillOfEntryModel.DoesNotExist:
+        return Response({'error': 'Source BOE not found'}, status=404)
+
+    if target_boe.id == source_boe.id:
+        return Response({'error': 'Cannot merge a BOE with itself'}, status=400)
+
+    with db_transaction.atomic():
+        # Track existing (sr_number, transaction_type) combos in target to avoid duplicates
+        existing_combos = set(
+            target_boe.item_details.values_list('sr_number_id', 'transaction_type')
+        )
+
+        moved_count = 0
+        skipped_count = 0
+        for row in source_boe.item_details.all():
+            combo = (row.sr_number_id, row.transaction_type)
+            if combo not in existing_combos:
+                row.bill_of_entry = target_boe
+                row.save(update_fields=['bill_of_entry'])
+                existing_combos.add(combo)
+                moved_count += 1
+            else:
+                skipped_count += 1
+
+        # Transfer allotments
+        for allotment in source_boe.allotment.all():
+            target_boe.allotment.add(allotment)
+
+        # Capture source port before deleting
+        source_port = source_boe.port
+
+        # Delete source BOE (frees unique constraint)
+        source_boe.delete()
+
+        # Update target port to the correct port from source
+        target_boe.port = source_port
+        target_boe.save(update_fields=['port'])
+
+    serializer = BillOfEntrySerializer(
+        BillOfEntryModel.objects.select_related('company', 'port').prefetch_related('item_details').get(id=target_boe.id)
+    )
+    return Response({
+        'success': True,
+        'message': f'Merged successfully. {moved_count} item(s) moved, {skipped_count} skipped (duplicate).',
+        'boe': serializer.data,
+    })
+
+
+BillOfEntryViewSet.merge_boe = merge_boe

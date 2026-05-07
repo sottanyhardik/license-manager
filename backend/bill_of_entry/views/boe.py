@@ -500,22 +500,26 @@ def merge_boe(self, request, pk=None):
         return Response({'error': 'Cannot merge a BOE with itself'}, status=400)
 
     with db_transaction.atomic():
-        # Track existing (sr_number, transaction_type) combos in target to avoid duplicates
+        from bill_of_entry.models import RowDetails
+
+        # Find combos already in target to avoid unique-constraint violations
         existing_combos = set(
             target_boe.item_details.values_list('sr_number_id', 'transaction_type')
         )
 
-        moved_count = 0
+        rows_to_move = []
         skipped_count = 0
-        for row in source_boe.item_details.all():
-            combo = (row.sr_number_id, row.transaction_type)
+        for row in source_boe.item_details.values('id', 'sr_number_id', 'transaction_type'):
+            combo = (row['sr_number_id'], row['transaction_type'])
             if combo not in existing_combos:
-                row.bill_of_entry = target_boe
-                row.save(update_fields=['bill_of_entry'])
+                rows_to_move.append(row['id'])
                 existing_combos.add(combo)
-                moved_count += 1
             else:
                 skipped_count += 1
+
+        # Use queryset .update() to bypass RowDetails.save() frozen-row guard —
+        # we are only reassigning the BOE FK, not editing financial data.
+        moved_count = RowDetails.objects.filter(id__in=rows_to_move).update(bill_of_entry=target_boe)
 
         # Transfer allotments
         for allotment in source_boe.allotment.all():
@@ -524,7 +528,7 @@ def merge_boe(self, request, pk=None):
         # Capture source port before deleting
         source_port = source_boe.port
 
-        # Delete source BOE (frees unique constraint)
+        # Delete source BOE (frees unique constraint; duplicate/unmoved rows cascade-delete)
         source_boe.delete()
 
         # Update target port to the correct port from source

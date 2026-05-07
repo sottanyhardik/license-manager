@@ -269,8 +269,28 @@ export default function LicenseLedgerDetail() {
                 });
                 const companiesGrouped = Object.values(companiesMap);
 
+                const TXN_SORT_ORDER = { OPENING: 0, PURCHASE: 1, SALE: 2 };
+
                 return companiesGrouped.map((company, ci) => {
-                    const txns = company.transactions;
+                    const rawTxns = company.transactions;
+
+                    // Sort per-company: OPENING/PURCHASE before SALE
+                    const txns = [...rawTxns].sort((a, b) =>
+                        ((TXN_SORT_ORDER[a.type] ?? 1) - (TXN_SORT_ORDER[b.type] ?? 1))
+                    );
+
+                    // Compute per-company running balance (backend balance is global)
+                    let companyRunning = 0;
+                    const companyBalMap = new Map();
+                    for (const txn of txns) {
+                        if (txn.type === 'PURCHASE' || txn.type === 'OPENING') {
+                            companyRunning += isDFIA ? (txn.debit_cif || 0) : (txn.debit_license_value || 0);
+                        } else if (txn.type === 'SALE') {
+                            companyRunning -= isDFIA ? (txn.credit_cif || 0) : (txn.credit_license_value || 0);
+                        }
+                        companyBalMap.set(txn, companyRunning);
+                    }
+
                     const totalDebit = txns.reduce((s, t) => s + (t.debit_amount || 0), 0);
                     const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
                     const companyPL = txns.filter(t => t.type === 'SALE').reduce((s, t) => s + (t.profit_loss || 0), 0);
@@ -353,7 +373,7 @@ export default function LicenseLedgerDetail() {
                                                 <td style={{ padding: '5px 10px', textAlign: 'right', color: '#374151' }}>{txn.rate ? formatIndianNumber(txn.rate, 2) : '-'}</td>
                                                 <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: '600', color: '#065f46' }}>{txn.debit_amount ? `₹${formatIndianNumber(txn.debit_amount, 2)}` : '-'}</td>
                                                 <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: '600', color: '#991b1b' }}>{txn.credit_amount ? `₹${formatIndianNumber(txn.credit_amount, 2)}` : '-'}</td>
-                                                <td style={{ padding: '5px 10px', textAlign: 'right', color: txn.balance >= 0 ? '#065f46' : '#991b1b' }}>{formatIndianNumber(txn.balance, 2)}</td>
+                                                <td style={{ padding: '5px 10px', textAlign: 'right', color: (companyBalMap.get(txn) ?? 0) >= 0 ? '#065f46' : '#991b1b' }}>{formatIndianNumber(companyBalMap.get(txn) ?? 0, 2)}</td>
                                                 <td style={{ padding: '5px 10px', textAlign: 'right', color: txn.profit_loss >= 0 ? '#065f46' : '#991b1b' }}>
                                                     {txn.type === 'SALE' && txn.profit_loss != null ? formatIndianNumber(Math.abs(txn.profit_loss), 2) : '-'}
                                                 </td>
@@ -367,7 +387,7 @@ export default function LicenseLedgerDetail() {
                                         </td>
                                         <td style={{ padding: '7px 10px', textAlign: 'right', color: '#6ee7b7' }}>₹{formatIndianNumber(totalDebit, 2)}</td>
                                         <td style={{ padding: '7px 10px', textAlign: 'right', color: '#fca5a5' }}>₹{formatIndianNumber(totalCredit, 2)}</td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#93c5fd' }}>{formatIndianNumber(txns[txns.length - 1]?.balance || 0, 2)}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#93c5fd' }}>{formatIndianNumber(companyRunning, 2)}</td>
                                         <td style={{ padding: '7px 10px', textAlign: 'right', color: companyPL >= 0 ? '#6ee7b7' : '#fca5a5' }}>
                                             {companyPL !== 0 ? `${companyPL >= 0 ? '+' : ''}₹${formatIndianNumber(Math.abs(companyPL), 2)}` : '-'}
                                         </td>

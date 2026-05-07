@@ -135,6 +135,52 @@ export default function MasterList() {
     const [invoiceDraft, setInvoiceDraft] = useState('');
     const [invoiceSaving, setInvoiceSaving] = useState(false);
 
+    // BOE Merge Modal state
+    const [showMergeModal, setShowMergeModal] = useState(false);
+    const [mergeBoeTarget, setMergeBoeTarget] = useState(null);
+    const [mergeBoeSource, setMergeBoeSource] = useState(null);
+    const [mergeBoeLoading, setMergeBoeLoading] = useState(false);
+    const [mergeCandidates, setMergeCandidates] = useState([]);
+    const [mergeCandidatesLoading, setMergeCandidatesLoading] = useState(false);
+
+    const openMergeModal = async (item) => {
+        setMergeBoeTarget(item);
+        setMergeBoeSource(null);
+        setShowMergeModal(true);
+        setMergeCandidatesLoading(true);
+        try {
+            const resp = await boeApi.fetchBOEList({ search: item.bill_of_entry_number, is_invoice: 'all', page_size: 50 });
+            const candidates = (resp.results || []).filter(b => b.id !== item.id && b.bill_of_entry_number === item.bill_of_entry_number);
+            setMergeCandidates(candidates);
+        } catch {
+            toast.error('Failed to load merge candidates');
+        } finally {
+            setMergeCandidatesLoading(false);
+        }
+    };
+
+    const closeMergeModal = () => {
+        setShowMergeModal(false);
+        setMergeBoeTarget(null);
+        setMergeBoeSource(null);
+        setMergeCandidates([]);
+    };
+
+    const doMerge = async () => {
+        if (!mergeBoeTarget || !mergeBoeSource) return;
+        setMergeBoeLoading(true);
+        try {
+            const resp = await boeApi.mergeBOE(mergeBoeTarget.id, mergeBoeSource.id);
+            toast.success(resp.message || 'BOE merged successfully');
+            closeMergeModal();
+            fetchData(currentPage, pageSize, filterParams);
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Failed to merge BOE');
+        } finally {
+            setMergeBoeLoading(false);
+        }
+    };
+
     const startInvoiceEdit = (item) => {
         setEditingInvoiceId(item.id);
         setInvoiceDraft(item.invoice_no || '');
@@ -895,6 +941,13 @@ export default function MasterList() {
                                                         style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
                                                     >
                                                         <i className="bi bi-file-earmark-text"></i> TL
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openMergeModal(item)}
+                                                        title="Merge BOE"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#7c3aed', background: '#ede9fe', border: '1px solid #c4b5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
+                                                    >
+                                                        <i className="bi bi-intersect"></i>
                                                     </button>
                                                     {(!item.product_name || item.product_name.trim() === '') && (
                                                         <button
@@ -2042,6 +2095,108 @@ export default function MasterList() {
                         {!linkSearch && (
                             <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem', padding: '8px' }}>Type an invoice number to search</div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* BOE Merge Modal */}
+            {showMergeModal && mergeBoeTarget && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1060, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeMergeModal}>
+                    <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', width: '560px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                            <h6 style={{ margin: 0, fontWeight: '700', color: '#1e1b4b' }}>
+                                <i className="bi bi-intersect me-2" style={{ color: '#7c3aed' }}></i>
+                                Merge BOE: <span style={{ color: '#7c3aed' }}>{mergeBoeTarget.bill_of_entry_number}</span>
+                            </h6>
+                            <button onClick={closeMergeModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#94a3b8' }}>
+                                <i className="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+
+                        {/* Target BOE info */}
+                        <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.85rem' }}>
+                            <div style={{ fontWeight: '600', color: '#166534', marginBottom: '4px' }}>Target BOE (will be kept &amp; updated)</div>
+                            <div><i className="bi bi-geo-alt me-1"></i>{mergeBoeTarget.port_name}</div>
+                            <div style={{ color: '#475569', fontSize: '0.78rem' }}>
+                                {mergeBoeTarget.item_details?.length || 0} item(s) · {mergeBoeTarget.licenses || 'No licenses'}
+                            </div>
+                        </div>
+
+                        <div style={{ fontWeight: '600', fontSize: '0.78rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                            Select source BOE to merge from (port replaces target, items moved, source deleted):
+                        </div>
+
+                        {mergeCandidatesLoading && (
+                            <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
+                                <div className="spinner-border spinner-border-sm text-primary me-2"></div>Loading candidates...
+                            </div>
+                        )}
+
+                        {!mergeCandidatesLoading && mergeCandidates.length === 0 && (
+                            <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '0.875rem' }}>
+                                No other BOEs found with number {mergeBoeTarget.bill_of_entry_number}
+                            </div>
+                        )}
+
+                        {mergeCandidates.map(candidate => (
+                            <div
+                                key={candidate.id}
+                                onClick={() => setMergeBoeSource(prev => prev?.id === candidate.id ? null : candidate)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '10px 14px', border: `2px solid ${mergeBoeSource?.id === candidate.id ? '#7c3aed' : '#e2e8f0'}`,
+                                    borderRadius: '8px', marginBottom: '8px', cursor: 'pointer',
+                                    background: mergeBoeSource?.id === candidate.id ? '#faf5ff' : '#ffffff',
+                                    transition: 'all 0.15s'
+                                }}
+                            >
+                                <div>
+                                    <div style={{ fontWeight: '600', fontSize: '0.875rem', color: '#1e293b' }}>
+                                        <i className="bi bi-geo-alt me-1" style={{ color: '#0369a1' }}></i>{candidate.port_name}
+                                    </div>
+                                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                                        {candidate.item_details?.length || 0} item(s) · {candidate.licenses || 'No licenses'}
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    {candidate.total_inr && (
+                                        <div style={{ fontWeight: '700', fontSize: '0.875rem', color: '#1e293b' }}>
+                                            ₹{Number(candidate.total_inr).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                        </div>
+                                    )}
+                                    {mergeBoeSource?.id === candidate.id && (
+                                        <span style={{ fontSize: '0.72rem', color: '#7c3aed', fontWeight: '700' }}>✓ Selected</span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+
+                        {mergeBoeSource && (
+                            <div style={{ background: '#faf5ff', border: '1px solid #c4b5fd', borderRadius: '8px', padding: '10px 14px', margin: '12px 0', fontSize: '0.82rem', color: '#4c1d95' }}>
+                                <strong>What will happen:</strong>
+                                <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
+                                    <li>Target port will change to <strong>{mergeBoeSource.port_name}</strong></li>
+                                    <li>Items from source will be moved to target (duplicates skipped)</li>
+                                    <li>Source BOE ({mergeBoeSource.port_name}) will be permanently deleted</li>
+                                </ul>
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+                            <button onClick={closeMergeModal} style={{ padding: '6px 16px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', fontSize: '0.875rem' }}>
+                                Cancel
+                            </button>
+                            <button
+                                onClick={doMerge}
+                                disabled={!mergeBoeSource || mergeBoeLoading}
+                                style={{ padding: '6px 16px', borderRadius: '6px', border: 'none', background: mergeBoeSource && !mergeBoeLoading ? '#7c3aed' : '#c4b5fd', color: 'white', cursor: mergeBoeSource && !mergeBoeLoading ? 'pointer' : 'not-allowed', fontSize: '0.875rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                {mergeBoeLoading
+                                    ? <><div className="spinner-border spinner-border-sm" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>Merging...</>
+                                    : <><i className="bi bi-intersect"></i>Confirm Merge</>
+                                }
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

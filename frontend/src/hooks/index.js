@@ -10,3 +10,6 @@ export {useForm} from './useForm';
 export {useFetch} from './useFetch';
 export {useModal} from './useModal';
 export {useFileUpload} from './useFileUpload';
+export {useConfirmDialog} from './useConfirmDialog.jsx';
+// Note: useFormState and useApiRequest are available but not exported yet
+// They will be integrated in future modularization work

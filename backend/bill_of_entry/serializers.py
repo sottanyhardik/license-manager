@@ -11,7 +11,13 @@ class RowDetailsSerializer(serializers.ModelSerializer):
     license_number = serializers.CharField(source='sr_number.license.license_number', read_only=True)
     item_description = serializers.CharField(source='sr_number.description', read_only=True)
     hs_code = serializers.CharField(source='sr_number.hs_code.hs_code', read_only=True)
-    purchase_status = serializers.CharField(source='sr_number.license.purchase_status', read_only=True)
+    purchase_status = serializers.SerializerMethodField()
+
+    def get_purchase_status(self, obj):
+        """Get purchase status code safely"""
+        if obj.sr_number and obj.sr_number.license and obj.sr_number.license.purchase_status:
+            return obj.sr_number.license.purchase_status.code
+        return None
 
     class Meta:
         model = RowDetails
@@ -21,11 +27,13 @@ class RowDetailsSerializer(serializers.ModelSerializer):
             'cif_inr',
             'cif_fc',
             'qty',
+            'is_frozen',
             'license_number',
             'item_description',
             'hs_code',
             'purchase_status',
         ]
+        read_only_fields = ['is_frozen']
 
 
 class BillOfEntrySerializer(serializers.ModelSerializer):
@@ -97,13 +105,65 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_on', 'modified_on', 'created_by', 'modified_by']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Auto-calculate exchange_rate from row totals when stored value is 0 or null
+        exc = data.get('exchange_rate')
+        if not exc or float(exc) == 0:
+            total_fc = float(data.get('total_fc') or 0)
+            total_inr = float(data.get('total_inr') or 0)
+            if total_fc > 0:
+                data['exchange_rate'] = round(total_inr / total_fc, 4)
+        return data
+
+    def to_internal_value(self, data):
+        """Parse JSON strings or flattened FormData from multipart/form-data"""
+        import json
+        import re
+
+        # Create a mutable copy of the data
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+
+        # Handle JSON string format (when frontend sends JSON.stringify for nested arrays)
+        if 'item_details' in data and isinstance(data['item_details'], str):
+            try:
+                data['item_details'] = json.loads(data['item_details'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Handle flattened FormData format (item_details[0][field])
+        if hasattr(data, 'getlist'):
+            nested_items = {}
+            for key in list(data.keys()):
+                match = re.match(r'item_details\[(\d+)\]\.(.+)', key)
+                if match:
+                    index = int(match.group(1))
+                    field_name = match.group(2)
+                    if index not in nested_items:
+                        nested_items[index] = {}
+                    nested_items[index][field_name] = data[key]
+
+            if nested_items:
+                data['item_details'] = [nested_items[i] for i in sorted(nested_items.keys())]
+
+        return super().to_internal_value(data)
+
     def create(self, validated_data):
         """Create BOE with nested item details"""
         item_details_data = validated_data.pop('item_details', [])
         allotment_data = validated_data.pop('allotment', [])
 
-        # Create the BOE instance
-        boe = BillOfEntryModel.objects.create(**validated_data)
+        # Use update_or_create to avoid IntegrityError on the unique_together
+        # constraint (bill_of_entry_number, bill_of_entry_date, port).
+        boe_number = validated_data.pop('bill_of_entry_number')
+        boe_date = validated_data.pop('bill_of_entry_date', None)
+        port = validated_data.pop('port', None)
+        boe, _ = BillOfEntryModel.objects.update_or_create(
+            bill_of_entry_number=boe_number,
+            bill_of_entry_date=boe_date,
+            port=port,
+            defaults=validated_data,
+        )
 
         # Set many-to-many allotment field
         if allotment_data:
@@ -190,6 +250,10 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                     # Update existing item
                     try:
                         item_instance = RowDetails.objects.get(id=item_id, bill_of_entry=instance)
+                        # Skip frozen rows — they come from ledger and cannot be edited
+                        if item_instance.is_frozen:
+                            updated_item_ids.append(item_id)
+                            continue
                         # Update all fields
                         for key, value in item_data_clean.items():
                             setattr(item_instance, key, value)
@@ -209,6 +273,15 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                         updated_item_ids.append(item_instance.id)
                 else:
                     # No ID provided - use update_or_create to handle duplicates
+                    # Check if existing row is frozen before overwriting
+                    existing = RowDetails.objects.filter(
+                        bill_of_entry=instance,
+                        sr_number_id=sr_number_id,
+                        transaction_type=transaction_type,
+                    ).first()
+                    if existing and existing.is_frozen:
+                        updated_item_ids.append(existing.id)
+                        continue
                     item_data_clean['sr_number_id'] = sr_number_id
                     item_instance, created = RowDetails.objects.update_or_create(
                         bill_of_entry=instance,

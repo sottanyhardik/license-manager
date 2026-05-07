@@ -10,7 +10,7 @@ def quantity_allotment(arg1, arg2):
     try:
         allotment = AllotmentItems.objects.get(item_id=arg1, allotment=arg2)
         return allotment.qty
-    except:
+    except AllotmentItems.DoesNotExist:
         return 0
 
 
@@ -19,7 +19,7 @@ def value_allotment(arg1, arg2):
     try:
         allotment = AllotmentItems.objects.get(item_id=arg1, allotment=arg2)
         return allotment.cif_fc
-    except:
+    except AllotmentItems.DoesNotExist:
         return 0
 
 

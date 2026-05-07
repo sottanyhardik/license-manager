@@ -79,7 +79,7 @@ export default function DataPagination({
         <div className="d-flex justify-content-between align-items-center mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
             {/* Page Size Selector */}
             <div className="d-flex align-items-center">
-                <label className="me-2 mb-0" style={{ fontSize: '0.9rem', fontWeight: '500', color: '#6b7280' }}>Show:</label>
+                <label className="me-2 mb-0" style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-secondary)' }}>Show:</label>
                 <select
                     className="form-select form-select-sm"
                     style={{
@@ -96,7 +96,7 @@ export default function DataPagination({
                         <option key={size} value={size}>{size}</option>
                     ))}
                 </select>
-                <span className="ms-2" style={{ fontSize: '0.9rem', color: '#6b7280' }}>per page</span>
+                <span className="ms-2" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>per page</span>
             </div>
 
             {/* Pagination Controls */}
@@ -143,8 +143,8 @@ export default function DataPagination({
                                         padding: '8px 12px',
                                         border: '1px solid #d1d5db',
                                         ...(isActive && {
-                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                            borderColor: '#667eea',
+                                            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
+                                            borderColor: 'var(--primary-color)',
                                             color: 'white'
                                         })
                                     }}
@@ -175,7 +175,7 @@ export default function DataPagination({
             </nav>
 
             {/* Page Info */}
-            <div style={{ fontSize: '0.9rem', fontWeight: '500', color: '#6b7280' }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-secondary)' }}>
                 Page {currentPage} of {totalPages}
             </div>
         </div>

@@ -5,6 +5,7 @@ Shows licenses with items as column headers, displaying quantities and values pe
 Similar to the GE DFIA report format.
 """
 
+import logging
 from collections import defaultdict
 from decimal import Decimal
 from typing import Dict, List, Any
@@ -17,9 +18,11 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from core.constants import DEC_0, DEC_000, GE, MI, IP, SM, CO
+from core.constants import DEC_0, DEC_000, GE, MI, CO
 from core.models import ItemNameModel
 from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
+
+logger = logging.getLogger(__name__)
 
 
 class ItemPivotReportView(View):
@@ -39,14 +42,15 @@ class ItemPivotReportView(View):
         exclude_company_ids = request.GET.get('exclude_company_ids')  # Comma-separated company IDs to exclude
         min_balance = int(request.GET.get('min_balance', 200))
         license_status = request.GET.get('license_status', 'active')
+        expiry_date_from = request.GET.get('expiry_date_from')  # YYYY-MM-DD
+        expiry_date_to = request.GET.get('expiry_date_to')      # YYYY-MM-DD
 
         # For Excel export, use streaming approach to avoid timeout
         if output_format == 'excel':
             try:
-                return self.export_to_excel_streaming(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status)
+                return self.export_to_excel_streaming(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status, expiry_date_from, expiry_date_to)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error exporting item pivot report to Excel")
                 return JsonResponse({
                     'error': str(e)
                 }, status=500)
@@ -54,7 +58,7 @@ class ItemPivotReportView(View):
         # For JSON, generate full report
         try:
             report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance,
-                                               license_status)
+                                               license_status, expiry_date_from, expiry_date_to)
         except Exception as e:
             return JsonResponse({
                 'error': str(e)
@@ -64,7 +68,8 @@ class ItemPivotReportView(View):
 
     def generate_report(self, days: int = 30, sion_norm: str = None,
                         company_ids: str = None, exclude_company_ids: str = None,
-                        min_balance: int = 200, license_status: str = 'active') -> Dict[str, Any]:
+                        min_balance: int = 200, license_status: str = 'active',
+                        expiry_date_from: str = None, expiry_date_to: str = None) -> Dict[str, Any]:
         """
         Generate item-wise pivot report.
 
@@ -85,8 +90,9 @@ class ItemPivotReportView(View):
 
         # Base query - licenses with required purchase status
         # Note: Don't filter by is_active here as it may exclude expired licenses
+        # Show only GE, MI, and CO purchase statuses by default in item pivot report
         licenses = LicenseDetailsModel.objects.filter(
-            purchase_status__in=[GE, MI, IP, SM, CO]
+            purchase_status__code__in=[GE, MI, CO]
         )
 
         # Apply license status filter
@@ -107,6 +113,14 @@ class ItemPivotReportView(View):
                 license_expiry_date__lte=today + timedelta(days=30)
             )
         # If 'all', no date or is_active filter applied - shows everything
+
+        # Apply explicit expiry date range filter (overrides license_status date logic if provided)
+        if expiry_date_from:
+            from datetime import datetime as _dt
+            licenses = licenses.filter(license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date())
+        if expiry_date_to:
+            from datetime import datetime as _dt
+            licenses = licenses.filter(license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date())
 
         # Filter by SION norm if specified (optional)
         if sion_norm:
@@ -201,27 +215,40 @@ class ItemPivotReportView(View):
 
                 # Define conversion norms
                 conversion_norms = ['E1', 'E5', 'E126', 'E132']
-                is_conversion = license_obj.purchase_status == CO
+                is_conversion = license_obj.purchase_status and license_obj.purchase_status.code == CO
+
+                # Get exporter name for split sheet logic
+                exporter_name = (license_obj.exporter.name or '') if license_obj.exporter else ''
+                exporter_name_upper = exporter_name.upper()
+
+                # Determine exporter category for split sheets
+                exporter_category = None
+                if 'PARLE' in exporter_name_upper:
+                    exporter_category = 'Parle'
+                elif 'HALDIRAM SNACKS' in exporter_name_upper:
+                    exporter_category = 'Haldiram Snacks'
+                elif 'HALDIRAM FOODS' in exporter_name_upper:
+                    exporter_category = 'Haldiram Foods'
+                elif 'HARIOMKAR FOOD' in exporter_name_upper:
+                    exporter_category = 'Hariomkar Food'
 
                 # Build notification key based on norm class and purchase status
                 if norm_class in conversion_norms and is_conversion:
                     # For conversion licenses in E1, E5, E126, E132
-                    if norm_class == 'E5':
-                        # E5 Conversion: split by Parle vs Others
-                        exporter_name = (license_obj.exporter.name or '') if license_obj.exporter else ''
-                        if 'PARLE' in exporter_name.upper():
-                            notification_key = f"{notification} - Conversion - Parle"
+                    if norm_class in ['E5', 'E132']:
+                        # E5 and E132 Conversion: split by exporter category
+                        if exporter_category:
+                            notification_key = f"{notification} - Conversion - {exporter_category}"
                         else:
                             notification_key = f"{notification} - Conversion"
                     else:
-                        # E1, E126, E132 Conversion
+                        # E1, E126 Conversion
                         notification_key = f"{notification} - Conversion"
 
-                elif norm_class == 'E5':
-                    # E5 non-conversion: split by Parle vs Others
-                    exporter_name = (license_obj.exporter.name or '') if license_obj.exporter else ''
-                    if 'PARLE' in exporter_name.upper():
-                        notification_key = f"{notification} - Parle"
+                elif norm_class in ['E5', 'E132']:
+                    # E5 and E132 non-conversion: split by exporter category
+                    if exporter_category:
+                        notification_key = f"{notification} - {exporter_category}"
                     else:
                         notification_key = f"{notification} - Others"
 
@@ -421,6 +448,7 @@ class ItemPivotReportView(View):
             'license_number': license_obj.license_number,
             'license_date': license_obj.license_date.isoformat() if license_obj.license_date else None,
             'license_expiry_date': license_obj.license_expiry_date.isoformat(),
+            'ledger_date': license_obj.ledger_date.isoformat() if license_obj.ledger_date else None,
             'exporter': str(license_obj.exporter) if license_obj.exporter else '',
             'port': str(license_obj.port) if license_obj.port else '',
             'notification_number': notification_display,
@@ -546,7 +574,8 @@ class ItemPivotReportView(View):
                     # Build headers
                     base_headers = [
                         'Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter',
-                        'Total CIF', 'Alloted CIF', 'Balance CIF'
+                        'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet',
+                        'Ledger Date'
                     ]
 
                     # Add item columns (HSN Code, Product Description, Total QTY, Debited QTY, Available QTY, Restriction %, Restriction Value, Unit Price for RUTILE)
@@ -601,6 +630,9 @@ class ItemPivotReportView(View):
                         row_data.append(license_data['total_cif'])
                         row_data.append(license_data['alloted_cif'])
                         row_data.append(license_data['balance_cif'])
+                        row_data.append(license_data.get('balance_report_notes', ''))
+                        row_data.append(license_data.get('condition_sheet', ''))
+                        row_data.append(license_data.get('ledger_date') or '')
 
                         # Item columns
                         for item in report_data['items']:
@@ -649,8 +681,8 @@ class ItemPivotReportView(View):
                     total_cell.font = Font(bold=True)
                     totals_row.append(total_cell)
 
-                    # Skip columns 2-5 (DFIA No, DFIA Dt, Expiry Dt, Exporter)
-                    totals_row.extend([None, None, None, None])
+                    # Skip columns 2-5 (DFIA No, DFIA Dt, Expiry Dt, Exporter) + Notes + Condition Sheet
+                    totals_row.extend([None, None, None, None, None, None])
 
                     # Calculate totals for CIF columns
                     total_cif = sum(lic['total_cif'] for lic in licenses_list)
@@ -740,7 +772,7 @@ class ItemPivotReportView(View):
                 # Clean up temp file after streaming
                 try:
                     os.unlink(file_path)
-                except:
+                except OSError:
                     pass
 
             response = StreamingHttpResponse(
@@ -754,12 +786,13 @@ class ItemPivotReportView(View):
             # Clean up temp file in case of error
             try:
                 os.unlink(temp_file.name)
-            except:
+            except OSError:
                 pass
             raise e
 
     def export_to_excel_streaming(self, days=30, sion_norm=None, company_ids=None,
-                                  exclude_company_ids=None, min_balance=200, license_status='active'):
+                                  exclude_company_ids=None, min_balance=200, license_status='active',
+                                  expiry_date_from=None, expiry_date_to=None):
         """
         Export report to Excel - uses existing generate_report for data, then formats as Excel.
         This ensures consistency with JSON output.
@@ -780,7 +813,7 @@ class ItemPivotReportView(View):
 
         try:
             # Use the working generate_report method
-            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status)
+            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status, expiry_date_from, expiry_date_to)
 
             workbook = openpyxl.Workbook(write_only=True)
             licenses_by_norm_notif = report_data.get('licenses_by_norm_notification', {})
@@ -811,7 +844,7 @@ class ItemPivotReportView(View):
                     worksheet.append([])
 
                     # Headers
-                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Alloted CIF', 'Balance CIF']
+                    base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet']
                     item_headers = []
                     for item in items_with_data:
                         item_name = item['name']
@@ -854,7 +887,9 @@ class ItemPivotReportView(View):
                             lic['exporter'],
                             lic['total_cif'],
                             lic['alloted_cif'],
-                            lic['balance_cif']
+                            lic['balance_cif'],
+                            lic.get('balance_report_notes', ''),
+                            lic.get('condition_sheet', '')
                         ]
 
                         for item in items_with_data:
@@ -883,7 +918,7 @@ class ItemPivotReportView(View):
                     # Totals row
                     totals_row = [WriteOnlyCell(worksheet, value='TOTAL')]
                     totals_row[0].font = Font(bold=True)
-                    totals_row.extend([None, None, None, None])
+                    totals_row.extend([None, None, None, None, None, None])
 
                     total_cif_cell = WriteOnlyCell(worksheet, value=sum(l['total_cif'] for l in licenses_list))
                     total_cif_cell.font = Font(bold=True)
@@ -932,7 +967,7 @@ class ItemPivotReportView(View):
                         yield chunk
                 try:
                     os.unlink(file_path)
-                except:
+                except OSError:
                     pass
 
             response = StreamingHttpResponse(
@@ -945,7 +980,7 @@ class ItemPivotReportView(View):
         except Exception as e:
             try:
                 os.unlink(temp_file.name)
-            except:
+            except OSError:
                 pass
             raise e
 
@@ -992,8 +1027,7 @@ class ItemPivotViewSet(viewsets.ViewSet):
 
             return Response(result)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error generating item pivot report")
             return Response({"error": str(e)}, status=500)
 
     @action(detail=False, methods=['post', 'get'], url_path='generate-async')

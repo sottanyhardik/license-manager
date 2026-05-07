@@ -5,7 +5,7 @@ This module handles validation rules specific to allotments.
 """
 
 from decimal import Decimal
-from typing import Tuple, List
+from typing import Dict, Tuple, List
 
 from core.constants import DEC_0
 from core.utils.decimal_utils import to_decimal

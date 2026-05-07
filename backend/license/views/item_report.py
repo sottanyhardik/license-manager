@@ -2,6 +2,8 @@
 Item Report - List all License Import Items with filters and inline editing support
 """
 
+import logging
+
 from django.db.models import Q, Prefetch
 from django.http import JsonResponse, HttpResponse
 from django.views import View
@@ -12,6 +14,8 @@ from rest_framework.response import Response
 
 from core.models import ItemNameModel
 from license.models import LicenseImportItemsModel, LicenseDetailsModel
+
+logger = logging.getLogger(__name__)
 
 
 class ItemReportView(View):
@@ -33,26 +37,30 @@ class ItemReportView(View):
         license_status = request.GET.get('license_status', 'active')
         is_restricted = request.GET.get('is_restricted')  # 'true', 'false', or None for all
         purchase_status = request.GET.get('purchase_status')  # Comma-separated purchase status codes
+        product_description = request.GET.get('product_description')  # Product description search
+        hsn_code = request.GET.get('hsn_code')  # HSN code search
+        norms = request.GET.get('norms')  # Comma-separated SION norm classes
+        notification_numbers = request.GET.get('notification_numbers')  # Comma-separated notification numbers
+        expiry_date_from = request.GET.get('expiry_date_from')  # YYYY-MM-DD
+        expiry_date_to = request.GET.get('expiry_date_to')      # YYYY-MM-DD
 
         if output_format == 'excel':
             try:
-                return self.export_to_excel(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status)
+                return self.export_to_excel(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error exporting item report to Excel")
                 return JsonResponse({'error': str(e)}, status=500)
 
         # For JSON, generate full report
         try:
-            report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status)
+            report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error generating item report")
             return JsonResponse({'error': str(e)}, status=500)
 
         return JsonResponse(report_data, safe=False)
 
-    def generate_report(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None):
+    def generate_report(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None):
         """
         Generate item report with all license import items.
 
@@ -65,6 +73,10 @@ class ItemReportView(View):
             license_status: Filter by status - 'active', 'expired', 'expiring_soon', 'all' (default 'active')
             is_restricted: Filter by restriction status - 'true', 'false', or None for all
             purchase_status: Comma-separated purchase status codes (e.g., 'GE,MI,SM')
+            product_description: Search text for product description (case-insensitive contains search)
+            hsn_code: Search text for HSN code (case-insensitive contains search)
+            norms: Comma-separated SION norm classes (e.g., '019/2015,098/2009')
+            notification_numbers: Comma-separated license notification numbers (e.g., '019/2015,098/2009')
 
         Returns:
             Dictionary with report data
@@ -108,6 +120,14 @@ class ItemReportView(View):
             )
         # If 'all', no date or is_active filter applied
 
+        # Apply explicit expiry date range filter
+        if expiry_date_from:
+            from datetime import datetime as _dt
+            items = items.filter(license__license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date())
+        if expiry_date_to:
+            from datetime import datetime as _dt
+            items = items.filter(license__license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date())
+
         # Filter by min_balance using stored available_value field (can be done in query)
         # This pre-filters before iteration for better performance
         items = items.filter(available_value__gte=min_balance)
@@ -141,7 +161,25 @@ class ItemReportView(View):
         # Filter by purchase_status if specified
         if purchase_status:
             purchase_status_list = [ps.strip() for ps in purchase_status.split(',') if ps.strip()]
-            items = items.filter(license__purchase_status__in=purchase_status_list)
+            items = items.filter(license__purchase_status__code__in=purchase_status_list)
+
+        # Filter by product description if specified (case-insensitive contains search)
+        if product_description:
+            items = items.filter(description__icontains=product_description)
+
+        # Filter by HSN code if specified (case-insensitive contains search)
+        if hsn_code:
+            items = items.filter(hs_code__hs_code__icontains=hsn_code)
+
+        # Filter by norms (SION norm class) if specified
+        if norms:
+            norms_list = [n.strip() for n in norms.split(',') if n.strip()]
+            items = items.filter(items__sion_norm_class__norm_class__in=norms_list).distinct()
+
+        # Filter by notification numbers (license notification) if specified
+        if notification_numbers:
+            notification_list = [n.strip() for n in notification_numbers.split(',') if n.strip()]
+            items = items.filter(license__notification_number__in=notification_list).distinct()
 
         # Order by license number and serial number
         items = items.order_by('license__license_number', 'serial_number')
@@ -171,6 +209,7 @@ class ItemReportView(View):
                 'license_number': item.license.license_number,
                 'license_date': item.license.license_date.isoformat() if item.license.license_date else None,
                 'license_expiry_date': item.license.license_expiry_date.isoformat() if item.license.license_expiry_date else None,
+                'ledger_date': item.license.ledger_date.isoformat() if item.license.ledger_date else None,
                 'exporter_name': item.license.exporter.name if item.license.exporter else None,
                 'current_owner': item.license.current_owner.name if item.license.current_owner else None,
                 'latest_transfer': latest_transfer_info,
@@ -180,6 +219,7 @@ class ItemReportView(View):
                 'quantity': float(item.quantity or 0),
                 'available_quantity': float(item.available_quantity or 0),
                 'available_balance': available_balance,
+                'balance_cif': float(item.license.balance_cif or 0),
                 'is_restricted': item.is_restricted,
                 'notes': item.license.balance_report_notes or '',
                 'condition_sheet': item.license.condition_sheet or '',
@@ -193,14 +233,14 @@ class ItemReportView(View):
             'items': report_items
         }
 
-    def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None):
+    def export_to_excel(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None):
         """Export item report to Excel with separate sheets for Restricted and Not Restricted items"""
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
         from io import BytesIO
 
         # Generate report data
-        report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status)
+        report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
         items = report_data['items']
 
         # Separate items into restricted and not restricted
@@ -218,9 +258,9 @@ class ItemReportView(View):
 
         # Headers
         headers = [
-            'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Exporter Name',
+            'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Ledger Date', 'Exporter Name',
             'Serial Number', 'HSN Code', 'Product Description', 'Item Name',
-            'Available Quantity', 'Available Balance', 'Notes', 'Condition Sheet', 'Transfer Status'
+            'Available Quantity', 'Available Balance', 'Balance CIF', 'Notes', 'Condition Sheet', 'Transfer Status'
         ]
 
         def create_sheet(workbook, sheet_name, items_list):
@@ -241,16 +281,18 @@ class ItemReportView(View):
             ws.column_dimensions['B'].width = 18  # License No
             ws.column_dimensions['C'].width = 15  # License Date
             ws.column_dimensions['D'].width = 18  # License Expiry Date
-            ws.column_dimensions['E'].width = 25  # Exporter Name
-            ws.column_dimensions['F'].width = 12  # Serial Number
-            ws.column_dimensions['G'].width = 12  # HSN Code
-            ws.column_dimensions['H'].width = 40  # Product Description
-            ws.column_dimensions['I'].width = 25  # Item Name
-            ws.column_dimensions['J'].width = 18  # Available Quantity
-            ws.column_dimensions['K'].width = 18  # Available Balance
-            ws.column_dimensions['L'].width = 30  # Notes
-            ws.column_dimensions['M'].width = 30  # Condition Sheet
-            ws.column_dimensions['N'].width = 35  # Transfer Status
+            ws.column_dimensions['E'].width = 15  # Ledger Date
+            ws.column_dimensions['F'].width = 25  # Exporter Name
+            ws.column_dimensions['G'].width = 12  # Serial Number
+            ws.column_dimensions['H'].width = 12  # HSN Code
+            ws.column_dimensions['I'].width = 40  # Product Description
+            ws.column_dimensions['J'].width = 25  # Item Name
+            ws.column_dimensions['K'].width = 18  # Available Quantity
+            ws.column_dimensions['L'].width = 18  # Available Balance
+            ws.column_dimensions['M'].width = 18  # Balance CIF
+            ws.column_dimensions['N'].width = 30  # Notes
+            ws.column_dimensions['O'].width = 30  # Condition Sheet
+            ws.column_dimensions['P'].width = 35  # Transfer Status
 
             # Group items by license
             grouped_items = {}
@@ -289,19 +331,20 @@ class ItemReportView(View):
                         ws.cell(row=current_row, column=2, value=item['license_number'])  # License No
                         ws.cell(row=current_row, column=3, value=item['license_date'])  # License Date
                         ws.cell(row=current_row, column=4, value=item['license_expiry_date'])  # License Expiry Date
-                        ws.cell(row=current_row, column=5, value=item['exporter_name'])  # Exporter Name
-                        ws.cell(row=current_row, column=11, value=item['available_balance'])  # Available Balance
-                        ws.cell(row=current_row, column=12, value=item['notes'])  # Notes
-                        ws.cell(row=current_row, column=13, value=item['condition_sheet'])  # Condition Sheet
-                        # Transfer Status - use latest_transfer
-                        ws.cell(row=current_row, column=14, value=item.get('latest_transfer', ''))  # Transfer Status
+                        ws.cell(row=current_row, column=5, value=item.get('ledger_date'))  # Ledger Date
+                        ws.cell(row=current_row, column=6, value=item['exporter_name'])  # Exporter Name
+                        ws.cell(row=current_row, column=12, value=item['available_balance'])  # Available Balance
+                        ws.cell(row=current_row, column=13, value=item['balance_cif'])  # Balance CIF
+                        ws.cell(row=current_row, column=14, value=item['notes'])  # Notes
+                        ws.cell(row=current_row, column=15, value=item['condition_sheet'])  # Condition Sheet
+                        ws.cell(row=current_row, column=16, value=item.get('latest_transfer', ''))  # Transfer Status
 
                     # Item-level columns (for each row)
-                    ws.cell(row=current_row, column=6, value=item['serial_number'])  # Serial Number
-                    ws.cell(row=current_row, column=7, value=item['hs_code'])  # HSN Code
-                    ws.cell(row=current_row, column=8, value=item['product_description'])  # Product Description
-                    ws.cell(row=current_row, column=9, value=item_names_str)  # Item Name
-                    ws.cell(row=current_row, column=10, value=item['available_quantity'])  # Available Quantity
+                    ws.cell(row=current_row, column=7, value=item['serial_number'])  # Serial Number
+                    ws.cell(row=current_row, column=8, value=item['hs_code'])  # HSN Code
+                    ws.cell(row=current_row, column=9, value=item['product_description'])  # Product Description
+                    ws.cell(row=current_row, column=10, value=item_names_str)  # Item Name
+                    ws.cell(row=current_row, column=11, value=item['available_quantity'])  # Available Quantity
 
                     current_row += 1
 
@@ -317,19 +360,23 @@ class ItemReportView(View):
                     ws.merge_cells(start_row=start_row, start_column=3, end_row=end_row, end_column=3)
                     # Merge License Expiry Date (column D / 4)
                     ws.merge_cells(start_row=start_row, start_column=4, end_row=end_row, end_column=4)
-                    # Merge Exporter Name (column E / 5)
+                    # Merge Ledger Date (column E / 5)
                     ws.merge_cells(start_row=start_row, start_column=5, end_row=end_row, end_column=5)
-                    # Merge Available Balance (column K / 11)
-                    ws.merge_cells(start_row=start_row, start_column=11, end_row=end_row, end_column=11)
-                    # Merge Notes (column L / 12)
+                    # Merge Exporter Name (column F / 6)
+                    ws.merge_cells(start_row=start_row, start_column=6, end_row=end_row, end_column=6)
+                    # Merge Available Balance (column L / 12)
                     ws.merge_cells(start_row=start_row, start_column=12, end_row=end_row, end_column=12)
-                    # Merge Condition Sheet (column M / 13)
+                    # Merge Balance CIF (column M / 13)
                     ws.merge_cells(start_row=start_row, start_column=13, end_row=end_row, end_column=13)
-                    # Merge Transfer Status (column N / 14)
+                    # Merge Notes (column N / 14)
                     ws.merge_cells(start_row=start_row, start_column=14, end_row=end_row, end_column=14)
+                    # Merge Condition Sheet (column O / 15)
+                    ws.merge_cells(start_row=start_row, start_column=15, end_row=end_row, end_column=15)
+                    # Merge Transfer Status (column P / 16)
+                    ws.merge_cells(start_row=start_row, start_column=16, end_row=end_row, end_column=16)
 
                     # Apply vertical center alignment to merged cells
-                    for col in [1, 2, 3, 4, 5, 11, 12, 13, 14]:
+                    for col in [1, 2, 3, 4, 5, 6, 12, 13, 14, 15, 16]:
                         cell = ws.cell(row=start_row, column=col)
                         cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
                         cell.border = thin_border

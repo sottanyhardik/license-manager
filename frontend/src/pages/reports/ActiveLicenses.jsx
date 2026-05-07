@@ -1,5 +1,6 @@
 import {useState} from "react";
 import api from "../../api/axios";
+import {toast} from "react-toastify";
 
 export default function ActiveLicenses() {
     const [days, setDays] = useState(30);
@@ -25,7 +26,7 @@ export default function ActiveLicenses() {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (error) {
-            alert('Failed to download report. Please try again.');
+            toast.error(error?.response?.data?.error || 'Failed to download report. Please try again.');
         } finally {
             setLoading(false);
         }

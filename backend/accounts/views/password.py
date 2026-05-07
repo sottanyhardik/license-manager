@@ -41,7 +41,7 @@ class PasswordResetRequestView(APIView):
 
         # render HTML email with theme
         html_message = render_to_string(
-            "emails/../templates/emails/password_reset.html",
+            "emails/password_reset.html",
             {
                 "user": user,
                 "reset_link": reset_link,

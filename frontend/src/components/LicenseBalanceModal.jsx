@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import AsyncSelect from 'react-select/async';
 import { toast } from 'react-toastify';
+import { formatDate } from '../utils/dateFormatter';
 
 // Inline Editable Text Component
 function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
@@ -16,7 +17,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await api.patch(`/licenses/${licenseId}/`, {
+            await api.patch(`licenses/${licenseId}/`, {
                 [fieldName]: textValue
             });
             onUpdate(textValue);
@@ -47,8 +48,8 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                         placeholder={`Enter ${label.toLowerCase()} here...`}
                         style={{
                             fontSize: '0.875rem',
-                            borderColor: '#667eea',
-                            backgroundColor: '#fffacd'
+                            borderColor: 'var(--primary-color)',
+                            backgroundColor: 'var(--row-yellow-bg)'
                         }}
                     />
                     <div className="d-flex gap-2">
@@ -57,8 +58,8 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                             onClick={handleSave}
                             disabled={saving}
                             style={{
-                                backgroundColor: '#667eea',
-                                borderColor: '#667eea'
+                                backgroundColor: 'var(--primary-color)',
+                                borderColor: 'var(--primary-color)'
                             }}
                         >
                             {saving ? 'Saving...' : 'Save'}
@@ -78,7 +79,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                     style={{
                         minHeight: '80px',
                         padding: '0.75rem',
-                        backgroundColor: textValue ? '#fffacd' : '#f8f9fa',
+                        backgroundColor: textValue ? 'var(--row-yellow-bg)' : 'var(--bs-gray-50)',
                         border: '1px solid #dee2e6',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -87,15 +88,15 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                         transition: 'all 0.2s'
                     }}
                     onMouseOver={(e) => {
-                        e.currentTarget.style.borderColor = '#667eea';
-                        e.currentTarget.style.backgroundColor = textValue ? '#fffacd' : '#e9ecef';
+                        e.currentTarget.style.borderColor = 'var(--primary-color)';
+                        e.currentTarget.style.backgroundColor = textValue ? 'var(--row-yellow-bg)' : 'var(--bs-gray-100)';
                     }}
                     onMouseOut={(e) => {
-                        e.currentTarget.style.borderColor = '#dee2e6';
-                        e.currentTarget.style.backgroundColor = textValue ? '#fffacd' : '#f8f9fa';
+                        e.currentTarget.style.borderColor = 'var(--bs-gray-200)';
+                        e.currentTarget.style.backgroundColor = textValue ? 'var(--row-yellow-bg)' : 'var(--bs-gray-50)';
                     }}
                 >
-                    {textValue || <span style={{ color: '#6c757d', fontStyle: 'italic' }}>Click to add {label.toLowerCase()}...</span>}
+                    {textValue || <span style={{ color: 'var(--bs-gray-500)', fontStyle: 'italic' }}>Click to add {label.toLowerCase()}...</span>}
                 </div>
             )}
         </div>
@@ -122,7 +123,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     const fetchLicenseData = async () => {
         setLoading(true);
         try {
-            const { data } = await api.get(`/licenses/${licenseId}/`);
+            const { data } = await api.get(`licenses/${licenseId}/`);
             setLicenseData(data);
         } catch (error) {
             console.error('Error fetching license data:', error);
@@ -134,7 +135,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
 
     const fetchItemUsage = async (item, type) => {
         try {
-            const response = await api.get(`/licenses/${licenseId}/item-usage/`, {
+            const response = await api.get(`licenses/${licenseId}/item-usage/`, {
                 params: {
                     item_id: item.id,
                     type: type
@@ -142,7 +143,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             });
             setUsageData(response.data);
         } catch (error) {
-            console.error('Error fetching item usage:', error);
+            toast.error('Failed to load usage details.');
             setUsageData({
                 boes: [],
                 allotments: []
@@ -176,7 +177,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                 params.norm_class = licenseData.get_norm_class;
             }
 
-            const { data } = await api.get('/masters/item-names/', {
+            const { data } = await api.get('masters/item-names/', {
                 params
             });
             return data.results.map(item => ({
@@ -207,16 +208,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             // Extract just the IDs
             const itemIds = editingItems.map(i => i.value);
 
-            await api.patch(`/licenses/${licenseId}/`, {
-                import_license: licenseData.import_license.map(importItem => {
-                    if (importItem.id === item.id) {
-                        return {
-                            ...importItem,
-                            items: itemIds
-                        };
-                    }
-                    return importItem;
-                })
+            // Update only the specific item via the license-items endpoint
+            // This prevents overriding other concurrent changes to the license
+            await api.patch(`license-items/${item.id}/`, {
+                items: itemIds
             });
 
             // Update local state without reloading
@@ -241,7 +236,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             setEditingItemId(null);
         } catch (error) {
             console.error('Error updating items:', error);
-            toast.error('Failed to update items');
+            toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to update items');
         } finally {
             setSaving(false);
         }
@@ -256,7 +251,8 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     const handleRestrictedToggle = async (itemId, isRestricted) => {
         try {
             // Update via the license-items API endpoint
-            await api.patch(`/license-items/${itemId}/`, {
+            // Using the item-specific endpoint prevents overriding other concurrent changes
+            await api.patch(`license-items/${itemId}/`, {
                 is_restricted: isRestricted
             });
 
@@ -285,18 +281,51 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         try {
             toast.info('Generating PDF file...');
 
-            // Call backend to generate PDF - use license number instead of ID
-            const token = localStorage.getItem('access');
-            const licenseNumber = licenseData?.license_number || licenseId;
-            const pdfUrl = `/api/licenses/${licenseNumber}/balance-pdf/?access_token=${token}`;
-
-            // Open PDF in new tab to download
-            window.open(pdfUrl, '_blank');
+            // Call backend to generate PDF using license ID with Authorization header
+            const response = await api.get(`licenses/${licenseId}/balance-pdf/`, {
+                responseType: 'blob',
+                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+            });
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => window.URL.revokeObjectURL(url), 100);
 
             toast.success('PDF file is being generated!');
         } catch (error) {
             console.error('Error generating PDF:', error);
-            toast.error('Failed to generate PDF file');
+            toast.error(error?.response?.data?.error || 'Failed to generate PDF file');
+        }
+    };
+
+    const handleDownloadExcel = async () => {
+        try {
+            toast.info('Generating Excel file...');
+
+            // Call backend to generate Excel using license ID
+            const token = localStorage.getItem('access');
+            const excelUrl = `/api/licenses/${licenseId}/balance-excel/?access_token=${token}`;
+
+            // Fetch the Excel file as blob
+            const response = await fetch(excelUrl);
+            if (!response.ok) {
+                throw new Error('Failed to generate Excel file');
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `${licenseData?.license_number || licenseId}-balance.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+
+            toast.success('Excel file downloaded successfully!');
+        } catch (error) {
+            console.error('Error generating Excel:', error);
+            toast.error('Failed to generate Excel file');
         }
     };
 
@@ -311,7 +340,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                     border: 'none'
                 }}>
                     <div className="modal-header" style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                         color: 'white',
                         borderTopLeftRadius: '12px',
                         borderTopRightRadius: '12px',
@@ -327,35 +356,64 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                             <i className="bi bi-file-text me-2"></i>
                             License Balance Report{licenseData ? ` - ${licenseData.license_number}` : ''}
                         </h5>
-                        <div className="d-flex gap-3 align-items-center">
+                        <div className="d-flex gap-2 align-items-center">
                             {licenseData && (
-                                <button
-                                    type="button"
-                                    className="btn btn-sm"
-                                    onClick={handleDownloadPDF}
-                                    disabled={loading}
-                                    style={{
-                                        backgroundColor: 'white',
-                                        color: '#667eea',
-                                        border: 'none',
-                                        fontWeight: '500',
-                                        padding: '0.5rem 1rem',
-                                        borderRadius: '6px',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                        transition: 'all 0.3s'
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.target.style.transform = 'translateY(-2px)';
-                                        e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.target.style.transform = 'translateY(0)';
-                                        e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-                                    }}
-                                >
-                                    <i className="bi bi-file-earmark-pdf me-2"></i>
-                                    Download PDF
-                                </button>
+                                <>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm"
+                                        onClick={handleDownloadPDF}
+                                        disabled={loading}
+                                        style={{
+                                            backgroundColor: 'white',
+                                            color: 'var(--primary-color)',
+                                            border: 'none',
+                                            fontWeight: '500',
+                                            padding: '0.5rem 1rem',
+                                            borderRadius: '6px',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                            transition: 'all 0.3s'
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.transform = 'translateY(-2px)';
+                                            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.transform = 'translateY(0)';
+                                            e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                                        }}
+                                    >
+                                        <i className="bi bi-file-earmark-pdf me-2"></i>
+                                        Download PDF
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm"
+                                        onClick={handleDownloadExcel}
+                                        disabled={loading}
+                                        style={{
+                                            backgroundColor: 'white',
+                                            color: 'var(--success-color)',
+                                            border: 'none',
+                                            fontWeight: '500',
+                                            padding: '0.5rem 1rem',
+                                            borderRadius: '6px',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                            transition: 'all 0.3s'
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.transform = 'translateY(-2px)';
+                                            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.transform = 'translateY(0)';
+                                            e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                                        }}
+                                    >
+                                        <i className="bi bi-file-earmark-excel me-2"></i>
+                                        Download Excel
+                                    </button>
+                                </>
                             )}
                             <button
                                 type="button"
@@ -367,12 +425,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                     </div>
                     <div className="modal-body" style={{
                         padding: '2rem',
-                        backgroundColor: '#f8f9fa'
+                        backgroundColor: 'var(--bs-gray-50)'
                     }}>
                         {loading || !licenseData ? (
                             <div className="text-center py-5">
-                                <div className="spinner-border" style={{ color: '#667eea' }}></div>
-                                <p className="mt-2" style={{ color: '#6c757d' }}>Loading...</p>
+                                <div className="spinner-border" style={{ color: 'var(--primary-color)' }}></div>
+                                <p className="mt-2" style={{ color: 'var(--bs-gray-500)' }}>Loading...</p>
                             </div>
                         ) : (
                             <>
@@ -386,7 +444,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 }}>
                                     <div className="table-responsive">
                                         <table className="table table-sm" style={{ marginBottom: '0', border: 'none' }}>
-                                            <thead style={{ backgroundColor: '#667eea', color: 'white' }}>
+                                            <thead style={{ backgroundColor: 'var(--primary-color)', color: 'white' }}>
                                                 <tr>
                                                     <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Number</th>
                                                     <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Date</th>
@@ -396,38 +454,49 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr style={{ backgroundColor: '#f8f9fa' }}>
+                                                <tr style={{ backgroundColor: 'var(--bs-gray-50)' }}>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef', fontWeight: '500' }}>
                                                         <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
-                                                            <span style={{ fontWeight: '600', color: '#2c3e50' }}>
+                                                            <span style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
                                                                 {licenseData.license_number || '-'}
                                                             </span>
                                                             {(licenseData.has_tl || licenseData.has_copy) && (
                                                                 <a
-                                                                    href={`/api/licenses/${licenseData.id}/merged-documents/?access_token=${localStorage.getItem('access')}`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
+                                                                    href="#"
                                                                     title="View merged documents"
-                                                                    onClick={(e) => {
+                                                                    onClick={async (e) => {
+                                                                        e.preventDefault();
                                                                         e.stopPropagation();
+                                                                        try {
+                                                                            const response = await api.get(`licenses/${licenseData.id}/merged-documents/`, {
+                                                                                responseType: 'blob',
+                                                                                headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                                                                            });
+                                                                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                                                                            const url = window.URL.createObjectURL(blob);
+                                                                            window.open(url, '_blank');
+                                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                                        } catch {
+                                                                            toast.error('Failed to load merged documents');
+                                                                        }
                                                                     }}
                                                                     style={{
                                                                         fontSize: '0.75rem',
-                                                                        color: '#28a745',
+                                                                        color: 'var(--success-color)',
                                                                         textDecoration: 'none',
                                                                         padding: '2px 6px',
-                                                                        backgroundColor: '#d4edda',
+                                                                        backgroundColor: 'var(--success-bg)',
                                                                         borderRadius: '3px',
                                                                         fontWeight: '500',
                                                                         transition: 'all 0.2s',
                                                                         whiteSpace: 'nowrap'
                                                                     }}
                                                                     onMouseOver={(e) => {
-                                                                        e.target.style.backgroundColor = '#c3e6cb';
+                                                                        e.target.style.backgroundColor = 'var(--success-border)';
                                                                         e.target.style.textDecoration = 'underline';
                                                                     }}
                                                                     onMouseOut={(e) => {
-                                                                        e.target.style.backgroundColor = '#d4edda';
+                                                                        e.target.style.backgroundColor = 'var(--success-bg)';
                                                                         e.target.style.textDecoration = 'none';
                                                                     }}
                                                                 >
@@ -437,10 +506,10 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
-                                                        {licenseData.license_date ? new Date(licenseData.license_date).toLocaleDateString('en-GB') : '-'}
+                                                        {licenseData.license_date ? formatDate(licenseData.license_date) : '-'}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
-                                                        {licenseData.license_expiry_date ? new Date(licenseData.license_expiry_date).toLocaleDateString('en-GB') : '-'}
+                                                        {licenseData.license_expiry_date ? formatDate(licenseData.license_expiry_date) : '-'}
                                                     </td>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                         {licenseData.exporter_name || '-'}
@@ -452,7 +521,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             </tbody>
                                         </table>
                                         <table className="table table-sm" style={{ marginBottom: '0', border: 'none', marginTop: '0.5rem' }}>
-                                            <thead style={{ backgroundColor: '#667eea', color: 'white' }}>
+                                            <thead style={{ backgroundColor: 'var(--primary-color)', color: 'white' }}>
                                                 <tr>
                                                     <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Purchase Status</th>
                                                     <th style={{ border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Balance CIF</th>
@@ -461,7 +530,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr style={{ backgroundColor: '#f8f9fa' }}>
+                                                <tr style={{ backgroundColor: 'var(--bs-gray-50)' }}>
                                                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                         {licenseData.purchase_status || '-'}
                                                     </td>
@@ -489,9 +558,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 }}>
                                     <div className="d-flex justify-content-between align-items-center mb-3">
                                         <h5 style={{
-                                            color: '#2c3e50',
+                                            color: 'var(--text-dark)',
                                             fontWeight: '600',
-                                            borderBottom: '2px solid #667eea',
+                                            borderBottom: '2px solid #4F46E5',
                                             paddingBottom: '0.5rem',
                                             marginBottom: '0',
                                             flex: 1
@@ -520,9 +589,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 }}>
                                     <div className="d-flex justify-content-between align-items-center mb-3">
                                         <h5 style={{
-                                            color: '#2c3e50',
+                                            color: 'var(--text-dark)',
                                             fontWeight: '600',
-                                            borderBottom: '2px solid #667eea',
+                                            borderBottom: '2px solid #4F46E5',
                                             paddingBottom: '0.5rem',
                                             marginBottom: '0',
                                             flex: 1
@@ -551,9 +620,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                         boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                                     }}>
                                         <h5 className="mb-3" style={{
-                                            color: '#2c3e50',
+                                            color: 'var(--text-dark)',
                                             fontWeight: '600',
-                                            borderBottom: '2px solid #667eea',
+                                            borderBottom: '2px solid #4F46E5',
                                             paddingBottom: '0.5rem'
                                         }}>
                                             <i className="bi bi-box-seam me-2"></i>
@@ -564,7 +633,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             border: 'none'
                                         }}>
                                             <thead style={{
-                                                backgroundColor: '#667eea',
+                                                backgroundColor: 'var(--primary-color)',
                                                 color: 'white'
                                             }}>
                                                 <tr>
@@ -581,17 +650,17 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             onClick={() => handleRowClick(item, 'export')}
                                                             style={{
                                                                 cursor: 'pointer',
-                                                                backgroundColor: expandedItem?.id === item.id ? '#f0f4ff' : index % 2 === 0 ? '#ffffff' : '#f8f9fa',
+                                                                backgroundColor: expandedItem?.id === item.id ? 'var(--indigo-50)' : index % 2 === 0 ? '#ffffff' : 'var(--bs-gray-50)',
                                                                 transition: 'all 0.2s'
                                                             }}
                                                             onMouseOver={(e) => {
                                                                 if (expandedItem?.id !== item.id) {
-                                                                    e.currentTarget.style.backgroundColor = '#e8eef9';
+                                                                    e.currentTarget.style.backgroundColor = 'var(--indigo-100)';
                                                                 }
                                                             }}
                                                             onMouseOut={(e) => {
                                                                 if (expandedItem?.id !== item.id) {
-                                                                    e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                                                                    e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : 'var(--bs-gray-50)';
                                                                 }
                                                             }}
                                                         >
@@ -631,7 +700,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                         {usageData.boes.map((boe) => (
                                                                                             <tr key={boe.id}>
                                                                                                 <td>{boe.bill_of_entry_number}</td>
-                                                                                                <td>{boe.date ? new Date(boe.date).toLocaleDateString() : '-'}</td>
+                                                                                                <td>{boe.date ? formatDate(boe.date) : '-'}</td>
                                                                                                 <td>{boe.port || '-'}</td>
                                                                                                 <td>{boe.company || '-'}</td>
                                                                                                 <td>{parseFloat(boe.quantity || 0).toFixed(2)}</td>
@@ -692,9 +761,9 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                         boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                                     }}>
                                         <h5 className="mb-3" style={{
-                                            color: '#2c3e50',
+                                            color: 'var(--text-dark)',
                                             fontWeight: '600',
-                                            borderBottom: '2px solid #764ba2',
+                                            borderBottom: '2px solid #4338CA',
                                             paddingBottom: '0.5rem'
                                         }}>
                                             <i className="bi bi-inbox me-2"></i>
@@ -706,7 +775,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                 border: 'none'
                                             }}>
                                                 <thead style={{
-                                                    backgroundColor: '#764ba2',
+                                                    backgroundColor: 'var(--primary-dark)',
                                                     color: 'white'
                                                 }}>
                                                     <tr>
@@ -731,17 +800,17 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                 onClick={() => handleRowClick(item, 'import')}
                                                                 style={{
                                                                     cursor: editingItemId ? 'default' : 'pointer',
-                                                                    backgroundColor: expandedItem?.id === item.id ? '#f5f0ff' : index % 2 === 0 ? '#ffffff' : '#f8f9fa',
+                                                                    backgroundColor: expandedItem?.id === item.id ? 'var(--indigo-50)' : index % 2 === 0 ? '#ffffff' : 'var(--bs-gray-50)',
                                                                     transition: 'all 0.2s'
                                                                 }}
                                                                 onMouseOver={(e) => {
                                                                     if (expandedItem?.id !== item.id && !editingItemId) {
-                                                                        e.currentTarget.style.backgroundColor = '#e8e0f9';
+                                                                        e.currentTarget.style.backgroundColor = 'var(--indigo-100)';
                                                                     }
                                                                 }}
                                                                 onMouseOut={(e) => {
                                                                     if (expandedItem?.id !== item.id) {
-                                                                        e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                                                                        e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : 'var(--bs-gray-50)';
                                                                     }
                                                                 }}
                                                             >
@@ -900,7 +969,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                             {usageData.boes.map((boe) => (
                                                                                                 <tr key={boe.id}>
                                                                                                     <td>{boe.bill_of_entry_number}</td>
-                                                                                                    <td>{boe.date ? new Date(boe.date).toLocaleDateString() : '-'}</td>
+                                                                                                    <td>{boe.date ? formatDate(boe.date) : '-'}</td>
                                                                                                     <td>{boe.port || '-'}</td>
                                                                                                     <td>{boe.company || '-'}</td>
                                                                                                     <td>{parseFloat(boe.quantity || 0).toFixed(2)}</td>
@@ -981,7 +1050,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                         )}
                     </div>
                     <div className="modal-footer" style={{
-                        backgroundColor: '#f8f9fa',
+                        backgroundColor: 'var(--bs-gray-50)',
                         borderTop: '1px solid #dee2e6',
                         padding: '1rem 2rem',
                         borderBottomLeftRadius: '12px',
@@ -992,7 +1061,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                             className="btn"
                             onClick={onHide}
                             style={{
-                                backgroundColor: '#6c757d',
+                                backgroundColor: 'var(--bs-gray-500)',
                                 color: 'white',
                                 borderRadius: '6px',
                                 padding: '0.5rem 1.5rem',
@@ -1001,12 +1070,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                 transition: 'all 0.3s'
                             }}
                             onMouseOver={(e) => {
-                                e.target.style.backgroundColor = '#5a6268';
+                                e.target.style.backgroundColor = 'var(--bs-gray-600)';
                                 e.target.style.transform = 'translateY(-2px)';
                                 e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
                             }}
                             onMouseOut={(e) => {
-                                e.target.style.backgroundColor = '#6c757d';
+                                e.target.style.backgroundColor = 'var(--bs-gray-500)';
                                 e.target.style.transform = 'translateY(0)';
                                 e.target.style.boxShadow = 'none';
                             }}

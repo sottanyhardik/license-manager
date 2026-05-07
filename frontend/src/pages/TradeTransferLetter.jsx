@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {useParams, useNavigate} from "react-router-dom";
+import { toast } from 'react-toastify';
 import api from "../api/axios";
 import TransferLetterForm from "../components/TransferLetterForm";
 
@@ -21,7 +22,7 @@ export default function TradeTransferLetter({ tradeId: propId, isModal = false, 
 
     const fetchTrade = async () => {
         try {
-            const {data} = await api.get(`/trades/${id}/`);
+            const {data} = await api.get(`trades/${id}/`);
             setTrade(data);
         } catch (err) {
             setError("Failed to load Trade details");
@@ -98,8 +99,8 @@ export default function TradeTransferLetter({ tradeId: propId, isModal = false, 
                             cif_inr: line.cif_inr || 0,
                             purchase_status: 'N/A'  // Purchase status comes from license, not trade line
                         })) || []}
-                        onSuccess={(msg) => setSuccess(msg)}
-                        onError={(msg) => setError(msg)}
+                        onSuccess={(msg) => toast.success(msg)}
+                        onError={(msg) => toast.error(msg)}
                     />
                 </>
             )}

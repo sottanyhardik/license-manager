@@ -101,7 +101,7 @@ export const useApiCall = (options = {}) => {
  * } = useMultipleApiCalls();
  *
  * const handleSave = async (id) => {
- *   await execute(`save-${id}`, () => api.put(`/items/${id}`, data));
+ *   await execute(`save-${id}`, () => api.put(`items/${id}`, data));
  * };
  *
  * // Check loading state for specific operation

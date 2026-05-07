@@ -5,7 +5,6 @@ import csv
 import io
 import logging
 
-from celery.result import AsyncResult
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
@@ -14,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from scripts.parse_ledger import parse_license_data, create_object
+from scripts.parse_ledger_htm import parse_license_data_htm
 
 logger = logging.getLogger(__name__)
 
@@ -22,37 +22,20 @@ logger = logging.getLogger(__name__)
 class LedgerUploadView(APIView):
     """
     API endpoint to upload and process ledger CSV files.
+    Supports both synchronous and asynchronous (Celery) processing.
 
     POST /api/licenses/upload-ledger/
-
-    Request:
-        - Files: One or more CSV files with 'ledger' as the field name
-
-    Response:
-        {
-            "message": "Successfully processed 3 licenses",
-            "licenses": ["3011006401", "3011006402", "3011006403"],
-            "stats": {
-                "licenses_created": 2,
-                "licenses_updated": 1,
-                "total_transactions": 15
-            }
-        }
     """
 
-    permission_classes = []  # Allow access without authentication for now
+    permission_classes = []
     parser_classes = [MultiPartParser, FormParser]
-    authentication_classes = []  # Disable authentication requirements
-    http_method_names = ['post', 'options']  # Explicitly allow POST and OPTIONS
+    authentication_classes = []
+    http_method_names = ['post', 'options']
+
+    from core.throttling import UploadRateThrottle
+    throttle_classes = [UploadRateThrottle]
 
     def post(self, request):
-        """
-        Process uploaded ledger file(s) asynchronously using Celery.
-        Returns immediately with task IDs for progress tracking.
-        """
-        # Check if async mode is requested (default: True)
-        use_async = request.data.get('async', 'true').lower() in ['true', '1', 'yes']
-
         files = request.FILES.getlist('ledger')
 
         if not files:
@@ -61,276 +44,237 @@ class LedgerUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Max file size: 50MB
+        use_async = request.data.get('async', 'false').lower() == 'true'
         MAX_FILE_SIZE = 50 * 1024 * 1024
 
         if use_async:
-            # ASYNC MODE: Queue files for background processing
-            from license.tasks import process_ledger_file_async
+            return self._handle_async(files, MAX_FILE_SIZE)
+        return self._handle_sync(files, MAX_FILE_SIZE)
 
-            tasks = []
-            validation_errors = []
+    @staticmethod
+    def _is_htm(filename):
+        return filename.lower().endswith(('.htm', '.html'))
 
-            logger.info(f"Queueing {len(files)} file(s) for async processing")
+    def _read_raw(self, uploaded_file):
+        """Read uploaded file bytes."""
+        content = b''
+        for chunk in uploaded_file.chunks(chunk_size=1024 * 1024):
+            content += chunk
+        return content
 
-            for uploaded_file in files:
-                try:
-                    # Validate file type
-                    if not uploaded_file.name.endswith('.csv'):
-                        validation_errors.append({
-                            'file': uploaded_file.name,
-                            'error': 'Only CSV files are supported'
-                        })
-                        continue
+    def _decode_file(self, uploaded_file):
+        """Read, decode and pre-process an uploaded CSV file."""
+        file_content = self._read_raw(uploaded_file)
 
-                    # Validate file size
-                    if uploaded_file.size > MAX_FILE_SIZE:
-                        validation_errors.append({
-                            'file': uploaded_file.name,
-                            'error': f'File size exceeds maximum limit of {MAX_FILE_SIZE // (1024 * 1024)}MB'
-                        })
-                        continue
+        try:
+            decoded = file_content.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            decoded = file_content.decode('latin-1')
 
-                    # Read and decode file
-                    file_content = b''
-                    chunk_size = 1024 * 1024
-                    for chunk in uploaded_file.chunks(chunk_size=chunk_size):
-                        file_content += chunk
+        decoded = decoded.replace(':\xa0', '')  # colon + non-breaking space (must come first)
+        decoded = decoded.replace(': ', '')      # colon + regular space
+        decoded = decoded.replace('\xa0', '')    # any remaining non-breaking spaces
+        decoded = decoded.replace(' ', '')       # any remaining regular spaces (field trim)
+        return decoded
 
-                    try:
-                        decoded_file = file_content.decode('utf-8-sig')
-                    except UnicodeDecodeError:
-                        decoded_file = file_content.decode('latin-1')
-
-                    # Clean file content
-                    decoded_file = decoded_file.replace(': ', '')
-                    decoded_file = decoded_file.replace(' ', '')
-                    decoded_file = decoded_file.replace(':\xa0', '')
-
-                    # Queue task
-                    task = process_ledger_file_async.apply_async(
-                        args=[decoded_file, uploaded_file.name]
-                    )
-
-                    tasks.append({
-                        'file': uploaded_file.name,
-                        'task_id': task.id,
-                        'status': 'QUEUED'
-                    })
-
-                    logger.info(f"Queued {uploaded_file.name} with task_id={task.id}")
-
-                except Exception as e:
-                    logger.error(f"Error queueing file {uploaded_file.name}: {str(e)}")
-                    validation_errors.append({
-                        'file': uploaded_file.name,
-                        'error': str(e)
-                    })
-
-            # Build response
-            response_data = {
-                'message': f'Queued {len(tasks)} file(s) for processing',
-                'mode': 'async',
-                'tasks': tasks
-            }
-
-            if validation_errors:
-                response_data['validation_errors'] = validation_errors
-                response_data['message'] += f' ({len(validation_errors)} file(s) failed validation)'
-
-            return Response(response_data, status=status.HTTP_202_ACCEPTED)
-
+    def _parse_file(self, uploaded_file):
+        """
+        Parse an uploaded ledger file (CSV or HTM/HTML) and return a dict_list
+        in the same format expected by create_object().
+        """
+        if self._is_htm(uploaded_file.name):
+            raw = self._read_raw(uploaded_file)
+            return parse_license_data_htm(raw)
         else:
-            # SYNC MODE: Original synchronous processing (kept for backward compatibility)
-            all_results = []
-            total_licenses = []
+            decoded_file = self._decode_file(uploaded_file)
+            csvfile = io.StringIO(decoded_file)
+            reader = csv.reader(csvfile)
+            rows = [
+                [cell.strip().replace('\xa0', '') for cell in row]
+                for row in reader
+                if any(cell.strip().replace('\xa0', '') for cell in row)
+            ]
+            return parse_license_data(rows)
 
-            logger.info(f"Starting synchronous processing of {len(files)} file(s)")
+    def _serialize_for_celery(self, dict_data):
+        """Convert date/datetime objects to strings for JSON-safe Celery transport."""
+        import copy
+        data = copy.deepcopy(dict_data)
+        if hasattr(data.get('ledger_date'), 'strftime'):
+            data['ledger_date'] = data['ledger_date'].strftime('%Y-%m-%d')
+        for row in data.get('row', []):
+            if row.get('be_date') and hasattr(row['be_date'], 'strftime'):
+                row['be_date'] = row['be_date'].strftime('%Y-%m-%d')
+        return data
 
-            for file_sequence_number, uploaded_file in enumerate(files, start=1):
-                try:
-                    logger.info(f"Processing file {file_sequence_number}/{len(files)}: {uploaded_file.name}")
+    def _handle_async(self, files, max_file_size):
+        """Parse each file and dispatch one Celery task per license (parallel processing)."""
+        from license.tasks import process_single_license
+        from scripts.parse_ledger import parse_license_data
 
-                    # Validate file type
-                    if not uploaded_file.name.endswith('.csv'):
-                        all_results.append({
-                            'file': uploaded_file.name,
-                            'success': False,
-                            'error': 'Only CSV files are supported'
-                        })
-                        continue
+        file_tasks = []
+        errors = []
 
-                    # Validate file size
-                    if uploaded_file.size > MAX_FILE_SIZE:
-                        all_results.append({
-                            'file': uploaded_file.name,
-                            'success': False,
-                            'error': f'File size exceeds maximum limit of {MAX_FILE_SIZE // (1024 * 1024)}MB'
-                        })
-                        continue
+        for uploaded_file in files:
+            if not (uploaded_file.name.endswith('.csv') or self._is_htm(uploaded_file.name)):
+                errors.append({'file': uploaded_file.name, 'error': 'Only CSV and HTM/HTML files are supported'})
+                continue
 
-                    # Read file in chunks
-                    file_content = b''
-                    chunk_size = 1024 * 1024
-                    for chunk in uploaded_file.chunks(chunk_size=chunk_size):
-                        file_content += chunk
+            if uploaded_file.size > max_file_size:
+                errors.append({
+                    'file': uploaded_file.name,
+                    'error': f'File size exceeds {max_file_size // (1024 * 1024)}MB limit'
+                })
+                continue
 
-                    # Decode the uploaded file
-                    try:
-                        decoded_file = file_content.decode('utf-8-sig')
-                    except UnicodeDecodeError:
-                        decoded_file = file_content.decode('latin-1')
+            try:
+                dict_list = self._parse_file(uploaded_file)
+                logger.info(f"Parsed {len(dict_list)} licenses from {uploaded_file.name}, dispatching tasks")
 
-                    decoded_file = decoded_file.replace(': ', '')
-                    decoded_file = decoded_file.replace(' ', '')
-                    decoded_file = decoded_file.replace(':\xa0', '')
-                    csvfile = io.StringIO(decoded_file)
+                tasks = []
+                for dict_data in dict_list:
+                    serialized = self._serialize_for_celery(dict_data)
+                    task = process_single_license.apply_async(args=[serialized], queue='ledger')
+                    tasks.append({'task_id': task.id, 'license': dict_data.get('lic_no', 'Unknown')})
 
-                    reader = csv.reader(csvfile)
+                file_tasks.append({
+                    'file': uploaded_file.name,
+                    'total': len(tasks),
+                    'tasks': tasks,
+                })
+                logger.info(f"Dispatched {len(tasks)} tasks for {uploaded_file.name}")
 
-                    # Read all rows
-                    rows = []
-                    for row in reader:
-                        if not any(field.strip() for field in row):
-                            continue
-                        rows.append(row)
+            except Exception as e:
+                logger.error(f"Failed to process {uploaded_file.name}: {e}", exc_info=True)
+                errors.append({'file': uploaded_file.name, 'error': str(e)})
 
-                    logger.info(f"Read {len(rows)} rows from {uploaded_file.name}")
+        total_tasks = sum(f['total'] for f in file_tasks)
+        return Response({
+            'message': f'Queued {total_tasks} licenses from {len(file_tasks)} file(s)',
+            'file_tasks': file_tasks,
+            'errors': errors,
+        }, status=status.HTTP_202_ACCEPTED)
 
-                    # Parse the CSV data
-                    dict_list = parse_license_data(rows)
+    def _handle_sync(self, files, max_file_size):
+        """Process each file synchronously and return results."""
+        all_results = []
+        total_licenses = []
 
-                    logger.info(f"Parsed {len(dict_list)} license(s) from {uploaded_file.name}")
+        for file_sequence_number, uploaded_file in enumerate(files, start=1):
+            try:
+                logger.info(f"Processing file {file_sequence_number}/{len(files)}: {uploaded_file.name}")
 
-                    # Create/update license objects
-                    created_license_numbers = []
-                    for idx, dict_data in enumerate(dict_list, start=1):
-                        try:
-                            license_number = create_object(dict_data)
-                            created_license_numbers.append(license_number)
-                            total_licenses.append(license_number)
-
-                            if idx % 10 == 0:
-                                logger.info(f"Processed {idx}/{len(dict_list)} licenses from {uploaded_file.name}")
-                        except Exception as license_error:
-                            logger.error(f"Error creating license {idx} from {uploaded_file.name}: {str(license_error)}")
-
-                    all_results.append({
-                        'file': uploaded_file.name,
-                        'success': True,
-                        'licenses': created_license_numbers,
-                        'count': len(created_license_numbers)
-                    })
-
-                    logger.info(f"Successfully processed {uploaded_file.name}: {len(created_license_numbers)} licenses")
-
-                except Exception as e:
-                    logger.error(f"Error processing file {uploaded_file.name}: {str(e)}", exc_info=True)
+                if not (uploaded_file.name.endswith('.csv') or self._is_htm(uploaded_file.name)):
                     all_results.append({
                         'file': uploaded_file.name,
                         'success': False,
-                        'error': str(e)
+                        'error': 'Only CSV and HTM/HTML files are supported'
                     })
+                    continue
 
-            # Aggregate results
-            failed_files = []
-            for result in all_results:
-                if not result['success']:
-                    failed_files.append({
-                        'file': result['file'],
-                        'error': result['error']
+                if uploaded_file.size > max_file_size:
+                    all_results.append({
+                        'file': uploaded_file.name,
+                        'success': False,
+                        'error': f'File size exceeds maximum limit of {max_file_size // (1024 * 1024)}MB'
                     })
+                    continue
 
-            # Build response
-            response_data = {
-                'message': f'Successfully processed {len(total_licenses)} license(s) from {len([r for r in all_results if r["success"]])} file(s)',
-                'mode': 'sync',
-                'licenses': total_licenses,
-                'stats': {
-                    'files_processed': len([r for r in all_results if r['success']]),
-                    'files_failed': len(failed_files),
-                    'total_licenses': len(total_licenses),
-                }
+                dict_list = self._parse_file(uploaded_file)
+                logger.info(f"Parsed {len(dict_list)} license(s) from {uploaded_file.name}")
+
+                created_license_numbers = []
+                failed_licenses = []
+                for idx, dict_data in enumerate(dict_list, start=1):
+                    license_no = dict_data.get('lic_no', 'Unknown')
+                    try:
+                        license_number = create_object(dict_data)
+                        created_license_numbers.append(license_number)
+                        total_licenses.append(license_number)
+                        logger.info(f"Processed license {idx}/{len(dict_list)}: {license_number}")
+                    except Exception as license_error:
+                        error_msg = str(license_error)
+                        failed_licenses.append({'license': license_no, 'error': error_msg})
+                        logger.error(f"Error creating license {license_no} at index {idx}: {error_msg}", exc_info=True)
+
+                all_results.append({
+                    'file': uploaded_file.name,
+                    'success': True,
+                    'licenses': created_license_numbers,
+                    'count': len(created_license_numbers),
+                    'failed': failed_licenses,
+                })
+
+                logger.info(f"Done {uploaded_file.name}: {len(created_license_numbers)} ok, {len(failed_licenses)} failed")
+
+            except Exception as e:
+                logger.error(f"Error processing file {uploaded_file.name}: {str(e)}", exc_info=True)
+                all_results.append({
+                    'file': uploaded_file.name,
+                    'success': False,
+                    'error': str(e)
+                })
+
+        failed_files = [r for r in all_results if not r['success']]
+
+        response_data = {
+            'message': f'Processed {len(total_licenses)} license(s) from {len([r for r in all_results if r["success"]])} file(s)',
+            'licenses': total_licenses,
+            'results': all_results,
+            'stats': {
+                'files_processed': len([r for r in all_results if r['success']]),
+                'files_failed': len(failed_files),
+                'total_licenses': len(total_licenses),
             }
+        }
 
-            if failed_files:
-                response_data['failures'] = failed_files
-                response_data['message'] += f' ({len(failed_files)} file(s) failed)'
+        if failed_files:
+            response_data['message'] += f' ({len(failed_files)} file(s) failed)'
 
-            return Response(response_data, status=status.HTTP_200_OK)
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
 class LedgerTaskStatusView(APIView):
     """
-    API endpoint to check the status of ledger processing tasks.
-
     GET /api/licenses/ledger-task-status/<task_id>/
-
-    Response:
-        {
-            "task_id": "abc-123-def",
-            "state": "PROGRESS",
-            "current": 5,
-            "total": 10,
-            "status": "Processed 5/10 licenses",
-            "processed_licenses": ["3011006401", "3011006402"],
-            "failed_licenses": []
-        }
+    Returns current state and progress of an async ledger processing task.
     """
 
     permission_classes = []
     authentication_classes = []
+    throttle_classes = []
     http_method_names = ['get', 'options']
 
     def get(self, request, task_id):
-        """Check the status of a background task."""
-        try:
-            task_result = AsyncResult(task_id)
+        from celery.result import AsyncResult
 
-            response_data = {
-                'task_id': task_id,
-                'state': task_result.state,
+        result = AsyncResult(task_id)
+        state = result.state
+
+        if state == 'PENDING':
+            response = {'state': 'PENDING', 'status': 'Task is waiting to be processed'}
+        elif state == 'PROGRESS':
+            info = result.info or {}
+            response = {
+                'state': 'PROGRESS',
+                'current': info.get('current', 0),
+                'total': info.get('total', 0),
+                'status': info.get('status', ''),
+                'processed_licenses': info.get('processed_licenses', []),
+                'failed_licenses': info.get('failed_licenses', []),
             }
+        elif state == 'SUCCESS':
+            response = {
+                'state': 'SUCCESS',
+                'result': result.result,
+            }
+        elif state == 'FAILURE':
+            response = {
+                'state': 'FAILURE',
+                'error': str(result.info),
+            }
+        else:
+            response = {'state': state}
 
-            if task_result.state == 'PENDING':
-                response_data['status'] = 'Task is waiting to be processed'
-
-            elif task_result.state == 'PROGRESS':
-                # Task is in progress, return progress info
-                info = task_result.info or {}
-                response_data.update({
-                    'current': info.get('current', 0),
-                    'total': info.get('total', 0),
-                    'status': info.get('status', 'Processing...'),
-                    'processed_licenses': info.get('processed_licenses', []),
-                    'failed_licenses': info.get('failed_licenses', [])
-                })
-
-            elif task_result.state == 'SUCCESS':
-                # Task completed successfully
-                result = task_result.result
-                response_data.update({
-                    'status': 'Completed',
-                    'result': result
-                })
-
-            elif task_result.state == 'FAILURE':
-                # Task failed
-                response_data.update({
-                    'status': 'Failed',
-                    'error': str(task_result.info)
-                })
-
-            else:
-                # Other states (RETRY, REVOKED, etc.)
-                response_data['status'] = f'Task state: {task_result.state}'
-
-            return Response(response_data, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.error(f"Error checking task status for {task_id}: {str(e)}")
-            return Response(
-                {'error': f'Failed to check task status: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response(response)

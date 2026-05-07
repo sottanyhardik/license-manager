@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 
 
@@ -66,18 +67,30 @@ def fetch_scrip_ownership(
             'https': proxy_url
         }
 
-    try:
-        response = requests.post(
-            url,
-            params=params,
-            cookies=cookies,
-            headers=headers,
-            data=data,
-            proxies=proxies,
-            timeout=30
-        )
-        response.raise_for_status()
-        return response
-    except requests.RequestException as e:
-        print(f"❌ Error fetching scrip ownership: {e}")
-        return None
+    for attempt in range(4):
+        try:
+            response = requests.post(
+                url,
+                params=params,
+                cookies=cookies,
+                headers=headers,
+                data=data,
+                proxies=proxies,
+                timeout=30
+            )
+            if response.status_code == 429:
+                wait = 2 ** attempt * 5  # 5s, 10s, 20s, 40s
+                print(f"⏳ Rate limited (429). Retrying in {wait}s... (attempt {attempt + 1}/4)")
+                time.sleep(wait)
+                continue
+            response.raise_for_status()
+            return response
+        except requests.RequestException as e:
+            if attempt < 3:
+                wait = 2 ** attempt * 5
+                print(f"⚠️  Request error: {e}. Retrying in {wait}s... (attempt {attempt + 1}/4)")
+                time.sleep(wait)
+            else:
+                print(f"❌ Error fetching scrip ownership: {e}")
+                return None
+    return None

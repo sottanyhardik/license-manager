@@ -120,7 +120,7 @@ def fetch_sion_data(cdata):
                         sion.unit = ''.join(tds[3].text.split(' ')[1:])
                         sion.serial_number = serial_number
                         serial_number = serial_number + 1
-                    except:
+                    except ValueError:
                         sion.condition = tds[3].text
                 else:
                     sion.condition = tds[3].text
@@ -134,5 +134,5 @@ def fetch_sion_class():
     for head in heads:
         try:
             request_sion_class_heads(head)
-        except:
+        except Exception:
             pass

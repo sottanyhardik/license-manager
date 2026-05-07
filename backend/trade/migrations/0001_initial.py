@@ -85,7 +85,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='licensetrade',
-            constraint=models.CheckConstraint(check=models.Q(('from_company__isnull', True), ('to_company__isnull', True), models.Q(('from_company', models.F('to_company')), _negated=True), _connector='OR'), name='chk_from_to_companies_different'),
+            constraint=models.CheckConstraint(condition=models.Q(('from_company__isnull', True), ('to_company__isnull', True), models.Q(('from_company', models.F('to_company')), _negated=True), _connector='OR'), name='chk_from_to_companies_different'),
         ),
         migrations.AddConstraint(
             model_name='licensetrade',

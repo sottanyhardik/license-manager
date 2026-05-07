@@ -7,7 +7,9 @@ import HybridSelect from "../../components/HybridSelect";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import {markNewItemCreated} from "../../utils/filterPersistence";
-import {formatDateForInput} from "../../utils/dateFormatter";
+import {formatDateForInput, parseDate as parseDateUtil} from "../../utils/dateFormatter";
+import * as validateFormUtil from "../../utils/formValidation";
+import { ValidationRules } from "../../utils/formValidation";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import {navigateToList} from "../../utils/navigationUtils";
 import {useBackButton} from "../../hooks/useBackButton";
@@ -19,6 +21,137 @@ import {useBackButton} from "../../hooks/useBackButton";
  * - Create: /masters/:entity/create OR /licenses/create
  * - Edit: /masters/:entity/:id/edit OR /licenses/:id/edit
  */
+
+const ENTITY_SECTIONS = {
+    'bill-of-entries': [
+        {
+            title: 'Document Info',
+            icon: 'receipt-cutoff',
+            color: '#6366F1',
+            fields: ['bill_of_entry_number', 'bill_of_entry_date', 'appraisement', 'ooc_date'],
+            cols: { bill_of_entry_number: 'col-md-4', bill_of_entry_date: 'col-md-4', appraisement: 'col-md-4', ooc_date: 'col-md-4' },
+        },
+        {
+            title: 'Parties & Location',
+            icon: 'building',
+            color: '#4F46E5',
+            fields: ['company', 'allotment', 'port', 'cha'],
+            cols: { company: 'col-md-4', allotment: 'col-md-4', port: 'col-md-4', cha: 'col-md-4' },
+        },
+        {
+            title: 'Financial',
+            icon: 'currency-dollar',
+            color: '#10b981',
+            fields: ['exchange_rate'],
+            cols: { exchange_rate: 'col-md-4' },
+        },
+        {
+            title: 'Invoice Details',
+            icon: 'file-earmark-text',
+            color: '#f59e0b',
+            fields: ['product_name', 'invoice_no', 'invoice_date'],
+            cols: { product_name: 'col-md-4', invoice_no: 'col-md-4', invoice_date: 'col-md-4' },
+        },
+        {
+            title: 'Notes',
+            icon: 'chat-left-text',
+            color: '#6b7280',
+            fields: ['comments'],
+            cols: { comments: 'col-12' },
+        },
+    ],
+    licenses: [
+        {
+            title: 'License Identification',
+            icon: 'file-earmark-text',
+            color: '#4F46E5',
+            fields: ['license_number', 'license_date', 'license_expiry_date', 'port', 'iec', 'scheme_code', 'advance_auth_number'],
+            cols: { license_number: 'col-md-4', license_date: 'col-md-4', license_expiry_date: 'col-md-4', port: 'col-md-4', iec: 'col-md-4', scheme_code: 'col-md-4', advance_auth_number: 'col-md-4' },
+        },
+        {
+            title: 'Financial Details',
+            icon: 'currency-dollar',
+            color: '#10b981',
+            fields: ['total_cif_fc', 'total_cif_inr', 'total_duty_amount', 'exchange_rate', 'duty_rate'],
+            cols: { total_cif_fc: 'col-md-4', total_cif_inr: 'col-md-4', total_duty_amount: 'col-md-4', exchange_rate: 'col-md-4', duty_rate: 'col-md-4' },
+        },
+        {
+            title: 'Status Flags',
+            icon: 'toggle-on',
+            color: '#6366F1',
+            fields: ['is_expired', 'is_null_dfia', 'is_incentive'],
+            cols: { is_expired: 'col-md-4', is_null_dfia: 'col-md-4', is_incentive: 'col-md-4' },
+        },
+        {
+            title: 'Conditions & Notes',
+            icon: 'chat-left-text',
+            color: '#6b7280',
+            fields: ['conditions', 'restrictions', 'comments', 'description', 'notes'],
+            cols: {},
+        },
+    ],
+    'incentive-licenses': [
+        {
+            title: 'License Details',
+            icon: 'award',
+            color: '#f59e0b',
+            fields: ['license_type', 'license_number', 'license_date', 'license_expiry_date'],
+            cols: { license_type: 'col-md-3', license_number: 'col-md-3', license_date: 'col-md-3', license_expiry_date: 'col-md-3' },
+        },
+        {
+            title: 'Party & Port',
+            icon: 'building',
+            color: '#4F46E5',
+            fields: ['exporter', 'port_code'],
+            cols: { exporter: 'col-md-6', port_code: 'col-md-6' },
+        },
+        {
+            title: 'Financial',
+            icon: 'currency-rupee',
+            color: '#10b981',
+            fields: ['license_value'],
+            cols: { license_value: 'col-md-4' },
+        },
+        {
+            title: 'Status & Notes',
+            icon: 'toggle-on',
+            color: '#6b7280',
+            fields: ['is_active', 'notes'],
+            cols: { is_active: 'col-md-4' },
+        },
+    ],
+    trades: [
+        {
+            title: 'Trade Details',
+            icon: 'arrow-left-right',
+            color: '#10b981',
+            fields: ['direction', 'license_type', 'invoice_number', 'invoice_date'],
+            cols: { direction: 'col-md-3', license_type: 'col-md-3', invoice_number: 'col-md-3', invoice_date: 'col-md-3' },
+        },
+        {
+            title: 'Parties',
+            icon: 'building',
+            color: '#4F46E5',
+            fields: ['from_company', 'to_company'],
+            cols: { from_company: 'col-md-6', to_company: 'col-md-6' },
+        },
+        {
+            title: 'References',
+            icon: 'link-45deg',
+            color: '#6366F1',
+            fields: ['incentive_license', 'boe'],
+            cols: { incentive_license: 'col-md-6', boe: 'col-md-6' },
+        },
+        {
+            title: 'Documents & Notes',
+            icon: 'file-earmark-arrow-up',
+            color: '#6b7280',
+            fields: ['purchase_invoice_copy', 'remarks'],
+            cols: { purchase_invoice_copy: 'col-md-6' },
+        },
+    ],
+};
+
 export default function MasterForm({
     entityName: propEntityName,
     recordId: propRecordId,
@@ -50,52 +183,14 @@ export default function MasterForm({
     const [updatedFields, setUpdatedFields] = useState({}); // Track updated fields for highlighting
     const [showBalanceModal, setShowBalanceModal] = useState(false); // License balance modal state
     const [savedLicenseId, setSavedLicenseId] = useState(null); // Store saved license ID for modal
+    const [activeNestedTab, setActiveNestedTab] = useState(null);
 
     // Enable browser back button support with filter preservation
     useBackButton(entityName, !isModal);
 
-    // Helper function to parse date from YYYY-MM-DD to Date object
+    // Use centralized date parser from utility
     const parseDate = (dateString) => {
-        if (!dateString) return null;
-
-        // If it's already a Date object, return it
-        if (dateString instanceof Date) {
-            return isNaN(dateString.getTime()) ? null : dateString;
-        }
-
-        // Parse string date
-        if (typeof dateString === 'string') {
-            // Split the date string to avoid timezone issues
-            const parts = dateString.split('-');
-            if (parts.length === 3) {
-                let year, month, day;
-
-                // Check if it's YYYY-MM-DD format (year is 4 digits)
-                if (parts[0].length === 4) {
-                    year = parseInt(parts[0], 10);
-                    month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
-                    day = parseInt(parts[2], 10);
-                }
-                // Check if it's dd-MM-yyyy format (first part is 1-2 digits)
-                else if (parts[2].length === 4) {
-                    day = parseInt(parts[0], 10);
-                    month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
-                    year = parseInt(parts[2], 10);
-                }
-                // Unknown format, try default parsing
-                else {
-                    const date = new Date(dateString);
-                    return isNaN(date.getTime()) ? null : date;
-                }
-
-                // Create date at noon local time to avoid timezone boundary issues
-                const date = new Date(year, month, day, 12, 0, 0);
-                return isNaN(date.getTime()) ? null : date;
-            }
-        }
-
-        const date = new Date(dateString);
-        return isNaN(date.getTime()) ? null : date;
+        return parseDateUtil(dateString);
     };
 
     // Helper function to format Date object to YYYY-MM-DD for API
@@ -118,23 +213,15 @@ export default function MasterForm({
         try {
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `/${entityName}/`;
+                apiPath = `${entityName}/`;
             } else if (entityName === 'incentive-licenses') {
-                apiPath = `/incentive-licenses/`;
+                apiPath = `incentive-licenses/`;
             } else {
-                apiPath = `/masters/${entityName}/`;
+                apiPath = `masters/${entityName}/`;
             }
-
-            console.log('[MasterForm] Fetching metadata from:', apiPath, 'for entity:', entityName);
 
             // Use GET to fetch metadata (custom structure with form_fields, field_meta, etc.)
             const {data} = await api.get(apiPath);
-
-            console.log('[MasterForm] Metadata response:', {
-                form_fields: data.form_fields,
-                field_meta_keys: Object.keys(data.field_meta || {}),
-                full_response_keys: Object.keys(data)
-            });
 
             setMetadata({
                 form_fields: data.form_fields || data.fields || [],
@@ -145,16 +232,48 @@ export default function MasterForm({
             // Apply default values from field_meta when creating new record (not editing)
             if (!isEdit && data.field_meta) {
                 const defaults = {};
+                const fkDefaults = {}; // Store FK defaults to fetch labels
+
                 Object.keys(data.field_meta).forEach(fieldName => {
                     const fieldConfig = data.field_meta[fieldName];
                     if (fieldConfig.default !== undefined && fieldConfig.default !== null) {
                         defaults[fieldName] = fieldConfig.default;
+
+                        // Track FK fields with defaults to fetch their labels
+                        // Note: type can be 'fk' or 'select' (enhanced by backend)
+                        if ((fieldConfig.type === 'fk' || fieldConfig.type === 'select') && typeof fieldConfig.default === 'number') {
+                            const endpoint = fieldConfig.fk_endpoint || fieldConfig.endpoint || data.fk_endpoint_overrides?.[fieldName];
+                            const labelField = fieldConfig.label_field || data.label_field_overrides?.[fieldName] || 'name';
+
+                            fkDefaults[fieldName] = {
+                                id: fieldConfig.default,
+                                endpoint: endpoint,
+                                labelField: labelField
+                            };
+                        }
                     }
                 });
 
-                // Only set defaults if we found any
-                if (Object.keys(defaults).length > 0) {
-                    setFormData(prevData => ({...prevData, ...defaults}));
+                // For FK defaults, just set the ID - AsyncSelectField will fetch the label
+                if (Object.keys(fkDefaults).length > 0) {
+                    const fkValues = Object.keys(fkDefaults).reduce((acc, fieldName) => {
+                        acc[fieldName] = fkDefaults[fieldName].id;
+                        return acc;
+                    }, {});
+
+                    setFormData(prev => ({ ...prev, ...fkValues }));
+                }
+
+                // Only set non-FK defaults if we found any
+                const nonFkDefaults = Object.keys(defaults)
+                    .filter(key => !fkDefaults[key])
+                    .reduce((obj, key) => {
+                        obj[key] = defaults[key];
+                        return obj;
+                    }, {});
+
+                if (Object.keys(nonFkDefaults).length > 0) {
+                    setFormData(prevData => ({...prevData, ...nonFkDefaults}));
                 }
             }
         } catch (err) {
@@ -169,11 +288,11 @@ export default function MasterForm({
         try {
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `/${entityName}/${recordId}/`;
+                apiPath = `${entityName}/${recordId}/`;
             } else if (entityName === 'incentive-licenses') {
-                apiPath = `/incentive-licenses/${recordId}/`;
+                apiPath = `incentive-licenses/${recordId}/`;
             } else {
-                apiPath = `/masters/${entityName}/${recordId}/`;
+                apiPath = `masters/${entityName}/${recordId}/`;
             }
             const {data} = await api.get(apiPath);
             setFormData(data);
@@ -185,11 +304,6 @@ export default function MasterForm({
     };
 
     const handleChange = async (field, value) => {
-        // DEBUG: Log license_documents changes
-        if (field === 'license_documents') {
-            console.log('[MasterForm.handleChange] license_documents updated:', value);
-        }
-
         const updates = {[field]: value};
 
         // Auto-calculate registration_number when license_number changes
@@ -247,7 +361,7 @@ export default function MasterForm({
                     let firstCompany = null;
 
                     for (const allotmentId of allotmentIds) {
-                        const {data} = await api.get(`/bill-of-entries/fetch-allotment-details/?allotment_id=${allotmentId}`);
+                        const {data} = await api.get(`bill-of-entries/fetch-allotment-details/?allotment_id=${allotmentId}`);
 
                         // Use exchange_rate, product_name, port, and company from first allotment
                         if (!firstExchangeRate && data.exchange_rate) {
@@ -270,7 +384,9 @@ export default function MasterForm({
                     }
 
                     // Update form fields with fetched data
-                    if (firstExchangeRate) {
+                    // Only set exchange_rate from allotment if the BOE doesn't already have one
+                    const currentExcRate = parseFloat(formData.exchange_rate);
+                    if (firstExchangeRate && (!currentExcRate || currentExcRate === 0)) {
                         updates.exchange_rate = firstExchangeRate;
                     }
                     if (firstProductName) {
@@ -283,7 +399,15 @@ export default function MasterForm({
                         updates.company = firstCompany;
                     }
                     if (allItemDetails.length > 0) {
-                        updates.item_details = allItemDetails;
+                        // Preserve frozen (ledger-imported) rows — never overwrite them
+                        const existingItems = formData.item_details || [];
+                        const frozenItems = existingItems.filter(item => item.is_frozen);
+                        const frozenSrNumbers = new Set(frozenItems.map(item => item.sr_number));
+                        const filteredAllotmentItems = allItemDetails.filter(item => !frozenSrNumbers.has(item.sr_number));
+                        updates.item_details = [...frozenItems, ...filteredAllotmentItems];
+                    } else if ((formData.item_details || []).some(item => item.is_frozen)) {
+                        // No new allotment items but frozen rows exist — keep them
+                        updates.item_details = (formData.item_details || []).filter(item => item.is_frozen);
                     }
                 } catch (err) {
                     toast.error("Failed to fetch allotment details: " + (err.response?.data?.error || err.message));
@@ -378,7 +502,7 @@ export default function MasterForm({
 
         try {
             // Fetch the SION norm class with its import items
-            const {data: sionData} = await api.get(`/masters/sion-classes/${exportItem.norm_class}/`);
+            const {data: sionData} = await api.get(`masters/sion-classes/${exportItem.norm_class}/`);
 
             if (!sionData.import_norm || sionData.import_norm.length === 0) {
                 alert("No import items found for this SION norm class");
@@ -434,12 +558,13 @@ export default function MasterForm({
                 } else if (!existingSerialNumbers.has(targetSerialNumber)) {
                     // Serial number doesn't exist - add new item
                     const newIndex = updatedImports.length;
+                    const netQty = parseFloat(exportItem.net_quantity) || 1;
                     const newItem = {
                         serial_number: targetSerialNumber,
                         hs_code: sionImport.hsn_code || null,
                         description: sionImport.description || "",
                         duty_type: sionImport.duty_type || "Basic",
-                        quantity: sionImport.quantity || 0,
+                        quantity: parseFloat((netQty * (sionImport.quantity || 0)).toFixed(4)),
                         unit: sionImport.unit || "KG",
                         cif_fc: 0,
                         cif_inr: 0,
@@ -479,28 +604,56 @@ export default function MasterForm({
     // Frontend validation function
     const validateForm = () => {
         const errors = {};
-        const requiredFields = [];
 
-        // Collect required fields from metadata
+        // Collect required fields from metadata and validate using utility
         if (metadata.form_fields) {
             metadata.form_fields.forEach(fieldName => {
                 const fieldMeta = metadata.field_meta?.[fieldName] || {};
+                const label = fieldMeta.label || fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const value = formData[fieldName];
+                const rules = [];
+
+                // Add required rule
                 if (fieldMeta.required) {
-                    requiredFields.push({
-                        name: fieldName,
-                        label: fieldMeta.label || fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-                    });
+                    rules.push(ValidationRules.REQUIRED);
+                }
+
+                // Add type-specific validations
+                if (fieldMeta.type === 'email' || fieldName.includes('email')) {
+                    rules.push(ValidationRules.EMAIL);
+                }
+                if (fieldMeta.type === 'url' || fieldName.includes('url')) {
+                    rules.push(ValidationRules.URL);
+                }
+                if (fieldMeta.type === 'number' || fieldMeta.type === 'decimal' || fieldMeta.type === 'integer') {
+                    if (fieldMeta.type === 'integer') {
+                        rules.push(ValidationRules.INTEGER);
+                    } else {
+                        rules.push(ValidationRules.NUMBER);
+                    }
+                }
+                if (fieldMeta.min_value !== undefined) {
+                    rules.push({ type: ValidationRules.MIN_VALUE, value: fieldMeta.min_value });
+                }
+                if (fieldMeta.max_value !== undefined) {
+                    rules.push({ type: ValidationRules.MAX_VALUE, value: fieldMeta.max_value });
+                }
+                if (fieldMeta.min_length) {
+                    rules.push({ type: ValidationRules.MIN_LENGTH, value: fieldMeta.min_length });
+                }
+                if (fieldMeta.max_length) {
+                    rules.push({ type: ValidationRules.MAX_LENGTH, value: fieldMeta.max_length });
+                }
+
+                // Validate field if it has rules
+                if (rules.length > 0) {
+                    const fieldErrors = validateFormUtil.validateField(value, rules, label);
+                    if (fieldErrors.length > 0) {
+                        errors[fieldName] = fieldErrors;
+                    }
                 }
             });
         }
-
-        // Validate required fields
-        requiredFields.forEach(field => {
-            const value = formData[field.name];
-            if (value === null || value === undefined || value === '') {
-                errors[field.name] = [`${field.label} is required`];
-            }
-        });
 
         // License-specific validations
         if (entityName === 'licenses') {
@@ -518,63 +671,45 @@ export default function MasterForm({
                 }
             }
 
-            // Validate export items
+            // Validate export items using validation utility
             if (formData.export_license && Array.isArray(formData.export_license)) {
-                const exportErrors = [];
-                formData.export_license.forEach((item, index) => {
-                    const itemErrors = {};
-
-                    // HS Code is not required for export items (can be blank)
-                    // Removed: if (!item.hs_code) { itemErrors.hs_code = ['HS Code is required']; }
-
-                    if (!item.description || item.description.trim() === '') {
-                        itemErrors.description = ['Description is required'];
+                const exportSchema = {
+                    description: {
+                        rules: [ValidationRules.REQUIRED],
+                        label: 'Description'
+                    },
+                    net_quantity: {
+                        rules: [ValidationRules.REQUIRED, ValidationRules.NON_NEGATIVE],
+                        label: 'Net Quantity'
                     }
-
-                    // Net quantity can be 0 or greater (including 0)
-                    const netQty = parseFloat(item.net_quantity);
-                    if (item.net_quantity === '' || item.net_quantity === null || item.net_quantity === undefined) {
-                        itemErrors.net_quantity = ['Net quantity is required'];
-                    } else if (isNaN(netQty) || netQty < 0) {
-                        itemErrors.net_quantity = ['Net quantity cannot be negative'];
-                    }
-
-                    if (!item.unit) {
-                        itemErrors.unit = ['Unit is required'];
-                    }
-
-                    if (Object.keys(itemErrors).length > 0) {
-                        exportErrors[index] = itemErrors;
-                    }
-                });
+                };
+                const exportErrors = validateFormUtil.validateNestedArray(formData.export_license, exportSchema);
                 if (exportErrors.length > 0) {
                     errors.export_license = exportErrors;
                 }
             }
 
-            // Validate import items
+            // Validate import items using validation utility
             if (formData.import_license && Array.isArray(formData.import_license)) {
-                const importErrors = [];
-                formData.import_license.forEach((item, index) => {
-                    const itemErrors = {};
-
-                    if (!item.hs_code) {
-                        itemErrors.hs_code = ['HS Code is required'];
+                const importSchema = {
+                    hs_code: {
+                        rules: [ValidationRules.REQUIRED],
+                        label: 'HS Code'
+                    },
+                    description: {
+                        rules: [ValidationRules.REQUIRED],
+                        label: 'Description'
+                    },
+                    serial_number: {
+                        rules: [ValidationRules.REQUIRED, ValidationRules.INTEGER],
+                        label: 'Serial Number'
+                    },
+                    unit: {
+                        rules: [ValidationRules.REQUIRED],
+                        label: 'Unit'
                     }
-                    if (!item.description || item.description.trim() === '') {
-                        itemErrors.description = ['Description is required'];
-                    }
-                    if (!item.serial_number && item.serial_number !== 0) {
-                        itemErrors.serial_number = ['Serial number is required'];
-                    }
-                    if (!item.unit) {
-                        itemErrors.unit = ['Unit is required'];
-                    }
-
-                    if (Object.keys(itemErrors).length > 0) {
-                        importErrors[index] = itemErrors;
-                    }
-                });
+                };
+                const importErrors = validateFormUtil.validateNestedArray(formData.import_license, importSchema);
                 if (importErrors.length > 0) {
                     errors.import_license = importErrors;
                 }
@@ -584,17 +719,18 @@ export default function MasterForm({
             if (formData.license_documents && Array.isArray(formData.license_documents)) {
                 const docErrors = [];
                 formData.license_documents.forEach((doc, index) => {
-                    const itemErrors = {};
-
                     // Only validate if file is provided (new document)
                     if (doc.file && doc.file instanceof File) {
-                        if (!doc.type || doc.type.trim() === '') {
-                            itemErrors.type = ['Document type is required'];
+                        const docSchema = {
+                            type: {
+                                rules: [ValidationRules.REQUIRED],
+                                label: 'Document Type'
+                            }
+                        };
+                        const itemErrors = validateFormUtil.validateForm(doc, docSchema);
+                        if (Object.keys(itemErrors).length > 0) {
+                            docErrors[index] = itemErrors;
                         }
-                    }
-
-                    if (Object.keys(itemErrors).length > 0) {
-                        docErrors[index] = itemErrors;
                     }
                 });
                 if (docErrors.length > 0) {
@@ -681,28 +817,13 @@ export default function MasterForm({
         }
 
         try {
-            // DEBUG: Log license_documents before sending
-            if (entityName === 'licenses' && formData.license_documents) {
-                console.log('=== DEBUG: license_documents before sending ===');
-                console.log('Raw formData.license_documents:', formData.license_documents);
-                formData.license_documents.forEach((doc, index) => {
-                    console.log(`Document ${index}:`, {
-                        type: doc.type,
-                        typeOf: typeof doc.type,
-                        file: doc.file,
-                        fileType: doc.file ? doc.file.constructor.name : 'null',
-                        allKeys: Object.keys(doc)
-                    });
-                });
-            }
-
             let apiPath;
             if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'bill-of-entries' || entityName === 'trades') {
-                apiPath = `/${entityName}/`;
+                apiPath = `${entityName}/`;
             } else if (entityName === 'incentive-licenses') {
-                apiPath = `/incentive-licenses/`;
+                apiPath = `incentive-licenses/`;
             } else {
-                apiPath = `/masters/${entityName}/`;
+                apiPath = `masters/${entityName}/`;
             }
 
             // Check if formData contains any File objects (including nested)
@@ -762,16 +883,6 @@ export default function MasterForm({
                 Object.entries(formData).forEach(([key, value]) => {
                     appendToFormData(key, value);
                 });
-
-                // DEBUG: Log FormData contents for license_documents
-                if (entityName === 'licenses') {
-                    console.log('=== DEBUG: FormData contents ===');
-                    for (let [key, value] of formDataObj.entries()) {
-                        if (key.includes('license_documents')) {
-                            console.log(key, ':', value);
-                        }
-                    }
-                }
 
                 if (isEdit) {
                     response = await api.patch(`${apiPath}${id}/`, formDataObj, {
@@ -884,7 +995,9 @@ export default function MasterForm({
 
             // Handle field-level errors
             if (err.response?.data && typeof err.response.data === 'object') {
-                setFieldErrors(err.response.data);
+                // Format backend errors using utility
+                const formattedErrors = validateFormUtil.formatBackendErrors(err.response.data);
+                setFieldErrors(formattedErrors);
 
                 // Create a user-friendly error message with better field names
                 const errorMessages = [];
@@ -988,7 +1101,29 @@ export default function MasterForm({
                     }
                 }, 100);
             } else {
-                const errorMsg = err.response?.data?.detail || "Failed to save record";
+                // Handle other error formats
+                let errorMsg = "Failed to save record";
+
+                if (err.response?.data?.detail) {
+                    errorMsg = err.response.data.detail;
+                } else if (err.response?.data?.error) {
+                    errorMsg = err.response.data.error;
+                } else if (err.response?.data?.message) {
+                    errorMsg = err.response.data.message;
+                } else if (typeof err.response?.data === 'string') {
+                    errorMsg = err.response.data;
+                } else if (err.response?.status === 400) {
+                    errorMsg = "Invalid data provided. Please check your input.";
+                } else if (err.response?.status === 403) {
+                    errorMsg = "You don't have permission to perform this action.";
+                } else if (err.response?.status === 404) {
+                    errorMsg = "Record not found.";
+                } else if (err.response?.status === 500) {
+                    errorMsg = "Server error occurred. Please try again or contact support.";
+                } else if (err.message) {
+                    errorMsg = `Error: ${err.message}`;
+                }
+
                 setError(errorMsg);
                 toast.error(errorMsg);
             }
@@ -1165,120 +1300,281 @@ export default function MasterForm({
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
 
+    const entityIconMap = {
+        licenses: 'file-earmark-text',
+        allotments: 'diagram-3',
+        'bill-of-entries': 'receipt-cutoff',
+        trades: 'arrow-left-right',
+        'incentive-licenses': 'award',
+    };
+    const entityColorMap = {
+        licenses: '#4F46E5',
+        allotments: '#06b6d4',
+        'bill-of-entries': '#6366F1',
+        trades: '#10b981',
+        'incentive-licenses': '#f59e0b',
+    };
+    const entityIcon = entityIconMap[entityName] || 'file-earmark';
+    const entityColor = entityColorMap[entityName] || '#4F46E5';
+
     if (loading) {
         return (
-            <div className="container mt-4">
-                <div className="text-center py-5">
-                    <div className="spinner-border text-primary"></div>
-                    <p className="mt-2">Loading...</p>
+            <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <div className="placeholder-glow mb-1"><span className="placeholder col-3 rounded" style={{ height: 24 }}></span></div>
+                        <div className="placeholder-glow"><span className="placeholder col-5 rounded" style={{ height: 14 }}></span></div>
+                    </div>
+                </div>
+                <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                    <div className="card-body p-4">
+                        <div className="row g-3">
+                            {[...Array(6)].map((_, i) => (
+                                <div key={i} className="col-md-4">
+                                    <div className="placeholder-glow mb-1"><span className="placeholder col-6 rounded" style={{ height: 12 }}></span></div>
+                                    <span className="placeholder col-12 rounded d-block" style={{ height: 38 }}></span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
-                <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
-                    <i className={`bi ${isEdit ? 'bi-pencil-square' : 'bi-plus-circle'} me-3`}></i>
-                    {isEdit ? "Edit" : "Create"} {entityTitle}
-                </h1>
+        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '20px 24px' }}>
+            {/* Compact Header */}
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
+                        <i className={`bi bi-${entityIcon} me-2`} style={{ color: entityColor }}></i>
+                        {isEdit ? 'Edit' : 'New'} {entityTitle}
+                    </h4>
+                    <small className="text-muted">{isEdit ? 'Update existing record' : 'Create a new record'}</small>
+                </div>
+                <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => {
+                        if (isModal && onClose) { onClose(); return; }
+                        navigateToList(navigate, entityName, { preserveFilters: true });
+                    }}
+                >
+                    <i className="bi bi-arrow-left me-1"></i>Back to List
+                </button>
             </div>
 
-            <div className="row">
-                <div className="col-lg-12 mx-auto">
-                    <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                        <div className="card-body" style={{ padding: '32px' }}>
-                            {error && (
-                                <div className="alert alert-danger">
-                                    <strong>
-                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                                        Validation Error
-                                    </strong>
-                                    <div className="mt-2" style={{whiteSpace: 'pre-wrap'}}>
-                                        {error}
+            <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
+                <div className="card-header bg-white border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                    <div className="d-flex align-items-center justify-content-between">
+                        <h6 className="mb-0 fw-semibold">
+                            <i className={`bi bi-${entityIcon} me-2`} style={{ color: entityColor }}></i>
+                            {entityTitle} Details
+                        </h6>
+                        {entityName === 'trades' && formData.direction && (() => {
+                            const dirColors = { PURCHASE: '#4F46E5', SALE: '#10b981', COMMISSION_PURCHASE: '#f59e0b', COMMISSION_SALE: '#6366F1' };
+                            const dirLabels = { PURCHASE: 'Purchase', SALE: 'Sale', COMMISSION_PURCHASE: 'Commission Purchase', COMMISSION_SALE: 'Commission Sale' };
+                            const dirIcons = { PURCHASE: 'cart-check', SALE: 'shop', COMMISSION_PURCHASE: 'percent', COMMISSION_SALE: 'percent' };
+                            const ltColors = { DFIA: '#0ea5e9', INCENTIVE: '#f59e0b' };
+                            const ltLabels = { DFIA: 'DFIA License', INCENTIVE: 'Incentive License' };
+                            return (
+                                <div className="d-flex gap-2">
+                                    <span className="badge d-flex align-items-center gap-1" style={{ background: `${dirColors[formData.direction]}20`, color: dirColors[formData.direction], fontWeight: '600', fontSize: '0.78rem', padding: '5px 10px', borderRadius: 6 }}>
+                                        <i className={`bi bi-${dirIcons[formData.direction]}`}></i>
+                                        {dirLabels[formData.direction]}
+                                    </span>
+                                    {formData.license_type && (
+                                        <span className="badge d-flex align-items-center gap-1" style={{ background: `${ltColors[formData.license_type]}20`, color: ltColors[formData.license_type], fontWeight: '600', fontSize: '0.78rem', padding: '5px 10px', borderRadius: 6 }}>
+                                            <i className="bi bi-file-earmark-text"></i>
+                                            {ltLabels[formData.license_type]}
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                </div>
+                <div className="card-body" style={{ padding: '24px' }}>
+                    {error && (
+                        <div className="alert alert-danger d-flex align-items-start gap-2 mb-4">
+                            <i className="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+                            <div>
+                                <strong>Validation Error</strong>
+                                <div className="mt-1" style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}>{error}</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {fetchingAllotment && (
+                        <div className="alert alert-info d-flex align-items-center gap-2 mb-4">
+                            <span className="spinner-border spinner-border-sm flex-shrink-0"></span>
+                            Fetching allotment details...
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} encType="multipart/form-data">
+                        {/* Regular Fields */}
+                        {(() => {
+                            const activeFields = (metadata.form_fields || []).filter(f => !metadata.nested_field_defs?.[f]);
+
+                            const renderOneField = (field, colClass) => {
+                                const isTextarea = !colClass && (field.includes("address") || field.includes("description") ||
+                                    field.includes("note") || field.includes("comment") ||
+                                    field.includes("condition") || field.includes("restriction"));
+                                const col = colClass || (isTextarea ? "col-12" : "col-md-4");
+                                const fieldMeta = metadata.field_meta?.[field] || {};
+                                const label = fieldMeta.label || field.replace(/_/g, " ");
+                                const helpText = fieldMeta.help_text;
+                                const fieldError = fieldErrors[field];
+                                const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
+                                return (
+                                    <div key={field} className={col}>
+                                        <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                                            {label}{fieldMeta.required && <span className="text-danger ms-1">*</span>}
+                                        </label>
+                                        {renderField(field)}
+                                        {hasError && (
+                                            <div className="invalid-feedback d-block" style={{ fontSize: '0.78rem', marginTop: 4 }}>
+                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
+                                            </div>
+                                        )}
+                                        {helpText && !hasError && (
+                                            <small className="form-text d-block mt-1" style={{ color: 'var(--text-secondary)', fontSize: '0.73rem' }}>
+                                                <i className="bi bi-info-circle me-1"></i>{helpText}
+                                            </small>
+                                        )}
                                     </div>
-                                </div>
-                            )}
+                                );
+                            };
 
-                            {fetchingAllotment && (
-                                <div className="alert alert-info">
-                                    <span className="spinner-border spinner-border-sm me-2"></span>
-                                    Fetching allotment details...
-                                </div>
-                            )}
+                            const sections = ENTITY_SECTIONS[entityName];
+                            if (sections) {
+                                const sectionedFields = new Set(sections.flatMap(s => s.fields));
+                                const remainingFields = activeFields.filter(f => !sectionedFields.has(f));
 
-                            <form onSubmit={handleSubmit} encType="multipart/form-data">
-                                {/* Regular Fields - 3 columns layout */}
-                                <div className="row">
-                                    {metadata.form_fields?.map((field) => {
-                                        // Skip nested fields (they're rendered separately below)
-                                        if (metadata.nested_field_defs?.[field]) {
-                                            return null;
-                                        }
-
-                                        // Full width for textarea fields
-                                        const isTextarea = field.includes("address") || field.includes("description") ||
-                                            field.includes("note") || field.includes("comment") ||
-                                            field.includes("condition") || field.includes("restriction");
-
-                                        const colClass = isTextarea ? "col-12" : "col-md-4";
-
-                                        const fieldMeta = metadata.field_meta?.[field] || {};
-                                        const label = fieldMeta.label || field.replace(/_/g, " ");
-                                        const helpText = fieldMeta.help_text;
-
-                                        const fieldError = fieldErrors[field];
-                                        const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
-
-                                        return (
-                                            <div key={field} className={`${colClass} mb-3`}>
-                                                <div className="form-group-material">
-                                                    <label className="form-label" style={{
-                                                        fontWeight: '500',
-                                                        color: '#374151',
-                                                        marginBottom: '8px',
-                                                        fontSize: '0.875rem'
-                                                    }}>
-                                                        {label}
-                                                        {fieldMeta.required && <span className="text-danger ms-1">*</span>}
-                                                    </label>
-                                                    {renderField(field)}
-                                                    {hasError && (
-                                                        <div className="invalid-feedback d-block" style={{
-                                                            fontSize: '0.8rem',
-                                                            marginTop: '6px'
-                                                        }}>
-                                                            <i className="bi bi-exclamation-circle me-1"></i>
-                                                            {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
-                                                        </div>
-                                                    )}
-                                                    {helpText && !hasError && (
-                                                        <small className="form-text d-block mt-1" style={{
-                                                            color: '#6b7280',
-                                                            fontSize: '0.75rem'
-                                                        }}>
-                                                            <i className="bi bi-info-circle me-1"></i>
-                                                            {helpText}
-                                                        </small>
-                                                    )}
+                                return (
+                                    <div className="d-flex flex-column gap-3">
+                                        {sections.map(section => {
+                                            const visibleFields = section.fields.filter(f => activeFields.includes(f));
+                                            if (visibleFields.length === 0) return null;
+                                            return (
+                                                <div key={section.title} style={{ background: 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: `3px solid ${section.color}` }}>
+                                                    <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: section.color, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <i className={`bi bi-${section.icon}`}></i> {section.title}
+                                                    </div>
+                                                    <div className="row g-3">
+                                                        {visibleFields.map(f => renderOneField(f, section.cols?.[f]))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {remainingFields.length > 0 && (
+                                            <div style={{ background: 'var(--bs-gray-50)', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #9ca3af' }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', marginBottom: '14px' }}>
+                                                    <i className="bi bi-three-dots me-1"></i> Other Fields
+                                                </div>
+                                                <div className="row g-3">
+                                                    {remainingFields.map(f => renderOneField(f))}
                                                 </div>
                                             </div>
-                                        );
-                                    })}
+                                        )}
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div className="row g-3">
+                                    {activeFields.map(f => renderOneField(f))}
                                 </div>
-                                <hr style={{ margin: '32px 0', border: 'none', borderTop: '2px solid #e5e7eb' }}/>
-                                {/* Nested Fields */}
-                                {/* Don't show nested fields for allotments in form - use action page instead */}
-                                {entityName !== 'allotments' && Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
+                            );
+                        })()}
+
+                        {/* Nested Fields */}
+                        {entityName !== 'allotments' && Object.entries(metadata.nested_field_defs || {}).length > 0 && (
+                            <div className="mt-4">
+                                <div style={{ height: 2, background: `linear-gradient(90deg, ${entityColor} 0%, transparent 100%)`, marginBottom: 20, borderRadius: 1 }}></div>
+                                {(entityName === 'licenses' || entityName === 'trades') ? (() => {
+                                    const allNestedEntries = Object.entries(metadata.nested_field_defs || {});
+                                    // For trades, filter tabs based on license_type
+                                    const nestedEntries = entityName === 'trades'
+                                        ? allNestedEntries.filter(([key]) => {
+                                            const lt = formData.license_type;
+                                            if (!lt) return true;
+                                            if (lt === 'DFIA') return key !== 'incentive_lines';
+                                            if (lt === 'INCENTIVE') return key !== 'lines';
+                                            return true;
+                                        })
+                                        : allNestedEntries;
+                                    const activeTab = (activeNestedTab && nestedEntries.some(([k]) => k === activeNestedTab))
+                                        ? activeNestedTab
+                                        : nestedEntries[0]?.[0];
+                                    const tabIcons = {
+                                        export_license: 'box-arrow-up',
+                                        import_license: 'box-arrow-in-down',
+                                        license_documents: 'file-earmark',
+                                        lines: 'list-ul',
+                                        incentive_lines: 'award',
+                                        payments: 'cash-stack',
+                                    };
+                                    const tabLabels = {
+                                        export_license: 'Export Items',
+                                        import_license: 'Import Items',
+                                        license_documents: 'Documents',
+                                        lines: 'Trade Lines',
+                                        incentive_lines: 'Incentive Lines',
+                                        payments: 'Payments',
+                                    };
+                                    return (
+                                        <>
+                                            <ul className="nav nav-tabs" style={{ borderBottom: '2px solid #e5e7eb', gap: 2, marginBottom: 0 }}>
+                                                {nestedEntries.map(([nestedKey]) => {
+                                                    const count = (formData[nestedKey] || []).length;
+                                                    const isActive = activeTab === nestedKey;
+                                                    const hasErrors = (fieldErrors[nestedKey] || []).some(Boolean);
+                                                    const label = tabLabels[nestedKey] || nestedKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                                    return (
+                                                        <li key={nestedKey} className="nav-item">
+                                                            <button
+                                                                type="button"
+                                                                className={`nav-link d-flex align-items-center gap-2 ${isActive ? 'active' : ''}`}
+                                                                onClick={() => setActiveNestedTab(nestedKey)}
+                                                                style={{ fontSize: '0.83rem', fontWeight: isActive ? '600' : '500', padding: '8px 16px', color: isActive ? entityColor : '#6b7280', borderColor: isActive ? `${entityColor} ${entityColor} white` : 'transparent', borderRadius: '8px 8px 0 0' }}
+                                                            >
+                                                                <i className={`bi bi-${tabIcons[nestedKey] || 'table'}`}></i>
+                                                                {label}
+                                                                {count > 0 && (
+                                                                    <span className="badge rounded-pill" style={{ backgroundColor: isActive ? entityColor : '#e5e7eb', color: isActive ? 'white' : '#6b7280', fontSize: '0.7rem', padding: '2px 7px' }}>
+                                                                        {count}
+                                                                    </span>
+                                                                )}
+                                                                {hasErrors && <i className="bi bi-exclamation-circle-fill text-danger" style={{ fontSize: '0.75rem' }}></i>}
+                                                            </button>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                            <div style={{ border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '20px 16px', background: 'white' }}>
+                                                {nestedEntries.map(([nestedKey, nestedDef]) => activeTab === nestedKey ? (
+                                                    <NestedFieldArray
+                                                        key={nestedKey}
+                                                        label={nestedKey.replace(/_/g, " ")}
+                                                        fields={nestedDef}
+                                                        value={formData[nestedKey] || []}
+                                                        onChange={(value) => handleChange(nestedKey, value)}
+                                                        fieldKey={nestedKey}
+                                                        onFetchImports={handleFetchImports}
+                                                        updatedFields={updatedFields}
+                                                        errors={fieldErrors[nestedKey] || []}
+                                                        entityName={entityName}
+                                                        formData={formData}
+                                                    />
+                                                ) : null)}
+                                            </div>
+                                        </>
+                                    );
+                                })() : Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
                                     <NestedFieldArray
                                         key={nestedKey}
                                         label={nestedKey.replace(/_/g, " ")}
@@ -1293,72 +1589,54 @@ export default function MasterForm({
                                         formData={formData}
                                     />
                                 ))}
-                                {/* Action Buttons */}
-                                <div className="mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
-                                    <button
-                                        type="submit"
-                                        className="btn btn-primary me-2"
-                                        disabled={saving}
-                                        style={{
-                                            padding: '12px 32px',
-                                            fontWeight: '600',
-                                            fontSize: '1rem',
-                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                            border: 'none'
-                                        }}
-                                    >
-                                        {saving ? (
-                                            <>
-                                                <span className="spinner-border spinner-border-sm me-2"></span>
-                                                Saving...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <i className="bi bi-check-circle me-2"></i>
-                                                {isEdit ? "Update" : "Create"}
-                                            </>
-                                        )}
-                                    </button>
+                            </div>
+                        )}
 
-                                    {/* License Balance Actions button - only show for licenses in edit mode */}
-                                    {entityName === 'licenses' && isEdit && (
-                                        <button
-                                            type="button"
-                                            className="btn btn-info me-2"
-                                            onClick={() => {
-                                                setSavedLicenseId(id);
-                                                setShowBalanceModal(true);
-                                            }}
-                                            disabled={saving}
-                                            style={{ padding: '12px 24px', fontWeight: '500' }}
-                                        >
-                                            <i className="bi bi-eye me-2"></i>
-                                            View Balance
-                                        </button>
-                                    )}
+                        {/* Action Buttons */}
+                        <div className="d-flex align-items-center gap-2 mt-4 pt-3" style={{ borderTop: '1px solid #e5e7eb' }}>
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                disabled={saving}
+                                style={{
+                                    padding: '10px 28px', fontWeight: '600',
+                                    background: `linear-gradient(135deg, ${entityColor}, ${entityColor}cc)`,
+                                    border: 'none', borderRadius: '8px'
+                                }}
+                            >
+                                {saving ? (
+                                    <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>
+                                ) : (
+                                    <><i className="bi bi-check-circle me-2"></i>{isEdit ? 'Update' : 'Create'}</>
+                                )}
+                            </button>
 
-                                    <button
-                                        type="button"
-                                        className="btn btn-outline-secondary"
-                                        onClick={() => {
-                                            if (isModal && onClose) {
-                                                onClose();
-                                                return;
-                                            }
+                            {entityName === 'licenses' && isEdit && (
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-info"
+                                    onClick={() => { setSavedLicenseId(id); setShowBalanceModal(true); }}
+                                    disabled={saving}
+                                    style={{ padding: '10px 20px', fontWeight: '500', borderRadius: '8px' }}
+                                >
+                                    <i className="bi bi-eye me-2"></i>View Balance
+                                </button>
+                            )}
 
-                                            // Navigate back to list with filter restoration
-                                            navigateToList(navigate, entityName, { preserveFilters: true });
-                                        }}
-                                        disabled={saving}
-                                        style={{ padding: '12px 24px', fontWeight: '500' }}
-                                    >
-                                        <i className="bi bi-arrow-left me-2"></i>
-                                        Back to List
-                                    </button>
-                                </div>
-                            </form>
+                            <button
+                                type="button"
+                                className="btn btn-outline-secondary"
+                                onClick={() => {
+                                    if (isModal && onClose) { onClose(); return; }
+                                    navigateToList(navigate, entityName, { preserveFilters: true });
+                                }}
+                                disabled={saving}
+                                style={{ padding: '10px 20px', fontWeight: '500', borderRadius: '8px' }}
+                            >
+                                <i className="bi bi-x-lg me-2"></i>Cancel
+                            </button>
                         </div>
-                    </div>
+                    </form>
                 </div>
             </div>
 

@@ -29,7 +29,7 @@
  * </Modal>
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 export const Modal = ({
   show,
@@ -47,6 +47,68 @@ export const Modal = ({
   centered = false,
   scrollable = false,
 }) => {
+  const modalRef = useRef(null);
+  const previousFocusRef = useRef(null);
+
+  // Focus trap implementation
+  useEffect(() => {
+    if (!show) return;
+
+    // Save the currently focused element
+    previousFocusRef.current = document.activeElement;
+
+    // Get all focusable elements within the modal
+    const getFocusableElements = () => {
+      if (!modalRef.current) return [];
+      const focusableSelectors =
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      return Array.from(modalRef.current.querySelectorAll(focusableSelectors));
+    };
+
+    // Focus first element when modal opens
+    setTimeout(() => {
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length > 0) {
+        focusableElements[0].focus();
+      }
+    }, 100);
+
+    // Trap focus within modal
+    const handleTabKey = (e) => {
+      if (e.key !== 'Tab') return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        // Shift + Tab
+        if (document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        // Tab
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleTabKey);
+
+    return () => {
+      document.removeEventListener('keydown', handleTabKey);
+      // Restore focus to the previously focused element
+      if (previousFocusRef.current) {
+        previousFocusRef.current.focus();
+      }
+    };
+  }, [show]);
+
   // Handle ESC key press
   useEffect(() => {
     if (!show || !closeOnEscape) return;
@@ -91,12 +153,16 @@ export const Modal = ({
       }}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="modal-title"
     >
-      <div className={`modal-dialog ${sizeClass} ${centeredClass} ${scrollableClass}`.trim()}>
+      <div
+        ref={modalRef}
+        className={`modal-dialog ${sizeClass} ${centeredClass} ${scrollableClass}`.trim()}
+      >
         <div className="modal-content">
           {/* Header */}
           <div className={`modal-header ${headerClassName}`}>
-            <h5 className="modal-title">{title}</h5>
+            <h5 id="modal-title" className="modal-title">{title}</h5>
             {showCloseButton && (
               <button
                 type="button"

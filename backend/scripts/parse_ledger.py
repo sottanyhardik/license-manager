@@ -18,75 +18,93 @@ def parse_date(date_str):
     return None
 
 
+_PAGE_HEADER_PREFIXES = (
+    "pageno:", "indiancustoms", "itemwiseledger", "jnch,", "icdb",
+    "description", "[e]->", "[p]->", "dated", "no.of", "totalpages",
+)
+
+
+def _is_page_header(row):
+    """Return True for ICEGATE pagination/footer rows that should be skipped."""
+    if not row or not row[0]:
+        return False
+    r0 = row[0].lower()
+    return any(r0.startswith(p) for p in _PAGE_HEADER_PREFIXES)
+
+
 def parse_license_data(rows):
     """
     Parses a list of rows (from CSV or OCR extraction) into structured dict_list based on license groupings.
     Each new 'Regn.No' row marks the beginning of a new license section.
+    Multi-page ICEGATE continuation pages (Page No:-N, Indian Customs headers, etc.)
+    are silently skipped while the active license context is preserved.
     """
     dict_list = []
     current = None
 
     for row in rows:
-        # Skip completely empty rows
         if not any(cell.strip() for cell in row):
             continue
 
         if len(row) < 2:
             continue
 
+        if _is_page_header(row):
+            continue
+
         # Detect start of new license block
-        if row[0] == "Regn.No.":
+        # Strip UTF-8 BOM (\ufeff) that Excel/Windows adds to the first cell
+        if row[0].lstrip('\ufeff') == "Regn.No.":
             if current:
                 dict_list.append(current)
-            if len(row[5]) == 9:
-                row[5] = "0" + row[5]
+            lic_no = row[5] if len(row) > 5 else ""
+            if len(lic_no) == 9:
+                lic_no = "0" + lic_no
             current = {
                 "ledger_date": datetime.datetime.now().date(),
                 "registration_no": row[1],
                 "registration_date": row[3],
-                "lic_no": row[5],
-                "lic_date": row[7],
+                "lic_no": lic_no,
+                "lic_date": row[7] if len(row) > 7 else "",
                 "row": []
             }
+
+        elif current is None:
+            # No license context yet — skip metadata rows before first Regn.No.
+            continue
+
         elif row[0] == "RANo.":
-            current["port"] = row[5]
+            current["port"] = row[5] if len(row) > 5 else ""
+
         elif row[0] == "IEC":
-            if len(row[1]) == 9:
-                row[1] = "0" + row[1]
-            current["iec"] = row[1]
-            current["scheme_code"] = row[3]
-            current["notification"] = row[5]
-            current["foregin_currency"] = row[7]
+            iec = row[1] if len(row) > 1 else ""
+            if len(iec) == 9:
+                iec = "0" + iec
+            current["iec"] = iec
+            current["scheme_code"] = row[3] if len(row) > 3 else ""
+            current["notification"] = row[5] if len(row) > 5 else ""
+            current["foregin_currency"] = row[7] if len(row) > 7 else ""
 
         elif row[0].lower() == "tot.duty":
-            current["cif_inr"] = float(row[3]) if row[3] else 0
-            current["total_quantity"] = float(row[5]) if row[5] else 0
-            current["cif_fc"] = float(row[7]) if row[7] else 0
+            current["cif_inr"] = float(row[3]) if len(row) > 3 and row[3] else 0
+            current["total_quantity"] = float(row[5]) if len(row) > 5 and row[5] else 0
+            current["cif_fc"] = float(row[7]) if len(row) > 7 and row[7] else 0
 
-        elif row[0] and row[0].lower() in ["credit-", "debit-"]:
-            if row[0].lower() == 'credit-':
-                txn = {
-                    "type": 'C',
-                    "sr_no": int(row[1]) if row[1] else None,
-                    "cif_inr": float(row[3]) if row[3] else 0,
-                    "cif_fc": float(row[4]) if row[4] else 0,
-                    "qty": float(row[5]) if row[5] else 0,
-                    "be_number": row[7] if len(row) > 5 else None,
-                    "be_date": row[8] if len(row) > 6 else None,
-                    "port": row[9] if len(row) > 7 else None
-                }
-
-            else:
-                txn = {
-                    "type": 'D',
-                    "sr_no": int(row[1]) if row[1] else None,
-                    "cif_inr": float(row[3]) if row[3] else 0,
-                    "cif_fc": float(row[4]) if row[4] else 0,
-                    "qty": float(row[5]) if row[5] else 0,
-                    "be_number": row[7] if len(row) > 5 else None,
-                    "be_date": parse_date(row[8]) if len(row) > 8 else None,
-                    "port": row[9] if len(row) > 7 else None
-                }
+        elif row[0].lower() in ("credit-", "debit-"):
+            sr_no = int(row[1]) if len(row) > 1 and row[1] else None
+            if sr_no is None:
+                continue
+            is_credit = row[0].lower() == "credit-"
+            txn = {
+                "type": "C" if is_credit else "D",
+                "sr_no": sr_no,
+                "cif_inr": float(row[3]) if len(row) > 3 and row[3] else 0,
+                "cif_fc": float(row[4]) if len(row) > 4 and row[4] else 0,
+                "qty": float(row[5]) if len(row) > 5 and row[5] else 0,
+                "be_number": row[7] if len(row) > 7 else None,
+                "be_date": None if is_credit else (parse_date(row[8]) if len(row) > 8 else None),
+                "port": row[9] if len(row) > 9 else None,
+            }
             current["row"].append(txn)
 
     if current:
@@ -163,6 +181,14 @@ def bulk_get_or_create_license_items(type_credit_list, license, skip_signals=Fal
 
 def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
     """Bulk create Bill of Entry records."""
+    # Skip debit rows with missing be_number or port — can't create/find a BOE without them
+    type_debit_list = [
+        item for item in type_debit_list
+        if item.get("be_number") and item.get("port") and item["port"] in existing_ports
+    ]
+    if not type_debit_list:
+        return {}
+
     unique_bill_entries = {}
 
     # Normalize date format and deduplicate by (be_number, be_date)
@@ -170,10 +196,10 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
         try:
             date_object = datetime.datetime.strptime(item["be_date"], "%Y/%m/%d")
             item["be_date"] = date_object.strftime("%Y-%m-%d")
-        except Exception:
+        except (ValueError, TypeError):
             try:
                 item["be_date"] = item["be_date"].strftime("%Y-%m-%d")
-            except:
+            except AttributeError:
                 pass
         key = (item["be_number"], item["be_date"], existing_ports[item["port"]])
         unique_bill_entries[key] = item
@@ -187,9 +213,10 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
         port_id__in=[k[2] for k in fetch_numbers]
     )
 
-    # Build a set of (be_number, be_date, port_id) already in DB
+    # Build a set of (be_number, be_date, port_model) already in DB
+    # Guard against BOEs that have a null port in the database
     existing_set = set(
-        (be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d'), existing_ports[be.port.code])
+        (be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d'), existing_ports.get(be.port.code) if be.port else None)
         for be in existing
     )
 
@@ -219,6 +246,48 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
     }
 
 
+def delete_stale_boe_rows(license, new_debit_row, skip_signals=False):
+    """
+    Delete debit RowDetails for this license that no longer appear in the
+    freshly uploaded ledger CSV.  Returns the count of deleted rows.
+    """
+    from django.db.models.signals import post_delete
+    from bill_of_entry.models import delete_stock
+
+    # Build the set of (boe_id, sr_number_id) present in the new upload
+    new_row_keys = set()
+    for data in new_debit_row:
+        boe = data.get('boe')
+        licence = data.get('licence')
+        if boe and licence:
+            new_row_keys.add((boe.id, licence.id))
+
+    # Fetch all existing debit RowDetails for this license
+    existing_rows = RowDetails.objects.filter(
+        sr_number__license=license,
+        transaction_type='D'
+    ).select_related('bill_of_entry', 'sr_number')
+
+    stale_ids = [
+        rd.id for rd in existing_rows
+        if (rd.bill_of_entry_id, rd.sr_number_id) not in new_row_keys
+    ]
+
+    if not stale_ids:
+        return 0
+
+    if skip_signals:
+        post_delete.disconnect(delete_stock, sender=RowDetails)
+
+    try:
+        deleted_count, _ = RowDetails.objects.filter(id__in=stale_ids).delete()
+    finally:
+        if skip_signals:
+            post_delete.connect(delete_stock, sender=RowDetails)
+
+    return deleted_count
+
+
 def bulk_get_or_create_boe(boe_row, skip_signals=False):
     """
     Bulk create or update BOE row details.
@@ -230,6 +299,11 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
     from django.db.models.signals import post_save, post_delete
     from bill_of_entry.models import update_stock, delete_stock
 
+    # Skip rows that are missing licence (import item) — can't create RowDetails without it
+    valid_items = [item for item in boe_row if item.get('licence') is not None]
+    if not valid_items:
+        return
+
     row_details_list = [
         RowDetails(
             bill_of_entry=item['boe'],
@@ -237,53 +311,93 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
             transaction_type=item['type'],
             cif_inr=item['cif_inr'],
             cif_fc=item['cif_fc'],
-            qty=item['qty']
-        ) for item in boe_row
+            qty=item['qty'],
+            is_frozen=True,  # Rows from ledger upload are frozen — cannot be edited from frontend
+        ) for item in valid_items
     ]
 
     with transaction.atomic():
-        existing_rows = RowDetails.objects.filter(
-            Q(bill_of_entry__in=[row.bill_of_entry for row in row_details_list]),
-            Q(sr_number__in=[row.sr_number for row in row_details_list]),
-            Q(transaction_type='D'),
-        )
+        # Build the existence query correctly for both credit (null BOE) and debit rows.
+        # Django's bill_of_entry__in=[None] does NOT find NULL FK rows in PostgreSQL,
+        # so we must use bill_of_entry__isnull=True for credit rows explicitly.
+        credit_sr_numbers = [
+            row.sr_number for row in row_details_list if row.bill_of_entry is None
+        ]
+        debit_rows = [row for row in row_details_list if row.bill_of_entry is not None]
+
+        query = Q()
+        if credit_sr_numbers:
+            query |= Q(
+                bill_of_entry__isnull=True,
+                sr_number__in=credit_sr_numbers,
+                transaction_type='C',
+            )
+        if debit_rows:
+            query |= Q(
+                bill_of_entry__in=[row.bill_of_entry for row in debit_rows],
+                sr_number__in=[row.sr_number for row in debit_rows],
+                transaction_type='D',
+            )
+
+        existing_rows = RowDetails.objects.filter(query) if query else RowDetails.objects.none()
         rows_dict = {
-            (row.bill_of_entry, row.sr_number, row.transaction_type): row
+            (row.bill_of_entry_id, row.sr_number_id, row.transaction_type): row
             for row in existing_rows
         }
         new_rows = []
         update_rows = []
         for row in row_details_list:
-            key = (row.bill_of_entry, row.sr_number, row.transaction_type)
+            # Use PK-based key to avoid ORM object identity issues
+            boe_id = row.bill_of_entry_id if row.bill_of_entry else None
+            sr_id = row.sr_number_id if row.sr_number else None
+            key = (boe_id, sr_id, row.transaction_type)
             if key not in rows_dict:
                 new_rows.append(row)
             else:
-                update_row = rows_dict.get(key)
+                update_row = rows_dict[key]
                 update_row.cif_inr = row.cif_inr
                 update_row.cif_fc = row.cif_fc
                 update_row.qty = row.qty
+                update_row.is_frozen = True
                 update_rows.append(update_row)
 
-        # Disable signals if requested (for bulk ledger upload)
         if skip_signals:
             post_save.disconnect(update_stock, sender=RowDetails, dispatch_uid="update_stock_on_save")
             post_delete.disconnect(delete_stock, sender=RowDetails)
 
         try:
-            RowDetails.objects.bulk_create(new_rows)
-            RowDetails.objects.bulk_update(update_rows, ['cif_inr', 'cif_fc', 'qty'])
+            RowDetails.objects.bulk_create(new_rows, ignore_conflicts=False)
+            RowDetails.objects.bulk_update(update_rows, ['cif_inr', 'cif_fc', 'qty', 'is_frozen'])
         finally:
-            # Re-enable signals
             if skip_signals:
                 post_save.connect(update_stock, sender=RowDetails, dispatch_uid="update_stock_on_save")
                 post_delete.connect(delete_stock, sender=RowDetails)
+
+
+def _recalculate_boe_exchange_rates_for_rows(debit_row):
+    """After bulk_create (which skips signals), force-recalculate exchange_rate for
+    each unique BOE in the debit rows. force=True always writes the computed rate,
+    overriding whatever was stored before (ledger is the authoritative source)."""
+    from bill_of_entry.models import _recalculate_boe_exchange_rate
+    seen = set()
+    for data in debit_row:
+        boe = data.get('boe')
+        if boe and boe.pk and boe.pk not in seen:
+            seen.add(boe.pk)
+            _recalculate_boe_exchange_rate(boe.pk, force=True)
 
 
 def create_object(data_dict):
     """
     Create or update license and related objects from parsed ledger data.
     Returns the license number.
+    Wrapped in transaction.atomic() so each license is all-or-nothing.
     """
+    with transaction.atomic():
+        return _create_object_inner(data_dict)
+
+
+def _create_object_inner(data_dict):
     # Get or create company
     company, _ = CompanyModel.objects.get_or_create(iec=data_dict['iec'])
 
@@ -312,9 +426,9 @@ def create_object(data_dict):
         }
     )
 
-    # Create ports
-    port_infos = {val['port'] for val in data_dict['row'] if val['type'] == 'D'}
-    port_infos_with_ledger_date = {data_dict['port']}
+    # Create ports — filter out None ports (rows with missing port data)
+    port_infos = {val['port'] for val in data_dict['row'] if val['type'] == 'D' and val.get('port')}
+    port_infos_with_ledger_date = {data_dict['port']} if data_dict.get('port') else set()
     ports_to_be_created = port_infos.union(port_infos_with_ledger_date)
     existing_ports = PortModel.objects.all().in_bulk(ports_to_be_created, field_name='code')
     ports_to_create = [
@@ -354,6 +468,13 @@ def create_object(data_dict):
     # Disable signals during bulk operations to avoid firing 100+ times
     bulk_get_or_create_boe(debit_row, skip_signals=True)
     bulk_get_or_create_boe(credit_row, skip_signals=True)
+
+    # Remove debit rows that were in the DB but are no longer in the new CSV
+    delete_stale_boe_rows(license, debit_row, skip_signals=True)
+
+    # Recalculate exchange rate for each debit BOE — bulk_create skips signals so
+    # the post_save recalc never fires; we must do it explicitly here.
+    _recalculate_boe_exchange_rates_for_rows(debit_row)
 
     # Trigger balance updates ONCE at the end for all items
     for import_item in license.import_license.all():

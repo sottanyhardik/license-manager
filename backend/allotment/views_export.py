@@ -573,7 +573,7 @@ def add_grouped_export_action(viewset_class):
                             column_letter = cell.column_letter
                         if cell.value and len(str(cell.value)) > max_length:
                             max_length = len(str(cell.value))
-                except:
+                except (TypeError, AttributeError):
                     pass
             if column_letter:
                 adjusted_width = min(max_length + 2, 50)

@@ -10,7 +10,7 @@ import api from '../../api/axios';
  * Fetch BOE list with filters
  */
 export const fetchBOEList = async (params = {}) => {
-    const response = await api.get('/bill-of-entries/', {params});
+    const response = await api.get('bill-of-entries/', {params});
     return response.data;
 };
 
@@ -18,7 +18,7 @@ export const fetchBOEList = async (params = {}) => {
  * Fetch single BOE details
  */
 export const fetchBOE = async (id) => {
-    const response = await api.get(`/bill-of-entries/${id}/`);
+    const response = await api.get(`bill-of-entries/${id}/`);
     return response.data;
 };
 
@@ -26,7 +26,7 @@ export const fetchBOE = async (id) => {
  * Create new Bill of Entry
  */
 export const createBOE = async (data) => {
-    const response = await api.post('/bill-of-entries/', data);
+    const response = await api.post('bill-of-entries/', data);
     return response.data;
 };
 
@@ -34,7 +34,7 @@ export const createBOE = async (data) => {
  * Update Bill of Entry
  */
 export const updateBOE = async (id, data) => {
-    const response = await api.patch(`/bill-of-entries/${id}/`, data);
+    const response = await api.patch(`bill-of-entries/${id}/`, data);
     return response.data;
 };
 
@@ -42,7 +42,7 @@ export const updateBOE = async (id, data) => {
  * Delete Bill of Entry
  */
 export const deleteBOE = async (id) => {
-    const response = await api.delete(`/bill-of-entries/${id}/`);
+    const response = await api.delete(`bill-of-entries/${id}/`);
     return response.data;
 };
 
@@ -50,7 +50,7 @@ export const deleteBOE = async (id) => {
  * Export BOE list to PDF with filters
  */
 export const exportBOEListPDF = async (params = {}) => {
-    const response = await api.get('/bill-of-entries/export/', {
+    const response = await api.get('bill-of-entries/export/', {
         params: {...params, _export: 'pdf'},
         responseType: 'blob'
     });
@@ -61,8 +61,19 @@ export const exportBOEListPDF = async (params = {}) => {
  * Export BOE list to Excel with filters
  */
 export const exportBOEListExcel = async (params = {}) => {
-    const response = await api.get('/bill-of-entries/export/', {
+    const response = await api.get('bill-of-entries/export/', {
         params: {...params, _export: 'xlsx'},
+        responseType: 'blob'
+    });
+    return response.data;
+};
+
+/**
+ * Export BOE list to Port Excel (simplified: BOE Number, BOE Date, Port, Quantity, Total CIF INR, Item Name)
+ */
+export const exportBOEPortExcel = async (params = {}) => {
+    const response = await api.get('bill-of-entries/export/', {
+        params: {...params, _export: 'port_xlsx'},
         responseType: 'blob'
     });
     return response.data;
@@ -76,4 +87,5 @@ export default {
     deleteBOE,
     exportBOEListPDF,
     exportBOEListExcel,
+    exportBOEPortExcel,
 };

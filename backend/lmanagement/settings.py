@@ -165,7 +165,8 @@ AUTH_USER_MODEL = "accounts.User"
 # ---------------------------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "core.authentication.JWTAuthenticationFromQueryParam",
+        "rest_framework.authentication.SessionAuthentication",  # Session auth for browser
+        "core.authentication.JWTAuthenticationFromQueryParam",  # JWT auth for API
     ),
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend"
@@ -173,16 +174,52 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardPagination",
+    "PAGE_SIZE": 25,
     "DATETIME_FORMAT": "%d-%m-%Y %H:%M",
     "DATE_FORMAT": "%d-%m-%Y",
     # Disable CSRF for API endpoints when using JWT authentication
     "DEFAULT_RENDERER_CLASSES": (
         "rest_framework.renderers.JSONRenderer",
     ),
+    # Throttling configuration
+    "DEFAULT_THROTTLE_CLASSES": [
+        "core.throttling.BurstRateThrottle",  # Short-term burst protection
+        "core.throttling.UserRateThrottle",   # General user throttling
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        # Anonymous users (unauthenticated)
+        "anon": "300/hour",           # 300 requests per hour for anonymous users
+
+        # Authenticated users (general)
+        "user": "3000/hour",          # 3000 requests per hour for authenticated users
+
+        # Staff users (admins)
+        "staff": "10000/hour",        # 10000 requests per hour for staff users
+
+        # Burst protection (short-term)
+        "burst": "180/minute",        # 180 requests per minute (3 per second - prevents rapid-fire)
+
+        # Sustained usage (long-term)
+        "sustained": "20000/day",     # 20000 requests per day
+
+        # Resource-intensive operations
+        "upload": "2000/hour",        # 2000 file uploads per hour
+        "export": "100/hour",         # 100 exports (Excel/PDF) per hour
+
+        # Security-sensitive operations
+        "login": "10/minute",         # 10 login attempts per minute
+        "strict": "30/hour",          # 30 sensitive operations per hour (delete, bulk ops)
+    },
+    # Return throttle information in response headers
+    "NUM_PROXIES": 1,  # Number of proxies (for accurate IP detection)
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    # Access token lasts 4 hours — long enough for a full working session.
+    # The frontend proactively refreshes 5 min before expiry, so users never
+    # hit a 401 mid-request during normal use.
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=4),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 
     # Enable refresh rotation
@@ -207,7 +244,7 @@ CELERY_TIMEZONE = TIME_ZONE
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1",
+        "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
         "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
     }
 }

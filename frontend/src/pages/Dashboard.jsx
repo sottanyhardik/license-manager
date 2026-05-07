@@ -1,598 +1,397 @@
 import {useEffect, useState} from "react";
 import {useNavigate} from "react-router-dom";
-import { toast } from 'react-toastify';
+import {toast} from 'react-toastify';
 import api from "../api/axios";
+
+function StatCard({icon, iconBg, label, value, valueColor, subLabel, subIcon, subColor = 'muted', onClick}) {
+    return (
+        <div
+            className="card border-0 shadow-sm h-100 stat-card"
+            style={{cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease'}}
+            onClick={onClick}
+            onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-3px)';
+                e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.13)';
+            }}
+            onMouseLeave={e => {
+                e.currentTarget.style.transform = '';
+                e.currentTarget.style.boxShadow = '';
+            }}
+        >
+            <div className="card-body p-3">
+                <div className="d-flex justify-content-between align-items-start">
+                    <div style={{flex: 1, minWidth: 0}}>
+                        <p className="text-muted mb-1" style={{
+                            fontSize: '0.72rem', fontWeight: '600',
+                            textTransform: 'uppercase', letterSpacing: '0.05em'
+                        }}>
+                            {label}
+                        </p>
+                        <h3 className="mb-1 fw-bold" style={{
+                            fontSize: '1.75rem', lineHeight: 1,
+                            color: valueColor || 'var(--text-dark)'
+                        }}>
+                            {value}
+                        </h3>
+                        {subLabel && (
+                            <small className={`text-${subColor} d-flex align-items-center`}
+                                   style={{fontSize: '0.73rem'}}>
+                                {subIcon && <i className={`bi bi-${subIcon} me-1`}></i>}
+                                {subLabel}
+                            </small>
+                        )}
+                    </div>
+                    <div style={{
+                        width: '46px', height: '46px', borderRadius: '10px',
+                        background: iconBg, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                        <i className={`bi bi-${icon} text-white`} style={{fontSize: '1.25rem'}}></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function SectionHeader({icon, iconColor, title, badge, action}) {
+    return (
+        <div className="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
+            <h6 className="mb-0 fw-semibold">
+                <i className={`bi bi-${icon} me-2`} style={{color: iconColor}}></i>
+                {title}
+                {badge != null && (
+                    <span className="badge ms-2" style={{
+                        backgroundColor: iconColor + '22',
+                        color: iconColor,
+                        fontSize: '0.7rem'
+                    }}>
+                        {badge}
+                    </span>
+                )}
+            </h6>
+            {action}
+        </div>
+    );
+}
+
+function SkeletonRow() {
+    return (
+        <tr>
+            {[1, 2, 3].map(i => (
+                <td key={i}>
+                    <div className="placeholder-glow">
+                        <span className="placeholder col-10 rounded"></span>
+                    </div>
+                </td>
+            ))}
+        </tr>
+    );
+}
 
 export default function Dashboard() {
     const navigate = useNavigate();
-
-    // Single loading state for unified API call
     const [loading, setLoading] = useState(true);
-
     const [stats, setStats] = useState({
         licenses: {total: 0, active: 0, expired: 0, null_dfia: 0, expiring_soon: 0},
         allotments: {total: 0, recent: []},
         boe: {total: 0, pending_invoices: 0, recent: []},
-        trade: {imports: 0, exports: 0}
     });
     const [expiringLicenses, setExpiringLicenses] = useState([]);
     const [boeMonthlyData, setBoeMonthlyData] = useState([]);
 
     useEffect(() => {
-        // Fetch all dashboard data in one API call
         fetchDashboardData();
     }, []);
 
-    // Fetch all dashboard data in one unified API call
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
-            const response = await api.get("/dashboard/");
-            const data = response.data;
-
-            // Set license stats with safe defaults
+            const {data} = await api.get("dashboard/");
             setStats({
                 licenses: data?.license_stats || {total: 0, active: 0, expired: 0, null_dfia: 0, expiring_soon: 0},
                 allotments: data?.allotment_stats || {total: 0, recent: []},
                 boe: data?.boe_stats || {total: 0, pending_invoices: 0, recent: []},
-                trade: {
-                    imports: data?.boe_stats?.total || 0,
-                    exports: data?.allotment_stats?.total || 0
-                }
             });
-
-            // Set expiring licenses
             setExpiringLicenses(data?.expiring_licenses || []);
-
-            // Set BOE monthly trend
             setBoeMonthlyData(data?.boe_monthly_trend || []);
-
-        } catch (error) {
+        } catch {
             toast.error("Failed to load dashboard data");
         } finally {
             setLoading(false);
         }
     };
 
-    const formatDate = (dateStr) => {
+    const fmtDate = (dateStr) => {
         if (!dateStr) return '-';
-        const date = new Date(dateStr);
-        // Check if date is valid
-        if (isNaN(date.getTime())) return '-';
-        return date.toLocaleDateString('en-IN');
+        const p = dateStr.split('-');
+        return p.length === 3 && p[0].length === 4 ? `${p[2]}-${p[1]}-${p[0]}` : dateStr;
     };
 
-    const getDaysUntilExpiry = (expiryDate) => {
-        const today = new Date();
-        const expiry = new Date(expiryDate);
-        const diffTime = expiry - today;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays;
-    };
+    const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / 86400000);
 
-    // Component for loading skeleton
-    const LoadingSkeleton = ({height = "80px"}) => (
-        <div className="placeholder-glow">
-            <div className="placeholder col-12" style={{height}}></div>
-        </div>
-    );
+    const today = new Date();
+    const dateLabel = today.toLocaleDateString('en-GB', {
+        weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+    });
 
-    // Show loading for entire dashboard while fetching unified data
+    // BOE trend: max bar = 100% width
+    const maxBoe = boeMonthlyData.length ? Math.max(...boeMonthlyData.map(d => d.count || 0), 1) : 1;
+
     if (loading) {
         return (
-            <div className="container-fluid mt-4 px-4">
-                <div className="d-flex justify-content-center align-items-center" style={{height: '80vh'}}>
-                    <div className="text-center">
-                        <div className="spinner-border text-primary" role="status"
-                             style={{width: '3rem', height: '3rem'}}>
-                            <span className="visually-hidden">Loading...</span>
-                        </div>
-                        <p className="mt-3 text-muted">Loading dashboard...</p>
+            <div className="container-fluid" style={{padding: '20px 24px', backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh'}}>
+                {/* Header skeleton */}
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <div className="placeholder-glow mb-1"><span className="placeholder col-3 rounded" style={{height: 24}}></span></div>
+                        <div className="placeholder-glow"><span className="placeholder col-5 rounded" style={{height: 14}}></span></div>
                     </div>
+                </div>
+                {/* Stat card skeletons */}
+                <div className="row g-3 mb-3">
+                    {[...Array(5)].map((_, i) => (
+                        <div className="col" key={i}>
+                            <div className="card border-0 shadow-sm" style={{height: 100}}>
+                                <div className="card-body p-3 placeholder-glow">
+                                    <span className="placeholder col-8 rounded mb-2 d-block" style={{height: 12}}></span>
+                                    <span className="placeholder col-5 rounded d-block" style={{height: 28}}></span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="row g-3 mb-3">
+                    {[...Array(3)].map((_, i) => (
+                        <div className="col-xl-4" key={i}>
+                            <div className="card border-0 shadow-sm" style={{height: 100}}>
+                                <div className="card-body p-3 placeholder-glow">
+                                    <span className="placeholder col-8 rounded mb-2 d-block" style={{height: 12}}></span>
+                                    <span className="placeholder col-5 rounded d-block" style={{height: 28}}></span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '24px' }}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
-                <div className="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '8px' }}>
-                            <i className="bi bi-speedometer2 me-3"></i>
-                            Dashboard Overview
-                        </h1>
-                        <p style={{ fontSize: '1.05rem', marginBottom: '0', opacity: '0.95' }}>
-                            Real-time insights into your license operations
-                        </p>
-                    </div>
-                    <div style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                        padding: '12px 20px',
-                        borderRadius: '8px',
-                        backdropFilter: 'blur(10px)'
-                    }}>
-                        <i className="bi bi-calendar-event me-2"></i>
-                        {new Date().toLocaleDateString('en-IN', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                        })}
-                    </div>
+        <div className="container-fluid" style={{padding: '20px 24px', backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh'}}>
+
+            {/* Compact Header */}
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h4 className="mb-0 fw-bold" style={{color: 'var(--text-dark)'}}>
+                        <i className="bi bi-speedometer2 me-2" style={{color: 'var(--primary-color)'}}></i>
+                        Dashboard
+                    </h4>
+                    <small className="text-muted">{dateLabel}</small>
+                </div>
+                <div className="d-flex gap-2">
+                    <button className="btn btn-sm btn-outline-secondary" onClick={fetchDashboardData}>
+                        <i className="bi bi-arrow-clockwise me-1"></i>Refresh
+                    </button>
+                    <button className="btn btn-sm btn-outline-primary" onClick={() => navigate('/allotments/new')}>
+                        <i className="bi bi-plus-lg me-1"></i>New Allotment
+                    </button>
+                    <button className="btn btn-sm btn-primary" onClick={() => navigate('/bill-of-entries/new')}>
+                        <i className="bi bi-plus-lg me-1"></i>New BOE
+                    </button>
                 </div>
             </div>
 
-            {/* Stats Cards Row 1 - Licenses */}
-            <div className="row g-3 mb-4">
-                <div className="col-xl-2-4 col-lg-4 col-md-6" style={{flex: '0 0 auto', width: '20%'}}>
-                    <div className="card border-0 shadow-sm h-100"
-                         style={{cursor: 'pointer', transition: 'all 0.2s ease'}}
-                         onClick={() => navigate('/licenses?is_expired=all&is_null=all')}
-                         onMouseEnter={(e) => {
-                             e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-                             e.currentTarget.style.transform = 'translateY(-3px)';
-                         }}
-                         onMouseLeave={(e) => {
-                             e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                             e.currentTarget.style.transform = 'translateY(0)';
-                         }}>
-                        <div className="card-body" style={{ padding: '20px' }}>
-                            <div className="d-flex justify-content-between align-items-start">
-                                <div style={{ flex: 1 }}>
-                                    <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Total Licenses</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#2c3e50' }}>{stats.licenses.total}</h3>
-                                    <small className="text-success d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
-                                        <i className="bi bi-check-circle me-1"></i>
-                                        All licenses
-                                    </small>
-                                </div>
-                                <div style={{
-                                    width: '56px',
-                                    height: '56px',
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 10px rgba(102, 126, 234, 0.3)'
-                                }}>
-                                    <i className="bi bi-file-earmark-text text-white" style={{ fontSize: '1.5rem' }}></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            {/* License Stats — 5 equal columns */}
+            <div className="row g-3 mb-3">
+                <div className="col">
+                    <StatCard
+                        icon="file-earmark-text"
+                        iconBg="linear-gradient(135deg,#4F46E5,#4338CA)"
+                        label="Total Licenses"
+                        value={stats.licenses.total}
+                        subLabel="All licenses" subIcon="layers" subColor="muted"
+                        onClick={() => navigate('/licenses?is_expired=all&is_null=all')}
+                    />
                 </div>
-
-                <div className="col-xl-2-4 col-lg-4 col-md-6" style={{flex: '0 0 auto', width: '20%'}}>
-                    <div className="card border-0 shadow-sm h-100"
-                         style={{cursor: 'pointer', transition: 'all 0.2s ease'}}
-                         onClick={() => navigate('/licenses?is_expired=False&is_null=False')}
-                         onMouseEnter={(e) => {
-                             e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-                             e.currentTarget.style.transform = 'translateY(-3px)';
-                         }}
-                         onMouseLeave={(e) => {
-                             e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                             e.currentTarget.style.transform = 'translateY(0)';
-                         }}>
-                        <div className="card-body" style={{ padding: '20px' }}>
-                            <div className="d-flex justify-content-between align-items-start">
-                                <div style={{ flex: 1 }}>
-                                    <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Active Licenses</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#10b981' }}>{stats.licenses.active}</h3>
-                                    <small className="text-success d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
-                                        <i className="bi bi-activity me-1"></i>
-                                        Currently valid
-                                    </small>
-                                </div>
-                                <div style={{
-                                    width: '56px',
-                                    height: '56px',
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)'
-                                }}>
-                                    <i className="bi bi-check-circle text-white" style={{ fontSize: '1.5rem' }}></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div className="col">
+                    <StatCard
+                        icon="check-circle"
+                        iconBg="linear-gradient(135deg,#10b981,#059669)"
+                        label="Active"
+                        value={stats.licenses.active}
+                        valueColor="var(--success-color)"
+                        subLabel="Currently valid" subIcon="activity" subColor="success"
+                        onClick={() => navigate('/licenses?is_expired=False&is_null=False')}
+                    />
                 </div>
-
-                <div className="col-xl-2-4 col-lg-4 col-md-6" style={{flex: '0 0 auto', width: '20%'}}>
-                    <div className="card border-0 shadow-sm h-100"
-                         style={{cursor: 'pointer', transition: 'all 0.2s ease'}}
-                         onClick={() => navigate('/licenses?is_expired=True&is_null=all')}
-                         onMouseEnter={(e) => {
-                             e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-                             e.currentTarget.style.transform = 'translateY(-3px)';
-                         }}
-                         onMouseLeave={(e) => {
-                             e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                             e.currentTarget.style.transform = 'translateY(0)';
-                         }}>
-                        <div className="card-body" style={{ padding: '20px' }}>
-                            <div className="d-flex justify-content-between align-items-start">
-                                <div style={{ flex: 1 }}>
-                                    <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Expired Licenses</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#ef4444' }}>{stats.licenses.expired}</h3>
-                                    <small className="text-danger d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
-                                        <i className="bi bi-x-circle me-1"></i>
-                                        Need renewal
-                                    </small>
-                                </div>
-                                <div style={{
-                                    width: '56px',
-                                    height: '56px',
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 10px rgba(239, 68, 68, 0.3)'
-                                }}>
-                                    <i className="bi bi-exclamation-triangle text-white" style={{ fontSize: '1.5rem' }}></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div className="col">
+                    <StatCard
+                        icon="exclamation-triangle"
+                        iconBg="linear-gradient(135deg,#ef4444,#dc2626)"
+                        label="Expired"
+                        value={stats.licenses.expired}
+                        valueColor="var(--danger-color)"
+                        subLabel="Need renewal" subIcon="x-circle" subColor="danger"
+                        onClick={() => navigate('/licenses?is_expired=True&is_null=all')}
+                    />
                 </div>
-
-                <div className="col-xl-2-4 col-lg-4 col-md-6" style={{flex: '0 0 auto', width: '20%'}}>
-                    <div className="card border-0 shadow-sm h-100"
-                         style={{cursor: 'pointer', transition: 'all 0.2s ease'}}
-                         onClick={() => navigate('/licenses?is_null=True&is_expired=all')}
-                         onMouseEnter={(e) => {
-                             e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-                             e.currentTarget.style.transform = 'translateY(-3px)';
-                         }}
-                         onMouseLeave={(e) => {
-                             e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                             e.currentTarget.style.transform = 'translateY(0)';
-                         }}>
-                        <div className="card-body" style={{ padding: '20px' }}>
-                            <div className="d-flex justify-content-between align-items-start">
-                                <div style={{ flex: 1 }}>
-                                    <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Null DFIA</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#6b7280' }}>{stats.licenses.null_dfia}</h3>
-                                    <small className="text-muted d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
-                                        <i className="bi bi-dash-circle me-1"></i>
-                                        Balance &lt; $500
-                                    </small>
-                                </div>
-                                <div style={{
-                                    width: '56px',
-                                    height: '56px',
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 10px rgba(107, 114, 128, 0.3)'
-                                }}>
-                                    <i className="bi bi-file-earmark-x text-white" style={{ fontSize: '1.5rem' }}></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div className="col">
+                    <StatCard
+                        icon="file-earmark-x"
+                        iconBg="linear-gradient(135deg,#6b7280,#4b5563)"
+                        label="Null DFIA"
+                        value={stats.licenses.null_dfia}
+                        valueColor="var(--text-secondary)"
+                        subLabel="Balance < $500" subIcon="dash-circle" subColor="secondary"
+                        onClick={() => navigate('/licenses?is_null=True&is_expired=all')}
+                    />
                 </div>
-
-                <div className="col-xl-2-4 col-lg-4 col-md-6" style={{flex: '0 0 auto', width: '20%'}}>
-                    <div className="card border-0 shadow-sm h-100"
-                         style={{cursor: 'pointer', transition: 'all 0.2s ease', borderLeft: '4px solid #f59e0b'}}
-                         onClick={() => {
-                             const today = new Date().toISOString().split('T')[0];
-                             const thirtyDaysLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                             navigate(`/licenses?is_expired=False&is_null=False&license_expiry_date__gte=${today}&license_expiry_date__lte=${thirtyDaysLater}`);
-                         }}
-                         onMouseEnter={(e) => {
-                             e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-                             e.currentTarget.style.transform = 'translateY(-3px)';
-                         }}
-                         onMouseLeave={(e) => {
-                             e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                             e.currentTarget.style.transform = 'translateY(0)';
-                         }}>
-                        <div className="card-body" style={{ padding: '20px' }}>
-                            <div className="d-flex justify-content-between align-items-start">
-                                <div style={{ flex: 1 }}>
-                                    <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Expiring Soon</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#f59e0b' }}>{stats.licenses.expiring_soon}</h3>
-                                    <small className="text-warning d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
-                                        <i className="bi bi-clock-history me-1"></i>
-                                        Within 30 days
-                                    </small>
-                                </div>
-                                <div style={{
-                                    width: '56px',
-                                    height: '56px',
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)'
-                                }}>
-                                    <i className="bi bi-hourglass-split text-white" style={{ fontSize: '1.5rem' }}></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div className="col">
+                    <StatCard
+                        icon="hourglass-split"
+                        iconBg="linear-gradient(135deg,#f59e0b,#d97706)"
+                        label="Expiring Soon"
+                        value={stats.licenses.expiring_soon}
+                        valueColor="var(--warning-color)"
+                        subLabel="Within 30 days" subIcon="clock-history" subColor="warning"
+                        onClick={() => {
+                            const t = new Date().toISOString().split('T')[0];
+                            const t30 = new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0];
+                            navigate(`/licenses?is_expired=False&is_null=False&license_expiry_date__gte=${t}&license_expiry_date__lte=${t30}`);
+                        }}
+                    />
                 </div>
             </div>
 
-            {/* Stats Cards Row 2 - Operations */}
-            <div className="row g-3 mb-4">
+            {/* Operations Stats — 3 cards */}
+            <div className="row g-3 mb-3">
                 <div className="col-xl-4 col-md-6">
-                    <div className="card border-0 shadow-sm h-100"
-                         style={{cursor: 'pointer', transition: 'all 0.2s ease'}}
-                         onClick={() => navigate('/allotments')}
-                         onMouseEnter={(e) => {
-                             e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-                             e.currentTarget.style.transform = 'translateY(-3px)';
-                         }}
-                         onMouseLeave={(e) => {
-                             e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                             e.currentTarget.style.transform = 'translateY(0)';
-                         }}>
-                        <div className="card-body" style={{ padding: '24px' }}>
-                            <div className="d-flex justify-content-between align-items-start">
-                                <div style={{ flex: 1 }}>
-                                    <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Pending Bills of Entry</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#2c3e50' }}>{stats.allotments.total}</h3>
-                                    <small className="text-info d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
-                                        <i className="bi bi-box-seam me-1"></i>
-                                        License allocations
-                                    </small>
-                                </div>
-                                <div style={{
-                                    width: '56px',
-                                    height: '56px',
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 10px rgba(6, 182, 212, 0.3)'
-                                }}>
-                                    <i className="bi bi-diagram-3 text-white" style={{ fontSize: '1.5rem' }}></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <StatCard
+                        icon="diagram-3"
+                        iconBg="linear-gradient(135deg,#06b6d4,#0891b2)"
+                        label="Allotments"
+                        value={stats.allotments.total}
+                        subLabel="License allocations" subIcon="box-seam" subColor="info"
+                        onClick={() => navigate('/allotments')}
+                    />
                 </div>
-
                 <div className="col-xl-4 col-md-6">
-                    <div className="card border-0 shadow-sm h-100"
-                         style={{cursor: 'pointer', transition: 'all 0.2s ease'}}
-                         onClick={() => navigate('/bill-of-entries?is_invoice=all')}
-                         onMouseEnter={(e) => {
-                             e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-                             e.currentTarget.style.transform = 'translateY(-3px)';
-                         }}
-                         onMouseLeave={(e) => {
-                             e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                             e.currentTarget.style.transform = 'translateY(0)';
-                         }}>
-                        <div className="card-body" style={{ padding: '24px' }}>
-                            <div className="d-flex justify-content-between align-items-start">
-                                <div style={{ flex: 1 }}>
-                                    <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Bills of Entry</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#2c3e50' }}>{stats.boe.total}</h3>
-                                    <small className="text-primary d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
-                                        <i className="bi bi-receipt me-1"></i>
-                                        All till date
-                                    </small>
-                                </div>
-                                <div style={{
-                                    width: '56px',
-                                    height: '56px',
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)'
-                                }}>
-                                    <i className="bi bi-receipt-cutoff text-white" style={{ fontSize: '1.5rem' }}></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <StatCard
+                        icon="receipt-cutoff"
+                        iconBg="linear-gradient(135deg,#6366F1,#4F46E5)"
+                        label="Bills of Entry"
+                        value={stats.boe.total}
+                        subLabel="Total till date" subIcon="receipt" subColor="primary"
+                        onClick={() => navigate('/bill-of-entries?is_invoice=all')}
+                    />
                 </div>
-
                 <div className="col-xl-4 col-md-6">
-                    <div className="card border-0 shadow-sm h-100"
-                         style={{cursor: 'pointer', transition: 'all 0.2s ease'}}
-                         onClick={() => navigate('/bill-of-entries')}
-                         onMouseEnter={(e) => {
-                             e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-                             e.currentTarget.style.transform = 'translateY(-3px)';
-                         }}
-                         onMouseLeave={(e) => {
-                             e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                             e.currentTarget.style.transform = 'translateY(0)';
-                         }}>
-                        <div className="card-body" style={{ padding: '24px' }}>
-                            <div className="d-flex justify-content-between align-items-start">
-                                <div style={{ flex: 1 }}>
-                                    <p className="text-muted mb-2" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Pending Invoices</p>
-                                    <h3 className="mb-2 fw-bold" style={{ fontSize: '2rem', color: '#f59e0b' }}>{stats.boe.pending_invoices}</h3>
-                                    <small className="text-warning d-flex align-items-center" style={{ fontSize: '0.8rem' }}>
-                                        <i className="bi bi-hourglass-split me-1"></i>
-                                        No invoice number
-                                    </small>
-                                </div>
-                                <div style={{
-                                    width: '56px',
-                                    height: '56px',
-                                    borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)'
-                                }}>
-                                    <i className="bi bi-file-earmark-excel text-white" style={{ fontSize: '1.5rem' }}></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <StatCard
+                        icon="file-earmark-excel"
+                        iconBg="linear-gradient(135deg,#f59e0b,#d97706)"
+                        label="Pending Invoices"
+                        value={stats.boe.pending_invoices}
+                        valueColor="var(--warning-color)"
+                        subLabel="No invoice number" subIcon="hourglass-split" subColor="warning"
+                        onClick={() => navigate('/bill-of-entries')}
+                    />
                 </div>
-
             </div>
 
-            {/* Three Tables in One Row */}
-            <div className="row g-3 mb-4">
-                {/* Expiring Licenses Table */}
-                <div className="col-xl-4">
+            {/* Tables Row */}
+            <div className="row g-3 mb-3">
+                {/* Expiring Licenses */}
+                <div className="col-xl-5">
                     <div className="card border-0 shadow-sm h-100">
-                        <div className="card-header bg-white border-bottom">
-                            <div className="d-flex justify-content-between align-items-center">
-                                <h5 className="mb-0">
-                                    <i className="bi bi-exclamation-triangle-fill text-warning me-2"></i>
-                                    Licenses Expiring Soon
-                                </h5>
-                                <span className="badge bg-warning">{expiringLicenses.length}</span>
-                            </div>
-                        </div>
-                        <div className="card-body p-0">
+                        <SectionHeader
+                            icon="exclamation-triangle-fill" iconColor="#f59e0b"
+                            title="Expiring Soon"
+                            badge={expiringLicenses.length}
+                            action={
+                                <button className="btn btn-sm btn-outline-warning" onClick={() => {
+                                    const t = new Date().toISOString().split('T')[0];
+                                    const t30 = new Date(Date.now() + 30 * 864e5).toISOString().split('T')[0];
+                                    navigate(`/licenses?is_expired=False&is_null=False&license_expiry_date__gte=${t}&license_expiry_date__lte=${t30}`);
+                                }}>
+                                    View All <i className="bi bi-arrow-right ms-1"></i>
+                                </button>
+                            }
+                        />
+                        <div className="card-body p-0" style={{overflowY: 'auto', maxHeight: 340}}>
                             {expiringLicenses.length > 0 ? (
-                                <div className="table-responsive" style={{maxHeight: '400px', overflowY: 'auto'}}>
-                                    <table className="table table-hover table-sm mb-0">
-                                        <thead className="table-light sticky-top">
-                                        <tr>
-                                            <th style={{width: '25%'}}>License Number</th>
-                                            <th style={{width: '20%'}}>Expiry Date</th>
-                                            <th style={{width: '20%'}} className="text-end">Balance (CIF)</th>
-                                            <th style={{width: '25%'}}>SION Norms</th>
-                                            <th style={{width: '10%'}} className="text-center">Days</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody>
-                                        {expiringLicenses.map((license) => {
-                                            const daysLeft = license.days_to_expiry || getDaysUntilExpiry(license.license_expiry_date);
-                                            const urgencyClass = daysLeft <= 7 ? 'danger' : daysLeft <= 15 ? 'warning' : 'info';
-
-                                            // SION norms from API response
-                                            const uniqueNorms = license.sion_norms?.join(', ') || '-';
-
-                                            return (
-                                                <tr key={license.license_number}
-                                                    style={{cursor: 'pointer'}}>
-                                                    <td className="small">{license.license_number}</td>
-                                                    <td className="small">{formatDate(license.license_expiry_date)}</td>
-                                                    <td className="small text-end">
-                                                        ${parseFloat(license.balance_cif || 0).toLocaleString('en-US', {
-                                                        minimumFractionDigits: 2,
-                                                        maximumFractionDigits: 2
-                                                    })}
-                                                    </td>
-                                                    <td className="small text-truncate" style={{maxWidth: '150px'}}
-                                                        title={uniqueNorms}>
-                                                        {uniqueNorms}
-                                                    </td>
-                                                    <td className="text-center">
-                                                        <span className={`badge bg-${urgencyClass}`}>
-                                                            {daysLeft}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                <table className="table table-hover table-sm mb-0">
+                                    <thead className="table-light sticky-top">
+                                    <tr>
+                                        <th>License No.</th>
+                                        <th>Expiry</th>
+                                        <th className="text-end">Balance (CIF)</th>
+                                        <th className="text-center">Days</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {expiringLicenses.map(lic => {
+                                        const d = lic.days_to_expiry ?? daysUntil(lic.license_expiry_date);
+                                        const color = d <= 7 ? 'danger' : d <= 15 ? 'warning' : 'info';
+                                        return (
+                                            <tr key={lic.license_number} style={{cursor: 'pointer'}}
+                                                onClick={() => navigate(`/licenses?search=${lic.license_number}`)}>
+                                                <td className="small fw-medium">{lic.license_number}</td>
+                                                <td className="small">{fmtDate(lic.license_expiry_date)}</td>
+                                                <td className="small text-end">
+                                                    ${parseFloat(lic.balance_cif || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                </td>
+                                                <td className="text-center">
+                                                    <span className={`badge bg-${color}`}>{d}</span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    </tbody>
+                                </table>
                             ) : (
-                                <div className="text-center p-4 text-muted">
-                                    <i className="bi bi-check-circle fs-1 d-block mb-2 text-success"></i>
-                                    No licenses expiring in next 30 days
+                                <div className="text-center py-5 text-muted">
+                                    <i className="bi bi-check-circle fs-2 d-block mb-2 text-success"></i>
+                                    <small>No licenses expiring in next 30 days</small>
                                 </div>
                             )}
                         </div>
-                        {expiringLicenses.length > 0 && (
-                            <div className="card-footer bg-light text-center">
-                                <button
-                                    className="btn btn-sm btn-outline-primary"
-                                    onClick={() => {
-                                        const today = new Date().toISOString().split('T')[0];
-                                        const thirtyDaysLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                                        navigate(`/licenses?is_expired=False&is_null=False&license_expiry_date__gte=${today}&license_expiry_date__lte=${thirtyDaysLater}`);
-                                    }}>
-                                    View All Expiring Licenses
-                                    <i className="bi bi-arrow-right ms-2"></i>
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
 
-                {/* Recent Allotments */}
-                <div className="col-xl-4">
-                    <div className="card border-0 shadow-sm">
-                        <div className="card-header bg-white border-bottom">
-                            <div className="d-flex justify-content-between align-items-center">
-                                <h5 className="mb-0">
-                                    <i className="bi bi-clock-history text-info me-2"></i>
-                                    Recent Allotments
-                                </h5>
-                                <button
-                                    className="btn btn-sm btn-outline-info"
-                                    onClick={() => navigate('/allotments')}>
-                                    View All
-                                </button>
-                            </div>
-                        </div>
-                        <div className="card-body p-0">
-                            {stats.allotments.recent.length > 0 ? (
-                                <div className="table-responsive">
-                                    <table className="table table-hover table-sm mb-0">
-                                        <thead className="table-light">
-                                        <tr>
-                                            <th style={{width: '25%'}}>Date</th>
-                                            <th style={{width: '35%'}}>Item Name</th>
-                                            <th style={{width: '20%'}} className="text-end">Quantity</th>
-                                            <th style={{width: '20%'}} className="text-end">CIF FC</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody>
-                                        {stats.allotments.recent.map((allotment) => (
-                                            <tr key={allotment.id}
-                                                style={{cursor: 'pointer'}}
-                                                onClick={() => navigate(`/allotments/${allotment.id}/allocate`)}>
-                                                <td className="small">{formatDate(allotment.modified_on || allotment.created_at)}</td>
-                                                <td className="small text-truncate" style={{maxWidth: '200px'}}
-                                                    title={allotment.item_name}>
-                                                    {allotment.item_name || '-'}
-                                                </td>
-                                                <td className="small text-end">
-                                                    {parseFloat(allotment.required_quantity || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
-                                                </td>
-                                                <td className="small text-end">
-                                                    ${parseFloat(allotment.cif_fc || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        </tbody>
-                                    </table>
+                {/* BOE Monthly Trend */}
+                <div className="col-xl-3">
+                    <div className="card border-0 shadow-sm h-100">
+                        <SectionHeader
+                            icon="bar-chart-fill" iconColor="#4F46E5"
+                            title="BOE Monthly Trend"
+                        />
+                        <div className="card-body" style={{overflowY: 'auto', maxHeight: 340}}>
+                            {boeMonthlyData.length > 0 ? (
+                                <div className="d-flex flex-column gap-2">
+                                    {boeMonthlyData.map((row, i) => (
+                                        <div key={i}>
+                                            <div className="d-flex justify-content-between mb-1">
+                                                <small className="text-muted fw-medium">{row.month || row.label || `Month ${i + 1}`}</small>
+                                                <small className="fw-semibold">{row.count ?? row.value ?? 0}</small>
+                                            </div>
+                                            <div className="progress" style={{height: '6px', borderRadius: '3px'}}>
+                                                <div
+                                                    className="progress-bar"
+                                                    style={{
+                                                        width: `${((row.count ?? row.value ?? 0) / maxBoe) * 100}%`,
+                                                        background: 'linear-gradient(90deg,#4F46E5,#6366F1)',
+                                                        borderRadius: '3px'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             ) : (
-                                <div className="text-center p-4 text-muted">
-                                    <i className="bi bi-inbox fs-1 d-block mb-2"></i>
-                                    No recent allotments
+                                <div className="text-center py-5 text-muted">
+                                    <i className="bi bi-bar-chart fs-2 d-block mb-2"></i>
+                                    <small>No monthly trend data</small>
                                 </div>
                             )}
                         </div>
@@ -601,57 +400,107 @@ export default function Dashboard() {
 
                 {/* Recent BOE */}
                 <div className="col-xl-4">
-                    <div className="card border-0 shadow-sm">
-                        <div className="card-header bg-white border-bottom">
-                            <div className="d-flex justify-content-between align-items-center">
-                                <h5 className="mb-0">
-                                    <i className="bi bi-receipt text-primary me-2"></i>
-                                    Recent Bills of Entry
-                                </h5>
-                                <button
-                                    className="btn btn-sm btn-outline-primary"
-                                    onClick={() => navigate('/bill-of-entries')}>
+                    <div className="card border-0 shadow-sm h-100">
+                        <SectionHeader
+                            icon="receipt" iconColor="#6366F1"
+                            title="Recent Bills of Entry"
+                            action={
+                                <button className="btn btn-sm btn-outline-primary"
+                                        onClick={() => navigate('/bill-of-entries')}>
                                     View All
                                 </button>
-                            </div>
-                        </div>
+                            }
+                        />
                         <div className="card-body p-0">
                             {stats.boe.recent.length > 0 ? (
-                                <div className="table-responsive">
-                                    <table className="table table-hover table-sm mb-0">
-                                        <thead className="table-light">
-                                        <tr>
-                                            <th style={{width: '30%'}}>BOE Number</th>
-                                            <th style={{width: '25%'}}>BOE Date</th>
-                                            <th style={{width: '45%'}}>Importer</th>
+                                <table className="table table-hover table-sm mb-0">
+                                    <thead className="table-light">
+                                    <tr>
+                                        <th>BOE No.</th>
+                                        <th>Date</th>
+                                        <th>Importer</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {stats.boe.recent.map(boe => (
+                                        <tr key={boe.id} style={{cursor: 'pointer'}}
+                                            onClick={() => navigate(`/bill-of-entries/${boe.id}/edit`)}>
+                                            <td className="small fw-medium">{boe.bill_of_entry_number || '-'}</td>
+                                            <td className="small">{fmtDate(boe.bill_of_entry_date)}</td>
+                                            <td className="small text-truncate" style={{maxWidth: 160}}
+                                                title={boe.company_name}>
+                                                {boe.company_name || '-'}
+                                            </td>
                                         </tr>
-                                        </thead>
-                                        <tbody>
-                                        {stats.boe.recent.map((boe) => (
-                                            <tr key={boe.id}
-                                                style={{cursor: 'pointer'}}
-                                                onClick={() => navigate(`/bill-of-entries/${boe.id}/edit`)}>
-                                                <td className="small">{boe.bill_of_entry_number || '-'}</td>
-                                                <td className="small">{formatDate(boe.bill_of_entry_date)}</td>
-                                                <td className="small text-truncate" style={{maxWidth: '250px'}}
-                                                    title={boe.company_name}>
-                                                    {boe.company_name || '-'}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                    ))}
+                                    </tbody>
+                                </table>
                             ) : (
-                                <div className="text-center p-4 text-muted">
-                                    <i className="bi bi-inbox fs-1 d-block mb-2"></i>
-                                    No recent BOE records
+                                <div className="text-center py-5 text-muted">
+                                    <i className="bi bi-inbox fs-2 d-block mb-2"></i>
+                                    <small>No recent BOE records</small>
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Recent Allotments */}
+            <div className="row g-3">
+                <div className="col-12">
+                    <div className="card border-0 shadow-sm">
+                        <SectionHeader
+                            icon="clock-history" iconColor="#06b6d4"
+                            title="Recent Allotments"
+                            action={
+                                <button className="btn btn-sm btn-outline-info"
+                                        onClick={() => navigate('/allotments')}>
+                                    View All
+                                </button>
+                            }
+                        />
+                        <div className="card-body p-0">
+                            {stats.allotments.recent.length > 0 ? (
+                                <table className="table table-hover table-sm mb-0">
+                                    <thead className="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Item Name</th>
+                                        <th className="text-end">Quantity</th>
+                                        <th className="text-end">CIF FC</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {stats.allotments.recent.map(a => (
+                                        <tr key={a.id} style={{cursor: 'pointer'}}
+                                            onClick={() => navigate(`/allotments/${a.id}/allocate`)}>
+                                            <td className="small">{fmtDate(a.modified_on || a.created_at)}</td>
+                                            <td className="small text-truncate" style={{maxWidth: 300}}
+                                                title={a.item_name}>
+                                                {a.item_name || '-'}
+                                            </td>
+                                            <td className="small text-end">
+                                                {parseFloat(a.required_quantity || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                                            </td>
+                                            <td className="small text-end">
+                                                ${parseFloat(a.cif_fc || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="text-center py-4 text-muted">
+                                    <i className="bi bi-inbox fs-2 d-block mb-2"></i>
+                                    <small>No recent allotments</small>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     );
 }

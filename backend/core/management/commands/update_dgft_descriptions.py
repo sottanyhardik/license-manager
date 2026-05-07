@@ -334,5 +334,5 @@ class Command(BaseCommand):
             import re
             clean_value = re.sub(r'[^\d.-]', '', str(value))
             return float(clean_value) if clean_value else 0
-        except:
+        except (ValueError, TypeError):
             return 0

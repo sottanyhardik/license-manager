@@ -14,8 +14,8 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 # Server configurations (using indexed arrays for compatibility)
-SERVER_NAMES=("Global" "Labdhi")
-SERVER_HOSTS=("django@143.110.252.201" "django@139.59.92.226")
+SERVER_NAMES=("Global" "Labdhi" "Server3")
+SERVER_HOSTS=("django@143.110.252.201" "django@139.59.92.226" "django@165.232.185.220")
 
 # Database configurations (common for all servers)
 REMOTE_DB_NAME="lmanagement"
@@ -28,6 +28,16 @@ BACKUP_DIR="./backups"
 
 # Selected server (will be set by user)
 REMOTE_SERVER=""
+
+# Use Homebrew rsync when available — macOS system rsync (2.6.9) has an mmap bug
+# that causes "Assertion failed: (offset + datasz <= fm->mapsz)" on certain files.
+if [ -x "/opt/homebrew/bin/rsync" ]; then
+    RSYNC="/opt/homebrew/bin/rsync"
+elif [ -x "/usr/local/bin/rsync" ]; then
+    RSYNC="/usr/local/bin/rsync"
+else
+    RSYNC="rsync --no-whole-file"   # fallback: skip mmap code path
+fi
 
 print_header() {
     echo -e "\n${BLUE}================================================${NC}"
@@ -310,24 +320,77 @@ sync_db() {
     cd ..
     print_success "Migrations complete"
 
-    print_info "Removing TL_ALLOT_* and TL_BOE_* files/folders from remote server..."
-    ssh $REMOTE_SERVER "cd /home/django/license-manager/backend/media && rm -rf TL_ALLOT_*.zip TL_ALLOT_*/ TL_BOE_*.zip TL_BOE_*/"
-    print_success "TL_ALLOT_* and TL_BOE_* files/folders removed from server"
-
     print_info "Syncing media files..."
-    rsync -avz --delete $REMOTE_SERVER:/home/django/license-manager/backend/media/ ./backend/media/
-
-    if [ $? -eq 0 ]; then
-        print_success "Media files synced"
-    else
-        print_error "Failed to sync media files"
-    fi
+    sync_media_files
 
     echo ""
     print_success "Database synced successfully!"
     echo ""
     print_info "Backup saved: $BACKUP_DIR/$BACKUP_FILE"
     echo ""
+}
+
+# Function: Sync only media files from remote to local
+sync_media_files() {
+    print_info "Cleaning temporary TL files from remote server..."
+    ssh $REMOTE_SERVER "cd /home/django/license-manager/backend/media && rm -rf TL_ALLOT_* TL_BOE_* TL_TRADE_*" 2>/dev/null || true
+
+    print_info "Syncing media from $REMOTE_SERVER → ./backend/media/ ..."
+    mkdir -p ./backend/media
+
+    $RSYNC -avz --delete \
+        --exclude='TL_ALLOT_*' \
+        --exclude='TL_BOE_*' \
+        --exclude='TL_TRADE_*' \
+        "$REMOTE_SERVER:/home/django/license-manager/backend/media/" \
+        ./backend/media/ && \
+        print_success "Media files synced" || {
+            print_error "Failed to sync media files"
+            exit 1
+        }
+}
+
+sync_media() {
+    print_header "📁 Sync Media Files from Remote"
+    select_server
+    sync_media_files
+}
+
+# Function: Install/update dependencies on all servers
+install_all_servers() {
+    print_header "📦 Install Dependencies on All Servers"
+
+    local REMOTE_APP="/home/django/license-manager"
+    local VENV="$REMOTE_APP/venv/bin"
+
+    for i in "${!SERVER_NAMES[@]}"; do
+        local name="${SERVER_NAMES[$i]}"
+        local host="${SERVER_HOSTS[$i]}"
+        echo ""
+        print_info "[$name] $host  (sudo password may be required)"
+
+        # -t allocates a pseudo-TTY so sudo can prompt for password interactively
+        ssh -t "$host" "
+            set -e
+            echo '→ Installing system packages...'
+            sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libreoffice unoconv
+            echo '→ Installing Python packages...'
+            $VENV/pip install -q -r $REMOTE_APP/backend/requirements.txt
+            echo '→ Testing LibreOffice...'
+            soffice --version
+            echo '✅ Done'
+        "
+
+        if [ $? -eq 0 ]; then
+            print_success "[$name] Installed successfully"
+        else
+            print_error "[$name] Installation failed"
+        fi
+    done
+
+    echo ""
+    print_success "All servers updated"
 }
 
 # Main script
@@ -354,6 +417,12 @@ case $COMMAND in
     sync)
         select_server
         sync_db
+        ;;
+    media)
+        sync_media
+        ;;
+    install)
+        install_all_servers
         ;;
     *)
         echo "Unknown command: $COMMAND"

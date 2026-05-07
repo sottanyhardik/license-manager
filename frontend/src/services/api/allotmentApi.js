@@ -10,7 +10,7 @@ import api from '../../api/axios';
  * Fetch allotment details
  */
 export const fetchAllotment = async (id) => {
-    const response = await api.get(`/allotment-actions/${id}/available-licenses/`);
+    const response = await api.get(`allotment-actions/${id}/available-licenses/`);
     return response.data;
 };
 
@@ -18,7 +18,7 @@ export const fetchAllotment = async (id) => {
  * Fetch available licenses for allocation
  */
 export const fetchAvailableLicenses = async (allotmentId, params = {}) => {
-    const response = await api.get(`/allotment-actions/${allotmentId}/available-licenses/`, {
+    const response = await api.get(`allotment-actions/${allotmentId}/available-licenses/`, {
         params
     });
     return response.data;
@@ -72,7 +72,7 @@ export const fetchNotificationOptions = async () => {
  * Export allotment to PDF
  */
 export const exportAllotmentPDF = async (allotmentId) => {
-    const response = await api.get(`/allotment-actions/${allotmentId}/export-pdf/`, {
+    const response = await api.get(`allotment-actions/${allotmentId}/export-pdf/`, {
         responseType: 'blob'
     });
     return response.data;
@@ -82,7 +82,7 @@ export const exportAllotmentPDF = async (allotmentId) => {
  * Export allotment to Excel
  */
 export const exportAllotmentExcel = async (allotmentId) => {
-    const response = await api.get(`/allotment-actions/${allotmentId}/export-excel/`, {
+    const response = await api.get(`allotment-actions/${allotmentId}/export-excel/`, {
         responseType: 'blob'
     });
     return response.data;
@@ -92,7 +92,7 @@ export const exportAllotmentExcel = async (allotmentId) => {
  * Fetch allotment list with filters
  */
 export const fetchAllotmentList = async (params = {}) => {
-    const response = await api.get('/allotments/', {params});
+    const response = await api.get('allotments/', {params});
     return response.data;
 };
 
@@ -100,7 +100,7 @@ export const fetchAllotmentList = async (params = {}) => {
  * Create new allotment
  */
 export const createAllotment = async (data) => {
-    const response = await api.post('/allotments/', data);
+    const response = await api.post('allotments/', data);
     return response.data;
 };
 
@@ -108,7 +108,7 @@ export const createAllotment = async (data) => {
  * Update allotment
  */
 export const updateAllotment = async (id, data) => {
-    const response = await api.patch(`/allotments/${id}/`, data);
+    const response = await api.patch(`allotments/${id}/`, data);
     return response.data;
 };
 
@@ -116,7 +116,7 @@ export const updateAllotment = async (id, data) => {
  * Delete allotment
  */
 export const deleteAllotment = async (id) => {
-    const response = await api.delete(`/allotments/${id}/`);
+    const response = await api.delete(`allotments/${id}/`);
     return response.data;
 };
 

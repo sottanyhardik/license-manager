@@ -9,6 +9,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     serial_number = serializers.CharField(read_only=True, required=False)
     ledger = serializers.SerializerMethodField()
     product_description = serializers.CharField(read_only=True, required=False)
+    hs_code = serializers.CharField(read_only=True, required=False)
     license_number = serializers.CharField(read_only=True, required=False)
     license_date = serializers.SerializerMethodField()
     exporter = serializers.CharField(read_only=True, required=False, source='exporter.name')
@@ -18,7 +19,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     notification_number = serializers.CharField(read_only=True, required=False)
     file_number = serializers.CharField(read_only=True, required=False)
     port_code = serializers.CharField(read_only=True, required=False, source='port_code.name')
-    purchase_status = serializers.CharField(source='item.license.purchase_status', read_only=True)
+    purchase_status = serializers.SerializerMethodField()
     current_owner = serializers.CharField(source='item.license.current_owner.name', read_only=True, allow_null=True)
     file_transfer_status = serializers.CharField(source='item.license.file_transfer_status', read_only=True, allow_null=True)
 
@@ -54,11 +55,17 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
             return registration_date.strftime("%d-%m-%Y")
         return registration_date
 
+    def get_purchase_status(self, obj):
+        """Get purchase status code safely"""
+        if obj.item and obj.item.license and obj.item.license.purchase_status:
+            return obj.item.license.purchase_status.code
+        return None
+
     class Meta:
         model = AllotmentItems
         fields = [
             'id', 'item', 'allotment', 'cif_inr', 'cif_fc', 'qty', 'is_boe',
-            'serial_number', 'ledger', 'product_description', 'license_number',
+            'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number',
             'license_date', 'exporter', 'license_expiry', 'registration_number',
             'registration_date', 'notification_number', 'file_number', 'port_code',
             'purchase_status', 'current_owner', 'file_transfer_status'

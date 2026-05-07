@@ -82,6 +82,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         related_query_name='accounts_user_permissions',
     )
 
+    avatar = models.ImageField(
+        upload_to="avatars/",
+        null=True,
+        blank=True,
+    )
+
     objects = UserManager()
 
     USERNAME_FIELD = "username"

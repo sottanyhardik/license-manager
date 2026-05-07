@@ -1,21 +1,38 @@
 import {useContext, useEffect, useState} from "react";
-import {useNavigate} from "react-router-dom";
+import {useNavigate, useLocation} from "react-router-dom";
 import api from "../api/axios";
 import {AuthContext} from "../context/AuthContext";
 
 export default function Login() {
     const {user, loading: authLoading, loginSuccess} = useContext(AuthContext);
     const navigate = useNavigate();
+    const location = useLocation();
     const [form, setForm] = useState({username: "", password: ""});
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
+    // Get the path user was trying to access from either:
+    // 1. location.state (from ProtectedRoute redirect)
+    // 2. redirect query param (from logout)
+    // 3. default to dashboard
+    const searchParams = new URLSearchParams(location.search);
+    const redirectParam = searchParams.get('redirect');
+    const reason = searchParams.get('reason');
+    const from = location.state?.from || redirectParam || "/dashboard";
+
+    const sessionMessage =
+        reason === 'idle' ? 'You were logged out due to inactivity. Please log in again.' :
+        reason === 'session_expired' ? 'Your session has expired. Please log in again.' :
+        null;
+
+    useEffect(() => { document.title = 'Login | License Manager'; }, []);
+
     // Redirect if already logged in
     useEffect(() => {
         if (!authLoading && user) {
-            navigate("/dashboard");
+            navigate(from, {replace: true});
         }
-    }, [user, authLoading, navigate]);
+    }, [user, authLoading, navigate, from]);
 
     const submit = async (e) => {
         e.preventDefault();
@@ -32,8 +49,8 @@ export default function Login() {
                 user: data.user
             });
 
-            // Use React Router navigation instead of page reload
-            navigate("/dashboard");
+            // Redirect to the page user was trying to access (or dashboard)
+            navigate(from, {replace: true});
         } catch (e) {
             setError(e.response?.data?.detail || "Invalid username or password");
             setSubmitting(false);
@@ -46,7 +63,7 @@ export default function Login() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
             padding: '20px'
         }}>
             <div className="card border-0 shadow-lg" style={{
@@ -57,7 +74,7 @@ export default function Login() {
             }}>
                 {/* Header Section */}
                 <div style={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                     padding: '40px 32px',
                     textAlign: 'center',
                     color: 'white'
@@ -85,6 +102,15 @@ export default function Login() {
 
                 {/* Form Section */}
                 <div style={{ padding: '40px 32px' }}>
+                    {sessionMessage && (
+                        <div className="alert alert-warning d-flex align-items-center" role="alert" style={{
+                            borderRadius: '10px',
+                            marginBottom: '24px'
+                        }}>
+                            <i className="bi bi-clock-history me-2"></i>
+                            {sessionMessage}
+                        </div>
+                    )}
                     {error && (
                         <div className="alert alert-danger d-flex align-items-center" role="alert" style={{
                             borderRadius: '10px',
@@ -99,7 +125,7 @@ export default function Login() {
                         <div className="mb-3">
                             <label className="form-label" style={{
                                 fontWeight: '500',
-                                color: '#374151',
+                                color: 'var(--text-secondary)',
                                 marginBottom: '8px',
                                 fontSize: '0.875rem'
                             }}>
@@ -126,7 +152,7 @@ export default function Login() {
                         <div className="mb-4">
                             <label className="form-label" style={{
                                 fontWeight: '500',
-                                color: '#374151',
+                                color: 'var(--text-secondary)',
                                 marginBottom: '8px',
                                 fontSize: '0.875rem'
                             }}>
@@ -158,7 +184,7 @@ export default function Login() {
                                 padding: '14px 24px',
                                 fontWeight: '600',
                                 fontSize: '1rem',
-                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
                                 border: 'none',
                                 borderRadius: '10px',
                                 color: 'white',
@@ -183,12 +209,12 @@ export default function Login() {
                 {/* Footer */}
                 <div style={{
                     padding: '24px 32px',
-                    backgroundColor: '#f8f9fa',
+                    backgroundColor: 'var(--bs-gray-50)',
                     textAlign: 'center',
                     borderTop: '1px solid #e5e7eb'
                 }}>
-                    <small style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                        Made with <span style={{color: '#dc3545'}}>❤️</span> by Hardik Sottany
+                    <small style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        Made with <span style={{color: 'var(--danger-color)'}}>❤️</span> by Hardik Sottany
                     </small>
                 </div>
             </div>

@@ -18,6 +18,7 @@ from ..models import (
     ItemGroupModel,
     TransferLetterModel,
     ExchangeRateModel,
+    PurchaseStatus,
 )
 from ..serializers import (
     CompanySerializer,
@@ -34,6 +35,7 @@ from ..serializers import (
     GroupSerializer,
     TransferLetterSerializer,
     ExchangeRateSerializer,
+    PurchaseStatusSerializer,
 )
 
 # Base API prefix used to construct select endpoints (adjust if needed).
@@ -167,11 +169,14 @@ def enhance_config_with_fk(model_cls, config=None):
             preferred = endpoints[0] if endpoints else None
 
         # Provide both a preferred 'endpoint' and an 'endpoints' list for robustness
+        # Preserve any existing field_meta configuration (like 'default', 'fk_endpoint', etc.)
+        existing_meta = field_meta.get(fk_name, {})
         field_meta[fk_name] = {
-            "type": "select",
-            "endpoint": preferred,
+            "type": existing_meta.get("type", "select"),
+            "endpoint": existing_meta.get("fk_endpoint") or existing_meta.get("endpoint") or preferred,
             "endpoints": endpoints,
             "label_field": label_field,
+            **{k: v for k, v in existing_meta.items() if k not in ["type", "endpoint", "endpoints", "label_field"]}
         }
 
         # Annotate nested_field_defs entries that reference this fk_name
@@ -537,6 +542,50 @@ ExchangeRateViewSet = MasterViewSet.create_viewset(
                 "required": True,
                 "step": "0.0001",
                 "help_text": "Chinese Yuan to INR exchange rate"
+            }
+        }
+    },
+)
+
+# Add this at the end of core/views/views.py:
+
+PurchaseStatusViewSet = MasterViewSet.create_viewset(
+    PurchaseStatus,
+    PurchaseStatusSerializer,
+    config={
+        "search": ["code", "label"],
+        "filter": {
+            "is_active": {"type": "exact"},
+            "code": {"type": "exact"},
+        },
+        "list_display": ["code", "label", "is_active", "display_order"],
+        "form_fields": ["code", "label", "is_active", "display_order"],
+        "ordering": ["display_order", "label"],
+        "field_meta": {
+            "code": {
+                "label": "Code",
+                "type": "text",
+                "required": True,
+                "max_length": 2,
+                "help_text": "2-letter code for the purchase status"
+            },
+            "label": {
+                "label": "Label",
+                "type": "text",
+                "required": True,
+                "help_text": "Display label for the purchase status"
+            },
+            "is_active": {
+                "label": "Active",
+                "type": "boolean",
+                "default": True,
+                "help_text": "Whether this status should be shown in dropdowns"
+            },
+            "display_order": {
+                "label": "Display Order",
+                "type": "number",
+                "default": 0,
+                "help_text": "Order for displaying in dropdowns (lower numbers first)"
             }
         }
     },

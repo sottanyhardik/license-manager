@@ -71,7 +71,7 @@ class ExpiringLicensesReportView(View):
             license_expiry_date__gte=today,
             license_expiry_date__lte=expiry_date,
             is_active=True,
-            purchase_status__in=[GE, MI, IP, SM]
+            purchase_status__code__in=[GE, MI, IP, SM]
         ).select_related('exporter', 'port').prefetch_related(
             'export_license__norm_class',
             'import_license__items',
@@ -159,6 +159,7 @@ class ExpiringLicensesReportView(View):
             'notification_number': license_obj.notification_number or '',
             'license_date': license_obj.license_date.isoformat() if license_obj.license_date else None,
             'license_expiry_date': license_obj.license_expiry_date.isoformat(),
+            'ledger_date': license_obj.ledger_date.isoformat() if license_obj.ledger_date else None,
             'days_to_expiry': days_to_expiry,
             'exporter': str(license_obj.exporter) if license_obj.exporter else '',
             'port': str(license_obj.port) if license_obj.port else '',
@@ -359,6 +360,7 @@ class ExpiringLicensesReportView(View):
                     ['Notification Number:', license_data['notification_number'], 'License Date:', license_data['license_date']],
                     ['Exporter:', license_data['exporter'], 'Port:', license_data['port']],
                     ['SION Norms:', ', '.join(license_data['sion_norms']), 'Balance CIF:', f"${license_data['balance_cif']:.2f}"],
+                    ['Ledger Date:', license_data.get('ledger_date') or '-', '', ''],
                 ]
                 for detail_row in details:
                     for col_num, value in enumerate(detail_row, 1):
@@ -575,7 +577,7 @@ class ExpiringLicensesReportView(View):
                                 cell_length = len(str(cell.value))
                                 if cell_length > max_length:
                                     max_length = cell_length
-                        except:
+                        except (TypeError, AttributeError):
                             pass
 
                 adjusted_width = min(max(max_length + 2, 10), 50)

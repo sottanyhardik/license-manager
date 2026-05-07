@@ -847,6 +847,10 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             total_purchase_amount = 0
             total_sales_amount = 0  # Track total sales amount for simple profit calculation
 
+            # Per-company purchase tracking for correct P/L per sale
+            company_purchase_cif = {}    # company_id -> cumulative purchase CIF USD
+            company_purchase_amount = {} # company_id -> cumulative purchase INR
+
             # Get all trades and sort: purchases always before sales (regardless of date)
             # so running balance and P/L are calculated correctly even when a sale is
             # recorded before its corresponding purchase in chronological order.
@@ -946,6 +950,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     total_purchase_cif += total_cif_usd
                     total_purchase_amount += total_amount
 
+                    # Track per-company so each company's sales use their own avg cost
+                    _buyer_id = trans_obj.to_company.id if trans_obj.to_company else None
+                    if _buyer_id and trans_type == 'PURCHASE':
+                        company_purchase_cif[_buyer_id] = company_purchase_cif.get(_buyer_id, 0) + total_cif_usd
+                        company_purchase_amount[_buyer_id] = company_purchase_amount.get(_buyer_id, 0) + total_amount
+
                     # Commission entries are always shown as expenses (debit)
                     is_commission = trans_type == 'COMMISSION_PURCHASE'
                     txn_type = 'COMMISSION' if is_commission else 'PURCHASE'
@@ -1028,8 +1038,16 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         running_balance -= total_cif_usd
                         total_sales_amount += total_amount
 
-                        # Per-sale P/L using average purchase cost up to this point
-                        if total_purchase_cif > 0:
+                        # Per-sale P/L using this company's own avg purchase cost
+                        _seller_id = trans_obj.from_company.id if trans_obj.from_company else None
+                        _co_cif = company_purchase_cif.get(_seller_id, 0) if _seller_id else 0
+                        _co_amt = company_purchase_amount.get(_seller_id, 0) if _seller_id else 0
+                        if _co_cif > 0:
+                            avg_purchase_rate = _co_amt / _co_cif
+                            purchase_cost_for_sale = total_cif_usd * avg_purchase_rate
+                            sale_profit_loss = round(total_amount - purchase_cost_for_sale, 2)
+                        elif total_purchase_cif > 0:
+                            # Fallback to global avg if no per-company purchase found
                             avg_purchase_rate = total_purchase_amount / total_purchase_cif
                             purchase_cost_for_sale = total_cif_usd * avg_purchase_rate
                             sale_profit_loss = round(total_amount - purchase_cost_for_sale, 2)

@@ -75,7 +75,13 @@ export default function AsyncSelectField({
             return;
         }
 
-        // If val is already a full object with id, use it directly
+        // If val is already a react-select {value, label} option, use it directly
+        if (typeof val === 'object' && !Array.isArray(val) && 'value' in val && 'label' in val) {
+            setSelectedOption(val);
+            return;
+        }
+
+        // If val is already a full object with valueField, format it directly
         if (typeof val === 'object' && !Array.isArray(val) && val[valueField]) {
             setSelectedOption(formatOption(val));
             return;

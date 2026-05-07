@@ -4,16 +4,126 @@ import { toast } from 'react-toastify';
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
 import { formatDate } from '../utils/dateFormatter';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { generatePDF, generateExcel } from '../utils/ledgerExport';
 import AsyncSelectField from '../components/AsyncSelectField';
+
+function LicenseWiseLedger({ data, navigate }) {
+    const { licenses } = data;
+    const fmt = (v) => `₹${formatIndianNumber(v, 2)}`;
+    const plColor = (v) => v >= 0 ? '#10b981' : '#ef4444';
+
+    return (
+        <div style={{ padding: '8px' }}>
+            {licenses.map((lic) => (
+                <div key={lic.license_id} style={{ marginBottom: '24px', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                    {/* License Header */}
+                    <div style={{ background: '#1e3a5f', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '24px' }}>
+                        <span style={{ fontWeight: '700', fontSize: '0.95rem' }}>
+                            <i className="bi bi-file-earmark-text me-2"></i>{lic.license_number}
+                        </span>
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                            <i className="bi bi-calendar3 me-1"></i>{lic.license_date}
+                        </span>
+                        <span style={{ background: lic.license_type === 'DFIA' ? '#3b82f6' : '#8b5cf6', color: '#fff', borderRadius: '4px', padding: '2px 8px', fontSize: '0.72rem', fontWeight: '700' }}>
+                            {lic.license_type}
+                        </span>
+                        {navigate && (
+                            <button
+                                onClick={() => navigate(`/license-ledger/${lic.license_id}`)}
+                                style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: '4px', padding: '3px 10px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
+                            >
+                                <i className="bi bi-journal-text me-1"></i>View Ledger
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Companies table */}
+                    <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#374151', width: '30%' }}>Company</th>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#374151', width: '15%' }}>Type</th>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#374151', width: '15%' }}>Date</th>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#065f46', textAlign: 'right', width: '20%' }}>Purchase (₹)</th>
+                                <th style={{ padding: '7px 12px', fontWeight: '700', color: '#991b1b', textAlign: 'right', width: '20%' }}>Sale (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lic.companies.map((company, ci) => {
+                                const allRows = [
+                                    ...company.purchases.map(r => ({ ...r, dir: 'PURCHASE' })),
+                                    ...company.sales.map(r => ({ ...r, dir: 'SALE' })),
+                                ];
+                                return (
+                                    <React.Fragment key={company.company_id}>
+                                        {/* Company name row */}
+                                        <tr style={{ background: ci % 2 === 0 ? '#f0f4ff' : '#f5f0ff', borderTop: ci > 0 ? '2px solid #e2e8f0' : 'none' }}>
+                                            <td colSpan="5" style={{ padding: '5px 12px', fontWeight: '700', color: '#1e3a5f', fontSize: '0.82rem' }}>
+                                                <i className="bi bi-building me-2"></i>{company.company_name}
+                                            </td>
+                                        </tr>
+                                        {/* Purchase rows */}
+                                        {company.purchases.map((row, ri) => (
+                                            <tr key={`p-${row.trade_id}`} style={{ background: '#f0fdf4', borderBottom: '1px solid #d1fae5' }}>
+                                                <td style={{ padding: '4px 12px 4px 24px', color: '#374151' }}>
+                                                    <i className="bi bi-arrow-down-circle text-success me-1"></i>Purchase
+                                                </td>
+                                                <td style={{ padding: '4px 12px', color: '#6b7280' }}>{lic.license_type}</td>
+                                                <td style={{ padding: '4px 12px', color: '#6b7280' }}>{row.invoice_date}</td>
+                                                <td style={{ padding: '4px 12px', textAlign: 'right', fontWeight: '600', color: '#065f46' }}>{fmt(row.amount)}</td>
+                                                <td style={{ padding: '4px 12px' }}></td>
+                                            </tr>
+                                        ))}
+                                        {/* Sale rows */}
+                                        {company.sales.map((row, ri) => (
+                                            <tr key={`s-${row.trade_id}`} style={{ background: '#fef2f2', borderBottom: '1px solid #fecaca' }}>
+                                                <td style={{ padding: '4px 12px 4px 24px', color: '#374151' }}>
+                                                    <i className="bi bi-arrow-up-circle text-danger me-1"></i>Sale
+                                                </td>
+                                                <td style={{ padding: '4px 12px', color: '#6b7280' }}>{lic.license_type}</td>
+                                                <td style={{ padding: '4px 12px', color: '#6b7280' }}>{row.invoice_date}</td>
+                                                <td style={{ padding: '4px 12px' }}></td>
+                                                <td style={{ padding: '4px 12px', textAlign: 'right', fontWeight: '600', color: '#991b1b' }}>{fmt(row.amount)}</td>
+                                            </tr>
+                                        ))}
+                                        {/* Company total row */}
+                                        <tr style={{ background: '#1e3a5f', color: '#fff', fontWeight: '700' }}>
+                                            <td colSpan="3" style={{ padding: '5px 12px', textAlign: 'right', fontSize: '0.78rem' }}>
+                                                Total — {company.company_name}
+                                            </td>
+                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: '#6ee7b7' }}>{fmt(company.purchase_total)}</td>
+                                            <td style={{ padding: '5px 12px', textAlign: 'right', color: '#fca5a5' }}>
+                                                {fmt(company.sale_total)}
+                                                <span style={{ marginLeft: '8px', color: plColor(company.profit_loss), fontSize: '0.72rem' }}>
+                                                    P/L: {company.profit_loss >= 0 ? '+' : ''}{fmt(company.profit_loss)}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </React.Fragment>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            ))}
+            {licenses.length === 0 && (
+                <div className="text-center py-5">
+                    <i className="bi bi-inbox" style={{ fontSize: '2.5rem', color: '#cbd5e0' }}></i>
+                    <p className="mt-3 text-muted mb-0">No trades found</p>
+                </div>
+            )}
+        </div>
+    );
+}
+
 
 export default function LicenseLedger() {
     const navigate = useNavigate();
     const [licenses, setLicenses] = useState([]);
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [exportingPdf, setExportingPdf] = useState(false);
+    const [companyWiseData, setCompanyWiseData] = useState(null);
+    const [companyWiseLoading, setCompanyWiseLoading] = useState(false);
 
     // Get current financial year dates (April 1 to March 31)
     const getCurrentFinancialYear = () => {
@@ -93,10 +203,10 @@ export default function LicenseLedger() {
             fetchLedgerData();
             fetchSummary();
         } else {
-            // Clear data when no company selected
             setLicenses([]);
             setSummary(null);
             setLoading(false);
+            fetchCompanyWise();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
@@ -158,6 +268,21 @@ export default function LicenseLedger() {
             setSummary(response.data);
         } catch (error) {
             toast.error('Failed to load summary data.');
+        }
+    };
+
+    const fetchCompanyWise = async () => {
+        setCompanyWiseLoading(true);
+        try {
+            const params = new URLSearchParams();
+            if (filters.search) params.append('search', filters.search);
+            const response = await api.get(`license-ledger/license-wise/?${params.toString()}`);
+            setCompanyWiseData(response.data);
+        } catch (error) {
+            toast.error('Failed to load company-wise ledger.');
+            setCompanyWiseData(null);
+        } finally {
+            setCompanyWiseLoading(false);
         }
     };
 
@@ -231,364 +356,55 @@ export default function LicenseLedger() {
         });
     };
 
-    const formatLedgerDate = (dateStr) => {
-        if (!dateStr) return '-';
-        return formatDate(dateStr) || '-';
-    };
+    const [bulkExporting, setBulkExporting] = useState(false);
 
-    const formatLedgerCurrency = (value, currency = 'INR') => {
-        if (!value && value !== 0) return '-';
-        const symbol = currency === 'USD' ? '$' : '₹';
-        return `${symbol}${formatIndianNumber(value, 2)}`;
-    };
-
-    const fetchAllLicensesForExport = async () => {
-        const params = new URLSearchParams();
-        if (filters.license_type) params.append('license_type', filters.license_type);
-        if (filters.min_balance) params.append('min_balance', filters.min_balance);
-        if (filters.search) params.append('search', filters.search);
-        if (filters.ordering) params.append('ordering', filters.ordering);
-        params.append('active_only', filters.active_only);
-
-        let url = `/license-ledger/?${params.toString()}`;
-        const allLicenses = [];
-
-        while (url) {
-            const response = await api.get(url);
-            const data = response.data;
-
-            if (Array.isArray(data)) {
-                allLicenses.push(...data);
-                break;
-            }
-
-            if (data && Array.isArray(data.results)) {
-                allLicenses.push(...data.results);
-                url = data.next || null;
-                continue;
-            }
-
-            if (data && Array.isArray(data.licenses)) {
-                allLicenses.push(...data.licenses);
-                break;
-            }
-
-            break;
+    const fetchFullLedgerDetails = async () => {
+        const licenses = companyWiseData?.licenses || [];
+        if (!licenses.length) return [];
+        const results = [];
+        for (const lic of licenses) {
+            try {
+                const { data } = await api.get(`license-ledger/${lic.license_id}/ledger_detail/`);
+                results.push(data);
+            } catch (_) { /* skip failed */ }
         }
-
-        return allLicenses;
+        return results;
     };
 
-    const addLicenseSectionToPdf = (doc, ledger, licenseIndex, totalLicenses) => {
-        if (licenseIndex > 0) {
-            doc.addPage();
-        }
-
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const isDFIA = ledger.license_type === 'DFIA';
-        const currentBalance = ledger.available_balance || 0;
-        const transactions = Array.isArray(ledger.transactions) ? ledger.transactions : [];
-
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(25, 42, 86);
-        doc.text('LICENSE LEDGER STATEMENT', pageWidth / 2, 12, { align: 'center' });
-
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(100, 116, 139);
-        doc.text(`License ${licenseIndex + 1} of ${totalLicenses}`, pageWidth / 2, 17, { align: 'center' });
-
-        doc.setDrawColor(52, 73, 94);
-        doc.setLineWidth(0.5);
-        doc.line(14, 20, pageWidth - 14, 20);
-
-        doc.setFillColor(247, 249, 252);
-        doc.roundedRect(14, 24, pageWidth - 28, 23, 2, 2, 'F');
-        doc.setDrawColor(223, 227, 234);
-        doc.roundedRect(14, 24, pageWidth - 28, 23, 2, 2, 'S');
-
-        doc.setFontSize(14);
-        doc.setTextColor(31, 41, 55);
-        doc.setFont('helvetica', 'bold');
-        doc.text(ledger.license_number || '-', 18, 31);
-
-        doc.setFillColor(58, 145, 167);
-        doc.roundedRect(52, 26.5, 22, 7, 1.5, 1.5, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(8.5);
-        doc.text(ledger.license_type || 'N/A', 63, 31.5, { align: 'center' });
-
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(108, 117, 125);
-        doc.text('Exporter:', 18, 38.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(17, 24, 39);
-        doc.text((ledger.exporter || 'N/A').slice(0, 45), 33, 38.5);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(108, 117, 125);
-        doc.text('License Date:', 95, 38.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(17, 24, 39);
-        doc.text(formatLedgerDate(ledger.license_date), 116, 38.5);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(108, 117, 125);
-        doc.text('Expiry Date:', 18, 44.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(17, 24, 39);
-        doc.text(formatLedgerDate(ledger.expiry_date), 33, 44.5);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(108, 117, 125);
-        doc.text('Total Value:', 95, 44.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(37, 99, 235);
-        doc.text(formatLedgerCurrency(ledger.total_value || 0, isDFIA ? 'USD' : 'INR'), 114, 44.5);
-
-        doc.setFillColor(246, 248, 250);
-        doc.roundedRect(pageWidth - 72, 26.5, 54, 17, 2, 2, 'F');
-        doc.setDrawColor(223, 227, 234);
-        doc.roundedRect(pageWidth - 72, 26.5, 54, 17, 2, 2, 'S');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.setTextColor(108, 117, 125);
-        doc.text('CURRENT BALANCE', pageWidth - 45, 32, { align: 'center' });
-        doc.setFontSize(14);
-        doc.setTextColor(currentBalance >= 0 ? 52 : 220, currentBalance >= 0 ? 168 : 53, currentBalance >= 0 ? 83 : 69);
-        doc.text(formatLedgerCurrency(currentBalance, isDFIA ? 'USD' : 'INR'), pageWidth - 45, 39, { align: 'center' });
-
-        const headers = isDFIA
-            ? [['Date', 'Particulars', 'Items', 'CIF Dr', 'CIF Cr', 'Rate', 'Debit (₹)', 'Credit (₹)', 'Balance', 'P/L']]
-            : [['Date', 'Particulars', 'Value Dr', 'Value Cr', 'Rate', 'Debit (₹)', 'Credit (₹)', 'Balance', 'P/L']];
-
-        const bodyData = transactions.map((txn) => {
-            const row = [
-                formatLedgerDate(txn.date),
-                txn.particular + (txn.invoice_number ? `\nInvoice: ${txn.invoice_number}` : ''),
-            ];
-
-            if (isDFIA) {
-                row.push(
-                    txn.items || '',
-                    txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '-',
-                    txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : '-'
-                );
-            } else {
-                row.push(
-                    txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '-',
-                    txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : '-'
-                );
-            }
-
-            row.push(
-                txn.rate ? formatIndianNumber(txn.rate, 2) : '-',
-                txn.debit_amount ? formatIndianNumber(txn.debit_amount, 2) : '-',
-                txn.credit_amount ? formatIndianNumber(txn.credit_amount, 2) : '-',
-                formatIndianNumber(txn.balance || 0, 2),
-                txn.type === 'SALE' && txn.profit_loss ? `${txn.profit_loss >= 0 ? '+' : '-'} ${formatIndianNumber(Math.abs(txn.profit_loss), 2)}` : '-'
-            );
-
-            return row;
-        });
-
-        const totalDebit = transactions.reduce((sum, t) => sum + (parseFloat(t.debit_amount) || 0), 0);
-        const totalCredit = transactions.reduce((sum, t) => sum + (parseFloat(t.credit_amount) || 0), 0);
-        const totalPL = transactions
-            .filter((t) => t.type === 'SALE')
-            .reduce((acc, t) => parseFloat(t.profit_loss || acc), 0);
-
-        const totalsRow = isDFIA
-            ? ['', 'TOTAL', '', '', '', '', formatIndianNumber(totalDebit, 2), formatIndianNumber(totalCredit, 2), formatIndianNumber(currentBalance, 2), `${totalPL >= 0 ? '+' : '-'} ${formatIndianNumber(Math.abs(totalPL), 2)}`]
-            : ['', 'TOTAL', '', '', '', formatIndianNumber(totalDebit, 2), formatIndianNumber(totalCredit, 2), formatIndianNumber(currentBalance, 2), `${totalPL >= 0 ? '+' : '-'} ${formatIndianNumber(Math.abs(totalPL), 2)}`];
-
-        bodyData.push(totalsRow);
-
-        autoTable(doc, {
-            head: headers,
-            body: bodyData,
-            startY: 52,
-            styles: {
-                fontSize: 8,
-                cellPadding: 2.5,
-                lineColor: [224, 224, 224],
-                lineWidth: 0.2,
-                halign: 'right',
-                font: 'helvetica',
-                textColor: [44, 62, 80]
-            },
-            headStyles: {
-                fillColor: [52, 73, 94],
-                fontStyle: 'bold',
-                textColor: [255, 255, 255],
-                halign: 'center',
-                fontSize: 8.5
-            },
-            columnStyles: isDFIA ? {
-                0: { halign: 'center', cellWidth: 18 },
-                1: { halign: 'left', cellWidth: 44 },
-                2: { halign: 'left', cellWidth: 26 },
-                3: { halign: 'right', cellWidth: 22 },
-                4: { halign: 'right', cellWidth: 22 },
-                5: { halign: 'right', cellWidth: 16 },
-                6: { halign: 'right', cellWidth: 24 },
-                7: { halign: 'right', cellWidth: 24 },
-                8: { halign: 'right', cellWidth: 24 },
-                9: { halign: 'right', cellWidth: 20 }
-            } : {
-                0: { halign: 'center', cellWidth: 18 },
-                1: { halign: 'left', cellWidth: 60 },
-                2: { halign: 'right', cellWidth: 22 },
-                3: { halign: 'right', cellWidth: 22 },
-                4: { halign: 'right', cellWidth: 16 },
-                5: { halign: 'right', cellWidth: 24 },
-                6: { halign: 'right', cellWidth: 24 },
-                7: { halign: 'right', cellWidth: 24 },
-                8: { halign: 'right', cellWidth: 20 }
-            },
-            alternateRowStyles: {
-                fillColor: [250, 251, 252]
-            },
-            margin: { left: 14, right: 14 },
-            didParseCell: (data) => {
-                if (data.row.index === transactions.length) {
-                    data.cell.styles.fillColor = [236, 240, 241];
-                    data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.textColor = [25, 42, 86];
-                }
-            }
-        });
-
-        const finalY = doc.lastAutoTable?.finalY || 52;
-        const purchaseCount = transactions.filter((t) => ['PURCHASE', 'OPENING'].includes(t.type)).length;
-        const salesCount = transactions.filter((t) => t.type === 'SALE').length;
-
-        doc.setDrawColor(224, 224, 224);
-        doc.line(14, finalY + 5, pageWidth - 14, finalY + 5);
-
-        doc.setFontSize(8.5);
-        doc.setTextColor(108, 117, 125);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Transactions: ${transactions.length}`, 14, finalY + 10);
-        doc.text(`Purchases: ${purchaseCount}`, 54, finalY + 10);
-        doc.text(`Sales: ${salesCount}`, 90, finalY + 10);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(totalPL >= 0 ? 52 : 220, totalPL >= 0 ? 168 : 53, totalPL >= 0 ? 83 : 69);
-        doc.text(`Net P/L: ${totalPL >= 0 ? '+' : '-'} ₹${formatIndianNumber(Math.abs(totalPL), 2)}`, pageWidth - 14, finalY + 10, { align: 'right' });
-    };
-
-    const handleExportPdf = useCallback(async () => {
-        if (!filters.company) {
-            toast.error('Please select a company first');
-            return;
-        }
-
+    const handleBulkExportPDF = async () => {
+        if (!companyWiseData?.licenses?.length) { toast.error('No data to export'); return; }
+        setBulkExporting(true);
         try {
-            setExportingPdf(true);
-
-            const params = buildFilterParams();
-            params.set('detailed', 'true');  // Request detailed transaction view
-            const pdfViewerUrl = `/pdf-viewer?url=${encodeURIComponent(`/license-ledger/export/all/?${params.toString()}`)}`;
-            const newWindow = window.open(pdfViewerUrl, '_blank');
-
-            if (newWindow) {
-                toast.success('PDF opened in new tab - you can refresh to regenerate');
-            } else {
-                toast.error('Popup blocked. Please allow popups for this site.');
-            }
-        } catch (error) {
-            console.error('Error opening PDF:', error);
-            toast.error('Failed to open PDF viewer.');
+            toast.info('Fetching ledger details…', { autoClose: false, toastId: 'bulk-pdf' });
+            const allLedgers = await fetchFullLedgerDetails();
+            toast.dismiss('bulk-pdf');
+            if (!allLedgers.length) { toast.error('No ledger data available'); return; }
+            generatePDF(allLedgers, `License_Ledger_Bulk_${new Date().toISOString().split('T')[0]}.pdf`);
+            toast.success(`Exported ${allLedgers.length} license(s) to PDF`);
+        } catch (e) {
+            toast.dismiss('bulk-pdf');
+            toast.error('Failed to generate PDF');
         } finally {
-            setExportingPdf(false);
+            setBulkExporting(false);
         }
-    }, [filters.company, buildFilterParams]);
+    };
 
-    const handleExportNoPurchases = useCallback(async () => {
+    const handleBulkExportExcel = async () => {
+        if (!companyWiseData?.licenses?.length) { toast.error('No data to export'); return; }
+        setBulkExporting(true);
         try {
-            setExportingPdf(true);
-
-            // Only use no_purchases parameter, ignore all other filters
-            const params = new URLSearchParams();
-            params.append('no_purchases', 'true');
-
-            const pdfViewerUrl = `/pdf-viewer?url=${encodeURIComponent(`/license-ledger/export/all/?${params.toString()}`)}`;
-            const newWindow = window.open(pdfViewerUrl, '_blank');
-
-            if (newWindow) {
-                toast.success('PDF with licenses without purchases opened');
-            } else {
-                toast.error('Popup blocked. Please allow popups for this site.');
-            }
-        } catch (error) {
-            console.error('Error opening PDF:', error);
-            toast.error('Failed to open PDF viewer.');
+            toast.info('Fetching ledger details…', { autoClose: false, toastId: 'bulk-xlsx' });
+            const allLedgers = await fetchFullLedgerDetails();
+            toast.dismiss('bulk-xlsx');
+            if (!allLedgers.length) { toast.error('No ledger data available'); return; }
+            await generateExcel(allLedgers, `License_Ledger_Bulk_${new Date().toISOString().split('T')[0]}.xlsx`);
+            toast.success(`Exported ${allLedgers.length} license(s) to Excel`);
+        } catch (e) {
+            toast.dismiss('bulk-xlsx');
+            toast.error('Failed to generate Excel');
         } finally {
-            setExportingPdf(false);
+            setBulkExporting(false);
         }
-    }, []);
-
-    const handleExportAllIncludingExpired = () => {
-        handleExportAllPdf({ license_type: 'ALL', active_only: false, min_balance: '', search: '', ordering: '-license_date' });
-    };
-
-    const handleExportDFIAOnly = () => {
-        handleExportAllPdf({ license_type: 'DFIA', active_only: true, min_balance: '', search: '', ordering: '-license_date' });
-    };
-
-    const handleExportIncentiveOnly = () => {
-        handleExportAllPdf({ license_type: 'INCENTIVE', active_only: true, min_balance: '', search: '', ordering: '-license_date' });
-    };
-
-    const handleExportWithBalance = () => {
-        handleExportAllPdf({ min_balance: '100', active_only: true, ordering: '-balance_value' });
-    };
-
-    const handleExportLastMonth = () => {
-        const today = new Date();
-        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-        handleExportAllPdf({
-            purchase_date_from: lastMonth.toISOString().split('T')[0],
-            purchase_date_to: lastMonthEnd.toISOString().split('T')[0],
-            active_only: true,
-            ordering: '-license_date'
-        });
-    };
-
-    const handleExportThisMonth = () => {
-        const today = new Date();
-        const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        handleExportAllPdf({
-            purchase_date_from: thisMonthStart.toISOString().split('T')[0],
-            purchase_date_to: today.toISOString().split('T')[0],
-            active_only: true,
-            ordering: '-license_date'
-        });
-    };
-
-    const handleExportLast3Months = () => {
-        const today = new Date();
-        const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate());
-        handleExportAllPdf({
-            purchase_date_from: threeMonthsAgo.toISOString().split('T')[0],
-            purchase_date_to: today.toISOString().split('T')[0],
-            active_only: true,
-            ordering: '-license_date'
-        });
-    };
-
-    const handleExportThisYear = () => {
-        const today = new Date();
-        const yearStart = new Date(today.getFullYear(), 0, 1);
-        handleExportAllPdf({
-            purchase_date_from: yearStart.toISOString().split('T')[0],
-            purchase_date_to: today.toISOString().split('T')[0],
-            active_only: true,
-            ordering: '-license_date'
-        });
     };
 
     return (
@@ -603,22 +419,28 @@ export default function LicenseLedger() {
                     <small className="text-muted">Track available balance for DFIA and Incentive licenses</small>
                 </div>
                 <div className="d-flex gap-2">
-                    {filters.company && (
-                        <button
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={handleExportPdf}
-                            disabled={exportingPdf}
-                        >
-                            <i className="bi bi-file-earmark-pdf me-1"></i>Export PDF
-                        </button>
+                    {companyWiseData?.licenses?.length > 0 && (
+                        <>
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-danger"
+                                onClick={handleBulkExportPDF}
+                                disabled={bulkExporting}
+                            >
+                                {bulkExporting ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-file-earmark-pdf me-1"></i>}
+                                Export PDF
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-success"
+                                onClick={handleBulkExportExcel}
+                                disabled={bulkExporting}
+                            >
+                                {bulkExporting ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-file-earmark-excel me-1"></i>}
+                                Export Excel
+                            </button>
+                        </>
                     )}
-                    <button
-                        className="btn btn-sm btn-outline-secondary"
-                        onClick={handleExportNoPurchases}
-                        disabled={exportingPdf}
-                    >
-                        <i className="bi bi-file-earmark-excel me-1"></i>No Purchases
-                    </button>
                 </div>
             </div>
 
@@ -881,194 +703,28 @@ export default function LicenseLedger() {
                 </div>
             </div>
 
-            {/* License Table */}
+            {/* Company-wise Ledger */}
             <div className="card border-0 shadow-sm">
-                <div className="card-header bg-white border-bottom py-2 px-3 d-flex align-items-center justify-content-between">
-                    <div className="d-flex align-items-center gap-2">
-                        <i className="bi bi-table" style={{ color: '#4F46E5' }}></i>
-                        <h6 className="mb-0 fw-semibold">License Listings</h6>
-                    </div>
-                    <span className="badge" style={{ background: '#e0e7ff', color: '#4F46E5', fontSize: '0.78rem', fontWeight: '600' }}>
-                        {licenses.length} {licenses.length === 1 ? 'License' : 'Licenses'}
-                    </span>
-                </div>
                 <div className="card-body p-0">
-                    <div style={{ overflowX: 'auto' }}>
-                        <table className="table table-hover mb-0" style={{ minWidth: '1200px' }}>
-                            <thead style={{ backgroundColor: 'var(--bs-gray-50)', borderBottom: '2px solid #dee2e6' }}>
-                                <tr>
-                                    <th style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        Type
-                                    </th>
-                                    <th style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        License #
-                                    </th>
-                                    <th style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        Issue Date
-                                    </th>
-                                    <th style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        Expiry
-                                    </th>
-                                    <th style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        Exporter
-                                    </th>
-                                    <th className="text-end" style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        Total Value
-                                    </th>
-                                    <th className="text-end" style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        Balance
-                                    </th>
-                                    <th className="text-end" style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        Purchase (₹)
-                                    </th>
-                                    <th className="text-end" style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        P/L (₹)
-                                    </th>
-                                    <th className="text-center" style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        Status
-                                    </th>
-                                    <th className="text-center" style={{ padding: '9px 12px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--bs-gray-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {!filters.company ? (
-                                    <tr>
-                                        <td colSpan="11" className="text-center py-5">
-                                            <i className="bi bi-building" style={{ fontSize: '2.5rem', color: 'var(--bs-gray-300)' }}></i>
-                                            <p className="mt-3 mb-1 fw-semibold" style={{ color: 'var(--text-dark)', fontSize: '0.95rem' }}>Select a Company</p>
-                                            <p className="text-muted mb-0 small">
-                                                Choose a company from the filter above to view their license ledger
-                                            </p>
-                                        </td>
-                                    </tr>
-                                ) : loading ? (
-                                    <tr>
-                                        <td colSpan="11" className="text-center py-5">
-                                            <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
-                                                <span className="visually-hidden">Loading...</span>
-                                            </div>
-                                            <p className="text-muted mt-3 mb-0">Loading license data...</p>
-                                        </td>
-                                    </tr>
-                                ) : licenses.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="11" className="text-center py-5">
-                                            <i className="bi bi-inbox text-muted" style={{ fontSize: '3rem' }}></i>
-                                            <p className="text-muted mt-3 mb-0" style={{ fontSize: '1.05rem' }}>
-                                                No licenses found for {filters.company.label}
-                                            </p>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    licenses.map((license) => (
-                                        <tr key={`${license.license_type}-${license.id}`}
-                                            style={{
-                                                borderBottom: '1px solid #f0f0f0',
-                                                transition: 'all 0.2s ease'
-                                            }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bs-gray-50)'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                        >
-                                            <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                                                <span className={`badge ${license.license_type === 'DFIA' ? 'bg-primary' : 'bg-info'}`}
-                                                    style={{ fontSize: '0.8rem', fontWeight: '600', padding: '6px 12px', borderRadius: '6px' }}>
-                                                    {license.license_type}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                                                <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-dark)' }}>
-                                                    {license.license_number}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '10px 12px', verticalAlign: 'middle', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                                                {formatDate(license.license_date)}
-                                            </td>
-                                            <td style={{ padding: '10px 12px', verticalAlign: 'middle', fontSize: '0.9rem' }}>
-                                                <span style={{ color: license.is_expired ? 'var(--danger-color)' : 'var(--text-secondary)' }}>
-                                                    {formatDate(license.license_expiry_date)}
-                                                </span>
-                                                {license.is_expired && (
-                                                    <span className="badge bg-danger ms-2" style={{ fontSize: '0.7rem', padding: '3px 6px' }}>
-                                                        EXPIRED
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td style={{ padding: '10px 12px', verticalAlign: 'middle', fontSize: '0.82rem', color: 'var(--text-secondary)', maxWidth: '200px' }}>
-                                                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                                    title={license.exporter_name}>
-                                                    {license.exporter_name}
-                                                </div>
-                                            </td>
-                                            <td className="text-end" style={{ padding: '10px 12px', verticalAlign: 'middle', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-dark)' }}>
-                                                {formatCurrency(license.total_value, license.currency)}
-                                            </td>
-                                            <td className="text-end" style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                                                <span style={{
-                                                    fontSize: '0.88rem',
-                                                    fontWeight: '700',
-                                                    color: license.balance_value > 0 ? 'var(--success-text)' : 'var(--bs-gray-400)'
-                                                }}>
-                                                    {formatCurrency(license.balance_value, license.currency)}
-                                                </span>
-                                            </td>
-                                            <td className="text-end" style={{ padding: '10px 12px', verticalAlign: 'middle', fontSize: '0.82rem', color: 'var(--warning-color)', fontWeight: '600' }}>
-                                                ₹ {formatIndianNumber(license.purchase_amount || 0, 0)}
-                                            </td>
-                                            <td className="text-end" style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                                                <span style={{
-                                                    fontSize: '0.82rem',
-                                                    fontWeight: '700',
-                                                    color: (license.profit_loss || 0) >= 0 ? 'var(--success-text)' : 'var(--danger-color)'
-                                                }}>
-                                                    {(license.profit_loss || 0) >= 0 ? '+' : ''}₹ {formatIndianNumber(Math.abs(license.profit_loss || 0), 0)}
-                                                </span>
-                                            </td>
-                                            <td className="text-center" style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                                                {getSoldStatusBadge(license.sold_status)}
-                                            </td>
-                                            <td className="text-center" style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                                                <button
-                                                    className="btn btn-sm me-2"
-                                                    onClick={() => handleViewDetails(license)}
-                                                    title="View Ledger Details"
-                                                    style={{
-                                                        backgroundColor: 'rgba(79, 70, 229, 0.08)',
-                                                        border: '1px solid rgba(79, 70, 229, 0.25)',
-                                                        color: '#4F46E5',
-                                                        padding: '4px 10px',
-                                                        borderRadius: '6px',
-                                                        fontSize: '0.78rem',
-                                                        fontWeight: '600'
-                                                    }}
-                                                >
-                                                    <i className="bi bi-journal-text me-1"></i>
-                                                    View
-                                                </button>
-                                                {license.balance_value > 0 && (
-                                                    <button
-                                                        className="btn btn-sm btn-success"
-                                                        onClick={() => handleCreateTrade(license)}
-                                                        title="Create Sale"
-                                                        style={{
-                                                            padding: '4px 10px',
-                                                            borderRadius: '6px',
-                                                            fontSize: '0.78rem',
-                                                            fontWeight: '600'
-                                                        }}
-                                                    >
-                                                        <i className="bi bi-cart-plus me-1"></i>
-                                                        Trade
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    {companyWiseLoading ? (
+                        <div className="text-center py-5">
+                            <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
+                                <span className="visually-hidden">Loading...</span>
+                            </div>
+                            <p className="text-muted mt-3 mb-0">Loading license-wise ledger...</p>
+                        </div>
+                    ) : companyWiseData ? (
+                        <LicenseWiseLedger
+                            data={companyWiseData}
+                            navigate={navigate}
+                        />
+                    ) : (
+                        <div className="text-center py-5">
+                            <i className="bi bi-building" style={{ fontSize: '2.5rem', color: 'var(--bs-gray-300)' }}></i>
+                            <p className="mt-3 mb-1 fw-semibold" style={{ color: 'var(--text-dark)', fontSize: '0.95rem' }}>No Data</p>
+                            <p className="text-muted mb-0 small">No trades found</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

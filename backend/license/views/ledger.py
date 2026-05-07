@@ -952,6 +952,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     particular_prefix = 'Commission Paid to' if is_commission else 'Purchase DFIA -'
 
                     # First purchase is the opening balance (only if no original opening balance and not commission)
+                    _co = trans_obj.to_company
                     if idx == 0 and len(transactions) == 0 and not is_commission:
                         transactions.append({
                             'date': trans_date,
@@ -959,14 +960,17 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'particular': f'Opening Balance - Purchase from {trans_obj.from_company.name if trans_obj.from_company else "N/A"}',
                             'invoice_number': trans_obj.invoice_number or '',
                             'cif_usd': total_cif_usd,
-                            'debit_cif': total_cif_usd,  # Purchase is debit (asset increases)
+                            'debit_cif': total_cif_usd,
                             'credit_cif': 0,
                             'rate': round(rate, 2),
                             'amount': total_amount,
-                            'debit_amount': total_amount,  # Purchase amount is debit (cost)
+                            'debit_amount': total_amount,
                             'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
+                            'company_id': _co.id if _co else None,
+                            'company_name': _co.name if _co else 'N/A',
+                            'trade_id': trans_obj.id,
                         })
                     else:
                         transactions.append({
@@ -978,22 +982,24 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'sion_norms': ', '.join(sion_norms) if sion_norms else '',
                             'qty': qty_kg_total,
                             'cif_usd': total_cif_usd,
-                            'debit_cif': total_cif_usd,  # Purchase/Commission is debit
+                            'debit_cif': total_cif_usd,
                             'credit_cif': 0,
                             'rate': round(rate, 2),
                             'amount': total_amount,
-                            'debit_amount': total_amount,  # Purchase/Commission amount is debit (expense)
+                            'debit_amount': total_amount,
                             'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
+                            'company_id': _co.id if _co else None,
+                            'company_name': _co.name if _co else 'N/A',
+                            'trade_id': trans_obj.id,
                         })
 
                 elif trans_type in ['SALE', 'COMMISSION_SALE']:
-                    # Commission sale is also an expense (debit) - commission paid on sale
                     is_commission = trans_type == 'COMMISSION_SALE'
+                    _co = trans_obj.from_company
 
                     if is_commission:
-                        # Commission sale is an expense (debit)
                         running_balance += total_cif_usd
                         total_purchase_amount += total_amount
 
@@ -1006,21 +1012,30 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'sion_norms': ', '.join(sion_norms) if sion_norms else '',
                             'qty': qty_kg_total,
                             'cif_usd': total_cif_usd,
-                            'debit_cif': total_cif_usd,  # Commission is debit (expense)
+                            'debit_cif': total_cif_usd,
                             'credit_cif': 0,
                             'rate': round(rate, 2),
                             'amount': total_amount,
-                            'debit_amount': total_amount,  # Commission amount is debit (expense)
+                            'debit_amount': total_amount,
                             'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
+                            'company_id': _co.id if _co else None,
+                            'company_name': _co.name if _co else 'N/A',
+                            'trade_id': trans_obj.id,
                         })
                     else:
-                        # Regular sale
                         running_balance -= total_cif_usd
                         total_sales_amount += total_amount
 
-                        # Store sale transaction (P/L will be calculated after all transactions)
+                        # Per-sale P/L using average purchase cost up to this point
+                        if total_purchase_cif > 0:
+                            avg_purchase_rate = total_purchase_amount / total_purchase_cif
+                            purchase_cost_for_sale = total_cif_usd * avg_purchase_rate
+                            sale_profit_loss = round(total_amount - purchase_cost_for_sale, 2)
+                        else:
+                            sale_profit_loss = round(total_amount, 2)
+
                         transactions.append({
                             'date': trans_date,
                             'type': 'SALE',
@@ -1031,20 +1046,17 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'qty': qty_kg_total,
                             'cif_usd': total_cif_usd,
                             'debit_cif': 0,
-                            'credit_cif': total_cif_usd,  # Sale is credit (asset decreases)
+                            'credit_cif': total_cif_usd,
                             'rate': round(rate, 2),
                             'amount': total_amount,
                             'debit_amount': 0,
-                            'credit_amount': total_amount,  # Sale amount is credit (revenue)
+                            'credit_amount': total_amount,
                             'balance': round(running_balance, 2),
-                            'profit_loss': 0,  # Will be updated after all transactions
+                            'profit_loss': sale_profit_loss,
+                            'company_id': _co.id if _co else None,
+                            'company_name': _co.name if _co else 'N/A',
+                            'trade_id': trans_obj.id,
                         })
-
-            # After all transactions are processed, calculate final P/L and update all SALE rows
-            final_profit_loss = round(total_sales_amount - total_purchase_amount, 2)
-            for txn in transactions:
-                if txn['type'] == 'SALE':
-                    txn['profit_loss'] = final_profit_loss
 
             return Response({
                 'license_type': 'DFIA',
@@ -1113,12 +1125,11 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     total_purchase_value += license_value
                     total_purchase_amount += amount
 
-                    # Commission entries are always shown as expenses (debit)
                     is_commission = trade.direction == 'COMMISSION_PURCHASE'
                     txn_type = 'COMMISSION' if is_commission else 'PURCHASE'
                     particular_prefix = 'Commission Paid to' if is_commission else f'Purchase {license.license_type} -'
+                    _co = trade.to_company
 
-                    # First purchase is the opening balance (unless it's commission)
                     if is_first_transaction and not is_commission:
                         transactions.append({
                             'date': trade.invoice_date or license.license_date,
@@ -1126,14 +1137,17 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'particular': f'Opening Balance - Purchase from {trade.from_company.name if trade.from_company else "N/A"}',
                             'invoice_number': trade.invoice_number or '',
                             'license_value': license_value,
-                            'debit_license_value': license_value,  # Purchase is debit
+                            'debit_license_value': license_value,
                             'credit_license_value': 0,
                             'rate': round(rate_pct, 3),
                             'amount': amount,
-                            'debit_amount': amount,  # Purchase amount is debit
+                            'debit_amount': amount,
                             'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
+                            'company_id': _co.id if _co else None,
+                            'company_name': _co.name if _co else 'N/A',
+                            'trade_id': trade.id,
                         })
                         is_first_transaction = False
                     else:
@@ -1143,24 +1157,26 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'particular': f'{particular_prefix} {trade.from_company.name if trade.from_company else "N/A"}',
                             'invoice_number': trade.invoice_number or '',
                             'license_value': license_value,
-                            'debit_license_value': license_value,  # Purchase/Commission is debit
+                            'debit_license_value': license_value,
                             'credit_license_value': 0,
                             'rate': round(rate_pct, 3),
                             'amount': amount,
-                            'debit_amount': amount,  # Purchase/Commission amount is debit (expense)
+                            'debit_amount': amount,
                             'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
+                            'company_id': _co.id if _co else None,
+                            'company_name': _co.name if _co else 'N/A',
+                            'trade_id': trade.id,
                         })
                         if is_first_transaction:
                             is_first_transaction = False
 
                 elif trade.direction in ['SALE', 'COMMISSION_SALE']:
-                    # Commission sale is an income (still debit in license ledger context as it's money out)
                     is_commission = trade.direction == 'COMMISSION_SALE'
+                    _co = trade.from_company
 
                     if is_commission:
-                        # Commission sale is also an expense (debit) - commission paid on sale
                         running_balance += license_value
                         total_purchase_amount += amount
 
@@ -1170,21 +1186,30 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'particular': f'Commission Paid to {trade.to_company.name if trade.to_company else "N/A"}',
                             'invoice_number': trade.invoice_number or '',
                             'license_value': license_value,
-                            'debit_license_value': license_value,  # Commission is debit (expense)
+                            'debit_license_value': license_value,
                             'credit_license_value': 0,
                             'rate': round(rate_pct, 3),
                             'amount': amount,
-                            'debit_amount': amount,  # Commission amount is debit (expense)
+                            'debit_amount': amount,
                             'credit_amount': 0,
                             'balance': round(running_balance, 2),
                             'profit_loss': 0,
+                            'company_id': _co.id if _co else None,
+                            'company_name': _co.name if _co else 'N/A',
+                            'trade_id': trade.id,
                         })
                     else:
-                        # Regular sale
                         running_balance -= license_value
                         total_sales_amount += amount
 
-                        # Store sale transaction (P/L will be calculated after all transactions)
+                        # Per-sale P/L using average purchase cost per license value unit
+                        if total_purchase_value > 0:
+                            avg_purchase_rate = total_purchase_amount / total_purchase_value
+                            purchase_cost_for_sale = license_value * avg_purchase_rate
+                            sale_profit_loss = round(amount - purchase_cost_for_sale, 2)
+                        else:
+                            sale_profit_loss = round(amount, 2)
+
                         transactions.append({
                             'date': trade.invoice_date or timezone.now().date(),
                             'type': 'SALE',
@@ -1192,21 +1217,18 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                             'invoice_number': trade.invoice_number or '',
                             'license_value': license_value,
                             'debit_license_value': 0,
-                            'credit_license_value': license_value,  # Sale is credit
+                            'credit_license_value': license_value,
                             'rate': round(rate_pct, 3),
                             'amount': amount,
                             'debit_amount': 0,
-                            'credit_amount': amount,  # Sale amount is credit
+                            'credit_amount': amount,
                             'balance': round(running_balance, 2),
-                            'profit_loss': 0,  # Will be updated after all transactions
+                            'profit_loss': sale_profit_loss,
+                            'company_id': _co.id if _co else None,
+                            'company_name': _co.name if _co else 'N/A',
+                            'trade_id': trade.id,
                         })
                     is_first_transaction = False
-
-            # After all transactions are processed, calculate final P/L and update all SALE rows
-            final_profit_loss = round(total_sales_amount - total_purchase_amount, 2)
-            for txn in transactions:
-                if txn['type'] == 'SALE':
-                    txn['profit_loss'] = final_profit_loss
 
             return Response({
                 'license_type': license.license_type,
@@ -2625,3 +2647,220 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     buffer.close()
                 except Exception:
                     pass
+
+    @action(detail=False, methods=['get'], url_path='company-wise')
+    def company_wise(self, request):
+        """
+        Returns all trades grouped by company with purchases, sales, and a grand summary.
+        No query params required.
+        """
+        from trade.models import LicenseTrade
+        from django.db.models import Q
+        from decimal import Decimal
+
+        search = request.query_params.get('search', '').strip()
+        terms = [t.strip() for t in search.split(',') if t.strip()] if search else []
+
+        qs = LicenseTrade.objects.select_related('from_company', 'to_company').prefetch_related(
+            'lines__sr_number__license',
+            'incentive_lines__incentive_license',
+        ).filter(direction__in=['PURCHASE', 'SALE'])
+
+        if terms:
+            if len(terms) == 1:
+                t = terms[0]
+                qs = qs.filter(
+                    Q(lines__sr_number__license__license_number__icontains=t) |
+                    Q(incentive_lines__incentive_license__license_number__icontains=t)
+                ).distinct()
+            else:
+                qs = qs.filter(
+                    Q(lines__sr_number__license__license_number__in=terms) |
+                    Q(incentive_lines__incentive_license__license_number__in=terms)
+                ).distinct()
+
+        trades = qs
+
+        companies_dict = {}
+
+        for trade in trades:
+            company = trade.to_company if trade.direction == 'PURCHASE' else trade.from_company
+            if not company:
+                continue
+
+            cid = company.id
+            if cid not in companies_dict:
+                companies_dict[cid] = {
+                    'company_id': cid,
+                    'company_name': company.name,
+                    'purchases': [],
+                    'sales': [],
+                    'purchase_total': Decimal('0'),
+                    'sale_total': Decimal('0'),
+                }
+
+            if trade.license_type == 'DFIA':
+                lic_pairs = list({
+                    (line.sr_number.license.id, line.sr_number.license.license_number)
+                    for line in trade.lines.all()
+                    if line.sr_number and line.sr_number.license
+                })
+            else:
+                lic_pairs = list({
+                    (tl.incentive_license.id, tl.incentive_license.license_number)
+                    for tl in trade.incentive_lines.all()
+                    if tl.incentive_license
+                })
+
+            license_ids = [p[0] for p in lic_pairs]
+            license_numbers = [p[1] for p in lic_pairs]
+
+            row = {
+                'trade_id': trade.id,
+                'license_ids': license_ids,
+                'licenses': license_numbers,
+                'license_type': trade.license_type,
+                'invoice_date': str(trade.invoice_date) if trade.invoice_date else '-',
+                'amount': float(trade.total_amount or 0),
+            }
+
+            amount = trade.total_amount or Decimal('0')
+            if trade.direction == 'PURCHASE':
+                companies_dict[cid]['purchases'].append(row)
+                companies_dict[cid]['purchase_total'] += amount
+            else:
+                companies_dict[cid]['sales'].append(row)
+                companies_dict[cid]['sale_total'] += amount
+
+        companies = []
+        total_purchase = Decimal('0')
+        total_sale = Decimal('0')
+
+        for c in sorted(companies_dict.values(), key=lambda x: x['company_name']):
+            pt = c['purchase_total']
+            st = c['sale_total']
+            c['purchase_total'] = float(pt)
+            c['sale_total'] = float(st)
+            c['profit_loss'] = float(st - pt)
+            total_purchase += pt
+            total_sale += st
+            companies.append(c)
+
+        return Response({
+            'companies': companies,
+            'summary': {
+                'total_companies': len(companies),
+                'total_purchase': float(total_purchase),
+                'total_sale': float(total_sale),
+                'profit_loss': float(total_sale - total_purchase),
+            },
+        })
+
+    @action(detail=False, methods=['get'], url_path='license-wise')
+    def license_wise(self, request):
+        """
+        Returns trades grouped by license, then by company within each license.
+        Structure: license → [company → purchases/sales/totals]
+        """
+        from trade.models import LicenseTrade
+        from django.db.models import Q
+        from decimal import Decimal
+
+        search = request.query_params.get('search', '').strip()
+        terms = [t.strip() for t in search.split(',') if t.strip()] if search else []
+
+        qs = LicenseTrade.objects.select_related('from_company', 'to_company').prefetch_related(
+            'lines__sr_number__license',
+            'incentive_lines__incentive_license',
+        ).filter(direction__in=['PURCHASE', 'SALE'])
+
+        if terms:
+            if len(terms) == 1:
+                t = terms[0]
+                qs = qs.filter(
+                    Q(lines__sr_number__license__license_number__icontains=t) |
+                    Q(incentive_lines__incentive_license__license_number__icontains=t)
+                ).distinct()
+            else:
+                qs = qs.filter(
+                    Q(lines__sr_number__license__license_number__in=terms) |
+                    Q(incentive_lines__incentive_license__license_number__in=terms)
+                ).distinct()
+
+        licenses_dict = {}
+
+        for trade in qs:
+            company = trade.to_company if trade.direction == 'PURCHASE' else trade.from_company
+            if not company:
+                continue
+
+            if trade.license_type == 'DFIA':
+                lic_entries = list({
+                    (line.sr_number.license.id,
+                     line.sr_number.license.license_number,
+                     str(line.sr_number.license.license_date) if line.sr_number.license.license_date else '-',
+                     trade.license_type)
+                    for line in trade.lines.all()
+                    if line.sr_number and line.sr_number.license
+                    and (not terms or any(t.lower() in line.sr_number.license.license_number.lower() for t in terms))
+                })
+            else:
+                lic_entries = list({
+                    (tl.incentive_license.id,
+                     tl.incentive_license.license_number,
+                     str(tl.incentive_license.license_date) if tl.incentive_license.license_date else '-',
+                     trade.license_type)
+                    for tl in trade.incentive_lines.all()
+                    if tl.incentive_license
+                    and (not terms or any(t.lower() in tl.incentive_license.license_number.lower() for t in terms))
+                })
+
+            amount = trade.total_amount or Decimal('0')
+            row = {
+                'trade_id': trade.id,
+                'invoice_date': str(trade.invoice_date) if trade.invoice_date else '-',
+                'amount': float(amount),
+            }
+
+            for lic_id, lic_num, lic_date, lic_type in lic_entries:
+                if lic_id not in licenses_dict:
+                    licenses_dict[lic_id] = {
+                        'license_id': lic_id,
+                        'license_number': lic_num,
+                        'license_date': lic_date,
+                        'license_type': lic_type,
+                        'companies': {},
+                    }
+
+                cid = company.id
+                if cid not in licenses_dict[lic_id]['companies']:
+                    licenses_dict[lic_id]['companies'][cid] = {
+                        'company_id': cid,
+                        'company_name': company.name,
+                        'purchases': [],
+                        'sales': [],
+                        'purchase_total': Decimal('0'),
+                        'sale_total': Decimal('0'),
+                    }
+
+                if trade.direction == 'PURCHASE':
+                    licenses_dict[lic_id]['companies'][cid]['purchases'].append(row)
+                    licenses_dict[lic_id]['companies'][cid]['purchase_total'] += amount
+                else:
+                    licenses_dict[lic_id]['companies'][cid]['sales'].append(row)
+                    licenses_dict[lic_id]['companies'][cid]['sale_total'] += amount
+
+        result = []
+        for lic in sorted(licenses_dict.values(), key=lambda x: x['license_number']):
+            companies = []
+            for c in sorted(lic['companies'].values(), key=lambda x: x['company_name']):
+                pt = c['purchase_total']
+                st = c['sale_total']
+                c['purchase_total'] = float(pt)
+                c['sale_total'] = float(st)
+                c['profit_loss'] = float(st - pt)
+                companies.append(c)
+            lic['companies'] = companies
+            result.append(lic)
+
+        return Response({'licenses': result})

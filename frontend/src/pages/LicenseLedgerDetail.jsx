@@ -3,9 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
 import { formatDate as formatDateUtil } from '../utils/dateFormatter';
-import ExcelJS from 'exceljs';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { generatePDF, generateExcel } from '../utils/ledgerExport';
 
 export default function LicenseLedgerDetail() {
     const { id, companyId } = useParams();
@@ -27,12 +25,8 @@ export default function LicenseLedgerDetail() {
         setLoading(true);
         setError(null);
         try {
-            // Backend now auto-detects license type (searches both DFIA and Incentive)
-            // Add company parameter if provided to filter transactions by company
             const params = new URLSearchParams();
-            if (companyId) {
-                params.append('company', companyId);
-            }
+            if (companyId) params.append('company', companyId);
             const queryString = params.toString();
             const url = `license-ledger/${id}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
             const response = await api.get(url);
@@ -92,376 +86,15 @@ export default function LicenseLedgerDetail() {
     const showPurchaseWarning = !hasPurchases || isNegativeBalance;
 
     const handleDownloadPDF = () => {
-        const doc = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
-        const pageWidth = doc.internal.pageSize.getWidth();
-
-        // Main Title with elegant styling
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(25, 42, 86); // Professional navy blue
-        doc.text('LICENSE LEDGER STATEMENT', pageWidth / 2, 12, { align: 'center' });
-
-        // License Type subtitle
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(41, 128, 185); // Elegant blue
-        doc.text(`[ ${ledger.license_type} ]`, pageWidth / 2, 18, { align: 'center' });
-
-        // Single elegant separator line
-        doc.setDrawColor(52, 73, 94);
-        doc.setLineWidth(0.5);
-        doc.line(14, 22, pageWidth - 14, 22);
-
-        // License Details - Compact layout
-        doc.setFontSize(8.5);
-        const leftColX = 14;
-        const leftValX = 50;
-        const midColX = pageWidth / 2 - 30;
-        const midValX = pageWidth / 2 + 5;
-        const rightColX = pageWidth - 95;
-        const rightValX = pageWidth - 50;
-        const rowY = 28;
-
-        // Row 1
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(74, 85, 104);
-        doc.text('License Number:', leftColX, rowY);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 0, 0);
-        doc.text(ledger.license_number, leftValX, rowY);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(74, 85, 104);
-        doc.text('License Date:', midColX, rowY);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-        doc.text(formatDate(ledger.license_date), midValX, rowY);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(74, 85, 104);
-        doc.text('Expiry Date:', rightColX, rowY);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-        doc.text(formatDate(ledger.expiry_date), rightValX, rowY);
-
-        // Row 2
-        const row2Y = rowY + 6;
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(74, 85, 104);
-        doc.text('Exporter:', leftColX, row2Y);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 0, 0);
-        const exporterText = ledger.exporter || 'N/A';
-        const maxExporterWidth = midColX - leftValX - 5;
-        const exporterLines = doc.splitTextToSize(exporterText, maxExporterWidth);
-        doc.text(exporterLines[0], leftValX, row2Y);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(74, 85, 104);
-        doc.text('Total Value:', midColX, row2Y);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 0, 0);
-        doc.text(formatCurrency(ledger.total_value, isDFIA ? 'USD' : 'INR'), midValX, row2Y);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(74, 85, 104);
-        doc.text('Balance:', rightColX, row2Y);
-        doc.setFont('helvetica', 'bold');
-        if (currentBalance >= 0) {
-            doc.setTextColor(22, 160, 133);
-        } else {
-            doc.setTextColor(231, 76, 60);
-        }
-        doc.text(formatCurrency(currentBalance, isDFIA ? 'USD' : 'INR'), rightValX, row2Y);
-        doc.setTextColor(0, 0, 0);
-
-        // Separator before table
-        doc.setDrawColor(52, 73, 94);
-        doc.setLineWidth(0.5);
-        doc.line(14, 38, pageWidth - 14, 38);
-
-        // Table headers with proper rupee symbol
-        const headers = isDFIA
-            ? [['Date', 'Particulars', 'Items', 'CIF $ Dr', 'CIF $ Cr', 'Rate', 'Debit (Rs)', 'Credit (Rs)', 'Balance (Rs)', 'P/L (Rs)']]
-            : [['Date', 'Particulars', 'Value Dr', 'Value Cr', 'Rate', 'Debit (Rs)', 'Credit (Rs)', 'Balance (Rs)', 'P/L (Rs)']];
-
-        // Table data with Indian number formatting
-        const data = ledger.transactions.map(txn => {
-            const row = [
-                formatDate(txn.date),
-                txn.particular + (txn.invoice_number ? `\n(${txn.invoice_number})` : ''),
-            ];
-
-            if (isDFIA) {
-                row.push(
-                    txn.items || '',
-                    txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '',
-                    txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : ''
-                );
-            } else {
-                row.push(
-                    txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '',
-                    txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : ''
-                );
-            }
-
-            row.push(
-                txn.rate ? formatIndianNumber(txn.rate, 2) : '',
-                txn.debit_amount ? formatIndianNumber(txn.debit_amount, 2) : '',
-                txn.credit_amount ? formatIndianNumber(txn.credit_amount, 2) : '',
-                formatIndianNumber(txn.balance, 2),
-                txn.type === 'SALE' && txn.profit_loss ? formatIndianNumber(Math.abs(txn.profit_loss), 2) : ''
-            );
-
-            return row;
-        });
-
-        // Add totals row
-        const totalDebit = ledger.transactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
-        const totalCredit = ledger.transactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
-        const salesTransactions = ledger.transactions.filter(t => t.type === 'SALE');
-        const totalPL = salesTransactions.length > 0 ? salesTransactions[salesTransactions.length - 1].profit_loss : 0;
-
-        const totalsRow = isDFIA
-            ? ['', 'TOTAL', '', '', '', '', formatIndianNumber(totalDebit, 2), formatIndianNumber(totalCredit, 2), formatIndianNumber(currentBalance, 2), formatIndianNumber(Math.abs(totalPL), 2)]
-            : ['', 'TOTAL', '', '', '', formatIndianNumber(totalDebit, 2), formatIndianNumber(totalCredit, 2), formatIndianNumber(currentBalance, 2), formatIndianNumber(Math.abs(totalPL), 2)];
-
-        data.push(totalsRow);
-
-        autoTable(doc, {
-            head: headers,
-            body: data,
-            startY: 42,
-            styles: {
-                fontSize: 8.5,
-                cellPadding: 3.5,
-                lineColor: [224, 224, 224],
-                lineWidth: 0.2,
-                halign: 'right',
-                font: 'helvetica',
-                textColor: [44, 62, 80]
-            },
-            headStyles: {
-                fillColor: [52, 73, 94], // Professional dark blue-gray
-                fontStyle: 'bold',
-                textColor: [255, 255, 255],
-                halign: 'center',
-                fontSize: 9,
-                cellPadding: 4.5,
-                lineWidth: 0.3,
-                lineColor: [44, 62, 80]
-            },
-            columnStyles: {
-                0: { halign: 'center', cellWidth: 20 }, // Date
-                1: { halign: 'left', cellWidth: 45 },   // Particulars
-                2: { halign: isDFIA ? 'left' : 'right', cellWidth: isDFIA ? 28 : 18 }, // Items/Value
-                3: { halign: 'right', cellWidth: isDFIA ? 24 : 18 },  // CIF $ Dr/Value
-                4: { halign: 'right', cellWidth: isDFIA ? 24 : 18 },  // CIF $ Cr/Rate
-                5: { halign: 'right', cellWidth: isDFIA ? 18 : 28 },  // Rate/Debit
-                6: { halign: 'right', cellWidth: 28 },  // Debit/Credit
-                7: { halign: 'right', cellWidth: 28 },  // Credit/Balance
-                8: { halign: 'right', cellWidth: 28 },  // Balance/P&L
-                9: { halign: 'right', cellWidth: 28 }   // P&L (if DFIA)
-            },
-            alternateRowStyles: {
-                fillColor: [250, 251, 252] // Very light gray for alternate rows
-            },
-            margin: { left: 14, right: 14 },
-            didParseCell: function(data) {
-                // Style the totals row with elegant colors
-                if (data.row.index === ledger.transactions.length) {
-                    data.cell.styles.fillColor = [236, 240, 241]; // Light elegant gray
-                    data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.fontSize = 9.5;
-                    data.cell.styles.textColor = [25, 42, 86]; // Navy blue
-                    data.cell.styles.lineWidth = 0.5;
-                    data.cell.styles.lineColor = [52, 73, 94];
-                }
-            }
-        });
-
-        // Professional Footer Section
-        const finalY = doc.lastAutoTable.finalY || 42;
-
-        // Footer separator line
-        doc.setDrawColor(224, 224, 224);
-        doc.setLineWidth(0.3);
-        doc.line(14, finalY + 6, pageWidth - 14, finalY + 6);
-
-        // Footer text
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(127, 140, 141);
-        doc.text(`Generated: ${formatDate(new Date())} | License Manager System`, 14, finalY + 11);
-
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(74, 85, 104);
-        doc.text('Page 1 of 1', pageWidth - 14, finalY + 11, { align: 'right' });
-
-        // Save with formatted filename
-        const filename = `License_Ledger_${ledger.license_number.replace(/\//g, '-')}_${new Date().toISOString().split('T')[0]}.pdf`;
-        doc.save(filename);
+        const filename = `License_Ledger_${String(ledger.license_number).replace(/\//g, '-')}_${new Date().toISOString().split('T')[0]}.pdf`;
+        generatePDF([ledger], filename);
     };
 
     const handleDownloadExcel = async () => {
-        const wb = new ExcelJS.Workbook();
-        const ws = wb.addWorksheet('License Ledger');
-
-        const headers = ['Date', 'Particulars'];
-        if (isDFIA) {
-            headers.push('Items', 'CIF $ Dr', 'CIF $ Cr');
-        } else {
-            headers.push('Value Dr', 'Value Cr');
-        }
-        headers.push('Rate', 'Debit (₹)', 'Credit (₹)', 'Balance (₹)', 'P/L (₹)');
-        const numCols = headers.length;
-
-        const thinBorder = (argb = 'FF000000') => ({ style: 'thin', color: { argb } });
-        const allThin = (argb = 'FF000000') => ({
-            top: thinBorder(argb), bottom: thinBorder(argb),
-            left: thinBorder(argb), right: thinBorder(argb),
-        });
-
-        // Row 1: Main title
-        ws.addRow(['LICENSE LEDGER STATEMENT']);
-        ws.mergeCells(1, 1, 1, numCols);
-        const titleCell = ws.getCell(1, 1);
-        titleCell.font = { bold: true, size: 16, color: { argb: 'FF2C3E50' } };
-        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECF0F1' } };
-        titleCell.border = { bottom: { style: 'medium', color: { argb: 'FF2C3E50' } } };
-        ws.getRow(1).height = 30;
-
-        // Row 2: License type subtitle
-        ws.addRow([`[ ${ledger.license_type} ]`]);
-        ws.mergeCells(2, 1, 2, numCols);
-        const subtitleCell = ws.getCell(2, 1);
-        subtitleCell.font = { bold: true, size: 12, color: { argb: 'FF3498DB' } };
-        subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        ws.getRow(2).height = 22;
-
-        // Row 3: blank separator
-        ws.addRow([]);
-
-        // Row 4: LICENSE DETAILS section header
-        ws.addRow(['LICENSE DETAILS']);
-        ws.mergeCells(4, 1, 4, numCols);
-        const detailsHeaderCell = ws.getCell(4, 1);
-        detailsHeaderCell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
-        detailsHeaderCell.alignment = { horizontal: 'left', vertical: 'middle' };
-        detailsHeaderCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF34495E' } };
-        detailsHeaderCell.border = allThin();
-        ws.getRow(4).height = 24;
-
-        // Rows 5–7: license detail key-value pairs
-        ws.addRow(['License Number:', ledger.license_number, '', '', '', 'License Date:', formatDate(ledger.license_date)]);
-        ws.addRow(['Exporter Name:', ledger.exporter || 'N/A', '', '', '', 'Expiry Date:', formatDate(ledger.expiry_date)]);
-        ws.addRow(['Total License Value:', formatCurrency(ledger.total_value, isDFIA ? 'USD' : 'INR'), '', '', '', 'Available Balance:', formatCurrency(currentBalance, isDFIA ? 'USD' : 'INR')]);
-
-        // Row 8: blank separator
-        ws.addRow([]);
-
-        // Row 9: table header
-        const headerRowNum = 9;
-        ws.addRow(headers);
-        for (let col = 1; col <= numCols; col++) {
-            const cell = ws.getCell(headerRowNum, col);
-            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } };
-            cell.alignment = { horizontal: 'center', vertical: 'middle' };
-            cell.border = allThin();
-        }
-        ws.getRow(headerRowNum).height = 25;
-
-        // Totals used in both data rows and totals row
-        const totalDebit = ledger.transactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
-        const totalCredit = ledger.transactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
-        const salesTransactions = ledger.transactions.filter(t => t.type === 'SALE');
-        const totalPL = salesTransactions.length > 0 ? salesTransactions[salesTransactions.length - 1].profit_loss : 0;
-
-        // Data rows starting at row 10
-        let dataRowNum = headerRowNum + 1;
-        ledger.transactions.forEach(txn => {
-            const row = [
-                formatDate(txn.date),
-                txn.particular + (txn.invoice_number ? ` (${txn.invoice_number})` : ''),
-            ];
-            if (isDFIA) {
-                row.push(
-                    txn.items || '',
-                    txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '',
-                    txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : '',
-                );
-            } else {
-                row.push(
-                    txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '',
-                    txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : '',
-                );
-            }
-            row.push(
-                txn.rate ? formatIndianNumber(txn.rate, 2) : '',
-                txn.debit_amount ? formatIndianNumber(txn.debit_amount, 2) : '',
-                txn.credit_amount ? formatIndianNumber(txn.credit_amount, 2) : '',
-                formatIndianNumber(txn.balance, 2),
-                txn.type === 'SALE' && txn.profit_loss ? formatIndianNumber(Math.abs(txn.profit_loss), 2) : '',
-            );
-            ws.addRow(row);
-            for (let col = 1; col <= numCols; col++) {
-                const cell = ws.getCell(dataRowNum, col);
-                cell.border = allThin('FFCCCCCC');
-                cell.alignment = { horizontal: col > 2 ? 'right' : 'left' };
-            }
-            dataRowNum++;
-        });
-
-        // Totals row
-        const totalsRowNum = dataRowNum;
-        const totalsRow = ['', 'TOTAL'];
-        if (isDFIA) {
-            totalsRow.push('', '', '');
-        } else {
-            totalsRow.push('', '');
-        }
-        totalsRow.push(
-            '',
-            formatIndianNumber(totalDebit, 2),
-            formatIndianNumber(totalCredit, 2),
-            formatIndianNumber(currentBalance, 2),
-            formatIndianNumber(Math.abs(totalPL), 2),
-        );
-        ws.addRow(totalsRow);
-        for (let col = 1; col <= numCols; col++) {
-            const cell = ws.getCell(totalsRowNum, col);
-            cell.font = { bold: true };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
-            cell.border = {
-                top: { style: 'double', color: { argb: 'FF000000' } },
-                bottom: { style: 'double', color: { argb: 'FF000000' } },
-                left: thinBorder(),
-                right: thinBorder(),
-            };
-            cell.alignment = { horizontal: col > 2 ? 'right' : 'left' };
-        }
-        ws.getRow(totalsRowNum).height = 24;
-
-        // Column widths
-        const colWidths = isDFIA
-            ? [12, 40, 20, 14, 14, 12, 16, 16, 18, 16]
-            : [12, 40, 14, 14, 12, 16, 16, 18, 16];
-        colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
-
-        // Download
-        const buffer = await wb.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${ledger.license_number.replace(/\//g, '-')}_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const filename = `License_Ledger_${String(ledger.license_number).replace(/\//g, '-')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        await generateExcel([ledger], filename);
     };
+
 
     return (
         <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '0' }}>
@@ -485,6 +118,7 @@ export default function LicenseLedgerDetail() {
                     </div>
                     <div>
                         <button
+                            type="button"
                             className="btn btn-sm btn-danger me-2"
                             onClick={handleDownloadPDF}
                             style={{ borderRadius: '2px' }}
@@ -493,6 +127,7 @@ export default function LicenseLedgerDetail() {
                             Download PDF
                         </button>
                         <button
+                            type="button"
                             className="btn btn-sm btn-success me-3"
                             onClick={handleDownloadExcel}
                             style={{ borderRadius: '2px' }}
@@ -618,341 +253,131 @@ export default function LicenseLedgerDetail() {
                 </div>
             </div>
 
-            {/* Professional Ledger Table */}
-            <div style={{
-                backgroundColor: 'white',
-                border: '1px solid #dee2e6',
-                borderRadius: '8px',
-                marginTop: '20px',
-                marginLeft: '20px',
-                marginRight: '20px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                overflow: 'hidden'
-            }}>
-                <div style={{
-                    backgroundColor: 'var(--bs-gray-50)',
-                    padding: '15px 20px',
-                    borderBottom: '2px solid #dee2e6'
-                }}>
-                    <h5 style={{ margin: '0', color: 'var(--text-dark)', fontWeight: '600' }}>
-                        <i className="bi bi-journal-text me-2"></i>
-                        Transaction Ledger
-                    </h5>
-                </div>
-                <table style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    fontSize: '0.9rem'
-                }}>
-                    {/* Header */}
-                    <thead>
-                        <tr style={{
-                            backgroundColor: 'var(--text-dark)',
-                            color: 'white',
-                            borderBottom: '2px solid #1a252f'
-                        }}>
-                            <th style={{ padding: '12px 15px', textAlign: 'left', borderRight: '1px solid #3d4f5f', width: '100px', fontWeight: '600' }}>Date</th>
-                            <th style={{ padding: '12px 15px', textAlign: 'left', borderRight: '1px solid #3d4f5f', minWidth: '280px', fontWeight: '600' }}>Particulars</th>
-                            {isDFIA && <th style={{ padding: '12px 15px', textAlign: 'left', borderRight: '1px solid #3d4f5f', minWidth: '180px', fontWeight: '600' }}>Items</th>}
-                            {isDFIA && <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '110px', fontWeight: '600' }}>CIF $ Dr</th>}
-                            {isDFIA && <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '110px', fontWeight: '600' }}>CIF $ Cr</th>}
-                            {!isDFIA && <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '120px', fontWeight: '600' }}>Value Dr</th>}
-                            {!isDFIA && <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '120px', fontWeight: '600' }}>Value Cr</th>}
-                            <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '90px', fontWeight: '600' }}>Rate</th>
-                            <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '130px', fontWeight: '600' }}>Debit (₹)</th>
-                            <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '130px', fontWeight: '600' }}>Credit (₹)</th>
-                            <th style={{ padding: '12px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f', width: '130px', fontWeight: '600' }}>Balance</th>
-                            <th style={{ padding: '12px 15px', textAlign: 'right', width: '120px', fontWeight: '600' }}>P/L</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {ledger.transactions.map((txn, index) => {
-                            const profitLoss = txn.profit_loss || 0;
-                            const isProfitable = profitLoss > 0;
-                            const isLoss = profitLoss < 0;
-                            const isOpening = txn.type === 'OPENING';
-                            const isPurchase = txn.type === 'PURCHASE';
-                            const isSale = txn.type === 'SALE';
+            {/* Company-grouped Ledger Table */}
+            {(() => {
+                const companiesMap = {};
+                (ledger.transactions || []).forEach(txn => {
+                    const key = txn.company_id != null ? txn.company_id : 'unknown';
+                    if (!companiesMap[key]) {
+                        companiesMap[key] = {
+                            company_id: txn.company_id,
+                            company_name: txn.company_name || 'N/A',
+                            transactions: []
+                        };
+                    }
+                    companiesMap[key].transactions.push(txn);
+                });
+                const companiesGrouped = Object.values(companiesMap);
 
-                            return (
-                                <tr key={index} style={{
-                                    backgroundColor: index % 2 === 0 ? 'white' : 'var(--bs-gray-50)',
-                                    borderBottom: '1px solid #e9ecef',
-                                    transition: 'background-color 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--indigo-50)'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'white' : 'var(--bs-gray-50)'}
-                                >
-                                    <td style={{
-                                        padding: '12px 15px',
-                                        borderRight: '1px solid #e9ecef',
-                                        fontWeight: isOpening ? '600' : 'normal',
-                                        color: 'var(--bs-gray-600)'
-                                    }}>
-                                        {formatDate(txn.date)}
-                                    </td>
-                                    <td style={{
-                                        padding: '12px 15px',
-                                        borderRight: '1px solid #e9ecef',
-                                        fontWeight: isOpening ? '600' : 'normal'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            {isOpening && <span style={{ color: 'var(--info-color)', fontSize: '0.9rem' }}>●</span>}
-                                            {isPurchase && <span style={{ color: 'var(--warning-color)', fontSize: '0.9rem' }}>●</span>}
-                                            {isSale && <span style={{ color: 'var(--success-color)', fontSize: '0.9rem' }}>●</span>}
-                                            <div>
-                                                <div style={{ color: 'var(--bs-gray-800)' }}>{txn.particular}</div>
-                                                {txn.invoice_number && (
-                                                    <div style={{ fontSize: '0.8rem', color: 'var(--bs-gray-500)', marginTop: '3px' }}>
-                                                        Invoice: {txn.invoice_number}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </td>
-                                    {isDFIA && (
-                                        <td style={{
-                                            padding: '12px 15px',
-                                            borderRight: '1px solid #e9ecef',
-                                            fontSize: '0.85rem',
-                                            color: 'var(--bs-gray-600)'
-                                        }}>
-                                            {txn.items || '-'}
-                                        </td>
-                                    )}
-                                    {isDFIA && (
-                                        <>
-                                            <td style={{
-                                                padding: '12px 15px',
-                                                textAlign: 'right',
-                                                borderRight: '1px solid #e9ecef',
-                                                color: txn.debit_cif ? 'var(--danger-color)' : 'var(--bs-gray-500)',
-                                                fontWeight: txn.debit_cif ? '500' : 'normal'
-                                            }}>
-                                                {txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '-'}
-                                            </td>
-                                            <td style={{
-                                                padding: '12px 15px',
-                                                textAlign: 'right',
-                                                borderRight: '1px solid #e9ecef',
-                                                color: txn.credit_cif ? 'var(--success-color)' : 'var(--bs-gray-500)',
-                                                fontWeight: txn.credit_cif ? '500' : 'normal'
-                                            }}>
-                                                {txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : '-'}
-                                            </td>
-                                        </>
-                                    )}
-                                    {!isDFIA && (
-                                        <>
-                                            <td style={{
-                                                padding: '12px 15px',
-                                                textAlign: 'right',
-                                                borderRight: '1px solid #e9ecef',
-                                                color: txn.debit_license_value ? 'var(--danger-color)' : 'var(--bs-gray-500)',
-                                                fontWeight: txn.debit_license_value ? '500' : 'normal'
-                                            }}>
-                                                {txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '-'}
-                                            </td>
-                                            <td style={{
-                                                padding: '12px 15px',
-                                                textAlign: 'right',
-                                                borderRight: '1px solid #e9ecef',
-                                                color: txn.credit_license_value ? 'var(--success-color)' : 'var(--bs-gray-500)',
-                                                fontWeight: txn.credit_license_value ? '500' : 'normal'
-                                            }}>
-                                                {txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : '-'}
-                                            </td>
-                                        </>
-                                    )}
-                                    <td style={{
-                                        padding: '12px 15px',
-                                        textAlign: 'right',
-                                        borderRight: '1px solid #e9ecef',
-                                        color: 'var(--bs-gray-600)'
-                                    }}>
-                                        {txn.rate ? formatIndianNumber(txn.rate, 2) : '-'}
-                                    </td>
-                                    <td style={{
-                                        padding: '12px 15px',
-                                        textAlign: 'right',
-                                        borderRight: '1px solid #e9ecef',
-                                        color: txn.debit_amount ? 'var(--danger-color)' : 'var(--bs-gray-500)',
-                                        fontWeight: txn.debit_amount ? '600' : 'normal'
-                                    }}>
-                                        {txn.debit_amount ? formatIndianNumber(txn.debit_amount, 2) : '-'}
-                                    </td>
-                                    <td style={{
-                                        padding: '12px 15px',
-                                        textAlign: 'right',
-                                        borderRight: '1px solid #e9ecef',
-                                        color: txn.credit_amount ? 'var(--success-color)' : 'var(--bs-gray-500)',
-                                        fontWeight: txn.credit_amount ? '600' : 'normal'
-                                    }}>
-                                        {txn.credit_amount ? formatIndianNumber(txn.credit_amount, 2) : '-'}
-                                    </td>
-                                    <td style={{
-                                        padding: '12px 15px',
-                                        textAlign: 'right',
-                                        fontWeight: '700',
-                                        backgroundColor: 'var(--bs-gray-50)',
-                                        color: 'var(--bs-gray-800)',
-                                        borderRight: '1px solid #e9ecef'
-                                    }}>
-                                        {formatIndianNumber(txn.balance, 2)}
-                                    </td>
-                                    <td style={{
-                                        padding: '12px 15px',
-                                        textAlign: 'right',
-                                        fontWeight: '700',
-                                        color: isProfitable ? 'var(--success-color)' : isLoss ? 'var(--danger-color)' : 'var(--bs-gray-500)'
-                                    }}>
-                                        {txn.type === 'SALE' && profitLoss !== 0 ? (
+                return companiesGrouped.map((company, ci) => {
+                    const txns = company.transactions;
+                    const totalDebit = txns.reduce((s, t) => s + (t.debit_amount || 0), 0);
+                    const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
+                    const companyPL = txns.filter(t => t.type === 'SALE').reduce((s, t) => s + (t.profit_loss || 0), 0);
+
+                    return (
+                        <div key={company.company_id ?? ci} style={{
+                            backgroundColor: 'white',
+                            border: '1px solid #dee2e6',
+                            borderRadius: '8px',
+                            marginTop: ci === 0 ? '20px' : '12px',
+                            marginLeft: '20px',
+                            marginRight: '20px',
+                            marginBottom: ci === companiesGrouped.length - 1 ? '20px' : '0',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                            overflow: 'hidden'
+                        }}>
+                            {/* Company Header */}
+                            <div style={{
+                                backgroundColor: '#1e3a5f',
+                                color: 'white',
+                                padding: '10px 20px',
+                                fontWeight: '700',
+                                fontSize: '0.95rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}>
+                                <i className="bi bi-building"></i>
+                                {company.company_name}
+                            </div>
+
+                            <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ background: '#f0f4ff', borderBottom: '2px solid #c7d2fe' }}>
+                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'left' }}>Date</th>
+                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'left' }}>Particulars</th>
+                                        {isDFIA && <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'left' }}>Items</th>}
+                                        {isDFIA ? (
                                             <>
-                                                {isProfitable ? '+ ' : '- '}
-                                                {formatIndianNumber(Math.abs(profitLoss), 2)}
+                                                <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'right' }}>CIF $ Dr</th>
+                                                <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'right' }}>CIF $ Cr</th>
                                             </>
-                                        ) : '-'}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-
-                        {/* Totals Row */}
-                        <tr style={{
-                            backgroundColor: 'var(--text-medium)',
-                            color: 'white',
-                            fontWeight: '700',
-                            borderTop: '2px solid #2c3e50'
-                        }}>
-                            <td colSpan="2" style={{ padding: '8px 10px', textAlign: 'right', borderRight: '1px solid #2c3e50' }}>
-                                TOTAL
-                            </td>
-                            {isDFIA && <td style={{ borderRight: '1px solid #2c3e50' }}></td>}
-                            {isDFIA && (
-                                <>
-                                    <td style={{ padding: '8px 10px', textAlign: 'right', borderRight: '1px solid #2c3e50' }}>
-                                        {formatIndianNumber(
-                                            ledger.transactions.reduce((sum, t) => sum + (t.debit_cif || 0), 0),
-                                            2
+                                        ) : (
+                                            <>
+                                                <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'right' }}>Value Dr</th>
+                                                <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'right' }}>Value Cr</th>
+                                            </>
                                         )}
-                                    </td>
-                                    <td style={{ padding: '8px 10px', textAlign: 'right', borderRight: '1px solid #2c3e50' }}>
-                                        {formatIndianNumber(
-                                            ledger.transactions.reduce((sum, t) => sum + (t.credit_cif || 0), 0),
-                                            2
-                                        )}
-                                    </td>
-                                </>
-                            )}
-                            {!isDFIA && (
-                                <>
-                                    <td style={{ padding: '8px 10px', textAlign: 'right', borderRight: '1px solid #2c3e50' }}>
-                                        {formatIndianNumber(
-                                            ledger.transactions.reduce((sum, t) => sum + (t.debit_license_value || 0), 0),
-                                            2
-                                        )}
-                                    </td>
-                                    <td style={{ padding: '8px 10px', textAlign: 'right', borderRight: '1px solid #2c3e50' }}>
-                                        {formatIndianNumber(
-                                            ledger.transactions.reduce((sum, t) => sum + (t.credit_license_value || 0), 0),
-                                            2
-                                        )}
-                                    </td>
-                                </>
-                            )}
-                            <td style={{ borderRight: '1px solid #2c3e50' }}></td>
-                            <td style={{ padding: '8px 10px', textAlign: 'right', borderRight: '1px solid #2c3e50' }}>
-                                {formatIndianNumber(
-                                    ledger.transactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0),
-                                    2
-                                )}
-                            </td>
-                            <td style={{ padding: '8px 10px', textAlign: 'right', borderRight: '1px solid #2c3e50' }}>
-                                {formatIndianNumber(
-                                    ledger.transactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0),
-                                    2
-                                )}
-                            </td>
-                            <td style={{ padding: '15px 15px', textAlign: 'right', borderRight: '1px solid #3d4f5f' }}>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ color: 'var(--bs-gray-400)' }}>Closing:</span>
-                                    <span style={{ color: currentBalance >= 0 ? 'var(--success-color)' : 'var(--danger-color)' }}>
-                                        {formatIndianNumber(currentBalance, 2)}
-                                    </span>
-                                </div>
-                            </td>
-                            <td style={{ padding: '15px 15px', textAlign: 'right' }}>
-                                {(() => {
-                                    const salesTransactions = ledger.transactions.filter(t => t.type === 'SALE');
-                                    const totalPL = salesTransactions.length > 0
-                                        ? salesTransactions[salesTransactions.length - 1].profit_loss
-                                        : 0;
-                                    return (
-                                        <span style={{ color: totalPL >= 0 ? 'var(--success-color)' : 'var(--danger-color)' }}>
-                                            {totalPL >= 0 ? '+ ' : '- '}
-                                            {formatIndianNumber(Math.abs(totalPL), 2)}
-                                        </span>
-                                    );
-                                })()}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Summary Footer - Tally Style */}
-            <div style={{
-                backgroundColor: 'white',
-                border: '1px solid #dee2e6',
-                marginTop: '20px',
-                marginLeft: '20px',
-                marginRight: '20px',
-                marginBottom: '20px',
-                padding: '15px'
-            }}>
-                <div className="row text-center" style={{ fontFamily: 'monospace' }}>
-                    <div className="col-3">
-                        <div style={{ color: 'var(--bs-gray-500)', fontSize: '0.75rem', marginBottom: '5px' }}>TRANSACTIONS</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '700' }}>
-                            {ledger.transactions.length - 1}
+                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'right' }}>Rate</th>
+                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: '#065f46', textAlign: 'right' }}>Debit (₹)</th>
+                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: '#991b1b', textAlign: 'right' }}>Credit (₹)</th>
+                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'right' }}>{isDFIA ? 'Balance ($)' : 'Balance (₹)'}</th>
+                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: '#374151', textAlign: 'right' }}>P/L</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {txns.map((txn, ti) => {
+                                        const isPurchase = txn.type === 'PURCHASE' || txn.type === 'OPENING';
+                                        const rowBg = isPurchase ? '#f0fdf4' : (txn.type === 'SALE' ? '#fef2f2' : '#ffffff');
+                                        const rowBorder = isPurchase ? '1px solid #d1fae5' : (txn.type === 'SALE' ? '1px solid #fecaca' : '1px solid #f3f4f6');
+                                        return (
+                                            <tr key={ti} style={{ background: rowBg, borderBottom: rowBorder }}>
+                                                <td style={{ padding: '5px 10px', color: '#6b7280', whiteSpace: 'nowrap' }}>{formatDate(txn.date)}</td>
+                                                <td style={{ padding: '5px 10px', color: '#374151' }}>
+                                                    {txn.particular}
+                                                    {txn.invoice_number && <span style={{ color: '#6b7280', fontSize: '0.78rem', display: 'block' }}>({txn.invoice_number})</span>}
+                                                </td>
+                                                {isDFIA && <td style={{ padding: '5px 10px', color: '#374151' }}>{txn.items || '-'}</td>}
+                                                {isDFIA ? (
+                                                    <>
+                                                        <td style={{ padding: '5px 10px', textAlign: 'right', color: '#065f46' }}>{txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '-'}</td>
+                                                        <td style={{ padding: '5px 10px', textAlign: 'right', color: '#991b1b' }}>{txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : '-'}</td>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <td style={{ padding: '5px 10px', textAlign: 'right', color: '#065f46' }}>{txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '-'}</td>
+                                                        <td style={{ padding: '5px 10px', textAlign: 'right', color: '#991b1b' }}>{txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : '-'}</td>
+                                                    </>
+                                                )}
+                                                <td style={{ padding: '5px 10px', textAlign: 'right', color: '#374151' }}>{txn.rate ? formatIndianNumber(txn.rate, 2) : '-'}</td>
+                                                <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: '600', color: '#065f46' }}>{txn.debit_amount ? `₹${formatIndianNumber(txn.debit_amount, 2)}` : '-'}</td>
+                                                <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: '600', color: '#991b1b' }}>{txn.credit_amount ? `₹${formatIndianNumber(txn.credit_amount, 2)}` : '-'}</td>
+                                                <td style={{ padding: '5px 10px', textAlign: 'right', color: txn.balance >= 0 ? '#065f46' : '#991b1b' }}>{formatIndianNumber(txn.balance, 2)}</td>
+                                                <td style={{ padding: '5px 10px', textAlign: 'right', color: txn.profit_loss >= 0 ? '#065f46' : '#991b1b' }}>
+                                                    {txn.type === 'SALE' && txn.profit_loss != null ? formatIndianNumber(Math.abs(txn.profit_loss), 2) : '-'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {/* Company Total Row */}
+                                    <tr style={{ background: '#1e3a5f', color: '#fff', fontWeight: '700' }}>
+                                        <td colSpan={isDFIA ? 6 : 5} style={{ padding: '7px 10px', textAlign: 'right', fontSize: '0.8rem' }}>
+                                            Total — {company.company_name}
+                                        </td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#6ee7b7' }}>₹{formatIndianNumber(totalDebit, 2)}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#fca5a5' }}>₹{formatIndianNumber(totalCredit, 2)}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#93c5fd' }}>{formatIndianNumber(txns[txns.length - 1]?.balance || 0, 2)}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: companyPL >= 0 ? '#6ee7b7' : '#fca5a5' }}>
+                                            {companyPL !== 0 ? `${companyPL >= 0 ? '+' : ''}₹${formatIndianNumber(Math.abs(companyPL), 2)}` : '-'}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
-                    <div className="col-3">
-                        <div style={{ color: 'var(--bs-gray-500)', fontSize: '0.75rem', marginBottom: '5px' }}>PURCHASES</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--warning-text)' }}>
-                            {ledger.transactions.filter(t => t.type === 'PURCHASE').length}
-                        </div>
-                    </div>
-                    <div className="col-3">
-                        <div style={{ color: 'var(--bs-gray-500)', fontSize: '0.75rem', marginBottom: '5px' }}>SALES</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--success-text)' }}>
-                            {ledger.transactions.filter(t => t.type === 'SALE').length}
-                        </div>
-                    </div>
-                    <div className="col-3">
-                        <div style={{ color: 'var(--bs-gray-500)', fontSize: '0.75rem', marginBottom: '5px' }}>NET PROFIT/LOSS</div>
-                        <div style={{
-                            fontSize: '1.1rem',
-                            fontWeight: '700',
-                            color: (() => {
-                                const salesTransactions = ledger.transactions.filter(t => t.type === 'SALE');
-                                const lastProfit = salesTransactions.length > 0
-                                    ? salesTransactions[salesTransactions.length - 1].profit_loss
-                                    : 0;
-                                return lastProfit >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
-                            })()
-                        }}>
-                            {(() => {
-                                const salesTransactions = ledger.transactions.filter(t => t.type === 'SALE');
-                                const lastProfit = salesTransactions.length > 0
-                                    ? salesTransactions[salesTransactions.length - 1].profit_loss
-                                    : 0;
-                                return (lastProfit >= 0 ? '+ ' : '- ') + formatIndianNumber(Math.abs(lastProfit), 2);
-                            })()}
-                        </div>
-                    </div>
-                </div>
-            </div>
+                    );
+                });
+            })()}
         </div>
     );
 }

@@ -120,6 +120,15 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
     """Extended BOE ViewSet with custom filtering for trade form"""
     permission_classes = [BillOfEntryPermission]
 
+    def get_permissions(self):
+        if self.action == 'generate_transfer_letter':
+            from accounts.permissions import TransferLetterPermission
+            return [TransferLetterPermission()]
+        if self.action == 'update_invoice_no':
+            from accounts.permissions import AccountAccessPermission
+            return [AccountAccessPermission()]
+        return super().get_permissions()
+
     # Apply advanced filter backends
     filterset_class = BOEFilterSet
     filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
@@ -198,11 +207,8 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
         })
 
 
-# Add grouped export functionality
+# Add grouped export functionality (attaches methods to existing class — no permission reset)
 BillOfEntryViewSet = add_grouped_export_action(BillOfEntryViewSet)
-
-# Add permission classes
-BillOfEntryViewSet.permission_classes = [BillOfEntryPermission]
 
 
 # Add custom action to fetch allotment details
@@ -555,3 +561,27 @@ def merge_boe(self, request, pk=None):
 
 
 BillOfEntryViewSet.merge_boe = merge_boe
+
+
+# ── Update invoice number — accessible to ACCOUNT_ACCESS (accounts team) ──────
+@action(detail=True, methods=['post'], url_path='update-invoice-no')
+def update_invoice_no(self, request, pk=None):
+    """
+    Update only the invoice_no field on a BOE.
+    Accessible to ACCOUNT_ACCESS role (accounts team) and BOE_MANAGER.
+    Payload: { "invoice_no": "INV-12345" }
+    """
+    from django.shortcuts import get_object_or_404
+
+    boe = get_object_or_404(BillOfEntryModel, pk=pk)
+    invoice_no = request.data.get('invoice_no', '').strip()
+    boe.invoice_no = invoice_no
+    boe.save(update_fields=['invoice_no'])
+    return Response({
+        'id': boe.id,
+        'invoice_no': boe.invoice_no,
+        'message': 'Invoice number updated',
+    })
+
+
+BillOfEntryViewSet.update_invoice_no = update_invoice_no

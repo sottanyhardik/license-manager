@@ -10,10 +10,10 @@ from decimal import Decimal
 from django.db import transaction
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import LedgerUploadPermission
 from bill_of_entry.models import BillOfEntryModel, RowDetails
 from core.utils.exceptions import api_error
 from core.models import PortModel
@@ -30,7 +30,7 @@ class LedgerCSVUploadView(APIView):
     Example:
     0311031558,1,1234567,01/01/2024,INMUN1,10000.50,1500.25,1000
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [LedgerUploadPermission]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):

@@ -153,8 +153,36 @@ export const AuthProvider = ({children}) => {
         setLoading(false);
     };
 
+    // ── Role helpers ──────────────────────────────────────────────────────────
+    // These read from the `roles` array that the /me endpoint now returns.
+    // Superusers bypass all role checks — check isSuperAdmin() first when gating.
+
+    const isSuperAdmin = () => user?.is_superuser === true;
+
+    const hasRole = (roleCode) => {
+        if (user?.is_superuser) return true;
+        return Array.isArray(user?.roles) && user.roles.includes(roleCode);
+    };
+
+    const hasAnyRole = (roleCodes) => {
+        if (user?.is_superuser) return true;
+        if (!Array.isArray(user?.roles)) return false;
+        return roleCodes.some(r => user.roles.includes(r));
+    };
+
+    const canManageUsers = () => isSuperAdmin() || hasRole('USER_MANAGER');
+
     return (
-        <AuthContext.Provider value={{user, loading, loginSuccess, logout}}>
+        <AuthContext.Provider value={{
+            user,
+            loading,
+            loginSuccess,
+            logout,
+            hasRole,
+            hasAnyRole,
+            isSuperAdmin,
+            canManageUsers,
+        }}>
             {children}
         </AuthContext.Provider>
     );

@@ -18,16 +18,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Security
 # ---------------------------------------------------------------------
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-this-in-production")
-DEBUG = os.getenv("DEBUG", "True").lower() == "true"
+DEBUG = os.getenv("DEBUG", "True").lower() == "true"  # default OFF in production
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS",
                           "127.0.0.1,localhost,139.59.92.226,labdhi.duckdns.org,143.110.252.201,license-manager.duckdns.org,178.128.58.219,165.232.185.220,license-tractor.duckdns.org").split(
     ",")
 
 # HTTPS Settings
+# When DEBUG=True (dev server, HTTP only) these are automatically off.
+# When DEBUG=False (production) these default to on — can be overridden via env vars.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "False").lower() == "true"
-SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "False").lower() == "true"
-CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "False").lower() == "true"
+_https_default = "False" if DEBUG else "True"
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", _https_default).lower() == "true"
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", _https_default).lower() == "true"
+CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", _https_default).lower() == "true"
 
 # ---------------------------------------------------------------------
 # Applications
@@ -75,6 +78,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Activity audit log — must be AFTER AuthenticationMiddleware so request.user is set
+    "core.middleware.ActivityLogMiddleware",
 ]
 
 ROOT_URLCONF = "lmanagement.urls"
@@ -256,20 +261,18 @@ CACHES = {
 CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # default Vite port
+    # ── Development (HTTP allowed locally) ───────────────────────────────────
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:3000",  # sometimes Vite is proxied to 3000 in dev
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://localhost:8000",  # Django serving React frontend
+    "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "http://139.59.92.226",  # Production server (Labdhi)
-    "http://139.59.92.226:8000",
-    "https://labdhi.duckdns.org",  # Production domain (Labdhi)
-    "http://143.110.252.201:8000",  # Server IP
-    "https://license-manager.duckdns.org",  # Production domain with SSL
-    "http://165.232.185.220",  # Tractor server IP (HTTP)
-    "https://165.232.185.220",  # Tractor server IP (HTTPS)
-    "https://license-tractor.duckdns.org",  # Production domain (Tractor)
+    # ── Production (HTTPS only — HTTP origins removed to prevent MITM) ───────
+    "https://labdhi.duckdns.org",
+    "https://license-manager.duckdns.org",
+    "https://165.232.185.220",
+    "https://license-tractor.duckdns.org",
 ]
 
 # Allow cookies (credentials) across origins when frontend sends withCredentials
@@ -310,12 +313,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "http://139.59.92.226",
-    "http://139.59.92.226:8000",
     "https://labdhi.duckdns.org",
-    "http://143.110.252.201:8000",
     "https://license-manager.duckdns.org",
-    "http://165.232.185.220",
     "https://165.232.185.220",
     "https://license-tractor.duckdns.org",
 ]

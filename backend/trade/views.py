@@ -281,6 +281,12 @@ LicenseTradeViewSet.permission_classes = [TradePermission]
 
 # Add custom actions to TradeViewSet
 class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
+    def get_permissions(self):
+        if self.action == 'generate_transfer_letter':
+            from accounts.permissions import TransferLetterPermission
+            return [TransferLetterPermission()]
+        return super().get_permissions()
+
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.select_related(

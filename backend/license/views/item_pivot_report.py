@@ -15,7 +15,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views import View
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny
+from accounts.permissions import ReportPermission
 from rest_framework.response import Response
 
 from core.constants import DEC_0, DEC_000, GE, MI, CO
@@ -991,7 +991,7 @@ class ItemPivotViewSet(viewsets.ViewSet):
 
     Permissions: AllowAny - accessible to all users
     """
-    permission_classes = [AllowAny]
+    permission_classes = [ReportPermission]
 
     def list(self, request):
         """

@@ -102,3 +102,17 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_short_name(self):
         return self.username or self.email
+
+    # ── Role helpers (backed by Django's built-in Group model) ────────────────
+
+    def has_role(self, role_code: str) -> bool:
+        """Return True if this user belongs to the group named *role_code*."""
+        return self.groups.filter(name=role_code).exists()
+
+    def has_any_role(self, role_codes) -> bool:
+        """Return True if this user belongs to at least one of the named groups."""
+        return self.groups.filter(name__in=role_codes).exists()
+
+    def get_role_codes(self) -> list:
+        """Return a list of group names this user belongs to."""
+        return list(self.groups.values_list('name', flat=True))

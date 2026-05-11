@@ -566,3 +566,68 @@ class CeleryTaskTracker(models.Model):
         if self.completed_at and self.started_at:
             return (self.completed_at - self.started_at).total_seconds()
         return None
+
+
+# ── Activity / Audit Log ──────────────────────────────────────────────────────
+
+class ActivityLog(models.Model):
+    """
+    Records every significant user action in the system for auditing purposes.
+    Written by ActivityLogMiddleware for all authenticated API requests plus
+    explicit entries for login/logout.
+    """
+    ACTION_LOGIN    = 'LOGIN'
+    ACTION_LOGOUT   = 'LOGOUT'
+    ACTION_VIEW     = 'VIEW'
+    ACTION_CREATE   = 'CREATE'
+    ACTION_UPDATE   = 'UPDATE'
+    ACTION_DELETE   = 'DELETE'
+    ACTION_DOWNLOAD = 'DOWNLOAD'
+    ACTION_UPLOAD   = 'UPLOAD'
+    ACTION_EXPORT   = 'EXPORT'
+    ACTION_SEARCH   = 'SEARCH'
+
+    ACTION_CHOICES = [
+        (ACTION_LOGIN,    'Login'),
+        (ACTION_LOGOUT,   'Logout'),
+        (ACTION_VIEW,     'View'),
+        (ACTION_CREATE,   'Create'),
+        (ACTION_UPDATE,   'Update'),
+        (ACTION_DELETE,   'Delete'),
+        (ACTION_DOWNLOAD, 'Download'),
+        (ACTION_UPLOAD,   'Upload'),
+        (ACTION_EXPORT,   'Export'),
+        (ACTION_SEARCH,   'Search'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='activity_logs',
+    )
+    username    = models.CharField(max_length=150, blank=True, db_index=True)
+    action      = models.CharField(max_length=20, choices=ACTION_CHOICES, db_index=True)
+    module      = models.CharField(max_length=60, blank=True, db_index=True)
+    resource_id = models.CharField(max_length=60, blank=True)
+    description = models.CharField(max_length=500, blank=True)
+    endpoint    = models.CharField(max_length=500, blank=True)
+    method      = models.CharField(max_length=10, blank=True)
+    ip_address  = models.GenericIPAddressField(null=True, blank=True)
+    user_agent  = models.CharField(max_length=400, blank=True)
+    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    extra       = models.JSONField(default=dict, blank=True)
+    timestamp   = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['action', 'timestamp']),
+            models.Index(fields=['module', 'timestamp']),
+            models.Index(fields=['username', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.username} | {self.action} | {self.module} | {self.timestamp:%Y-%m-%d %H:%M}"
+

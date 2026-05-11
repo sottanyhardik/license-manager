@@ -2,6 +2,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .views.activity_log import ActivityLogViewSet
 from .views.views import (CompanyViewSet, PortViewSet, HSCodeViewSet, HeadSIONNormsViewSet, SionNormClassViewSet,
                           ProductDescriptionViewSet, UnitPriceViewSet, ItemNameViewSet, GroupViewSet,
                           TransferLetterViewSet, ExchangeRateViewSet, PurchaseStatusViewSet)
@@ -26,6 +27,7 @@ router.register("item-names", ItemNameViewSet)
 router.register("exchange-rates", ExchangeRateViewSet)
 router.register("transfer-letters", TransferLetterViewSet)
 router.register("purchase-statuses", PurchaseStatusViewSet)
+router.register("activity-logs", ActivityLogViewSet, basename="activity-logs")
 
 urlpatterns = [
     # Throttle monitoring endpoints

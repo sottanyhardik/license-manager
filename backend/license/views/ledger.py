@@ -10,8 +10,9 @@ from django.utils import timezone
 from django.http import HttpResponse
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from accounts.permissions import LicenseLedgerViewPermission
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
@@ -98,7 +99,7 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
     - DFIA licenses: balance_cif (available CIF $ balance)
     - Incentive licenses: balance_value (available INR balance)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [LicenseLedgerViewPermission]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['license_number', 'exporter__name']
     ordering_fields = ['license_date', 'balance_value', 'license_expiry_date']

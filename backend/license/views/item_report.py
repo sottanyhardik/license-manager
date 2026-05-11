@@ -9,7 +9,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views import View
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny
+from accounts.permissions import ReportPermission
 from rest_framework.response import Response
 
 from core.models import ItemNameModel
@@ -415,7 +415,7 @@ class ItemReportViewSet(viewsets.ViewSet):
     """
     ViewSet for Item Report actions like getting available items for filter.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [ReportPermission]
 
     @action(detail=False, methods=['get'], url_path='available-items')
     def available_items(self, request):

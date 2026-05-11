@@ -18,7 +18,7 @@ from django.views.decorators.csrf import csrf_exempt
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from accounts.permissions import ReportPermission
 
 from core.constants import DEC_0, DEC_000, GE, MI, IP, SM
 from license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
@@ -601,7 +601,7 @@ class ActiveLicensesViewSet(viewsets.ViewSet):
 
     Permissions: AllowAny - accessible to all users
     """
-    permission_classes = [AllowAny]
+    permission_classes = [ReportPermission]
 
     def list(self, request):
         """

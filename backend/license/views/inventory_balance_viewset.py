@@ -10,7 +10,7 @@ Provides inventory balance reports by SION norm with:
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from accounts.permissions import ReportPermission
 from django.http import HttpResponse
 
 from core.models import SionNormClassModel
@@ -28,7 +28,7 @@ class InventoryBalanceViewSet(viewsets.ViewSet):
         GET /api/license/inventory-balance/{sion_norm}/ - Get balance report for specific norm
         GET /api/license/inventory-balance/{sion_norm}/export/ - Export to Excel
     """
-    permission_classes = [AllowAny]
+    permission_classes = [ReportPermission]
 
     def list(self, request):
         """

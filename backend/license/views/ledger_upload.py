@@ -12,6 +12,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import LedgerUploadPermission
 from scripts.parse_ledger import parse_license_data, create_object
 from scripts.parse_ledger_htm import parse_license_data_htm
 
@@ -27,9 +28,8 @@ class LedgerUploadView(APIView):
     POST /api/licenses/upload-ledger/
     """
 
-    permission_classes = []
+    permission_classes = [LedgerUploadPermission]
     parser_classes = [MultiPartParser, FormParser]
-    authentication_classes = []
     http_method_names = ['post', 'options']
 
     from core.throttling import UploadRateThrottle
@@ -241,8 +241,7 @@ class LedgerTaskStatusView(APIView):
     Returns current state and progress of an async ledger processing task.
     """
 
-    permission_classes = []
-    authentication_classes = []
+    permission_classes = [LedgerUploadPermission]
     throttle_classes = []
     http_method_names = ['get', 'options']
 

@@ -1,14 +1,29 @@
-import {useEffect, useState} from "react";
-import {useNavigate} from "react-router-dom";
+import {useContext, useEffect, useState} from "react";
+import {Navigate} from "react-router-dom";
 import { toast } from 'react-toastify';
 import api from "../api/axios";
+import {AuthContext} from "../context/AuthContext";
+import {ROLE_LABELS, getRoleBadgeProps} from "../utils/roleConstants";
+
+function fmtDate(val) {
+    if (!val) return '—';
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return '—';
+    return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+}
 
 export default function Settings() {
-    const navigate = useNavigate();
+    const {user: currentUser} = useContext(AuthContext);
     const [users, setUsers] = useState([]);
+    const [availableRoles, setAvailableRoles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
+
+    // Guard: superusers only — hooks must all be declared before this
+    if (currentUser && !currentUser.is_superuser) {
+        return <Navigate to="/403" replace />;
+    }
 
     const [formData, setFormData] = useState({
         username: "",
@@ -16,25 +31,28 @@ export default function Settings() {
         first_name: "",
         last_name: "",
         password: "",
-        is_active: true
+        is_active: true,
+        roles: [],
     });
 
     useEffect(() => {
         loadUsers();
+        api.get("auth/users/available-roles/")
+            .then(r => setAvailableRoles(r.data))
+            .catch(() => {});
     }, []);
 
     const loadUsers = async () => {
         try {
             const response = await api.get("auth/users/");
-            // Handle both array and paginated response formats
             const usersData = Array.isArray(response.data)
                 ? response.data
                 : response.data.results || [];
             setUsers(usersData);
         } catch (error) {
             toast.error("Failed to load users");
-            setUsers([]); // Set empty array on error
-        } finally{
+            setUsers([]);
+        } finally {
             setLoading(false);
         }
     };
@@ -48,7 +66,8 @@ export default function Settings() {
                 first_name: user.first_name || "",
                 last_name: user.last_name || "",
                 password: "",
-                is_active: user.is_active
+                is_active: user.is_active,
+                roles: user.roles || [],
             });
         } else {
             setEditingUser(null);
@@ -58,10 +77,20 @@ export default function Settings() {
                 first_name: "",
                 last_name: "",
                 password: "",
-                is_active: true
+                is_active: true,
+                roles: [],
             });
         }
         setShowModal(true);
+    };
+
+    const toggleRole = (code) => {
+        setFormData(prev => ({
+            ...prev,
+            roles: prev.roles.includes(code)
+                ? prev.roles.filter(r => r !== code)
+                : [...prev.roles, code],
+        }));
     };
 
     const handleCloseModal = () => {
@@ -72,15 +101,14 @@ export default function Settings() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            const payload = {...formData};
+            if (editingUser && !payload.password) delete payload.password;
+
             if (editingUser) {
-                const updateData = {...formData};
-                if (!updateData.password) {
-                    delete updateData.password;
-                }
-                await api.put(`auth/users/${editingUser.id}/`, updateData);
+                await api.put(`auth/users/${editingUser.id}/`, payload);
                 toast.success("User updated successfully");
             } else {
-                await api.post("auth/users/", formData);
+                await api.post("auth/users/", payload);
                 toast.success("User created successfully");
             }
             handleCloseModal();
@@ -126,11 +154,11 @@ export default function Settings() {
             {/* Compact Header */}
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
-                        <i className="bi bi-gear me-2" style={{ color: 'var(--primary-color)' }}></i>
-                        Settings
+                    <h4 className="mb-0 fw-bold" style={{color: 'var(--text-dark)'}}>
+                        <i className="bi bi-shield-lock me-2" style={{color: 'var(--primary-color)'}}></i>
+                        Users &amp; Roles
                     </h4>
-                    <small className="text-muted">Manage users and system configuration</small>
+                    <small className="text-muted">Manage users and assign roles — visible to superusers only</small>
                 </div>
             </div>
 
@@ -160,6 +188,7 @@ export default function Settings() {
                                 <th className="ps-3">Username</th>
                                 <th>Email</th>
                                 <th>Name</th>
+                                <th>Roles</th>
                                 <th>Status</th>
                                 <th>Joined</th>
                                 <th className="text-end pe-3">Actions</th>
@@ -181,7 +210,7 @@ export default function Settings() {
                                             <div>
                                                 <div className="fw-medium small">{user.username}</div>
                                                 {user.is_superuser && (
-                                                    <span className="badge bg-danger" style={{ fontSize: '0.65rem' }}>Superuser</span>
+                                                    <span className="badge bg-danger" style={{fontSize: '0.65rem'}}>Superuser</span>
                                                 )}
                                             </div>
                                         </div>
@@ -189,13 +218,27 @@ export default function Settings() {
                                     <td className="small text-muted">{user.email || '—'}</td>
                                     <td className="small">{user.first_name || user.last_name ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : '—'}</td>
                                     <td>
-                                        <span className={`badge ${user.is_active ? 'bg-success' : 'bg-secondary'}`} style={{ fontSize: '0.7rem' }}>
+                                        {(user.roles ?? []).length === 0
+                                            ? <span className="text-muted small">—</span>
+                                            : (user.roles ?? []).map(r => {
+                                                const bp = getRoleBadgeProps(r);
+                                                return (
+                                                    <span key={r}
+                                                          className={`${bp.className} me-1 mb-1`}
+                                                          style={{fontSize: '0.65rem', ...bp.style}}>
+                                                        {ROLE_LABELS[r] ?? r}
+                                                    </span>
+                                                );
+                                            })
+                                        }
+                                    </td>
+                                    <td>
+                                        <span className={`badge ${user.is_active ? 'bg-success' : 'bg-secondary'}`}
+                                              style={{fontSize: '0.7rem'}}>
                                             {user.is_active ? 'Active' : 'Inactive'}
                                         </span>
                                     </td>
-                                    <td className="small text-muted">
-                                        {(() => { const d = new Date(user.date_joined); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; })()}
-                                    </td>
+                                    <td className="small text-muted">{fmtDate(user.date_joined)}</td>
                                     <td className="text-end pe-3">
                                         <button
                                             className="btn btn-sm btn-outline-primary me-1"
@@ -315,8 +358,40 @@ export default function Settings() {
                                                 </div>
                                             </div>
                                         </div>
+                                        {/* Roles */}
+                                        {availableRoles.length > 0 && (
+                                            <div style={{background: 'white', borderRadius: '10px', padding: '16px 20px', borderLeft: '3px solid #8b5cf6'}}>
+                                                <div style={{fontSize: '0.68rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8b5cf6', marginBottom: '14px'}}>
+                                                    <i className="bi bi-shield-check me-1"></i> Roles
+                                                </div>
+                                                <div className="row g-2">
+                                                    {availableRoles.map(code => (
+                                                        <div className="col-md-4" key={code}>
+                                                            <div
+                                                                className={`form-check border rounded p-2 ${formData.roles.includes(code) ? 'border-primary bg-primary bg-opacity-10' : 'border-light'}`}
+                                                                style={{cursor: 'pointer'}}
+                                                                onClick={() => toggleRole(code)}
+                                                            >
+                                                                <input
+                                                                    className="form-check-input"
+                                                                    type="checkbox"
+                                                                    id={`role-${code}`}
+                                                                    checked={formData.roles.includes(code)}
+                                                                    onChange={() => toggleRole(code)}
+                                                                    onClick={e => e.stopPropagation()}
+                                                                />
+                                                                <label className="form-check-label small" htmlFor={`role-${code}`} style={{cursor: 'pointer'}}>
+                                                                    {ROLE_LABELS[code] ?? code}
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Status */}
-                                        <div style={{ background: 'white', borderRadius: '10px', padding: '14px 20px', borderLeft: '3px solid #6366F1' }}>
+                                        <div style={{background: 'white', borderRadius: '10px', padding: '14px 20px', borderLeft: '3px solid #6366F1'}}>
                                             <div className="form-check form-switch">
                                                 <input
                                                     type="checkbox"
@@ -326,7 +401,7 @@ export default function Settings() {
                                                     checked={formData.is_active}
                                                     onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
                                                 />
-                                                <label className="form-check-label" htmlFor="isActive" style={{ fontWeight: '500' }}>
+                                                <label className="form-check-label" htmlFor="isActive" style={{fontWeight: '500'}}>
                                                     Active User
                                                     <small className="text-muted ms-2">Allow this user to log in</small>
                                                 </label>

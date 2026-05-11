@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import ReportPermission
 from allotment.models import AllotmentModel
 from bill_of_entry.models import BillOfEntryModel
 from core.cache_utils import CACHE_TIMEOUT_MEDIUM
@@ -30,36 +31,46 @@ class DashboardDataView(APIView):
         - Expiring licenses (top 5)
         - BOE monthly trend (last 6 months)
     """
+    # Any authenticated user can reach the dashboard.
+    # The data returned is filtered by role inside get() — users with no roles
+    # receive an empty payload rather than a 403.
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """
-        Get all dashboard data with caching.
-
-        Cache key: dashboard:data
-        TTL: 5 minutes
+        Role-filtered dashboard. Each section is only included when the user
+        has the relevant role. Superusers see everything.
+        Cache key is per-role-set so different roles get different cached payloads.
         """
-        cache_key = 'view:dashboard:data'
+        user = request.user
+        is_super = user.is_superuser
 
-        # Try cache first
+        def has(role_codes):
+            return is_super or user.has_any_role(role_codes)
+
+        # Build a stable cache key from the user's role set
+        roles_key = '_'.join(sorted(user.get_role_codes())) if not is_super else 'superuser'
+        cache_key = f'view:dashboard:{roles_key}'
+
         cached_data = cache.get(cache_key)
         if cached_data is not None:
             return Response(cached_data)
 
-        # Cache miss - compute dashboard data
         try:
-            # Prepare response data structure
-            data = {
-                'license_stats': self._get_license_stats(),
-                'allotment_stats': self._get_allotment_stats(),
-                'boe_stats': self._get_boe_stats(),
-                'expiring_licenses': self._get_expiring_licenses(),
-                'boe_monthly_trend': self._get_boe_monthly_trend(),
-            }
+            data = {}
 
-            # Cache for 5 minutes
+            if has(['LICENSE_MANAGER', 'LICENSE_VIEWER', 'REPORT_VIEWER']):
+                data['license_stats'] = self._get_license_stats()
+                data['expiring_licenses'] = self._get_expiring_licenses()
+
+            if has(['ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER', 'REPORT_VIEWER']):
+                data['allotment_stats'] = self._get_allotment_stats()
+
+            if has(['BOE_MANAGER', 'BOE_VIEWER', 'ACCOUNT_ACCESS', 'REPORT_VIEWER']):
+                data['boe_stats'] = self._get_boe_stats()
+                data['boe_monthly_trend'] = self._get_boe_monthly_trend()
+
             cache.set(cache_key, data, CACHE_TIMEOUT_MEDIUM)
-
             return Response(data)
         except Exception as e:
             return Response(

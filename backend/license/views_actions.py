@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
+from accounts.permissions import LicensePermission, LicenseLedgerViewPermission
 from core.models import CompanyModel
 from core.utils.exceptions import api_error
 from license.ledger_pdf import generate_license_ledger_pdf
@@ -18,6 +19,13 @@ class LicenseActionViewSet(ViewSet):
     """
     ViewSet for license actions like downloading ledger
     """
+    permission_classes = [LicensePermission]
+
+    def get_permissions(self):
+        # download-ledger is also accessible to LEDGER_MANAGER
+        if self.action == 'download_ledger':
+            return [LicenseLedgerViewPermission()]
+        return super().get_permissions()
 
     @action(detail=True, methods=['get'], url_path='download-ledger')
     def download_ledger(self, request, pk=None):

@@ -18,6 +18,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
+from accounts.permissions import AllotmentPermission
 from allotment.models import AllotmentModel, AllotmentItems
 from core.utils.exceptions import api_error, _safe_int
 from allotment.serializers import AllotmentSerializer
@@ -29,6 +30,13 @@ class AllotmentActionViewSet(ViewSet):
     """
     ViewSet for allotment actions like viewing available licenses and allocating them
     """
+    permission_classes = [AllotmentPermission]
+
+    def get_permissions(self):
+        if self.action == 'generate_transfer_letter':
+            from accounts.permissions import TransferLetterPermission
+            return [TransferLetterPermission()]
+        return super().get_permissions()
 
     @action(detail=True, methods=['get'], url_path='available-licenses')
     def available_licenses(self, request, pk=None):

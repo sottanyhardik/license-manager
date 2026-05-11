@@ -3,28 +3,33 @@ import {Link, useLocation} from "react-router-dom";
 import {AuthContext} from "../context/AuthContext";
 import {reportEntities, masterEntities} from "../routes/config";
 
+// Static nav groups with per-item role requirements.
+// Superusers always see everything (hasAnyRole returns true for them).
 const NAV_GROUPS = [
     {
         label: 'Licenses',
         icon: 'file-earmark-text',
         items: [
-            { path: '/licenses',           label: 'Licenses',           icon: 'file-earmark-text' },
-            { path: '/incentive-licenses', label: 'Incentive Licenses', icon: 'award' },
+            { path: '/licenses',           label: 'Licenses',           icon: 'file-earmark-text', roles: ['LICENSE_MANAGER', 'LICENSE_VIEWER'] },
+            { path: '/incentive-licenses', label: 'Incentive Licenses', icon: 'award',              roles: ['INCENTIVE_LICENSE_MANAGER', 'INCENTIVE_LICENSE_VIEWER'] },
+            { path: '/license-ledger',     label: 'License Ledger',     icon: 'journal-text',       roles: ['LICENSE_MANAGER', 'TRADE_MANAGER', 'TRADE_VIEWER', 'LEDGER_MANAGER'] },
+            { path: '/ledger-upload',      label: 'Ledger Upload',      icon: 'cloud-upload',       roles: ['LICENSE_MANAGER', 'LEDGER_MANAGER'] },
+            { path: '/ledger-csv-upload',  label: 'Ledger CSV Upload',  icon: 'filetype-csv',       roles: ['LICENSE_MANAGER', 'LEDGER_MANAGER'] },
         ],
     },
     {
         label: 'Operations',
         icon: 'arrow-left-right',
         items: [
-            { path: '/allotments',      label: 'Allotments',     icon: 'box-seam' },
-            { path: '/bill-of-entries', label: 'Bill of Entry',  icon: 'receipt' },
-            { path: '/trades',          label: 'Trade In & Out', icon: 'arrow-left-right' },
+            { path: '/allotments',      label: 'Allotments',     icon: 'box-seam',       roles: ['ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER'] },
+            { path: '/bill-of-entries', label: 'Bill of Entry',  icon: 'receipt',        roles: ['BOE_MANAGER', 'BOE_VIEWER', 'TL_GENERATE', 'ACCOUNT_ACCESS'] },
+            { path: '/trades',          label: 'Trade In & Out', icon: 'arrow-left-right', roles: ['TRADE_MANAGER', 'TRADE_VIEWER'] },
         ],
     },
 ];
 
 export default function TopNav() {
-    const {user, logout} = useContext(AuthContext);
+    const {user, logout, isSuperAdmin, hasAnyRole} = useContext(AuthContext);
     const location = useLocation();
 
     const isPathActive = (path) =>
@@ -128,7 +133,13 @@ export default function TopNav() {
                 {/* Grouped Dropdowns */}
 
                 {NAV_GROUPS.map(group => {
-                    const active = isGroupActive(group.items);
+                    // Only render items the user has access to
+                    const visibleItems = group.items.filter(item =>
+                        !item.roles || hasAnyRole(item.roles)
+                    );
+                    if (visibleItems.length === 0) return null;
+
+                    const active = isGroupActive(visibleItems);
                     return (
                         <div className="dropdown" key={group.label}>
                             <button
@@ -142,7 +153,7 @@ export default function TopNav() {
                                 {group.label}
                             </button>
                             <ul className="dropdown-menu" style={dropdownMenuStyle}>
-                                {group.items.map(item => {
+                                {visibleItems.map(item => {
                                     const itemActive = isPathActive(item.path);
                                     return (
                                         <li key={item.path}>
@@ -162,8 +173,8 @@ export default function TopNav() {
                     );
                 })}
 
-                {/* Reports Dropdown */}
-                {(() => {
+                {/* Reports Dropdown — visible to anyone with a report-relevant role */}
+                {hasAnyRole(['REPORT_VIEWER','LICENSE_MANAGER','TRADE_MANAGER','ALLOTMENT_MANAGER','BOE_MANAGER','INCENTIVE_LICENSE_MANAGER']) && (() => {
                     const active = isGroupActive(reportEntities);
                     return (
                         <div className="dropdown">
@@ -259,12 +270,22 @@ export default function TopNav() {
                                 Profile
                             </Link>
                         </li>
-                        <li>
-                            <Link className="dropdown-item" to="/settings" style={dropdownItemStyle}>
-                                <i className="bi bi-gear" style={{color: 'var(--text-secondary)'}}></i>
-                                Settings
-                            </Link>
-                        </li>
+                        {(isSuperAdmin && isSuperAdmin() || hasAnyRole && hasAnyRole(['USER_MANAGER'])) && (
+                            <li>
+                                <Link className="dropdown-item" to="/admin/activity-log" style={dropdownItemStyle}>
+                                    <i className="bi bi-journal-text" style={{color: '#8b5cf6'}}></i>
+                                    Activity Log
+                                </Link>
+                            </li>
+                        )}
+                        {isSuperAdmin && isSuperAdmin() && (
+                            <li>
+                                <Link className="dropdown-item" to="/settings" style={dropdownItemStyle}>
+                                    <i className="bi bi-shield-lock" style={{color: 'var(--primary-color)'}}></i>
+                                    Users &amp; Roles
+                                </Link>
+                            </li>
+                        )}
                         <li><hr className="dropdown-divider" style={{margin: '4px 0'}} /></li>
                         <li>
                             <button className="dropdown-item" onClick={logout} style={{

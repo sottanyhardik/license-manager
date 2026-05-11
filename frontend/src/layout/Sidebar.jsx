@@ -1,9 +1,11 @@
 import {Link, useLocation} from "react-router-dom";
-import {useState} from "react";
+import {useContext, useState} from "react";
 import {masterEntities, routes, reportEntities} from "../routes/config";
+import {AuthContext} from "../context/AuthContext";
 
 export default function Sidebar() {
     const location = useLocation();
+    const {canManageUsers} = useContext(AuthContext);
     const [mastersOpen, setMastersOpen] = useState(false);
     const [reportsOpen, setReportsOpen] = useState(false);
 
@@ -93,6 +95,22 @@ export default function Sidebar() {
                         </ul>
                     )}
                 </li>
+
+                {/* User Management — superusers and USER_MANAGER role only */}
+                {canManageUsers && canManageUsers() && (
+                    <li className="nav-item mb-1">
+                        <Link
+                            className={`nav-link d-flex align-items-center ${isActive('/admin/users') ? 'active' : ''}`}
+                            to="/admin/users"
+                            style={navLinkStyle(isActive('/admin/users'))}
+                            onMouseEnter={handleMouseEnter(isActive('/admin/users'))}
+                            onMouseLeave={handleMouseLeave(isActive('/admin/users'))}
+                        >
+                            <i className="bi bi-people me-2" style={{fontSize: '1.1rem'}}/>
+                            <span>Users</span>
+                        </Link>
+                    </li>
+                )}
 
                 {/* Masters Dropdown */}
                 <li className="nav-item mb-1">

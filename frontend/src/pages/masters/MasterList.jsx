@@ -1,5 +1,6 @@
-import {useEffect, useState, useCallback, useRef} from "react";
+import {useContext, useEffect, useState, useCallback, useRef} from "react";
 import {Link, useParams, useLocation, useNavigate} from "react-router-dom";
+import {AuthContext} from "../../context/AuthContext";
 import { toast } from 'react-toastify';
 import api from "../../api/axios";
 import {boeApi} from "../../services/api";
@@ -34,6 +35,24 @@ export default function MasterList() {
         (location.pathname.startsWith('/bill-of-entries') ? 'bill-of-entries' : null) ||
         (location.pathname.startsWith('/trades') ? 'trades' : null) ||
         (location.pathname.startsWith('/incentive-licenses') ? 'incentive-licenses' : null);
+
+    // Role-based write access per entity
+    const {hasAnyRole, isSuperAdmin, hasRole} = useContext(AuthContext);
+    const ENTITY_WRITE_ROLES = {
+        'licenses':           ['LICENSE_MANAGER'],
+        'allotments':         ['ALLOTMENT_MANAGER'],
+        'bill-of-entries':    ['BOE_MANAGER'],
+        'trades':             ['TRADE_MANAGER'],
+        'incentive-licenses': ['INCENTIVE_LICENSE_MANAGER'],
+    };
+    // For known business entities: check the mapped write roles.
+    // For masters (companies, ports, HS codes, etc.): superusers only.
+    const canWrite = entityName in ENTITY_WRITE_ROLES
+        ? hasAnyRole(ENTITY_WRITE_ROLES[entityName])
+        : isSuperAdmin();
+
+    // ACCOUNT_ACCESS users can edit invoice_no on BOE items only
+    const canEditInvoice = canWrite || hasRole('ACCOUNT_ACCESS');
     const [data, setData] = useState([]);
     const [metadata, setMetadata] = useState({});
     const [loading, setLoading] = useState(true);
@@ -194,11 +213,13 @@ export default function MasterList() {
     const saveInvoiceEdit = async (itemId) => {
         setInvoiceSaving(true);
         try {
-            await api.patch(`bill-of-entries/${itemId}/`, { invoice_no: invoiceDraft.trim() });
+            // Dedicated endpoint — accessible to ACCOUNT_ACCESS (and BOE_MANAGER).
+            // Does NOT require full BOE edit permission.
+            await api.post(`bill-of-entries/${itemId}/update-invoice-no/`, { invoice_no: invoiceDraft.trim() });
             setData(prev => prev.map(d => d.id === itemId ? { ...d, invoice_no: invoiceDraft.trim() } : d));
             setEditingInvoiceId(null);
         } catch (e) {
-            console.error('Failed to update invoice_no:', e);
+            toast.error('Failed to update invoice number');
         } finally {
             setInvoiceSaving(false);
         }
@@ -757,7 +778,7 @@ export default function MasterList() {
                             Fetch All Products
                         </button>
                     )}
-                    <Link
+                    {canWrite && <Link
                         to={entityName === 'licenses' ? '/licenses/create' :
                             entityName === 'allotments' ? '/allotments/create' :
                             entityName === 'trades' ? '/trades/create' :
@@ -781,7 +802,7 @@ export default function MasterList() {
                     >
                         <i className="bi bi-plus-circle me-2"></i>
                         Add New
-                    </Link>
+                    </Link>}
                 </div>
                 </div>
             </div>
@@ -861,33 +882,35 @@ export default function MasterList() {
                                                         <i className="bi bi-building me-1"></i>{item.company_name}
                                                     </span>
                                                 )}
-                                                {editingInvoiceId === item.id ? (
-                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        <input
-                                                            autoFocus
-                                                            value={invoiceDraft}
-                                                            onChange={e => setInvoiceDraft(e.target.value)}
-                                                            onKeyDown={e => { if (e.key === 'Enter') saveInvoiceEdit(item.id); if (e.key === 'Escape') cancelInvoiceEdit(); }}
-                                                            placeholder="Invoice number"
-                                                            style={{ fontSize: '0.78rem', padding: '2px 6px', borderRadius: '4px', border: '1px solid #059669', width: '160px', outline: 'none' }}
-                                                        />
-                                                        <button onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} style={{ fontSize: '0.72rem', padding: '2px 7px', borderRadius: '4px', background: '#059669', color: 'white', border: 'none', cursor: 'pointer' }}>
-                                                            {invoiceSaving ? '…' : 'Save'}
-                                                        </button>
-                                                        <button onClick={cancelInvoiceEdit} style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px', background: '#e5e7eb', color: '#374151', border: 'none', cursor: 'pointer' }}>✕</button>
-                                                    </span>
-                                                ) : (
-                                                    <span
-                                                        onClick={() => startInvoiceEdit(item)}
-                                                        title="Click to edit invoice number"
-                                                        style={{ fontSize: '0.78rem', color: '#059669', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                                    >
-                                                        {item.invoice_no
-                                                            ? <><i className="bi bi-receipt"></i> {item.invoice_no}</>
-                                                            : <><i className="bi bi-plus-circle"></i> Add Invoice No</>
-                                                        }
-                                                        <i className="bi bi-pencil-fill" style={{ fontSize: '0.6rem', opacity: 0.6 }}></i>
-                                                    </span>
+                                                {canEditInvoice && (
+                                                    editingInvoiceId === item.id ? (
+                                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <input
+                                                                autoFocus
+                                                                value={invoiceDraft}
+                                                                onChange={e => setInvoiceDraft(e.target.value)}
+                                                                onKeyDown={e => { if (e.key === 'Enter') saveInvoiceEdit(item.id); if (e.key === 'Escape') cancelInvoiceEdit(); }}
+                                                                placeholder="Invoice number"
+                                                                style={{ fontSize: '0.78rem', padding: '2px 6px', borderRadius: '4px', border: '1px solid #059669', width: '160px', outline: 'none' }}
+                                                            />
+                                                            <button onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} style={{ fontSize: '0.72rem', padding: '2px 7px', borderRadius: '4px', background: '#059669', color: 'white', border: 'none', cursor: 'pointer' }}>
+                                                                {invoiceSaving ? '…' : 'Save'}
+                                                            </button>
+                                                            <button onClick={cancelInvoiceEdit} style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px', background: '#e5e7eb', color: '#374151', border: 'none', cursor: 'pointer' }}>✕</button>
+                                                        </span>
+                                                    ) : (
+                                                        <span
+                                                            onClick={() => startInvoiceEdit(item)}
+                                                            title="Click to edit invoice number"
+                                                            style={{ fontSize: '0.78rem', color: '#059669', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                                        >
+                                                            {item.invoice_no
+                                                                ? <><i className="bi bi-receipt"></i> {item.invoice_no}</>
+                                                                : <><i className="bi bi-plus-circle"></i> Add Invoice No</>
+                                                            }
+                                                            <i className="bi bi-pencil-fill" style={{ fontSize: '0.6rem', opacity: 0.6 }}></i>
+                                                        </span>
+                                                    )
                                                 )}
                                             </div>
 
@@ -967,20 +990,20 @@ export default function MasterList() {
                                                             <i className="bi bi-arrow-repeat"></i>
                                                         </button>
                                                     )}
-                                                    <button
+                                                    {canWrite && <button
                                                         onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/bill-of-entries/${item.id}/edit`); }}
                                                         title="Edit"
                                                         style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
                                                     >
                                                         <i className="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button
+                                                    </button>}
+                                                    {canWrite && <button
                                                         onClick={() => handleDelete(item)}
                                                         title="Delete"
                                                         style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
                                                     >
                                                         <i className="bi bi-trash"></i>
-                                                    </button>
+                                                    </button>}
                                                 </div>
                                             </div>
 
@@ -1103,10 +1126,10 @@ export default function MasterList() {
                                                     </div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button onClick={async () => {
+                                                    </button>}
+                                                    {canWrite && <button onClick={async () => {
                                                         if (!window.confirm(`Create a copy of allotment ${item.invoice || 'this allotment'}?`)) return;
                                                         try {
                                                             const r = await api.post(`allotments/${item.id}/copy/`);
@@ -1116,10 +1139,10 @@ export default function MasterList() {
                                                         } catch (err) { toast.error(err.response?.data?.error || 'Failed to copy'); }
                                                     }} title="Copy" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-copy"></i>
-                                                    </button>
-                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/allocate`); }} title="Allocate" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    </button>}
+                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/allocate`); }} title="Allocate" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-box-arrow-in-down"></i>
-                                                    </button>
+                                                    </button>}
                                                     <button onClick={async () => {
                                                         try {
                                                             const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
@@ -1143,9 +1166,9 @@ export default function MasterList() {
                                                     }} title="Download Allotment" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1e40af', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-download"></i>
                                                     </button>
-                                                    <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-trash"></i>
-                                                    </button>
+                                                    </button>}
                                                 </div>
                                             </div>
                                         </div>
@@ -1278,9 +1301,9 @@ export default function MasterList() {
                                                     </div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-pencil"></i>
-                                                    </button>
+                                                    </button>}
                                                     <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-eye"></i>
                                                     </button>
@@ -1305,9 +1328,9 @@ export default function MasterList() {
                                                     }} title="Download Excel" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-file-earmark-excel"></i>
                                                     </button>
-                                                    <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-trash"></i>
-                                                    </button>
+                                                    </button>}
                                                 </div>
                                             </div>
                                         </div>
@@ -1414,7 +1437,7 @@ export default function MasterList() {
                                                         <i className="bi bi-file-pdf"></i> -Sign
                                                     </button>
                                                 </>)}
-                                                {item.direction === 'PURCHASE' && !isLinked && (
+                                                {canWrite && item.direction === 'PURCHASE' && !isLinked && (
                                                     <button onClick={async () => {
                                                         if (!window.confirm('Create a SALE trade from this PURCHASE trade?')) return;
                                                         try {
@@ -1430,17 +1453,17 @@ export default function MasterList() {
                                                         <i className="bi bi-arrow-left-right"></i>
                                                     </button>
                                                 )}
-                                                {!isLinked && (
+                                                {canWrite && !isLinked && (
                                                     <button onClick={() => openLinkModal(item)} title="Link to existing trade" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#6366f1', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-link-45deg"></i>
                                                     </button>
                                                 )}
-                                                <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/trades/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#4f46e5', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/trades/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#4f46e5', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                     <i className="bi bi-pencil-fill"></i>
-                                                </button>
-                                                <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                </button>}
+                                                {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                     <i className="bi bi-trash"></i>
-                                                </button>
+                                                </button>}
                                             </div>
                                         </div>
                                     </div>
@@ -1573,12 +1596,12 @@ export default function MasterList() {
                                                     <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Balance</div><div style={{ fontSize: '0.875rem', color: item.balance_value > 0 ? '#059669' : '#94a3b8', fontWeight: '600' }}>{fmtInr(item.balance_value)}</div></div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/incentive-licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/incentive-licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                    </button>}
+                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-trash"></i>
-                                                    </button>
+                                                    </button>}
                                                 </div>
                                             </div>
                                         </div>

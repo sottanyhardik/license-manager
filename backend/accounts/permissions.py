@@ -43,7 +43,7 @@ class AllotmentPermission(BaseRolePermission):
 
 class BillOfEntryPermission(BaseRolePermission):
     """Permission class for Bill of Entry operations"""
-    required_roles_for_read = ['BOE_MANAGER', 'BOE_VIEWER']
+    required_roles_for_read = ['BOE_MANAGER', 'BOE_VIEWER', 'ACCOUNT_ACCESS', 'TL_GENERATE']
     required_roles_for_write = ['BOE_MANAGER']
 
 
@@ -72,26 +72,63 @@ class ReportPermission(BaseRolePermission):
 
 
 class LedgerUploadPermission(permissions.BasePermission):
-    """Special permission for ledger upload - only LICENSE_MANAGER"""
+    """Upload and manage ledger files — LICENSE_MANAGER or LEDGER_MANAGER."""
 
     def has_permission(self, request, view):
         if request.user and request.user.is_superuser:
             return True
-
         if not request.user or not request.user.is_authenticated:
             return False
-
-        return request.user.has_role('LICENSE_MANAGER')
+        return request.user.has_any_role(['LICENSE_MANAGER', 'LEDGER_MANAGER'])
 
 
 class LicenseLedgerViewPermission(permissions.BasePermission):
-    """Permission for viewing license ledger - TRADE_VIEWER and TRADE_MANAGER"""
+    """View license ledger — trade/license roles or LEDGER_MANAGER."""
 
     def has_permission(self, request, view):
         if request.user and request.user.is_superuser:
             return True
-
         if not request.user or not request.user.is_authenticated:
             return False
+        return request.user.has_any_role([
+            'TRADE_VIEWER', 'TRADE_MANAGER',
+            'LICENSE_MANAGER', 'LEDGER_MANAGER',
+        ])
 
-        return request.user.has_any_role(['TRADE_VIEWER', 'TRADE_MANAGER', 'LICENSE_MANAGER'])
+
+class AccountAccessPermission(permissions.BasePermission):
+    """
+    Accounts team: read BOE list + update invoice_no only.
+    All safe methods (GET) AND the dedicated update-invoice-no action are allowed.
+    Full BOE create/edit/delete requires BOE_MANAGER.
+    """
+    _roles = ['ACCOUNT_ACCESS', 'BOE_MANAGER', 'BOE_VIEWER']
+
+    def has_permission(self, request, view):
+        if request.user and request.user.is_superuser:
+            return True
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return request.user.has_any_role(self._roles)
+
+
+class TransferLetterPermission(permissions.BasePermission):
+    """
+    Allows users who can generate transfer letters.
+    Granted to: TL_GENERATE role, plus any entity manager/viewer role
+    (since managers can already do everything, including generating TLs).
+    """
+    _allowed = [
+        'TL_GENERATE',
+        'BOE_MANAGER', 'BOE_VIEWER',
+        'ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER',
+        'TRADE_MANAGER', 'TRADE_VIEWER',
+        'LICENSE_MANAGER',
+    ]
+
+    def has_permission(self, request, view):
+        if request.user and request.user.is_superuser:
+            return True
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return request.user.has_any_role(self._allowed)

@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from core.middleware import log_login, log_logout
 from core.throttling import LoginRateThrottle
 from ..serializers import UserSerializer
 
@@ -30,6 +31,7 @@ class LoginView(APIView):
             return Response({"detail": "invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
         refresh = RefreshToken.for_user(user)
+        log_login(user, request)
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
@@ -52,6 +54,7 @@ class LogoutView(APIView):
             RefreshToken(token).blacklist()
         except Exception:
             return Response({"detail": "invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+        log_logout(request.user, request)
         return Response({"detail": "logged out"}, status=status.HTTP_205_RESET_CONTENT)
 
 

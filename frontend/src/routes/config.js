@@ -50,10 +50,11 @@ export const routes = [
     },
     {
         path: "/settings",
-        label: "Settings",
+        label: "Users & Roles",
         component: "Settings",
         protected: false,
-        icon: "gear",
+        icon: "shield-lock",
+        superuserOnly: true,
     },
 ];
 

@@ -1,7 +1,8 @@
-import {useEffect, useState} from "react";
+import {useContext, useEffect, useState} from "react";
 import {useNavigate} from "react-router-dom";
 import {toast} from 'react-toastify';
 import api from "../api/axios";
+import {AuthContext} from "../context/AuthContext";
 
 function StatCard({icon, iconBg, label, value, valueColor, subLabel, subIcon, subColor = 'muted', onClick}) {
     return (
@@ -91,6 +92,12 @@ function SkeletonRow() {
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const {hasAnyRole, isSuperAdmin} = useContext(AuthContext);
+
+    // Role-visibility helpers — superusers see everything
+    const canSeeAllotments   = isSuperAdmin() || hasAnyRole(['ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER', 'REPORT_VIEWER']);
+    const canSeeBOE          = isSuperAdmin() || hasAnyRole(['BOE_MANAGER', 'BOE_VIEWER', 'ACCOUNT_ACCESS', 'TL_GENERATE', 'REPORT_VIEWER']);
+    const canSeeLicenses     = isSuperAdmin() || hasAnyRole(['LICENSE_MANAGER', 'LICENSE_VIEWER', 'TRADE_MANAGER', 'TRADE_VIEWER', 'REPORT_VIEWER']);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         licenses: {total: 0, active: 0, expired: 0, null_dfia: 0, expiring_soon: 0},
@@ -202,8 +209,8 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* License Stats — 5 equal columns */}
-            <div className="row g-3 mb-3">
+            {/* License Stats — visible only to users with license/trade roles */}
+            {canSeeLicenses && <div className="row g-3 mb-3">
                 <div className="col">
                     <StatCard
                         icon="file-earmark-text"
@@ -262,47 +269,55 @@ export default function Dashboard() {
                         }}
                     />
                 </div>
-            </div>
+            </div>}
 
-            {/* Operations Stats — 3 cards */}
-            <div className="row g-3 mb-3">
-                <div className="col-xl-4 col-md-6">
-                    <StatCard
-                        icon="diagram-3"
-                        iconBg="linear-gradient(135deg,#06b6d4,#0891b2)"
-                        label="Allotments"
-                        value={stats.allotments.total}
-                        subLabel="License allocations" subIcon="box-seam" subColor="info"
-                        onClick={() => navigate('/allotments')}
-                    />
+            {/* Operations Stats — shown only for users with relevant roles */}
+            {(canSeeAllotments || canSeeBOE) && (
+                <div className="row g-3 mb-3">
+                    {canSeeAllotments && (
+                        <div className="col-xl-4 col-md-6">
+                            <StatCard
+                                icon="diagram-3"
+                                iconBg="linear-gradient(135deg,#06b6d4,#0891b2)"
+                                label="Allotments"
+                                value={stats.allotments.total}
+                                subLabel="License allocations" subIcon="box-seam" subColor="info"
+                                onClick={() => navigate('/allotments')}
+                            />
+                        </div>
+                    )}
+                    {canSeeBOE && (
+                        <div className="col-xl-4 col-md-6">
+                            <StatCard
+                                icon="receipt-cutoff"
+                                iconBg="linear-gradient(135deg,#6366F1,#4F46E5)"
+                                label="Bills of Entry"
+                                value={stats.boe.total}
+                                subLabel="Total till date" subIcon="receipt" subColor="primary"
+                                onClick={() => navigate('/bill-of-entries?is_invoice=all')}
+                            />
+                        </div>
+                    )}
+                    {canSeeBOE && (
+                        <div className="col-xl-4 col-md-6">
+                            <StatCard
+                                icon="file-earmark-excel"
+                                iconBg="linear-gradient(135deg,#f59e0b,#d97706)"
+                                label="Pending Invoices"
+                                value={stats.boe.pending_invoices}
+                                valueColor="var(--warning-color)"
+                                subLabel="No invoice number" subIcon="hourglass-split" subColor="warning"
+                                onClick={() => navigate('/bill-of-entries')}
+                            />
+                        </div>
+                    )}
                 </div>
-                <div className="col-xl-4 col-md-6">
-                    <StatCard
-                        icon="receipt-cutoff"
-                        iconBg="linear-gradient(135deg,#6366F1,#4F46E5)"
-                        label="Bills of Entry"
-                        value={stats.boe.total}
-                        subLabel="Total till date" subIcon="receipt" subColor="primary"
-                        onClick={() => navigate('/bill-of-entries?is_invoice=all')}
-                    />
-                </div>
-                <div className="col-xl-4 col-md-6">
-                    <StatCard
-                        icon="file-earmark-excel"
-                        iconBg="linear-gradient(135deg,#f59e0b,#d97706)"
-                        label="Pending Invoices"
-                        value={stats.boe.pending_invoices}
-                        valueColor="var(--warning-color)"
-                        subLabel="No invoice number" subIcon="hourglass-split" subColor="warning"
-                        onClick={() => navigate('/bill-of-entries')}
-                    />
-                </div>
-            </div>
+            )}
 
-            {/* Tables Row */}
+            {/* Tables Row — each column gated by role */}
             <div className="row g-3 mb-3">
-                {/* Expiring Licenses */}
-                <div className="col-xl-5">
+                {/* Expiring Licenses — license roles only */}
+                {canSeeLicenses && <div className="col-xl-5">
                     <div className="card border-0 shadow-sm h-100">
                         <SectionHeader
                             icon="exclamation-triangle-fill" iconColor="#f59e0b"
@@ -357,10 +372,10 @@ export default function Dashboard() {
                             )}
                         </div>
                     </div>
-                </div>
+                </div>}
 
-                {/* BOE Monthly Trend */}
-                <div className="col-xl-3">
+                {/* BOE Monthly Trend — BOE roles only */}
+                {canSeeBOE && <div className="col-xl-3">
                     <div className="card border-0 shadow-sm h-100">
                         <SectionHeader
                             icon="bar-chart-fill" iconColor="#4F46E5"
@@ -396,10 +411,10 @@ export default function Dashboard() {
                             )}
                         </div>
                     </div>
-                </div>
+                </div>}
 
-                {/* Recent BOE */}
-                <div className="col-xl-4">
+                {/* Recent BOE — BOE roles only */}
+                {canSeeBOE && <div className="col-xl-4">
                     <div className="card border-0 shadow-sm h-100">
                         <SectionHeader
                             icon="receipt" iconColor="#6366F1"
@@ -443,11 +458,11 @@ export default function Dashboard() {
                             )}
                         </div>
                     </div>
-                </div>
+                </div>}
             </div>
 
-            {/* Recent Allotments */}
-            <div className="row g-3">
+            {/* Recent Allotments — allotment roles only */}
+            {canSeeAllotments && <div className="row g-3">
                 <div className="col-12">
                     <div className="card border-0 shadow-sm">
                         <SectionHeader
@@ -499,7 +514,7 @@ export default function Dashboard() {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div>}
 
         </div>
     );

@@ -80,7 +80,9 @@ class MasterViewSet(viewsets.ModelViewSet):
 
     http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    permission_classes = [permissions.AllowAny]
+    # Default: authenticated users can read master data (companies, ports, etc.)
+    # Individual viewsets override this with role-specific permission classes.
+    permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardPagination
     filter_backends = [CaseInsensitiveSearchFilter, filters.OrderingFilter]  # Use custom search with icontains
     ordering_fields = "__all__"

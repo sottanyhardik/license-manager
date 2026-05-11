@@ -101,13 +101,13 @@ class CompanyModel(AuditModel):
                            message="Enter a valid GST number.")
         ]
     )
-    name = models.CharField(max_length=255, null=True, blank=True)
+    name = models.CharField(max_length=255, blank=True, default='')
     contact_person = models.CharField(max_length=255, null=True, blank=True)
     phone_number = models.CharField(max_length=255, null=True, blank=True)
     email = models.EmailField(null=True, blank=True)
     address = models.TextField(null=True, blank=True)
-    address_line_1 = models.TextField(null=True, blank=True)
-    address_line_2 = models.TextField(null=True, blank=True)
+    address_line_1 = models.TextField(blank=True, default='')
+    address_line_2 = models.TextField(blank=True, default='')
     # Branding / Legal Docs
     logo = models.ImageField(upload_to=company_upload_path, null=True, blank=True)
     signature = models.ImageField(upload_to=company_upload_path, null=True, blank=True)
@@ -149,7 +149,7 @@ class CompanyModel(AuditModel):
 
 class PortModel(AuditModel):
     code = models.CharField(max_length=10, unique=True)
-    name = models.CharField(max_length=255, null=True, blank=True)
+    name = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
         ordering = ('code', 'name')

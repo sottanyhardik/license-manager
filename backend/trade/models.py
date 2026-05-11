@@ -253,6 +253,12 @@ class LicenseTrade(models.Model):
 
     class Meta:
         ordering = ["-invoice_date", "-invoice_number", "-created_on"]
+        indexes = [
+            models.Index(fields=["invoice_date"]),
+            models.Index(fields=["direction", "invoice_date"]),
+            models.Index(fields=["direction", "from_company"]),
+            models.Index(fields=["direction", "to_company"]),
+        ]
         constraints = [
             # A) from_company and to_company must differ (NULLs allowed)
             models.CheckConstraint(

@@ -595,8 +595,8 @@ def generate_transfer_letter_generic(instance, request, instance_type='allotment
     except Exception as e:
         logger.exception("Failed to generate transfer letter")
         return Response(
-            {'error': f'Failed to generate transfer letter: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {'error': 'Failed to generate transfer letter'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 

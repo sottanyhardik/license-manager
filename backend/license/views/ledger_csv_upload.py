@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from bill_of_entry.models import BillOfEntryModel, RowDetails
+from core.utils.exceptions import api_error
 from core.models import PortModel
 from license.models import LicenseDetailsModel, LicenseImportItemsModel
 
@@ -80,10 +81,12 @@ class LedgerCSVUploadView(APIView):
                     try:
                         self._process_row(row, row_num, results)
                     except Exception as e:
+                        import logging as _log
+                        _log.getLogger(__name__).exception("CSV row %s processing failed", row_num)
                         results['errors'].append({
                             'row': row_num,
                             'data': row,
-                            'error': str(e)
+                            'error': 'Row processing failed; check server logs',
                         })
 
             # Prepare response
@@ -106,8 +109,8 @@ class LedgerCSVUploadView(APIView):
 
         except Exception as e:
             return Response(
-                {'error': f'Failed to process CSV file: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                api_error('Failed to process CSV file', e, __name__),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     def _process_row(self, row, row_num, results):

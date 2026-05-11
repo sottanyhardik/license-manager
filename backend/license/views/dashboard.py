@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 from allotment.models import AllotmentModel
 from bill_of_entry.models import BillOfEntryModel
 from core.cache_utils import CACHE_TIMEOUT_MEDIUM
+from core.utils.exceptions import api_error
 from license.models import LicenseDetailsModel
 
 
@@ -61,9 +62,10 @@ class DashboardDataView(APIView):
 
             return Response(data)
         except Exception as e:
-            return Response({
-                'error': str(e)
-            }, status=500)
+            return Response(
+                api_error('Failed to load dashboard data', e, __name__),
+                status=500,
+            )
 
     def _get_license_stats(self):
         """Get license statistics"""

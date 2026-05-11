@@ -145,8 +145,8 @@ class LedgerUploadView(APIView):
                 logger.info(f"Dispatched {len(tasks)} tasks for {uploaded_file.name}")
 
             except Exception as e:
-                logger.error(f"Failed to process {uploaded_file.name}: {e}", exc_info=True)
-                errors.append({'file': uploaded_file.name, 'error': str(e)})
+                logger.exception("Failed to process %s", uploaded_file.name)
+                errors.append({'file': uploaded_file.name, 'error': 'Processing failed; check server logs'})
 
         total_tasks = sum(f['total'] for f in file_tasks)
         return Response({

@@ -52,6 +52,22 @@ def to_decimal(
         return default
 
 
+def to_float(value, default: float = 0.0) -> float:
+    """
+    Convert any numeric-or-None value to float.
+
+    Returns *default* when value is None, empty, or cannot be converted.
+    Safer than ``float(value or 0)`` which coerces falsy non-None values
+    (e.g. ``Decimal('0')``) to the default incorrectly.
+    """
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def safe_decimal_operation(
         operation: Callable[[Decimal, Decimal], Decimal],
         value1: Union[Decimal, int, float, str, None],

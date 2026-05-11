@@ -36,10 +36,7 @@ class IncentiveLicenseViewSetClass(MasterViewSet):
     def get_queryset(self):
         """Return all incentive licenses without default filtering"""
         queryset = super().get_queryset()
-
-        # No default filter - show all licenses
-        # Users can optionally filter by sold_status using the FilterSet
-
+        queryset = queryset.select_related('exporter', 'port_code')
         return queryset
 
 

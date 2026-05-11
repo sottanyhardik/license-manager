@@ -4,11 +4,12 @@ from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
 from core.models import CompanyModel
+from core.utils.exceptions import api_error
 from license.ledger_pdf import generate_license_ledger_pdf
 from license.models import LicenseDetailsModel, LicenseTransferModel
 
@@ -54,8 +55,8 @@ class LicenseActionViewSet(ViewSet):
 
         except Exception as e:
             return Response(
-                {'error': f'Failed to generate PDF: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                api_error('Failed to generate PDF', e, __name__),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=True, methods=['post'], url_path='fetch-ledger')
@@ -84,11 +85,11 @@ class LicenseActionViewSet(ViewSet):
 
         except Exception as e:
             return Response(
-                {'error': f'Failed to fetch ledger: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                api_error('Failed to fetch ledger', e, __name__),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=['post'], url_path='update-license-transfer', permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], url_path='update-license-transfer', permission_classes=[IsAuthenticated])
     def update_license_transfer(self, request):
         """
         Update license ownership and transfer information.
@@ -215,11 +216,11 @@ class LicenseActionViewSet(ViewSet):
 
         except Exception as e:
             return Response(
-                {'error': f'Failed to update license transfer: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                api_error('Failed to update license transfer', e, __name__),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=['post'], url_path='bulk-update-license-transfer', permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], url_path='bulk-update-license-transfer', permission_classes=[IsAuthenticated])
     def bulk_update_license_transfer(self, request):
         """
         Bulk update license ownership and transfer information for multiple licenses.
@@ -402,7 +403,12 @@ class LicenseActionViewSet(ViewSet):
                         success_count += 1
 
                 except Exception as e:
-                    errors.append(f"License {license_data.get('license_number', 'unknown')}: {str(e)}")
+                    import logging as _log
+                    _log.getLogger(__name__).exception(
+                        "bulk_update_license_transfer: failed for license %s",
+                        license_data.get('license_number', 'unknown'),
+                    )
+                    errors.append(f"License {license_data.get('license_number', 'unknown')}: processing failed")
                     failed_count += 1
 
             return Response({
@@ -414,6 +420,6 @@ class LicenseActionViewSet(ViewSet):
 
         except Exception as e:
             return Response(
-                {'error': f'Failed to bulk update license transfers: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                api_error('Failed to bulk update license transfers', e, __name__),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

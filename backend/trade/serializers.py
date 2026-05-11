@@ -48,19 +48,9 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         )
 
     def get_sr_number_label(self, obj):
-        """Return license number, SR number, and description"""
+        """Return license number and SR number, using prefetch cache where possible."""
         if obj.sr_number:
-            # Get license number
             license_number = obj.sr_number.license.license_number if obj.sr_number.license else 'Unknown'
-
-            # Use description if available, otherwise get first item name from ManyToMany
-            if obj.sr_number.description:
-                item_desc = obj.sr_number.description
-            else:
-                # Get first item from ManyToMany items field
-                first_item = obj.sr_number.items.first()
-                item_desc = first_item.name if first_item else 'Unknown'
-
             return f"{license_number} - SR {obj.sr_number.serial_number}"
         return None
 

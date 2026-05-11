@@ -1,23 +1,50 @@
 from django.db.models import Sum, Q
 
 from core.constants import N2015
-from core.utils.decimal_utils import round_decimal_down as round_down
+from core.utils.decimal_utils import round_decimal_down as round_down, to_float
 
 
 def _get_aggregated_values(instance):
     """
-    Perform all aggregate queries in a single pass to improve performance.
-    Returns a dict with all calculated values.
+    Compute item-level debit/allotment aggregations.
 
-    This replaces 6 separate database queries with just 2 queries.
+    item_details (RowDetails):
+      When the caller has prefetched 'item_details' the debited sums are computed
+      in Python from the cache — zero extra queries. Filter is purely on
+      transaction_type, a direct column with no FK traversal, so the Python
+      result is bit-for-bit identical to the SQL SUM(... WHERE transaction_type='D').
+
+    allotment_details (AllotmentItems):
+      Always uses a SQL aggregate. The AT filter relies on
+      allotment__bill_of_entry__isnull=True, which checks the M2M join table
+      directly — there is no single stored boolean on AllotmentModel that is
+      guaranteed to stay in sync in all edge-cases (admin edits, cascade deletes).
+      One aggregate query is issued regardless of how many allotment rows exist,
+      so there is no N+1 risk here.
     """
-    # Single query for all item_details aggregations
-    item_agg = instance.item_details.aggregate(
-        debited_qty=Sum('qty', filter=Q(transaction_type='D')),
-        debited_value=Sum('cif_fc', filter=Q(transaction_type='D'))
-    )
+    prefetch_cache = getattr(instance, '_prefetched_objects_cache', {})
 
-    # Single query for all allotment_details aggregations
+    # ------------------------------------------------------------------ #
+    # item_details (RowDetails): debited rows only                        #
+    # Prefetch-cache path: zero extra queries, exact same result as SQL.  #
+    # ------------------------------------------------------------------ #
+    if 'item_details' in prefetch_cache:
+        rows = prefetch_cache['item_details']
+        debited_qty = sum(float(r.qty or 0) for r in rows if r.transaction_type == 'D')
+        debited_value = sum(float(r.cif_fc or 0) for r in rows if r.transaction_type == 'D')
+    else:
+        item_agg = instance.item_details.aggregate(
+            debited_qty=Sum('qty', filter=Q(transaction_type='D')),
+            debited_value=Sum('cif_fc', filter=Q(transaction_type='D'))
+        )
+        debited_qty = to_float(item_agg['debited_qty'])
+        debited_value = to_float(item_agg['debited_value'])
+
+    # ------------------------------------------------------------------ #
+    # allotment_details (AllotmentItems): always one SQL aggregate query. #
+    # The AT filter uses the M2M join table directly, which is the        #
+    # authoritative source of truth for whether an allotment has a BOE.  #
+    # ------------------------------------------------------------------ #
     allot_agg = instance.allotment_details.aggregate(
         aro_qty=Sum('qty', filter=Q(allotment__type='ARO')),
         aro_value=Sum('cif_fc', filter=Q(allotment__type='ARO')),
@@ -32,12 +59,12 @@ def _get_aggregated_values(instance):
     )
 
     return {
-        'debited_qty': float(item_agg['debited_qty'] or 0),
-        'debited_value': float(item_agg['debited_value'] or 0),
-        'aro_qty': float(allot_agg['aro_qty'] or 0),
-        'aro_value': float(allot_agg['aro_value'] or 0),
-        'allotted_qty': float(allot_agg['allotted_qty'] or 0),
-        'allotted_value': float(allot_agg['allotted_value'] or 0)
+        'debited_qty': debited_qty,
+        'debited_value': debited_value,
+        'aro_qty': to_float(allot_agg['aro_qty']),
+        'aro_value': to_float(allot_agg['aro_value']),
+        'allotted_qty': to_float(allot_agg['allotted_qty']),
+        'allotted_value': to_float(allot_agg['allotted_value']),
     }
 
 
@@ -45,7 +72,7 @@ def calculate_available_quantity(instance, agg_values=None):
     if agg_values is None:
         agg_values = _get_aggregated_values(instance)
 
-    credit = float(instance.quantity or 0)
+    credit = to_float(instance.quantity)
 
     # Use prefetched data if available, otherwise query
     try:
@@ -57,7 +84,7 @@ def calculate_available_quantity(instance, agg_values=None):
     # Check if first item has restrictions (sion_norm_class and restriction_percentage)
     if first_item and first_item.sion_norm_class and first_item.restriction_percentage > 0:
         if instance.old_quantity or instance.license.notification_number == N2015:
-            credit = float(instance.old_quantity or instance.quantity or 0)
+            credit = to_float(instance.old_quantity) or to_float(instance.quantity)
 
     debited = agg_values['debited_qty'] + agg_values['aro_qty']
     allotted = agg_values['allotted_qty']
@@ -107,14 +134,14 @@ def calculate_available_value(instance):
 
         # Check if all other items (not serial_number 1) have zero CIF
         all_others_zero_cif = all(
-            float(item.cif_fc or 0) == 0 and float(item.cif_inr or 0) == 0
+            to_float(item.cif_fc) == 0 and to_float(item.cif_inr) == 0
             for item in other_items
         ) if other_items else False
 
         # If all other items have zero CIF, and this is serial_number 1
         if all_others_zero_cif and instance.serial_number == 1:
             # Return the license's balance_cif (use stored value to avoid recursion)
-            return round(float(instance.license.balance_cif or 0), 2)
+            return round(to_float(instance.license.balance_cif), 2)
 
     # NOTE: This logic is now handled by available_value_calculated property in the model
     # which uses restriction_percentage directly from ItemNameModel

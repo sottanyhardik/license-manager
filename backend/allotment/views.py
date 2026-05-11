@@ -169,8 +169,15 @@ def custom_get_queryset_with_defaults(self):
     # Add select_related for FK fields to avoid N+1 queries
     qs = qs.select_related('company', 'port', 'related_company')
 
-    # Prefetch related allotment_details for better performance
-    qs = qs.prefetch_related('allotment_details')
+    # Prefetch related allotment_details and their nested relationships
+    qs = qs.prefetch_related(
+        'allotment_details',
+        'allotment_details__item',
+        'allotment_details__item__hs_code',
+        'allotment_details__item__license',
+        'allotment_details__item__license__purchase_status',
+        'allotment_details__item__license__current_owner',
+    )
 
     params = self.request.query_params
 

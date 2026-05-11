@@ -35,6 +35,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import PropTypes from 'prop-types';
+import { getErrorMessage } from '../utils/errorUtils';
 
 // Simple in-memory cache
 const requestCache = new Map();
@@ -56,12 +57,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  */
 const extractErrorMessage = (error, defaultMessage = 'An error occurred') => {
   if (typeof error === 'string') return error;
-
-  return error?.response?.data?.detail ||
-    error?.response?.data?.message ||
-    error?.response?.data?.error ||
-    error?.message ||
-    defaultMessage;
+  return getErrorMessage(error) || defaultMessage;
 };
 
 /**

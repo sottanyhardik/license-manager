@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, Optional
 
+from django.conf import settings
 from django.core.validators import RegexValidator, MinValueValidator
 from django.db import models, transaction
 from django.db.models import Count, Sum, DecimalField, Value
@@ -1343,6 +1344,23 @@ class LicenseTransferModel(models.Model):
 
     user_id_transfer_initiation = models.CharField(max_length=100, null=True, blank=True)
     user_id_acceptance = models.CharField(max_length=100, null=True, blank=True)
+
+    # Expand phase: proper FK columns replacing the CharField ID copies above.
+    # Backfilled by data migration 0XXX_backfill_transfer_user_fks.
+    transfer_initiation_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='transfer_initiations',
+    )
+    acceptance_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='transfer_acceptances',
+    )
 
     def __str__(self) -> str:
         fd = self.transfer_date or (self.transfer_initiation_date.date() if self.transfer_initiation_date else None)

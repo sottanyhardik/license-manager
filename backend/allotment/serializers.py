@@ -1,7 +1,10 @@
 # allotment/serializers.py
-from rest_framework import serializers
-from allotment.models import AllotmentModel, AllotmentItems
 from datetime import datetime, date
+
+from rest_framework import serializers
+
+from allotment.models import AllotmentModel, AllotmentItems
+from core.serializers.fields import IndianDateField
 
 
 class AllotmentItemSerializer(serializers.ModelSerializer):
@@ -77,7 +80,7 @@ class AllotmentSerializer(serializers.ModelSerializer):
     allotment_details_read = AllotmentItemSerializer(source='allotment_details', many=True, read_only=True)
 
     # Date field handling
-    estimated_arrival_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y", input_formats=["%d-%m-%Y", "%Y-%m-%d"])
+    estimated_arrival_date = IndianDateField(required=False, allow_null=True)
     created_on = serializers.SerializerMethodField()
     modified_on = serializers.SerializerMethodField()
 

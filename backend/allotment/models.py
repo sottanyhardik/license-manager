@@ -235,7 +235,7 @@ class AllotmentItems(AuditModel):
     )
     qty = models.DecimalField(
         max_digits=15,
-        decimal_places=0,
+        decimal_places=3,
         default=DEC_0,
         validators=[MinValueValidator(DEC_0)],
     )

@@ -281,6 +281,23 @@ LicenseTradeViewSet.permission_classes = [TradePermission]
 
 # Add custom actions to TradeViewSet
 class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
+    def get_queryset(self):
+        qs = super().get_queryset()
+        qs = qs.select_related(
+            'from_company', 'to_company', 'boe', 'incentive_license', 'linked_trade',
+            'created_by', 'modified_by',
+        )
+        qs = qs.prefetch_related(
+            'lines',
+            'lines__sr_number',
+            'lines__sr_number__license',
+            'lines__sr_number__items',
+            'incentive_lines',
+            'incentive_lines__incentive_license',
+            'payments',
+        )
+        return qs
+
     def create(self, request, *args, **kwargs):
         """Override create to log request data"""
         import logging

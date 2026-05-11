@@ -107,6 +107,23 @@ class SafeDateTimeField(serializers.DateTimeField):
         return super().to_representation(value)
 
 
+class IndianDateField(serializers.DateField):
+    """
+    DateField pre-configured for the Indian date format (DD-MM-YYYY) with ISO fallback.
+
+    Identical behaviour to:
+        serializers.DateField(format='%d-%m-%Y', input_formats=['%d-%m-%Y', '%Y-%m-%d'])
+
+    Centralises the repeated format configuration so changes to the date
+    convention only need to happen in one place.
+    """
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault('format', '%d-%m-%Y')
+        kwargs.setdefault('input_formats', ['%d-%m-%Y', '%Y-%m-%d'])
+        super().__init__(**kwargs)
+
+
 class FlexibleDateField(serializers.Field):
     """
     Flexible date field that accepts multiple input formats.

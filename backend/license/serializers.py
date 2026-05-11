@@ -6,6 +6,7 @@ from rest_framework import serializers
 
 from core.models import ItemNameModel, ProductDescriptionModel
 from core.serializers import HSCodeSerializer, SionNormClassNestedSerializer
+from core.serializers.fields import IndianDateField
 from license.models import (
     LicenseDetailsModel,
     LicenseExportItemModel,
@@ -103,11 +104,24 @@ class LicenseExportItemSerializer(serializers.ModelSerializer):
 
 
 class LicenseImportItemSerializer(serializers.ModelSerializer):
+    @staticmethod
+    def _cached_float(obj, key: str, calculator) -> float:
+        """Run *calculator(obj)*, cache the result on the instance, return it as float."""
+        if hasattr(obj, key):
+            return getattr(obj, key)
+        try:
+            result = calculator(obj)
+            value = float(result) if result is not None else 0.0
+        except Exception:
+            value = 0.0
+        setattr(obj, key, value)
+        return value
+
     items = serializers.PrimaryKeyRelatedField(many=True, queryset=ItemNameModel.objects.all(), required=False)
     items_detail = serializers.SerializerMethodField(read_only=True)
     license_number = serializers.CharField(source="license.license_number", read_only=True)
-    license_date = serializers.DateField(source="license.license_date", read_only=True, format="%d-%m-%Y")
-    license_expiry_date = serializers.DateField(source="license.license_expiry_date", read_only=True, format="%d-%m-%Y")
+    license_date = IndianDateField(source="license.license_date", read_only=True)
+    license_expiry_date = IndianDateField(source="license.license_expiry_date", read_only=True)
     notification_number = serializers.CharField(source="license.notification_number", read_only=True)
     exporter_name = serializers.CharField(source="license.exporter.name", read_only=True)
     notes = serializers.CharField(source="license.balance_report_notes", read_only=True, allow_null=True, allow_blank=True)
@@ -178,39 +192,8 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         return None
 
     def get_available_quantity(self, obj):
-        """
-        Calculate available quantity at runtime.
-        Formula: quantity - debited_quantity - allotted_quantity
-        Uses instance cache to avoid recalculating.
-        """
-        # Use cached value if available
-        cache_key = f'_cached_available_quantity_{obj.id}'
-        if hasattr(obj, cache_key):
-            return getattr(obj, cache_key)
-
         from core.scripts.calculate_balance import calculate_available_quantity
-        try:
-            result = calculate_available_quantity(obj)
-            value = float(result) if result is not None else 0.0
-            # Cache on instance
-            setattr(obj, cache_key, value)
-            return value
-        except Exception as e:
-            # Fallback: Manual calculation if helper function fails
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"calculate_available_quantity failed for item {obj.id}: {str(e)}")
-
-            try:
-                quantity = float(obj.quantity or 0)
-                debited = self.get_debited_quantity(obj)
-                allotted = self.get_allotted_quantity(obj)
-                available = quantity - debited - allotted
-                value = max(available, 0.0)
-                setattr(obj, cache_key, value)
-                return value
-            except Exception:
-                return 0.0
+        return self._cached_float(obj, f'_cached_available_quantity_{obj.id}', calculate_available_quantity)
 
     def get_available_value(self, obj):
         """
@@ -222,80 +205,20 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         return obj.available_value_calculated
 
     def get_debited_quantity(self, obj):
-        """
-        Calculate debited quantity at runtime.
-        Includes BOE debits + ARO allotments (treated as debits).
-        Uses instance cache to avoid recalculating.
-        """
-        cache_key = f'_cached_debited_quantity_{obj.id}'
-        if hasattr(obj, cache_key):
-            return getattr(obj, cache_key)
-
         from core.scripts.calculate_balance import calculate_debited_quantity
-        try:
-            result = calculate_debited_quantity(obj)
-            value = float(result) if result is not None else 0.0
-            setattr(obj, cache_key, value)
-            return value
-        except Exception:
-            return 0.0
+        return self._cached_float(obj, f'_cached_debited_quantity_{obj.id}', calculate_debited_quantity)
 
     def get_debited_value(self, obj):
-        """
-        Calculate debited value at runtime.
-        Includes BOE debits + ARO allotments (treated as debits).
-        Uses instance cache to avoid recalculating.
-        """
-        cache_key = f'_cached_debited_value_{obj.id}'
-        if hasattr(obj, cache_key):
-            return getattr(obj, cache_key)
-
         from core.scripts.calculate_balance import calculate_debited_value
-        try:
-            result = calculate_debited_value(obj)
-            value = float(result) if result is not None else 0.0
-            setattr(obj, cache_key, value)
-            return value
-        except Exception:
-            return 0.0
+        return self._cached_float(obj, f'_cached_debited_value_{obj.id}', calculate_debited_value)
 
     def get_allotted_quantity(self, obj):
-        """
-        Calculate allotted quantity at runtime.
-        Only includes AT allotments without BOE.
-        Uses instance cache to avoid recalculating.
-        """
-        cache_key = f'_cached_allotted_quantity_{obj.id}'
-        if hasattr(obj, cache_key):
-            return getattr(obj, cache_key)
-
         from core.scripts.calculate_balance import calculate_allotted_quantity
-        try:
-            result = calculate_allotted_quantity(obj)
-            value = float(result) if result is not None else 0.0
-            setattr(obj, cache_key, value)
-            return value
-        except Exception:
-            return 0.0
+        return self._cached_float(obj, f'_cached_allotted_quantity_{obj.id}', calculate_allotted_quantity)
 
     def get_allotted_value(self, obj):
-        """
-        Calculate allotted value at runtime.
-        Only includes AT allotments without BOE.
-        Uses instance cache to avoid recalculating.
-        """
-        cache_key = f'_cached_allotted_value_{obj.id}'
-        if hasattr(obj, cache_key):
-            return getattr(obj, cache_key)
-
         from core.scripts.calculate_balance import calculate_allotted_value
-        try:
-            result = calculate_allotted_value(obj)
-            value = float(result) if result is not None else 0.0
-            setattr(obj, cache_key, value)
-            return value
-        except Exception:
-            return 0.0
+        return self._cached_float(obj, f'_cached_allotted_value_{obj.id}', calculate_allotted_value)
 
     def get_balance_cif_fc(self, obj):
         """
@@ -329,8 +252,7 @@ class LicenseDocumentSerializer(serializers.ModelSerializer):
 
 
 class LicenseTransferSerializer(serializers.ModelSerializer):
-    transfer_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y",
-                                          input_formats=["%d-%m-%Y", "%Y-%m-%d"])
+    transfer_date = IndianDateField(required=False, allow_null=True)
     transfer_initiation_date = serializers.DateTimeField(required=False, allow_null=True)
     transfer_acceptance_date = serializers.DateTimeField(required=False, allow_null=True)
     cbic_response_date = serializers.DateTimeField(required=False, allow_null=True)
@@ -341,7 +263,7 @@ class LicenseTransferSerializer(serializers.ModelSerializer):
 
 
 class LicensePurchaseSerializer(serializers.ModelSerializer):
-    invoice_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y", input_formats=["%d-%m-%Y", "%Y-%m-%d"])
+    invoice_date = IndianDateField(required=False, allow_null=True)
 
     class Meta:
         model = LicensePurchase
@@ -350,12 +272,10 @@ class LicensePurchaseSerializer(serializers.ModelSerializer):
 
 class LicenseDetailsSerializer(serializers.ModelSerializer):
     # Explicit DateFields for model.DateField columns
-    license_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y", input_formats=["%d-%m-%Y", "%Y-%m-%d"])
-    license_expiry_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y",
-                                                input_formats=["%d-%m-%Y", "%Y-%m-%d"])
-    registration_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y",
-                                              input_formats=["%d-%m-%Y", "%Y-%m-%d"])
-    ledger_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y", input_formats=["%d-%m-%Y", "%Y-%m-%d"])
+    license_date = IndianDateField(required=False, allow_null=True)
+    license_expiry_date = IndianDateField(required=False, allow_null=True)
+    registration_date = IndianDateField(required=False, allow_null=True)
+    ledger_date = IndianDateField(required=False, allow_null=True)
 
     # Annotated fields for FK display
     exporter_name = serializers.CharField(read_only=True, required=False)
@@ -1469,9 +1389,8 @@ class IncentiveLicenseSerializer(serializers.ModelSerializer):
     """
     Serializer for IncentiveLicense model (RODTEP/ROSTL/MEIS)
     """
-    license_date = serializers.DateField(required=True, format="%d-%m-%Y", input_formats=["%d-%m-%Y", "%Y-%m-%d"])
-    license_expiry_date = serializers.DateField(required=False, allow_null=True, format="%d-%m-%Y",
-                                                input_formats=["%d-%m-%Y", "%Y-%m-%d"])
+    license_date = IndianDateField(required=True)
+    license_expiry_date = IndianDateField(required=False, allow_null=True)
 
     # Read-only fields for display
     exporter_name = serializers.CharField(source="exporter.name", read_only=True)

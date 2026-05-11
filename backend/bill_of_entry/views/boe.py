@@ -286,7 +286,8 @@ def fetch_allotment_details(self, request):
         })
 
     except Exception as e:
-        return Response({'error': str(e)}, status=500)
+        from core.utils.exceptions import api_error
+        return Response(api_error('Failed to fetch allotment details', e, __name__), status=500)
 
 
 BillOfEntryViewSet.fetch_allotment_details = fetch_allotment_details
@@ -331,8 +332,16 @@ def custom_get_queryset_with_defaults(self):
     # Add select_related for FK fields to avoid N+1 queries
     qs = qs.select_related('company', 'port')
 
-    # Prefetch related item_details for better performance
-    qs = qs.prefetch_related('item_details')
+    # Prefetch item_details and the full FK chain used by RowDetailsSerializer
+    qs = qs.prefetch_related(
+        'item_details',
+        'item_details__sr_number',
+        'item_details__sr_number__hs_code',
+        'item_details__sr_number__license',
+        'item_details__sr_number__license__purchase_status',
+        'item_details__sr_number__items',
+        'allotment',
+    )
 
     params = self.request.query_params
 

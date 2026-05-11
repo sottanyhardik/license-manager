@@ -23,6 +23,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import api from '../api/axios';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export const useFetch = (url, options = {}) => {
   const {
@@ -59,10 +60,7 @@ export const useFetch = (url, options = {}) => {
       return { success: true, data: response.data };
 
     } catch (err) {
-      const errorMsg = err.response?.data?.detail
-        || err.response?.data?.message
-        || err.message
-        || 'Failed to load data';
+      const errorMsg = getErrorMessage(err) || 'Failed to load data';
 
       setError(errorMsg);
 

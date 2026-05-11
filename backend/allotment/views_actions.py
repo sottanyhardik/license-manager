@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
 from allotment.models import AllotmentModel, AllotmentItems
+from core.utils.exceptions import api_error, _safe_int
 from allotment.serializers import AllotmentSerializer
 from license.models import LicenseImportItemsModel
 from license.serializers import LicenseImportItemSerializer
@@ -230,8 +231,8 @@ class AllotmentActionViewSet(ViewSet):
                 queryset = queryset.filter(items__id__in=item_name_list).distinct()
 
         # Pagination
-        page = int(request.query_params.get('page', 1))
-        page_size = min(int(request.query_params.get('page_size', 20)), 100)  # Max 100 items per page
+        page = _safe_int(request.query_params.get('page'), default=1, minimum=1)
+        page_size = min(_safe_int(request.query_params.get('page_size'), default=20, minimum=1), 100)
 
         # Apply pagination first, then count (more efficient for large datasets)
         start = (page - 1) * page_size
@@ -418,10 +419,9 @@ class AllotmentActionViewSet(ViewSet):
                     'error': 'License import item not found'
                 })
             except Exception as e:
-                errors.append({
-                    'item_id': item_id,
-                    'error': str(e)
-                })
+                import logging as _log
+                _log.getLogger(__name__).exception("allocate_items: failed for item_id %s", item_id)
+                errors.append({'item_id': item_id, 'error': 'Allocation failed; check server logs'})
 
         # Refresh allotment to get updated balanced_quantity
         allotment.refresh_from_db()
@@ -462,9 +462,10 @@ class AllotmentActionViewSet(ViewSet):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                api_error('Failed to delete allotment item', e, __name__),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @action(detail=True, methods=['get'], url_path='generate-pdf')
     def generate_pdf(self, request, pk=None):
@@ -487,9 +488,10 @@ class AllotmentActionViewSet(ViewSet):
             return response
 
         except Exception as e:
-            return Response({
-                'error': f'Failed to generate PDF: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                api_error('Failed to generate PDF', e, __name__),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=True, methods=['post'], url_path='generate-transfer-letter')
     def generate_transfer_letter(self, request, pk=None):

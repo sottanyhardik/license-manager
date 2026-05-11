@@ -277,7 +277,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             self.default_filters = original_default_filters
 
         # Add select_related for ForeignKey fields to avoid N+1 queries
-        qs = qs.select_related('exporter', 'port', 'current_owner')
+        qs = qs.select_related('exporter', 'port', 'current_owner', 'purchase_status')
 
         # Only prefetch nested items for detail view (single object)
         # For list view, this causes massive performance issues
@@ -290,7 +290,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 'import_license__hs_code',
                 'import_license__items',
                 'import_license__items__sion_norm_class',
-                'license_documents'
+                'import_license__allotment_details',
+                'import_license__item_details',
+                'license_documents',
             )
 
         return qs

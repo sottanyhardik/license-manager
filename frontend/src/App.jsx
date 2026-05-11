@@ -17,7 +17,6 @@ import NotFound from "./pages/errors/NotFound";
 
 // Lazy load pages with retry logic
 const Dashboard = lazyLoadWithRetry(() => import("./pages/Dashboard"));
-const LicensePage = lazyLoadWithRetry(() => import("./pages/LicensePage"));
 const Settings = lazyLoadWithRetry(() => import("./pages/Settings"));
 const Profile = lazyLoadWithRetry(() => import("./pages/Profile"));
 const MasterList = lazyLoadWithRetry(() => import("./pages/masters/MasterList"));

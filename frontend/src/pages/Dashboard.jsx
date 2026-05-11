@@ -193,10 +193,10 @@ export default function Dashboard() {
                     <button className="btn btn-sm btn-outline-secondary" onClick={fetchDashboardData}>
                         <i className="bi bi-arrow-clockwise me-1"></i>Refresh
                     </button>
-                    <button className="btn btn-sm btn-outline-primary" onClick={() => navigate('/allotments/new')}>
+                    <button className="btn btn-sm btn-outline-primary" onClick={() => navigate('/allotments/create')}>
                         <i className="bi bi-plus-lg me-1"></i>New Allotment
                     </button>
-                    <button className="btn btn-sm btn-primary" onClick={() => navigate('/bill-of-entries/new')}>
+                    <button className="btn btn-sm btn-primary" onClick={() => navigate('/bill-of-entries/create')}>
                         <i className="bi bi-plus-lg me-1"></i>New BOE
                     </button>
                 </div>

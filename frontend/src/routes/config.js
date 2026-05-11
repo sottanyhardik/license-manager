@@ -104,18 +104,10 @@ export const masterEntities = [
     {
         path: "/masters/exchange-rates",
         label: "Exchange Rates",
-        entity: "exchange-rates",
+                entity: "exchange-rates",
         icon: "currency-exchange",
     },
-    {
-        path: "/masters/item-heads",
-        label: "Item Heads (Deprecated)",
-        entity: "item-heads",
-        icon: "folder",
-        deprecated: true,
-    },
 ];
-
 // Report entities configuration
 export const reportEntities = [
     {

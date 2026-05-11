@@ -134,16 +134,18 @@ export default function UserList() {
                                         <td>
                                             {(u.roles ?? []).length === 0
                                                 ? <span className="text-muted small">No roles</span>
-                                                : (u.roles ?? []).map(r => (
-                                                    {(() => { const bp = getRoleBadgeProps(r); return (
-                                                    <span
-                                                        key={r}
-                                                        className={`${bp.className} me-1 mb-1`}
-                                                        style={{fontSize: '0.7rem', ...bp.style}}
-                                                    >
+                                                : (u.roles ?? []).map(r => {
+                                                    const bp = getRoleBadgeProps(r);
+                                                    return (
+                                                        <span
+                                                            key={r}
+                                                            className={`${bp.className} me-1 mb-1`}
+                                                            style={{fontSize: '0.7rem', ...bp.style}}
+                                                        >
                                                             {ROLE_LABELS[r] ?? r}
                                                         </span>
-                                                    ); })())
+                                                    );
+                                                })
                                             }
                                         </td>
                                         <td>

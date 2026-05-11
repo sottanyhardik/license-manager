@@ -4,6 +4,12 @@ Migration: Fix nullable name fields on CompanyModel and PortModel.
 Strategy:
 1. Backfill NULL values with empty string (RunPython)
 2. AlterField to remove null=True
+
+atomic = False is required because PostgreSQL raises
+  "cannot ALTER TABLE because it has pending trigger events"
+when a DDL statement (AlterField) follows a DML statement (UPDATE in RunPython)
+inside the same transaction.  With atomic=False each operation commits before
+the next one begins, so the trigger queue is flushed before the ALTER TABLE runs.
 """
 from django.db import migrations, models
 
@@ -28,6 +34,10 @@ def reverse_backfill(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+
+    # Required: RunPython (UPDATE) and AlterField (DDL) cannot share a transaction
+    # on PostgreSQL when deferred trigger events are pending.
+    atomic = False
 
     dependencies = [
         ('core', '0032_remove_companymodel_company_iec_name_idx_and_more'),

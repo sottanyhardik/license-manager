@@ -2,7 +2,7 @@
 
 # Automated Deployment Script for License Manager
 # Deploys to multiple servers sequentially
-# Usage: ./auto-deploy.sh
+# Usage: ./auto-deploy.sh [BRANCH]
 # Password: admin (hardcoded)
 
 set -e  # Exit on error
@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 SERVER_USER="django"
 SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
-BRANCH="master"
+BRANCH="${1:-feature/Version5}"
 PASSWORD="admin"
 
 print_header() {
@@ -48,16 +48,14 @@ deploy_to_server() {
     # Check if sshpass is installed, if not use expect
     if command -v sshpass &> /dev/null; then
         print_info "Using sshpass for authentication"
-        SSH_CMD="sshpass -p '$PASSWORD' ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP"
-        SUDO_CMD="echo '$PASSWORD' | sudo -S"
+        SSH_CMD=(sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP")
     else
         print_info "Using SSH (password will be prompted if needed)"
-        SSH_CMD="ssh $SERVER_USER@$SERVER_IP"
-        SUDO_CMD="sudo"
+        SSH_CMD=(ssh "$SERVER_USER@$SERVER_IP")
     fi
 
     # Execute deployment via SSH
-    $SSH_CMD bash << ENDSSH
+    "${SSH_CMD[@]}" bash << ENDSSH
 set -e
 
 # Colors
@@ -76,8 +74,11 @@ git stash
 echo -e "\${BLUE}→ Removing untracked files that would block merge...\${NC}"
 git clean -fd
 
+echo -e "\${BLUE}→ Fetching latest refs...\${NC}"
+git fetch --all --prune
+
 echo -e "\${BLUE}→ Checking out branch $BRANCH...\${NC}"
-git checkout $BRANCH
+git checkout $BRANCH || git checkout -b $BRANCH origin/$BRANCH
 
 echo -e "\${BLUE}→ Pulling latest code from $BRANCH...\${NC}"
 git pull origin $BRANCH

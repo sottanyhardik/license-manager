@@ -83,9 +83,18 @@ class UserManagementSerializer(serializers.ModelSerializer):
         groups = Group.objects.filter(name__in=role_codes)
         user.groups.set(groups)
 
+    @staticmethod
+    def _normalise(data):
+        """Normalise fields before DB write — empty email → None (avoids unique constraint clash)."""
+        if 'email' in data and not data['email']:
+            data['email'] = None
+        return data
+
     def create(self, validated_data):
-        password = validated_data.pop('password', None)
+        password   = validated_data.pop('password', None)
         role_codes = validated_data.pop('roles', None)
+
+        self._normalise(validated_data)
 
         user = User(**validated_data)
         if password:
@@ -99,8 +108,10 @@ class UserManagementSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
-        password = validated_data.pop('password', None)
+        password   = validated_data.pop('password', None)
         role_codes = validated_data.pop('roles', None)
+
+        self._normalise(validated_data)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

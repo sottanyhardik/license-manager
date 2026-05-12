@@ -325,20 +325,38 @@ export default function MasterForm({
             const patch = {};
             if (parsed.be_number) patch.bill_of_entry_number = parsed.be_number;
             if (parsed.be_date) patch.bill_of_entry_date = parsed.be_date;
-            if (matched_company_id) patch.company = matched_company_id;
-            if (matched_port_id) patch.port = matched_port_id;
-            if (matched_allotment_id) patch.allotment = matched_allotment_id;
-            if (prefill.exchange_rate) patch.exchange_rate = prefill.exchange_rate;
+            if (matched_company_id) patch.company = parseInt(matched_company_id, 10);
+            if (matched_port_id) patch.port = parseInt(matched_port_id, 10);
+            if (matched_allotment_id) patch.allotment = [matched_allotment_id];
+            if (prefill.exchange_rate) patch.exchange_rate = String(prefill.exchange_rate);
             if (parsed.item_description) patch.product_name = parsed.item_description;
 
-            // Build BOE item_details rows from matched licence rows
+            // Build BOE item_details rows from matched licence rows.
+            // Multiple licence rows that point to the same license item (same
+            // sr_number) are summed into a single row — the BOE form should
+            // carry the total CIF/qty per license item, not duplicates.
             const matchedRows = (licences || []).filter(l => l.match_status === 'matched' && l.matched_item_id);
             if (matchedRows.length > 0) {
-                patch.item_details = matchedRows.map(l => ({
-                    sr_number: l.matched_item_id,
-                    cif_inr: l.cif_inr,
-                    cif_fc: l.cif_fc,
-                    qty: l.qty,
+                const toNum = (v) => {
+                    if (v === null || v === undefined || v === '') return 0;
+                    const n = parseFloat(v);
+                    return isNaN(n) ? 0 : n;
+                };
+                const byItem = new Map();
+                for (const l of matchedRows) {
+                    const key = parseInt(l.matched_item_id, 10);
+                    const existing = byItem.get(key) || { sr_number: key, cif_inr: 0, cif_fc: 0, qty: 0 };
+                    existing.cif_inr += toNum(l.cif_inr);
+                    existing.cif_fc  += toNum(l.cif_fc);
+                    existing.qty     += toNum(l.qty);
+                    byItem.set(key, existing);
+                }
+                // Round to 2dp / 3dp like the form expects
+                patch.item_details = Array.from(byItem.values()).map(r => ({
+                    sr_number: r.sr_number,
+                    cif_inr: Number(r.cif_inr.toFixed(2)),
+                    cif_fc:  Number(r.cif_fc.toFixed(2)),
+                    qty:     Number(r.qty.toFixed(3)),
                 }));
             }
 

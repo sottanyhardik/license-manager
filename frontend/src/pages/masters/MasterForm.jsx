@@ -184,6 +184,9 @@ export default function MasterForm({
     const [showBalanceModal, setShowBalanceModal] = useState(false); // License balance modal state
     const [savedLicenseId, setSavedLicenseId] = useState(null); // Store saved license ID for modal
     const [activeNestedTab, setActiveNestedTab] = useState(null);
+    const [boePdfFile, setBoePdfFile] = useState(null);
+    const [boeParsing, setBoeParsing] = useState(false);
+    const [boeParseSummary, setBoeParseSummary] = useState(null);
 
     // Enable browser back button support with filter preservation
     useBackButton(entityName, !isModal);
@@ -300,6 +303,78 @@ export default function MasterForm({
             setError(err.response?.data?.detail || "Failed to load record");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleParseBoePdf = async () => {
+        if (!boePdfFile) {
+            toast.error("Please choose a BOE PDF first");
+            return;
+        }
+        setBoeParsing(true);
+        setBoeParseSummary(null);
+        try {
+            const fd = new FormData();
+            fd.append("file", boePdfFile);
+            const { data } = await api.post("bill-of-entries/parse-pdf/", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            const { parsed, prefill, matched_allotment_id, matched_company_id, matched_port_id, company_created, licences } = data;
+
+            // Build patch — only fields we successfully extracted/matched
+            const patch = {};
+            if (parsed.be_number) patch.bill_of_entry_number = parsed.be_number;
+            if (parsed.be_date) patch.bill_of_entry_date = parsed.be_date;
+            if (matched_company_id) patch.company = matched_company_id;
+            if (matched_port_id) patch.port = matched_port_id;
+            if (matched_allotment_id) patch.allotment = matched_allotment_id;
+            if (prefill.exchange_rate) patch.exchange_rate = prefill.exchange_rate;
+            if (parsed.item_description) patch.product_name = parsed.item_description;
+
+            // Build BOE item_details rows from matched licence rows
+            const matchedRows = (licences || []).filter(l => l.match_status === 'matched' && l.matched_item_id);
+            if (matchedRows.length > 0) {
+                patch.item_details = matchedRows.map(l => ({
+                    sr_number: l.matched_item_id,
+                    cif_inr: l.cif_inr,
+                    cif_fc: l.cif_fc,
+                    qty: l.qty,
+                }));
+            }
+
+            setFormData(prev => ({ ...prev, ...patch }));
+            // Highlight updated fields briefly
+            setUpdatedFields(prev => ({
+                ...prev,
+                ...Object.keys(patch).reduce((acc, k) => { acc[k] = true; return acc; }, {}),
+            }));
+
+            const unmatched = (licences || []).filter(l => l.match_status !== 'matched').length;
+            setBoeParseSummary({
+                be_number: parsed.be_number,
+                be_date: parsed.be_date,
+                port_code: parsed.port_code,
+                currency: parsed.currency,
+                exchange_rate: prefill.exchange_rate,
+                company_created,
+                matched_allotment_id,
+                matched_company_id,
+                buyer_name: parsed.buyer_name,
+                licences: licences || [],
+                unmatched,
+            });
+
+            const bits = [`BOE ${parsed.be_number || ""} parsed`];
+            if (company_created) bits.push("new company created");
+            if (matched_allotment_id) bits.push(`matched allotment #${matched_allotment_id}`);
+            bits.push(`${(licences || []).length} licence row(s), ${unmatched} unmatched`);
+            toast.success(bits.join(" · "));
+        } catch (err) {
+            console.error("BOE parse error", err);
+            const msg = err?.response?.data?.detail || "Failed to parse BOE PDF";
+            toast.error(msg);
+        } finally {
+            setBoeParsing(false);
         }
     };
 
@@ -1410,6 +1485,86 @@ export default function MasterForm({
                         <div className="alert alert-info d-flex align-items-center gap-2 mb-4">
                             <span className="spinner-border spinner-border-sm flex-shrink-0"></span>
                             Fetching allotment details...
+                        </div>
+                    )}
+
+                    {entityName === 'bill-of-entries' && !isEdit && (
+                        <div className="mb-4 p-3 rounded" style={{ background: 'white', border: '1px dashed #c7d2fe' }}>
+                            <div className="d-flex align-items-center gap-2 flex-wrap">
+                                <input
+                                    type="file"
+                                    accept=".pdf,application/pdf"
+                                    id="boe-pdf-input"
+                                    className="form-control form-control-sm"
+                                    style={{ maxWidth: 360 }}
+                                    onChange={(e) => {
+                                        setBoePdfFile(e.target.files?.[0] || null);
+                                        setBoeParseSummary(null);
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    className="btn btn-primary btn-sm"
+                                    onClick={handleParseBoePdf}
+                                    disabled={!boePdfFile || boeParsing}
+                                >
+                                    {boeParsing ? (
+                                        <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Fetching…</>
+                                    ) : (
+                                        <><i className="bi bi-download me-1"></i>Fetch</>
+                                    )}
+                                </button>
+                                <small className="text-muted">
+                                    Upload the ICEGATE BOE PDF, then click <strong>Fetch</strong> to prefill BE no, date, port, company, exchange rate, invoice & item.
+                                </small>
+                            </div>
+                            {boeParseSummary && (
+                                <div className="mt-3 small">
+                                    <div>
+                                        <strong>BE {boeParseSummary.be_number}</strong> · {boeParseSummary.be_date} · port <code>{boeParseSummary.port_code}</code> · 1 {boeParseSummary.currency || 'USD'} = ₹{boeParseSummary.exchange_rate}
+                                    </div>
+                                    {boeParseSummary.company_created && (
+                                        <div className="text-success">
+                                            <i className="bi bi-check-circle me-1"></i>
+                                            New company created from buyer details ({boeParseSummary.buyer_name}).
+                                        </div>
+                                    )}
+                                    {!boeParseSummary.company_created && boeParseSummary.matched_company_id && (
+                                        <div className="text-muted">
+                                            <i className="bi bi-check2 me-1"></i>
+                                            Matched existing company ({boeParseSummary.buyer_name}).
+                                        </div>
+                                    )}
+                                    {boeParseSummary.matched_allotment_id && (
+                                        <div className="text-info">
+                                            <i className="bi bi-info-circle me-1"></i>
+                                            Matched existing allotment <strong>#{boeParseSummary.matched_allotment_id}</strong> by invoice number.
+                                        </div>
+                                    )}
+                                    {boeParseSummary.licences?.length > 0 && (
+                                        <details className="mt-1">
+                                            <summary>{boeParseSummary.licences.length} licence row(s) — {boeParseSummary.unmatched} unmatched</summary>
+                                            <ul className="mb-0 mt-1" style={{ paddingLeft: '1.2rem' }}>
+                                                {boeParseSummary.licences.map((l, i) => {
+                                                    const badge = l.match_status === 'matched'
+                                                        ? <span className="text-success ms-1">✓ prefill item</span>
+                                                        : l.match_status === 'license_only'
+                                                            ? <span className="text-warning ms-1">⚠ license found, sl#{l.licence_slno} missing</span>
+                                                            : l.match_status === 'license_missing'
+                                                                ? <span className="text-danger ms-1">✗ license not in DB</span>
+                                                                : <span className="text-muted ms-1">— no data</span>;
+                                                    return (
+                                                        <li key={i}>
+                                                            License <code>{l.licence_number}</code> sl#{l.licence_slno} · CIF ₹{l.cif_inr} · ${l.cif_fc} · qty {l.qty} {l.uqc}
+                                                            {badge}
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        </details>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 

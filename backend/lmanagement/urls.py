@@ -12,6 +12,7 @@ urlpatterns = [
     path("api/", include("allotment.urls")),  # allotment CRUD
     path("api/", include("bill_of_entry.urls")),  # bill of entry CRUD
     path("api/", include("trade.urls")),  # trade in/out CRUD
+    path("api/", include("tasks.urls")),  # personal tasks / todo
     path("api/masters/", include("core.urls")),  # options/select endpoints
 
     # Serve media files in development

@@ -1,4 +1,5 @@
 import TopNav from "../components/TopNav";
+import TaskFAB from "../components/TaskFAB";
 import {useLocation, useNavigate} from "react-router-dom";
 import {useEffect, useState} from "react";
 import {usePageTitle} from "../hooks/usePageTitle";
@@ -95,6 +96,7 @@ export default function AdminLayout({children}) {
                     </div>
                 </div>
             </footer>}
+            {!isInIframe && <TaskFAB bottomOffset={110}/>}
         </div>
     );
 }

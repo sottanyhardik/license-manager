@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -25,7 +26,9 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Task.objects.select_related("created_by", "assigned_to").prefetch_related("remarks__created_by")
+        qs = Task.objects.select_related(
+            "created_by", "assigned_to", "rejected_by"
+        ).prefetch_related("remarks__created_by")
         if user.is_superuser:
             return qs
         return qs.filter(Q(created_by=user) | Q(assigned_to=user))
@@ -37,6 +40,23 @@ class TaskViewSet(viewsets.ModelViewSet):
             or task.created_by_id == user.id
             or task.assigned_to_id == user.id
         )
+
+    def perform_create(self, serializer):
+        # Default assignee = creator when not specified, so the "by" line always renders
+        user = self.request.user
+        assigned_to = serializer.validated_data.get("assigned_to") or user
+        serializer.save(
+            assigned_to=assigned_to,
+            assigned_on=timezone.now(),
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        new_assignee = serializer.validated_data.get("assigned_to", instance.assigned_to)
+        extra = {}
+        if new_assignee != instance.assigned_to:
+            extra["assigned_on"] = timezone.now()
+        serializer.save(**extra)
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -74,7 +94,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         if not self._can_modify(task):
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
         reason = (request.data.get("reason") or "").strip()
-        task.mark_rejected()
+        task.mark_rejected(by_user=request.user, reason=reason)
         if reason:
             TaskRemark.objects.create(task=task, text=f"[Rejected] {reason}", created_by=request.user)
         return Response(self.get_serializer(task).data)
@@ -86,7 +106,12 @@ class TaskViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
         task.status = Task.STATUS_PENDING
         task.completed_on = None
-        task.save(update_fields=["status", "completed_on", "modified_on", "modified_by"])
+        task.rejected_by = None
+        task.rejection_reason = ""
+        task.save(update_fields=[
+            "status", "completed_on", "rejected_by", "rejection_reason",
+            "modified_on", "modified_by",
+        ])
         return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=["get", "post"], url_path="remarks")
@@ -110,5 +135,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
-        users = User.objects.filter(is_active=True).order_by("username").values("id", "username", "first_name", "last_name")
+        users = User.objects.filter(is_active=True).order_by("username").values(
+            "id", "username", "first_name", "last_name"
+        )
         return Response(list(users))

@@ -54,6 +54,62 @@ function formatDate(value) {
     }
 }
 
+const URGENT_RX = /\b(urgent|asap|high\s*priority)\b/i;
+const ASSIGN_RX = /\bassign(?:\s+(?:this\s+)?task)?\s+to\s+([a-z][a-z0-9 ._-]{0,40}?)(?=\s*(?:,|\.|;|:|$|\bplease\b|\bto\b))/i;
+
+function fuzzyMatchUser(name, users) {
+    if (!name || !users || users.length === 0) return null;
+    const lower = name.trim().toLowerCase();
+    const candidates = users.map(u => ({
+        u,
+        username: (u.username || "").toLowerCase(),
+        first: (u.first_name || "").toLowerCase(),
+        last: (u.last_name || "").toLowerCase(),
+        full: `${u.first_name || ""} ${u.last_name || ""}`.trim().toLowerCase(),
+    }));
+    // Exact matches first
+    let hit = candidates.find(c => c.username === lower || c.first === lower || c.full === lower);
+    if (hit) return hit.u;
+    // First-token match (e.g. "ankit sharma" → matches "ankit")
+    const firstToken = lower.split(/\s+/)[0];
+    hit = candidates.find(c => c.username === firstToken || c.first === firstToken);
+    if (hit) return hit.u;
+    // Contains
+    hit = candidates.find(c =>
+        c.username.includes(lower) || c.first.includes(lower) || c.full.includes(lower)
+    );
+    return hit ? hit.u : null;
+}
+
+/**
+ * Parse a voice segment into a task payload.
+ * Recognises "assign (task) to NAME" and "urgent"/"asap"/"high priority".
+ */
+function parseVoiceCommand(rawText, users) {
+    let title = (rawText || "").trim();
+    let priority = TASK_PRIORITY.NORMAL;
+    let assignedTo = null;
+
+    if (URGENT_RX.test(title)) {
+        priority = TASK_PRIORITY.HIGH;
+    }
+
+    const assignMatch = title.match(ASSIGN_RX);
+    if (assignMatch) {
+        const candidate = assignMatch[1].trim();
+        const match = fuzzyMatchUser(candidate, users);
+        if (match) {
+            assignedTo = match.id;
+            // Strip "assign (task) to NAME" from the title
+            title = title.replace(assignMatch[0], " ").replace(/\s+/g, " ").trim();
+        }
+    }
+
+    // If, after stripping, the title is empty, fall back to the original text
+    if (!title) title = (rawText || "").trim();
+    return { title, priority, assigned_to: assignedTo };
+}
+
 export default function TaskDrawer({ show, onClose }) {
     const { user } = useContext(AuthContext) || {};
     const [tasks, setTasks] = useState([]);
@@ -75,6 +131,10 @@ export default function TaskDrawer({ show, onClose }) {
     const [saving, setSaving] = useState(false);
     const titleInputRef = useRef(null);
 
+    // Keep latest users list reachable from speech callback without re-creating the recognizer
+    const usersRef = useRef(users);
+    useEffect(() => { usersRef.current = users; }, [users]);
+
     const speech = useSpeechRecognition({
         onSegment: (text) => {
             // Each completed segment becomes a new task auto-saved.
@@ -91,8 +151,20 @@ export default function TaskDrawer({ show, onClose }) {
             const data = await listTasks(params);
             // DRF default pagination returns {results: []} when paginator is global; otherwise array.
             const rows = Array.isArray(data) ? data : (data.results || []);
+            const myId = user?.id;
             const filtered = statusFilter === "open"
-                ? rows.filter(t => t.status === TASK_STATUS.PENDING || t.status === TASK_STATUS.IN_PROGRESS)
+                ? rows.filter(t => {
+                    if (t.status === TASK_STATUS.PENDING || t.status === TASK_STATUS.IN_PROGRESS) return true;
+                    // Bounced-back: rejected by someone else, I'm the creator → still "open" for me
+                    if (
+                        t.status === TASK_STATUS.REJECTED &&
+                        myId &&
+                        t.created_by === myId &&
+                        t.rejected_by &&
+                        t.rejected_by !== myId
+                    ) return true;
+                    return false;
+                })
                 : rows;
             setTasks(filtered);
         } catch {
@@ -100,7 +172,7 @@ export default function TaskDrawer({ show, onClose }) {
         } finally {
             setLoading(false);
         }
-    }, [search, statusFilter]);
+    }, [search, statusFilter, user?.id]);
 
     useEffect(() => {
         if (show) {
@@ -117,13 +189,21 @@ export default function TaskDrawer({ show, onClose }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [show, fetchTasks]);
 
-    const handleQuickCreate = async (title) => {
-        const text = (title || "").trim();
+    const handleQuickCreate = async (rawText) => {
+        const text = (rawText || "").trim();
         if (!text) return;
+        const parsed = parseVoiceCommand(text, usersRef.current);
+        const payload = { title: parsed.title, priority: parsed.priority };
+        if (parsed.assigned_to) payload.assigned_to = parsed.assigned_to;
         try {
-            const created = await createTask({ title: text, priority: TASK_PRIORITY.NORMAL });
+            const created = await createTask(payload);
             setTasks(prev => [created, ...prev]);
-            toast.success("Task added");
+            const bits = [`Task added${parsed.priority === TASK_PRIORITY.HIGH ? " (high)" : ""}`];
+            if (parsed.assigned_to) {
+                const u = usersRef.current.find(x => x.id === parsed.assigned_to);
+                if (u) bits.push(`→ ${u.username}`);
+            }
+            toast.success(bits.join(" "));
         } catch {
             toast.error("Failed to add task");
         }
@@ -155,10 +235,31 @@ export default function TaskDrawer({ show, onClose }) {
         }
     };
 
+    // After an action mutates a task, drop it from the current list if it no longer matches the filter.
+    const rowMatchesFilter = (row) => {
+        if (statusFilter !== "open") {
+            if (!statusFilter) return true;
+            return row.status === statusFilter;
+        }
+        if (row.status === TASK_STATUS.PENDING || row.status === TASK_STATUS.IN_PROGRESS) return true;
+        if (
+            row.status === TASK_STATUS.REJECTED &&
+            user?.id && row.created_by === user.id &&
+            row.rejected_by && row.rejected_by !== user.id
+        ) return true;
+        return false;
+    };
+
+    const replaceAndFilter = (updated) =>
+        setTasks(prev => prev
+            .map(t => t.id === updated.id ? updated : t)
+            .filter(rowMatchesFilter)
+        );
+
     const handleComplete = async (task) => {
         try {
             const updated = await completeTask(task.id);
-            setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+            replaceAndFilter(updated);
             toast.success("Marked completed");
         } catch {
             toast.error("Failed to update");
@@ -169,7 +270,7 @@ export default function TaskDrawer({ show, onClose }) {
         const reason = window.prompt("Reason for rejection (optional):", "") || "";
         try {
             const updated = await rejectTask(task.id, reason);
-            setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+            replaceAndFilter(updated);
             toast.success("Task rejected");
         } catch {
             toast.error("Failed to reject");
@@ -179,7 +280,7 @@ export default function TaskDrawer({ show, onClose }) {
     const handleReopen = async (task) => {
         try {
             const updated = await reopenTask(task.id);
-            setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+            replaceAndFilter(updated);
         } catch {
             toast.error("Failed to reopen");
         }
@@ -291,8 +392,9 @@ export default function TaskDrawer({ show, onClose }) {
 
                     {speech.listening && (
                         <div className="small text-muted mb-2" style={{ minHeight: 18 }}>
-                            <span className="text-danger">● Listening</span> — say <code>next</code> to start a new task.
-                            {speech.interim && <em className="ms-1">"{speech.interim}"</em>}
+                            <span className="text-danger">● Listening</span> — say <code>next</code> to split,
+                            {" "}<code>assign to NAME</code>, or include <code>urgent</code> for high priority.
+                            {speech.interim && <em className="ms-1 d-block">"{speech.interim}"</em>}
                         </div>
                     )}
 
@@ -378,6 +480,11 @@ export default function TaskDrawer({ show, onClose }) {
                         const open = expanded === task.id;
                         const mine = user?.id && task.created_by === user.id;
                         const closed = task.status === TASK_STATUS.COMPLETED || task.status === TASK_STATUS.REJECTED;
+                        const bouncedBack =
+                            task.status === TASK_STATUS.REJECTED &&
+                            mine && task.rejected_by && task.rejected_by !== user.id;
+                        const assigneeLabel = task.assigned_to_username || task.created_by_username || "self";
+                        const assigneeIsSelf = task.assigned_to === user?.id || (!task.assigned_to && mine);
                         return (
                             <div key={task.id} className="border-bottom px-3 py-2">
                                 <div className="d-flex align-items-start gap-2">
@@ -399,6 +506,11 @@ export default function TaskDrawer({ show, onClose }) {
                                             <span className={`badge ${STATUS_BADGE[task.status] || "bg-secondary"}`} style={{ fontSize: "0.65rem" }}>
                                                 {STATUS_LABEL[task.status] || task.status}
                                             </span>
+                                            {bouncedBack && (
+                                                <span className="badge bg-warning text-dark" style={{ fontSize: "0.65rem" }}>
+                                                    Bounced back
+                                                </span>
+                                            )}
                                             {task.priority === TASK_PRIORITY.HIGH && (
                                                 <span className={`badge ${PRIORITY_BADGE[task.priority]}`} style={{ fontSize: "0.65rem" }}>
                                                     High
@@ -406,10 +518,30 @@ export default function TaskDrawer({ show, onClose }) {
                                             )}
                                         </div>
                                         <div className="small text-muted">
-                                            {task.assigned_to_username && <span>→ {task.assigned_to_username} · </span>}
-                                            by {task.created_by_username}
+                                            → <strong>{assigneeIsSelf ? `${assigneeLabel} (you)` : assigneeLabel}</strong>
+                                            {task.assigned_on && <span> · assigned {formatDate(task.assigned_on)}</span>}
+                                            {!mine && task.created_by_username && (
+                                                <span> · by {task.created_by_username}</span>
+                                            )}
                                             {task.due_date && <span> · due {task.due_date}</span>}
                                         </div>
+                                        {bouncedBack && (
+                                            <div
+                                                className="small mt-1 p-2 rounded"
+                                                style={{ background: "#fff3cd", border: "1px solid #ffeeba" }}
+                                            >
+                                                <strong>Rejected by {task.rejected_by_username || "assignee"}</strong>
+                                                {task.rejection_reason && <span>: {task.rejection_reason}</span>}
+                                                {!task.rejection_reason && <span> (no reason given)</span>}
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-link btn-sm p-0 ms-2 align-baseline"
+                                                    onClick={() => handleReopen(task)}
+                                                >
+                                                    Reopen
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="btn-group btn-group-sm">
                                         <button

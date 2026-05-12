@@ -15,6 +15,7 @@ class TaskRemarkSerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     created_by_username = serializers.CharField(source="created_by.username", read_only=True)
     assigned_to_username = serializers.CharField(source="assigned_to.username", read_only=True)
+    rejected_by_username = serializers.CharField(source="rejected_by.username", read_only=True)
     remarks = TaskRemarkSerializer(many=True, read_only=True)
 
     class Meta:
@@ -27,8 +28,12 @@ class TaskSerializer(serializers.ModelSerializer):
             "priority",
             "assigned_to",
             "assigned_to_username",
+            "assigned_on",
             "due_date",
             "completed_on",
+            "rejected_by",
+            "rejected_by_username",
+            "rejection_reason",
             "created_by",
             "created_by_username",
             "created_on",
@@ -38,6 +43,10 @@ class TaskSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "completed_on",
+            "assigned_on",
+            "rejected_by",
+            "rejected_by_username",
+            "rejection_reason",
             "created_by",
             "created_by_username",
             "assigned_to_username",

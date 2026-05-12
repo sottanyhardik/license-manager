@@ -39,8 +39,17 @@ class Task(AuditModel):
         on_delete=models.SET_NULL,
         related_name="tasks_assigned",
     )
+    assigned_on = models.DateTimeField(null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
     completed_on = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tasks_rejected",
+    )
+    rejection_reason = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["-created_on"]
@@ -58,9 +67,14 @@ class Task(AuditModel):
         self.completed_on = timezone.now()
         self.save(update_fields=["status", "completed_on", "modified_on", "modified_by"])
 
-    def mark_rejected(self):
+    def mark_rejected(self, by_user=None, reason=""):
         self.status = self.STATUS_REJECTED
-        self.save(update_fields=["status", "modified_on", "modified_by"])
+        if by_user is not None:
+            self.rejected_by = by_user
+        self.rejection_reason = reason or ""
+        self.save(update_fields=[
+            "status", "rejected_by", "rejection_reason", "modified_on", "modified_by",
+        ])
 
 
 class TaskRemark(models.Model):

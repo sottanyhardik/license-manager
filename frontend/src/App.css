@@ -1084,16 +1084,17 @@ h1, h2, h3, h4, h5, h6,
     background: var(--surface-raised);
     transition: box-shadow var(--transition-base), transform var(--transition-base);
 }
-.card:hover {
+.card-hoverable:hover {
     box-shadow: var(--elevation-2);
+    cursor: pointer;
 }
 
-/* Refined modal */
+/* Refined modal — no overflow:hidden so dropdowns/popups inside
+   (react-select, DatePicker, HybridSelect, etc.) don't get clipped. */
 .modal-content {
     border-radius: var(--radius-xl);
     box-shadow: var(--elevation-overlay);
     border: none;
-    overflow: hidden;
 }
 .modal-backdrop.show {
     opacity: 0.45;
@@ -1521,7 +1522,6 @@ code {
     box-shadow: var(--elevation-3);
     background: var(--surface-raised);
     margin-top: 6px;
-    min-width: 200px;
 }
 .dropdown-menu .dropdown-item {
     border-radius: 8px;

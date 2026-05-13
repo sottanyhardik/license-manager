@@ -71,6 +71,12 @@ class BillOfEntryModel(AuditModel):
     invoice_no = models.CharField(max_length=255, null=True, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
     is_fetch = models.BooleanField(default=False)
+    boe_pdf_copy = models.FileField(
+        upload_to='boe_copies/',
+        null=True,
+        blank=True,
+        help_text="Original ICEGATE BOE PDF uploaded during Fetch",
+    )
     failed = models.IntegerField(default=0)
     appraisement = models.CharField(max_length=255, null=True, blank=True)
     ooc_date = models.CharField(max_length=255, null=True, blank=True)

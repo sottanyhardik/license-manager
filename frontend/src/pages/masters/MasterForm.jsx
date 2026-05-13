@@ -313,6 +313,23 @@ export default function MasterForm({
         }
         setBoeParsing(true);
         setBoeParseSummary(null);
+
+        // Auto-save the current BOE before overwriting fields with parsed data,
+        // so the original state is preserved on the server as a recoverable copy.
+        if (isEdit && entityName === 'bill-of-entries') {
+            try {
+                const snapshot = { ...formData };
+                delete snapshot.created_on;
+                delete snapshot.created_by;
+                delete snapshot.modified_on;
+                delete snapshot.modified_by;
+                await api.patch(`bill-of-entries/${recordId}/`, snapshot);
+                toast.info("BOE saved before fetch");
+            } catch {
+                // Non-blocking — proceed with fetch even if auto-save fails
+            }
+        }
+
         try {
             const fd = new FormData();
             fd.append("file", boePdfFile);
@@ -919,8 +936,10 @@ export default function MasterForm({
                 apiPath = `masters/${entityName}/`;
             }
 
-            // Check if formData contains any File objects (including nested)
+            // Check if formData contains any File objects (including nested).
+            // Also treat a pending boePdfFile (BOE entity) as a file upload.
             const hasFiles = () => {
+                if (entityName === 'bill-of-entries' && boePdfFile) return true;
                 const checkForFiles = (obj) => {
                     if (obj instanceof File) return true;
                     if (Array.isArray(obj)) {
@@ -976,6 +995,12 @@ export default function MasterForm({
                 Object.entries(formData).forEach(([key, value]) => {
                     appendToFormData(key, value);
                 });
+
+                // Attach the BOE PDF copy when one was uploaded via Fetch
+                if (entityName === 'bill-of-entries' && boePdfFile) {
+                    formDataObj.append('boe_pdf_copy', boePdfFile, boePdfFile.name);
+                    formDataObj.append('is_fetch', 'true');
+                }
 
                 if (isEdit) {
                     response = await api.patch(`${apiPath}${id}/`, formDataObj, {

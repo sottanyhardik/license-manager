@@ -87,6 +87,7 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
             'invoice_no',
             'invoice_date',
             'is_fetch',
+            'boe_pdf_copy',
             'failed',
             'appraisement',
             'ooc_date',

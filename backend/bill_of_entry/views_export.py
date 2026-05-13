@@ -66,6 +66,7 @@ def add_grouped_export_action(viewset_class):
         from reportlab.platypus import TableStyle, Paragraph
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.colors import HexColor
+        from reportlab.lib import colors
 
         pdf_exporter = create_pdf_exporter(
             title="Bill of Entry Report",
@@ -78,6 +79,10 @@ def add_grouped_export_action(viewset_class):
 
         # Group data
         grouped_data = self._group_boe(queryset)
+
+        # Active exchange rate for the mini-table in the header
+        from core.models import ExchangeRateModel
+        active_rate = ExchangeRateModel.get_active_rate()
 
         # Calculate grand totals
         total_inr = sum(boe['total_inr']
@@ -124,10 +129,52 @@ def add_grouped_export_action(viewset_class):
             leftIndent=0,
         )
 
-        # Add title with totals
-        subtitle = (f"Total CIF (FC): ${pdf_exporter.format_number(total_fc)} | "
-                    f"Total CIF (INR): {pdf_exporter.format_number(total_inr)}")
-        pdf_exporter.add_title(elements, subtitle=subtitle)
+        # Header: title + totals on left, exchange rate mini-table on right
+        subtitle_text = (f"Total CIF (FC): ${pdf_exporter.format_number(total_fc)} | "
+                         f"Total CIF (INR): {pdf_exporter.format_number(total_inr)}")
+
+        if active_rate:
+            from reportlab.platypus import Table as RLTable
+            from reportlab.lib.styles import ParagraphStyle as PSArg
+            from reportlab.lib.enums import TA_CENTER as TA_C
+
+            exch_data = [
+                ['Exch. Rate', active_rate.date.strftime('%d-%m-%Y')],
+                ['USD', str(active_rate.usd)],
+                ['EUR', str(active_rate.euro)],
+                ['GBP', str(active_rate.pound_sterling)],
+                ['CNY', str(active_rate.chinese_yuan)],
+            ]
+            exch_table = RLTable(exch_data, colWidths=[0.7 * inch, 0.8 * inch])
+            exch_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), pdf_exporter.HEADER_BG),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ]))
+
+            title_para = Paragraph("Bill of Entry Report", pdf_exporter.title_style)
+            subtitle_para = Paragraph(subtitle_text, pdf_exporter.subtitle_style)
+            ts_style = PSArg('TS', parent=pdf_exporter.styles['Normal'],
+                             fontSize=9, textColor=colors.grey, alignment=TA_C, spaceAfter=10)
+            ts_para = Paragraph(f"Generated on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", ts_style)
+
+            header_layout = RLTable([[title_para, exch_table]], colWidths=[8.85 * inch, 1.5 * inch])
+            header_layout.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ]))
+            elements.append(header_layout)
+            elements.append(subtitle_para)
+            elements.append(ts_para)
+        else:
+            pdf_exporter.add_title(elements, subtitle=subtitle_text)
 
         # 18 columns — full landscape A4 (~11.35" usable after 0.15" margins).
         # Qty(KGS) and Value($) restored.  Column widths are set so that

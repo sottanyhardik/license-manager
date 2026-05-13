@@ -131,12 +131,10 @@ def add_grouped_export_action(viewset_class):
                 ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 14),
-                ('FONTSIZE', (0, 1), (-1, -1), 14),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
-                ('TOPPADDING', (0, 0), (-1, 0), 4),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 2),
-                ('TOPPADDING', (0, 1), (-1, -1), 2),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
             ]))
 

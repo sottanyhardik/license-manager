@@ -10,13 +10,33 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *
  * Returns:
  *   isSupported   — browser supports SpeechRecognition
- *   listening     — currently capturing
+ *   listening     — currently capturing (user-intent: even between auto-restarts)
  *   interim       — live (non-final) transcript for UI feedback
- *   error         — last error event string, if any
+ *   error         — { code, message } | null
  *   start()       — begin capture
  *   stop()        — stop and flush remaining buffer
- *   reset()       — clear interim/buffer
+ *   reset()       — clear interim/buffer/error
+ *   clearError()  — drop the error without stopping
  */
+const FATAL_ERRORS = new Set([
+    "not-allowed",         // user denied permission
+    "service-not-allowed", // OS / scheme (non-HTTPS) blocked
+    "audio-capture",       // no mic / mic unavailable
+    "language-not-supported",
+    "bad-grammar",
+]);
+
+const ERROR_MESSAGES = {
+    "not-allowed":          "Microphone permission denied. Allow it in the browser address bar.",
+    "service-not-allowed":  "Speech service not available. Make sure you're on localhost or HTTPS.",
+    "audio-capture":        "No microphone detected. Check your input device.",
+    "no-speech":            "Didn't hear anything — try again.",
+    "network":              "Speech network error. Check your connection.",
+    "aborted":              "Recording was interrupted.",
+    "language-not-supported": "Language not supported by this browser.",
+    "bad-grammar":          "Speech grammar error.",
+};
+
 export default function useSpeechRecognition({
     onSegment,
     separators = ["next", "new task", "next task"],
@@ -32,6 +52,9 @@ export default function useSpeechRecognition({
     const shouldRestartRef = useRef(false);
     const onSegmentRef = useRef(onSegment);
     const separatorsRef = useRef(separators);
+    // Detect a tight no-speech loop (mic stuck silent) and stop auto-restart.
+    const lastEndTsRef = useRef(0);
+    const rapidEndCountRef = useRef(0);
 
     const [listening, setListening] = useState(false);
     const [interim, setInterim] = useState("");
@@ -47,8 +70,6 @@ export default function useSpeechRecognition({
     }, []);
 
     const splitOnSeparators = useCallback((text) => {
-        // Replace any separator (whole-word, case-insensitive) with a sentinel,
-        // then split. Returns array of segments (last is the "still buffering" tail).
         const pattern = new RegExp(
             `\\b(?:${separatorsRef.current.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
             "gi"
@@ -69,10 +90,8 @@ export default function useSpeechRecognition({
                 const result = event.results[i];
                 const transcript = result[0].transcript;
                 if (result.isFinal) {
-                    // Append to buffer, then split on any separator phrase
                     bufferRef.current = (bufferRef.current + " " + transcript).trim();
                     const segments = splitOnSeparators(bufferRef.current);
-                    // All but the last are committed segments
                     for (let s = 0; s < segments.length - 1; s++) {
                         const piece = segments[s].trim();
                         if (piece && onSegmentRef.current) onSegmentRef.current(piece);
@@ -85,21 +104,42 @@ export default function useSpeechRecognition({
             setInterim(interimChunk);
         };
 
+        recognition.onstart = () => {
+            // Reset the rapid-end detector each time the engine actually starts.
+            rapidEndCountRef.current = 0;
+        };
+
         recognition.onerror = (e) => {
-            setError(e.error || "speech-error");
-            if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+            const code = e?.error || "speech-error";
+            // Aborted is expected when we call stop() — don't show it.
+            if (code === "aborted") return;
+            setError({ code, message: ERROR_MESSAGES[code] || `Speech error: ${code}` });
+            if (FATAL_ERRORS.has(code)) {
                 shouldRestartRef.current = false;
             }
         };
 
         recognition.onend = () => {
-            if (shouldRestartRef.current) {
-                try { recognition.start(); } catch { /* already started */ }
+            // If two onend events fire within 600ms of each other repeatedly,
+            // the engine is likely in a no-speech loop — back off to avoid burning CPU.
+            const now = Date.now();
+            if (now - lastEndTsRef.current < 600) {
+                rapidEndCountRef.current += 1;
             } else {
-                setListening(false);
-                setInterim("");
-                flushSegment();
+                rapidEndCountRef.current = 0;
             }
+            lastEndTsRef.current = now;
+
+            if (shouldRestartRef.current && rapidEndCountRef.current < 4) {
+                try { recognition.start(); return; } catch { /* already started */ }
+            }
+            if (rapidEndCountRef.current >= 4) {
+                shouldRestartRef.current = false;
+                setError({ code: "no-speech", message: "Microphone is not capturing audio. Check your input device or try again." });
+            }
+            setListening(false);
+            setInterim("");
+            flushSegment();
         };
 
         recognitionRef.current = recognition;
@@ -114,12 +154,13 @@ export default function useSpeechRecognition({
         if (!recognitionRef.current) return;
         setError(null);
         bufferRef.current = "";
+        rapidEndCountRef.current = 0;
         shouldRestartRef.current = true;
         try {
             recognitionRef.current.start();
             setListening(true);
         } catch {
-            // Already started — ignore
+            // Already started — ignore.
         }
     }, []);
 
@@ -136,5 +177,7 @@ export default function useSpeechRecognition({
         setError(null);
     }, []);
 
-    return { isSupported, listening, interim, error, start, stop, reset };
+    const clearError = useCallback(() => setError(null), []);
+
+    return { isSupported, listening, interim, error, start, stop, reset, clearError };
 }

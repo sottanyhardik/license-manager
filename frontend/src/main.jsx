@@ -7,6 +7,9 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
+// App‑wide design tokens (loaded LAST so it wins specificity)
+import "./theme/tabler.css";
+
 // Global Styles (optional)
 // import "./assets/styles.css";
 

@@ -1,2026 +1,279 @@
-/* ============================================================
-   Design Token System — Single Source of Truth
-   ============================================================ */
-:root {
-    /* ── Primary Brand: Obsidian Indigo ──────────────────── */
-    --primary-color:    #4F46E5;
-    --primary-light:    #6366F1;
-    --primary-dark:     #4338CA;
-    --primary-deeper:   #3730A3;
-    --primary-gradient: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%);
+/*
+ * ============================================================
+ *  App.css — slim layer.
+ *
+ *  All tokens, base typography, buttons, cards, tables, forms,
+ *  badges, modals, alerts, page-header, and primitives now live
+ *  in theme/tabler.css (loaded LAST in main.jsx, so it wins).
+ *
+ *  This file holds only:
+ *    1. Third-party library tweaks (react-select, react-datepicker)
+ *    2. Bootstrap form-switch specifics not covered by tabler
+ *    3. Wrapper classes used by legacy code (form-group-material,
+ *       nested-items-container)
+ *    4. App-specific animations and utilities
+ *
+ *  When adding new global styling, prefer theme/tabler.css.
+ * ============================================================
+ */
 
-    /* Indigo scale */
-    --indigo-50:  #EEF2FF;
-    --indigo-100: #E0E7FF;
-    --indigo-200: #C7D2FE;
-    --indigo-300: #A5B4FC;
-    --indigo-400: #818CF8;
-    --indigo-500: #6366F1;
-    --indigo-600: #4F46E5;
-    --indigo-700: #4338CA;
-    --indigo-800: #3730A3;
-    --indigo-900: #312E81;
 
-    /* ── Secondary / Neutral ─────────────────────────────── */
-    --secondary-color: #64748b;
-    --secondary-light: #94a3b8;
-    --secondary-dark:  #475569;
+/* ─── Root base ─────────────────────────────────────────── */
+* { box-sizing: border-box; }
 
-    /* Neutral / Gray scale (Tailwind + Bootstrap compatible) */
-    --gray-50:  #f9fafb;
-    --gray-100: #f3f4f6;
-    --gray-200: #e5e7eb;
-    --gray-300: #d1d5db;
-    --gray-400: #9ca3af;
-    --gray-500: #6b7280;
-    --gray-600: #4b5563;
-    --gray-700: #374151;
-    --gray-800: #1f2937;
-    --gray-900: #111827;
-
-    /* Bootstrap-compatible gray aliases */
-    --bs-gray-50:  #f8f9fa;
-    --bs-gray-100: #e9ecef;
-    --bs-gray-200: #dee2e6;
-    --bs-gray-300: #ced4da;
-    --bs-gray-400: #adb5bd;
-    --bs-gray-500: #6c757d;
-    --bs-gray-600: #495057;
-    --bs-gray-700: #343a40;
-    --bs-gray-800: #212529;
-
-    /* ── Semantic Text ───────────────────────────────────── */
-    --text-primary:   #0f172a;
-    --text-secondary: #475569;
-    --text-tertiary:  #94a3b8;
-    --text-muted:     #cbd5e1;
-    --text-dark:      #2c3e50;
-    --text-medium:    #3d4f5f;
-    --text-light:     #5a6c7d;
-
-    /* ── Status: Success ─────────────────────────────────── */
-    --success-color:  #28a745;
-    --success-light:  #51cf66;
-    --success-bg:     #d4edda;
-    --success-border: #c3e6cb;
-    --success-text:   #155724;
-
-    /* ── Status: Danger ──────────────────────────────────── */
-    --danger-color:   #dc3545;
-    --danger-light:   #f87171;
-    --danger-bg:      #f8d7da;
-    --danger-border:  #f5c6cb;
-    --danger-text:    #721c24;
-
-    /* ── Status: Warning ─────────────────────────────────── */
-    --warning-color:  #ffc107;
-    --warning-light:  #fb923c;
-    --warning-bg:     #fff3cd;
-    --warning-border: #ffeeba;
-    --warning-text:   #856404;
-
-    /* ── Status: Info ────────────────────────────────────── */
-    --info-color:     #17a2b8;
-    --info-light:     #22d3ee;
-    --info-bg:        #d1ecf1;
-    --info-border:    #bee5eb;
-    --info-text:      #0c5460;
-
-    /* ── Accent / Purple ─────────────────────────────────── */
-    --accent-color: #8b5cf6;
-    --accent-light: #a78bfa;
-
-    /* ── Surfaces & Backgrounds ──────────────────────────── */
-    --surface-color:      #ffffff;
-    --surface-hover:      #f8fafc;
-    --background-color:   #F5F5FF;
-    --background-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-
-    /* ── Borders & Dividers ──────────────────────────────── */
-    --divider-color: #e2e8f0;
-    --border-light:  #cbd5e1;
-    --border-medium: #94a3b8;
-
-    /* ── Material Elevation (box-shadow scale) ───────────── */
-    --elevation-0: none;
-    --elevation-1: 0 1px 3px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.06);
-    --elevation-2: 0 3px 6px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08);
-    --elevation-3: 0 8px 16px rgba(0,0,0,0.12), 0 3px 6px rgba(0,0,0,0.08);
-    --elevation-4: 0 16px 32px rgba(0,0,0,0.14), 0 6px 12px rgba(0,0,0,0.08);
-    --elevation-6: 0 24px 48px rgba(0,0,0,0.16), 0 10px 20px rgba(0,0,0,0.10);
-
-    /* Legacy shadow aliases → mapped to elevation tokens */
-    --shadow-sm: var(--elevation-1);
-    --shadow-md: var(--elevation-2);
-    --shadow-lg: var(--elevation-3);
-    --shadow-xl: var(--elevation-4);
-
-    /* ── Card Tokens ─────────────────────────────────────── */
-    --card-radius:        12px;
-    --card-shadow:        var(--elevation-1);
-    --card-shadow-hover:  var(--elevation-2);
-    --card-shadow-modal:  var(--elevation-4);
-
-    /* ── Badge Tokens ────────────────────────────────────── */
-    --badge-primary-bg:    var(--indigo-100);
-    --badge-primary-color: var(--primary-dark);
-    --badge-success-bg:    var(--success-bg);
-    --badge-success-color: var(--success-text);
-    --badge-danger-bg:     var(--danger-bg);
-    --badge-danger-color:  var(--danger-text);
-    --badge-warning-bg:    var(--warning-bg);
-    --badge-warning-color: var(--warning-text);
-    --badge-info-bg:       var(--info-bg);
-    --badge-info-color:    var(--info-text);
-    --badge-gray-bg:       var(--bs-gray-100);
-    --badge-gray-color:    var(--bs-gray-600);
-
-    /* ── Table Row Highlights ────────────────────────────── */
-    --row-hover-bg:   rgba(79, 70, 229, 0.04);
-    --row-success-bg: #f0fdf4;
-    --row-danger-bg:  #fff5f5;
-    --row-warning-bg: #fffbeb;
-    --row-yellow-bg:  #fffacd;
-
-    /* ── Navigation ──────────────────────────────────────── */
-    --nav-bg:    linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    --nav-hover: rgba(79, 70, 229, 0.12);
-
-    /* ── Bootstrap Overrides ─────────────────────────────── */
-    --bs-primary:          #4F46E5;
-    --bs-primary-rgb:      79, 70, 229;
-    --bs-link-color:       #4F46E5;
-    --bs-link-hover-color: #4338CA;
-    --bs-body-bg:          #F5F5FF;
-    --bs-success:          #28a745;
-    --bs-danger:           #dc3545;
-    --bs-warning:          #ffc107;
-    --bs-info:             #17a2b8;
-    --bs-secondary:        #6c757d;
-}
-
-* {
-    box-sizing: border-box;
-}
-
-#root {
-    margin: 0 auto;
-    background-color: var(--background-color);
-    min-height: 100vh;
-}
-
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-    color: var(--text-primary);
-    background-color: var(--background-color);
-    line-height: 1.6;
-    font-size: 14px;
-    overflow-x: hidden;
-}
-
-/* Ensure proper scrolling on all pages */
 html, body, #root {
     height: 100%;
     margin: 0;
     padding: 0;
 }
 
-.logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
+#root {
+    margin: 0 auto;
+    background-color: var(--tb-body-bg);
+    min-height: 100vh;
 }
 
-.logo:hover {
-    filter: drop-shadow(0 0 2em #646cffaa);
-}
 
-.logo.react:hover {
-    filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    a:nth-of-type(2) .logo {
-        animation: logo-spin infinite 20s linear;
-    }
-}
-
-.card {
-    padding: 1.5em;
-}
-
-.read-the-docs {
-    color: #888;
-}
-
-/* Custom styles for form switches */
+/* ─── Bootstrap form-switch (uses success-green by default,
+       align with brand) ──────────────────────────────────── */
 .form-switch .form-check-input {
-    width: 3em;
-    height: 1.5em;
+    width: 2.5em;
+    height: 1.3em;
     cursor: pointer;
-    border: 1px solid var(--bs-gray-200);
-    background-color: var(--bs-gray-100);
-    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    border: 1px solid var(--tb-border);
+    background-color: var(--tb-sunken);
+    transition: background-color var(--tb-tx-fast), border-color var(--tb-tx-fast);
 }
-
 .form-switch .form-check-input:checked {
-    background-color: #198754;
-    border-color: #198754;
+    background-color: var(--tb-brand);
+    border-color: var(--tb-brand);
 }
-
 .form-switch .form-check-input:focus {
-    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
-    border-color: #86b7fe;
+    box-shadow: var(--tb-ring);
+    border-color: var(--tb-brand);
 }
-
 .form-switch .form-check-label {
     margin-left: 0.5rem;
-    font-weight: 500;
+    font-weight: var(--tb-fw-medium);
     cursor: pointer;
+    color: var(--tb-text);
 }
-
-/* Ensure switches align properly in nested forms */
 .nested-items-container .form-switch {
     display: flex;
     align-items: center;
     min-height: 38px;
 }
 
-/* Better spacing for switch groups in filters */
-.btn-group .btn-check + .btn {
-    border-width: 1px;
-}
 
-.btn-group .btn-check:checked + .btn {
-    font-weight: 600;
-}
-
-/* Highlighting for updated fields from SION fetch */
+/* ─── Highlight pulse (used after SION auto-fill) ───────── */
 .border-warning.border-2 {
-    animation: highlightPulse 0.5s ease-in-out;
+    animation: highlightPulse 0.6s var(--tb-ease);
 }
-
 @keyframes highlightPulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
-    }
-    50% {
-        box-shadow: 0 0 0 8px rgba(249, 115, 22, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
-    }
+    0%   { box-shadow: 0 0 0 0 rgba(247, 103, 7, 0.55); }
+    50%  { box-shadow: 0 0 0 8px rgba(247, 103, 7, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(247, 103, 7, 0); }
 }
 
-/* Material Design Form Styles */
+
+/* ─── form-group-material wrapper (used by forms across the
+       app — kept thin so tabler.css handles the controls) ── */
 .form-group-material {
     position: relative;
-    margin-bottom: 1.75rem;
+    margin-bottom: 1.1rem;
 }
-
+.form-group-material label.form-label {
+    font-weight: var(--tb-fw-medium);
+    margin-bottom: 4px;
+    color: var(--tb-text-secondary);
+    font-size: 12.5px;
+    display: block;
+    letter-spacing: 0.01em;
+}
 .form-group-material .form-control,
 .form-group-material .form-select,
 .form-group-material textarea.form-control {
-    border: 1px solid var(--border-light);
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 0.875rem;
-    transition: all 0.2s ease;
-    background-color: var(--surface-color);
-    width: 100%;
-    box-shadow: none;
+    background-color: var(--tb-card-bg);
 }
-
-.form-group-material .form-control:focus,
-.form-group-material .form-select:focus,
-.form-group-material textarea.form-control:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-    outline: 0;
-    background-color: #fff;
-}
-
-.form-group-material .form-control:hover:not(:focus):not(:disabled),
-.form-group-material .form-select:hover:not(:focus):not(:disabled),
-.form-group-material textarea.form-control:hover:not(:focus):not(:disabled) {
-    border-color: var(--text-secondary);
-}
-
-.form-group-material label.form-label {
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-    color: var(--text-primary);
-    font-size: 0.8125rem;
-    text-transform: capitalize !important;
-    display: block;
-    letter-spacing: 0.3px;
-}
-
-/* ── Material-style card ─────────────────────────────────── */
-.card {
-    border: none;
-    box-shadow: var(--card-shadow);
-    border-radius: var(--card-radius);
-    transition: box-shadow 0.2s ease, transform 0.15s ease;
-    background-color: var(--surface-color);
-}
-
-.card:hover {
-    box-shadow: var(--card-shadow-hover);
-}
-
-.card-header {
-    background-color: var(--surface-color);
-    border-bottom: 1px solid var(--divider-color);
-    padding: 1rem 1.5rem;
-    border-radius: var(--card-radius) var(--card-radius) 0 0 !important;
-    font-weight: 600;
-    color: var(--text-primary);
-    font-size: 0.9375rem;
-}
-
-/* Nested field array styling */
-.nested-items-container .card {
-    margin-bottom: 1rem;
-    border: 1px solid var(--divider-color);
-}
-
-.nested-items-container .card-header {
-    background-color: var(--indigo-50);
-    color: var(--primary-dark);
-    font-weight: 600;
-    border-bottom: 2px solid var(--primary-color);
-}
-
-.nested-items-container .card-body {
-    padding: 1.5rem;
-    background-color: var(--surface-color);
-}
-
-/* Material Design Button Styles */
-.btn {
-    font-weight: 500;
-    padding: 8px 20px;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
-    text-transform: none;
-    letter-spacing: 0.3px;
-    font-size: 0.875rem;
-    box-shadow: none;
-}
-
-.btn:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
-}
-
-.btn:active {
-    transform: translateY(0);
-    box-shadow: none;
-}
-
-.btn-primary {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
-
-.btn-primary:hover {
-    background-color: var(--primary-dark);
-    border-color: var(--primary-dark);
-    color: white;
-}
-
-.btn-success {
-    background-color: var(--success-color);
-    color: white;
-    border-color: var(--success-color);
-}
-
-.btn-success:hover {
-    background-color: #0ea472;
-    border-color: #0ea472;
-    color: white;
-}
-
-.btn-danger {
-    background-color: var(--danger-color);
-    color: white;
-    border-color: var(--danger-color);
-}
-
-.btn-danger:hover {
-    background-color: #dc2626;
-    border-color: #dc2626;
-    color: white;
-}
-
-.btn-outline-danger {
-    border: 1px solid var(--danger-color);
-    color: var(--danger-color);
-    background: transparent;
-}
-
-.btn-outline-danger:hover {
-    background: var(--danger-color);
-    border-color: var(--danger-color);
-    color: white;
-}
-
-/* React Select enhancements - Material Design */
-.react-select__control {
-    border-radius: 6px !important;
-    border-color: var(--border-light) !important;
-    min-height: 38px !important;
-    transition: all 0.2s ease !important;
-    box-shadow: none !important;
-    background-color: var(--surface-color) !important;
-}
-
-.react-select__control:hover {
-    border-color: var(--text-secondary) !important;
-}
-
-.react-select__control--is-focused {
-    border-color: var(--primary-color) !important;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important;
-}
-
-.react-select__menu {
-    border-radius: 6px !important;
-    box-shadow: var(--shadow-lg) !important;
-    z-index: 9999 !important;
-    border: 1px solid var(--divider-color) !important;
-}
-
-.react-select__option--is-selected {
-    background-color: var(--primary-color) !important;
-}
-
-.react-select__option--is-focused {
-    background-color: #EEF2FF !important;
-    color: var(--text-primary) !important;
-}
-
-/* Date picker styling - Material Design */
-.react-datepicker-wrapper {
-    width: 100%;
-    display: block;
-}
-
-.react-datepicker__input-container {
-    width: 100%;
-    display: block;
-}
-
-.react-datepicker__input-container input {
-    border: 1px solid var(--border-light);
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 0.875rem;
-    width: 100%;
-    transition: all 0.2s ease;
-    display: block;
-    background-color: var(--surface-color);
-    box-shadow: none;
-}
-
-.react-datepicker__input-container input:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-    outline: 0;
-}
-
-.react-datepicker__input-container input:hover:not(:focus) {
-    border-color: var(--text-secondary);
-}
-
-/* Ensure DatePicker in forms looks consistent */
 .form-group-material .react-datepicker-wrapper,
 .form-group-material .react-datepicker__input-container {
     width: 100%;
     display: block;
 }
 
-/* DatePicker calendar styling */
+
+/* ─── Nested item container (e.g. nested field arrays) ──── */
+.nested-items-container .card {
+    margin-bottom: 12px;
+    border: 1px solid var(--tb-border);
+}
+.nested-items-container .card-header {
+    background-color: var(--tb-sunken);
+    color: var(--tb-text);
+    font-weight: var(--tb-fw-semibold);
+    border-bottom: 1px solid var(--tb-border-soft);
+}
+.nested-items-container .card-body {
+    padding: 14px 16px;
+    background-color: var(--tb-card-bg);
+}
+
+
+/* ─── React Select tweaks (Material → Tabler) ───────────── */
+.react-select__control {
+    border-radius: var(--tb-r-sm) !important;
+    border-color: var(--tb-border) !important;
+    min-height: 36px !important;
+    transition: border-color var(--tb-tx-fast), box-shadow var(--tb-tx-fast) !important;
+    box-shadow: none !important;
+    background-color: var(--tb-card-bg) !important;
+}
+.react-select__control:hover { border-color: var(--tb-border-strong) !important; }
+.react-select__control--is-focused {
+    border-color: var(--tb-brand) !important;
+    box-shadow: var(--tb-ring) !important;
+}
+.react-select__menu {
+    border-radius: var(--tb-r-sm) !important;
+    box-shadow: var(--tb-shadow-3) !important;
+    z-index: 9999 !important;
+    border: 1px solid var(--tb-border) !important;
+}
+.react-select__option--is-selected {
+    background-color: var(--tb-brand) !important;
+    color: #fff !important;
+}
+.react-select__option--is-focused:not(.react-select__option--is-selected) {
+    background-color: var(--tb-brand-50) !important;
+    color: var(--tb-text) !important;
+}
+
+
+/* ─── React DatePicker (Material → Tabler) ──────────────── */
+.react-datepicker-wrapper { width: 100%; display: block; }
+.react-datepicker__input-container { width: 100%; display: block; }
+.react-datepicker__input-container input {
+    border: 1px solid var(--tb-border);
+    border-radius: var(--tb-r-sm);
+    padding: 0.4375rem 0.75rem;
+    font-size: var(--tb-fs-base);
+    width: 100%;
+    transition: border-color var(--tb-tx-fast), box-shadow var(--tb-tx-fast);
+    display: block;
+    background-color: var(--tb-card-bg);
+    box-shadow: none;
+    color: var(--tb-text);
+    font-family: var(--tb-font);
+}
+.react-datepicker__input-container input:focus {
+    border-color: var(--tb-brand);
+    box-shadow: var(--tb-ring);
+    outline: 0;
+}
+.react-datepicker__input-container input:hover:not(:focus) {
+    border-color: var(--tb-border-strong);
+}
 .react-datepicker__header {
-    background-color: var(--primary-color) !important;
+    background-color: var(--tb-brand) !important;
     border-bottom: none !important;
 }
-
 .react-datepicker__current-month,
-.react-datepicker__day-name {
-    color: white !important;
-}
-
+.react-datepicker__day-name { color: #fff !important; }
 .react-datepicker__day--selected,
 .react-datepicker__day--keyboard-selected {
-    background-color: var(--primary-color) !important;
+    background-color: var(--tb-brand) !important;
+    color: #fff !important;
 }
-
-.react-datepicker__day:hover {
-    background-color: var(--primary-light) !important;
-}
-
+.react-datepicker__day:hover { background-color: var(--tb-brand-50) !important; }
 .react-datepicker__close-icon::after {
-    background-color: var(--primary-color) !important;
-    color: white !important;
+    background-color: var(--tb-brand) !important;
+    color: #fff !important;
 }
+.react-datepicker__close-icon:hover::after { background-color: var(--tb-brand-hover) !important; }
 
-.react-datepicker__close-icon:hover::after {
-    background-color: var(--primary-dark) !important;
-}
 
-/* Ensure all form labels are capitalized */
-label.form-label,
-.form-label,
-label,
-.form-group-material label,
-.form-group-material .form-label {
-    text-transform: capitalize !important;
-}
-
-/* Additional capitalization rules */
-.card-header h6,
-.nested-items-container label {
-    text-transform: capitalize !important;
-}
-
-/* Force all labels to be capitalized - highest priority */
-label,
+/* ─── Label capitalization (kept from legacy — many forms
+       rely on this) ──────────────────────────────────────── */
 label.form-label,
 .form-label,
 .form-group-material label,
 .form-group-material .form-label,
-.col-md-4 label,
-.col-12 label,
-div label {
-    text-transform: capitalize !important;
-    font-weight: 500 !important;
+.col-md-4 > label,
+.col-12 > label,
+div > label[for] {
+    text-transform: capitalize;
 }
 
-/* ========================================
-   Bootstrap Component Color Overrides
-   ======================================== */
 
-/* Bootstrap Buttons */
-.btn-primary {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
+/* ─── Slide-in animation for toasts ─────────────────────── */
+@keyframes fade-in-slide {
+    from { opacity: 0; transform: translateX(16px); }
+    to   { opacity: 1; transform: translateX(0); }
 }
+.fade-in-slide { animation: fade-in-slide 220ms var(--tb-ease); }
 
-.btn-primary:hover {
-    background-color: #4338CA !important;
-    border-color: #4338CA !important;
-}
-
-.btn-primary:focus,
-.btn-primary:active,
-.btn-primary.active,
-.btn-primary:first-child:active {
-    background-color: #4338CA !important;
-    border-color: #4338CA !important;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.25) !important;
-}
-
-.btn-primary:disabled,
-.btn-primary.disabled {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-    opacity: 0.65;
-}
-
-.btn-outline-primary {
-    color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-}
-
-.btn-outline-primary:hover {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-    color: white !important;
-}
-
-.btn-outline-primary:focus,
-.btn-outline-primary:active {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.25) !important;
-}
-
-/* Bootstrap Form Controls */
-.form-control:focus,
-.form-select:focus {
-    border-color: #6366F1 !important;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15) !important;
-}
-
-.form-check-input:checked {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-}
-
-.form-check-input:focus {
-    border-color: #6366F1 !important;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15) !important;
-}
-
-.form-switch .form-check-input:checked {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Links */
-a {
-    color: #4F46E5;
-    text-decoration: none;
-}
-
-a:hover {
-    color: #4338CA;
-}
-
-/* Bootstrap Badges */
-.badge.bg-primary,
-.badge.text-bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Alerts */
-.alert-primary {
-    color: #1E1B4B;
-    background-color: #E0E7FF;
-    border-color: #C7D2FE;
-}
-
-.alert-primary .alert-link {
-    color: #4338CA;
-}
-
-/* Bootstrap Pagination */
-.pagination .page-link {
-    color: #4F46E5;
-}
-
-.pagination .page-link:hover {
-    color: #4338CA;
-    background-color: #EEF2FF;
-}
-
-.pagination .page-item.active .page-link {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-}
-
-.pagination .page-link:focus {
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap Progress Bar */
-.progress-bar,
-.progress-bar.bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Spinners */
-.spinner-border.text-primary {
-    color: #4F46E5 !important;
-}
-
-.spinner-grow.text-primary {
-    color: #4F46E5 !important;
-}
-
-/* Bootstrap Nav Pills */
-.nav-pills .nav-link.active,
-.nav-pills .show > .nav-link {
-    background-color: #4F46E5 !important;
-    color: white !important;
-}
-
-.nav-pills .nav-link:hover {
-    background-color: #EEF2FF !important;
-    color: #4338CA !important;
-}
-
-.nav-pills .nav-link {
-    color: var(--text-primary);
-    transition: all 0.2s ease;
-}
-
-/* Bootstrap Nav Tabs */
-.nav-tabs .nav-link.active {
-    color: #4F46E5;
-    border-color: var(--divider-color) var(--divider-color) #fff;
-}
-
-.nav-tabs .nav-link:hover {
-    color: #4338CA;
-}
-
-/* Bootstrap Accordion */
-.accordion-button:not(.collapsed) {
-    background-color: #EEF2FF;
-    color: #4338CA;
-}
-
-.accordion-button:focus {
-    border-color: #6366F1;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap List Group */
-.list-group-item.active {
-    background-color: #4F46E5 !important;
-    border-color: #4F46E5 !important;
-}
-
-.list-group-item-primary {
-    color: #1E1B4B;
-    background-color: #E0E7FF;
-}
-
-.list-group-item-primary.list-group-item-action:hover,
-.list-group-item-primary.list-group-item-action:focus {
-    color: #1E1B4B;
-    background-color: #C7D2FE;
-}
-
-/* Bootstrap Dropdown */
-.dropdown-item.active,
-.dropdown-item:active {
-    background-color: #4F46E5 !important;
-    color: white;
-}
-
-.dropdown-item:hover,
-.dropdown-item:focus {
-    background-color: #EEF2FF;
-    color: #4338CA;
-}
-
-/* Bootstrap Breadcrumb */
-.breadcrumb-item.active {
-    color: #4F46E5;
-}
-
-.breadcrumb-item a {
-    color: #4F46E5;
-}
-
-.breadcrumb-item a:hover {
-    color: #4338CA;
-}
-
-/* Bootstrap Tables */
-.table-primary {
-    --bs-table-bg: #EEF2FF;
-    --bs-table-border-color: #C7D2FE;
-}
-
-.table-hover tbody tr:hover {
-    background-color: #EEF2FF;
-}
-
-/* Bootstrap Text Colors */
-.text-primary {
-    color: #4F46E5 !important;
-}
-
-.text-bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Border Colors */
-.border-primary {
-    border-color: #4F46E5 !important;
-}
-
-/* Bootstrap Background Colors */
-.bg-primary,
-.bg-primary.bg-gradient,
-div.bg-primary,
-span.bg-primary,
-td.bg-primary,
-th.bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-.bg-primary-subtle {
-    background-color: #EEF2FF !important;
-}
-
-/* Bootstrap Toast */
-.toast-header {
-    background-color: #EEF2FF;
-    color: #4338CA;
-}
-
-/* Bootstrap Input Group */
-.input-group-text {
-    border-color: var(--border-light);
-}
-
-.input-group:focus-within .input-group-text {
-    border-color: #6366F1;
-}
-
-/* Additional Bootstrap Primary Overrides */
-.btn-check:checked + .btn-primary,
-.btn-check:active + .btn-primary {
-    background-color: #4338CA !important;
-    border-color: #4338CA !important;
-}
-
-.btn-close:focus {
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap Card with primary header */
-.card-header.bg-primary,
-.card-header.text-bg-primary {
-    background-color: #4F46E5 !important;
-    color: white;
-}
-
-/* Bootstrap Placeholder */
-.placeholder.bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Offcanvas */
-.offcanvas-header .btn-close:focus {
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap Form Validation with Primary */
-.was-validated .form-control:valid:focus,
-.form-control.is-valid:focus {
-    border-color: #6366F1;
-    box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-/* Bootstrap Range Slider */
-.form-range:focus::-webkit-slider-thumb {
-    box-shadow: 0 0 0 1px #fff, 0 0 0 0.25rem rgba(79, 70, 229, 0.15);
-}
-
-.form-range::-webkit-slider-thumb:active {
-    background-color: #C7D2FE;
-}
-
-.form-range::-moz-range-thumb:active {
-    background-color: #C7D2FE;
-}
-
-/* Bootstrap Floating Labels */
-.form-floating > .form-control:focus ~ label,
-.form-floating > .form-control:not(:placeholder-shown) ~ label,
-.form-floating > .form-select ~ label {
-    color: rgba(79, 70, 229, 0.65);
-}
-
-.form-floating > .form-control:focus ~ label {
-    color: #6366F1;
-}
-
-/* Bootstrap Modal Header with Primary */
-.modal-header.bg-primary {
-    background-color: #4F46E5 !important;
-}
-
-/* Bootstrap Popover */
-.popover-header {
-    background-color: #EEF2FF;
-}
-
-/* Bootstrap Tooltip */
-.tooltip-inner {
-    background-color: #1e293b;
-}
-
-/* Bootstrap Button Group */
-.btn-group > .btn-primary:not(:last-child):not(.dropdown-toggle),
-.btn-group > .btn-group:not(:last-child) > .btn-primary {
-    border-right-color: #4338CA;
-}
-
-.btn-group > .btn-primary:not(:first-child),
-.btn-group > .btn-group:not(:first-child) > .btn-primary {
-    border-left-color: #4338CA;
-}
-
-/* Bootstrap Focus Ring */
-.focus-ring-primary {
-    --bs-focus-ring-color: rgba(79, 70, 229, 0.25);
-}
-
-/* ========================================
-   Toast Notifications
-   ======================================== */
-
-/* Toast Animation */
-@keyframes fadeInSlide {
-    from {
-        opacity: 0;
-        transform: translateX(100%);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-.fade-in-slide {
-    animation: fadeInSlide 0.3s ease-out;
-}
-
-/* Toast Container */
-.toast-container {
-    z-index: 10000 !important;
-}
-
-/* Toast Styling */
-.toast {
-    min-width: 300px;
-    box-shadow: var(--shadow-lg);
-    border-radius: 8px;
-    margin-bottom: 1rem;
-}
-
-.toast.text-bg-success {
-    background-color: var(--success-color) !important;
-}
-
-.toast.text-bg-danger {
-    background-color: var(--danger-color) !important;
-}
-
-.toast.text-bg-warning {
-    background-color: var(--warning-color) !important;
-    color: #ffffff !important;
-}
-
-.toast.text-bg-info {
-    background-color: var(--info-color) !important;
-}
-
-.toast.text-bg-primary {
-    background-color: var(--primary-color) !important;
-}
-
-.toast .toast-body {
-    padding: 1rem;
-    font-size: 0.9375rem;
-}
-
-.toast .btn-close {
-    opacity: 0.8;
-}
-
-.toast .btn-close:hover {
-    opacity: 1;
-}
-
-/* Warning toast specific - use dark text */
-.toast.text-bg-warning .btn-close {
-    filter: invert(1);
-}
-
-/* ============================================================
-   Production Polish Layer — Apple-style refinements
-   Appended after the base token system; existing tokens stay
-   the source of truth, this layer tightens the visual feel.
-   ============================================================ */
-
-:root {
-    /* Refined neutrals — cooler, slightly bluer grays for that
-       Apple/Stripe feel. Override only the named variables we use
-       most so existing styles continue to work. */
-    --surface-canvas:    #FAFBFC;
-    --surface-raised:    #FFFFFF;
-    --surface-sunken:    #F4F5F7;
-    --surface-overlay:   rgba(15, 23, 42, 0.4);
-
-    --border-subtle:     rgba(15, 23, 42, 0.06);
-    --border-default:    rgba(15, 23, 42, 0.10);
-    --border-strong:     rgba(15, 23, 42, 0.16);
-
-    --ring-primary:      rgba(79, 70, 229, 0.18);
-    --ring-danger:       rgba(220, 38, 38, 0.18);
-    --ring-success:      rgba(34, 197, 94, 0.18);
-
-    /* Multi-layered, restrained shadows */
-    --elevation-1:       0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.05);
-    --elevation-2:       0 2px 4px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.06);
-    --elevation-3:       0 4px 10px rgba(15, 23, 42, 0.06), 0 12px 28px rgba(15, 23, 42, 0.10);
-    --elevation-overlay: 0 16px 48px rgba(15, 23, 42, 0.16);
-
-    /* Spacing scale (4-pt grid) */
-    --space-1: 4px;
-    --space-2: 8px;
-    --space-3: 12px;
-    --space-4: 16px;
-    --space-5: 20px;
-    --space-6: 24px;
-    --space-8: 32px;
-    --space-10: 40px;
-    --space-12: 48px;
-
-    /* Radius */
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 20px;
-    --radius-pill: 999px;
-
-    /* Motion */
-    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-fast: 120ms var(--ease-out);
-    --transition-base: 180ms var(--ease-out);
-
-    /* Typography */
-    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI",
-                 Roboto, "Helvetica Neue", Arial, sans-serif;
-    --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI",
-                    Roboto, "Helvetica Neue", Arial, sans-serif;
-}
-
-/* Base typography — gentler, more readable */
-body {
-    font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    color: var(--text-primary);
-    background-color: var(--surface-canvas);
-    letter-spacing: -0.005em;
-}
-
-h1, h2, h3, h4, h5, h6,
-.h1, .h2, .h3, .h4, .h5, .h6 {
-    font-family: var(--font-display);
-    font-weight: 600;
-    letter-spacing: -0.015em;
-    color: var(--text-primary);
-}
-
-/* Refined cards / panels */
-.card,
-.modal-content {
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--elevation-1);
-    background: var(--surface-raised);
-    transition: box-shadow var(--transition-base), transform var(--transition-base);
-}
-.card-hoverable:hover {
-    box-shadow: var(--elevation-2);
-    cursor: pointer;
-}
-
-/* Refined modal — no overflow:hidden so dropdowns/popups inside
-   (react-select, DatePicker, HybridSelect, etc.) don't get clipped. */
-.modal-content {
-    border-radius: var(--radius-xl);
-    box-shadow: var(--elevation-overlay);
-    border: none;
-}
-.modal-backdrop.show {
-    opacity: 0.45;
-    backdrop-filter: blur(2px);
-}
-
-/* Refined buttons */
-.btn {
-    font-weight: 500;
-    border-radius: var(--radius-sm);
-    padding: 0.5rem 0.95rem;
-    letter-spacing: -0.005em;
-    transition: background-color var(--transition-fast),
-                color var(--transition-fast),
-                border-color var(--transition-fast),
-                box-shadow var(--transition-fast),
-                transform var(--transition-fast);
-    will-change: transform;
-}
-.btn:focus,
-.btn:focus-visible {
-    box-shadow: 0 0 0 3px var(--ring-primary);
-    outline: none;
-}
-.btn-sm {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.825rem;
-    border-radius: var(--radius-sm);
-}
-.btn-primary {
-    background: var(--primary-color);
-    border-color: var(--primary-color);
-    color: #fff;
-}
-.btn-primary:hover,
-.btn-primary:focus-visible {
-    background: var(--primary-dark);
-    border-color: var(--primary-dark);
-    box-shadow: var(--elevation-1), 0 0 0 3px var(--ring-primary);
-}
-.btn-primary:active {
-    transform: translateY(0.5px);
-}
-.btn-outline-primary {
-    color: var(--primary-color);
-    border-color: var(--border-default);
-    background: var(--surface-raised);
-}
-.btn-outline-primary:hover {
-    background: var(--indigo-50);
-    border-color: var(--indigo-200);
-    color: var(--primary-dark);
-}
-.btn-outline-secondary {
-    color: var(--text-secondary);
-    border-color: var(--border-default);
-    background: var(--surface-raised);
-}
-.btn-outline-secondary:hover {
-    background: var(--surface-sunken);
-    border-color: var(--border-strong);
-    color: var(--text-primary);
-}
-.btn-light {
-    background: var(--surface-sunken);
-    border-color: var(--border-subtle);
-    color: var(--text-primary);
-}
-.btn-light:hover {
-    background: var(--surface-raised);
-    border-color: var(--border-default);
-    box-shadow: var(--elevation-1);
-}
-.btn-danger:focus,
-.btn-danger:focus-visible {
-    box-shadow: 0 0 0 3px var(--ring-danger);
-}
-.btn-success:focus,
-.btn-success:focus-visible {
-    box-shadow: 0 0 0 3px var(--ring-success);
-}
-.btn:disabled,
-.btn.disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-}
-
-/* Refined form controls */
-.form-control,
-.form-select {
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-sm);
-    padding: 0.5rem 0.75rem;
-    font-size: 0.9rem;
-    color: var(--text-primary);
-    background-color: var(--surface-raised);
-    transition: border-color var(--transition-fast),
-                box-shadow var(--transition-fast),
-                background-color var(--transition-fast);
-}
-.form-control:hover,
-.form-select:hover {
-    border-color: var(--border-strong);
-}
-.form-control:focus,
-.form-select:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px var(--ring-primary);
-    outline: none;
-    background-color: var(--surface-raised);
-}
-.form-control:disabled,
-.form-select:disabled {
-    background-color: var(--surface-sunken);
-    color: var(--text-tertiary);
-    cursor: not-allowed;
-}
-.form-control-sm,
-.form-select-sm {
-    padding: 0.375rem 0.625rem;
-    font-size: 0.8125rem;
-    border-radius: var(--radius-sm);
-}
-.form-control::placeholder {
-    color: var(--text-tertiary);
-}
-.form-control.is-invalid,
-.form-select.is-invalid {
-    border-color: var(--danger-color);
-}
-.form-control.is-invalid:focus,
-.form-select.is-invalid:focus {
-    box-shadow: 0 0 0 3px var(--ring-danger);
-}
-.form-label {
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    margin-bottom: 0.375rem;
-    letter-spacing: -0.005em;
-}
-
-/* Refined badges */
-.badge {
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    padding: 0.3em 0.6em;
-    border-radius: var(--radius-sm);
-    font-size: 0.7rem;
-}
-
-/* Refined alerts */
-.alert {
-    border: 1px solid transparent;
-    border-radius: var(--radius-md);
-    padding: 0.875rem 1rem;
-    font-size: 0.875rem;
-}
-.alert-info {
-    background-color: var(--indigo-50);
-    border-color: var(--indigo-100);
-    color: var(--primary-deeper);
-}
-.alert-success {
-    background-color: #ECFDF5;
-    border-color: #A7F3D0;
-    color: #065F46;
-}
-.alert-warning {
-    background-color: #FFFBEB;
-    border-color: #FDE68A;
-    color: #92400E;
-}
-.alert-danger {
-    background-color: #FEF2F2;
-    border-color: #FECACA;
-    color: #991B1B;
-}
-
-/* Refined tables */
-.table {
-    --bs-table-bg: var(--surface-raised);
-    color: var(--text-primary);
-    font-size: 0.9rem;
-}
-.table > thead > tr > th {
-    font-weight: 600;
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-secondary);
-    background-color: var(--surface-sunken);
-    border-bottom: 1px solid var(--border-default);
-    padding: 0.75rem 1rem;
-}
-.table > tbody > tr > td {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border-subtle);
-    vertical-align: middle;
-}
-.table-hover > tbody > tr:hover > td {
-    background-color: var(--surface-sunken);
-}
-
-/* Refined nav / top bar */
-nav.navbar,
-.top-nav {
-    background: rgba(255, 255, 255, 0.78);
-    backdrop-filter: saturate(180%) blur(16px);
-    -webkit-backdrop-filter: saturate(180%) blur(16px);
-    border-bottom: 1px solid var(--border-subtle);
-}
-
-/* Empty state */
-.empty-state {
-    text-align: center;
-    padding: var(--space-10) var(--space-6);
-    color: var(--text-tertiary);
-}
-.empty-state .empty-icon {
-    font-size: 2.5rem;
-    color: var(--gray-300);
-    margin-bottom: var(--space-3);
-}
-.empty-state .empty-title {
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    margin-bottom: var(--space-1);
-}
-.empty-state .empty-sub {
-    font-size: 0.8125rem;
-    color: var(--text-tertiary);
-}
-
-/* Loading skeleton helper */
-.skeleton {
-    background: linear-gradient(
-        90deg,
-        var(--surface-sunken) 0%,
-        rgba(15, 23, 42, 0.06) 50%,
-        var(--surface-sunken) 100%
-    );
-    background-size: 200% 100%;
-    animation: skeleton-shimmer 1.4s ease-in-out infinite;
-    border-radius: var(--radius-sm);
-}
-@keyframes skeleton-shimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
-/* Focus-visible polish for keyboard users */
-:focus-visible {
-    outline: 2px solid transparent;
-    border-radius: var(--radius-sm);
-}
-
-/* Reusable surface helpers */
-.surface-card {
-    background: var(--surface-raised);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--elevation-1);
-}
-.surface-panel {
-    background: var(--surface-raised);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-}
-.surface-sunken {
-    background: var(--surface-sunken);
-    border-radius: var(--radius-md);
-}
-
-/* Reduced-motion */
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: 0.001ms !important;
-        transition-duration: 0.001ms !important;
-    }
-}
-
-/* TaskDrawer specifics */
-.task-drawer-row {
-    transition: background-color var(--transition-fast);
-}
-.task-drawer-row:hover {
-    background-color: var(--surface-sunken);
-}
-
-/* ============================================================
-   System v2 — Cohesive Apple-style palette
-   Overrides earlier brand variables with a calmer, more refined
-   set. Existing var names preserved so dependent components
-   inherit automatically.
-   ============================================================ */
-
-:root {
-    /* ── Brand: refined indigo ────────────────────────────── */
-    --primary-color:   #3B5BDB;
-    --primary-light:   #5C7CFA;
-    --primary-dark:    #364FC7;
-    --primary-deeper:  #1E3A8A;
-
-    /* Functional accent (kept indigo-flavoured, less saturated) */
-    --indigo-50:  #EEF2FF;
-    --indigo-100: #E0E7FF;
-    --indigo-200: #C7D2FE;
-    --indigo-300: #A5B4FC;
-    --indigo-400: #818CF8;
-    --indigo-500: #6366F1;
-    --indigo-600: #4F46E5;
-    --indigo-700: #4338CA;
-    --indigo-800: #3730A3;
-    --indigo-900: #312E81;
-
-    /* ── Neutrals: slate-tinted, cooler than Bootstrap default */
-    --gray-50:  #F8FAFC;
-    --gray-100: #F1F5F9;
-    --gray-200: #E2E8F0;
-    --gray-300: #CBD5E1;
-    --gray-400: #94A3B8;
-    --gray-500: #64748B;
-    --gray-600: #475569;
-    --gray-700: #334155;
-    --gray-800: #1E293B;
-    --gray-900: #0F172A;
-
-    --text-primary:   #0F172A;
-    --text-secondary: #475569;
-    --text-tertiary:  #94A3B8;
-    --text-muted:     #CBD5E1;
-
-    /* ── Surfaces ─────────────────────────────────────────── */
-    --surface-canvas:  #F7F8FA;
-    --surface-raised:  #FFFFFF;
-    --surface-sunken:  #F1F5F9;
-    --surface-elevated:#FFFFFF;
-    --surface-overlay: rgba(15, 23, 42, 0.42);
-
-    /* ── Borders ──────────────────────────────────────────── */
-    --border-subtle:  rgba(15, 23, 42, 0.06);
-    --border-default: rgba(15, 23, 42, 0.10);
-    --border-strong:  rgba(15, 23, 42, 0.18);
-
-    /* ── Semantic status colors (calmer, less saturated) ─── */
-    --success-color:  #16A34A;
-    --success-bg:     #ECFDF5;
-    --success-border: #BBF7D0;
-    --success-text:   #14532D;
-
-    --danger-color:   #DC2626;
-    --danger-bg:      #FEF2F2;
-    --danger-border:  #FECACA;
-    --danger-text:    #7F1D1D;
-
-    --warning-color:  #D97706;
-    --warning-bg:     #FFFBEB;
-    --warning-border: #FDE68A;
-    --warning-text:   #78350F;
-
-    --info-color:     #0284C7;
-    --info-bg:        #F0F9FF;
-    --info-border:    #BAE6FD;
-    --info-text:      #075985;
-
-    /* ── Focus rings ──────────────────────────────────────── */
-    --ring-primary: rgba(59, 91, 219, 0.20);
-    --ring-danger:  rgba(220, 38, 38, 0.18);
-    --ring-success: rgba(22, 163, 74, 0.18);
-    --ring-warning: rgba(217, 119, 6, 0.18);
-
-    /* ── Replace existing gradient with subtle, optional one  */
-    --primary-gradient: linear-gradient(135deg, #3B5BDB 0%, #364FC7 100%);
-}
-
-/* Reset the heavy Bootstrap text classes to the refined palette */
-.text-muted     { color: var(--text-tertiary) !important; }
-.text-secondary { color: var(--text-secondary) !important; }
-.text-success   { color: var(--success-text)  !important; }
-.text-danger    { color: var(--danger-text)   !important; }
-.text-warning   { color: var(--warning-text)  !important; }
-.text-info      { color: var(--info-text)     !important; }
-
-/* Soften Bootstrap badges to match new palette */
-.badge.bg-success    { background-color: var(--success-bg) !important; color: var(--success-text) !important; border: 1px solid var(--success-border); }
-.badge.bg-danger     { background-color: var(--danger-bg) !important;  color: var(--danger-text)  !important; border: 1px solid var(--danger-border);  }
-.badge.bg-warning    { background-color: var(--warning-bg) !important; color: var(--warning-text) !important; border: 1px solid var(--warning-border); }
-.badge.bg-info       { background-color: var(--info-bg) !important;    color: var(--info-text)    !important; border: 1px solid var(--info-border);    }
-.badge.bg-secondary  { background-color: var(--gray-100) !important;   color: var(--text-secondary) !important; border: 1px solid var(--border-default); }
-.badge.bg-light      { background-color: var(--gray-50) !important;    color: var(--text-secondary) !important; border: 1px solid var(--border-subtle); }
-.badge.bg-primary    { background-color: var(--indigo-50) !important;  color: var(--primary-deeper) !important; border: 1px solid var(--indigo-100); }
-
-/* Refined link */
-a {
-    color: var(--primary-color);
-    text-decoration: none;
-    transition: color var(--transition-fast);
-}
-a:hover { color: var(--primary-dark); text-decoration: underline; text-underline-offset: 3px; }
-
-/* Code chips */
-code {
-    background: var(--surface-sunken);
-    border: 1px solid var(--border-subtle);
-    color: var(--text-primary);
-    padding: 1px 6px;
-    border-radius: 6px;
-    font-size: 0.85em;
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-}
-
-/* ============================================================
-   Polish v3 — bug fixes & responsiveness
-   Targets dropdown alignment, viewport overflow, mobile layout,
-   and shared card stability.
-   ============================================================ */
-
-/* Bootstrap dropdown — refined defaults that override site-wide */
-.dropdown-menu {
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    padding: 6px;
-    box-shadow: var(--elevation-3);
-    background: var(--surface-raised);
-    margin-top: 6px;
-}
-.dropdown-menu .dropdown-item {
-    border-radius: 8px;
-    padding: 8px 10px;
-    font-size: 0.875rem;
-    color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow: hidden;
-}
-.dropdown-menu .dropdown-item:hover,
-.dropdown-menu .dropdown-item:focus {
-    background-color: var(--surface-sunken);
-    color: var(--text-primary);
-}
-.dropdown-menu .dropdown-item.active,
-.dropdown-menu .dropdown-item:active {
-    background-color: var(--indigo-50);
-    color: var(--primary-deeper);
-}
-.dropdown-menu .dropdown-divider {
-    border-top-color: var(--border-subtle);
-    margin: 4px 0;
-}
-/* Keep dropdowns inside viewport on tablet+ — right-align when overflowing */
-@media (max-width: 768px) {
-    .dropdown-menu {
-        min-width: 180px;
-        max-width: calc(100vw - 24px);
-    }
-    .dropdown-menu-end {
-        right: 0 !important;
-        left: auto !important;
-    }
-}
-
-/* Topnav items — keep overflow visible so dropdown menus can render
-   outside the bar. On tight screens, allow horizontal scrolling via
-   `overflow: clip` + dynamic width rather than overflow:hidden,
-   which would clip the menus dropping below. */
-.top-nav .nav-items-scroller {
-    overflow: visible;
-}
-
-@media (max-width: 720px) {
-    .top-nav {
-        padding-left: 12px !important;
-        padding-right: 12px !important;
-    }
-    .top-nav .nav-brand-text {
-        display: none;              /* hide brand text on tight screens */
-    }
-    .top-nav .user-name-label {
-        display: none;              /* avatar-only on tight screens */
-    }
-}
-
-/* Main container responsive padding */
-@media (max-width: 720px) {
-    main > .container-fluid {
-        padding-left: 12px !important;
-        padding-right: 12px !important;
-    }
-}
-
-/* Footer quick-actions: smaller chrome on mobile, hide labels on tightest screens */
-@media (max-width: 720px) {
-    footer[aria-label="Quick actions"] .container-fluid {
-        padding-left: 12px !important;
-        padding-right: 12px !important;
-    }
-    footer[aria-label="Quick actions"] small {
-        display: none;
-    }
-}
-@media (max-width: 480px) {
-    footer[aria-label="Quick actions"] .btn .footer-action-label {
-        display: none;
-    }
-    footer[aria-label="Quick actions"] .btn {
-        padding-inline: 10px;
-    }
-}
-
-/* EntityCard responsiveness */
-.entity-card-summary {
-    display: flex;
-    gap: 24px;
-    flex: 1;
-    min-width: 0;
-    flex-wrap: wrap;
-}
-.entity-card-actions {
-    display: flex;
-    gap: 6px;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-}
-@media (max-width: 720px) {
-    .entity-card-summary { gap: 16px; }
-    .entity-card-action-label { display: none; }     /* compact: icon-only */
-    .entity-card-actions .btn,
-    .entity-card-actions button { padding: 4px 8px; }
-}
-
-/* EntityCard chips truncate gracefully */
-.entity-card-chip {
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-@media (max-width: 720px) {
-    .entity-card-chip { max-width: 140px; }
-}
-
-/* DetailTable — horizontal scroll on narrow */
-.detail-table-scroller {
-    width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    border-radius: 10px;
-    border: 1px solid var(--border-subtle);
-    background: var(--surface-raised);
-}
-.detail-table-scroller > table {
-    min-width: 560px;               /* prevents squashed cells */
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-    color: var(--text-primary);
-}
-.detail-table-scroller > table thead th {
-    text-align: left;
-    font-weight: 600;
-    font-size: 0.7rem;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 8px 12px;
-    background: var(--surface-sunken);
-    border-bottom: 1px solid var(--border-subtle);
-    white-space: nowrap;
-}
-.detail-table-scroller > table tbody td {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border-subtle);
-    vertical-align: middle;
-}
-.detail-table-scroller > table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-/* TaskFAB clears the footer on tight screens (footer wraps to 2 rows on mobile) */
-@media (max-width: 720px) {
-    .task-fab-btn {
-        bottom: clamp(96px, 14vh, 140px) !important;
-        right: 16px !important;
-    }
-}
-
-/* Modal — sane sizing on mobile */
-@media (max-width: 720px) {
-    .modal-dialog.modal-xl,
-    .modal-dialog.modal-lg,
-    .modal-dialog.modal-md {
-        max-width: calc(100vw - 24px);
-        margin: 12px auto;
-    }
-    .modal-body { padding: 1rem !important; }
-    .modal-header { padding: 1rem 1rem !important; }
-}
-
-/* Filter row — prevent overflow */
-.filter-bar {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-}
-.filter-bar > * { min-width: 0; }
-
-/* Long-label utility */
-.truncate {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-}
-
-/* Reduce Bootstrap default form-control "size huge" feel on small */
-@media (max-width: 480px) {
-    .form-control, .form-select { font-size: 0.875rem; }
-    h1, .h1 { font-size: 1.5rem; }
-    h2, .h2 { font-size: 1.25rem; }
-    h3, .h3 { font-size: 1.1rem; }
-}
-
-/* Prevent body horizontal scroll without breaking position:absolute children */
-@supports (overflow: clip) {
-    html, body { overflow-x: clip; }
-}
-@supports not (overflow: clip) {
-    html { overflow-x: hidden; }
-}
-
-
-
-/* ============================================================
-   Enterprise polish v4 — denser, larger type, stronger hierarchy
-   Target: SaaS dashboard density (Linear / Stripe-class).
-   Existing variable names preserved so the rest of the app
-   inherits automatically.
-   ============================================================ */
-
-:root {
-    /* Base font scale bumped up ~1 step — body text now 15px */
-    --font-size-xs:   11px;
-    --font-size-sm:   12px;
-    --font-size-base: 14px;
-    --font-size-md:   15px;
-    --font-size-lg:   16px;
-    --font-size-xl:   19px;
-    --font-size-2xl:  24px;
-
-    /* Tightened spacing scale for higher density */
-    --space-1: 4px;
-    --space-2: 8px;
-    --space-3: 10px;
-    --space-4: 14px;
-    --space-5: 18px;
-    --space-6: 22px;
-}
-
-/* Bump body text */
-html {
-    font-size: var(--font-size-base);
-}
-body {
-    font-size: var(--font-size-base);
-    line-height: 1.45;
-}
-
-/* Stronger heading scale */
-h1, .h1 { font-size: var(--font-size-2xl); font-weight: 600; letter-spacing: -0.02em; }
-h2, .h2 { font-size: var(--font-size-xl);  font-weight: 600; letter-spacing: -0.015em; }
-h3, .h3 { font-size: var(--font-size-lg);  font-weight: 600; letter-spacing: -0.01em; }
-h4, .h4 { font-size: var(--font-size-md);  font-weight: 600; letter-spacing: -0.005em; }
-h5, .h5 { font-size: var(--font-size-base); font-weight: 600; }
-h6, .h6 { font-size: var(--font-size-sm);  font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
-
-/* Tables — bigger body, denser rows */
-.table {
-    font-size: var(--font-size-base);
-}
-.table > thead > tr > th {
-    font-size: var(--font-size-xs);
-    padding: 10px 14px;
-}
-.table > tbody > tr > td {
-    padding: 10px 14px;
-}
-
-/* Buttons — same height, but bigger label */
-.btn {
-    font-size: var(--font-size-sm);
-    padding: 0.45rem 0.85rem;
-}
-.btn-sm {
-    font-size: 12px;
-    padding: 0.3rem 0.65rem;
-}
-.btn-lg {
-    font-size: var(--font-size-md);
-    padding: 0.55rem 1.05rem;
-}
-
-/* Form controls — larger text, tighter padding */
-.form-control,
-.form-select {
-    font-size: var(--font-size-sm);
-    padding: 0.42rem 0.7rem;
-}
-.form-control-sm,
-.form-select-sm {
-    font-size: 12px;
-    padding: 0.3rem 0.55rem;
-}
-.form-label {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-bottom: 4px;
-}
-
-/* Cards — keep refined chrome but reduce vertical air */
-.card-body {
-    padding: 16px 18px;
-}
-.card-header {
-    padding: 12px 18px;
-    font-weight: 600;
-}
-.card + .card,
-.card-stack > .card { margin-top: 12px; }
-
-/* Page container — tighter horizontal padding for wide screens,
-   so cards take more of the screen */
-main > .container-fluid {
-    padding-top: 16px !important;
-    padding-bottom: 96px !important;
-    padding-left: clamp(12px, 2vw, 24px) !important;
-    padding-right: clamp(12px, 2vw, 24px) !important;
-    max-width: 1600px;
-    margin-inline: auto;
-}
-
-/* EntityCard — denser, stronger hierarchy */
-.entity-card-header {
-    padding: 10px 16px !important;
-    gap: 8px !important;
-}
-.entity-card-title {
-    font-size: var(--font-size-md) !important;
-    font-weight: 600;
-}
-.entity-card-chip {
-    font-size: 11.5px !important;
-    padding: 2px 7px !important;
-}
-.entity-card-body {
-    padding: 10px 16px !important;
-}
-.entity-card-stat-label {
-    font-size: 11px !important;
-    letter-spacing: 0.07em;
-    color: var(--text-tertiary);
-    font-weight: 600;
-    text-transform: uppercase;
-    margin-bottom: 2px;
-}
-.entity-card-stat-value {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-.entity-card-summary {
-    gap: 22px !important;
-}
-.entity-card-action-btn {
-    padding: 3px 9px !important;
-    font-size: 11.5px !important;
-}
-
-/* Detail table — bigger row text, tight rows */
-.detail-table-scroller > table {
-    font-size: 13px;
-}
-.detail-table-scroller > table thead th {
-    font-size: 10.5px;
-    padding: 6px 12px;
-}
-.detail-table-scroller > table tbody td {
-    padding: 6px 12px;
-}
-
-/* Reduce the space between successive entity cards */
-.entity-card + .entity-card,
-article + article { margin-top: 8px; }
-
-/* Filter bar — sit on the page (not a heavy card) for less chrome */
-.filter-bar {
-    gap: 10px;
-}
-.filter-bar > * {
-    flex: 1 1 200px;
-    min-width: 160px;
-}
-
-/* Section dividers — replace overly-padded card headers in lists */
-.section-divider {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 0 10px;
-    border-bottom: 1px solid var(--border-subtle);
-    margin-bottom: 12px;
-}
-.section-divider .section-title {
-    font-size: var(--font-size-md);
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0;
-}
-.section-divider .section-actions {
-    margin-left: auto;
-    display: flex;
-    gap: 8px;
-}
-
-/* AdminLayout footer — tighter */
-footer[aria-label="Quick actions"] .container-fluid {
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
-}
-footer[aria-label="Quick actions"] .btn {
-    font-size: 12px;
-}
-
-/* TopNav — keep 56px height but slightly tighter triggers so more fits */
-.top-nav { height: 56px; }
-
-/* Less padding under page title rows so content starts higher */
-.page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 0 14px;
-    border-bottom: 1px solid var(--border-subtle);
-    margin-bottom: 14px;
-}
-.page-header h1,
-.page-header h2 {
-    margin: 0;
-}
-
-/* Dense badge for status / category */
-.badge-dense {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 7px;
-    font-size: 11px;
-    font-weight: 600;
-    border-radius: 6px;
-    line-height: 1.5;
-}
-
-/* Stronger hierarchy: KPIs */
-.kpi {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.kpi-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-}
-.kpi-value {
-    font-size: 17px;
-    font-weight: 600;
-    color: var(--text-primary);
-    line-height: 1.2;
-}
-.kpi-delta {
-    font-size: 11px;
-    color: var(--text-secondary);
-}
 
-/* Reduce empty space inside Bootstrap row gutters */
-.row.row-tight { --bs-gutter-y: 8px; --bs-gutter-x: 12px; }
+/* ─── Compact-row gutter helpers (existing usage) ───────── */
+.row.row-tight   { --bs-gutter-y: 8px;  --bs-gutter-x: 12px; }
 .row.row-compact { --bs-gutter-y: 10px; --bs-gutter-x: 16px; }
 
-/* Sticky table headers for long lists */
+
+/* ─── Sticky table header utility ───────────────────────── */
 .table-sticky-head thead th {
     position: sticky;
     top: 0;
     z-index: 2;
 }
 
-/* On wide screens, span content more efficiently */
-@media (min-width: 1280px) {
-    main > .container-fluid {
-        padding-left: 32px !important;
-        padding-right: 32px !important;
-    }
-}
-@media (min-width: 1600px) {
-    main > .container-fluid {
-        padding-left: 48px !important;
-        padding-right: 48px !important;
-    }
+
+/* ─── Truncate helper ───────────────────────────────────── */
+.truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* Small screens: don't oversize headings, keep readability */
-@media (max-width: 720px) {
-    :root { --font-size-base: 13.5px; }
-    h1, .h1 { font-size: 20px; }
-    h2, .h2 { font-size: 17px; }
-    h3, .h3 { font-size: 15px; }
-    .card-body { padding: 12px 14px; }
-    .table > thead > tr > th,
-    .table > tbody > tr > td { padding: 8px 10px; }
-    main > .container-fluid { padding-top: 12px !important; }
+
+/* ─── Spinner brand color (Bootstrap) ───────────────────── */
+.spinner-border.text-primary,
+.spinner-grow.text-primary {
+    color: var(--tb-brand) !important;
+}
+
+
+/* ─── Form check + radio brand color ────────────────────── */
+.form-check-input:checked {
+    background-color: var(--tb-brand);
+    border-color: var(--tb-brand);
+}
+.form-check-input:focus {
+    border-color: var(--tb-brand);
+    box-shadow: var(--tb-ring);
+}
+
+
+/* ─── Pagination brand color ────────────────────────────── */
+.pagination .page-link {
+    color: var(--tb-brand);
+    border-color: var(--tb-border);
+}
+.pagination .page-item.active .page-link {
+    background-color: var(--tb-brand);
+    border-color: var(--tb-brand);
+    color: #fff;
+}
+.pagination .page-link:hover {
+    background-color: var(--tb-brand-50);
+    color: var(--tb-brand-hover);
+    border-color: var(--tb-border-strong);
+}
+.pagination .page-link:focus {
+    box-shadow: var(--tb-ring);
+    z-index: 2;
+}
+
+
+/* ─── Reduced motion ────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    .btn:hover { transform: none; }
 }

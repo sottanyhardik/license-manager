@@ -1,18 +1,26 @@
-import {Link} from "react-router-dom";
+import { Link } from "react-router-dom";
+import { Button, EmptyState } from "../components/ui";
 
 export default function Forbidden() {
     return (
-        <div className="d-flex flex-column align-items-center justify-content-center min-vh-100 text-center p-4">
-            <div className="mb-4" style={{fontSize: '4rem'}}>🔒</div>
-            <h1 className="h2 fw-bold text-danger mb-2">Access Denied</h1>
-            <p className="text-muted mb-4">
-                You don't have permission to view this page.
-                <br/>
-                Contact your administrator if you believe this is an error.
-            </p>
-            <Link to="/dashboard" className="btn btn-primary">
-                Back to Dashboard
-            </Link>
+        <div
+            className="d-flex align-items-center justify-content-center"
+            style={{ minHeight: "100vh", background: "var(--tb-body-bg)", padding: 20 }}
+        >
+            <div className="card" style={{ maxWidth: 480, width: "100%" }}>
+                <div className="card-body">
+                    <EmptyState
+                        icon="lock"
+                        title="Access denied"
+                        description="You don't have permission to view this page. Contact your administrator if you believe this is an error."
+                        action={
+                            <Link to="/dashboard">
+                                <Button variant="primary" size="sm" icon="house">Back to Dashboard</Button>
+                            </Link>
+                        }
+                    />
+                </div>
+            </div>
         </div>
     );
 }

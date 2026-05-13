@@ -3,7 +3,6 @@ import { Link, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { reportEntities, masterEntities } from "../routes/config";
 
-// Static nav groups with per-item role requirements.
 const NAV_GROUPS = [
     {
         label: "Licenses",
@@ -27,69 +26,12 @@ const NAV_GROUPS = [
     },
 ];
 
-// ── Styling helpers ────────────────────────────────────────────────────────
-const triggerBase = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    height: 36,
-    padding: "0 12px",
-    borderRadius: 8,
-    fontSize: "0.875rem",
-    fontWeight: 500,
-    color: "var(--text-secondary)",
-    background: "transparent",
-    border: "none",
-    textDecoration: "none",
-    cursor: "pointer",
-    transition: "background-color 150ms ease, color 150ms ease",
-    whiteSpace: "nowrap",
-};
-const triggerActive = {
-    ...triggerBase,
-    color: "var(--primary-color)",
-    background: "var(--indigo-50)",
-};
-const menuPanel = {
-    position: "absolute",
-    top: "100%",
-    minWidth: 220,
-    background: "var(--surface-raised)",
-    border: "1px solid var(--border-subtle)",
-    borderRadius: 12,
-    padding: 6,
-    boxShadow: "var(--elevation-3)",
-    zIndex: 1031,
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    listStyle: "none",
-    margin: 0,
-};
-const itemBase = {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "8px 10px",
-    borderRadius: 8,
-    fontSize: "0.875rem",
-    color: "var(--text-primary)",
-    textDecoration: "none",
-    cursor: "pointer",
-    border: "none",
-    background: "transparent",
-    width: "100%",
-    textAlign: "left",
-};
 
-
-// ── A single hover-or-click menu ──────────────────────────────────────────
 function NavMenu({ icon, label, items, isActive, end = false }) {
     const [open, setOpen] = useState(false);
     const wrapperRef = useRef(null);
     const closeTimerRef = useRef(null);
 
-    // Close when clicking outside or pressing Escape
     useEffect(() => {
         if (!open) return;
         const onDown = (e) => {
@@ -119,26 +61,20 @@ function NavMenu({ icon, label, items, isActive, end = false }) {
         >
             <button
                 type="button"
-                style={isActive ? triggerActive : triggerBase}
+                className={`tb-nav-trigger${isActive ? " is-active" : ""}`}
                 onClick={() => setOpen(v => !v)}
                 aria-expanded={open}
                 aria-haspopup="menu"
             >
-                <i className={`bi bi-${icon}`} aria-hidden="true" style={{ fontSize: "0.95rem" }}></i>
+                <i className={`bi bi-${icon}`} aria-hidden="true" />
                 {label}
-                <i className="bi bi-chevron-down" aria-hidden="true" style={{ fontSize: "0.65rem", marginLeft: 2, opacity: 0.6 }}></i>
+                <i className="bi bi-chevron-down" aria-hidden="true" />
             </button>
 
             {open && (
-                <ul
-                    role="menu"
-                    style={{
-                        ...menuPanel,
-                        ...(end ? { right: 0, left: "auto" } : { left: 0, right: "auto" }),
-                    }}
-                >
+                <ul role="menu" className={`tb-nav-menu${end ? " is-end" : ""}`}>
                     {/* Invisible bridge so cursor can move from trigger to menu */}
-                    <li aria-hidden="true" style={{ position: "absolute", top: -8, left: 0, right: 0, height: 8 }}></li>
+                    <li aria-hidden="true" style={{ position: "absolute", top: -8, left: 0, right: 0, height: 8 }} />
                     {items}
                 </ul>
             )}
@@ -148,40 +84,21 @@ function NavMenu({ icon, label, items, isActive, end = false }) {
 
 
 function MenuItem({ to, icon, label, active, onClick, danger = false }) {
-    const [hover, setHover] = useState(false);
-    const style = {
-        ...itemBase,
-        color: danger
-            ? "var(--danger-color)"
-            : active
-                ? "var(--primary-deeper)"
-                : "var(--text-primary)",
-        background: hover
-            ? (active ? "var(--indigo-50)" : "var(--surface-sunken)")
-            : (active ? "var(--indigo-50)" : "transparent"),
-    };
+    const classes = [
+        "tb-nav-menu-item",
+        active ? "is-active" : "",
+        danger ? "is-danger" : "",
+    ].filter(Boolean).join(" ");
     const inner = (
         <>
-            {icon && (
-                <i
-                    className={`bi bi-${icon}`}
-                    style={{ color: danger ? "var(--danger-color)" : "var(--primary-color)", fontSize: "0.9rem", width: 16, textAlign: "center" }}
-                ></i>
-            )}
+            {icon && <i className={`bi bi-${icon}`} aria-hidden="true" />}
             <span style={{ flex: 1 }}>{label}</span>
         </>
     );
     if (onClick) {
         return (
             <li role="none">
-                <button
-                    type="button"
-                    role="menuitem"
-                    style={style}
-                    onClick={onClick}
-                    onMouseEnter={() => setHover(true)}
-                    onMouseLeave={() => setHover(false)}
-                >
+                <button type="button" role="menuitem" className={classes} onClick={onClick}>
                     {inner}
                 </button>
             </li>
@@ -189,13 +106,7 @@ function MenuItem({ to, icon, label, active, onClick, danger = false }) {
     }
     return (
         <li role="none">
-            <Link
-                role="menuitem"
-                to={to}
-                style={style}
-                onMouseEnter={() => setHover(true)}
-                onMouseLeave={() => setHover(false)}
-            >
+            <Link role="menuitem" to={to} className={classes}>
                 {inner}
             </Link>
         </li>
@@ -210,68 +121,25 @@ export default function TopNav() {
     const isPathActive = (path) =>
         location.pathname === path || location.pathname.startsWith(path + "/");
     const isGroupActive = (items) => items.some(i => isPathActive(i.path));
+    const isDashActive = isPathActive("/dashboard");
 
     return (
-        <nav
-            className="top-nav"
-            style={{
-                background: "rgba(255, 255, 255, 0.82)",
-                backdropFilter: "saturate(180%) blur(16px)",
-                WebkitBackdropFilter: "saturate(180%) blur(16px)",
-                borderBottom: "1px solid var(--border-subtle)",
-                padding: "0 clamp(1rem, 4vw, 2rem)",
-                height: 56,
-                display: "flex",
-                alignItems: "center",
-                position: "sticky",
-                top: 0,
-                zIndex: 1030,
-            }}
-        >
+        <nav className="tb-nav top-nav">
             {/* Brand */}
-            <Link
-                to="/"
-                style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 10,
-                    textDecoration: "none",
-                    marginRight: 24,
-                    flexShrink: 0,
-                    color: "var(--text-primary)",
-                }}
-            >
-                <span
-                    aria-hidden="true"
-                    style={{
-                        width: 30, height: 30, borderRadius: 8,
-                        background: "var(--primary-gradient)",
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        color: "#fff",
-                        boxShadow: "var(--elevation-1)",
-                    }}
-                >
-                    <i className="bi bi-shield-check" style={{ fontSize: "0.95rem" }}></i>
+            <Link to="/" className="tb-nav-brand">
+                <span className="tb-nav-brand-mark" aria-hidden="true">
+                    <i className="bi bi-shield-check" style={{ fontSize: "0.95rem" }} />
                 </span>
-                <span className="nav-brand-text" style={{ fontWeight: 600, fontSize: "0.95rem", letterSpacing: "-0.01em" }}>
-                    License Manager
-                </span>
+                <span className="tb-nav-brand-text">License Manager</span>
             </Link>
 
             {/* Nav items */}
-            <div className="nav-items-scroller" style={{ display: "flex", alignItems: "center", gap: 4, flex: 1, minWidth: 0 }}>
-                {/* Dashboard */}
-                {(() => {
-                    const active = isPathActive("/dashboard");
-                    return (
-                        <Link to="/dashboard" style={active ? triggerActive : triggerBase}>
-                            <i className="bi bi-speedometer2" aria-hidden="true" style={{ fontSize: "0.95rem" }}></i>
-                            Dashboard
-                        </Link>
-                    );
-                })()}
+            <div className="tb-nav-scroller nav-items-scroller">
+                <Link to="/dashboard" className={`tb-nav-trigger${isDashActive ? " is-active" : ""}`}>
+                    <i className="bi bi-speedometer2" aria-hidden="true" />
+                    Dashboard
+                </Link>
 
-                {/* Grouped */}
                 {NAV_GROUPS.map(group => {
                     const visible = group.items.filter(item => !item.roles || hasAnyRole(item.roles));
                     if (visible.length === 0) return null;
@@ -294,7 +162,6 @@ export default function TopNav() {
                     );
                 })}
 
-                {/* Reports */}
                 {hasAnyRole(["REPORT_VIEWER", "LICENSE_MANAGER", "TRADE_MANAGER", "ALLOTMENT_MANAGER", "BOE_MANAGER", "INCENTIVE_LICENSE_MANAGER"]) && (
                     <NavMenu
                         icon="bar-chart-line"
@@ -312,7 +179,6 @@ export default function TopNav() {
                     />
                 )}
 
-                {/* Masters */}
                 <NavMenu
                     icon="database"
                     label="Masters"
@@ -333,19 +199,15 @@ export default function TopNav() {
             {user && (
                 <NavMenu
                     icon="person-circle"
-                    label={(
-                        <span className="user-name-label" style={{ paddingRight: 2 }}>
-                            {user.username}
-                        </span>
-                    )}
+                    label={<span className="user-name-label">{user.username}</span>}
                     isActive={false}
                     end
                     items={[
-                        <li key="header" role="none" style={{ padding: "8px 10px 6px" }}>
-                            <div style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" }}>Signed in as</div>
-                            <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>{user.username}</div>
+                        <li key="header" role="none" className="tb-nav-menu-header">
+                            <div className="pretitle">Signed in as</div>
+                            <div className="username">{user.username}</div>
                         </li>,
-                        <li key="div1" role="separator" style={{ borderTop: "1px solid var(--border-subtle)", margin: "4px 0" }}></li>,
+                        <li key="div1" role="separator" className="tb-nav-menu-divider" />,
                         <MenuItem key="profile" to="/profile" icon="person" label="Profile" />,
                         ((isSuperAdmin && isSuperAdmin()) || (hasAnyRole && hasAnyRole(["USER_MANAGER"])))
                             ? <MenuItem key="activity" to="/admin/activity-log" icon="journal-text" label="Activity Log" />
@@ -353,7 +215,7 @@ export default function TopNav() {
                         (isSuperAdmin && isSuperAdmin())
                             ? <MenuItem key="settings" to="/settings" icon="shield-lock" label="Users & Roles" />
                             : null,
-                        <li key="div2" role="separator" style={{ borderTop: "1px solid var(--border-subtle)", margin: "4px 0" }}></li>,
+                        <li key="div2" role="separator" className="tb-nav-menu-divider" />,
                         <MenuItem key="logout" icon="box-arrow-right" label="Sign out" danger onClick={logout} />,
                     ].filter(Boolean)}
                 />

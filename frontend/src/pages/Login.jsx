@@ -1,36 +1,32 @@
-import {useContext, useEffect, useState} from "react";
-import {useNavigate, useLocation} from "react-router-dom";
+import { useContext, useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/axios";
-import {AuthContext} from "../context/AuthContext";
+import { AuthContext } from "../context/AuthContext";
+import { Button } from "../components/ui";
 
 export default function Login() {
-    const {user, loading: authLoading, loginSuccess} = useContext(AuthContext);
+    const { user, loading: authLoading, loginSuccess } = useContext(AuthContext);
     const navigate = useNavigate();
     const location = useLocation();
-    const [form, setForm] = useState({username: "", password: ""});
+    const [form, setForm] = useState({ username: "", password: "" });
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
-    // Get the path user was trying to access from either:
-    // 1. location.state (from ProtectedRoute redirect)
-    // 2. redirect query param (from logout)
-    // 3. default to dashboard
     const searchParams = new URLSearchParams(location.search);
-    const redirectParam = searchParams.get('redirect');
-    const reason = searchParams.get('reason');
+    const redirectParam = searchParams.get("redirect");
+    const reason = searchParams.get("reason");
     const from = location.state?.from || redirectParam || "/dashboard";
 
     const sessionMessage =
-        reason === 'idle' ? 'You were logged out due to inactivity. Please log in again.' :
-        reason === 'session_expired' ? 'Your session has expired. Please log in again.' :
+        reason === "idle" ? "You were logged out due to inactivity. Please log in again." :
+        reason === "session_expired" ? "Your session has expired. Please log in again." :
         null;
 
-    useEffect(() => { document.title = 'Login | License Manager'; }, []);
+    useEffect(() => { document.title = "Login | License Manager"; }, []);
 
-    // Redirect if already logged in
     useEffect(() => {
         if (!authLoading && user) {
-            navigate(from, {replace: true});
+            navigate(from, { replace: true });
         }
     }, [user, authLoading, navigate, from]);
 
@@ -38,183 +34,141 @@ export default function Login() {
         e.preventDefault();
         setError("");
         setSubmitting(true);
-
         try {
-            const {data} = await api.post("/auth/login/", form);
-
-            // IMPORTANT: Save access + refresh + user
-            loginSuccess({
-                access: data.access,
-                refresh: data.refresh,
-                user: data.user
-            });
-
-            // Redirect to the page user was trying to access (or dashboard)
-            navigate(from, {replace: true});
-        } catch (e) {
-            setError(e.response?.data?.detail || "Invalid username or password");
+            const { data } = await api.post("/auth/login/", form);
+            loginSuccess({ access: data.access, refresh: data.refresh, user: data.user });
+            navigate(from, { replace: true });
+        } catch (err) {
+            setError(err.response?.data?.detail || "Invalid username or password");
             setSubmitting(false);
         }
     };
 
     return (
-        <div style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-            padding: '20px'
-        }}>
-            <div className="card border-0 shadow-lg" style={{
-                maxWidth: '440px',
-                width: '100%',
-                borderRadius: '16px',
-                overflow: 'hidden'
-            }}>
-                {/* Header Section */}
-                <div style={{
-                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                    padding: '40px 32px',
-                    textAlign: 'center',
-                    color: 'white'
-                }}>
-                    <div style={{
-                        width: '80px',
-                        height: '80px',
-                        margin: '0 auto 20px',
-                        borderRadius: '20px',
-                        background: 'rgba(255, 255, 255, 0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backdropFilter: 'blur(10px)'
-                    }}>
-                        <i className="bi bi-shield-check" style={{ fontSize: '2.5rem' }}></i>
+        <div
+            style={{
+                minHeight: "100vh",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "var(--tb-body-bg)",
+                padding: "20px",
+            }}
+        >
+            <div
+                className="card"
+                style={{
+                    maxWidth: 440,
+                    width: "100%",
+                    overflow: "hidden",
+                    boxShadow: "var(--tb-shadow-overlay)",
+                }}
+            >
+                {/* Header */}
+                <div
+                    style={{
+                        background: `linear-gradient(135deg, var(--tb-brand) 0%, var(--tb-brand-active) 100%)`,
+                        padding: "36px 28px",
+                        textAlign: "center",
+                        color: "#fff",
+                    }}
+                >
+                    <div
+                        aria-hidden="true"
+                        style={{
+                            width: 64,
+                            height: 64,
+                            margin: "0 auto 16px",
+                            borderRadius: 14,
+                            background: "rgba(255, 255, 255, 0.18)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backdropFilter: "blur(8px)",
+                        }}
+                    >
+                        <i className="bi bi-shield-check" style={{ fontSize: "2rem" }} />
                     </div>
-                    <h2 style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '8px' }}>
+                    <h2 style={{ fontSize: "1.5rem", fontWeight: 600, margin: 0, color: "#fff" }}>
                         Welcome Back
                     </h2>
-                    <p style={{ fontSize: '1rem', opacity: '0.95', marginBottom: '0' }}>
-                        License Manager System
+                    <p style={{ fontSize: "0.9rem", opacity: 0.92, marginTop: 4, marginBottom: 0 }}>
+                        License Manager
                     </p>
                 </div>
 
-                {/* Form Section */}
-                <div style={{ padding: '40px 32px' }}>
+                {/* Body */}
+                <div style={{ padding: "28px 28px 20px" }}>
                     {sessionMessage && (
-                        <div className="alert alert-warning d-flex align-items-center" role="alert" style={{
-                            borderRadius: '10px',
-                            marginBottom: '24px'
-                        }}>
-                            <i className="bi bi-clock-history me-2"></i>
-                            {sessionMessage}
+                        <div className="alert alert-warning d-flex align-items-center" role="alert">
+                            <i className="bi bi-clock-history me-2" aria-hidden="true" />
+                            <span>{sessionMessage}</span>
                         </div>
                     )}
                     {error && (
-                        <div className="alert alert-danger d-flex align-items-center" role="alert" style={{
-                            borderRadius: '10px',
-                            marginBottom: '24px'
-                        }}>
-                            <i className="bi bi-exclamation-circle-fill me-2"></i>
-                            {error}
+                        <div className="alert alert-danger d-flex align-items-center" role="alert">
+                            <i className="bi bi-exclamation-circle-fill me-2" aria-hidden="true" />
+                            <span>{error}</span>
                         </div>
                     )}
 
-                    <form onSubmit={submit}>
+                    <form onSubmit={submit} className="form-group-material" style={{ margin: 0 }}>
                         <div className="mb-3">
-                            <label className="form-label" style={{
-                                fontWeight: '500',
-                                color: 'var(--text-secondary)',
-                                marginBottom: '8px',
-                                fontSize: '0.875rem'
-                            }}>
-                                <i className="bi bi-person me-2"></i>
-                                Username
+                            <label className="form-label" htmlFor="login-username">
+                                <i className="bi bi-person me-1" aria-hidden="true" /> Username
                             </label>
                             <input
+                                id="login-username"
                                 className="form-control"
                                 placeholder="Enter your username"
                                 value={form.username}
-                                onChange={(e) =>
-                                    setForm({...form, username: e.target.value})
-                                }
+                                onChange={e => setForm({ ...form, username: e.target.value })}
                                 required
-                                style={{
-                                    padding: '12px 16px',
-                                    borderRadius: '10px',
-                                    border: '1px solid #d1d5db',
-                                    fontSize: '1rem'
-                                }}
+                                autoFocus
+                                autoComplete="username"
                             />
                         </div>
 
                         <div className="mb-4">
-                            <label className="form-label" style={{
-                                fontWeight: '500',
-                                color: 'var(--text-secondary)',
-                                marginBottom: '8px',
-                                fontSize: '0.875rem'
-                            }}>
-                                <i className="bi bi-lock me-2"></i>
-                                Password
+                            <label className="form-label" htmlFor="login-password">
+                                <i className="bi bi-lock me-1" aria-hidden="true" /> Password
                             </label>
                             <input
+                                id="login-password"
                                 type="password"
                                 className="form-control"
                                 placeholder="Enter your password"
                                 value={form.password}
-                                onChange={(e) =>
-                                    setForm({...form, password: e.target.value})
-                                }
+                                onChange={e => setForm({ ...form, password: e.target.value })}
                                 required
-                                style={{
-                                    padding: '12px 16px',
-                                    borderRadius: '10px',
-                                    border: '1px solid #d1d5db',
-                                    fontSize: '1rem'
-                                }}
+                                autoComplete="current-password"
                             />
                         </div>
 
-                        <button
-                            className="btn w-100"
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            block
+                            loading={submitting}
+                            icon={submitting ? null : "box-arrow-in-right"}
                             disabled={submitting}
-                            style={{
-                                padding: '14px 24px',
-                                fontWeight: '600',
-                                fontSize: '1rem',
-                                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                                border: 'none',
-                                borderRadius: '10px',
-                                color: 'white',
-                                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-                            }}
                         >
-                            {submitting ? (
-                                <>
-                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                    Logging in...
-                                </>
-                            ) : (
-                                <>
-                                    <i className="bi bi-box-arrow-in-right me-2"></i>
-                                    Login
-                                </>
-                            )}
-                        </button>
+                            {submitting ? "Logging in…" : "Login"}
+                        </Button>
                     </form>
                 </div>
 
                 {/* Footer */}
-                <div style={{
-                    padding: '24px 32px',
-                    backgroundColor: 'var(--bs-gray-50)',
-                    textAlign: 'center',
-                    borderTop: '1px solid #e5e7eb'
-                }}>
-                    <small style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                        Made with <span style={{color: 'var(--danger-color)'}}>❤️</span> by Hardik Sottany
+                <div
+                    style={{
+                        padding: "16px 28px",
+                        background: "var(--tb-sunken)",
+                        textAlign: "center",
+                        borderTop: "1px solid var(--tb-border-soft)",
+                    }}
+                >
+                    <small style={{ color: "var(--tb-text-secondary)" }}>
+                        Built by Hardik Sottany
                     </small>
                 </div>
             </div>

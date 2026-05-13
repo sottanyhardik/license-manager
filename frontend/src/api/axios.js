@@ -1,8 +1,15 @@
 import axios from "axios";
 import { toast } from 'react-toastify';
 
+// Resolve API base URL:
+//   - If VITE_API_URL is defined (e.g. "http://localhost:8000"), call Django directly.
+//   - Otherwise fall back to "/api/" so requests flow through Vite's dev proxy.
+// Django CORS_ALLOWED_ORIGINS must include the frontend origin when calling directly.
+const API_HOST = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_BASE = API_HOST ? `${API_HOST}/api/` : "/api/";
+
 const api = axios.create({
-    baseURL: "/api/",
+    baseURL: API_BASE,
     headers: {"Content-Type": "application/json"},
 });
 
@@ -73,7 +80,7 @@ api.interceptors.response.use(
             }
 
             try {
-                const { data } = await axios.post("/api/auth/refresh/", { refresh });
+                const { data } = await axios.post(`${API_BASE}auth/refresh/`, { refresh });
 
                 localStorage.setItem("access", data.access);
                 if (data.refresh) localStorage.setItem("refresh", data.refresh);

@@ -1,69 +1,36 @@
-/**
+/*
  * SectionHeader — title + optional subtitle + right-aligned actions slot.
+ *
+ *   <SectionHeader
+ *     icon="file-earmark-text"
+ *     iconTone="primary"
+ *     title="Active Licenses"
+ *     subtitle="Auto-refreshes every 5 minutes"
+ *     actions={<Button size="sm">Refresh</Button>}
+ *   />
  */
+const ALLOWED_TONES = new Set(["primary", "success", "warning", "danger", "info", "neutral"]);
+
 export default function SectionHeader({
     icon,
     iconTone = "primary",
     title,
     subtitle,
     actions,
-    style = {},
+    className = "",
+    style,
 }) {
+    const safeTone = ALLOWED_TONES.has(iconTone) ? iconTone : "primary";
     return (
-        <div
-            className="d-flex align-items-center"
-            style={{
-                gap: 12,
-                marginBottom: 16,
-                ...style,
-            }}
-        >
+        <div className={`tb-section-head ${className}`.trim()} style={style}>
             {icon && (
-                <span
-                    aria-hidden="true"
-                    style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        background:
-                            iconTone === "success" ? "var(--success-bg)" :
-                            iconTone === "warning" ? "var(--warning-bg)" :
-                            iconTone === "danger"  ? "var(--danger-bg)"  :
-                            iconTone === "info"    ? "var(--info-bg)"    :
-                                                     "var(--indigo-50)",
-                        color:
-                            iconTone === "success" ? "var(--success-color)" :
-                            iconTone === "warning" ? "var(--warning-color)" :
-                            iconTone === "danger"  ? "var(--danger-color)"  :
-                            iconTone === "info"    ? "var(--info-color)"    :
-                                                     "var(--primary-color)",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                    }}
-                >
-                    <i className={`bi bi-${icon}`} style={{ fontSize: "1rem" }}></i>
+                <span className={`tb-section-icon tone-${safeTone}`} aria-hidden="true">
+                    <i className={`bi bi-${icon}`} />
                 </span>
             )}
-            <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                    fontSize: "1rem",
-                    fontWeight: 600,
-                    color: "var(--text-primary)",
-                    letterSpacing: "-0.01em",
-                }}>
-                    {title}
-                </div>
-                {subtitle && (
-                    <div style={{
-                        fontSize: "0.8125rem",
-                        color: "var(--text-secondary)",
-                        marginTop: 2,
-                    }}>
-                        {subtitle}
-                    </div>
-                )}
+            <div className="tb-section-body">
+                {title && <div className="tb-section-title">{title}</div>}
+                {subtitle && <div className="tb-section-subtitle">{subtitle}</div>}
             </div>
             {actions && <div style={{ flexShrink: 0 }}>{actions}</div>}
         </div>

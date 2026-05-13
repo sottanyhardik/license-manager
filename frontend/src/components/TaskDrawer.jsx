@@ -142,6 +142,12 @@ export default function TaskDrawer({ show, onClose }) {
         },
     });
 
+    // Surface speech errors to the user (the hook itself is silent).
+    useEffect(() => {
+        if (!speech.error) return;
+        toast.error(speech.error.message);
+    }, [speech.error]);
+
     const fetchTasks = useMemo(() => async () => {
         setLoading(true);
         try {
@@ -325,8 +331,12 @@ export default function TaskDrawer({ show, onClose }) {
             toast.error("Voice input is not supported in this browser. Use Chrome or Edge.");
             return;
         }
-        if (speech.listening) speech.stop();
-        else speech.start();
+        if (speech.listening) {
+            speech.stop();
+        } else {
+            speech.clearError();
+            speech.start();
+        }
     };
 
     if (!show) return null;
@@ -431,26 +441,60 @@ export default function TaskDrawer({ show, onClose }) {
                             className="small mb-2"
                             style={{
                                 minHeight: 18,
-                                color: "var(--text-secondary)",
-                                background: "var(--surface-raised)",
-                                border: "1px solid var(--border-subtle)",
+                                color: "var(--tb-text-secondary)",
+                                background: "var(--tb-card-bg)",
+                                border: "1px solid var(--tb-border)",
                                 borderRadius: 8,
                                 padding: "8px 10px",
                                 marginTop: 4,
                             }}
                         >
-                            <span style={{ color: "var(--danger-color)", fontWeight: 500 }}>
-                                <span style={{
-                                    display: "inline-block",
-                                    width: 6, height: 6, borderRadius: 999,
-                                    background: "var(--danger-color)",
-                                    marginRight: 6,
-                                    verticalAlign: "middle",
-                                    animation: "skeleton-shimmer 1.4s ease-in-out infinite",
-                                }} />
+                            <span style={{ color: "var(--tb-danger)", fontWeight: 500 }}>
+                                <span
+                                    aria-hidden="true"
+                                    style={{
+                                        display: "inline-block",
+                                        width: 8, height: 8, borderRadius: 999,
+                                        background: "var(--tb-danger)",
+                                        marginRight: 6,
+                                        verticalAlign: "middle",
+                                        animation: "tb-skel 1.2s ease-in-out infinite",
+                                    }}
+                                />
                                 Listening
                             </span>{" "}— say <code>next</code> to split, <code>assign to NAME</code>, or include <code>urgent</code> for high priority.
-                            {speech.interim && <em className="d-block mt-1" style={{ color: "var(--text-tertiary)" }}>"{speech.interim}"</em>}
+                            {speech.interim
+                                ? <em className="d-block mt-1" style={{ color: "var(--tb-text-tertiary)" }}>"{speech.interim}"</em>
+                                : <span className="d-block mt-1" style={{ color: "var(--tb-text-tertiary)", fontStyle: "italic" }}>
+                                      Waiting for audio…
+                                  </span>
+                            }
+                        </div>
+                    )}
+
+                    {!speech.listening && speech.error && (
+                        <div
+                            className="small mb-2 d-flex align-items-start"
+                            role="alert"
+                            style={{
+                                gap: 8,
+                                color: "var(--tb-danger-text)",
+                                background: "var(--tb-danger-soft)",
+                                border: "1px solid var(--tb-danger-border)",
+                                borderRadius: 8,
+                                padding: "8px 10px",
+                                marginTop: 4,
+                            }}
+                        >
+                            <i className="bi bi-exclamation-circle-fill" aria-hidden="true" style={{ marginTop: 1 }} />
+                            <div style={{ flex: 1 }}>{speech.error.message}</div>
+                            <button
+                                type="button"
+                                className="btn-close btn-sm"
+                                aria-label="Dismiss"
+                                onClick={speech.clearError}
+                                style={{ fontSize: "0.6rem", marginTop: 2 }}
+                            />
                         </div>
                     )}
 

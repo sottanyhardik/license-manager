@@ -672,81 +672,48 @@ export default function MasterList() {
         .join(" ");
 
     return (
-        <div className="container-fluid" style={{ backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px' }}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
-                <div className="d-flex justify-content-between align-items-center flex-wrap">
-                    <div>
-                        {/* Breadcrumb */}
-                        <div style={{ marginBottom: '12px', opacity: '0.9' }}>
-                            <a
-                                href="/"
-                                onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                                style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem' }}
-                            >
-                                <i className="bi bi-house-door me-2"></i>Home
-                            </a>
-                            <span className="mx-2">/</span>
-                            <span style={{ fontSize: '0.9rem' }}>{entityTitle}</span>
-                        </div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '0' }}>
-                            <i className="bi bi-grid-3x3-gap me-3"></i>
-                            {entityTitle}
-                        </h1>
+        <div style={{ minHeight: '100vh' }}>
+            {/* Tabler-style page header */}
+            <div className="page-header">
+                <div style={{ minWidth: 0 }}>
+                    <div className="page-pretitle">
+                        <a
+                            href="/"
+                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
+                            style={{ color: 'inherit', textDecoration: 'none' }}
+                        >
+                            Home
+                        </a>
+                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        {entityTitle}
                     </div>
-                    <div className="btn-group" style={{ marginTop: '12px' }}>
+                    <h1>{entityTitle}</h1>
+                </div>
+                <div className="page-actions">
                     <button
-                        className="btn"
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
                         onClick={() => handleExport('xlsx')}
-                        aria-label="Export to Excel"
                         title="Export to Excel"
-                        style={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                            border: '1px solid rgba(255, 255, 255, 0.3)',
-                            color: 'white',
-                            fontWeight: '500',
-                            backdropFilter: 'blur(10px)'
-                        }}
                     >
                         <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
                         Excel
                     </button>
                     <button
-                        className="btn"
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
                         onClick={() => handleExport('pdf')}
-                        aria-label="Export to PDF"
                         title="Export to PDF"
-                        style={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                            border: '1px solid rgba(255, 255, 255, 0.3)',
-                            color: 'white',
-                            fontWeight: '500',
-                            backdropFilter: 'blur(10px)'
-                        }}
                     >
                         <i className="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>
                         PDF
                     </button>
                     {entityName === 'bill-of-entries' && (
                         <button
-                            className="btn"
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm"
                             onClick={handlePortExcelExport}
-                            aria-label="Port Excel Download"
-                            title="Download port-wise BOE Excel (BOE No, Date, Port, Company, Qty, CIF INR, Item) using applied filters"
-                            style={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                border: '1px solid rgba(255, 255, 255, 0.3)',
-                                color: 'white',
-                                fontWeight: '500',
-                                backdropFilter: 'blur(10px)'
-                            }}
+                            title="Download port-wise BOE Excel"
                         >
                             <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
                             Port Excel
@@ -754,35 +721,20 @@ export default function MasterList() {
                     )}
                     {entityName === 'bill-of-entries' && (
                         <button
-                            className="btn"
-                            style={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                border: '1px solid rgba(255, 255, 255, 0.3)',
-                                color: 'white',
-                                fontWeight: '500',
-                                backdropFilter: 'blur(10px)'
-                            }}
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm"
                             onClick={async () => {
                                 const confirmed = await confirmDangerousAction(
                                     'Bulk Update Product Names',
                                     'This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?'
                                 );
-                                if (!confirmed) {
-                                    return;
-                                }
-
-                                setLoading(true);
-                                setError("");
-
+                                if (!confirmed) return;
+                                setLoading(true); setError("");
                                 try {
                                     const response = await api.post(`bill-of-entries/bulk-update-product-names/`);
-
                                     setLoading(false);
-
                                     if (response.data.success) {
                                         toast.success(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
-
-                                        // Refresh the list to show updated product names
                                         fetchData(currentPage, pageSize, filterParams);
                                     } else {
                                         setError('Failed to update product names');
@@ -799,32 +751,25 @@ export default function MasterList() {
                             Fetch All Products
                         </button>
                     )}
-                    {canWrite && <Link
-                        to={entityName === 'licenses' ? '/licenses/create' :
-                            entityName === 'allotments' ? '/allotments/create' :
-                            entityName === 'trades' ? '/trades/create' :
-                            `/masters/${entityName}/create`}
-                        className="btn"
-                        style={{
-                            fontWeight: '600',
-                            backgroundColor: 'white',
-                            border: '2px solid white',
-                            color: 'var(--primary-color)',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                        }}
-                        onClick={() => {
-                            // Save current filter state before navigating to create
-                            saveFilterState(entityName, {
-                                filters: filterParams,
-                                pagination: { currentPage, pageSize },
-                                search: ''
-                            });
-                        }}
-                    >
-                        <i className="bi bi-plus-circle me-2"></i>
-                        Add New
-                    </Link>}
-                </div>
+                    {canWrite && (
+                        <Link
+                            to={entityName === 'licenses' ? '/licenses/create' :
+                                entityName === 'allotments' ? '/allotments/create' :
+                                entityName === 'trades' ? '/trades/create' :
+                                `/masters/${entityName}/create`}
+                            className="btn btn-primary btn-sm"
+                            onClick={() => {
+                                saveFilterState(entityName, {
+                                    filters: filterParams,
+                                    pagination: { currentPage, pageSize },
+                                    search: ''
+                                });
+                            }}
+                        >
+                            <i className="bi bi-plus-lg me-1"></i>
+                            Add New
+                        </Link>
+                    )}
                 </div>
             </div>
 
@@ -851,8 +796,8 @@ export default function MasterList() {
             />
 
             {/* Table */}
-            <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                <div className="card-body" style={{ padding: '16px 18px' }}>
+            <div className="surface-card" style={{ marginTop: 16 }}>
+                <div style={{ padding: '14px 16px' }}>
                     {/* BOE Card Layout */}
                     {entityName === 'bill-of-entries' && (
                         loading ? (

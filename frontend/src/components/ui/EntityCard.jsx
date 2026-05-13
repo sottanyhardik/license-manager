@@ -1,50 +1,27 @@
 import { useState } from "react";
+import { ACTION_TONE_MAP, CHIP_TONE_MAP, TEXT_TONE_MAP, tone as resolveTone } from "../../theme/tokens";
 
-/**
+/*
  * EntityCard — shared card layout for list rows (Allotment, BOE, Trade…).
  *
  * Props
  *   accent       primary | success | warning | danger | info | neutral
  *   title        ReactNode (typically a reference number)
- *   headerChips  array of { icon?, label, tone? }   — small tinted chips next to the title
- *   statusBadges array of { tone, label } — strong status indicators
- *   summary      array of { label, value, tone? }  — three or four KPIs above the actions
- *   actions      array of { icon, title, onClick, tone? } — small action buttons (Edit, Copy, Delete, etc)
- *   onView       () => void  — controlled toggle handler; if omitted, View button uses internal state
- *   viewOpen     bool — controlled `open` state when onView is provided
- *   detail       () => ReactNode — renders the expanded detail section
- *   detailLabel  string — label next to the View button (e.g. "5 Items")
- *   defaultOpen  bool — initial open state for uncontrolled mode
+ *   headerChips  array of { icon?, label, tone? }
+ *   statusBadges array of { tone, label, icon? }
+ *   summary      array of { label, value, tone? }
+ *   actions      array of { icon, title, onClick, tone?, label? }
+ *   onView       () => void  (controlled)  — toggles detail
+ *   viewOpen     bool        (controlled)  — open state
+ *   detail       () => ReactNode           — renders the expanded detail section
+ *   detailLabel  string                    — label next to the View button
+ *   defaultOpen  bool                      — initial open state
  */
-const ACCENT_MAP = {
-    primary: "var(--primary-color)",
-    success: "var(--success-color)",
-    warning: "var(--warning-color)",
-    danger:  "var(--danger-color)",
-    info:    "var(--info-color)",
-    neutral: "var(--border-default)",
-};
+const ALLOWED_TONES = new Set(["primary", "success", "warning", "danger", "info", "neutral"]);
 
-const ACTION_TONE_MAP = {
-    primary: { fg: "var(--primary-color)",  bg: "var(--indigo-50)",  border: "var(--indigo-100)" },
-    success: { fg: "var(--success-color)",  bg: "var(--success-bg)", border: "var(--success-border)" },
-    warning: { fg: "var(--warning-color)",  bg: "var(--warning-bg)", border: "var(--warning-border)" },
-    danger:  { fg: "var(--danger-color)",   bg: "var(--danger-bg)",  border: "var(--danger-border)"  },
-    info:    { fg: "var(--info-color)",     fg2:"var(--info-color)", bg: "var(--info-bg)",    border: "var(--info-border)"    },
-    neutral: { fg: "var(--text-secondary)", bg: "var(--surface-sunken)", border: "var(--border-default)" },
-};
-
-const CHIP_TONE_MAP = {
-    primary: { fg: "var(--primary-deeper)", bg: "var(--indigo-50)",  border: "var(--indigo-100)" },
-    success: { fg: "var(--success-text)",   bg: "var(--success-bg)", border: "var(--success-border)" },
-    warning: { fg: "var(--warning-text)",   bg: "var(--warning-bg)", border: "var(--warning-border)" },
-    danger:  { fg: "var(--danger-text)",    bg: "var(--danger-bg)",  border: "var(--danger-border)"  },
-    info:    { fg: "var(--info-text)",      bg: "var(--info-bg)",    border: "var(--info-border)"    },
-    neutral: { fg: "var(--text-secondary)", bg: "var(--surface-sunken)", border: "var(--border-default)" },
-};
-
-function HeaderChip({ icon, label, tone = "neutral", style = {} }) {
-    const c = CHIP_TONE_MAP[tone] || CHIP_TONE_MAP.neutral;
+function HeaderChip({ icon, label, tone = "neutral", style }) {
+    const safe = ALLOWED_TONES.has(tone) ? tone : "neutral";
+    const c = resolveTone(CHIP_TONE_MAP, safe);
     return (
         <span
             className="entity-card-chip"
@@ -52,25 +29,26 @@ function HeaderChip({ icon, label, tone = "neutral", style = {} }) {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 4,
-                fontSize: "0.82rem",
+                fontSize: "11px",
                 color: c.fg,
                 background: c.bg,
-                padding: "3px 8px",
-                borderRadius: 6,
+                padding: "2px 7px",
+                borderRadius: 4,
                 border: `1px solid ${c.border}`,
                 fontWeight: 500,
                 lineHeight: 1.5,
                 ...style,
             }}
         >
-            {icon && <i className={`bi bi-${icon}`} style={{ fontSize: "0.78rem" }}></i>}
+            {icon && <i className={`bi bi-${icon}`} style={{ fontSize: "10.5px" }} />}
             {label}
         </span>
     );
 }
 
 function ActionButton({ icon, title, onClick, tone = "neutral", children, disabled }) {
-    const c = ACTION_TONE_MAP[tone] || ACTION_TONE_MAP.neutral;
+    const safe = ALLOWED_TONES.has(tone) ? tone : "neutral";
+    const c = resolveTone(ACTION_TONE_MAP, safe);
     return (
         <button
             type="button"
@@ -86,16 +64,13 @@ function ActionButton({ icon, title, onClick, tone = "neutral", children, disabl
                 color: c.fg,
                 background: c.bg,
                 border: `1px solid ${c.border}`,
-                borderRadius: 7,
                 cursor: disabled ? "not-allowed" : "pointer",
-                opacity: disabled ? 0.5 : 1,
+                opacity: disabled ? 0.55 : 1,
                 lineHeight: 1.4,
-                transition: "background 150ms ease, box-shadow 150ms ease",
+                transition: "background var(--tb-tx-fast), box-shadow var(--tb-tx-fast)",
             }}
-            onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.boxShadow = "var(--elevation-1)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; }}
         >
-            {icon && <i className={`bi bi-${icon}`} aria-hidden="true"></i>}
+            {icon && <i className={`bi bi-${icon}`} aria-hidden="true" />}
             {children}
         </button>
     );
@@ -103,10 +78,7 @@ function ActionButton({ icon, title, onClick, tone = "neutral", children, disabl
 
 function Stat({ label, value, tone }) {
     const valueColor =
-        tone === "success" ? "var(--success-text)" :
-        tone === "danger"  ? "var(--danger-text)" :
-        tone === "warning" ? "var(--warning-text)" :
-        "var(--text-primary)";
+        tone && TEXT_TONE_MAP[tone] ? TEXT_TONE_MAP[tone] : "var(--tb-text)";
     return (
         <div>
             <div className="entity-card-stat-label">{label}</div>
@@ -122,7 +94,7 @@ export default function EntityCard({
     title,
     headerChips = [],
     statusBadges = [],
-    children,            // optional middle section (e.g. item name + licenses row)
+    children,
     summary = [],
     actions = [],
     onView,
@@ -130,7 +102,8 @@ export default function EntityCard({
     detail,
     detailLabel,
     defaultOpen = false,
-    style = {},
+    className = "",
+    style,
 }) {
     const [internalOpen, setInternalOpen] = useState(defaultOpen);
     const isControlled = typeof onView === "function";
@@ -141,40 +114,15 @@ export default function EntityCard({
     };
 
     const showViewBtn = !!detail;
-    const accentColor = ACCENT_MAP[accent] || ACCENT_MAP.primary;
+    const safeAccent = ALLOWED_TONES.has(accent) ? accent : "primary";
 
     return (
         <article
-            className="entity-card"
-            style={{
-                background: "var(--surface-raised)",
-                border: "1px solid var(--border-subtle)",
-                borderLeft: `4px solid ${accentColor}`,
-                borderRadius: 10,
-                overflow: "hidden",
-                boxShadow: "var(--elevation-1)",
-                transition: "box-shadow 180ms cubic-bezier(0.16,1,0.3,1)",
-                ...style,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "var(--elevation-2)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "var(--elevation-1)"; }}
+            className={`entity-card tone-${safeAccent} ${className}`.trim()}
+            style={style}
         >
-            {/* Row 1: title + chips + status */}
-            <header
-                className="entity-card-header"
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    background: "var(--surface-sunken)",
-                    borderBottom: "1px solid var(--border-subtle)",
-                    flexWrap: "wrap",
-                }}
-            >
-                <span className="entity-card-title" style={{
-                    color: "var(--text-primary)",
-                    letterSpacing: "-0.01em",
-                    marginRight: 4,
-                }}>
+            <header className="entity-card-header">
+                <span className="entity-card-title" style={{ marginRight: 4 }}>
                     {title}
                 </span>
                 {headerChips.map((chip, i) => (
@@ -185,24 +133,16 @@ export default function EntityCard({
                 ))}
             </header>
 
-            {/* Optional middle section */}
             {children && (
-                <div className="entity-card-body" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                <div
+                    className="entity-card-body"
+                    style={{ borderBottom: "1px solid var(--tb-border-soft)" }}
+                >
                     {children}
                 </div>
             )}
 
-            {/* Row 3: stats + actions */}
-            <div
-                className="entity-card-body"
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    background: "var(--surface-raised)",
-                    flexWrap: "wrap",
-                }}
-            >
+            <div className="entity-card-body entity-card-body-row">
                 <div className="entity-card-summary">
                     {summary.map((s, i) => (
                         <Stat key={i} {...s} />
@@ -210,7 +150,9 @@ export default function EntityCard({
                 </div>
                 <div className="entity-card-actions">
                     {actions.map((a, i) => (
-                        <ActionButton key={i} {...a} />
+                        <ActionButton key={i} {...a}>
+                            {a.label}
+                        </ActionButton>
                     ))}
                     {showViewBtn && (
                         <ActionButton
@@ -219,7 +161,7 @@ export default function EntityCard({
                             tone="primary"
                             onClick={toggle}
                         >
-                            <span className="entity-card-action-label" style={{ marginLeft: 2 }}>
+                            <span style={{ marginLeft: 2 }}>
                                 {open ? "Hide" : "View"}
                                 {detailLabel ? ` · ${detailLabel}` : ""}
                             </span>
@@ -228,15 +170,8 @@ export default function EntityCard({
                 </div>
             </div>
 
-            {/* Expandable detail */}
             {showViewBtn && open && (
-                <div
-                    style={{
-                        padding: "12px 16px",
-                        background: "var(--surface-sunken)",
-                        borderTop: "1px solid var(--border-subtle)",
-                    }}
-                >
+                <div className="entity-card-detail">
                     {detail()}
                 </div>
             )}

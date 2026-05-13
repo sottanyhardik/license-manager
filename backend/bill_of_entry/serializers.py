@@ -28,12 +28,13 @@ class RowDetailsSerializer(serializers.ModelSerializer):
             'cif_fc',
             'qty',
             'is_frozen',
+            'is_dispute',
             'license_number',
             'item_description',
             'hs_code',
             'purchase_status',
         ]
-        read_only_fields = ['is_frozen']
+        read_only_fields = ['is_frozen', 'is_dispute']
 
 
 class BillOfEntrySerializer(serializers.ModelSerializer):

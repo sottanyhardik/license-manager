@@ -825,6 +825,8 @@ export default function MasterList() {
                                     const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—';
                                     const fmtQty = (val) => val ? Number(val).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—';
                                     const detailRows = item.item_details || [];
+                                    const disputeRows = detailRows.filter(r => r.is_dispute);
+                                    const hasDispute = disputeRows.length > 0;
                                     const invoiceChip = canEditInvoice
                                         ? (editingInvoiceId === item.id
                                             ? (
@@ -862,12 +864,18 @@ export default function MasterList() {
                                     return (
                                         <EntityCard
                                             key={item.id}
-                                            accent="primary"
+                                            className={hasDispute ? 'is-dispute' : ''}
+                                            accent={hasDispute ? 'danger' : 'primary'}
                                             title={item.bill_of_entry_number || '—'}
                                             headerChips={[
                                                 item.bill_of_entry_date && { icon: 'calendar3', label: item.bill_of_entry_date },
                                                 item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
                                                 item.company_name        && { icon: 'building', label: item.company_name, tone: 'primary' },
+                                                hasDispute && {
+                                                    icon: 'exclamation-triangle-fill',
+                                                    label: `${disputeRows.length} Dispute${disputeRows.length > 1 ? 's' : ''}`,
+                                                    tone: 'danger',
+                                                },
                                             ].filter(Boolean)}
                                             statusBadges={[]}
                                             summary={[
@@ -876,6 +884,19 @@ export default function MasterList() {
                                                 { label: 'Qty (MT)',  value: fmtQty(item.total_quantity) },
                                             ]}
                                             actions={[
+                                                hasDispute && {
+                                                    icon: 'check2-circle', title: 'Resolve Dispute', tone: 'danger',
+                                                    onClick: async () => {
+                                                        if (!window.confirm(`Resolve ${disputeRows.length} dispute row(s) on BOE ${item.bill_of_entry_number}? This clears the dispute flag on all flagged rows.`)) return;
+                                                        try {
+                                                            const response = await api.post(`bill-of-entries/${item.id}/resolve-dispute/`);
+                                                            toast.success(response.data.message || 'Dispute resolved');
+                                                            fetchData(currentPage, pageSize, filterParams);
+                                                        } catch (err) {
+                                                            toast.error(err.response?.data?.detail || err.response?.data?.message || 'Failed to resolve dispute');
+                                                        }
+                                                    }
+                                                },
                                                 { icon: 'file-earmark-text', title: 'Transfer Letter', tone: 'warning',
                                                     onClick: () => { setTransferLetterType('boe'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); } },
                                                 { icon: 'intersect', title: 'Merge BOE', tone: 'info',
@@ -903,8 +924,14 @@ export default function MasterList() {
                                             detail={() => (
                                                 <DetailTable
                                                     columns={[
+                                                        { key: 'is_dispute', label: '', nowrap: true, width: 28,
+                                                            render: (v, row) => row.is_dispute
+                                                                ? <span title="Not found in latest ledger upload — dispute" style={{ color: 'var(--tb-danger)', fontSize: '0.9rem' }}><i className="bi bi-exclamation-triangle-fill" /></span>
+                                                                : null },
                                                         { key: 'license_number',   label: 'License',   bold: true, nowrap: true,
-                                                            render: v => v ? <span style={{ color: 'var(--primary-color)' }}>{v}</span> : '—' },
+                                                            render: (v, row) => v
+                                                                ? <span style={{ color: row.is_dispute ? 'var(--tb-danger-text)' : 'var(--primary-color)' }}>{v}</span>
+                                                                : '—' },
                                                         { key: 'item_description', label: 'Item',      muted: true },
                                                         { key: 'hs_code',          label: 'HS Code',   nowrap: true,
                                                             render: v => v ? <code>{v}</code> : '—' },
@@ -916,6 +943,7 @@ export default function MasterList() {
                                                             render: v => fmtInr(v) },
                                                     ]}
                                                     rows={detailRows}
+                                                    rowStyle={row => row.is_dispute ? { background: 'var(--tb-danger-soft)' } : undefined}
                                                 />
                                             )}
                                         >

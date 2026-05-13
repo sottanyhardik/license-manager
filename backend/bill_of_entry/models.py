@@ -268,6 +268,10 @@ class RowDetails(AuditModel):
         default=False,
         help_text="Set to True when this row is created/updated from a ledger upload. Frozen rows cannot be edited from the frontend.",
     )
+    is_dispute = models.BooleanField(
+        default=False,
+        help_text="Flagged when this BOE row is missing from the latest ledger upload. Shown in red for manual review.",
+    )
 
     admin_search_fields = (
         "sr_number__license__license_number",

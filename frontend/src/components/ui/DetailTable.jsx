@@ -15,6 +15,7 @@ export default function DetailTable({
     rows = [],
     emptyMessage = "No details to show.",
     rowKey = (r, i) => r.id ?? i,
+    rowStyle,
 }) {
     if (!rows || rows.length === 0) {
         return (
@@ -52,7 +53,7 @@ export default function DetailTable({
                 </thead>
                 <tbody>
                     {rows.map((row, i) => (
-                        <tr key={rowKey(row, i)}>
+                        <tr key={rowKey(row, i)} style={rowStyle ? rowStyle(row) : undefined}>
                             {columns.map(c => (
                                 <td
                                     key={c.key}

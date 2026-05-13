@@ -1171,6 +1171,11 @@ hr { border-color: var(--tb-border-soft); }
 .entity-card.tone-danger  { border-left: 4px solid var(--tb-danger); }
 .entity-card.tone-info    { border-left: 4px solid var(--tb-info); }
 .entity-card.tone-neutral { border-left: 4px solid var(--tb-border); }
+/* Full red border for dispute state */
+.entity-card.is-dispute {
+    border-color: var(--tb-danger) !important;
+    border-width: 2px !important;
+}
 
 .entity-card-header {
     display: flex;

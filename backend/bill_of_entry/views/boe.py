@@ -483,6 +483,36 @@ def update_product_name(self, request, pk=None):
 BillOfEntryViewSet.update_product_name = update_product_name
 
 
+# Add resolve-dispute action — clears is_dispute flag on all rows of a BOE
+@action(detail=True, methods=['post'], url_path='resolve-dispute')
+def resolve_dispute(self, request, pk=None):
+    """
+    Clear the is_dispute flag on all RowDetails of a BOE.
+    Used when a user has manually reviewed and resolved the dispute.
+
+    Returns:
+    - success: True
+    - cleared: number of rows whose dispute flag was cleared
+    """
+    from django.shortcuts import get_object_or_404
+    from rest_framework.response import Response
+    from bill_of_entry.models import RowDetails
+
+    boe = get_object_or_404(BillOfEntryModel, id=pk)
+    cleared = RowDetails.objects.filter(
+        bill_of_entry=boe, is_dispute=True
+    ).update(is_dispute=False)
+
+    return Response({
+        'success': True,
+        'cleared': cleared,
+        'message': f'Resolved {cleared} dispute row(s) on BOE {boe.bill_of_entry_number}',
+    })
+
+
+BillOfEntryViewSet.resolve_dispute = resolve_dispute
+
+
 # Add merge BOE action
 @action(detail=True, methods=['post'], url_path='merge')
 def merge_boe(self, request, pk=None):

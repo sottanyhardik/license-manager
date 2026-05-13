@@ -248,12 +248,15 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
 
 def delete_stale_boe_rows(license, new_debit_row, skip_signals=False):
     """
-    Delete debit RowDetails for this license that no longer appear in the
-    freshly uploaded ledger CSV.  Returns the count of deleted rows.
-    """
-    from django.db.models.signals import post_delete
-    from bill_of_entry.models import delete_stock
+    Flag debit RowDetails for this license that no longer appear in the
+    freshly uploaded ledger CSV as dispute (is_dispute=True) instead of
+    deleting them, so they can be reviewed and resolved manually.
 
+    Also clears the dispute flag on rows that ARE present in the new upload
+    (re-upload of the same ledger resolves the dispute).
+
+    Returns a tuple: (flagged_count, resolved_count).
+    """
     # Build the set of (boe_id, sr_number_id) present in the new upload
     new_row_keys = set()
     for data in new_debit_row:
@@ -263,29 +266,37 @@ def delete_stale_boe_rows(license, new_debit_row, skip_signals=False):
             new_row_keys.add((boe.id, licence.id))
 
     # Fetch all existing debit RowDetails for this license
-    existing_rows = RowDetails.objects.filter(
-        sr_number__license=license,
-        transaction_type='D'
-    ).select_related('bill_of_entry', 'sr_number')
+    existing_rows = list(
+        RowDetails.objects.filter(
+            sr_number__license=license,
+            transaction_type='D'
+        ).select_related('bill_of_entry', 'sr_number')
+    )
 
-    stale_ids = [
-        rd.id for rd in existing_rows
-        if (rd.bill_of_entry_id, rd.sr_number_id) not in new_row_keys
-    ]
+    stale_ids   = []
+    present_ids = []
+    for rd in existing_rows:
+        key = (rd.bill_of_entry_id, rd.sr_number_id)
+        if key not in new_row_keys:
+            stale_ids.append(rd.id)
+        else:
+            present_ids.append(rd.id)
 
-    if not stale_ids:
-        return 0
+    # Flag stale rows as dispute
+    flagged_count = 0
+    if stale_ids:
+        flagged_count = RowDetails.objects.filter(
+            id__in=stale_ids, is_dispute=False
+        ).update(is_dispute=True)
 
-    if skip_signals:
-        post_delete.disconnect(delete_stock, sender=RowDetails)
+    # Clear dispute flag on rows that appear in the new upload
+    resolved_count = 0
+    if present_ids:
+        resolved_count = RowDetails.objects.filter(
+            id__in=present_ids, is_dispute=True
+        ).update(is_dispute=False)
 
-    try:
-        deleted_count, _ = RowDetails.objects.filter(id__in=stale_ids).delete()
-    finally:
-        if skip_signals:
-            post_delete.connect(delete_stock, sender=RowDetails)
-
-    return deleted_count
+    return flagged_count, resolved_count
 
 
 def bulk_get_or_create_boe(boe_row, skip_signals=False):
@@ -469,8 +480,13 @@ def _create_object_inner(data_dict):
     bulk_get_or_create_boe(debit_row, skip_signals=True)
     bulk_get_or_create_boe(credit_row, skip_signals=True)
 
-    # Remove debit rows that were in the DB but are no longer in the new CSV
-    delete_stale_boe_rows(license, debit_row, skip_signals=True)
+    # Flag debit rows missing from the new CSV as dispute (is_dispute=True).
+    # Rows present in the new CSV get their dispute flag cleared automatically.
+    flagged, resolved = delete_stale_boe_rows(license, debit_row, skip_signals=True)
+    if flagged:
+        logger.warning("Ledger upload: %d row(s) not found in ledger — flagged as dispute for %s", flagged, license.license_number)
+    if resolved:
+        logger.info("Ledger upload: %d dispute(s) resolved for %s", resolved, license.license_number)
 
     # Recalculate exchange rate for each debit BOE — bulk_create skips signals so
     # the post_save recalc never fires; we must do it explicitly here.

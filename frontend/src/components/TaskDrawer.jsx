@@ -57,6 +57,26 @@ function formatDate(value) {
 const URGENT_RX = /\b(urgent|asap|high\s*priority)\b/i;
 const ASSIGN_RX = /\bassign(?:\s+(?:this\s+)?task)?\s+to\s+([a-z][a-z0-9 ._-]{0,40}?)(?=\s*(?:,|\.|;|:|$|\bplease\b|\bto\b))/i;
 
+// Pull the most useful error string out of an axios error response.
+function extractApiError(err, fallback = "Request failed") {
+    if (!err) return fallback;
+    if (err.response) {
+        const data = err.response.data;
+        if (typeof data === "string" && data) return data;
+        if (data?.detail) return data.detail;
+        if (data && typeof data === "object") {
+            // DRF field-validation error shape: { field: ["msg"] }
+            const firstKey = Object.keys(data)[0];
+            const firstVal = firstKey ? data[firstKey] : null;
+            const msg = Array.isArray(firstVal) ? firstVal[0] : firstVal;
+            if (msg) return firstKey === "non_field_errors" ? msg : `${firstKey}: ${msg}`;
+        }
+        return `${fallback} (HTTP ${err.response.status})`;
+    }
+    if (err.message) return err.message;
+    return fallback;
+}
+
 function fuzzyMatchUser(name, users) {
     if (!name || !users || users.length === 0) return null;
     const lower = name.trim().toLowerCase();
@@ -210,8 +230,8 @@ export default function TaskDrawer({ show, onClose }) {
                 if (u) bits.push(`→ ${u.username}`);
             }
             toast.success(bits.join(" "));
-        } catch {
-            toast.error("Failed to add task");
+        } catch (err) {
+            toast.error(extractApiError(err, "Failed to add task"));
         }
     };
 
@@ -234,8 +254,8 @@ export default function TaskDrawer({ show, onClose }) {
             setTasks(prev => [created, ...prev]);
             setDraft({ title: "", description: "", priority: TASK_PRIORITY.NORMAL, assigned_to: "", due_date: "" });
             toast.success("Task created");
-        } catch {
-            toast.error("Failed to create task");
+        } catch (err) {
+            toast.error(extractApiError(err, "Failed to create task"));
         } finally {
             setSaving(false);
         }

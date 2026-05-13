@@ -64,7 +64,7 @@ get_server_meta() {
             ;;
         "165.232.185.220")
             SERVER_DOMAIN="license-tractor.duckdns.org"
-            NGINX_CONF_HTTP="nginx-license-tractor.conf"
+            NGINX_CONF_HTTP="nginx-http-only-tractor.conf"
             NGINX_CONF_HTTPS="nginx-license-tractor.conf"
             NGINX_SITE_NAME="license-tractor"
             DUCKDNS_SUBDOMAIN="license-tractor"

@@ -187,7 +187,7 @@ class BusinessPDFExporter:
         """
         elements.append(Paragraph(section_title, self.section_style))
 
-    def create_table(self, data, col_widths=None, repeating_rows=1, wrap_text=True):
+    def create_table(self, data, col_widths=None, repeating_rows=1, wrap_text=True, left_align_cols=None):
         """
         Create a professionally styled table.
 
@@ -200,28 +200,40 @@ class BusinessPDFExporter:
         Returns:
             Table object with professional styling
         """
-        # Convert long text to Paragraphs for wrapping if needed
+        # Convert text to Paragraphs so the table cells wrap onto 2–3 lines
+        # instead of being truncated. Header cells stay plain — they get their
+        # font/colour from the table style below.
         if wrap_text:
             wrapped_data = []
             cell_style = ParagraphStyle(
                 'CellText',
                 parent=self.styles['Normal'],
-                fontSize=14,
-                leading=9,
+                fontSize=8,
+                leading=10,
                 textColor=colors.black,
-                wordWrap='CJK'
+                alignment=TA_CENTER,
+                # Default word wrap (breaks at whitespace only) so numbers
+                # like "48,000" or "2,62,396.12" never split at a comma.
+            )
+            wrap_left_style = ParagraphStyle(
+                'CellTextLeft',
+                parent=cell_style,
+                alignment=TA_LEFT,
             )
             for i, row in enumerate(data):
                 wrapped_row = []
                 for j, cell in enumerate(row):
-                    if i == 0:  # Header row - keep as is
+                    if i == 0:  # Header row — let table style format it
                         wrapped_row.append(cell)
+                        continue
+                    if cell is None or cell == "":
+                        wrapped_row.append(cell)
+                        continue
+                    if isinstance(cell, str):
+                        style = wrap_left_style if (left_align_cols and j in left_align_cols) else cell_style
+                        wrapped_row.append(Paragraph(cell, style))
                     else:
-                        # Wrap long text in Paragraph
-                        if isinstance(cell, str) and len(cell) > 15:
-                            wrapped_row.append(Paragraph(cell, cell_style))
-                        else:
-                            wrapped_row.append(cell)
+                        wrapped_row.append(cell)
                 wrapped_data.append(wrapped_row)
             data = wrapped_data
 
@@ -233,23 +245,23 @@ class BusinessPDFExporter:
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8eaf6')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 14),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
-            ('TOPPADDING', (0, 0), (-1, 0), 5),
-            ('LEFTPADDING', (0, 0), (-1, 0), 3),
-            ('RIGHTPADDING', (0, 0), (-1, 0), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 3),
+            ('TOPPADDING', (0, 0), (-1, 0), 3),
+            ('LEFTPADDING', (0, 0), (-1, 0), 2),
+            ('RIGHTPADDING', (0, 0), (-1, 0), 2),
 
-            # Data rows styling
+            # Data rows styling — fontSize must match the Paragraph cell style above
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 14),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 1), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-            ('LEFTPADDING', (0, 1), (-1, -1), 3),
-            ('RIGHTPADDING', (0, 1), (-1, -1), 3),
+            ('TOPPADDING', (0, 1), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 2),
+            ('LEFTPADDING', (0, 1), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 1), (-1, -1), 2),
 
             # Grid and borders - light clean lines
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
@@ -292,7 +304,7 @@ class BusinessPDFExporter:
         table_style = [
             ('BACKGROUND', (0, 0), (-1, -1), self.HEADER_BG),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 14),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
             ('TEXTCOLOR', (0, 0), (-1, -1), self.PRIMARY_COLOR),
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
             ('GRID', (0, 0), (-1, -1), 0.5, self.BORDER_COLOR),

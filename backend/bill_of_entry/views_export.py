@@ -93,6 +93,15 @@ def add_grouped_export_action(viewset_class):
                        for port in product.values()
                        for boe in port)
 
+        def shorten_exporter(name, max_words=2):
+            """Return first N words of an exporter name followed by '…'."""
+            if not name or name == '--':
+                return name or '--'
+            words = name.split()
+            if len(words) <= max_words:
+                return name
+            return ' '.join(words[:max_words]) + '…'  # …
+
         # Create PDF response - inline display for new tab
         response = HttpResponse(content_type='application/pdf')
         today = datetime.now().strftime('%d-%m-%Y')
@@ -108,10 +117,10 @@ def add_grouped_export_action(viewset_class):
         item_style = ParagraphStyle(
             'ItemHeader',
             fontName='Helvetica-Bold',
-            fontSize=14,
+            fontSize=9,
             textColor=HexColor('#1e40af'),
             spaceAfter=2,
-            spaceBefore=4,
+            spaceBefore=3,
             leftIndent=0,
         )
 
@@ -120,34 +129,36 @@ def add_grouped_export_action(viewset_class):
                     f"Total CIF (INR): {pdf_exporter.format_number(total_inr)}")
         pdf_exporter.add_title(elements, subtitle=subtitle)
 
-        # Table column widths (19 columns)
+        # 18 columns — full landscape A4 (~11.35" usable after 0.15" margins).
+        # Qty(KGS) and Value($) restored.  Column widths are set so that
+        # Port, Lic.Date, Lic.Port, BOE $., BOE CIF never split across 2 lines.
         col_widths = [
-            0.28 * inch,  # Sr No
-            0.6 * inch,   # BOE Number
-            0.52 * inch,  # BOE Date
-            0.48 * inch,  # Port
-            0.52 * inch,  # Quantity (KGS)
-            0.48 * inch,  # Unit Price ($)
-            0.6 * inch,   # Value ($)
-            0.48 * inch,  # Exchange Rate
-            0.72 * inch,  # Total CIF INR
-            0.7 * inch,   # Item Name
-            0.52 * inch,  # Invoice
-            0.75 * inch,  # Exporter
-            0.68 * inch,  # License No.
-            0.52 * inch,  # License Date
-            0.48 * inch,  # License Port
-            0.35 * inch,  # Item Sr.
-            0.48 * inch,  # BOE Qty.
-            0.52 * inch,  # BOE $.
-            0.6 * inch    # BOE CIF
-        ]
+            0.25 * inch,  # Sr No
+            0.78 * inch,  # BOE Number   (+0.20)
+            0.75 * inch,  # BOE Date     (+0.10)
+            0.54 * inch,  # Port
+            0.50 * inch,  # Qty (KGS)
+            0.45 * inch,  # Unit Price ($)
+            0.73 * inch,  # Value ($)    (+0.08)
+            0.45 * inch,  # Exchange Rate
+            0.93 * inch,  # Item Name
+            0.50 * inch,  # Invoice
+            0.90 * inch,  # Exporter — 0.90" = 60pt usable, "PGP GLASS…" ≈ 51pt, fits 1 line
+            0.98 * inch,  # License No.  (+0.20)
+            0.65 * inch,  # Lic. Date
+            0.54 * inch,  # Lic. Port
+            0.28 * inch,  # Item Sr.
+            0.50 * inch,  # BOE Qty.
+            0.70 * inch,  # BOE $.       (+0.12)
+            0.92 * inch,  # BOE CIF      (+0.10)
+        ]  # total = 11.35"
 
         table_header = [
-            'Sr\nNo', 'BOE\nNumber', 'BOE\nDate', 'Port', 'Quantity\n(KGS)',
-            'Unit\nPrice ($)', 'Value\n($)', 'Exchange\nRate', 'Total CIF\nINR', 'Item\nName', 'Invoice',
-            'Exporter', 'License\nNo.', 'License\nDate', 'License\nPort', 'Item\nSr.',
-            'BOE\nQty.', 'BOE\n$.', 'BOE\nCIF'
+            'Sr\nNo', 'BOE\nNumber', 'BOE\nDate', 'Port',
+            'Qty\n(KGS)', 'Unit\nPrice ($)', 'Value\n($)', 'Exch.\nRate',
+            'Item\nName', 'Invoice',
+            'Exporter', 'License\nNo.', 'Lic. Date', 'Lic. Port', 'Item\nSr.',
+            'BOE\nQty.', 'BOE $.', 'BOE CIF'
         ]
 
         # Process each company (sorted alphabetically, None values last)
@@ -169,7 +180,6 @@ def add_grouped_export_action(viewset_class):
             for product_name in sorted(merged_products.keys()):
                 ports_dict = merged_products[product_name]
 
-                # Item sub-header
                 elements.append(Paragraph(f"Item: {product_name}", item_style))
 
                 table_data = [table_header]
@@ -183,22 +193,24 @@ def add_grouped_export_action(viewset_class):
                     for boe in ports_dict[port_code]:
                         if boe['license_details']:
                             first_detail = boe['license_details'][0]
+                            unit_price = (
+                                boe['total_fc'] / boe['total_quantity']
+                                if boe['total_quantity'] > 0 else 0
+                            )
 
+                            # Main BOE row (first licence detail) — 18 columns
                             table_data.append([
                                 str(sr_no),
                                 boe['boe_number'],
                                 boe['boe_date'],
                                 port_code,
                                 pdf_exporter.format_number(boe['total_quantity'], decimals=0),
-                                pdf_exporter.format_number(
-                                    boe['total_fc'] / boe['total_quantity'] if boe['total_quantity'] > 0 else 0
-                                ),
+                                pdf_exporter.format_number(unit_price),
                                 pdf_exporter.format_number(boe['total_fc']),
                                 pdf_exporter.format_number(boe['exchange_rate']),
-                                pdf_exporter.format_number(boe['total_inr']),
                                 boe['product_name'],
                                 boe['invoice_no'],
-                                first_detail['exporter_name'],
+                                shorten_exporter(first_detail['exporter_name']),
                                 first_detail['license_no'],
                                 first_detail['license_date'],
                                 first_detail['license_port'],
@@ -208,11 +220,11 @@ def add_grouped_export_action(viewset_class):
                                 pdf_exporter.format_number(first_detail['cif_inr'])
                             ])
 
+                            # Additional licence detail rows — 18 columns (10 empty leading)
                             for detail in boe['license_details'][1:]:
                                 table_data.append([
-                                    '', '', '', '', '', '', '', '', '',
-                                    '', '',
-                                    detail['exporter_name'],
+                                    '', '', '', '', '', '', '', '', '', '',
+                                    shorten_exporter(detail['exporter_name']),
                                     detail['license_no'],
                                     detail['license_date'],
                                     detail['license_port'],
@@ -227,31 +239,36 @@ def add_grouped_export_action(viewset_class):
                         port_total_value += boe['total_fc']
                         port_total_inr += boe['total_inr']
 
-                    # Port total row
+                    # Port total row — 18 cols; totals in Qty, Value$, and BOE CIF cols
                     table_data.append([
-                        '', '', '',
+                        '',
                         f'Port Total ({port_code})',
-                        pdf_exporter.format_number(port_total_qty, decimals=0),
+                        '', '',
+                        pdf_exporter.format_number(port_total_qty, decimals=0),   # Qty
                         '',
-                        pdf_exporter.format_number(port_total_value),
-                        '',
-                        pdf_exporter.format_number(port_total_inr),
-                        '', '', '', '', '', '', '', '', '', ''
+                        pdf_exporter.format_number(port_total_value),              # Value $
+                        '', '', '', '', '', '', '', '', '', '',
+                        pdf_exporter.format_number(port_total_inr)                 # BOE CIF
                     ])
 
                     company_total_qty += port_total_qty
                     company_total_inr += port_total_inr
                     company_total_fc += port_total_value
 
-                table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1)
+                # col 10 = Exporter — left-align for readable name wrapping
+                table = pdf_exporter.create_table(table_data, col_widths=col_widths, repeating_rows=1, left_align_cols={10})
 
+                # Right-align numeric cols (0-indexed) for 18-col layout:
+                # Qty(4), UnitPrice(5), Value$(6), ExchRate(7), BOEQty(15), BOE$(16), BOECIF(17)
                 additional_styles = []
-                for col_idx in [4, 5, 6, 7, 8, 15, 16, 17]:
+                for col_idx in [4, 5, 6, 7, 15, 16, 17]:
                     additional_styles.append(
                         ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
                     )
+
+                # Port Total rows — bold + subtle header background
                 for row_idx, row in enumerate(table_data):
-                    if row[3] and 'Port Total' in str(row[3]):
+                    if row[1] and 'Port Total' in str(row[1]):
                         additional_styles.append(('FONTNAME', (0, row_idx), (-1, row_idx), 'Helvetica-Bold'))
                         additional_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), pdf_exporter.HEADER_BG))
 
@@ -414,10 +431,9 @@ def add_grouped_export_action(viewset_class):
                             for col_idx, value in enumerate(data, 1):
                                 cell = ws.cell(row=row, column=col_idx, value=value)
                                 cell.border = border
-                                if col_idx == 12:  # Exporter column - wrap text and top align
-                                    cell.alignment = Alignment(horizontal='center', vertical='top', wrap_text=True)
-                                elif col_idx in [5, 6, 7, 8, 9, 17, 18, 19]:  # Number columns (updated indices)
-                                    cell.alignment = Alignment(horizontal='right', vertical='center')
+                                cell.font = Font(size=12)
+                                if col_idx in [5, 6, 7, 8, 9, 17, 18, 19]:  # Number columns
+                                    cell.alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
                                     if col_idx in [6, 7, 18]:  # USD columns
                                         cell.number_format = '#,##0.00'
                                     elif col_idx in [9, 19]:  # INR columns
@@ -425,12 +441,16 @@ def add_grouped_export_action(viewset_class):
                                     elif col_idx == 8:  # Exchange Rate column
                                         cell.number_format = '#,##0.00'
                                 else:
-                                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                            # Set row height based on exporter name length
-                            exporter_name = first_detail['exporter_name']
-                            if exporter_name and len(exporter_name) > 20:
-                                ws.row_dimensions[row].height = max(30, len(exporter_name) / 2)
+                            # Allow 2 lines by default; grow to 3 lines if the
+                            # longest cell content suggests more wrapping is needed.
+                            longest = max(
+                                (len(str(v)) for v in data if v not in (None, '')),
+                                default=0,
+                            )
+                            target_lines = 3 if longest > 30 else 2
+                            ws.row_dimensions[row].height = max(28, target_lines * 16)
 
                             row += 1
 
@@ -452,19 +472,20 @@ def add_grouped_export_action(viewset_class):
                                 for col_idx, value in enumerate(data, 1):
                                     cell = ws.cell(row=row, column=col_idx, value=value)
                                     cell.border = border
-                                    if col_idx == 12:  # Exporter column - wrap text and top align
-                                        cell.alignment = Alignment(horizontal='center', vertical='top', wrap_text=True)
-                                    elif col_idx in [17, 18, 19]:  # Updated column indices
-                                        cell.alignment = Alignment(horizontal='right', vertical='center')
-                                        if col_idx in [18, 19]:  # Updated column indices
+                                    cell.font = Font(size=12)
+                                    if col_idx in [17, 18, 19]:
+                                        cell.alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
+                                        if col_idx in [18, 19]:
                                             cell.number_format = '#,##0.00'
                                     else:
-                                        cell.alignment = Alignment(horizontal='center', vertical='center')
+                                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                                # Set row height for additional detail rows with long exporter names
-                                exporter_name_detail = detail['exporter_name']
-                                if exporter_name_detail and len(exporter_name_detail) > 20:
-                                    ws.row_dimensions[row].height = max(30, len(exporter_name_detail) / 2)
+                                longest_detail = max(
+                                    (len(str(v)) for v in data if v not in (None, '')),
+                                    default=0,
+                                )
+                                target_lines_d = 3 if longest_detail > 30 else 2
+                                ws.row_dimensions[row].height = max(28, target_lines_d * 16)
 
                                 row += 1
 
@@ -510,7 +531,8 @@ def add_grouped_export_action(viewset_class):
             cell.alignment = Alignment(horizontal='center', vertical='center')
             row += 3
 
-        # Auto-size columns
+        # Size columns with a friendly cap so wide cells wrap to 2–3 lines
+        # instead of forcing the sheet to be enormously wide.
         for column in ws.columns:
             max_length = 0
             column_letter = None
@@ -524,7 +546,9 @@ def add_grouped_export_action(viewset_class):
                 except (TypeError, AttributeError):
                     pass
             if column_letter:
-                adjusted_width = min(max_length + 2, 50)
+                # Floor 10 (so short headers like "Sr No" stay readable),
+                # cap 22 (so long text wraps onto 2–3 lines instead of stretching).
+                adjusted_width = max(10, min(max_length + 2, 22))
                 ws.column_dimensions[column_letter].width = adjusted_width
 
         # Save to response

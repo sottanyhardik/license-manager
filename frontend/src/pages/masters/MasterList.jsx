@@ -132,6 +132,7 @@ export default function MasterList() {
     };
 
     const [expandedPairs, setExpandedPairs] = useState(new Set());
+    const [pdfLoading, setPdfLoading] = useState(false);
     const togglePair = (pairKey) => {
         setExpandedPairs(prev => {
             const next = new Set(prev);
@@ -602,26 +603,23 @@ export default function MasterList() {
                 }
 
                 if (format === 'pdf') {
-                    // For PDF, use blob with Authorization header
-                    const response = await api.get(apiPath, {
-                        params,
-                        responseType: 'blob',
-                        headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
-                    });
-                    const blob = new Blob([response.data], { type: 'application/pdf' });
-                    const url = window.URL.createObjectURL(blob);
-                    // Open in new browser tab for viewing
-                    window.open(url, '_blank');
-                    // Also trigger download
-                    const today = new Date().toISOString().split('T')[0];
-                    const dlLink = document.createElement('a');
-                    dlLink.href = url;
-                    dlLink.setAttribute('download', `BOE-Report-${today}.pdf`);
-                    document.body.appendChild(dlLink);
-                    dlLink.click();
-                    dlLink.remove();
-                    // Revoke after enough time for both tab and download to complete
-                    setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+                    setPdfLoading(true);
+                    try {
+                        const response = await api.get(apiPath, {
+                            params,
+                            responseType: 'blob',
+                            headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
+                        });
+                        const blob = new Blob([response.data], { type: 'application/pdf' });
+                        const url = window.URL.createObjectURL(blob);
+                        const opened = window.open(url, '_blank');
+                        if (!opened) {
+                            toast.error('Pop-up blocked. Allow pop-ups for this site to view the PDF.');
+                        }
+                        setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+                    } finally {
+                        setPdfLoading(false);
+                    }
                 } else {
                     // For Excel, download as before
                     const response = await api.get(apiPath, {
@@ -704,9 +702,19 @@ export default function MasterList() {
                         className="btn btn-outline-secondary btn-sm"
                         onClick={() => handleExport('pdf')}
                         title="Export to PDF"
+                        disabled={pdfLoading}
                     >
-                        <i className="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>
-                        PDF
+                        {pdfLoading ? (
+                            <>
+                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style={{ width: 12, height: 12 }} />
+                                Generating…
+                            </>
+                        ) : (
+                            <>
+                                <i className="bi bi-file-earmark-pdf me-1" aria-hidden="true" />
+                                PDF
+                            </>
+                        )}
                     </button>
                     {entityName === 'bill-of-entries' && (
                         <button

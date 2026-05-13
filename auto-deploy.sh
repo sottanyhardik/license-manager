@@ -288,6 +288,51 @@ echo -e "\${BLUE}→ Starting Celery (worker + beat combined)...\${NC}"
 echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery
 echo -e "\${GREEN}  ✅ Celery started (worker --beat -Q celery,ledger)\${NC}"
 
+echo -e "\${BLUE}→ Installing correct nginx config for this server...\${NC}"
+# Map each server IP to its nginx config file and site name
+case "$SERVER_IP" in
+    "143.110.252.201")
+        NGINX_CONF_FILE="nginx-license-manager.conf"
+        NGINX_SITE_NAME="license-manager"
+        NGINX_WRONG_SITES="labdhi nginx-http-only nginx-http-only.conf default"
+        ;;
+    "139.59.92.226")
+        NGINX_CONF_FILE="nginx-http-only.conf"
+        NGINX_SITE_NAME="labdhi"
+        NGINX_WRONG_SITES="license-manager nginx-license-manager nginx-license-manager.conf default"
+        ;;
+    "165.232.185.220")
+        NGINX_CONF_FILE="nginx-license-tractor.conf"
+        NGINX_SITE_NAME="license-tractor"
+        NGINX_WRONG_SITES="license-manager labdhi nginx-http-only default"
+        ;;
+    *)
+        NGINX_CONF_FILE=""
+        NGINX_SITE_NAME=""
+        NGINX_WRONG_SITES="default"
+        ;;
+esac
+
+if [ -n "\$NGINX_CONF_FILE" ] && [ -f "$SERVER_PATH/\$NGINX_CONF_FILE" ]; then
+    # Install the correct config
+    echo '$PASSWORD' | sudo -S cp "$SERVER_PATH/\$NGINX_CONF_FILE" "/etc/nginx/sites-available/\$NGINX_SITE_NAME"
+    echo '$PASSWORD' | sudo -S ln -sf "/etc/nginx/sites-available/\$NGINX_SITE_NAME" "/etc/nginx/sites-enabled/\$NGINX_SITE_NAME"
+
+    # Remove any wrong configs from sites-enabled (don't delete from sites-available)
+    for WRONG in \$NGINX_WRONG_SITES; do
+        echo '$PASSWORD' | sudo -S rm -f "/etc/nginx/sites-enabled/\$WRONG" 2>/dev/null || true
+    done
+
+    # Validate before reloading
+    if echo '$PASSWORD' | sudo -S nginx -t 2>/dev/null; then
+        echo -e "\${GREEN}  ✅ Nginx config for \$NGINX_SITE_NAME is valid\${NC}"
+    else
+        echo -e "\${RED}  ❌ Nginx config test failed — check /etc/nginx/sites-enabled/\${NC}"
+    fi
+else
+    echo -e "\${YELLOW}  ⚠️  No nginx config file found for $SERVER_IP — skipping config install\${NC}"
+fi
+
 echo -e "\${BLUE}→ Reloading Nginx...\${NC}"
 echo '$PASSWORD' | sudo -S systemctl reload nginx
 

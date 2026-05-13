@@ -1482,6 +1482,30 @@ export default function MasterForm({
                     <h4 className="mb-0 fw-bold" style={{ color: 'var(--text-dark)' }}>
                         <i className={`bi bi-${entityIcon} me-2`} style={{ color: entityColor }}></i>
                         {isEdit ? 'Edit' : 'New'} {entityTitle}
+                        {/* Clickable BOE number → opens saved BOE copy PDF */}
+                        {entityName === 'bill-of-entries' && isEdit && formData.bill_of_entry_number && (() => {
+                            const pdfUrl = formData.boe_pdf_copy
+                                ? ((formData.boe_pdf_copy.startsWith('http') ? '' : (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')) + formData.boe_pdf_copy)
+                                : null;
+                            return pdfUrl ? (
+                                <a
+                                    href={pdfUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="ms-2"
+                                    title="View BOE copy PDF"
+                                    style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-color)', textDecoration: 'none' }}
+                                >
+                                    <i className="bi bi-file-earmark-pdf me-1"></i>
+                                    {formData.bill_of_entry_number}
+                                    <i className="bi bi-box-arrow-up-right ms-1" style={{ fontSize: '0.7rem' }}></i>
+                                </a>
+                            ) : (
+                                <span className="ms-2" style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                                    {formData.bill_of_entry_number}
+                                </span>
+                            );
+                        })()}
                     </h4>
                     <small className="text-muted">{isEdit ? 'Update existing record' : 'Create a new record'}</small>
                 </div>
@@ -1544,6 +1568,74 @@ export default function MasterForm({
                             Fetching allotment details...
                         </div>
                     )}
+
+                    {/* Edit mode: show saved BOE copy link + allow re-upload */}
+                    {entityName === 'bill-of-entries' && isEdit && (() => {
+                        const pdfUrl = formData.boe_pdf_copy
+                            ? ((formData.boe_pdf_copy.startsWith('http') ? '' : (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')) + formData.boe_pdf_copy)
+                            : null;
+                        return (
+                            <section className="surface-card mb-4" style={{ padding: 16 }}>
+                                <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 12 }}>
+                                    <div className="d-flex align-items-center" style={{ gap: 10 }}>
+                                        <span
+                                            aria-hidden="true"
+                                            style={{
+                                                width: 36, height: 36, borderRadius: 8,
+                                                background: pdfUrl ? 'var(--danger-bg)' : 'var(--surface-sunken)',
+                                                color: pdfUrl ? 'var(--danger-color)' : 'var(--text-tertiary)',
+                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                            }}
+                                        >
+                                            <i className="bi bi-file-earmark-pdf" style={{ fontSize: '1rem' }}></i>
+                                        </span>
+                                        <div>
+                                            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>BOE Copy</div>
+                                            {pdfUrl ? (
+                                                <a
+                                                    href={pdfUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{ fontSize: '0.8rem', color: 'var(--primary-color)' }}
+                                                >
+                                                    <i className="bi bi-box-arrow-up-right me-1" style={{ fontSize: '0.7rem' }}></i>
+                                                    View saved BOE PDF
+                                                </a>
+                                            ) : (
+                                                <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>No PDF saved yet</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {/* Allow replacing the copy */}
+                                    <div className="d-flex align-items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+                                        <input
+                                            type="file"
+                                            accept=".pdf,application/pdf"
+                                            id="boe-pdf-input"
+                                            className="form-control form-control-sm"
+                                            style={{ maxWidth: 260 }}
+                                            onChange={(e) => {
+                                                setBoePdfFile(e.target.files?.[0] || null);
+                                                setBoeParseSummary(null);
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline-primary btn-sm"
+                                            onClick={handleParseBoePdf}
+                                            disabled={!boePdfFile || boeParsing}
+                                        >
+                                            {boeParsing ? (
+                                                <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Fetching…</>
+                                            ) : (
+                                                <><i className="bi bi-magic me-1"></i>Re-fetch</>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            </section>
+                        );
+                    })()}
 
                     {entityName === 'bill-of-entries' && !isEdit && (
                         <section className="surface-card mb-4" style={{ padding: 20 }}>

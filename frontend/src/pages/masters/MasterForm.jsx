@@ -937,9 +937,10 @@ export default function MasterForm({
             }
 
             // Check if formData contains any File objects (including nested).
-            // Also treat a pending boePdfFile (BOE entity) as a file upload.
+            // NOTE: boePdfFile is intentionally excluded here — it is uploaded
+            // as a separate PATCH after the main JSON save so that nested arrays
+            // like item_details are not broken by multipart encoding.
             const hasFiles = () => {
-                if (entityName === 'bill-of-entries' && boePdfFile) return true;
                 const checkForFiles = (obj) => {
                     if (obj instanceof File) return true;
                     if (Array.isArray(obj)) {
@@ -995,12 +996,6 @@ export default function MasterForm({
                 Object.entries(formData).forEach(([key, value]) => {
                     appendToFormData(key, value);
                 });
-
-                // Attach the BOE PDF copy when one was uploaded via Fetch
-                if (entityName === 'bill-of-entries' && boePdfFile) {
-                    formDataObj.append('boe_pdf_copy', boePdfFile, boePdfFile.name);
-                    formDataObj.append('is_fetch', 'true');
-                }
 
                 if (isEdit) {
                     response = await api.patch(`${apiPath}${id}/`, formDataObj, {
@@ -1068,6 +1063,25 @@ export default function MasterForm({
             // Mark newly created items for highlighting in list
             if (!isEdit && response.data?.id) {
                 markNewItemCreated(response.data.id);
+            }
+
+            // Upload the BOE PDF copy separately (as multipart PATCH) so that
+            // the main JSON save above is not broken by multipart encoding of nested arrays.
+            if (entityName === 'bill-of-entries' && boePdfFile) {
+                const savedId = response.data?.id || recordId;
+                if (savedId) {
+                    try {
+                        const pdfFd = new FormData();
+                        pdfFd.append('boe_pdf_copy', boePdfFile, boePdfFile.name);
+                        pdfFd.append('is_fetch', 'true');
+                        await api.patch(`bill-of-entries/${savedId}/`, pdfFd, {
+                            headers: { 'Content-Type': 'multipart/form-data' },
+                        });
+                    } catch {
+                        // Non-critical — main BOE was saved; log silently
+                        console.warn('[BOE] Failed to upload PDF copy');
+                    }
+                }
             }
 
             // Set flag to restore filters when returning to list

@@ -31,9 +31,9 @@ export default function AdminLayout({children}) {
                 <div
                     className="container-fluid"
                     style={{
-                        padding: isInIframe ? '1rem 1.5rem' : '2rem clamp(1rem, 4vw, 2rem)',
+                        padding: isInIframe ? '1rem 1.5rem' : undefined,
                         maxWidth: '100%',
-                        paddingBottom: isInIframe ? '1rem' : '96px',
+                        paddingBottom: isInIframe ? '1rem' : undefined,
                     }}
                 >
                     {/* ARIA live region for form validation announcements */}
@@ -66,7 +66,7 @@ export default function AdminLayout({children}) {
                     <div
                         className="container-fluid d-flex align-items-center"
                         style={{
-                            padding: '10px clamp(1rem, 4vw, 2rem)',
+                            padding: '8px clamp(1rem, 4vw, 2rem)',
                             gap: 12,
                             flexWrap: 'wrap',
                         }}

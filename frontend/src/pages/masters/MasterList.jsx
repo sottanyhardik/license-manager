@@ -852,7 +852,7 @@ export default function MasterList() {
 
             {/* Table */}
             <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                <div className="card-body" style={{ padding: '24px' }}>
+                <div className="card-body" style={{ padding: '16px 18px' }}>
                     {/* BOE Card Layout */}
                     {entityName === 'bill-of-entries' && (
                         loading ? (

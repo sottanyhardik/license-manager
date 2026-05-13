@@ -1734,3 +1734,293 @@ code {
 }
 
 
+
+/* ============================================================
+   Enterprise polish v4 — denser, larger type, stronger hierarchy
+   Target: SaaS dashboard density (Linear / Stripe-class).
+   Existing variable names preserved so the rest of the app
+   inherits automatically.
+   ============================================================ */
+
+:root {
+    /* Base font scale bumped up ~1 step — body text now 15px */
+    --font-size-xs:   11px;
+    --font-size-sm:   12px;
+    --font-size-base: 14px;
+    --font-size-md:   15px;
+    --font-size-lg:   16px;
+    --font-size-xl:   19px;
+    --font-size-2xl:  24px;
+
+    /* Tightened spacing scale for higher density */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 10px;
+    --space-4: 14px;
+    --space-5: 18px;
+    --space-6: 22px;
+}
+
+/* Bump body text */
+html {
+    font-size: var(--font-size-base);
+}
+body {
+    font-size: var(--font-size-base);
+    line-height: 1.45;
+}
+
+/* Stronger heading scale */
+h1, .h1 { font-size: var(--font-size-2xl); font-weight: 600; letter-spacing: -0.02em; }
+h2, .h2 { font-size: var(--font-size-xl);  font-weight: 600; letter-spacing: -0.015em; }
+h3, .h3 { font-size: var(--font-size-lg);  font-weight: 600; letter-spacing: -0.01em; }
+h4, .h4 { font-size: var(--font-size-md);  font-weight: 600; letter-spacing: -0.005em; }
+h5, .h5 { font-size: var(--font-size-base); font-weight: 600; }
+h6, .h6 { font-size: var(--font-size-sm);  font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+
+/* Tables — bigger body, denser rows */
+.table {
+    font-size: var(--font-size-base);
+}
+.table > thead > tr > th {
+    font-size: var(--font-size-xs);
+    padding: 10px 14px;
+}
+.table > tbody > tr > td {
+    padding: 10px 14px;
+}
+
+/* Buttons — same height, but bigger label */
+.btn {
+    font-size: var(--font-size-sm);
+    padding: 0.45rem 0.85rem;
+}
+.btn-sm {
+    font-size: 12px;
+    padding: 0.3rem 0.65rem;
+}
+.btn-lg {
+    font-size: var(--font-size-md);
+    padding: 0.55rem 1.05rem;
+}
+
+/* Form controls — larger text, tighter padding */
+.form-control,
+.form-select {
+    font-size: var(--font-size-sm);
+    padding: 0.42rem 0.7rem;
+}
+.form-control-sm,
+.form-select-sm {
+    font-size: 12px;
+    padding: 0.3rem 0.55rem;
+}
+.form-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+/* Cards — keep refined chrome but reduce vertical air */
+.card-body {
+    padding: 16px 18px;
+}
+.card-header {
+    padding: 12px 18px;
+    font-weight: 600;
+}
+.card + .card,
+.card-stack > .card { margin-top: 12px; }
+
+/* Page container — tighter horizontal padding for wide screens,
+   so cards take more of the screen */
+main > .container-fluid {
+    padding-top: 16px !important;
+    padding-bottom: 96px !important;
+    padding-left: clamp(12px, 2vw, 24px) !important;
+    padding-right: clamp(12px, 2vw, 24px) !important;
+    max-width: 1600px;
+    margin-inline: auto;
+}
+
+/* EntityCard — denser, stronger hierarchy */
+.entity-card-header {
+    padding: 10px 16px !important;
+    gap: 8px !important;
+}
+.entity-card-title {
+    font-size: var(--font-size-md) !important;
+    font-weight: 600;
+}
+.entity-card-chip {
+    font-size: 11.5px !important;
+    padding: 2px 7px !important;
+}
+.entity-card-body {
+    padding: 10px 16px !important;
+}
+.entity-card-stat-label {
+    font-size: 11px !important;
+    letter-spacing: 0.07em;
+    color: var(--text-tertiary);
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+.entity-card-stat-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.entity-card-summary {
+    gap: 22px !important;
+}
+.entity-card-action-btn {
+    padding: 3px 9px !important;
+    font-size: 11.5px !important;
+}
+
+/* Detail table — bigger row text, tight rows */
+.detail-table-scroller > table {
+    font-size: 13px;
+}
+.detail-table-scroller > table thead th {
+    font-size: 10.5px;
+    padding: 6px 12px;
+}
+.detail-table-scroller > table tbody td {
+    padding: 6px 12px;
+}
+
+/* Reduce the space between successive entity cards */
+.entity-card + .entity-card,
+article + article { margin-top: 8px; }
+
+/* Filter bar — sit on the page (not a heavy card) for less chrome */
+.filter-bar {
+    gap: 10px;
+}
+.filter-bar > * {
+    flex: 1 1 200px;
+    min-width: 160px;
+}
+
+/* Section dividers — replace overly-padded card headers in lists */
+.section-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: 12px;
+}
+.section-divider .section-title {
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+.section-divider .section-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+/* AdminLayout footer — tighter */
+footer[aria-label="Quick actions"] .container-fluid {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+}
+footer[aria-label="Quick actions"] .btn {
+    font-size: 12px;
+}
+
+/* TopNav — keep 56px height but slightly tighter triggers so more fits */
+.top-nav { height: 56px; }
+
+/* Less padding under page title rows so content starts higher */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: 14px;
+}
+.page-header h1,
+.page-header h2 {
+    margin: 0;
+}
+
+/* Dense badge for status / category */
+.badge-dense {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    line-height: 1.5;
+}
+
+/* Stronger hierarchy: KPIs */
+.kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.kpi-value {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+.kpi-delta {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Reduce empty space inside Bootstrap row gutters */
+.row.row-tight { --bs-gutter-y: 8px; --bs-gutter-x: 12px; }
+.row.row-compact { --bs-gutter-y: 10px; --bs-gutter-x: 16px; }
+
+/* Sticky table headers for long lists */
+.table-sticky-head thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+/* On wide screens, span content more efficiently */
+@media (min-width: 1280px) {
+    main > .container-fluid {
+        padding-left: 32px !important;
+        padding-right: 32px !important;
+    }
+}
+@media (min-width: 1600px) {
+    main > .container-fluid {
+        padding-left: 48px !important;
+        padding-right: 48px !important;
+    }
+}
+
+/* Small screens: don't oversize headings, keep readability */
+@media (max-width: 720px) {
+    :root { --font-size-base: 13.5px; }
+    h1, .h1 { font-size: 20px; }
+    h2, .h2 { font-size: 17px; }
+    h3, .h3 { font-size: 15px; }
+    .card-body { padding: 12px 14px; }
+    .table > thead > tr > th,
+    .table > tbody > tr > td { padding: 8px 10px; }
+    main > .container-fluid { padding-top: 12px !important; }
+}

@@ -77,17 +77,16 @@ function ActionButton({ icon, title, onClick, tone = "neutral", children, disabl
             title={title}
             onClick={onClick}
             disabled={disabled}
+            className="entity-card-action-btn"
             style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 4,
-                fontSize: "0.78rem",
                 fontWeight: 500,
                 color: c.fg,
                 background: c.bg,
                 border: `1px solid ${c.border}`,
-                borderRadius: 8,
-                padding: "4px 9px",
+                borderRadius: 7,
                 cursor: disabled ? "not-allowed" : "pointer",
                 opacity: disabled ? 0.5 : 1,
                 lineHeight: 1.4,
@@ -110,17 +109,8 @@ function Stat({ label, value, tone }) {
         "var(--text-primary)";
     return (
         <div>
-            <div style={{
-                fontSize: "0.66rem",
-                color: "var(--text-tertiary)",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 2,
-            }}>
-                {label}
-            </div>
-            <div style={{ fontSize: "0.875rem", color: valueColor, fontWeight: 600 }}>
+            <div className="entity-card-stat-label">{label}</div>
+            <div className="entity-card-stat-value" style={{ color: valueColor }}>
                 {value ?? "—"}
             </div>
         </div>
@@ -155,12 +145,12 @@ export default function EntityCard({
 
     return (
         <article
+            className="entity-card"
             style={{
                 background: "var(--surface-raised)",
                 border: "1px solid var(--border-subtle)",
                 borderLeft: `4px solid ${accentColor}`,
-                borderRadius: 12,
-                marginBottom: 12,
+                borderRadius: 10,
                 overflow: "hidden",
                 boxShadow: "var(--elevation-1)",
                 transition: "box-shadow 180ms cubic-bezier(0.16,1,0.3,1)",
@@ -171,19 +161,16 @@ export default function EntityCard({
         >
             {/* Row 1: title + chips + status */}
             <header
+                className="entity-card-header"
                 style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 8,
-                    padding: "10px 16px",
                     background: "var(--surface-sunken)",
                     borderBottom: "1px solid var(--border-subtle)",
                     flexWrap: "wrap",
                 }}
             >
-                <span style={{
-                    fontWeight: 600,
-                    fontSize: "0.95rem",
+                <span className="entity-card-title" style={{
                     color: "var(--text-primary)",
                     letterSpacing: "-0.01em",
                     marginRight: 4,
@@ -200,18 +187,18 @@ export default function EntityCard({
 
             {/* Optional middle section */}
             {children && (
-                <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div className="entity-card-body" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
                     {children}
                 </div>
             )}
 
             {/* Row 3: stats + actions */}
             <div
+                className="entity-card-body"
                 style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
-                    padding: "10px 16px",
                     background: "var(--surface-raised)",
                     flexWrap: "wrap",
                 }}

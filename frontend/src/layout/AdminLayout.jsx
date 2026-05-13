@@ -1,32 +1,41 @@
 import TopNav from "../components/TopNav";
 import TaskFAB from "../components/TaskFAB";
-import {useLocation, useNavigate} from "react-router-dom";
-import {useEffect, useState} from "react";
+import {useNavigate} from "react-router-dom";
+import {useState} from "react";
 import {usePageTitle} from "../hooks/usePageTitle";
 
+const QUICK_ACTIONS = [
+    { to: '/licenses/create',        label: 'New License',   icon: 'bi-plus-circle',         primary: true  },
+    { to: '/allotments/create',      label: 'New Allotment', icon: 'bi-plus-circle' },
+    { to: '/masters/bill-of-entries/create', label: 'New BOE', icon: 'bi-plus-circle' },
+    { to: '/reports/item-pivot',     label: 'Reports',       icon: 'bi-graph-up-arrow' },
+];
+
 export default function AdminLayout({children}) {
-    const location = useLocation();
     const navigate = useNavigate();
-    const [isInIframe, setIsInIframe] = useState(false);
+    const [isInIframe] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        try { return window.self !== window.top; } catch { return true; }
+    });
     usePageTitle();
 
-    useEffect(() => {
-        // Check if the page is loaded in an iframe
-        setIsInIframe(window.self !== window.top);
-    }, []);
-
     return (
-        <div className="d-flex flex-column" style={{minHeight: "100vh"}}>
+        <div className="d-flex flex-column" style={{minHeight: "100vh", background: "var(--surface-canvas)"}}>
             {!isInIframe && <TopNav/>}
-            <main id="main-content" className="flex-grow-1" style={{
-                backgroundColor: 'var(--background-color)',
-                overflowY: 'auto'
-            }}>
-                <div className="container-fluid" style={{
-                    padding: isInIframe ? '1rem 1.5rem' : '2rem 1.5rem',
-                    maxWidth: '100%',
-                    paddingBottom: isInIframe ? '1rem' : '90px'
-                }}>
+
+            <main
+                id="main-content"
+                className="flex-grow-1"
+                style={{ overflowY: 'auto' }}
+            >
+                <div
+                    className="container-fluid"
+                    style={{
+                        padding: isInIframe ? '1rem 1.5rem' : '2rem clamp(1rem, 4vw, 2rem)',
+                        maxWidth: '100%',
+                        paddingBottom: isInIframe ? '1rem' : '96px',
+                    }}
+                >
                     {/* ARIA live region for form validation announcements */}
                     <div
                         id="form-announcements"
@@ -38,65 +47,58 @@ export default function AdminLayout({children}) {
                     {children}
                 </div>
             </main>
-            {!isInIframe && <footer className="border-top py-3" style={{
-                position: 'fixed',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                zIndex: 1000,
-                background: 'linear-gradient(to bottom, rgba(248, 249, 250, 0.97), rgba(255, 255, 255, 0.99))',
-                backdropFilter: 'blur(10px)',
-                boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
-            }}>
-                <div className="container-fluid">
-                    <div className="row align-items-center">
-                        <div className="col-md-8">
-                            <div className="d-flex gap-2 flex-wrap">
+
+            {!isInIframe && (
+                <footer
+                    aria-label="Quick actions"
+                    style={{
+                        position: 'fixed',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        zIndex: 1000,
+                        background: 'rgba(255, 255, 255, 0.82)',
+                        backdropFilter: 'saturate(180%) blur(16px)',
+                        WebkitBackdropFilter: 'saturate(180%) blur(16px)',
+                        borderTop: '1px solid var(--border-subtle)',
+                    }}
+                >
+                    <div
+                        className="container-fluid d-flex align-items-center"
+                        style={{
+                            padding: '10px clamp(1rem, 4vw, 2rem)',
+                            gap: 12,
+                            flexWrap: 'wrap',
+                        }}
+                    >
+                        <div className="d-flex" style={{ gap: 8, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                            {QUICK_ACTIONS.map(a => (
                                 <button
-                                    className="btn btn-sm"
-                                    onClick={() => navigate('/licenses/create')}
-                                    style={{
-                                        background: 'var(--primary-gradient)',
-                                        color: 'white',
-                                        border: 'none',
-                                        fontWeight: '500',
-                                        padding: '6px 16px'
-                                    }}>
-                                    <i className="bi bi-plus-circle me-1"></i>
-                                    New License
+                                    key={a.to}
+                                    type="button"
+                                    onClick={() => navigate(a.to)}
+                                    className={a.primary ? 'btn btn-primary btn-sm' : 'btn btn-outline-secondary btn-sm'}
+                                    style={{ fontWeight: 500 }}
+                                >
+                                    <i className={`bi ${a.icon} me-1`} aria-hidden="true"></i>
+                                    <span className="footer-action-label">{a.label}</span>
                                 </button>
-                                <button
-                                    className="btn btn-sm btn-outline-primary"
-                                    onClick={() => navigate('/allotments/create')}
-                                    style={{ fontWeight: '500', padding: '6px 16px' }}>
-                                    <i className="bi bi-plus-circle me-1"></i>
-                                    New Allotment
-                                </button>
-                                <button
-                                    className="btn btn-sm btn-outline-success"
-                                    onClick={() => navigate('/masters/bill-of-entries/create')}
-                                    style={{ fontWeight: '500', padding: '6px 16px' }}>
-                                    <i className="bi bi-plus-circle me-1"></i>
-                                    New BOE
-                                </button>
-                                <button
-                                    className="btn btn-sm btn-outline-secondary"
-                                    onClick={() => navigate('/reports/item-pivot')}
-                                    style={{ fontWeight: '500', padding: '6px 16px' }}>
-                                    <i className="bi bi-file-earmark-text me-1"></i>
-                                    View Reports
-                                </button>
-                            </div>
+                            ))}
                         </div>
-                        <div className="col-md-4 text-end">
-                            <small style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                                Made with <span style={{color: 'var(--danger-color)'}}>❤️</span> by Hardik Sottany
-                            </small>
-                        </div>
+                        <small
+                            style={{
+                                color: 'var(--text-tertiary)',
+                                fontSize: '0.78rem',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            Built by Hardik Sottany
+                        </small>
                     </div>
-                </div>
-            </footer>}
-            {!isInIframe && <TaskFAB bottomOffset={110}/>}
+                </footer>
+            )}
+
+            {!isInIframe && <TaskFAB bottomOffset={84}/>}
         </div>
     );
 }

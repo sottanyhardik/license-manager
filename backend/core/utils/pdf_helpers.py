@@ -425,7 +425,7 @@ def create_paragraph_styles():
         'header': ParagraphStyle(
             'CustomHeader',
             parent=base_styles['Normal'],
-            fontSize=12,
+            fontSize=14,
             fontName='Helvetica-Bold',
             alignment=TA_LEFT,
             spaceAfter=6
@@ -433,7 +433,7 @@ def create_paragraph_styles():
         'subheader': ParagraphStyle(
             'CustomSubHeader',
             parent=base_styles['Normal'],
-            fontSize=10,
+            fontSize=14,
             fontName='Helvetica-Bold',
             alignment=TA_LEFT,
             spaceAfter=4
@@ -441,25 +441,25 @@ def create_paragraph_styles():
         'normal': ParagraphStyle(
             'CustomNormal',
             parent=base_styles['Normal'],
-            fontSize=9,
+            fontSize=14,
             alignment=TA_LEFT
         ),
         'right_align': ParagraphStyle(
             'CustomRightAlign',
             parent=base_styles['Normal'],
-            fontSize=9,
+            fontSize=14,
             alignment=TA_RIGHT
         ),
         'center': ParagraphStyle(
             'CustomCenter',
             parent=base_styles['Normal'],
-            fontSize=9,
+            fontSize=14,
             alignment=TA_CENTER
         ),
         'bold_right': ParagraphStyle(
             'CustomBoldRight',
             parent=base_styles['Normal'],
-            fontSize=10,
+            fontSize=14,
             fontName='Helvetica-Bold',
             alignment=TA_RIGHT,
             wordWrap='LTR',
@@ -468,14 +468,14 @@ def create_paragraph_styles():
         'italic': ParagraphStyle(
             'CustomItalic',
             parent=base_styles['Normal'],
-            fontSize=9,
+            fontSize=14,
             fontName='Helvetica-Oblique',
             alignment=TA_LEFT
         ),
         'footer': ParagraphStyle(
             'CustomFooter',
             parent=base_styles['Normal'],
-            fontSize=8,
+            fontSize=14,
             alignment=TA_CENTER
         )
     }

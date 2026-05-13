@@ -79,7 +79,7 @@ class BusinessPDFExporter:
         self.company_style = ParagraphStyle(
             'CompanyHeader',
             parent=self.styles['Heading2'],
-            fontSize=12,
+            fontSize=14,
             textColor=colors.black,
             spaceAfter=6,
             spaceBefore=6,
@@ -94,7 +94,7 @@ class BusinessPDFExporter:
         self.section_style = ParagraphStyle(
             'SectionHeader',
             parent=self.styles['Heading3'],
-            fontSize=11,
+            fontSize=14,
             textColor=self.SECONDARY_COLOR,
             spaceAfter=4,
             spaceBefore=8,
@@ -106,7 +106,7 @@ class BusinessPDFExporter:
         self.footer_style = ParagraphStyle(
             'Footer',
             parent=self.styles['Normal'],
-            fontSize=8,
+            fontSize=14,
             textColor=colors.grey,
             alignment=TA_CENTER
         )
@@ -158,7 +158,7 @@ class BusinessPDFExporter:
         timestamp_style = ParagraphStyle(
             'Timestamp',
             parent=self.styles['Normal'],
-            fontSize=9,
+            fontSize=14,
             textColor=colors.grey,
             alignment=TA_CENTER,
             spaceAfter=16
@@ -206,7 +206,7 @@ class BusinessPDFExporter:
             cell_style = ParagraphStyle(
                 'CellText',
                 parent=self.styles['Normal'],
-                fontSize=7,
+                fontSize=14,
                 leading=9,
                 textColor=colors.black,
                 wordWrap='CJK'
@@ -233,7 +233,7 @@ class BusinessPDFExporter:
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8eaf6')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 7),
+            ('FONTSIZE', (0, 0), (-1, 0), 14),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
@@ -243,7 +243,7 @@ class BusinessPDFExporter:
 
             # Data rows styling
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 6),
+            ('FONTSIZE', (0, 1), (-1, -1), 14),
             ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
             ('TOPPADDING', (0, 1), (-1, -1), 4),
@@ -292,7 +292,7 @@ class BusinessPDFExporter:
         table_style = [
             ('BACKGROUND', (0, 0), (-1, -1), self.HEADER_BG),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('FONTSIZE', (0, 0), (-1, -1), 14),
             ('TEXTCOLOR', (0, 0), (-1, -1), self.PRIMARY_COLOR),
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
             ('GRID', (0, 0), (-1, -1), 0.5, self.BORDER_COLOR),

@@ -108,7 +108,7 @@ def add_grouped_export_action(viewset_class):
         item_style = ParagraphStyle(
             'ItemHeader',
             fontName='Helvetica-Bold',
-            fontSize=9,
+            fontSize=14,
             textColor=HexColor('#1e40af'),
             spaceAfter=2,
             spaceBefore=4,
@@ -359,7 +359,7 @@ def add_grouped_export_action(viewset_class):
                 ws.merge_cells(f'A{row}:S{row}')
                 cell = ws[f'A{row}']
                 cell.value = f"Item: {product_name}"
-                cell.font = Font(bold=True, size=11, color="3b82f6")
+                cell.font = Font(bold=True, size=14, color="3b82f6")
                 row += 1
 
                 # Table headers (18 columns - added Exporter and Exchange Rate)
@@ -489,23 +489,23 @@ def add_grouped_export_action(viewset_class):
             # Add grand total after all products
             ws.merge_cells(f'A{row}:B{row}')
             cell = ws.cell(row=row, column=1, value="Grand Total:")
-            cell.font = Font(bold=True, size=12, color="1e3a8a")
+            cell.font = Font(bold=True, size=14, color="1e3a8a")
             cell.fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
-            ws.cell(row=row, column=5, value=int(company_total_qty)).font = Font(bold=True, size=11)
+            ws.cell(row=row, column=5, value=int(company_total_qty)).font = Font(bold=True, size=14)
             ws.cell(row=row, column=5).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
             ws.cell(row=row, column=5).alignment = Alignment(horizontal='right', vertical='center')
             ws.cell(row=row, column=5).number_format = '#,##0'
 
-            ws.cell(row=row, column=7, value=round(company_total_fc, 2)).font = Font(bold=True, size=11)
+            ws.cell(row=row, column=7, value=round(company_total_fc, 2)).font = Font(bold=True, size=14)
             ws.cell(row=row, column=7).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
             ws.cell(row=row, column=7).alignment = Alignment(horizontal='right', vertical='center')
             ws.cell(row=row, column=7).number_format = '#,##0.00'
 
             ws.merge_cells(f'H{row}:I{row}')
             cell = ws.cell(row=row, column=8, value=f"CIF INR: ₹{company_total_inr:,.2f}")
-            cell.font = Font(bold=True, size=11, color="1e3a8a")
+            cell.font = Font(bold=True, size=14, color="1e3a8a")
             cell.fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
             cell.alignment = Alignment(horizontal='center', vertical='center')
             row += 3

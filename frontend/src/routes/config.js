@@ -126,14 +126,4 @@ export const reportEntities = [
         label: "Item Report",
         icon: "list-ul",
     },
-    {
-        path: "/license-ledger",
-        label: "License Ledger",
-        icon: "journal-text",
-    },
-    {
-        path: "/ledger-upload",
-        label: "Ledger Upload",
-        icon: "upload",
-    },
 ];

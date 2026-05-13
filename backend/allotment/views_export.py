@@ -123,8 +123,8 @@ def add_grouped_export_action(viewset_class):
                 ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 8),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('FONTSIZE', (0, 0), (-1, 0), 14),
+                ('FONTSIZE', (0, 1), (-1, -1), 14),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
                 ('TOPPADDING', (0, 0), (-1, 0), 4),
                 ('BOTTOMPADDING', (0, 1), (-1, -1), 2),
@@ -140,7 +140,7 @@ def add_grouped_export_action(viewset_class):
             timestamp_style = ParagraphStyle(
                 'Timestamp',
                 parent=pdf_exporter.styles['Normal'],
-                fontSize=9,
+                fontSize=14,
                 textColor=colors.grey,
                 alignment=TA_CENTER,
                 spaceAfter=16
@@ -372,7 +372,7 @@ def add_grouped_export_action(viewset_class):
             cell = ws[f'A{row}']
             cell.value = f"Exchange Rate (as of {active_rate.date.strftime('%d-%m-%Y')}): USD {active_rate.usd} | EUR {active_rate.euro} | GBP {active_rate.pound_sterling} | CNY {active_rate.chinese_yuan}"
             cell.alignment = Alignment(horizontal='center')
-            cell.font = Font(italic=True, size=10)
+            cell.font = Font(italic=True, size=14)
         row += 2
 
         # Process each company
@@ -401,7 +401,7 @@ def add_grouped_export_action(viewset_class):
                     ws.merge_cells(f'A{row}:Q{row}')
                     cell = ws[f'A{row}']
                     cell.value = f"Item: {display_item_name}"
-                    cell.font = Font(bold=True, size=12, italic=True)
+                    cell.font = Font(bold=True, size=14, italic=True)
                     row += 1
 
                 # Process each port within item
@@ -434,7 +434,7 @@ def add_grouped_export_action(viewset_class):
                     # Write license sub-headers
                     for col_idx, header in enumerate(license_headers, start_col):
                         cell = ws.cell(row=row, column=col_idx, value=header)
-                        cell.font = Font(bold=True, size=9)
+                        cell.font = Font(bold=True, size=14)
                         cell.fill = PatternFill(start_color='E0E0E0', end_color='E0E0E0', fill_type='solid')
                         cell.alignment = Alignment(horizontal='center')
                         cell.border = border
@@ -538,24 +538,24 @@ def add_grouped_export_action(viewset_class):
             # Add grand total after all items
             ws.merge_cells(f'A{row}:C{row}')
             cell = ws.cell(row=row, column=1, value="Grand Total:")
-            cell.font = Font(bold=True, size=12)
+            cell.font = Font(bold=True, size=14)
             cell.fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
-            ws.cell(row=row, column=4, value=int(company_total_qty)).font = Font(bold=True, size=12)
+            ws.cell(row=row, column=4, value=int(company_total_qty)).font = Font(bold=True, size=14)
             ws.cell(row=row, column=4).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=4).alignment = Alignment(horizontal='center', vertical='center')
 
-            ws.cell(row=row, column=5, value="Total USD $:").font = Font(bold=True, size=12)
+            ws.cell(row=row, column=5, value="Total USD $:").font = Font(bold=True, size=14)
             ws.cell(row=row, column=5).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=5).alignment = Alignment(horizontal='center', vertical='center')
 
-            ws.cell(row=row, column=6, value=company_total_value).font = Font(bold=True, size=12)
+            ws.cell(row=row, column=6, value=company_total_value).font = Font(bold=True, size=14)
             ws.cell(row=row, column=6).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=6).alignment = Alignment(horizontal='center', vertical='center')
             ws.cell(row=row, column=6).number_format = '#,##0.00'
 
-            ws.cell(row=row, column=7, value=company_total_inr).font = Font(bold=True, size=12)
+            ws.cell(row=row, column=7, value=company_total_inr).font = Font(bold=True, size=14)
             ws.cell(row=row, column=7).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=7).alignment = Alignment(horizontal='center', vertical='center')
             ws.cell(row=row, column=7).number_format = '₹#,##0.00'

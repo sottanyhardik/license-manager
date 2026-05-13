@@ -10,6 +10,7 @@ import DataTable from "../../components/DataTable";
 import AccordionTable from "../../components/AccordionTable";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import TransferLetterModal from "../../components/TransferLetterModal";
+import { EntityCard, DetailTable } from "../../components/ui";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 
@@ -143,6 +144,26 @@ export default function MasterList() {
     const [expandedBoeRows, setExpandedBoeRows] = useState(new Set());
     const toggleBoeRow = (id) => {
         setExpandedBoeRows(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const [expandedAllotments, setExpandedAllotments] = useState(new Set());
+    const toggleAllotment = (id) => {
+        setExpandedAllotments(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const [expandedTrades, setExpandedTrades] = useState(new Set());
+    const toggleTrade = (id) => {
+        setExpandedTrades(prev => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
@@ -840,192 +861,131 @@ export default function MasterList() {
                                 <div className="mt-2 text-muted">Loading Bill of Entries...</div>
                             </div>
                         ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted">
-                                <i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i>
-                                <div className="mt-2">No bill of entries found</div>
+                            <div className="empty-state">
+                                <div className="empty-icon"><i className="bi bi-inbox"></i></div>
+                                <div className="empty-title">No bill of entries found</div>
+                                <div className="empty-sub">Try adjusting filters or create a new BOE.</div>
                             </div>
                         ) : (
                             <div>
                                 {data.map(item => {
-                                    const isExpanded = expandedBoeRows.has(item.id);
-                                    const itemCount = item.item_details?.length || 0;
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
-                                    return (
-                                        <div key={item.id} style={{
-                                            display: 'block',
-                                            background: '#ffffff',
-                                            border: '1px solid #e2e8f0',
-                                            borderLeft: '4px solid #4f46e5',
-                                            borderRadius: '10px',
-                                            marginBottom: '10px',
-                                            overflow: 'hidden',
-                                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-                                        }}>
-                                            {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
-                                                    {item.bill_of_entry_number || '-'}
+                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—';
+                                    const fmtQty = (val) => val ? Number(val).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—';
+                                    const detailRows = item.item_details || [];
+                                    const invoiceChip = canEditInvoice
+                                        ? (editingInvoiceId === item.id
+                                            ? (
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    <input
+                                                        autoFocus
+                                                        value={invoiceDraft}
+                                                        onChange={e => setInvoiceDraft(e.target.value)}
+                                                        onKeyDown={e => { if (e.key === 'Enter') saveInvoiceEdit(item.id); if (e.key === 'Escape') cancelInvoiceEdit(); }}
+                                                        placeholder="Invoice number"
+                                                        style={{ fontSize: '0.82rem', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--success-color)', width: 160, outline: 'none' }}
+                                                    />
+                                                    <button type="button" onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: 6, background: 'var(--success-color)', color: 'white', border: 'none', cursor: 'pointer' }}>
+                                                        {invoiceSaving ? '…' : 'Save'}
+                                                    </button>
+                                                    <button type="button" onClick={cancelInvoiceEdit} style={{ fontSize: '0.75rem', padding: '3px 7px', borderRadius: 6, background: 'var(--surface-sunken)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', cursor: 'pointer' }}>✕</button>
                                                 </span>
-                                                {item.bill_of_entry_date && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
-                                                        <i className="bi bi-calendar3 me-1"></i>
-                                                        {item.bill_of_entry_date}
-                                                    </span>
-                                                )}
-                                                {item.port_name && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
-                                                        <i className="bi bi-geo-alt me-1"></i>{item.port_name}
-                                                    </span>
-                                                )}
-                                                {item.company_name && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
-                                                        <i className="bi bi-building me-1"></i>{item.company_name}
-                                                    </span>
-                                                )}
-                                                {canEditInvoice && (
-                                                    editingInvoiceId === item.id ? (
-                                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                            <input
-                                                                autoFocus
-                                                                value={invoiceDraft}
-                                                                onChange={e => setInvoiceDraft(e.target.value)}
-                                                                onKeyDown={e => { if (e.key === 'Enter') saveInvoiceEdit(item.id); if (e.key === 'Escape') cancelInvoiceEdit(); }}
-                                                                placeholder="Invoice number"
-                                                                style={{ fontSize: '0.78rem', padding: '2px 6px', borderRadius: '4px', border: '1px solid #059669', width: '160px', outline: 'none' }}
-                                                            />
-                                                            <button onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} style={{ fontSize: '0.72rem', padding: '2px 7px', borderRadius: '4px', background: '#059669', color: 'white', border: 'none', cursor: 'pointer' }}>
-                                                                {invoiceSaving ? '…' : 'Save'}
-                                                            </button>
-                                                            <button onClick={cancelInvoiceEdit} style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px', background: '#e5e7eb', color: '#374151', border: 'none', cursor: 'pointer' }}>✕</button>
-                                                        </span>
-                                                    ) : (
-                                                        <span
-                                                            onClick={() => startInvoiceEdit(item)}
-                                                            title="Click to edit invoice number"
-                                                            style={{ fontSize: '0.78rem', color: '#059669', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                                        >
-                                                            {item.invoice_no
-                                                                ? <><i className="bi bi-receipt"></i> {item.invoice_no}</>
-                                                                : <><i className="bi bi-plus-circle"></i> Add Invoice No</>
-                                                            }
-                                                            <i className="bi bi-pencil-fill" style={{ fontSize: '0.6rem', opacity: 0.6 }}></i>
-                                                        </span>
-                                                    )
-                                                )}
-                                            </div>
+                                            )
+                                            : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => startInvoiceEdit(item)}
+                                                    title="Click to edit invoice number"
+                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.82rem', color: 'var(--success-text)', background: 'var(--success-bg)', border: '1px solid var(--success-border)', padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}
+                                                >
+                                                    {item.invoice_no
+                                                        ? (<><i className="bi bi-receipt" style={{ fontSize: '0.78rem' }}></i> {item.invoice_no}</>)
+                                                        : (<><i className="bi bi-plus-circle" style={{ fontSize: '0.78rem' }}></i> Add Invoice No</>)
+                                                    }
+                                                    <i className="bi bi-pencil-fill" style={{ fontSize: '0.6rem', opacity: 0.6 }}></i>
+                                                </button>
+                                            ))
+                                        : null;
 
-                                            {/* Row 2: Product + licenses + expand button */}
-                                            <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                                                    <div style={{ flex: 1, minWidth: '200px' }}>
-                                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Product</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>
-                                                            {item.product_name || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No product name</span>}
-                                                        </div>
-                                                    </div>
-                                                    {item.licenses && (
-                                                        <div style={{ flex: 1, minWidth: '140px' }}>
-                                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Licenses</div>
-                                                            <div style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '500' }}>{item.licenses}</div>
-                                                        </div>
-                                                    )}
-                                                    {itemCount > 0 && (
-                                                        <button
-                                                            onClick={() => toggleBoeRow(item.id)}
-                                                            style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: '#4f46e5', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap', alignSelf: 'center' }}
-                                                        >
-                                                            <i className={`bi bi-${isExpanded ? 'chevron-up' : 'chevron-down'}`}></i>
-                                                            {itemCount} Item{itemCount !== 1 ? 's' : ''}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Row 3: Stats + Actions */}
-                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
-                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>CIF (INR)</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.total_inr)}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>CIF (FC)</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '600' }}>{item.total_fc ? Number(item.total_fc).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '-'}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Qty (MT)</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '600' }}>{item.total_quantity ? Number(item.total_quantity).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '-'}</div>
-                                                    </div>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    <button
-                                                        onClick={() => { setTransferLetterType('boe'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); }}
-                                                        title="Transfer Letter"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
-                                                    >
-                                                        <i className="bi bi-file-earmark-text"></i> TL
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openMergeModal(item)}
-                                                        title="Merge BOE"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#7c3aed', background: '#ede9fe', border: '1px solid #c4b5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
-                                                    >
-                                                        <i className="bi bi-intersect"></i>
-                                                    </button>
-                                                    {(!item.product_name || item.product_name.trim() === '') && (
-                                                        <button
-                                                            onClick={async () => {
-                                                                if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) return;
-                                                                try {
-                                                                    const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
-                                                                    toast.success(response.data.message || 'Product name updated');
-                                                                    fetchData(currentPage, pageSize, filterParams);
-                                                                } catch (err) {
-                                                                    toast.error(err.response?.data?.message || 'Failed to update product name');
-                                                                }
-                                                            }}
-                                                            title="Update Product Name"
-                                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
-                                                        >
-                                                            <i className="bi bi-arrow-repeat"></i>
-                                                        </button>
-                                                    )}
-                                                    {canWrite && <button
-                                                        onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/bill-of-entries/${item.id}/edit`); }}
-                                                        title="Edit"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
-                                                    >
-                                                        <i className="bi bi-pencil"></i>
-                                                    </button>}
-                                                    {canWrite && <button
-                                                        onClick={() => handleDelete(item)}
-                                                        title="Delete"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
-                                                    >
-                                                        <i className="bi bi-trash"></i>
-                                                    </button>}
-                                                </div>
-                                            </div>
-
-                                            {/* Expandable: Item Details */}
-                                            {isExpanded && itemCount > 0 && (
-                                                <div style={{ padding: '10px 14px', background: '#fafaf9', borderTop: '1px solid #e2e8f0' }}>
-                                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Item Details</div>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                                        {item.item_details.map((detail, idx) => (
-                                                            <div key={detail.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '7px 12px', fontSize: '0.82rem' }}>
-                                                                <span style={{ fontWeight: '600', color: '#4f46e5', minWidth: '90px' }}>{detail.license_number || '-'}</span>
-                                                                <span style={{ flex: 1, color: '#334155', minWidth: '120px' }}>{detail.item_description || '-'}</span>
-                                                                {detail.hs_code && <span style={{ background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>{detail.hs_code}</span>}
-                                                                <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>Qty: <strong>{detail.qty || '-'}</strong></span>
-                                                                <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>FC: <strong>{detail.cif_fc || '-'}</strong></span>
-                                                                <span style={{ color: '#1e293b', fontWeight: '600', whiteSpace: 'nowrap' }}>INR: {fmtInr(detail.cif_inr)}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
+                                    return (
+                                        <EntityCard
+                                            key={item.id}
+                                            accent="primary"
+                                            title={item.bill_of_entry_number || '—'}
+                                            headerChips={[
+                                                item.bill_of_entry_date && { icon: 'calendar3', label: item.bill_of_entry_date },
+                                                item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
+                                                item.company_name        && { icon: 'building', label: item.company_name, tone: 'primary' },
+                                            ].filter(Boolean)}
+                                            statusBadges={[]}
+                                            summary={[
+                                                { label: 'CIF (INR)', value: fmtInr(item.total_inr) },
+                                                { label: 'CIF (FC)',  value: item.total_fc ? Number(item.total_fc).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                                                { label: 'Qty (MT)',  value: fmtQty(item.total_quantity) },
+                                            ]}
+                                            actions={[
+                                                { icon: 'file-earmark-text', title: 'Transfer Letter', tone: 'warning',
+                                                    onClick: () => { setTransferLetterType('boe'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); } },
+                                                { icon: 'intersect', title: 'Merge BOE', tone: 'info',
+                                                    onClick: () => openMergeModal(item) },
+                                                (!item.product_name || item.product_name.trim() === '') && {
+                                                    icon: 'arrow-repeat', title: 'Update Product Name', tone: 'info',
+                                                    onClick: async () => {
+                                                        if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) return;
+                                                        try {
+                                                            const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
+                                                            toast.success(response.data.message || 'Product name updated');
+                                                            fetchData(currentPage, pageSize, filterParams);
+                                                        } catch (err) {
+                                                            toast.error(err.response?.data?.message || 'Failed to update product name');
+                                                        }
+                                                    }
+                                                },
+                                                canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
+                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/bill-of-entries/${item.id}/edit`); } },
+                                                canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => handleDelete(item) },
+                                            ].filter(Boolean)}
+                                            viewOpen={expandedBoeRows.has(item.id)}
+                                            onView={() => toggleBoeRow(item.id)}
+                                            detailLabel={detailRows.length ? `${detailRows.length} Item${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
+                                            detail={() => (
+                                                <DetailTable
+                                                    columns={[
+                                                        { key: 'license_number',   label: 'License',   bold: true, nowrap: true,
+                                                            render: v => v ? <span style={{ color: 'var(--primary-color)' }}>{v}</span> : '—' },
+                                                        { key: 'item_description', label: 'Item',      muted: true },
+                                                        { key: 'hs_code',          label: 'HS Code',   nowrap: true,
+                                                            render: v => v ? <code>{v}</code> : '—' },
+                                                        { key: 'qty',              label: 'Qty',       align: 'right', nowrap: true,
+                                                            render: v => fmtQty(v) },
+                                                        { key: 'cif_fc',           label: 'CIF (FC)',  align: 'right', nowrap: true,
+                                                            render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                                                        { key: 'cif_inr',          label: 'CIF (INR)', align: 'right', nowrap: true, bold: true,
+                                                            render: v => fmtInr(v) },
+                                                    ]}
+                                                    rows={detailRows}
+                                                />
                                             )}
-                                        </div>
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
+                                                <div style={{ flex: 1, minWidth: 200 }}>
+                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Product</div>
+                                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                                                        {item.product_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No product name</span>}
+                                                    </div>
+                                                </div>
+                                                {item.licenses && (
+                                                    <div style={{ flex: 1, minWidth: 140 }}>
+                                                        <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
+                                                        <div style={{ fontSize: '0.85rem', color: 'var(--primary-color)', fontWeight: 500 }}>{item.licenses}</div>
+                                                    </div>
+                                                )}
+                                                {invoiceChip && (
+                                                    <div style={{ alignSelf: 'center' }}>
+                                                        {invoiceChip}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </EntityCard>
                                     );
                                 })}
                             </div>
@@ -1040,96 +1000,41 @@ export default function MasterList() {
                                 <div className="mt-2 text-muted">Loading Allotments...</div>
                             </div>
                         ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted">
-                                <i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i>
-                                <div className="mt-2">No allotments found</div>
+                            <div className="empty-state">
+                                <div className="empty-icon"><i className="bi bi-inbox"></i></div>
+                                <div className="empty-title">No allotments found</div>
+                                <div className="empty-sub">Try adjusting filters or create a new allotment.</div>
                             </div>
                         ) : (
                             <div>
                                 {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
+                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—';
+                                    const fmtQty = (val) => val ? Number(val).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—';
+                                    const detailRows = item.allotment_details || [];
                                     return (
-                                        <div key={item.id} style={{
-                                            display: 'block',
-                                            background: '#ffffff',
-                                            border: `1px solid ${item.is_boe ? '#86efac' : '#e2e8f0'}`,
-                                            borderLeft: `4px solid ${item.is_boe ? '#22c55e' : '#4f46e5'}`,
-                                            borderRadius: '10px',
-                                            marginBottom: '10px',
-                                            overflow: 'hidden',
-                                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-                                        }}>
-                                            {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
-                                                    {item.invoice || <span style={{ fontStyle: 'italic', color: '#94a3b8', fontWeight: '400', fontSize: '0.875rem' }}>No Invoice</span>}
-                                                </span>
-                                                {item.estimated_arrival_date && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
-                                                        <i className="bi bi-calendar3 me-1"></i>{item.estimated_arrival_date}
-                                                    </span>
-                                                )}
-                                                {item.port_name && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
-                                                        <i className="bi bi-geo-alt me-1"></i>{item.port_name}
-                                                    </span>
-                                                )}
-                                                {item.company_name && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: '4px', fontWeight: '500' }}>
-                                                        <i className="bi bi-building me-1"></i>{item.company_name}
-                                                    </span>
-                                                )}
-                                                {item.is_boe && (
-                                                    <span style={{ fontSize: '0.75rem', color: '#166534', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
-                                                        BOE ✓
-                                                    </span>
-                                                )}
-                                                {item.is_approved && (
-                                                    <span style={{ fontSize: '0.75rem', color: '#1d4ed8', background: '#dbeafe', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
-                                                        Approved
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Row 2: Item + Licenses */}
-                                            <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                                                    <div style={{ flex: 1, minWidth: '200px' }}>
-                                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Item</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>
-                                                            {item.item_name || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No item name</span>}
-                                                        </div>
-                                                    </div>
-                                                    {item.dfia_list && (
-                                                        <div style={{ flex: 1, minWidth: '140px' }}>
-                                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Licenses</div>
-                                                            <div style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '500' }}>{item.dfia_list}</div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Row 3: Stats + Actions */}
-                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
-                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Req Qty</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{item.required_quantity ? Number(item.required_quantity).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '-'}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Req Value</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '600' }}>{fmtInr(item.required_value)}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Balanced Qty</div>
-                                                        <div style={{ fontSize: '0.875rem', color: item.balanced_quantity > 0 ? '#059669' : '#94a3b8', fontWeight: '600' }}>{item.balanced_quantity ? Number(item.balanced_quantity).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '-'}</div>
-                                                    </div>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-pencil"></i>
-                                                    </button>}
-                                                    {canWrite && <button onClick={async () => {
+                                        <EntityCard
+                                            key={item.id}
+                                            accent={item.is_boe ? 'success' : 'primary'}
+                                            title={item.invoice || <span style={{ fontStyle: 'italic', color: 'var(--text-tertiary)', fontWeight: 400 }}>No Invoice</span>}
+                                            headerChips={[
+                                                item.estimated_arrival_date && { icon: 'calendar3', label: item.estimated_arrival_date },
+                                                item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
+                                                item.company_name        && { icon: 'building', label: item.company_name, tone: 'primary' },
+                                            ].filter(Boolean)}
+                                            statusBadges={[
+                                                item.is_boe      && { tone: 'success', label: 'BOE ✓' },
+                                                item.is_approved && { tone: 'info',    label: 'Approved' },
+                                            ].filter(Boolean)}
+                                            summary={[
+                                                { label: 'Req Qty',      value: fmtQty(item.required_quantity) },
+                                                { label: 'Req Value',    value: fmtInr(item.required_value) },
+                                                { label: 'Balanced Qty', value: fmtQty(item.balanced_quantity), tone: (item.balanced_quantity > 0 ? 'success' : undefined) },
+                                            ]}
+                                            actions={[
+                                                canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
+                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/edit`); } },
+                                                canWrite && { icon: 'copy', title: 'Copy', tone: 'info',
+                                                    onClick: async () => {
                                                         if (!window.confirm(`Create a copy of allotment ${item.invoice || 'this allotment'}?`)) return;
                                                         try {
                                                             const r = await api.post(`allotments/${item.id}/copy/`);
@@ -1137,23 +1042,20 @@ export default function MasterList() {
                                                             saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
                                                             navigate(`/allotments/${r.data.id}/edit`);
                                                         } catch (err) { toast.error(err.response?.data?.error || 'Failed to copy'); }
-                                                    }} title="Copy" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-copy"></i>
-                                                    </button>}
-                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/allocate`); }} title="Allocate" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-box-arrow-in-down"></i>
-                                                    </button>}
-                                                    <button onClick={async () => {
+                                                    } },
+                                                canWrite && { icon: 'box-arrow-in-down', title: 'Allocate', tone: 'success',
+                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/allocate`); } },
+                                                { icon: 'file-pdf', title: 'Preview PDF', tone: 'warning',
+                                                    onClick: async () => {
                                                         try {
                                                             const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
                                                             const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
                                                             window.open(url, '_blank');
                                                             setTimeout(() => window.URL.revokeObjectURL(url), 30000);
                                                         } catch (err) { toast.error(err.response?.data?.error || 'Failed to generate PDF'); }
-                                                    }} title="Preview Allotment" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-eye"></i>
-                                                    </button>
-                                                    <button onClick={async () => {
+                                                    } },
+                                                { icon: 'download', title: 'Download',
+                                                    onClick: async () => {
                                                         try {
                                                             const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
                                                             const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
@@ -1163,15 +1065,48 @@ export default function MasterList() {
                                                             document.body.appendChild(a); a.click(); a.remove();
                                                             setTimeout(() => window.URL.revokeObjectURL(url), 10000);
                                                         } catch (err) { toast.error(err.response?.data?.error || 'Failed to download PDF'); }
-                                                    }} title="Download Allotment" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1e40af', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-download"></i>
-                                                    </button>
-                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-trash"></i>
-                                                    </button>}
+                                                    } },
+                                                canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => handleDelete(item) },
+                                            ].filter(Boolean)}
+                                            viewOpen={expandedAllotments.has(item.id)}
+                                            onView={() => toggleAllotment(item.id)}
+                                            detailLabel={detailRows.length ? `${detailRows.length} Item${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
+                                            detail={() => (
+                                                <DetailTable
+                                                    columns={[
+                                                        { key: 'license_number',     label: 'License',     bold: true, nowrap: true,
+                                                            render: v => v ? <span style={{ color: 'var(--primary-color)' }}>{v}</span> : '—' },
+                                                        { key: 'serial_number',      label: 'Sl#',         align: 'right', nowrap: true },
+                                                        { key: 'product_description', label: 'Item',       muted: true },
+                                                        { key: 'qty',                 label: 'Qty',        align: 'right', nowrap: true,
+                                                            render: v => fmtQty(v) },
+                                                        { key: 'cif_fc',              label: 'CIF (FC)',   align: 'right', nowrap: true,
+                                                            render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                                                        { key: 'cif_inr',             label: 'CIF (INR)',  align: 'right', nowrap: true, bold: true,
+                                                            render: v => fmtInr(v) },
+                                                    ]}
+                                                    rows={detailRows}
+                                                    emptyMessage="No items have been allotted yet."
+                                                />
+                                            )}
+                                        >
+                                            {(item.item_name || item.dfia_list) && (
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
+                                                    <div style={{ flex: 1, minWidth: 200 }}>
+                                                        <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Item</div>
+                                                        <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                                                            {item.item_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No item name</span>}
+                                                        </div>
+                                                    </div>
+                                                    {item.dfia_list && (
+                                                        <div style={{ flex: 1, minWidth: 140 }}>
+                                                            <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
+                                                            <div style={{ fontSize: '0.85rem', color: 'var(--primary-color)', fontWeight: 500 }}>{item.dfia_list}</div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            </div>
-                                        </div>
+                                            )}
+                                        </EntityCard>
                                     );
                                 })}
                             </div>
@@ -1350,123 +1285,126 @@ export default function MasterList() {
                             const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
 
                             const renderTradeCard = (item) => {
-                                const dirColor = item.direction === 'SALE' ? { border: '#86efac', left: '#22c55e', bg: '#dcfce7', text: '#166534' }
-                                    : item.direction === 'PURCHASE' ? { border: '#93c5fd', left: '#3b82f6', bg: '#dbeafe', text: '#1d4ed8' }
-                                    : item.direction === 'COMMISSION_SALE' ? { border: '#fdba74', left: '#f97316', bg: '#ffedd5', text: '#9a3412' }
-                                    : { border: '#c4b5fd', left: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6' };
+                                const directionTone =
+                                    item.direction === 'SALE'             ? 'success'
+                                  : item.direction === 'PURCHASE'         ? 'info'
+                                  : item.direction === 'COMMISSION_SALE'  ? 'warning'
+                                  :                                          'primary';
+                                const accent =
+                                    item.direction === 'SALE'             ? 'success'
+                                  : item.direction === 'PURCHASE'         ? 'info'
+                                  : item.direction === 'COMMISSION_SALE'  ? 'warning'
+                                  :                                          'primary';
                                 const isLinked = !!(item.linked_trade_id || item.linked_trade_info);
+                                const detailRows = item.lines || [];
                                 return (
-                                    <div key={item.id} style={{ display: 'block', background: '#ffffff', border: `1px solid ${dirColor.border}`, borderLeft: `4px solid ${dirColor.left}`, borderRadius: '10px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                                        {/* Row 1: Identity */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                                            <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1e1b4b', marginRight: '4px' }}>
-                                                {item.invoice_number || <span style={{ fontStyle: 'italic', color: '#94a3b8', fontWeight: '400', fontSize: '0.875rem' }}>No Invoice</span>}
-                                            </span>
-                                            <span style={{ fontSize: '0.78rem', fontWeight: '700', color: dirColor.text, background: dirColor.bg, padding: '2px 8px', borderRadius: '4px' }}>
-                                                {item.direction_label || item.direction}
-                                            </span>
-                                            {item.license_type_label && (
-                                                <span style={{ fontSize: '0.78rem', color: '#475569', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>{item.license_type_label}</span>
-                                            )}
-                                            {item.invoice_date && (
-                                                <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
-                                                    <i className="bi bi-calendar3 me-1"></i>{item.invoice_date}
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Row 2: From → To + BOE */}
-                                        <div style={{ padding: '10px 14px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '200px' }}>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>From</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.from_company_label || '-'}</div>
-                                                    </div>
-                                                    <i className="bi bi-arrow-right" style={{ color: '#94a3b8', fontSize: '1rem' }}></i>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>To</div>
-                                                        <div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '500' }}>{item.to_company_label || '-'}</div>
-                                                    </div>
-                                                </div>
-                                                {item.boe_label && (
-                                                    <div style={{ minWidth: '100px' }}>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BOE</div>
-                                                        <div style={{ fontSize: '0.82rem', color: '#4f46e5', fontWeight: '500' }}>{item.boe_label}</div>
-                                                    </div>
-                                                )}
-                                                {item.incentive_license && (
-                                                    <div style={{ minWidth: '100px' }}>
-                                                        <div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Incentive Lic</div>
-                                                        <div style={{ fontSize: '0.82rem', color: '#059669', fontWeight: '500' }}>{item.incentive_license}</div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Row 3: Stats + Actions */}
-                                        <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', gap: '8px', flexWrap: 'wrap' }}>
-                                            <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-                                                <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total</div><div style={{ fontSize: '0.875rem', color: '#1e293b', fontWeight: '700' }}>{fmtInr(item.total_amount)}</div></div>
-                                                <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Paid/Rcvd</div><div style={{ fontSize: '0.875rem', color: '#059669', fontWeight: '600' }}>{fmtInr(item.paid_or_received)}</div></div>
-                                                <div><div style={{ fontSize: '0.67rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Due</div><div style={{ fontSize: '0.875rem', color: item.due_amount > 0 ? '#b91c1c' : '#64748b', fontWeight: '600' }}>{fmtInr(item.due_amount)}</div></div>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                <button onClick={() => { setTransferLetterType('trade'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); }} title="Transfer Letter" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                    <i className="bi bi-file-earmark-text"></i> TL
-                                                </button>
-                                                {item.direction === 'SALE' && (<>
-                                                    <button onClick={async () => {
+                                    <EntityCard
+                                        key={item.id}
+                                        accent={accent}
+                                        title={item.invoice_number || <span style={{ fontStyle: 'italic', color: 'var(--text-tertiary)', fontWeight: 400 }}>No Invoice</span>}
+                                        headerChips={[
+                                            { tone: directionTone, label: item.direction_label || item.direction },
+                                            item.license_type_label && { label: item.license_type_label },
+                                            item.invoice_date       && { icon: 'calendar3', label: item.invoice_date },
+                                        ].filter(Boolean)}
+                                        summary={[
+                                            { label: 'Total',     value: fmtInr(item.total_amount) },
+                                            { label: 'Paid/Rcvd', value: fmtInr(item.paid_or_received), tone: 'success' },
+                                            { label: 'Due',       value: fmtInr(item.due_amount), tone: item.due_amount > 0 ? 'danger' : undefined },
+                                        ]}
+                                        actions={[
+                                            { icon: 'file-earmark-text', title: 'Transfer Letter', tone: 'warning',
+                                                onClick: () => { setTransferLetterType('trade'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); },
+                                                children: 'TL' },
+                                            ...(item.direction === 'SALE' ? [
+                                                { icon: 'file-pdf', title: 'Invoice (With Sign)', tone: 'success',
+                                                    onClick: async () => {
                                                         try {
                                                             const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: true }, responseType: 'blob' });
                                                             const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
                                                             const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_with_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
                                                             window.URL.revokeObjectURL(url);
-                                                        } catch (err) { toast.error('Failed to generate invoice'); }
-                                                    }} title="Invoice (With Sign)" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-file-pdf"></i> +Sign
-                                                    </button>
-                                                    <button onClick={async () => {
+                                                        } catch { toast.error('Failed to generate invoice'); }
+                                                    } },
+                                                { icon: 'file-pdf', title: 'Invoice (Without Sign)', tone: 'warning',
+                                                    onClick: async () => {
                                                         try {
                                                             const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: false }, responseType: 'blob' });
                                                             const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
                                                             const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_without_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
                                                             window.URL.revokeObjectURL(url);
-                                                        } catch (err) { toast.error('Failed to generate invoice'); }
-                                                    }} title="Invoice (Without Sign)" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-file-pdf"></i> -Sign
-                                                    </button>
-                                                </>)}
-                                                {canWrite && item.direction === 'PURCHASE' && !isLinked && (
-                                                    <button onClick={async () => {
-                                                        if (!window.confirm('Create a SALE trade from this PURCHASE trade?')) return;
-                                                        try {
-                                                            const resp = await api.get(`trades/${item.id}/`);
-                                                            const p = resp.data;
-                                                            const saleData = { direction: 'SALE', license_type: p.license_type || 'DFIA', from_company: p.to_company?.id || p.to_company, to_company: p.from_company?.id || p.from_company, boe: p.boe?.id || p.boe, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], remarks: p.remarks || '', from_pan: p.to_pan, from_gst: p.to_gst, from_addr_line_1: p.to_addr_line_1, from_addr_line_2: p.to_addr_line_2, to_pan: p.from_pan, to_gst: p.from_gst, to_addr_line_1: p.from_addr_line_1, to_addr_line_2: p.from_addr_line_2, lines: (p.lines || []).map(l => ({ sr_number: l.sr_number, description: l.description, hsn_code: l.hsn_code, mode: l.mode, qty_kg: l.qty_kg, rate_inr_per_kg: l.rate_inr_per_kg, cif_fc: l.cif_fc, exc_rate: l.exc_rate, cif_inr: l.cif_inr, fob_inr: l.fob_inr, pct: l.pct, amount_inr: l.amount_inr })), incentive_lines: [], payments: [] };
-                                                            const nr = await api.post('trades/', saleData);
-                                                            toast.success('SALE trade created. Opening in edit mode...');
-                                                            saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
-                                                            navigate(`/trades/${nr.data.id}/edit`);
-                                                        } catch (err) { toast.error(err.response?.data?.non_field_errors?.[0] || 'Failed to copy trade'); }
-                                                    }} title="Copy to Sale" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-arrow-left-right"></i>
-                                                    </button>
-                                                )}
-                                                {canWrite && !isLinked && (
-                                                    <button onClick={() => openLinkModal(item)} title="Link to existing trade" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#6366f1', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-link-45deg"></i>
-                                                    </button>
-                                                )}
-                                                {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/trades/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#4f46e5', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                    <i className="bi bi-pencil-fill"></i>
-                                                </button>}
-                                                {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                    <i className="bi bi-trash"></i>
-                                                </button>}
+                                                        } catch { toast.error('Failed to generate invoice'); }
+                                                    } },
+                                            ] : []),
+                                            canWrite && item.direction === 'PURCHASE' && !isLinked && {
+                                                icon: 'arrow-left-right', title: 'Copy to Sale', tone: 'info',
+                                                onClick: async () => {
+                                                    if (!window.confirm('Create a SALE trade from this PURCHASE trade?')) return;
+                                                    try {
+                                                        const resp = await api.get(`trades/${item.id}/`);
+                                                        const p = resp.data;
+                                                        const saleData = { direction: 'SALE', license_type: p.license_type || 'DFIA', from_company: p.to_company?.id || p.to_company, to_company: p.from_company?.id || p.from_company, boe: p.boe?.id || p.boe, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], remarks: p.remarks || '', from_pan: p.to_pan, from_gst: p.to_gst, from_addr_line_1: p.to_addr_line_1, from_addr_line_2: p.to_addr_line_2, to_pan: p.from_pan, to_gst: p.from_gst, to_addr_line_1: p.from_addr_line_1, to_addr_line_2: p.from_addr_line_2, lines: (p.lines || []).map(l => ({ sr_number: l.sr_number, description: l.description, hsn_code: l.hsn_code, mode: l.mode, qty_kg: l.qty_kg, rate_inr_per_kg: l.rate_inr_per_kg, cif_fc: l.cif_fc, exc_rate: l.exc_rate, cif_inr: l.cif_inr, fob_inr: l.fob_inr, pct: l.pct, amount_inr: l.amount_inr })), incentive_lines: [], payments: [] };
+                                                        const nr = await api.post('trades/', saleData);
+                                                        toast.success('SALE trade created. Opening in edit mode...');
+                                                        saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
+                                                        navigate(`/trades/${nr.data.id}/edit`);
+                                                    } catch (err) { toast.error(err.response?.data?.non_field_errors?.[0] || 'Failed to copy trade'); }
+                                                }
+                                            },
+                                            canWrite && !isLinked && { icon: 'link-45deg', title: 'Link to existing trade', tone: 'primary',
+                                                onClick: () => openLinkModal(item) },
+                                            canWrite && { icon: 'pencil-fill', title: 'Edit', tone: 'primary',
+                                                onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/trades/${item.id}/edit`); } },
+                                            canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => handleDelete(item) },
+                                        ].filter(Boolean)}
+                                        viewOpen={expandedTrades.has(item.id)}
+                                        onView={() => toggleTrade(item.id)}
+                                        detailLabel={detailRows.length ? `${detailRows.length} Line${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
+                                        detail={() => (
+                                            <DetailTable
+                                                columns={[
+                                                    { key: 'sr_number',       label: 'Sr#',        nowrap: true, align: 'right' },
+                                                    { key: 'description',     label: 'Description', muted: true },
+                                                    { key: 'hsn_code',        label: 'HSN',         nowrap: true,
+                                                        render: v => v ? <code>{v}</code> : '—' },
+                                                    { key: 'qty_kg',          label: 'Qty (KG)',   align: 'right', nowrap: true,
+                                                        render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—' },
+                                                    { key: 'rate_inr_per_kg', label: 'Rate ₹/KG',  align: 'right', nowrap: true,
+                                                        render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                                                    { key: 'amount_inr',      label: 'Amount',     align: 'right', nowrap: true, bold: true,
+                                                        render: v => fmtInr(v) },
+                                                ]}
+                                                rows={detailRows}
+                                                emptyMessage="No trade lines."
+                                            />
+                                        )}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 220 }}>
+                                                <div>
+                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>From</div>
+                                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 500 }}>{item.from_company_label || '—'}</div>
+                                                </div>
+                                                <i className="bi bi-arrow-right" style={{ color: 'var(--text-tertiary)', fontSize: '1rem' }}></i>
+                                                <div>
+                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>To</div>
+                                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 500 }}>{item.to_company_label || '—'}</div>
+                                                </div>
                                             </div>
+                                            {item.boe_label && (
+                                                <div style={{ minWidth: 100 }}>
+                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>BOE</div>
+                                                    <div style={{ fontSize: '0.85rem', color: 'var(--primary-color)', fontWeight: 500 }}>{item.boe_label}</div>
+                                                </div>
+                                            )}
+                                            {item.incentive_license && (
+                                                <div style={{ minWidth: 100 }}>
+                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Incentive Lic</div>
+                                                    <div style={{ fontSize: '0.85rem', color: 'var(--success-text)', fontWeight: 500 }}>{item.incentive_license}</div>
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
+                                    </EntityCard>
                                 );
                             };
 

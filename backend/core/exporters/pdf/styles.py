@@ -44,7 +44,7 @@ class PDFStyles:
         self.section_heading = ParagraphStyle(
             'SectionHeading',
             parent=self.base_styles['Heading3'],
-            fontSize=12,
+            fontSize=14,
             textColor=colors.HexColor('#34495e'),
             spaceAfter=8,
             spaceBefore=12,
@@ -56,7 +56,7 @@ class PDFStyles:
         self.header_label = ParagraphStyle(
             'HeaderLabel',
             parent=self.base_styles['Normal'],
-            fontSize=9,
+            fontSize=14,
             leading=11,
             fontName='Helvetica-Bold',
             textColor=colors.black
@@ -65,7 +65,7 @@ class PDFStyles:
         self.header_value = ParagraphStyle(
             'HeaderValue',
             parent=self.base_styles['Normal'],
-            fontSize=9,
+            fontSize=14,
             leading=11,
             fontName='Helvetica',
             textColor=colors.black
@@ -75,7 +75,7 @@ class PDFStyles:
         self.table_header = ParagraphStyle(
             'TableHeader',
             parent=self.base_styles['Normal'],
-            fontSize=8,
+            fontSize=14,
             fontName='Helvetica-Bold',
             alignment=TA_CENTER,
             textColor=colors.white
@@ -84,7 +84,7 @@ class PDFStyles:
         self.table_cell = ParagraphStyle(
             'TableCell',
             parent=self.base_styles['Normal'],
-            fontSize=8,
+            fontSize=14,
             fontName='Helvetica',
             alignment=TA_LEFT
         )
@@ -92,7 +92,7 @@ class PDFStyles:
         self.table_cell_number = ParagraphStyle(
             'TableCellNumber',
             parent=self.base_styles['Normal'],
-            fontSize=8,
+            fontSize=14,
             fontName='Helvetica',
             alignment=TA_RIGHT
         )
@@ -101,7 +101,7 @@ class PDFStyles:
         self.body = ParagraphStyle(
             'CustomBody',
             parent=self.base_styles['Normal'],
-            fontSize=10,
+            fontSize=14,
             leading=12,
             alignment=TA_JUSTIFY
         )
@@ -110,7 +110,7 @@ class PDFStyles:
         self.small = ParagraphStyle(
             'SmallText',
             parent=self.base_styles['Normal'],
-            fontSize=8,
+            fontSize=14,
             leading=10
         )
 
@@ -138,7 +138,7 @@ def create_table_style_basic() -> TableStyle:
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
         ('TOPPADDING', (0, 0), (-1, 0), 8),
 
@@ -147,7 +147,7 @@ def create_table_style_basic() -> TableStyle:
         ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
         ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ('FONTSIZE', (0, 1), (-1, -1), 14),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
         ('TOPPADDING', (0, 1), (-1, -1), 6),
 
@@ -170,7 +170,7 @@ def create_table_style_striped() -> TableStyle:
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
         ('TOPPADDING', (0, 0), (-1, 0), 8),
 
@@ -178,7 +178,7 @@ def create_table_style_striped() -> TableStyle:
         ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
         ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ('FONTSIZE', (0, 1), (-1, -1), 14),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
         ('TOPPADDING', (0, 1), (-1, -1), 6),
 
@@ -206,7 +206,7 @@ def create_table_style_header_info() -> TableStyle:
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('FONTSIZE', (0, 0), (-1, -1), 14),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
@@ -276,7 +276,7 @@ def create_minimal_table_style() -> TableStyle:
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
         ('TOPPADDING', (0, 0), (-1, 0), 8),
 
@@ -284,7 +284,7 @@ def create_minimal_table_style() -> TableStyle:
         ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
         ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ('FONTSIZE', (0, 1), (-1, -1), 14),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
         ('TOPPADDING', (0, 1), (-1, -1), 6),
 

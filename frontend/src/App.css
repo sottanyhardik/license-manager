@@ -996,3 +996,741 @@ th.bg-primary {
 .toast.text-bg-warning .btn-close {
     filter: invert(1);
 }
+
+/* ============================================================
+   Production Polish Layer — Apple-style refinements
+   Appended after the base token system; existing tokens stay
+   the source of truth, this layer tightens the visual feel.
+   ============================================================ */
+
+:root {
+    /* Refined neutrals — cooler, slightly bluer grays for that
+       Apple/Stripe feel. Override only the named variables we use
+       most so existing styles continue to work. */
+    --surface-canvas:    #FAFBFC;
+    --surface-raised:    #FFFFFF;
+    --surface-sunken:    #F4F5F7;
+    --surface-overlay:   rgba(15, 23, 42, 0.4);
+
+    --border-subtle:     rgba(15, 23, 42, 0.06);
+    --border-default:    rgba(15, 23, 42, 0.10);
+    --border-strong:     rgba(15, 23, 42, 0.16);
+
+    --ring-primary:      rgba(79, 70, 229, 0.18);
+    --ring-danger:       rgba(220, 38, 38, 0.18);
+    --ring-success:      rgba(34, 197, 94, 0.18);
+
+    /* Multi-layered, restrained shadows */
+    --elevation-1:       0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.05);
+    --elevation-2:       0 2px 4px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.06);
+    --elevation-3:       0 4px 10px rgba(15, 23, 42, 0.06), 0 12px 28px rgba(15, 23, 42, 0.10);
+    --elevation-overlay: 0 16px 48px rgba(15, 23, 42, 0.16);
+
+    /* Spacing scale (4-pt grid) */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    /* Radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-pill: 999px;
+
+    /* Motion */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: 120ms var(--ease-out);
+    --transition-base: 180ms var(--ease-out);
+
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI",
+                 Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI",
+                    Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Base typography — gentler, more readable */
+body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--text-primary);
+    background-color: var(--surface-canvas);
+    letter-spacing: -0.005em;
+}
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--text-primary);
+}
+
+/* Refined cards / panels */
+.card,
+.modal-content {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--elevation-1);
+    background: var(--surface-raised);
+    transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+.card:hover {
+    box-shadow: var(--elevation-2);
+}
+
+/* Refined modal */
+.modal-content {
+    border-radius: var(--radius-xl);
+    box-shadow: var(--elevation-overlay);
+    border: none;
+    overflow: hidden;
+}
+.modal-backdrop.show {
+    opacity: 0.45;
+    backdrop-filter: blur(2px);
+}
+
+/* Refined buttons */
+.btn {
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.95rem;
+    letter-spacing: -0.005em;
+    transition: background-color var(--transition-fast),
+                color var(--transition-fast),
+                border-color var(--transition-fast),
+                box-shadow var(--transition-fast),
+                transform var(--transition-fast);
+    will-change: transform;
+}
+.btn:focus,
+.btn:focus-visible {
+    box-shadow: 0 0 0 3px var(--ring-primary);
+    outline: none;
+}
+.btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.825rem;
+    border-radius: var(--radius-sm);
+}
+.btn-primary {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+}
+.btn-primary:hover,
+.btn-primary:focus-visible {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+    box-shadow: var(--elevation-1), 0 0 0 3px var(--ring-primary);
+}
+.btn-primary:active {
+    transform: translateY(0.5px);
+}
+.btn-outline-primary {
+    color: var(--primary-color);
+    border-color: var(--border-default);
+    background: var(--surface-raised);
+}
+.btn-outline-primary:hover {
+    background: var(--indigo-50);
+    border-color: var(--indigo-200);
+    color: var(--primary-dark);
+}
+.btn-outline-secondary {
+    color: var(--text-secondary);
+    border-color: var(--border-default);
+    background: var(--surface-raised);
+}
+.btn-outline-secondary:hover {
+    background: var(--surface-sunken);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+}
+.btn-light {
+    background: var(--surface-sunken);
+    border-color: var(--border-subtle);
+    color: var(--text-primary);
+}
+.btn-light:hover {
+    background: var(--surface-raised);
+    border-color: var(--border-default);
+    box-shadow: var(--elevation-1);
+}
+.btn-danger:focus,
+.btn-danger:focus-visible {
+    box-shadow: 0 0 0 3px var(--ring-danger);
+}
+.btn-success:focus,
+.btn-success:focus-visible {
+    box-shadow: 0 0 0 3px var(--ring-success);
+}
+.btn:disabled,
+.btn.disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* Refined form controls */
+.form-control,
+.form-select {
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    background-color: var(--surface-raised);
+    transition: border-color var(--transition-fast),
+                box-shadow var(--transition-fast),
+                background-color var(--transition-fast);
+}
+.form-control:hover,
+.form-select:hover {
+    border-color: var(--border-strong);
+}
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--ring-primary);
+    outline: none;
+    background-color: var(--surface-raised);
+}
+.form-control:disabled,
+.form-select:disabled {
+    background-color: var(--surface-sunken);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+}
+.form-control-sm,
+.form-select-sm {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8125rem;
+    border-radius: var(--radius-sm);
+}
+.form-control::placeholder {
+    color: var(--text-tertiary);
+}
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: var(--danger-color);
+}
+.form-control.is-invalid:focus,
+.form-select.is-invalid:focus {
+    box-shadow: 0 0 0 3px var(--ring-danger);
+}
+.form-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0.375rem;
+    letter-spacing: -0.005em;
+}
+
+/* Refined badges */
+.badge {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    padding: 0.3em 0.6em;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+}
+
+/* Refined alerts */
+.alert {
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    padding: 0.875rem 1rem;
+    font-size: 0.875rem;
+}
+.alert-info {
+    background-color: var(--indigo-50);
+    border-color: var(--indigo-100);
+    color: var(--primary-deeper);
+}
+.alert-success {
+    background-color: #ECFDF5;
+    border-color: #A7F3D0;
+    color: #065F46;
+}
+.alert-warning {
+    background-color: #FFFBEB;
+    border-color: #FDE68A;
+    color: #92400E;
+}
+.alert-danger {
+    background-color: #FEF2F2;
+    border-color: #FECACA;
+    color: #991B1B;
+}
+
+/* Refined tables */
+.table {
+    --bs-table-bg: var(--surface-raised);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+.table > thead > tr > th {
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    background-color: var(--surface-sunken);
+    border-bottom: 1px solid var(--border-default);
+    padding: 0.75rem 1rem;
+}
+.table > tbody > tr > td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
+}
+.table-hover > tbody > tr:hover > td {
+    background-color: var(--surface-sunken);
+}
+
+/* Refined nav / top bar */
+nav.navbar,
+.top-nav {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: var(--space-10) var(--space-6);
+    color: var(--text-tertiary);
+}
+.empty-state .empty-icon {
+    font-size: 2.5rem;
+    color: var(--gray-300);
+    margin-bottom: var(--space-3);
+}
+.empty-state .empty-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-1);
+}
+.empty-state .empty-sub {
+    font-size: 0.8125rem;
+    color: var(--text-tertiary);
+}
+
+/* Loading skeleton helper */
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--surface-sunken) 0%,
+        rgba(15, 23, 42, 0.06) 50%,
+        var(--surface-sunken) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+    border-radius: var(--radius-sm);
+}
+@keyframes skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Focus-visible polish for keyboard users */
+:focus-visible {
+    outline: 2px solid transparent;
+    border-radius: var(--radius-sm);
+}
+
+/* Reusable surface helpers */
+.surface-card {
+    background: var(--surface-raised);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--elevation-1);
+}
+.surface-panel {
+    background: var(--surface-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+}
+.surface-sunken {
+    background: var(--surface-sunken);
+    border-radius: var(--radius-md);
+}
+
+/* Reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+    }
+}
+
+/* TaskDrawer specifics */
+.task-drawer-row {
+    transition: background-color var(--transition-fast);
+}
+.task-drawer-row:hover {
+    background-color: var(--surface-sunken);
+}
+
+/* ============================================================
+   System v2 — Cohesive Apple-style palette
+   Overrides earlier brand variables with a calmer, more refined
+   set. Existing var names preserved so dependent components
+   inherit automatically.
+   ============================================================ */
+
+:root {
+    /* ── Brand: refined indigo ────────────────────────────── */
+    --primary-color:   #3B5BDB;
+    --primary-light:   #5C7CFA;
+    --primary-dark:    #364FC7;
+    --primary-deeper:  #1E3A8A;
+
+    /* Functional accent (kept indigo-flavoured, less saturated) */
+    --indigo-50:  #EEF2FF;
+    --indigo-100: #E0E7FF;
+    --indigo-200: #C7D2FE;
+    --indigo-300: #A5B4FC;
+    --indigo-400: #818CF8;
+    --indigo-500: #6366F1;
+    --indigo-600: #4F46E5;
+    --indigo-700: #4338CA;
+    --indigo-800: #3730A3;
+    --indigo-900: #312E81;
+
+    /* ── Neutrals: slate-tinted, cooler than Bootstrap default */
+    --gray-50:  #F8FAFC;
+    --gray-100: #F1F5F9;
+    --gray-200: #E2E8F0;
+    --gray-300: #CBD5E1;
+    --gray-400: #94A3B8;
+    --gray-500: #64748B;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-800: #1E293B;
+    --gray-900: #0F172A;
+
+    --text-primary:   #0F172A;
+    --text-secondary: #475569;
+    --text-tertiary:  #94A3B8;
+    --text-muted:     #CBD5E1;
+
+    /* ── Surfaces ─────────────────────────────────────────── */
+    --surface-canvas:  #F7F8FA;
+    --surface-raised:  #FFFFFF;
+    --surface-sunken:  #F1F5F9;
+    --surface-elevated:#FFFFFF;
+    --surface-overlay: rgba(15, 23, 42, 0.42);
+
+    /* ── Borders ──────────────────────────────────────────── */
+    --border-subtle:  rgba(15, 23, 42, 0.06);
+    --border-default: rgba(15, 23, 42, 0.10);
+    --border-strong:  rgba(15, 23, 42, 0.18);
+
+    /* ── Semantic status colors (calmer, less saturated) ─── */
+    --success-color:  #16A34A;
+    --success-bg:     #ECFDF5;
+    --success-border: #BBF7D0;
+    --success-text:   #14532D;
+
+    --danger-color:   #DC2626;
+    --danger-bg:      #FEF2F2;
+    --danger-border:  #FECACA;
+    --danger-text:    #7F1D1D;
+
+    --warning-color:  #D97706;
+    --warning-bg:     #FFFBEB;
+    --warning-border: #FDE68A;
+    --warning-text:   #78350F;
+
+    --info-color:     #0284C7;
+    --info-bg:        #F0F9FF;
+    --info-border:    #BAE6FD;
+    --info-text:      #075985;
+
+    /* ── Focus rings ──────────────────────────────────────── */
+    --ring-primary: rgba(59, 91, 219, 0.20);
+    --ring-danger:  rgba(220, 38, 38, 0.18);
+    --ring-success: rgba(22, 163, 74, 0.18);
+    --ring-warning: rgba(217, 119, 6, 0.18);
+
+    /* ── Replace existing gradient with subtle, optional one  */
+    --primary-gradient: linear-gradient(135deg, #3B5BDB 0%, #364FC7 100%);
+}
+
+/* Reset the heavy Bootstrap text classes to the refined palette */
+.text-muted     { color: var(--text-tertiary) !important; }
+.text-secondary { color: var(--text-secondary) !important; }
+.text-success   { color: var(--success-text)  !important; }
+.text-danger    { color: var(--danger-text)   !important; }
+.text-warning   { color: var(--warning-text)  !important; }
+.text-info      { color: var(--info-text)     !important; }
+
+/* Soften Bootstrap badges to match new palette */
+.badge.bg-success    { background-color: var(--success-bg) !important; color: var(--success-text) !important; border: 1px solid var(--success-border); }
+.badge.bg-danger     { background-color: var(--danger-bg) !important;  color: var(--danger-text)  !important; border: 1px solid var(--danger-border);  }
+.badge.bg-warning    { background-color: var(--warning-bg) !important; color: var(--warning-text) !important; border: 1px solid var(--warning-border); }
+.badge.bg-info       { background-color: var(--info-bg) !important;    color: var(--info-text)    !important; border: 1px solid var(--info-border);    }
+.badge.bg-secondary  { background-color: var(--gray-100) !important;   color: var(--text-secondary) !important; border: 1px solid var(--border-default); }
+.badge.bg-light      { background-color: var(--gray-50) !important;    color: var(--text-secondary) !important; border: 1px solid var(--border-subtle); }
+.badge.bg-primary    { background-color: var(--indigo-50) !important;  color: var(--primary-deeper) !important; border: 1px solid var(--indigo-100); }
+
+/* Refined link */
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+a:hover { color: var(--primary-dark); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Code chips */
+code {
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 1px 6px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ============================================================
+   Polish v3 — bug fixes & responsiveness
+   Targets dropdown alignment, viewport overflow, mobile layout,
+   and shared card stability.
+   ============================================================ */
+
+/* Bootstrap dropdown — refined defaults that override site-wide */
+.dropdown-menu {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 6px;
+    box-shadow: var(--elevation-3);
+    background: var(--surface-raised);
+    margin-top: 6px;
+    min-width: 200px;
+}
+.dropdown-menu .dropdown-item {
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+.dropdown-menu .dropdown-item:hover,
+.dropdown-menu .dropdown-item:focus {
+    background-color: var(--surface-sunken);
+    color: var(--text-primary);
+}
+.dropdown-menu .dropdown-item.active,
+.dropdown-menu .dropdown-item:active {
+    background-color: var(--indigo-50);
+    color: var(--primary-deeper);
+}
+.dropdown-menu .dropdown-divider {
+    border-top-color: var(--border-subtle);
+    margin: 4px 0;
+}
+/* Keep dropdowns inside viewport on tablet+ — right-align when overflowing */
+@media (max-width: 768px) {
+    .dropdown-menu {
+        min-width: 180px;
+        max-width: calc(100vw - 24px);
+    }
+    .dropdown-menu-end {
+        right: 0 !important;
+        left: auto !important;
+    }
+}
+
+/* Topnav items — keep overflow visible so dropdown menus can render
+   outside the bar. On tight screens, allow horizontal scrolling via
+   `overflow: clip` + dynamic width rather than overflow:hidden,
+   which would clip the menus dropping below. */
+.top-nav .nav-items-scroller {
+    overflow: visible;
+}
+
+@media (max-width: 720px) {
+    .top-nav {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+    .top-nav .nav-brand-text {
+        display: none;              /* hide brand text on tight screens */
+    }
+    .top-nav .user-name-label {
+        display: none;              /* avatar-only on tight screens */
+    }
+}
+
+/* Main container responsive padding */
+@media (max-width: 720px) {
+    main > .container-fluid {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+}
+
+/* Footer quick-actions: smaller chrome on mobile, hide labels on tightest screens */
+@media (max-width: 720px) {
+    footer[aria-label="Quick actions"] .container-fluid {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+    footer[aria-label="Quick actions"] small {
+        display: none;
+    }
+}
+@media (max-width: 480px) {
+    footer[aria-label="Quick actions"] .btn .footer-action-label {
+        display: none;
+    }
+    footer[aria-label="Quick actions"] .btn {
+        padding-inline: 10px;
+    }
+}
+
+/* EntityCard responsiveness */
+.entity-card-summary {
+    display: flex;
+    gap: 24px;
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+.entity-card-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+@media (max-width: 720px) {
+    .entity-card-summary { gap: 16px; }
+    .entity-card-action-label { display: none; }     /* compact: icon-only */
+    .entity-card-actions .btn,
+    .entity-card-actions button { padding: 4px 8px; }
+}
+
+/* EntityCard chips truncate gracefully */
+.entity-card-chip {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+@media (max-width: 720px) {
+    .entity-card-chip { max-width: 140px; }
+}
+
+/* DetailTable — horizontal scroll on narrow */
+.detail-table-scroller {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-raised);
+}
+.detail-table-scroller > table {
+    min-width: 560px;               /* prevents squashed cells */
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+.detail-table-scroller > table thead th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 8px 12px;
+    background: var(--surface-sunken);
+    border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
+}
+.detail-table-scroller > table tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
+}
+.detail-table-scroller > table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* TaskFAB clears the footer on tight screens (footer wraps to 2 rows on mobile) */
+@media (max-width: 720px) {
+    .task-fab-btn {
+        bottom: clamp(96px, 14vh, 140px) !important;
+        right: 16px !important;
+    }
+}
+
+/* Modal — sane sizing on mobile */
+@media (max-width: 720px) {
+    .modal-dialog.modal-xl,
+    .modal-dialog.modal-lg,
+    .modal-dialog.modal-md {
+        max-width: calc(100vw - 24px);
+        margin: 12px auto;
+    }
+    .modal-body { padding: 1rem !important; }
+    .modal-header { padding: 1rem 1rem !important; }
+}
+
+/* Filter row — prevent overflow */
+.filter-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.filter-bar > * { min-width: 0; }
+
+/* Long-label utility */
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* Reduce Bootstrap default form-control "size huge" feel on small */
+@media (max-width: 480px) {
+    .form-control, .form-select { font-size: 0.875rem; }
+    h1, .h1 { font-size: 1.5rem; }
+    h2, .h2 { font-size: 1.25rem; }
+    h3, .h3 { font-size: 1.1rem; }
+}
+
+/* Prevent body horizontal scroll without breaking position:absolute children */
+@supports (overflow: clip) {
+    html, body { overflow-x: clip; }
+}
+@supports not (overflow: clip) {
+    html { overflow-x: hidden; }
+}
+
+

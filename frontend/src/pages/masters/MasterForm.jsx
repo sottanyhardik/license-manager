@@ -1507,72 +1507,104 @@ export default function MasterForm({
                     )}
 
                     {entityName === 'bill-of-entries' && !isEdit && (
-                        <div className="mb-4 p-3 rounded" style={{ background: 'white', border: '1px dashed #c7d2fe' }}>
-                            <div className="d-flex align-items-center gap-2 flex-wrap">
-                                <input
-                                    type="file"
-                                    accept=".pdf,application/pdf"
-                                    id="boe-pdf-input"
-                                    className="form-control form-control-sm"
-                                    style={{ maxWidth: 360 }}
-                                    onChange={(e) => {
-                                        setBoePdfFile(e.target.files?.[0] || null);
-                                        setBoeParseSummary(null);
+                        <section className="surface-card mb-4" style={{ padding: 20 }}>
+                            <div className="d-flex align-items-start" style={{ gap: 16, flexWrap: 'wrap' }}>
+                                <div
+                                    aria-hidden="true"
+                                    style={{
+                                        width: 44, height: 44, borderRadius: 12,
+                                        background: 'var(--indigo-50)', color: 'var(--primary-color)',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                        flexShrink: 0,
                                     }}
-                                />
-                                <button
-                                    type="button"
-                                    className="btn btn-primary btn-sm"
-                                    onClick={handleParseBoePdf}
-                                    disabled={!boePdfFile || boeParsing}
                                 >
-                                    {boeParsing ? (
-                                        <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Fetching…</>
-                                    ) : (
-                                        <><i className="bi bi-download me-1"></i>Fetch</>
-                                    )}
-                                </button>
-                                <small className="text-muted">
-                                    Upload the ICEGATE BOE PDF, then click <strong>Fetch</strong> to prefill BE no, date, port, company, exchange rate, invoice & item.
-                                </small>
+                                    <i className="bi bi-file-earmark-pdf" style={{ fontSize: '1.15rem' }}></i>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                                        Import from BOE PDF
+                                    </div>
+                                    <div className="mt-1" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                                        Upload an ICEGATE BOE, then click <strong>Fetch</strong> to prefill the form and item rows.
+                                    </div>
+                                    <div className="d-flex align-items-center mt-3" style={{ gap: 10, flexWrap: 'wrap' }}>
+                                        <input
+                                            type="file"
+                                            accept=".pdf,application/pdf"
+                                            id="boe-pdf-input"
+                                            className="form-control form-control-sm"
+                                            style={{ maxWidth: 340 }}
+                                            onChange={(e) => {
+                                                setBoePdfFile(e.target.files?.[0] || null);
+                                                setBoeParseSummary(null);
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary btn-sm"
+                                            onClick={handleParseBoePdf}
+                                            disabled={!boePdfFile || boeParsing}
+                                        >
+                                            {boeParsing ? (
+                                                <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Fetching…</>
+                                            ) : (
+                                                <><i className="bi bi-magic me-1"></i>Fetch</>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             {boeParseSummary && (
-                                <div className="mt-3 small">
-                                    <div>
-                                        <strong>BE {boeParseSummary.be_number}</strong> · {boeParseSummary.be_date} · port <code>{boeParseSummary.port_code}</code> · 1 {boeParseSummary.currency || 'USD'} = ₹{boeParseSummary.exchange_rate}
+                                <div
+                                    className="mt-3"
+                                    style={{
+                                        background: 'var(--surface-sunken)',
+                                        border: '1px solid var(--border-subtle)',
+                                        borderRadius: 'var(--radius-md)',
+                                        padding: '12px 14px',
+                                        fontSize: '0.8125rem',
+                                    }}
+                                >
+                                    <div style={{ color: 'var(--text-primary)' }}>
+                                        <strong>BE {boeParseSummary.be_number}</strong>
+                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>{boeParseSummary.be_date}
+                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>port <code>{boeParseSummary.port_code}</code>
+                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>1 {boeParseSummary.currency || 'USD'} = ₹{boeParseSummary.exchange_rate}
                                     </div>
                                     {boeParseSummary.company_created && (
-                                        <div className="text-success">
-                                            <i className="bi bi-check-circle me-1"></i>
+                                        <div className="mt-1" style={{ color: '#065F46' }}>
+                                            <i className="bi bi-check-circle-fill me-1"></i>
                                             New company created from buyer details ({boeParseSummary.buyer_name}).
                                         </div>
                                     )}
                                     {!boeParseSummary.company_created && boeParseSummary.matched_company_id && (
-                                        <div className="text-muted">
+                                        <div className="mt-1" style={{ color: 'var(--text-secondary)' }}>
                                             <i className="bi bi-check2 me-1"></i>
                                             Matched existing company ({boeParseSummary.buyer_name}).
                                         </div>
                                     )}
                                     {boeParseSummary.matched_allotment_id && (
-                                        <div className="text-info">
+                                        <div className="mt-1" style={{ color: 'var(--primary-deeper)' }}>
                                             <i className="bi bi-info-circle me-1"></i>
                                             Matched existing allotment <strong>#{boeParseSummary.matched_allotment_id}</strong> by invoice number.
                                         </div>
                                     )}
                                     {boeParseSummary.licences?.length > 0 && (
-                                        <details className="mt-1">
-                                            <summary>{boeParseSummary.licences.length} licence row(s) — {boeParseSummary.unmatched} unmatched</summary>
-                                            <ul className="mb-0 mt-1" style={{ paddingLeft: '1.2rem' }}>
+                                        <details className="mt-2">
+                                            <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                                                {boeParseSummary.licences.length} licence row(s) — {boeParseSummary.unmatched} unmatched
+                                            </summary>
+                                            <ul className="mb-0 mt-2" style={{ paddingLeft: '1.1rem', color: 'var(--text-secondary)' }}>
                                                 {boeParseSummary.licences.map((l, i) => {
                                                     const badge = l.match_status === 'matched'
-                                                        ? <span className="text-success ms-1">✓ prefill item</span>
+                                                        ? <span style={{ color: '#065F46', marginLeft: 6 }}>✓ prefill item</span>
                                                         : l.match_status === 'license_only'
-                                                            ? <span className="text-warning ms-1">⚠ license found, sl#{l.licence_slno} missing</span>
+                                                            ? <span style={{ color: '#92400E', marginLeft: 6 }}>⚠ license found, sl#{l.licence_slno} missing</span>
                                                             : l.match_status === 'license_missing'
-                                                                ? <span className="text-danger ms-1">✗ license not in DB</span>
-                                                                : <span className="text-muted ms-1">— no data</span>;
+                                                                ? <span style={{ color: '#991B1B', marginLeft: 6 }}>✗ license not in DB</span>
+                                                                : <span style={{ color: 'var(--text-tertiary)', marginLeft: 6 }}>— no data</span>;
                                                     return (
-                                                        <li key={i}>
+                                                        <li key={i} style={{ padding: '2px 0' }}>
                                                             License <code>{l.licence_number}</code> sl#{l.licence_slno} · CIF ₹{l.cif_inr} · ${l.cif_fc} · qty {l.qty} {l.uqc}
                                                             {badge}
                                                         </li>
@@ -1583,7 +1615,7 @@ export default function MasterForm({
                                     )}
                                 </div>
                             )}
-                        </div>
+                        </section>
                     )}
 
                     <form onSubmit={handleSubmit} encType="multipart/form-data">

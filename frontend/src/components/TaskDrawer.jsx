@@ -338,8 +338,11 @@ export default function TaskDrawer({ show, onClose }) {
                 style={{
                     position: "fixed",
                     inset: 0,
-                    background: "rgba(0,0,0,0.35)",
+                    background: "var(--surface-overlay)",
+                    backdropFilter: "blur(2px)",
+                    WebkitBackdropFilter: "blur(2px)",
                     zIndex: 1050,
+                    transition: "opacity 180ms cubic-bezier(0.16,1,0.3,1)",
                 }}
             />
             <aside
@@ -351,26 +354,59 @@ export default function TaskDrawer({ show, onClose }) {
                     right: 0,
                     bottom: 0,
                     width: "min(440px, 100vw)",
-                    background: "#fff",
+                    background: "var(--surface-raised)",
                     zIndex: 1060,
                     display: "flex",
                     flexDirection: "column",
-                    boxShadow: "-4px 0 20px rgba(0,0,0,0.15)",
+                    boxShadow: "var(--elevation-overlay)",
+                    borderLeft: "1px solid var(--border-subtle)",
                 }}
             >
                 {/* Header */}
-                <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
-                    <div className="d-flex align-items-center gap-2">
-                        <i className="bi bi-check2-square fs-5"></i>
-                        <strong>Tasks</strong>
+                <div
+                    className="d-flex align-items-center justify-content-between"
+                    style={{
+                        padding: "18px 20px",
+                        borderBottom: "1px solid var(--border-subtle)",
+                    }}
+                >
+                    <div className="d-flex align-items-center" style={{ gap: 10 }}>
+                        <span
+                            aria-hidden="true"
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: 28,
+                                height: 28,
+                                borderRadius: 8,
+                                background: "var(--indigo-50)",
+                                color: "var(--primary-color)",
+                            }}
+                        >
+                            <i className="bi bi-check2-square" style={{ fontSize: "0.95rem" }}></i>
+                        </span>
+                        <span style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.01em" }}>Tasks</span>
                     </div>
-                    <button className="btn btn-sm btn-light" onClick={onClose} aria-label="Close">
-                        <i className="bi bi-x-lg"></i>
+                    <button
+                        className="btn btn-sm btn-light"
+                        onClick={onClose}
+                        aria-label="Close"
+                        style={{ width: 32, height: 32, padding: 0, borderRadius: 8 }}
+                    >
+                        <i className="bi bi-x-lg" style={{ fontSize: "0.85rem" }}></i>
                     </button>
                 </div>
 
                 {/* Quick create + voice */}
-                <form onSubmit={handleSubmit} className="p-3 border-bottom" style={{ background: "#f8f9fa" }}>
+                <form
+                    onSubmit={handleSubmit}
+                    style={{
+                        padding: "16px 20px",
+                        background: "var(--surface-sunken)",
+                        borderBottom: "1px solid var(--border-subtle)",
+                    }}
+                >
                     <div className="d-flex gap-2 mb-2">
                         <input
                             ref={titleInputRef}
@@ -391,10 +427,30 @@ export default function TaskDrawer({ show, onClose }) {
                     </div>
 
                     {speech.listening && (
-                        <div className="small text-muted mb-2" style={{ minHeight: 18 }}>
-                            <span className="text-danger">● Listening</span> — say <code>next</code> to split,
-                            {" "}<code>assign to NAME</code>, or include <code>urgent</code> for high priority.
-                            {speech.interim && <em className="ms-1 d-block">"{speech.interim}"</em>}
+                        <div
+                            className="small mb-2"
+                            style={{
+                                minHeight: 18,
+                                color: "var(--text-secondary)",
+                                background: "var(--surface-raised)",
+                                border: "1px solid var(--border-subtle)",
+                                borderRadius: 8,
+                                padding: "8px 10px",
+                                marginTop: 4,
+                            }}
+                        >
+                            <span style={{ color: "var(--danger-color)", fontWeight: 500 }}>
+                                <span style={{
+                                    display: "inline-block",
+                                    width: 6, height: 6, borderRadius: 999,
+                                    background: "var(--danger-color)",
+                                    marginRight: 6,
+                                    verticalAlign: "middle",
+                                    animation: "skeleton-shimmer 1.4s ease-in-out infinite",
+                                }} />
+                                Listening
+                            </span>{" "}— say <code>next</code> to split, <code>assign to NAME</code>, or include <code>urgent</code> for high priority.
+                            {speech.interim && <em className="d-block mt-1" style={{ color: "var(--text-tertiary)" }}>"{speech.interim}"</em>}
                         </div>
                     )}
 
@@ -450,7 +506,15 @@ export default function TaskDrawer({ show, onClose }) {
                 </form>
 
                 {/* Filters */}
-                <div className="px-3 py-2 border-bottom d-flex gap-2 align-items-center" style={{ background: "#fff" }}>
+                <div
+                    className="d-flex align-items-center"
+                    style={{
+                        padding: "12px 20px",
+                        gap: 8,
+                        background: "var(--surface-raised)",
+                        borderBottom: "1px solid var(--border-subtle)",
+                    }}
+                >
                     <input
                         className="form-control form-control-sm"
                         placeholder="Search…"
@@ -472,9 +536,18 @@ export default function TaskDrawer({ show, onClose }) {
 
                 {/* List */}
                 <div className="flex-grow-1" style={{ overflowY: "auto" }}>
-                    {loading && <div className="text-center py-4 text-muted small">Loading…</div>}
+                    {loading && (
+                        <div style={{ padding: "16px 20px" }}>
+                            <div className="skeleton" style={{ height: 14, width: "70%", marginBottom: 10 }} />
+                            <div className="skeleton" style={{ height: 12, width: "45%" }} />
+                        </div>
+                    )}
                     {!loading && tasks.length === 0 && (
-                        <div className="text-center py-4 text-muted small">No tasks.</div>
+                        <div className="empty-state">
+                            <div className="empty-icon"><i className="bi bi-clipboard-check"></i></div>
+                            <div className="empty-title">No tasks yet</div>
+                            <div className="empty-sub">Add one above or hold the mic and dictate.</div>
+                        </div>
                     )}
                     {tasks.map(task => {
                         const open = expanded === task.id;
@@ -486,7 +559,14 @@ export default function TaskDrawer({ show, onClose }) {
                         const assigneeLabel = task.assigned_to_username || task.created_by_username || "self";
                         const assigneeIsSelf = task.assigned_to === user?.id || (!task.assigned_to && mine);
                         return (
-                            <div key={task.id} className="border-bottom px-3 py-2">
+                            <div
+                                key={task.id}
+                                className="task-drawer-row"
+                                style={{
+                                    padding: "12px 20px",
+                                    borderBottom: "1px solid var(--border-subtle)",
+                                }}
+                            >
                                 <div className="d-flex align-items-start gap-2">
                                     <input
                                         type="checkbox"

@@ -231,22 +231,33 @@ _PCT_CONDITION_RX = re.compile(
 )
 
 # Newer DFIA condition style — references items by NAME rather than sl.No.
-# Examples:
-#   "IMPORT ITEM Liquid Glucose, Fruit Juice or Milk & Milk Products /
-#    Milk Solids , Citric Acid IS SUBJECT TO ACTUAL USER CONDITION"
-#   "FOR IMPORT ITEM Essential oils , Food Colours, Food Flavours THE CIF
-#    VALUE SHALL NOT EXCEED 5% OF THE TOTAL CIF VALUE OF THE AUTHORIZATION."
+# Observed variants (the format evolved across DGFT RA offices):
+#
+# AU variants:
+#   "IMPORT ITEM Liquid Glucose, Milk & Milk Products IS SUBJECT TO ACTUAL USER CONDITION"
+#   "Note5: IMPORT ITEM Liquid Glucose, Milk and Milk Products, Fruit Juice and
+#    Citric Acid, IS SUBJECT TO ACTUAL USER CONDITION ."  ← comma before IS
+#
+# PCT variants:
+#   "FOR IMPORT ITEM Essential oils, Food Colours THE CIF VALUE SHALL NOT EXCEED 5%"
+#   "FOR IMPORT ITEM Binder / Thickeners / Starch CIF value shall not exceed 3%"
+#   "CIF value of input item FOR IMPORT ITEM Essential oils ... shall not exceed 5%"
 #
 # The non-DOTALL `.+?` keeps each match bounded to ONE condition clause —
-# the negative lookahead at each step is a safety net for cases where the
-# clause wraps across a line break.
+# the negative lookahead at each step is a safety net.
 _NAMED_STOP = r"(?!IMPORT\s+ITEM)(?!ACTUAL\s+USER)(?!CIF\s+VALUE)"
 _AU_NAMED_RX = re.compile(
-    rf"IMPORT\s+ITEM\s+((?:{_NAMED_STOP}.){{1,300}}?)\s+(?:IS|ARE)\s+SUBJECT\s+TO\s+ACTUAL\s+USER",
+    # Allow an optional comma (", IS" as in newer PDFs) before IS/ARE.
+    rf"IMPORT\s+ITEM\s+((?:{_NAMED_STOP}.){{1,300}}?)\s*,?\s*(?:IS|ARE)\s+SUBJECT\s+TO\s+ACTUAL\s+USER",
     re.IGNORECASE | re.DOTALL,
 )
 _PCT_NAMED_RX = re.compile(
-    rf"(?:FOR\s+)?IMPORT\s+ITEM\s+((?:{_NAMED_STOP}.){{1,300}}?)\s+THE\s+CIF\s+VALUE\s+SHALL\s+NOT\s+EXCEED\s+(\d+)\s*%",
+    # Three trailing forms all handled by making "THE CIF value" optional:
+    #   "THE CIF VALUE SHALL NOT EXCEED N%"  (original)
+    #   "CIF value shall not exceed N%"      (without THE, _NAMED_STOP stops before CIF)
+    #   "shall not exceed N%"                (no CIF qualifier at all)
+    rf"(?:FOR\s+)?IMPORT\s+ITEM\s+((?:{_NAMED_STOP}.){{1,300}}?)"
+    rf"\s*(?:(?:THE\s+)?CIF\s+value\s+)?shall\s+not\s+exceed\s+(\d+)\s*%",
     re.IGNORECASE | re.DOTALL,
 )
 

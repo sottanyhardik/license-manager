@@ -1,8 +1,10 @@
 import {useState} from "react";
+import {useNavigate} from "react-router-dom";
 import api from "../../api/axios";
 import {toast} from "react-toastify";
 
 export default function DownloadLicense() {
+    const navigate = useNavigate();
     const [licenseStatus, setLicenseStatus] = useState("active");
     const [days, setDays] = useState(365);
     const [loading, setLoading] = useState(false);
@@ -87,27 +89,38 @@ export default function DownloadLicense() {
         .filter(Boolean).length;
 
     return (
-        <div className="container-fluid">
-            <div className="row mb-4">
-                <div className="col-12">
-                    <h2>Download License</h2>
-                    <p className="text-muted">
-                        Export license data as Excel reports
-                    </p>
+        <div style={{ minHeight: '100vh' }}>
+            {/* Tabler-style page header */}
+            <div className="page-header">
+                <div style={{ minWidth: 0 }}>
+                    <div className="page-pretitle">
+                        <a
+                            href="/"
+                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
+                            style={{ color: 'inherit', textDecoration: 'none' }}
+                        >
+                            Home
+                        </a>
+                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        Reports
+                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        Download License
+                    </div>
+                    <h1>Download License</h1>
                 </div>
             </div>
 
             <div className="row g-3">
                 {/* Bulk Download by License Numbers */}
                 <div className="col-md-6">
-                    <div className="card h-100">
-                        <div className="card-header bg-white">
-                            <h5 className="mb-0">
-                                <i className="bi bi-upc-scan me-2 text-primary"></i>
+                    <div className="surface-card h-100">
+                        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}>
+                            <h5 className="mb-0" style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                                <i className="bi bi-upc-scan me-2" style={{ color: 'var(--primary-color)' }}></i>
                                 Download by License Numbers
                             </h5>
                         </div>
-                        <div className="card-body d-flex flex-column">
+                        <div className="d-flex flex-column" style={{ padding: '14px 16px' }}>
                             <p className="text-muted small mb-3">
                                 Enter DFIA license numbers separated by commas. Each license will get its own sheet in the downloaded Excel file.
                             </p>
@@ -154,14 +167,14 @@ export default function DownloadLicense() {
 
                 {/* Download by Status */}
                 <div className="col-md-6">
-                    <div className="card h-100">
-                        <div className="card-header bg-white">
-                            <h5 className="mb-0">
-                                <i className="bi bi-funnel me-2 text-success"></i>
+                    <div className="surface-card h-100">
+                        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}>
+                            <h5 className="mb-0" style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                                <i className="bi bi-funnel me-2" style={{ color: 'var(--success-color, #16a34a)' }}></i>
                                 Download by Status
                             </h5>
                         </div>
-                        <div className="card-body d-flex flex-column">
+                        <div className="d-flex flex-column" style={{ padding: '14px 16px' }}>
                             <p className="text-muted small mb-3">
                                 Export all active or expiring licenses filtered by date range.
                             </p>
@@ -231,9 +244,12 @@ export default function DownloadLicense() {
 
                 {/* Info card */}
                 <div className="col-12">
-                    <div className="card">
-                        <div className="card-body py-3">
-                            <h6 className="card-title mb-2">Excel Report Includes</h6>
+                    <div className="surface-card">
+                        <div style={{ padding: '14px 16px' }}>
+                            <h6 className="mb-2" style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                                <i className="bi bi-info-circle me-2" style={{ color: 'var(--primary-color)' }}></i>
+                                Excel Report Includes
+                            </h6>
                             <div className="row row-cols-2 row-cols-md-3 g-2">
                                 {[
                                     "License number, date, expiry, exporter",

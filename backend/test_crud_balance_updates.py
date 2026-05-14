@@ -139,11 +139,11 @@ def test_crud_updates_all_items():
         print(f"✓ Found {len(restricted)} restricted items")
 
         for idx, item in enumerate(restricted, 1):
-            restriction_balance = item._calculate_head_restriction_balance()
+            # NEW model — restrictions come from condition_type pools.
             print(f"  Item {idx}:")
-            print(f"    Available value: ${item.available_value:,.2f}")
-            print(f"    Restriction calc: ${restriction_balance:,.2f}")
-            print(f"    Match: {'✓' if abs(item.available_value - restriction_balance) < Decimal('0.01') else '✗'}")
+            print(f"    Condition type:   {item.condition_type or '(open)'}")
+            print(f"    Available value:  ${item.available_value:,.2f}")
+            print(f"    Balance cif fc:   ${item.balance_cif_fc:,.2f}")
     else:
         print("ℹ️  No restricted items found")
 

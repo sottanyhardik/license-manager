@@ -20,6 +20,7 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     """Serializer for trade line items"""
     id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     sr_number_label = serializers.SerializerMethodField()
+    condition_type = serializers.CharField(source='sr_number.condition_type', read_only=True, allow_blank=True, default='')
     computed_amount = serializers.SerializerMethodField()
 
     def to_internal_value(self, data):
@@ -42,7 +43,7 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = LicenseTradeLine
         fields = (
-            'id', 'sr_number', 'sr_number_label', 'description', 'hsn_code', 'mode',
+            'id', 'sr_number', 'sr_number_label', 'condition_type', 'description', 'hsn_code', 'mode',
             'qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr',
             'fob_inr', 'pct', 'amount_inr', 'computed_amount'
         )

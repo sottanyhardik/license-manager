@@ -13,7 +13,7 @@ from django.utils.functional import cached_property
 
 from core.constants import DEC_0
 from license.services.balance_calculator import LicenseBalanceCalculator, ItemBalanceCalculator
-from license.services.restriction_calculator import RestrictionCalculator
+from license.services.condition_pool import compute_condition_pools
 from license.services.validation_service import LicenseValidationService
 
 
@@ -32,12 +32,12 @@ class LicenseBalanceMixin:
         """
         return LicenseBalanceCalculator.calculate_balance(self)
 
-    def get_restriction_balances(self) -> Dict[Decimal, Decimal]:
+    def get_restriction_balances(self) -> Dict[str, Decimal]:
         """
-        Get restriction balances using centralized calculator service.
+        Per-condition_type remaining pool balances (NEW model).
+        Returns: {"2%": remaining, "3%": remaining, ...}
         """
-        total_export_cif = self._calculate_license_credit()
-        return RestrictionCalculator.calculate_all_restriction_balances(self, total_export_cif)
+        return compute_condition_pools(self)
 
     def _calculate_license_credit(self) -> Decimal:
         """Calculate total credit using service."""

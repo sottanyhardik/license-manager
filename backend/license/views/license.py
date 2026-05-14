@@ -2,7 +2,7 @@
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounts.permissions import LicensePermission
+from accounts.permissions import LicensePermission, LicenseReadOnlyPermission
 from core.constants import LICENCE_PURCHASE_CHOICES, LICENCE_PURCHASE_CHOICES_ACTIVE, SCHEME_CODE_CHOICES, \
     NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
     CURRENCY_CHOICES
@@ -44,14 +44,24 @@ license_nested_field_defs = {
         {"name": "serial_number", "type": "number", "label": "Serial Number", "default": 0},
         {"name": "hs_code", "type": "fk", "label": "HS Code", "fk_endpoint": "/masters/hs-codes/",
          "label_field": "hs_code", "display_field": "hs_code_label"},
-        {"name": "description", "type": "text", "label": "Description"},
+        {"name": "description", "type": "textarea", "label": "Description"},
         {"name": "items", "type": "fk_multi", "label": "Items", "fk_endpoint": "/masters/item-names/",
          "label_field": "name", "show_in_list": False},
         {"name": "quantity", "type": "number", "label": "Quantity", "default": 0},
         {"name": "unit", "type": "select", "label": "Unit", "choices": list(UNIT_CHOICES), "default": "kg"},
         {"name": "cif_fc", "type": "number", "label": "CIF (FC)", "default": 0},
         {"name": "cif_inr", "type": "number", "label": "CIF (INR)", "default": 0},
-        {"name": "is_restricted", "type": "boolean", "label": "Is Restricted"},
+        # `is_restricted` is derived from `condition_type` (set on save) —
+        # hidden from the editable form, surfaced only via the Condition badge.
+        {"name": "is_restricted", "type": "boolean", "label": "Is Restricted", "read_only": True, "show_in_list": False, "show_in_form": False},
+        {"name": "condition_type", "type": "select", "label": "Condition", "choices": [
+            {"value": "", "label": "—"},
+            {"value": "AU", "label": "AU (Actual User)"},
+            {"value": "2%", "label": "2% restriction"},
+            {"value": "3%", "label": "3% restriction"},
+            {"value": "5%", "label": "5% restriction"},
+            {"value": "10%", "label": "10% restriction"},
+        ], "default": "", "show_in_list": False},
     ],
     "license_documents": [
         {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
@@ -180,6 +190,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     """
     permission_classes = [LicensePermission]
     lookup_value_regex = '[^/]+'  # Allow both numbers and strings
+
+    def get_permissions(self):
+        # bulk_balance_excel uses POST only because the licence-number list
+        # goes in the request body; behaviour is read-only. Allow any role
+        # that can read licences.
+        if getattr(self, 'action', None) == 'bulk_balance_excel':
+            return [LicenseReadOnlyPermission()]
+        return super().get_permissions()
 
     # Apply advanced filter backends
     filterset_class = LicenseFilterSet
@@ -916,25 +934,23 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         from django.db.models import Sum as _Sum, DecimalField as _DF, Value as _Val
         from django.db.models.functions import Coalesce as _Coalesce
 
-        _bal_agg = defaultdict(lambda: {'qty': 0.0, 'is_restricted': False, 'restriction_pct': None, 'sr_ids': [], 'description': '', 'hs_code': ''})
+        # New restriction model: condition_type on LicenseImportItemsModel is
+        # the source of truth. %-conditions share a pool from compute_condition_pools();
+        # AU / blank use the full licence balance.
+        from license.services.condition_pool import compute_condition_pools as _ccp
+        _cond_pools = _ccp(license_obj)
+
+        _bal_agg = defaultdict(lambda: {'qty': 0.0, 'sr_ids': [], 'description': '', 'hs_code': '', 'condition_type': ''})
         for _item in license_obj.import_license.all():
             _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
             _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
             _bal_agg[_key]['sr_ids'].append(_item.id)
-            if _item.is_restricted:
-                _bal_agg[_key]['is_restricted'] = True
-                if _bal_agg[_key]['restriction_pct'] is None:
-                    # Get restriction_percentage directly from linked ItemNameModel
-                    # (without sion_norm_class requirement, which may be null)
-                    _rpct_val = _item.items.filter(
-                        restriction_percentage__gt=0
-                    ).values_list('restriction_percentage', flat=True).first()
-                    if _rpct_val:
-                        _bal_agg[_key]['restriction_pct'] = _Dec(str(_rpct_val))
             if not _bal_agg[_key]['description']:
                 _bal_agg[_key]['description'] = _item.description or _key
             if not _bal_agg[_key]['hs_code']:
                 _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
+            if _item.condition_type and not _bal_agg[_key]['condition_type']:
+                _bal_agg[_key]['condition_type'] = _item.condition_type
 
         for item in license_obj.import_license.all():
             item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
@@ -1099,8 +1115,6 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 return Paragraph(str(text), Pb_yel)
 
             _license_balance = float(license_obj.balance_cif or 0)
-            _total_export_cif = _Dec(str(license_obj._calculate_license_credit() or 0))
-
             bal_table_data = [
                 # Row 0: cols 0-3 merged "BALANCE CIF $" | col 4 = total (yellow)
                 [BH('BALANCE CIF $'), '', '', '', BY(f"{total_bal_cif_fc:,.2f}")],
@@ -1109,23 +1123,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             ]
             for item_key in sorted(_bal_agg.keys()):
                 b_qty = _bal_agg[item_key]['qty']
-                # Restricted items: compute per-group balance = (export_cif × pct/100) − group_debits − group_allotments
-                # Non-restricted items: show license-level balance
-                if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
-                    _rpct = _bal_agg[item_key]['restriction_pct']
-                    _sr_ids = _bal_agg[item_key]['sr_ids']
-                    _grp_debits = RowDetails.objects.filter(
-                        sr_number_id__in=_sr_ids, transaction_type='D'
-                    ).aggregate(
-                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                    )['total'] or _Dec('0')
-                    _grp_allots = AllotmentItems.objects.filter(
-                        item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
-                    ).aggregate(
-                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                    )['total'] or _Dec('0')
-                    _allowed = _total_export_cif * _rpct / _Dec('100')
-                    b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+                cond = _bal_agg[item_key].get('condition_type') or ''
+                if cond in _cond_pools:
+                    b_cif = float(min(_cond_pools[cond], _Dec(str(_license_balance))))
                 else:
                     b_cif = _license_balance
                 unit_price = b_cif / b_qty if b_qty else 0.0
@@ -1308,29 +1308,31 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             # BOEs first (sorted by BOE date), then allotments (sorted by allotment date)
             summary_rows.sort(key=lambda x: (x[0], x[1]))
 
+            # New restriction model: condition_type on LicenseImportItemsModel is
+            # the source of truth. Percentage conditions share a pool computed
+            # by compute_condition_pools(); AU / blank conditions use the full
+            # licence balance.
+            from license.services.condition_pool import compute_condition_pools as _ccp
+            _cond_pools = _ccp(license_obj)
+
             _bal_agg = defaultdict(lambda: {
-                'qty': 0.0, 'is_restricted': False, 'restriction_pct': None,
-                'sr_ids': [], 'description': '', 'hs_code': ''
+                'qty': 0.0, 'sr_ids': [],
+                'description': '', 'hs_code': '', 'condition_type': ''
             })
             for _item in license_obj.import_license.all():
                 _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
                 _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
                 _bal_agg[_key]['sr_ids'].append(_item.id)
-                if _item.is_restricted:
-                    _bal_agg[_key]['is_restricted'] = True
-                    if _bal_agg[_key]['restriction_pct'] is None:
-                        _rpct_val = _item.items.filter(
-                            restriction_percentage__gt=0
-                        ).values_list('restriction_percentage', flat=True).first()
-                        if _rpct_val:
-                            _bal_agg[_key]['restriction_pct'] = _Dec(str(_rpct_val))
                 if not _bal_agg[_key]['description']:
                     _bal_agg[_key]['description'] = _item.description or _key
                 if not _bal_agg[_key]['hs_code']:
                     _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
+                # Carry per-item licence-condition (AU / 2% / 3% / 5% / 10%)
+                # through to the bulk-balance Excel cell.
+                if _item.condition_type and not _bal_agg[_key]['condition_type']:
+                    _bal_agg[_key]['condition_type'] = _item.condition_type
 
             _license_balance = float(license_obj.balance_cif or 0)
-            _total_export_cif = _Dec(str(license_obj._calculate_license_credit() or 0))
             total_license_cif = total_cif + _license_balance
 
             r = 1
@@ -1430,32 +1432,25 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     if not _found:
                         _unclassified.append((_de, _hs, _bq))
             elif _is_e5:
-                _E5_CATS = [
-                    ('DIETARY FIBRE',            2.7,   ['0802']),
-                    ('VEGETABLE OIL (1513)',      2.26,  ['1513']),
-                    ('VEGETABLE OIL (15119020)',  1.2,   ['15119020']),
-                    ('MILK (0404)',               3.75,  ['0404']),
-                    ('MILK (3502)',               14.0,  ['3502']),
-                ]
-                _e5_totals = {label: 0.0 for label, *_ in _E5_CATS}
+                from license.services.e5_plan import (
+                    E5_PLAN_CATS as _E5_PLAN_CATS,
+                    classify_e5_hsn as _classify_e5,
+                    is_wheat_flour as _is_wheat_flour,
+                )
+                _e5_totals = {c: 0.0 for c in _E5_PLAN_CATS}
                 _e5_unclassified = []
                 _wf_qty = 0.0
-                _WF_HS = ['11010000']
                 for _ik in _bal_agg:
                     _bq = _bal_agg[_ik]['qty']
-                    _hs = (_bal_agg[_ik]['hs_code'] or '').lower()
+                    _hs = _bal_agg[_ik]['hs_code'] or ''
                     _de = _bal_agg[_ik]['description'] or _ik
-                    _found = False
-                    for _lbl, _rt, _hskw in _E5_CATS:
-                        if any(k in _hs for k in _hskw):
-                            _e5_totals[_lbl] += _bq
-                            _found = True
-                            break
-                    if not _found:
-                        if any(k in _hs for k in _WF_HS):
-                            _wf_qty += _bq
-                        else:
-                            _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+                    _cat = _classify_e5(_hs)
+                    if _cat:
+                        _e5_totals[_cat] += _bq
+                    elif _is_wheat_flour(_hs):
+                        _wf_qty += _bq
+                    else:
+                        _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
 
             ws.merge_cells(f'A{r}:E{r}')
             bh = ws[f'A{r}']
@@ -1550,38 +1545,40 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     'categories': [lbl for lbl, *_ in _UTIL_PLAN]
                 })
             elif _is_e5:
+                from license.services.e5_plan import (
+                    E5_CATS as _E5_CATS_ORDERED,
+                    compute_e5_plan as _compute_e5_plan,
+                )
+                _pool_10 = _cond_pools.get('10%', _Dec('0'))
+                _e5_planned_per_cat, _e5_rate_per_cat = _compute_e5_plan(
+                    _e5_totals, _wf_qty, _license_balance, _pool_10,
+                )
+
                 for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
 
                 _e5_planned = 0.0
-                _e5_remaining = _license_balance
-                _e5_planned_per_cat = {}
-                for _idx, (_lbl, _rt, _hskw) in enumerate(_E5_CATS):
-                    _bq = _e5_totals[_lbl]
-                    _pc = min(_rt * _bq, _e5_remaining)
-                    _e5_planned_per_cat[_lbl] = _pc
-                    _up = _pc / _bq if _bq else 0.0
-                    _e5_remaining -= _pc
+                _e5_qty = {}
+                for _idx, _lbl in enumerate(_E5_CATS_ORDERED):
+                    _bq = _wf_qty if _lbl == 'WHEAT FLOUR' else _e5_totals.get(_lbl, 0.0)
+                    _e5_qty[_lbl] = _bq
+                    _pc = _e5_planned_per_cat.get(_lbl, 0.0)
+                    _rt = _e5_rate_per_cat.get(_lbl, 0.0)
+                    _up = (_pc / _bq) if _bq else 0.0
                     _e5_planned += _pc
                     _rf = None if _idx % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _lbl, fill=_rf)
-                    _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    if _bq or _pc:
+                        _cell(ws, r, 2, _rt, fill=_rf, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 3, _bq, fill=_rf, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 4, _up, fill=_rf, align='right', num_fmt='#,##0.00')
+                    else:
+                        _cell(ws, r, 2, '-', fill=_rf, align='center')
+                        _cell(ws, r, 3, '-', fill=_rf, align='center')
+                        _cell(ws, r, 4, '-', fill=_rf, align='center')
+                    _cell(ws, r, 5, _pc, fill=_rf, align='right', num_fmt='#,##0.00')
                     r += 1
-
-                # WHEAT FLOUR row — last priority, remaining balance
-                _wf = _e5_remaining
-                _wf_up = _wf / _wf_qty if _wf_qty else 0.0
-                _wf_rf = None if len(_E5_CATS) % 2 == 0 else ALT_FILL
-                _cell(ws, r, 1, 'WHEAT FLOUR', fill=_wf_rf)
-                _cell(ws, r, 2, '-', fill=_wf_rf, align='center')
-                _cell(ws, r, 3, _wf_qty if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.00' if _wf_qty else None)
-                _cell(ws, r, 4, _wf_up if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.000000' if _wf_qty else None)
-                _cell(ws, r, 5, _wf, fill=_wf_rf, align='right', num_fmt='#,##0.00')
-                r += 1
 
                 if _e5_unclassified:
                     r += 1
@@ -1609,41 +1606,29 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _cell(ws, r, 2, '', fill=TOTAL_FILL)
                 _cell(ws, r, 3, '', fill=TOTAL_FILL)
                 _cell(ws, r, 4, 'TOTAL ALLOCATED CIF $', fill=TOTAL_FILL, bold=True, align='right')
-                _cell(ws, r, 5, _e5_planned + _wf, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, _e5_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 r += 1
-                _e5_planned_per_cat['WHEAT FLOUR'] = _wf
-                _e5_qty = dict(_e5_totals)
-                _e5_qty['WHEAT FLOUR'] = _wf_qty
                 _util_return.update({
                     'norm_type': 'E5', 'planned': _e5_planned_per_cat,
                     'qty_per_cat': _e5_qty,
-                    'total_planned': _e5_planned + _wf,
-                    'categories': [lbl for lbl, *_ in _E5_CATS] + ['WHEAT FLOUR']
+                    'total_planned': _e5_planned,
+                    'categories': list(_E5_CATS_ORDERED),
                 })
             else:
-                BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
+                from license.utils.condition_excel import annotate_cell as _annotate_cond
+                BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC', 'Cond']
                 for col, h in enumerate(BAL_COLS, 1):
                     _hdr(ws, r, col, h)
                 r += 1
 
                 for idx, item_key in enumerate(sorted(_bal_agg.keys())):
                     b_qty = _bal_agg[item_key]['qty']
-                    if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
-                        _rpct  = _bal_agg[item_key]['restriction_pct']
-                        _sr_ids = _bal_agg[item_key]['sr_ids']
-                        _grp_debits = RowDetails.objects.filter(
-                            sr_number_id__in=_sr_ids, transaction_type='D'
-                        ).aggregate(
-                            total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                        )['total'] or _Dec('0')
-                        _grp_allots = AllotmentItems.objects.filter(
-                            item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
-                        ).aggregate(
-                            total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                        )['total'] or _Dec('0')
-                        _allowed = _total_export_cif * _rpct / _Dec('100')
-                        b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+                    cond = _bal_agg[item_key].get('condition_type') or ''
+                    if cond in _cond_pools:
+                        # Shared pool for this %-condition, capped at licence balance.
+                        b_cif = float(min(_cond_pools[cond], _Dec(str(_license_balance))))
                     else:
+                        # AU or blank: full licence balance is available.
                         b_cif = _license_balance
 
                     unit_price = b_cif / b_qty if b_qty else 0.0
@@ -1651,11 +1636,48 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     hs   = _bal_agg[item_key]['hs_code']
                     row_fill = None if idx % 2 == 0 else ALT_FILL
 
-                    _cell(ws, r, 1, hs,         fill=row_fill)
+                    hs_cell = _cell(ws, r, 1, hs, fill=row_fill)
                     _cell(ws, r, 2, desc,       fill=row_fill)
                     _cell(ws, r, 3, b_qty,      fill=row_fill, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                    cond_cell = _cell(ws, r, 6, cond, fill=row_fill, align='center', bold=True)
+                    # When a licence condition is set on this item, paint the
+                    # HSN and Cond cells with the same colour used in the UI
+                    # badges so the restriction is visible at a glance.
+                    _annotate_cond(hs_cell, cond)
+                    _annotate_cond(cond_cell, cond)
+                    r += 1
+
+            # Per-item licence conditions (AU / 2% / 3% / 5% / 10%) — always
+            # rendered when at least one item carries a condition, regardless
+            # of norm type. Sits below the Utilization / Summary block.
+            _items_with_cond = [
+                _it for _it in license_obj.import_license.all()
+                if _it.condition_type
+            ]
+            if _items_with_cond:
+                from license.utils.condition_excel import annotate_cell as _annotate_per_item
+                r += 1
+                ws.merge_cells(f'A{r}:E{r}')
+                _ich = ws[f'A{r}']
+                _ich.value = 'Item-level Licence Conditions'
+                _ich.fill = HDR_FILL; _ich.font = Font(bold=True, color="FFFFFF", size=10)
+                _ich.alignment = Alignment(horizontal='center', vertical='center')
+                r += 1
+                for col, h in enumerate(['Sr No', 'HSN Code', 'Item Name', 'Description', 'Condition'], 1):
+                    _hdr(ws, r, col, h)
+                r += 1
+                for _it in sorted(_items_with_cond, key=lambda x: x.serial_number or 0):
+                    _names = ', '.join([i.name for i in _it.items.all()]) if _it.items.exists() else '-'
+                    _hs = str(_it.hs_code.hs_code if _it.hs_code else '-')
+                    sr_cell = _cell(ws, r, 1, _it.serial_number or '-', align='center', bold=True)
+                    _cell(ws, r, 2, _hs)
+                    _cell(ws, r, 3, _names)
+                    _cell(ws, r, 4, _it.description or '-')
+                    cond_cell = _cell(ws, r, 5, _it.condition_type, align='center', bold=True)
+                    _annotate_per_item(sr_cell, _it.condition_type)
+                    _annotate_per_item(cond_cell, _it.condition_type)
                     r += 1
 
             ws.column_dimensions['A'].width = 14
@@ -1694,14 +1716,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'POLYPROPYLENE',
             'PAPER & PAPER BOARD',
         ]
-        _E5_CATS_LABELS = [
-            'DIETARY FIBRE',
-            'VEGETABLE OIL (1513)',
-            'VEGETABLE OIL (15119020)',
-            'MILK (0404)',
-            'MILK (3502)',
-            'WHEAT FLOUR',
-        ]
+        from license.services.e5_plan import E5_CATS as _E5_CATS_ORDERED_SUMM
+        _E5_CATS_LABELS = list(_E5_CATS_ORDERED_SUMM)
         _e1_rows = [s for s in _util_summaries if s['norm_type'] == 'E1']
         _e5_rows = [s for s in _util_summaries if s['norm_type'] == 'E5']
         _other_rows = [s for s in _util_summaries if s['norm_type'] == 'other']
@@ -2028,29 +2044,28 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         summary_rows.sort(key=lambda x: (x[0], x[1]))
 
         # ── Pre-aggregate balance data ─────────────────────────────────────────
+        # New restriction model: condition_type on LicenseImportItemsModel is
+        # the source of truth. Percentage conditions share a pool computed by
+        # compute_condition_pools(); AU / blank use the full licence balance.
+        from license.services.condition_pool import compute_condition_pools as _ccp
+        _cond_pools = _ccp(license_obj)
+
         _bal_agg = defaultdict(lambda: {
-            'qty': 0.0, 'is_restricted': False, 'restriction_pct': None,
-            'sr_ids': [], 'description': '', 'hs_code': ''
+            'qty': 0.0, 'sr_ids': [],
+            'description': '', 'hs_code': '', 'condition_type': ''
         })
         for _item in license_obj.import_license.all():
             _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
             _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
             _bal_agg[_key]['sr_ids'].append(_item.id)
-            if _item.is_restricted:
-                _bal_agg[_key]['is_restricted'] = True
-                if _bal_agg[_key]['restriction_pct'] is None:
-                    _rpct_val = _item.items.filter(
-                        restriction_percentage__gt=0
-                    ).values_list('restriction_percentage', flat=True).first()
-                    if _rpct_val:
-                        _bal_agg[_key]['restriction_pct'] = _Dec(str(_rpct_val))
             if not _bal_agg[_key]['description']:
                 _bal_agg[_key]['description'] = _item.description or _key
             if not _bal_agg[_key]['hs_code']:
                 _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
+            if _item.condition_type and not _bal_agg[_key]['condition_type']:
+                _bal_agg[_key]['condition_type'] = _item.condition_type
 
         _license_balance = float(license_obj.balance_cif or 0)
-        _total_export_cif = _Dec(str(license_obj._calculate_license_credit() or 0))
         total_license_cif = total_cif + _license_balance
 
         # ══════════════════════════════════════════════════════════════════════
@@ -2243,63 +2258,56 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _rc2.number_format = '#,##0.00'
             r += 1
         elif _is_e5:
-            _E5_CATS = [
-                ('DIETARY FIBRE',            2.7,  ['0802']),
-                ('VEGETABLE OIL (1513)',      2.26, ['1513']),
-                ('VEGETABLE OIL (15119020)',  1.2,  ['15119020']),
-                ('MILK (0404)',               3.75, ['0404']),
-                ('MILK (3502)',               14.0, ['3502']),
-            ]
-            _e5_totals = {lbl: 0.0 for lbl, *_ in _E5_CATS}
+            from license.services.e5_plan import (
+                E5_CATS as _E5_CATS_ORDERED_BE,
+                E5_PLAN_CATS as _E5_PLAN_CATS_BE,
+                classify_e5_hsn as _classify_e5_be,
+                is_wheat_flour as _is_wheat_flour_be,
+                compute_e5_plan as _compute_e5_plan_be,
+            )
+            _e5_totals = {c: 0.0 for c in _E5_PLAN_CATS_BE}
             _e5_unclassified = []
             _wf_qty = 0.0
-            _WF_HS = ['11010000']
             for _ik in _bal_agg:
                 _bq = _bal_agg[_ik]['qty']
-                _hs = (_bal_agg[_ik]['hs_code'] or '').lower()
+                _hs = _bal_agg[_ik]['hs_code'] or ''
                 _de = _bal_agg[_ik]['description'] or _ik
-                _found = False
-                for _lbl, _rt, _hskw in _E5_CATS:
-                    if any(k in _hs for k in _hskw):
-                        _e5_totals[_lbl] += _bq
-                        _found = True
-                        break
-                if not _found:
-                    if any(k in _hs for k in _WF_HS):
-                        _wf_qty += _bq
-                    else:
-                        _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+                _cat = _classify_e5_be(_hs)
+                if _cat:
+                    _e5_totals[_cat] += _bq
+                elif _is_wheat_flour_be(_hs):
+                    _wf_qty += _bq
+                else:
+                    _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+
+            _pool_10_be = _cond_pools.get('10%', _Dec('0'))
+            _e5_planned_per_cat_be, _e5_rate_per_cat_be = _compute_e5_plan_be(
+                _e5_totals, _wf_qty, _license_balance, _pool_10_be,
+            )
 
             for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
                 _hdr(ws, r, col, h)
             r += 1
 
             _e5_planned = 0.0
-            _e5_remaining = _license_balance
-            for _idx, (_lbl, _rt, _hskw) in enumerate(_E5_CATS):
-                _bq = _e5_totals[_lbl]
-                _pc = min(_rt * _bq, _e5_remaining)
-                _up = _pc / _bq if _bq else 0.0
-                _e5_remaining -= _pc
+            for _idx, _lbl in enumerate(_E5_CATS_ORDERED_BE):
+                _bq = _wf_qty if _lbl == 'WHEAT FLOUR' else _e5_totals.get(_lbl, 0.0)
+                _pc = _e5_planned_per_cat_be.get(_lbl, 0.0)
+                _rt = _e5_rate_per_cat_be.get(_lbl, 0.0)
+                _up = (_pc / _bq) if _bq else 0.0
                 _e5_planned += _pc
                 _rf = None if _idx % 2 == 0 else ALT_FILL
                 _cell(ws, r, 1, _lbl, fill=_rf)
-                _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                if _bq or _pc:
+                    _cell(ws, r, 2, _rt, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 3, _bq, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, _up, fill=_rf, align='right', num_fmt='#,##0.00')
+                else:
+                    _cell(ws, r, 2, '-', fill=_rf, align='center')
+                    _cell(ws, r, 3, '-', fill=_rf, align='center')
+                    _cell(ws, r, 4, '-', fill=_rf, align='center')
+                _cell(ws, r, 5, _pc, fill=_rf, align='right', num_fmt='#,##0.00')
                 r += 1
-
-            # WHEAT FLOUR row — last priority, remaining balance
-            _wf = _e5_remaining
-            _wf_up = _wf / _wf_qty if _wf_qty else 0.0
-            _wf_rf = None if len(_E5_CATS) % 2 == 0 else ALT_FILL
-            _cell(ws, r, 1, 'WHEAT FLOUR', fill=_wf_rf)
-            _cell(ws, r, 2, '-', fill=_wf_rf, align='center')
-            _cell(ws, r, 3, _wf_qty if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.00' if _wf_qty else None)
-            _cell(ws, r, 4, _wf_up if _wf_qty else '-', fill=_wf_rf, align='right' if _wf_qty else 'center', num_fmt='#,##0.000000' if _wf_qty else None)
-            _cell(ws, r, 5, _wf, fill=_wf_rf, align='right', num_fmt='#,##0.00')
-            r += 1
 
             if _e5_unclassified:
                 r += 1
@@ -2327,11 +2335,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _cell(ws, r, 2, '', fill=TOTAL_FILL)
             _cell(ws, r, 3, '', fill=TOTAL_FILL)
             _cell(ws, r, 4, 'TOTAL ALLOCATED CIF $', fill=TOTAL_FILL, bold=True, align='right')
-            _cell(ws, r, 5, _e5_planned + _wf, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 5, _e5_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             r += 1
         else:
+            from license.utils.condition_excel import annotate_cell as _annotate_cond_be
             # Column headers
-            BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC']
+            BAL_COLS = ['HSN Code', 'Item Name', 'Bal Qty', 'Unit Price', 'CIF FC', 'Cond']
             for col, h in enumerate(BAL_COLS, 1):
                 _hdr(ws, r, col, h)
             r += 1
@@ -2339,21 +2348,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             # Data rows
             for idx, item_key in enumerate(sorted(_bal_agg.keys())):
                 b_qty = _bal_agg[item_key]['qty']
-                if _bal_agg[item_key]['is_restricted'] and _bal_agg[item_key]['restriction_pct'] is not None:
-                    _rpct  = _bal_agg[item_key]['restriction_pct']
-                    _sr_ids = _bal_agg[item_key]['sr_ids']
-                    _grp_debits = RowDetails.objects.filter(
-                        sr_number_id__in=_sr_ids, transaction_type='D'
-                    ).aggregate(
-                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                    )['total'] or _Dec('0')
-                    _grp_allots = AllotmentItems.objects.filter(
-                        item_id__in=_sr_ids, allotment__bill_of_entry__isnull=True
-                    ).aggregate(
-                        total=_Coalesce(_Sum('cif_fc'), _Val(_Dec('0')), output_field=_DF())
-                    )['total'] or _Dec('0')
-                    _allowed = _total_export_cif * _rpct / _Dec('100')
-                    b_cif = float(max(_allowed - _Dec(str(_grp_debits)) - _Dec(str(_grp_allots)), _Dec('0')))
+                cond = _bal_agg[item_key].get('condition_type') or ''
+                if cond in _cond_pools:
+                    b_cif = float(min(_cond_pools[cond], _Dec(str(_license_balance))))
                 else:
                     b_cif = _license_balance
 
@@ -2362,11 +2359,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 hs   = _bal_agg[item_key]['hs_code']
                 row_fill = None if idx % 2 == 0 else ALT_FILL
 
-                _cell(ws, r, 1, hs,         fill=row_fill)
+                hs_cell = _cell(ws, r, 1, hs,         fill=row_fill)
                 _cell(ws, r, 2, desc,       fill=row_fill)
                 _cell(ws, r, 3, b_qty,      fill=row_fill, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 4, unit_price, fill=row_fill, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 5, b_cif,      fill=row_fill, align='right', num_fmt='#,##0.00')
+                cond_cell = _cell(ws, r, 6, cond, fill=row_fill, align='center', bold=True)
+                _annotate_cond_be(hs_cell, cond)
+                _annotate_cond_be(cond_cell, cond)
                 r += 1
 
         # ── Column widths ─────────────────────────────────────────────────────
@@ -2559,10 +2559,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     f"{float(item.cif_fc or 0):.2f}",
                     f"{float(item.balance_cif_fc or 0):.2f}"
                 ]
+                from license.utils.condition_excel import annotate_cell as _annotate_cond_unused
                 for col_num, value in enumerate(item_values, 1):
                     cell = ws.cell(row=current_row, column=col_num, value=value)
                     cell.fill = data_fill
                     cell.border = thin_border
+                    # Tint the Serial Number cell when this item carries a
+                    # licence condition (AU / 2% / 3% / 5% / 10%).
+                    if col_num == 1 and item.condition_type:
+                        _annotate_cond_unused(cell, item.condition_type)
                 current_row += 1
 
                 # BOE Details

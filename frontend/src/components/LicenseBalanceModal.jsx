@@ -3,6 +3,7 @@ import api from '../api/axios';
 import AsyncSelect from 'react-select/async';
 import { toast } from 'react-toastify';
 import { formatDate } from '../utils/dateFormatter';
+import ConditionBadge from './ConditionBadge';
 
 // Inline Editable Text Component
 function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
@@ -816,6 +817,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             >
                                                                 <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                                     {item.serial_number || index + 1}
+                                                                    <ConditionBadge type={item.condition_type} size="xs" />
                                                                 </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                                     {item.hs_code_label || item.hs_code || '-'}
@@ -922,19 +924,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                     {parseFloat(item.available_quantity || 0).toFixed(2)}
                                                                 </td>
                                                                 <td
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                    style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}
+                                                                    style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef', textAlign: 'center' }}
                                                                 >
-                                                                    <div className="form-check form-switch d-flex justify-content-center">
-                                                                        <input
-                                                                            className="form-check-input"
-                                                                            type="checkbox"
-                                                                            role="switch"
-                                                                            checked={item.is_restricted || false}
-                                                                            onChange={(e) => handleRestrictedToggle(item.id, e.target.checked)}
-                                                                            style={{ cursor: 'pointer' }}
-                                                                        />
-                                                                    </div>
+                                                                    {/* Read-only — driven by condition_type. */}
+                                                                    {item.condition_type
+                                                                        ? <ConditionBadge type={item.condition_type} size="xs" />
+                                                                        : <span style={{ color: '#9ca3af', fontSize: '0.7rem' }}>—</span>}
                                                                 </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                                     {parseFloat(item.cif_fc || 0).toFixed(2)}

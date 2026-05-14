@@ -13,6 +13,7 @@ from license.views.dashboard import DashboardDataView
 from license.views.ledger_upload import LedgerUploadView, LedgerTaskStatusView
 from license.views.ledger_csv_upload import LedgerCSVUploadView
 from license.views.ledger import LicenseLedgerViewSet
+from license.views.parse_pdf import LicensePdfParseView
 from license.views_actions import LicenseActionViewSet
 from license.views_incentive import IncentiveLicenseViewSet
 
@@ -32,6 +33,8 @@ urlpatterns = [
     # Specific paths must come BEFORE router.urls to avoid conflicts
     # Dashboard unified endpoint
     path("dashboard/", DashboardDataView.as_view(), name="dashboard"),
+    # License PDF parse (DFIA licence copy → prefill License form)
+    path("licenses/parse-pdf/", LicensePdfParseView.as_view(), name="licenses-parse-pdf"),
     # Ledger Upload endpoint
     path("upload-ledger/", LedgerUploadView.as_view(), name="upload-ledger"),
     path("ledger-csv-upload/", LedgerCSVUploadView.as_view(), name="ledger-csv-upload"),

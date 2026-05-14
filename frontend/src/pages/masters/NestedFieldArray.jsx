@@ -1,5 +1,6 @@
 import {useState} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
+import ConditionBadge from "../../components/ConditionBadge";
 import Select from "react-select";
 import AsyncCreatableSelect from "react-select/async-creatable";
 import DatePicker from "react-datepicker";
@@ -22,6 +23,7 @@ import {formatDateForInput, parseDate as parseDateUtil} from "../../utils/dateFo
  * - updatedFields: Object tracking which fields were recently updated (for highlighting)
  * - errors: Array of error objects for nested items
  */
+
 export default function NestedFieldArray({
                                              label,
                                              fields = [],
@@ -32,7 +34,8 @@ export default function NestedFieldArray({
                                              updatedFields = {},
                                              errors = [],
                                              entityName = "",
-                                             formData = {}
+                                             formData = {},
+                                             itemConditionsBySerial = {},
                                          }) {
 
     // Use centralized date parser from utility
@@ -245,8 +248,30 @@ export default function NestedFieldArray({
                             control: (base, state) => ({
                                 ...base,
                                 minHeight: "34px",
+                                height: "auto",
                                 borderColor: hasError ? "#dc3545" : (isHighlighted ? "#ffc107" : "#dee2e6"),
                                 boxShadow: hasError ? "0 0 0 0.2rem rgba(220, 53, 69, 0.25)" : (state.isFocused ? "0 0 0 0.2rem rgba(13, 110, 253, 0.25)" : "none")
+                            }),
+                            valueContainer: (base) => ({
+                                ...base,
+                                whiteSpace: "normal",
+                                flexWrap: "wrap",
+                                padding: "4px 8px",
+                            }),
+                            singleValue: (base) => ({
+                                ...base,
+                                whiteSpace: "normal",
+                                overflow: "visible",
+                                textOverflow: "clip",
+                                position: "static",
+                                transform: "none",
+                                maxWidth: "100%",
+                                lineHeight: "1.35",
+                            }),
+                            input: (base) => ({
+                                ...base,
+                                margin: 0,
+                                padding: 0,
                             }),
                             menu: (base) => ({
                                 ...base,
@@ -456,7 +481,7 @@ export default function NestedFieldArray({
                 return (
                     <textarea
                         className={`form-control form-control-sm ${highlightClass}`}
-                        rows="2"
+                        rows={field.name === "description" ? 3 : 2}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
                     />
@@ -599,6 +624,10 @@ export default function NestedFieldArray({
                                         <span className="badge" style={{ background: '#e0e7ff', color: '#4338CA', fontSize: '0.68rem', fontWeight: 600 }}>
                                             <i className="bi bi-lock-fill me-1"></i>Ledger
                                         </span>
+                                    )}
+                                    {/* Condition badge: licence-level Import Items, BOE rows, and trade lines */}
+                                    {(fieldKey === "import_license" || fieldKey === "item_details" || fieldKey === "lines") && (
+                                        <ConditionBadge type={item.condition_type || itemConditionsBySerial?.[item.serial_number]} />
                                     )}
                                     {getItemTitle(item) && (
                                         <span className="fw-normal text-muted text-truncate" style={{ fontSize: '0.78rem', maxWidth: 300 }}>

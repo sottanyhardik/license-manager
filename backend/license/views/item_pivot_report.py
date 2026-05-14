@@ -359,9 +359,18 @@ class ItemPivotReportView(View):
             'description': '',
             'sion_norm_class': None,
             'restriction_percentage': None,
+            'condition_type': '',
         })
 
-        # Group items by (sion_norm_class, restriction_percentage) to calculate shared restriction limits
+        # Per condition_type pool — new restriction model. Each "N%" pool is
+        # shared by every import item on this licence with that condition_type,
+        # and provides the per-cell `restriction_value` shown in the pivot.
+        from license.services.condition_pool import compute_condition_pools
+        condition_pools = compute_condition_pools(license_obj)
+        # condition_pools = {"2%": Decimal(...), "3%": Decimal(...), ...}
+
+        # (Legacy restriction_groups kept ONLY for backward compatibility with
+        # callers that still read it; unused for the cell-level value now.)
         restriction_groups = defaultdict(lambda: {
             'total_cif': Decimal('0.00'),
             'debited_cif': Decimal('0.00'),
@@ -386,6 +395,13 @@ class ItemPivotReportView(View):
 
                 if import_item.description and not item_quantities[item.id]['description']:
                     item_quantities[item.id]['description'] = import_item.description
+
+                # Carry the licence-condition badge through to the pivot cell.
+                # If multiple import-item rows map to the same item-name, the
+                # first non-empty condition wins (typical case: each item-name
+                # appears on one serial number per licence).
+                if import_item.condition_type and not item_quantities[item.id]['condition_type']:
+                    item_quantities[item.id]['condition_type'] = import_item.condition_type
 
                 # Get restriction from item's sion_norm_class and restriction_percentage
                 if item and hasattr(item, 'sion_norm_class') and item.sion_norm_class:
@@ -482,19 +498,20 @@ class ItemPivotReportView(View):
         for item_id, item_name in all_items:
             if item_id in item_quantities:
                 item_data = item_quantities[item_id]
-                sion_norm = item_data['sion_norm_class']
-                restriction_pct = item_data['restriction_percentage']
 
-                # Get restriction percentage only (as number)
+                # NEW model: restriction is determined by condition_type set
+                # on the licence's import item (from the parsed condition
+                # sheet), not by ItemNameModel.restriction_percentage.
+                cond_type = item_data.get('condition_type') or ''
                 restriction_value = None
                 available_cif = Decimal('0')
-
-                if sion_norm and restriction_pct:
-                    restriction_key = f"{sion_norm}_{restriction_pct}"
-                    if restriction_key in restriction_groups:
-                        group = restriction_groups[restriction_key]
-                        restriction_value = float(restriction_pct)
-                        available_cif = group['available_cif']
+                if cond_type.endswith('%'):
+                    try:
+                        restriction_value = float(cond_type.rstrip('%'))
+                    except ValueError:
+                        restriction_value = None
+                    if cond_type in condition_pools:
+                        available_cif = condition_pools[cond_type]
 
                 # Use pre-calculated unit price for RUTILE
                 unit_price = rutile_unit_price if item_name == 'RUTILE - A3627' else None
@@ -509,6 +526,7 @@ class ItemPivotReportView(View):
                     'restriction': restriction_value,
                     'restriction_value': float(available_cif),
                     'unit_price': unit_price,
+                    'condition_type': cond_type,
                 }
             else:
                 row_data['items'][item_name] = {
@@ -521,6 +539,7 @@ class ItemPivotReportView(View):
                     'restriction': None,
                     'restriction_value': 0,
                     'unit_price': None,
+                    'condition_type': '',
                 }
 
         return row_data
@@ -542,6 +561,7 @@ class ItemPivotReportView(View):
         from django.http import StreamingHttpResponse
         import tempfile
         import os
+        from license.utils.condition_excel import annotate_cell as _annotate_condition_cell
 
         # Create a temporary file for the workbook
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
@@ -648,10 +668,15 @@ class ItemPivotReportView(View):
                                 'available_quantity': 0,
                                 'restriction': None,
                                 'restriction_value': 0,
-                                'unit_price': None
+                                'unit_price': None,
+                                'condition_type': '',
                             })
 
-                            row_data.append(item_data.get('hs_code', ''))
+                            # Tint HSN cell when a licence-condition is set
+                            cond = item_data.get('condition_type') or ''
+                            hsn_cell = WriteOnlyCell(worksheet, value=item_data.get('hs_code', ''))
+                            _annotate_condition_cell(hsn_cell, cond)
+                            row_data.append(hsn_cell)
                             row_data.append(item_data.get('description', ''))
                             row_data.append(item_data.get('quantity', 0))
                             row_data.append(item_data.get('allotted_quantity', 0))
@@ -806,6 +831,7 @@ class ItemPivotReportView(View):
         from django.http import StreamingHttpResponse
         import tempfile
         import os
+        from license.utils.condition_excel import annotate_cell as _annotate_condition_cell
 
         # Create temporary file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
@@ -897,8 +923,13 @@ class ItemPivotReportView(View):
                             has_restriction = item.get('has_restriction', False)
                             is_rutile = item_name == 'RUTILE - A3627'
                             item_data = lic['items'].get(item_name, {})
+                            cond = item_data.get('condition_type') or ''
+                            # Tint the HSN-code cell for this (licence, item)
+                            # pair when a condition is set.
+                            hsn_cell = WriteOnlyCell(worksheet, value=item_data.get('hs_code', ''))
+                            _annotate_condition_cell(hsn_cell, cond)
+                            row_data.append(hsn_cell)
                             row_data.extend([
-                                item_data.get('hs_code', ''),
                                 item_data.get('description', ''),
                                 item_data.get('quantity', 0),
                                 item_data.get('allotted_quantity', 0),

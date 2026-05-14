@@ -14,7 +14,7 @@ class LicenseItemSimpleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LicenseImportItemsModel
-        fields = ['id', 'serial_number', 'description', 'license_number', 'hs_code', 'label']
+        fields = ['id', 'serial_number', 'description', 'license_number', 'hs_code', 'label', 'condition_type']
 
     def get_label(self, obj):
         """Format label for dropdown"""

@@ -734,6 +734,97 @@ def get_item_filters():
     ]
 
 
+def bulk_auto_link_license_items(license_instance):
+    """
+    Bulk auto-link ItemNameModel rows to all unlinked import items on a
+    licence. Runs ~M queries (one per filter config that applies to this
+    licence's norms) instead of N×M (one per item × filter), and writes M2M
+    rows via bulk_create.
+
+    Returns the number of import items that had ItemNames linked.
+
+    SAFE to call after the per-item signal cascade has been suspended —
+    this does the same work the post_save signal would have done one-at-a-time,
+    just batched.
+    """
+    from functools import reduce
+    from operator import or_
+    from django.db.models import Count
+    from core.models import ItemNameModel
+    from license.models import LicenseImportItemsModel
+
+    norm_classes = list(
+        license_instance.export_license.values_list("norm_class__norm_class", flat=True).distinct()
+    )
+    if not norm_classes:
+        return 0
+
+    # Items already linked to ItemNames are skipped.
+    unlinked_ids = list(
+        LicenseImportItemsModel.objects
+        .filter(license=license_instance)
+        .annotate(_link_count=Count("items"))
+        .filter(_link_count=0)
+        .values_list("id", flat=True)
+    )
+    if not unlinked_ids:
+        return 0
+
+    filter_configs = get_item_filters()
+    needed_names = set()  # (base_name, norm) pairs we'll look up
+    item_to_basenames: dict[int, list[tuple[str, str]]] = {}
+
+    for item_config in filter_configs:
+        applicable_norms = [n for n in norm_classes if n in item_config["norms"]]
+        if not applicable_norms:
+            continue
+        combined_q = reduce(or_, item_config["filters"])
+        matching_ids = list(
+            LicenseImportItemsModel.objects
+            .filter(id__in=unlinked_ids)
+            .filter(combined_q)
+            .values_list("id", flat=True)
+        )
+        if not matching_ids:
+            continue
+        base_name = f"{item_config['base_name']} - {applicable_norms[0]}"
+        needed_names.add(base_name)
+        for iid in matching_ids:
+            item_to_basenames.setdefault(iid, []).append(base_name)
+
+    if not item_to_basenames:
+        return 0
+
+    # Resolve all ItemNames in a single query.
+    name_to_obj = {
+        it.name: it
+        for it in ItemNameModel.objects
+        .filter(name__in=needed_names, sion_norm_class__norm_class__in=norm_classes)
+    }
+    if not name_to_obj:
+        return 0
+
+    # Bulk-insert M2M rows.
+    Through = LicenseImportItemsModel.items.through
+    rows = []
+    # `is_restricted` is no longer set from ItemNameModel.restriction_percentage —
+    # it's derived from condition_type via the model's save() override.
+    for iid, base_names in item_to_basenames.items():
+        for bn in base_names:
+            item_name = name_to_obj.get(bn)
+            if not item_name:
+                continue
+            rows.append(Through(
+                licenseimportitemsmodel_id=iid,
+                itemnamemodel_id=item_name.id,
+            ))
+
+    if rows:
+        Through.objects.bulk_create(rows, ignore_conflicts=True)
+
+    return len(item_to_basenames)
+
+
 def match_import_item_to_items(import_item, license_norm_classes):
     """
     Match a single import item to ItemNameModel items based on comprehensive filters.

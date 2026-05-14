@@ -1,9 +1,10 @@
-import {useEffect, useState} from "react";
+import {useEffect, useMemo, useState} from "react";
 import {useLocation, useNavigate, useParams} from "react-router-dom";
 import { toast } from 'react-toastify';
 import api from "../../api/axios";
 import NestedFieldArray from "./NestedFieldArray";
 import HybridSelect from "../../components/HybridSelect";
+import { primeFkDetailCache } from "../../components/fkDetailCache";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import {markNewItemCreated} from "../../utils/filterPersistence";
@@ -187,6 +188,12 @@ export default function MasterForm({
     const [boePdfFile, setBoePdfFile] = useState(null);
     const [boeParsing, setBoeParsing] = useState(false);
     const [boeParseSummary, setBoeParseSummary] = useState(null);
+    const [licensePdfFile, setLicensePdfFile] = useState(null);
+    const [licenseParsing, setLicenseParsing] = useState(false);
+    const [licenseParseSummary, setLicenseParseSummary] = useState(null);
+    // {serialNumber: "AU" | "2%" | "3%" | "5%"} — drives the per-row condition
+    // badge in the Import Items table.
+    const [itemConditionsBySerial, setItemConditionsBySerial] = useState({});
 
     // Enable browser back button support with filter preservation
     useBackButton(entityName, !isModal);
@@ -298,7 +305,48 @@ export default function MasterForm({
                 apiPath = `masters/${entityName}/${recordId}/`;
             }
             const {data} = await api.get(apiPath);
+
+            // Pre-populate the AsyncSelectField cache from the *_detail
+            // fields the serializer already returns inline. Saves one GET
+            // per FK per row when the page renders.
+            if (entityName === 'licenses' && Array.isArray(data.import_license)) {
+                data.import_license.forEach(row => {
+                    if (row.hs_code_detail) {
+                        primeFkDetailCache('/masters/hs-codes/', row.hs_code_detail);
+                    }
+                    if (Array.isArray(row.items_detail)) {
+                        row.items_detail.forEach(item =>
+                            primeFkDetailCache('/masters/item-names/', item)
+                        );
+                    }
+                });
+                // Rebuild the condition-badge map from persisted condition_type
+                // so badges show on plain edit loads (no parse step required).
+                const loadedConditions = {};
+                data.import_license.forEach(row => {
+                    if (row.condition_type && row.serial_number != null) {
+                        loadedConditions[row.serial_number] = row.condition_type;
+                    }
+                });
+                setItemConditionsBySerial(loadedConditions);
+            }
             setFormData(data);
+
+            // If we arrived here via /licenses/create → existing-license redirect
+            // (from handleParseLicensePdf), the parsed PDF response was passed in
+            // location state. Re-apply it now so the user sees prefilled fields.
+            const parseData = location.state?.licenseParseData;
+            if (parseData && entityName === 'licenses') {
+                const carriedFile = location.state?.licensePdfFile || null;
+                if (carriedFile) {
+                    setLicensePdfFile(carriedFile);
+                }
+                // Pass the file directly so the License Copy document gets
+                // attached on this render — setLicensePdfFile is async.
+                applyLicenseParse(parseData, carriedFile);
+                // Clear the state so a manual reload doesn't re-apply it.
+                navigate(location.pathname, { replace: true, state: null });
+            }
         } catch (err) {
             setError(err.response?.data?.detail || "Failed to load record");
         } finally {
@@ -410,6 +458,252 @@ export default function MasterForm({
             toast.error(msg);
         } finally {
             setBoeParsing(false);
+        }
+    };
+
+    const buildLicensePatch = (data) => {
+        const { parsed = {}, prefill = {}, items = [], item_conditions = [] } = data || {};
+
+        // Build a {serialNumber: conditionType} map from parsed conditions so
+        // we can flag restricted rows and surface badges in the UI.
+        const conditionBySerial = {};
+        for (const c of item_conditions) {
+            for (const si of (c.serial_numbers || [])) {
+                conditionBySerial[si] = c.type;
+            }
+        }
+
+        const importRows = (items || []).map((it, idx) => {
+            const sn = it.serial_number ?? (idx + 1);
+            const cond = conditionBySerial[sn] || "";
+            return {
+                serial_number: sn,
+                hs_code: it.matched_hs_code_id || null,
+                description: it.description || "",
+                items: [],
+                quantity: parseFloat(it.quantity || 0),
+                unit: "kg",
+                cif_fc: parseFloat(it.cif_fc || 0),
+                cif_inr: parseFloat(it.cif_inr || 0),
+                is_restricted: Boolean(cond),
+                condition_type: cond,
+            };
+        });
+
+        // Financial totals extracted from the licence header. We don't put
+        // these in `patch.export_license` directly — instead we expose them
+        // via `exportFinancials` so applyLicenseParse can merge them into the
+        // FIRST existing export row (or create one if none exists) without
+        // clobbering user-entered Description / Norm Class / Net Quantity.
+        const fobInr = parseFloat(parsed.fob_inr || 0);
+        const cifInr = parseFloat(parsed.cif_inr || 0);
+        const cifFc  = parseFloat(parsed.cif_fc || 0);
+        const exportFinancials = (fobInr || cifInr || cifFc)
+            ? { fob_inr: fobInr || 0, cif_inr: cifInr || 0, cif_fc: cifFc || 0 }
+            : null;
+
+        const patch = {};
+        if (prefill.license_number) patch.license_number = prefill.license_number;
+        if (prefill.license_date) patch.license_date = prefill.license_date;
+        if (prefill.license_expiry_date) patch.license_expiry_date = prefill.license_expiry_date;
+        if (prefill.file_number) patch.file_number = prefill.file_number;
+        if (prefill.registration_number) patch.registration_number = prefill.registration_number;
+        if (prefill.registration_date) patch.registration_date = prefill.registration_date;
+        if (prefill.notification_number) patch.notification_number = prefill.notification_number;
+        if (prefill.exporter) patch.exporter = prefill.exporter;
+        if (prefill.port) patch.port = prefill.port;
+        if (prefill.condition_sheet) patch.condition_sheet = prefill.condition_sheet;
+        if (importRows.length > 0) patch.import_license = importRows;
+        return { patch, importRows, conditionBySerial, exportFinancials };
+    };
+
+    const buildLicenseSummary = (data) => {
+        const { parsed = {}, items = [], matched_company_id, matched_company_name,
+                company_created, matched_port_id, matched_port_code } = data || {};
+        return {
+            license_number: parsed.license_number,
+            license_date: parsed.license_date,
+            license_expiry_date: parsed.license_expiry_date,
+            file_number: parsed.file_number,
+            port_code: matched_port_code || parsed.port_code,
+            notification_number: parsed.notification_number,
+            company_name: matched_company_name,
+            company_created,
+            matched_company_id,
+            matched_port_id,
+            source_kind: parsed.source_kind,
+            items: items || [],
+            unmatchedHsn: (items || []).filter(it => !it.matched_hs_code_id).length,
+        };
+    };
+
+    const applyLicenseParse = (data, fileOverride, opts = {}) => {
+        const { patch, importRows, conditionBySerial, exportFinancials } = buildLicensePatch(data);
+        // `skipAttach` is set when re-parsing from a Licence Copy already
+        // stored on the licence — we don't want to attach a duplicate.
+        const fileToAttach = opts.skipAttach ? null : (fileOverride || licensePdfFile);
+        if (conditionBySerial && Object.keys(conditionBySerial).length > 0) {
+            setItemConditionsBySerial(prev => ({ ...prev, ...conditionBySerial }));
+        }
+        setFormData(prev => {
+            const next = { ...prev, ...patch };
+
+            // Merge financial totals into the existing first Export row
+            // (preserves user-entered Description / Norm Class / Net Quantity).
+            // If no export row exists yet, create a fresh one.
+            if (exportFinancials) {
+                const existingExports = Array.isArray(prev.export_license) ? prev.export_license : [];
+                if (existingExports.length > 0) {
+                    const merged = existingExports.map((row, i) =>
+                        i === 0 ? { ...row, ...exportFinancials } : row
+                    );
+                    next.export_license = merged;
+                } else {
+                    next.export_license = [{
+                        description: "",
+                        norm_class: null,
+                        start_serial_number: 0,
+                        net_quantity: 0,
+                        currency: "usd",
+                        ...exportFinancials,
+                    }];
+                }
+            }
+
+            // Attach the uploaded PDF as a "LICENSE COPY" document, but only
+            // if no LICENSE COPY is already saved on this record.
+            if (fileToAttach) {
+                const existing = prev.license_documents || [];
+                const hasLicenseCopy = existing.some(d => {
+                    const t = (d.type || "").toUpperCase();
+                    return t === "LICENSE COPY" && (d.id || d.file);
+                });
+                if (!hasLicenseCopy) {
+                    next.license_documents = [
+                        ...existing,
+                        { type: "LICENSE COPY", file: fileToAttach },
+                    ];
+                }
+            }
+            return next;
+        });
+        setUpdatedFields(prev => ({
+            ...prev,
+            ...Object.keys(patch).reduce((acc, k) => { acc[k] = true; return acc; }, {}),
+            ...(fileToAttach ? { license_documents: true } : {}),
+            ...(exportFinancials ? { export_license: true } : {}),
+        }));
+        if (importRows.length > 0) {
+            setActiveNestedTab('import_license');
+        }
+        setLicenseParseSummary(buildLicenseSummary(data));
+
+        const summary = buildLicenseSummary(data);
+        const bits = [`Licence ${summary.license_number} parsed`];
+        if (summary.company_created) bits.push("new company created");
+        else if (summary.matched_company_id) bits.push("company matched");
+        bits.push(`${(data.items || []).length} import item(s)`);
+        if (summary.unmatchedHsn > 0) bits.push(`${summary.unmatchedHsn} HSN(s) not in master`);
+        toast.success(bits.join(" · "));
+    };
+
+    const handleParseLicensePdf = async () => {
+        if (!licensePdfFile) {
+            toast.error("Please choose a Licence PDF first");
+            return;
+        }
+        setLicenseParsing(true);
+        setLicenseParseSummary(null);
+
+        try {
+            const fd = new FormData();
+            fd.append("file", licensePdfFile);
+            const { data } = await api.post("licenses/parse-pdf/", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+
+            // If we're on the create page and the licence already exists,
+            // auto-redirect to that existing licence's edit page and re-apply
+            // the parsed data there so the user can update without re-uploading.
+            if (!isEdit && data.existing_license_id) {
+                toast.info(
+                    `Licence ${data.parsed?.license_number} already exists — opening it for edit.`
+                );
+                navigate(`/licenses/${data.existing_license_id}/edit`, {
+                    state: {
+                        licenseParseData: data,
+                        // history.pushState uses structured cloning which
+                        // preserves File objects across navigation.
+                        licensePdfFile: licensePdfFile,
+                    },
+                });
+                return;
+            }
+
+            applyLicenseParse(data);
+        } catch (err) {
+            console.error("Licence parse error", err);
+            const msg = err?.response?.data?.detail || "Failed to parse Licence PDF";
+            toast.error(msg);
+        } finally {
+            setLicenseParsing(false);
+        }
+    };
+
+    // If the licence already has a "LICENSE COPY" document attached, expose it
+    // so the form can offer a "Re-fetch & parse" shortcut for old records.
+    const existingLicenseCopy = useMemo(() => {
+        if (entityName !== "licenses" || !isEdit) return null;
+        const docs = Array.isArray(formData.license_documents) ? formData.license_documents : [];
+        return docs.find(d => {
+            const t = (d?.type || "").toUpperCase();
+            return t === "LICENSE COPY" && d?.id && d?.file;
+        }) || null;
+    }, [entityName, isEdit, formData.license_documents]);
+
+    const existingLicenseCopyName = useMemo(() => {
+        if (!existingLicenseCopy?.file) return "";
+        const url = String(existingLicenseCopy.file);
+        const base = (url.split("?")[0].split("/").pop() || "license-copy.pdf");
+        try { return decodeURIComponent(base); } catch { return base; }
+    }, [existingLicenseCopy]);
+
+    const handleReparseExistingCopy = async () => {
+        if (!existingLicenseCopy?.file) {
+            toast.error("No saved Licence Copy found on this record");
+            return;
+        }
+        setLicenseParsing(true);
+        setLicenseParseSummary(null);
+        try {
+            const access = localStorage.getItem("access");
+            const resp = await fetch(existingLicenseCopy.file, {
+                headers: access ? { Authorization: `Bearer ${access}` } : {},
+            });
+            if (!resp.ok) {
+                throw new Error(`Failed to fetch saved copy (HTTP ${resp.status})`);
+            }
+            const blob = await resp.blob();
+            const file = new File(
+                [blob],
+                existingLicenseCopyName || "license-copy.pdf",
+                { type: blob.type || "application/pdf" },
+            );
+
+            const fd = new FormData();
+            fd.append("file", file);
+            const { data } = await api.post("licenses/parse-pdf/", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            // Apply the parse without attaching a duplicate LICENSE COPY.
+            applyLicenseParse(data, null, { skipAttach: true });
+            toast.success("Re-parsed from saved Licence Copy");
+        } catch (err) {
+            console.error("Re-parse error", err);
+            const msg = err?.response?.data?.detail || err?.message || "Failed to re-fetch & parse the saved Licence Copy";
+            toast.error(msg);
+        } finally {
+            setLicenseParsing(false);
         }
     };
 
@@ -1749,6 +2043,166 @@ export default function MasterForm({
                         </section>
                     )}
 
+                    {entityName === 'licenses' && (
+                        <section className="surface-card mb-4" style={{ padding: 20 }}>
+                            <div className="d-flex align-items-start" style={{ gap: 16, flexWrap: 'wrap' }}>
+                                <div
+                                    aria-hidden="true"
+                                    style={{
+                                        width: 44, height: 44, borderRadius: 12,
+                                        background: 'var(--indigo-50)', color: 'var(--primary-color)',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <i className="bi bi-file-earmark-pdf" style={{ fontSize: '1.15rem' }}></i>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                                        Import from Licence Copy
+                                    </div>
+                                    <div className="mt-1" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                                        Upload the DFIA licence PDF and click <strong>Fetch</strong> to prefill the form. Digital PDFs parse instantly; scanned copies with a DGFT QR code are downloaded fresh from DGFT (~10–15s).
+                                    </div>
+                                    <div className="d-flex align-items-center mt-3" style={{ gap: 10, flexWrap: 'wrap' }}>
+                                        <input
+                                            type="file"
+                                            accept=".pdf,application/pdf"
+                                            id="licence-pdf-input"
+                                            className="form-control form-control-sm"
+                                            style={{ maxWidth: 340 }}
+                                            onChange={(e) => {
+                                                setLicensePdfFile(e.target.files?.[0] || null);
+                                                setLicenseParseSummary(null);
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary btn-sm"
+                                            onClick={handleParseLicensePdf}
+                                            disabled={!licensePdfFile || licenseParsing}
+                                        >
+                                            {licenseParsing ? (
+                                                <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Fetching…</>
+                                            ) : (
+                                                <><i className="bi bi-magic me-1"></i>Fetch</>
+                                            )}
+                                        </button>
+                                    </div>
+
+                                    {existingLicenseCopy && (
+                                        <div
+                                            className="d-flex align-items-center mt-2"
+                                            style={{
+                                                gap: 10,
+                                                flexWrap: 'wrap',
+                                                background: 'var(--surface-sunken)',
+                                                border: '1px solid var(--border-subtle)',
+                                                borderRadius: 'var(--radius-md)',
+                                                padding: '8px 12px',
+                                                fontSize: '0.8125rem',
+                                            }}
+                                        >
+                                            <i className="bi bi-paperclip" style={{ color: 'var(--text-secondary)' }}></i>
+                                            <span style={{ color: 'var(--text-primary)', minWidth: 0 }}>
+                                                Saved Licence Copy:&nbsp;
+                                                <a
+                                                    href={existingLicenseCopy.file}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    style={{ fontWeight: 600, wordBreak: 'break-all' }}
+                                                >
+                                                    {existingLicenseCopyName}
+                                                </a>
+                                            </span>
+                                            <button
+                                                type="button"
+                                                className="btn btn-outline-primary btn-sm"
+                                                onClick={handleReparseExistingCopy}
+                                                disabled={licenseParsing}
+                                                style={{ marginLeft: 'auto' }}
+                                                title="Re-fetch & parse the saved Licence Copy"
+                                            >
+                                                {licenseParsing ? (
+                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Re-fetching…</>
+                                                ) : (
+                                                    <><i className="bi bi-arrow-clockwise me-1"></i>Re-fetch &amp; parse</>
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            {licenseParseSummary && (
+                                <div
+                                    className="mt-3"
+                                    style={{
+                                        background: 'var(--surface-sunken)',
+                                        border: '1px solid var(--border-subtle)',
+                                        borderRadius: 'var(--radius-md)',
+                                        padding: '12px 14px',
+                                        fontSize: '0.8125rem',
+                                    }}
+                                >
+                                    <div style={{ color: 'var(--text-primary)' }}>
+                                        <strong>{licenseParseSummary.license_number}</strong>
+                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>{licenseParseSummary.license_date} → {licenseParseSummary.license_expiry_date}
+                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>port <code>{licenseParseSummary.port_code}</code>
+                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>notification {licenseParseSummary.notification_number}
+                                        <span style={{ color: 'var(--text-tertiary)' }}> · </span>file <code>{licenseParseSummary.file_number}</code>
+                                    </div>
+                                    {licenseParseSummary.source_kind === 'dgft_qr' && (
+                                        <div className="mt-1" style={{ color: '#065F46' }}>
+                                            <i className="bi bi-qr-code-scan me-1"></i>
+                                            Fetched fresh digital copy from DGFT via QR code on uploaded scan.
+                                        </div>
+                                    )}
+                                    {licenseParseSummary.source_kind === 'ocr' && (
+                                        <div className="mt-1" style={{ color: '#92400E' }}>
+                                            <i className="bi bi-exclamation-triangle me-1"></i>
+                                            Scanned PDF — header fields recovered via OCR. Items table is unreliable; please review/add manually.
+                                        </div>
+                                    )}
+                                    {licenseParseSummary.company_created && (
+                                        <div className="mt-1" style={{ color: '#065F46' }}>
+                                            <i className="bi bi-check-circle-fill me-1"></i>
+                                            New company created ({licenseParseSummary.company_name}).
+                                        </div>
+                                    )}
+                                    {!licenseParseSummary.company_created && licenseParseSummary.matched_company_id && (
+                                        <div className="mt-1" style={{ color: 'var(--text-secondary)' }}>
+                                            <i className="bi bi-check2 me-1"></i>
+                                            Matched existing company ({licenseParseSummary.company_name}).
+                                        </div>
+                                    )}
+                                    {!licenseParseSummary.matched_port_id && licenseParseSummary.port_code && (
+                                        <div className="mt-1" style={{ color: '#92400E' }}>
+                                            <i className="bi bi-exclamation-triangle me-1"></i>
+                                            Port code <code>{licenseParseSummary.port_code}</code> not found in master — please add and re-select.
+                                        </div>
+                                    )}
+                                    {licenseParseSummary.items?.length > 0 && (
+                                        <details className="mt-2">
+                                            <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                                                {licenseParseSummary.items.length} import item(s) — {licenseParseSummary.unmatchedHsn} HSN(s) not in master
+                                            </summary>
+                                            <ul className="mb-0 mt-2" style={{ paddingLeft: '1.1rem', color: 'var(--text-secondary)' }}>
+                                                {licenseParseSummary.items.map((it, i) => (
+                                                    <li key={i} style={{ padding: '2px 0' }}>
+                                                        sl#{it.serial_number} · HSN <code>{it.hsn}</code> · qty {it.quantity} {it.uom} · CIF ₹{it.cif_inr} / ${it.cif_fc}
+                                                        {it.matched_hs_code_id
+                                                            ? <span style={{ color: '#065F46', marginLeft: 6 }}>✓ HSN matched</span>
+                                                            : <span style={{ color: '#92400E', marginLeft: 6 }}>⚠ HSN not in master</span>}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </details>
+                                    )}
+                                </div>
+                            )}
+                        </section>
+                    )}
+
                     <form onSubmit={handleSubmit} encType="multipart/form-data">
                         {/* Regular Fields */}
                         {(() => {
@@ -1905,6 +2359,7 @@ export default function MasterForm({
                                                         errors={fieldErrors[nestedKey] || []}
                                                         entityName={entityName}
                                                         formData={formData}
+                                                        itemConditionsBySerial={itemConditionsBySerial}
                                                     />
                                                 ) : null)}
                                             </div>
@@ -1923,6 +2378,7 @@ export default function MasterForm({
                                         errors={fieldErrors[nestedKey] || []}
                                         entityName={entityName}
                                         formData={formData}
+                                        itemConditionsBySerial={itemConditionsBySerial}
                                     />
                                 ))}
                             </div>

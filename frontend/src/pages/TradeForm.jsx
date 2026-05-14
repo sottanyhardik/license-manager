@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from 'react-toastify';
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
+import ConditionBadge from "../components/ConditionBadge";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import {formatDateForInput, parseDate} from "../utils/dateFormatter";
@@ -1420,7 +1421,10 @@ export default function TradeForm() {
                         <tbody>
                             {formData.lines.map((line, index) => (
                                 <tr key={index}>
-                                    <td className="text-center">{index + 1}</td>
+                                    <td className="text-center">
+                                        {index + 1}
+                                        <ConditionBadge type={line.condition_type} size="xs" />
+                                    </td>
                                     <td>
                                         <HybridSelect
                                             fieldMeta={{
@@ -1431,9 +1435,14 @@ export default function TradeForm() {
                                             onChange={(val) => handleLineChange(index, 'sr_number', val)}
                                             isClearable={true}
                                             placeholder="Select License SR..."
-                                            formatLabel={(option) =>
-                                                option.label || `SR ${option.sr_number || option.id}`
-                                            }
+                                            formatLabel={(option) => (
+                                                <>
+                                                    {option.label || `SR ${option.sr_number || option.id}`}
+                                                    {option.condition_type && (
+                                                        <ConditionBadge type={option.condition_type} size="xs" />
+                                                    )}
+                                                </>
+                                            )}
                                         />
                                     </td>
                                     <td>

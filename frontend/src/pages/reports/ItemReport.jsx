@@ -1,5 +1,7 @@
 import React, {useEffect, useState, useMemo} from "react";
+import {useNavigate} from "react-router-dom";
 import AsyncSelectField from "../../components/AsyncSelectField";
+import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
 import {toast} from "react-toastify";
@@ -7,6 +9,7 @@ import Select from "react-select";
 import {useDebouncedFilters} from "../../hooks/useDebounce";
 
 export default function ItemReport() {
+    const navigate = useNavigate();
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -421,58 +424,50 @@ export default function ItemReport() {
     const itemNameOptions = availableItems;
 
     return (
-        <div className="container-fluid" style={{backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px'}}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
-                <div className="d-flex justify-content-between align-items-center flex-wrap">
-                    <div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '8px' }}>
-                            <i className="bi bi-list-ul me-3"></i>
-                            Item Report
-                        </h1>
-                        <p style={{ fontSize: '0.95rem', marginBottom: '0', opacity: '0.95' }}>
-                            {reportData && (
-                                <>
-                                    <i className="bi bi-calendar-event me-1"></i>
-                                    Report Date: {reportData.report_date}
-                                    <span className="mx-2">•</span>
-                                    <i className="bi bi-box-seam me-1"></i>
-                                    Total Items: {reportData.total_items}
-                                </>
-                            )}
-                        </p>
+        <div style={{ minHeight: '100vh' }}>
+            {/* Tabler-style page header */}
+            <div className="page-header">
+                <div style={{ minWidth: 0 }}>
+                    <div className="page-pretitle">
+                        <a
+                            href="/"
+                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
+                            style={{ color: 'inherit', textDecoration: 'none' }}
+                        >
+                            Home
+                        </a>
+                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        Reports
+                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        Item Report
                     </div>
+                    <h1>Item Report</h1>
+                    {reportData && (
+                        <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
+                            <i className="bi bi-calendar-event me-1"></i>
+                            {reportData.report_date}
+                            <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
+                            <i className="bi bi-box-seam me-1"></i>
+                            {reportData.total_items} items
+                        </div>
+                    )}
+                </div>
+                <div className="page-actions">
                     <button
-                        className="btn"
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
                         onClick={handleExport}
                         disabled={downloading || (selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch)}
-                        style={{
-                            backgroundColor: 'white',
-                            border: '2px solid white',
-                            color: 'var(--primary-color)',
-                            fontWeight: '600',
-                            padding: '10px 24px',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                            marginTop: '12px'
-                        }}
                     >
                         {downloading ? (
                             <>
-                                <span className="spinner-border spinner-border-sm me-2" role="status"
-                                      aria-hidden="true"></span>
-                                Downloading...
+                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style={{ width: 12, height: 12 }} />
+                                Generating…
                             </>
                         ) : (
                             <>
-                                <i className="bi bi-file-earmark-excel me-2"></i>
-                                Export to Excel
+                                <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
+                                Excel
                             </>
                         )}
                     </button>
@@ -480,14 +475,13 @@ export default function ItemReport() {
             </div>
 
             {/* Filters Section */}
-            <div className="row mb-4">
+            <div className="row mb-3">
                 <div className="col-12">
-                    <div className="card border-0 shadow-sm" style={{ borderRadius: '12px' }}>
-                        <div
-                            className="card-header bg-white border-bottom d-flex justify-content-between align-items-center"
-                            style={{ padding: '20px 24px', borderRadius: '12px 12px 0 0' }}>
-                            <h5 className="mb-0" style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
-                                <i className="bi bi-sliders me-2"></i>
+                    <div className="surface-card">
+                        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}
+                             className="d-flex justify-content-between align-items-center">
+                            <h5 className="mb-0" style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                                <i className="bi bi-sliders me-2" style={{ color: 'var(--primary-color)' }}></i>
                                 Filters
                                 {isPending && (
                                     <span className="ms-2" style={{ fontSize: '0.85rem', color: 'var(--bs-gray-500)' }}>
@@ -498,23 +492,16 @@ export default function ItemReport() {
                             </h5>
                             {hasActiveFilters && (
                                 <button
-                                    className="btn btn-sm"
+                                    type="button"
+                                    className="btn btn-outline-secondary btn-sm"
                                     onClick={handleClearFilters}
-                                    style={{
-                                        backgroundColor: 'var(--bs-gray-500)',
-                                        border: 'none',
-                                        color: 'white',
-                                        fontWeight: '500',
-                                        padding: '6px 16px',
-                                        borderRadius: '6px'
-                                    }}
                                 >
                                     <i className="bi bi-x-circle me-1"></i>
                                     Clear Filters
                                 </button>
                             )}
                         </div>
-                        <div className="card-body" style={{ padding: '24px' }}>
+                        <div style={{ padding: '14px 16px' }}>
                             <div className="row g-3">
                                 <div className="col-lg-2 col-md-6">
                                     <label className="form-label fw-bold mb-2">
@@ -1056,7 +1043,10 @@ export default function ItemReport() {
                                                                 </>
                                                             )}
                                                             <td className="text-center"
-                                                                style={{verticalAlign: 'middle'}}>{item.serial_number}</td>
+                                                                style={{verticalAlign: 'middle'}}>
+                                                                {item.serial_number}
+                                                                <ConditionBadge type={item.condition_type} size="xs" />
+                                                            </td>
                                                             <td style={{verticalAlign: 'middle'}}>{item.hs_code || '-'}</td>
                                                             <td style={{verticalAlign: 'middle'}}>{item.product_description || '-'}</td>
                                                             <td>
@@ -1098,25 +1088,13 @@ export default function ItemReport() {
                                                                             verticalAlign: 'middle',
                                                                             backgroundColor: 'var(--bs-gray-50)'
                                                                         }}>
-                                                                        <span
-                                                                            style={{cursor: togglingRestriction[firstItem.id] ? 'wait' : 'pointer', display: 'inline-block'}}
-                                                                            onClick={(e) => handleToggleRestriction(firstItem, e)}
-                                                                            title="Click to toggle"
-                                                                        >
-                                                                            {togglingRestriction[firstItem.id] ? (
-                                                                                <span className="spinner-border spinner-border-sm" role="status"></span>
-                                                                            ) : firstItem.is_restricted ? (
-                                                                                <span className="badge bg-warning text-dark">
-                                                                                    <i className="bi bi-shield-lock me-1"></i>
-                                                                                    Yes
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="badge bg-success">
-                                                                                    <i className="bi bi-shield-check me-1"></i>
-                                                                                    No
-                                                                                </span>
-                                                                            )}
-                                                                        </span>
+                                                                        {/* Restriction is derived from condition_type (licence's
+                                                                            condition sheet) — read-only display. */}
+                                                                        {firstItem.condition_type
+                                                                            ? <ConditionBadge type={firstItem.condition_type} />
+                                                                            : <span className="badge bg-success">
+                                                                                  <i className="bi bi-shield-check me-1"></i>Open
+                                                                              </span>}
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',

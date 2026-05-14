@@ -35,6 +35,22 @@ class LicensePermission(BaseRolePermission):
     required_roles_for_write = ['LICENSE_MANAGER']
 
 
+class LicenseReadOnlyPermission(LicensePermission):
+    """Same role set as LicensePermission, but every method (including POST)
+    is treated as a read.
+
+    Used for licence endpoints that are read-only by intent but require POST
+    for payload-size reasons — e.g. bulk-balance-excel, which accepts a list
+    of licence numbers in the request body."""
+
+    def has_permission(self, request, view):
+        if request.user and request.user.is_superuser:
+            return True
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return request.user.has_any_role(self.required_roles_for_read)
+
+
 class AllotmentPermission(BaseRolePermission):
     """Permission class for Allotment operations"""
     required_roles_for_read = ['ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER']

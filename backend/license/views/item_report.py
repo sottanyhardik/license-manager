@@ -221,6 +221,7 @@ class ItemReportView(View):
                 'available_balance': available_balance,
                 'balance_cif': float(item.license.balance_cif or 0),
                 'is_restricted': item.is_restricted,
+                'condition_type': item.condition_type or '',
                 'notes': item.license.balance_report_notes or '',
                 'condition_sheet': item.license.condition_sheet or '',
                 'unit': item.unit,
@@ -238,6 +239,7 @@ class ItemReportView(View):
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
         from io import BytesIO
+        from license.utils.condition_excel import annotate_cell as _annotate_condition_cell
 
         # Generate report data
         report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
@@ -256,10 +258,11 @@ class ItemReportView(View):
         header_font = Font(bold=True, color="FFFFFF", size=11)
         header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-        # Headers
+        # Headers — "Condition" sits next to "Serial Number" so it's obvious
+        # which licence item the AU / N% restriction applies to.
         headers = [
             'Sr No', 'License No', 'License Date', 'License Expiry Date', 'Ledger Date', 'Exporter Name',
-            'Serial Number', 'HSN Code', 'Product Description', 'Item Name',
+            'Serial Number', 'Condition', 'HSN Code', 'Product Description', 'Item Name',
             'Available Quantity', 'Available Balance', 'Balance CIF', 'Notes', 'Condition Sheet', 'Transfer Status'
         ]
 
@@ -284,15 +287,16 @@ class ItemReportView(View):
             ws.column_dimensions['E'].width = 15  # Ledger Date
             ws.column_dimensions['F'].width = 25  # Exporter Name
             ws.column_dimensions['G'].width = 12  # Serial Number
-            ws.column_dimensions['H'].width = 12  # HSN Code
-            ws.column_dimensions['I'].width = 40  # Product Description
-            ws.column_dimensions['J'].width = 25  # Item Name
-            ws.column_dimensions['K'].width = 18  # Available Quantity
-            ws.column_dimensions['L'].width = 18  # Available Balance
-            ws.column_dimensions['M'].width = 18  # Balance CIF
-            ws.column_dimensions['N'].width = 30  # Notes
-            ws.column_dimensions['O'].width = 30  # Condition Sheet
-            ws.column_dimensions['P'].width = 35  # Transfer Status
+            ws.column_dimensions['H'].width = 11  # Condition
+            ws.column_dimensions['I'].width = 12  # HSN Code
+            ws.column_dimensions['J'].width = 40  # Product Description
+            ws.column_dimensions['K'].width = 25  # Item Name
+            ws.column_dimensions['L'].width = 18  # Available Quantity
+            ws.column_dimensions['M'].width = 18  # Available Balance
+            ws.column_dimensions['N'].width = 18  # Balance CIF
+            ws.column_dimensions['O'].width = 30  # Notes
+            ws.column_dimensions['P'].width = 30  # Condition Sheet
+            ws.column_dimensions['Q'].width = 35  # Transfer Status
 
             # Group items by license
             grouped_items = {}
@@ -333,18 +337,24 @@ class ItemReportView(View):
                         ws.cell(row=current_row, column=4, value=item['license_expiry_date'])  # License Expiry Date
                         ws.cell(row=current_row, column=5, value=item.get('ledger_date'))  # Ledger Date
                         ws.cell(row=current_row, column=6, value=item['exporter_name'])  # Exporter Name
-                        ws.cell(row=current_row, column=12, value=item['available_balance'])  # Available Balance
-                        ws.cell(row=current_row, column=13, value=item['balance_cif'])  # Balance CIF
-                        ws.cell(row=current_row, column=14, value=item['notes'])  # Notes
-                        ws.cell(row=current_row, column=15, value=item['condition_sheet'])  # Condition Sheet
-                        ws.cell(row=current_row, column=16, value=item.get('latest_transfer', ''))  # Transfer Status
+                        ws.cell(row=current_row, column=13, value=item['available_balance'])  # Available Balance
+                        ws.cell(row=current_row, column=14, value=item['balance_cif'])  # Balance CIF
+                        ws.cell(row=current_row, column=15, value=item['notes'])  # Notes
+                        ws.cell(row=current_row, column=16, value=item['condition_sheet'])  # Condition Sheet
+                        ws.cell(row=current_row, column=17, value=item.get('latest_transfer', ''))  # Transfer Status
 
                     # Item-level columns (for each row)
-                    ws.cell(row=current_row, column=7, value=item['serial_number'])  # Serial Number
-                    ws.cell(row=current_row, column=8, value=item['hs_code'])  # HSN Code
-                    ws.cell(row=current_row, column=9, value=item['product_description'])  # Product Description
-                    ws.cell(row=current_row, column=10, value=item_names_str)  # Item Name
-                    ws.cell(row=current_row, column=11, value=item['available_quantity'])  # Available Quantity
+                    sn_cell = ws.cell(row=current_row, column=7, value=item['serial_number'])  # Serial Number
+                    cond = (item.get('condition_type') or '')
+                    cond_cell = ws.cell(row=current_row, column=8, value=cond)  # Condition
+                    # Tint both Serial-Number and Condition cells so the row
+                    # stands out at a glance.
+                    _annotate_condition_cell(sn_cell, cond)
+                    _annotate_condition_cell(cond_cell, cond)
+                    ws.cell(row=current_row, column=9, value=item['hs_code'])  # HSN Code
+                    ws.cell(row=current_row, column=10, value=item['product_description'])  # Product Description
+                    ws.cell(row=current_row, column=11, value=item_names_str)  # Item Name
+                    ws.cell(row=current_row, column=12, value=item['available_quantity'])  # Available Quantity
 
                     current_row += 1
 
@@ -364,19 +374,19 @@ class ItemReportView(View):
                     ws.merge_cells(start_row=start_row, start_column=5, end_row=end_row, end_column=5)
                     # Merge Exporter Name (column F / 6)
                     ws.merge_cells(start_row=start_row, start_column=6, end_row=end_row, end_column=6)
-                    # Merge Available Balance (column L / 12)
-                    ws.merge_cells(start_row=start_row, start_column=12, end_row=end_row, end_column=12)
-                    # Merge Balance CIF (column M / 13)
+                    # Merge Available Balance (column M / 13)
                     ws.merge_cells(start_row=start_row, start_column=13, end_row=end_row, end_column=13)
-                    # Merge Notes (column N / 14)
+                    # Merge Balance CIF (column N / 14)
                     ws.merge_cells(start_row=start_row, start_column=14, end_row=end_row, end_column=14)
-                    # Merge Condition Sheet (column O / 15)
+                    # Merge Notes (column O / 15)
                     ws.merge_cells(start_row=start_row, start_column=15, end_row=end_row, end_column=15)
-                    # Merge Transfer Status (column P / 16)
+                    # Merge Condition Sheet (column P / 16)
                     ws.merge_cells(start_row=start_row, start_column=16, end_row=end_row, end_column=16)
+                    # Merge Transfer Status (column Q / 17)
+                    ws.merge_cells(start_row=start_row, start_column=17, end_row=end_row, end_column=17)
 
                     # Apply vertical center alignment to merged cells
-                    for col in [1, 2, 3, 4, 5, 6, 12, 13, 14, 15, 16]:
+                    for col in [1, 2, 3, 4, 5, 6, 13, 14, 15, 16, 17]:
                         cell = ws.cell(row=start_row, column=col)
                         cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
                         cell.border = thin_border

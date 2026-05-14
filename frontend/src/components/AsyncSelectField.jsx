@@ -1,6 +1,7 @@
 import {useState, useEffect} from "react";
 import AsyncSelect from "react-select/async";
 import api from "../api/axios";
+import { _fkDetailCache, _fkInFlight } from "./fkDetailCache";
 
 /**
  * AsyncSelectField Component - Select2-like with API support
@@ -58,11 +59,33 @@ export default function AsyncSelectField({
 
     const fetchOptionById = async (id) => {
         try {
-            // Parse ID if it's a number string
             const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+            const url = `${baseEndpoint}${numId}/`;
 
-            // Fetch from API using base endpoint (without query params for detail view)
-            const {data} = await api.get(`${baseEndpoint}${numId}/`);
+            // Cached response — no network call.
+            if (_fkDetailCache.has(url)) {
+                return formatOption(_fkDetailCache.get(url));
+            }
+            // Coalesce concurrent calls for the same URL: each row's
+            // AsyncSelectField fires its own useEffect on mount, so without
+            // this several rows requesting the same FK ID would each issue
+            // an HTTP GET.
+            let pending = _fkInFlight.get(url);
+            if (!pending) {
+                pending = api.get(url).then(
+                    ({data}) => {
+                        _fkDetailCache.set(url, data);
+                        _fkInFlight.delete(url);
+                        return data;
+                    },
+                    (err) => {
+                        _fkInFlight.delete(url);
+                        throw err;
+                    },
+                );
+                _fkInFlight.set(url, pending);
+            }
+            const data = await pending;
             return formatOption(data);
         } catch (err) {
             return null;

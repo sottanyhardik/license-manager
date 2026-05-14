@@ -20,6 +20,48 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+// ─── In-flight GET dedup ─────────────────────────────────────────────────────
+// Coalesces concurrent identical GETs into a single HTTP request. Each caller
+// gets its own response copy (so an .interceptor/transform on one doesn't
+// affect another). Cleared as soon as the request resolves/rejects — this is
+// NOT a response cache, only a request dedup.
+//
+// Common triggers this fixes:
+//   • React StrictMode double-mount in dev (effects fire twice → 2 GETs)
+//   • Two components mounting near-simultaneously and both fetching the same
+//     metadata endpoint.
+const _getInFlight = new Map(); // url -> Promise<axiosResponse>
+
+const _origGet = api.get.bind(api);
+api.get = (url, config = {}) => {
+    // Skip dedup if caller used signal/cancelToken (they want fine control).
+    if (config.signal || config.cancelToken || config._noDedupe) {
+        return _origGet(url, config);
+    }
+    // Key includes the URL plus any params so paginated/filtered requests
+    // don't share a single promise.
+    const paramKey = config.params
+        ? JSON.stringify(config.params, Object.keys(config.params).sort())
+        : "";
+    const key = `${url}|${paramKey}`;
+
+    let pending = _getInFlight.get(key);
+    if (!pending) {
+        pending = _origGet(url, config).finally(() => {
+            // Use a microtask delay so synchronous .then handlers see the
+            // same in-flight promise, but a fresh later GET re-fetches.
+            queueMicrotask(() => _getInFlight.delete(key));
+        });
+        _getInFlight.set(key, pending);
+    }
+    // Each caller gets a separate Promise resolving to a shallow-cloned
+    // response, so downstream mutations on `data` don't leak across callers.
+    return pending.then(
+        (res) => ({ ...res, data: res.data }),
+        (err) => Promise.reject(err),
+    );
+};
+
 // ─── Refresh queue ────────────────────────────────────────────────────────────
 // Prevents the race condition where multiple concurrent 401s each try to refresh,
 // causing "token already blacklisted" errors and unexpected logouts.

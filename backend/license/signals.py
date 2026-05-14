@@ -1,4 +1,6 @@
 # license/signals.py
+import threading
+from contextlib import contextmanager
 from decimal import Decimal
 
 from django.db.models.signals import post_save, post_delete
@@ -8,50 +10,100 @@ from django.utils import timezone
 from license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 
 
+# ── Bulk-operation guard ─────────────────────────────────────────────────────
+# Serializers that save many import/export items in one request (e.g. licence
+# create with 38 items × cascading balance recalcs) can suspend the per-item
+# `update_license_flags` recalculation by entering this context, then call
+# `update_license_flags()` ONCE at the end. Without this guard, 38 item
+# creates fire ~275 SQL sums each → multi-thousand-query saves.
+_bulk_state = threading.local()
+
+
+def _flags_suspended() -> bool:
+    return getattr(_bulk_state, "suspended", False)
+
+
+@contextmanager
+def suspend_license_flag_recalc():
+    """Suspend `update_license_flags` calls from license import/export item
+    signals on the current thread for the duration of the block.
+
+    Always pair with a manual `update_license_flags(license_obj)` call after
+    the bulk work so the licence row's balance/flags stay consistent.
+    """
+    prev = getattr(_bulk_state, "suspended", False)
+    _bulk_state.suspended = True
+    try:
+        yield
+    finally:
+        _bulk_state.suspended = prev
+
+
 def _update_all_import_items_available_value(license_instance):
     """
-    Update available_value for ALL import items in a license.
+    Update available_value for ALL import items in a license, using the
+    pool-based condition_type model.
 
-    This ensures that when any item gets debited/allotted/traded:
-    - Item A gets debited → license.balance_cif decreases
-    - Items B, C, D also get their available_value updated to reflect new balance
+    Cost is O(M) where M = number of distinct %-condition groups on this
+    licence (typically 1–5), rather than O(N²) per-item — the helper
+    `condition_pool.compute_condition_pools` issues ~3 SUM queries per group
+    and reuses the result across every item that shares that condition_type.
 
-    For non-restricted items: available_value = license.balance_cif (shared)
-    For restricted items: available_value calculated based on restriction percentage
+    Semantics (see `available_value_calculated`):
+      • `condition_type` ending in "%"  → pool-limited, capped at licence balance
+      • `condition_type == "AU"`         → licence balance (non-transferable)
+      • empty condition_type             → licence balance (open)
 
-    IMPORTANT: Uses bulk update to avoid triggering signals and infinite recursion.
+    Uses bulk `.update()` to bypass post_save signals and prevent recursion.
     """
     import logging
+    from decimal import Decimal
+    from license.services.condition_pool import compute_condition_pools
+
     logger = logging.getLogger(__name__)
+    DEC_0 = Decimal("0")
 
     try:
-        # Get all import items for this license
-        import_items = license_instance.import_license.all()
-
-        if not import_items.exists():
+        import_items = list(license_instance.import_license.all())
+        if not import_items:
             return
 
-        # Update available_value for each import item using the centralized property
+        # `update_license_flags` writes the new balance via .filter().update()
+        # which doesn't refresh the in-memory instance — pull the fresh value
+        # explicitly before using it as the cap.
+        license_instance.refresh_from_db(fields=["balance_cif"])
+        license_balance = license_instance.balance_cif or DEC_0
+
+        # One-shot computation of remaining pools for every %-condition on
+        # this licence (handles 0 groups too — returns an empty dict).
+        pools = compute_condition_pools(license_instance)
+
         updates_made = 0
         for item in import_items:
             try:
-                # Use available_value_calculated property for accurate calculation
-                new_available_value = item.available_value_calculated
+                if item.cif_inr == Decimal("0.01") or item.cif_fc == Decimal("0.01"):
+                    new_av = Decimal("0.01")
+                else:
+                    cond = (item.condition_type or "").strip()
+                    if cond.endswith("%") and cond in pools:
+                        new_av = min(pools[cond], license_balance)
+                    else:
+                        # "AU" or empty: just track licence balance.
+                        new_av = license_balance
 
-                # Only update if value changed (optimization)
-                if item.available_value != new_available_value:
-                    # CRITICAL: Use update() instead of save() to avoid triggering signals
-                    # This prevents infinite recursion: update_license_flags → save item → signal → update_license_flags
+                if item.available_value != new_av:
                     LicenseImportItemsModel.objects.filter(pk=item.pk).update(
-                        available_value=new_available_value
+                        available_value=new_av
                     )
                     updates_made += 1
             except Exception as e:
-                logger.error(f"Error updating available_value for import item {item.id}: {e}")
-                continue
+                logger.error(f"Error updating available_value for item {item.id}: {e}")
 
         if updates_made > 0:
-            logger.info(f"Updated available_value for {updates_made} import items in license {license_instance.license_number}")
+            logger.info(
+                "Updated available_value for %d import items in license %s",
+                updates_made, license_instance.license_number,
+            )
 
     except Exception as e:
         logger.error(f"Error updating import items for license {license_instance.id}: {e}")
@@ -116,6 +168,10 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
     # Prevent infinite recursion by checking if we're already in a save
     if kwargs.get('raw', False):
         return
+    # Bulk operation in progress — serializer will call update_license_flags
+    # explicitly after all child rows are written.
+    if _flags_suspended():
+        return
 
     # Update license flags
     update_license_flags(instance)
@@ -143,16 +199,13 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
 
         matching_items = match_import_item_to_items(import_item, license_norm_classes)
 
-        # Link all matching ItemNameModel items
+        # Link all matching ItemNameModel items. `is_restricted` is no longer
+        # auto-set from ItemNameModel.restriction_percentage — restrictions
+        # come exclusively from the licence's condition sheet via
+        # `condition_type`.
         for item_name in matching_items:
-            # Add item if not already linked
             if not import_item.items.filter(id=item_name.id).exists():
                 import_item.items.add(item_name)
-
-                # Update is_restricted flag if item has restriction
-                if item_name.restriction_percentage > 0 and not import_item.is_restricted:
-                    import_item.is_restricted = True
-                    import_item.save(update_fields=['is_restricted'])
 
 
 @receiver(post_save, sender=LicenseExportItemModel)
@@ -162,6 +215,8 @@ def update_license_on_export_item_change(sender, instance, created, **kwargs):
     This ensures is_null and is_expired are updated after export items are created.
     """
     if kwargs.get('raw', False):
+        return
+    if _flags_suspended():
         return
 
     if instance.license:
@@ -174,6 +229,8 @@ def update_license_on_export_item_delete(sender, instance, **kwargs):
     Update license flags when export items are deleted.
     """
     if kwargs.get('raw', False):
+        return
+    if _flags_suspended():
         return
 
     if instance.license:
@@ -194,6 +251,26 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
     if kwargs.get('raw', False):
         logger.debug(f"Signal skipped (raw=True) for import item {instance.id}")
         return
+    if _flags_suspended():
+        # Bulk serializer operation in progress — the caller will flush
+        # update_license_flags once after all items are written.
+        logger.debug(f"Signal skipped (flags suspended) for import item {instance.id}")
+        return
+
+    # Skip if only balance fields changed — those updates come from
+    # `update_balance_values` (the on_commit job) and the licence balance was
+    # already recomputed when whatever triggered THAT change ran. Re-running
+    # update_license_flags here is just expensive duplicate work and creates
+    # an O(N) cascade after every bulk save commits.
+    update_fields = kwargs.get('update_fields')
+    if update_fields is not None:
+        _balance_only_fields = {
+            'available_quantity', 'debited_quantity', 'allotted_quantity',
+            'allotted_value', 'debited_value', 'available_value',
+            'is_restricted',  # auto-link sets this via .update() but on_commit may surface it
+        }
+        if set(update_fields).issubset(_balance_only_fields):
+            return
 
     logger.info(f"Signal fired for import item {instance.id} (created={created})")
 
@@ -221,21 +298,15 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
 
             logger.info(f"Found {matching_items.count()} matching items using comprehensive filters")
 
-            # Link ALL matching items (not just one) since multiple items can be valid
+            # Link ALL matching items. `is_restricted` is no longer auto-set
+            # from ItemNameModel.restriction_percentage — restrictions come
+            # exclusively from the licence's condition sheet via condition_type.
             for item_name in matching_items:
-                # Only add if not already linked
                 if not instance.items.filter(id=item_name.id).exists():
                     logger.info(f"Linking item {item_name.id} ({item_name.name}) to import item {instance.id}")
                     instance.items.add(item_name)
                 else:
                     logger.debug(f"Item {item_name.id} already linked to import item {instance.id}")
-
-                # Update is_restricted flag if item has restriction
-                if item_name.restriction_percentage > 0 and not instance.is_restricted:
-                    logger.info(
-                        f"Setting is_restricted=True for import item {instance.id} (restriction: {item_name.restriction_percentage}%)")
-                    instance.is_restricted = True
-                    instance.save(update_fields=['is_restricted'])
         else:
             if not license_norm_classes:
                 logger.warning(f"No license norm classes found for license {instance.license.id}")
@@ -249,6 +320,8 @@ def update_license_on_import_item_delete(sender, instance, **kwargs):
     Update license flags when import items are deleted.
     """
     if kwargs.get('raw', False):
+        return
+    if _flags_suspended():
         return
 
     if instance.license:

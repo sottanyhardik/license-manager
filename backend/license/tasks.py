@@ -124,45 +124,23 @@ def update_all_license_balances(self, license_status='all'):
                 error_count += 1
                 logger.error(f"Error updating license {license_obj.license_number}: {str(e)}")
 
-        # Update restriction flags and available_value on import items
+        # Refresh per-item available_value via the new pool model and keep
+        # is_restricted in sync with condition_type. The old path that derived
+        # is_restricted from ItemNameModel.restriction_percentage is gone —
+        # restrictions now come exclusively from the licence's condition sheet.
         self.update_state(
             state='PROGRESS',
-            meta={'current': 90, 'total': 100, 'status': 'Updating restriction flags and available values...'}
+            meta={'current': 90, 'total': 100, 'status': 'Refreshing per-item balances...'}
         )
 
         restriction_count = 0
-        import_items = LicenseImportItemsModel.objects.select_related('license').prefetch_related('items')
-
-        for import_item in import_items.iterator(chunk_size=100):
-            # Check if any linked ItemNameModel has restriction
-            has_restriction = any(
-                item.restriction_percentage > 0
-                for item in import_item.items.all()
-            )
-
-            # Calculate the correct available_value to save
-            # If is_restricted=True, use restriction-based calculation (available_value_calculated)
-            # If is_restricted=False, use license balance_cif
-            if has_restriction:
-                # Use the calculated property which applies restriction logic
-                available_value_to_save = import_item.available_value_calculated
-            else:
-                # Use license balance_cif for non-restricted items
-                available_value_to_save = import_item.license.balance_cif
-
-            # Check if update is needed
-            needs_update = False
-            if has_restriction != import_item.is_restricted:
-                import_item.is_restricted = has_restriction
-                needs_update = True
-
-            if import_item.available_value != available_value_to_save:
-                import_item.available_value = available_value_to_save
-                needs_update = True
-
-            if needs_update:
-                import_item.save(update_fields=['is_restricted', 'available_value'])
+        from license.signals import update_license_flags
+        for license_obj in LicenseDetailsModel.objects.all().iterator(chunk_size=50):
+            try:
+                update_license_flags(license_obj)
                 restriction_count += 1
+            except Exception as e:
+                logger.error(f"Error refreshing balances for license {license_obj.license_number}: {e}")
 
         elapsed = (datetime.now() - start_time).total_seconds()
 

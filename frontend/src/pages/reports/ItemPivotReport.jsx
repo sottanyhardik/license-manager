@@ -1,11 +1,14 @@
 import React, {useEffect, useState} from "react";
+import {useNavigate} from "react-router-dom";
 import AsyncSelectField from "../../components/AsyncSelectField";
+import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
 import {formatIndianNumber} from "../../utils/numberFormatter";
 import {toast} from "react-toastify";
 
 export default function ItemPivotReport() {
+    const navigate = useNavigate();
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -315,134 +318,109 @@ export default function ItemPivotReport() {
 
 
     return (
-        <div className="container-fluid" style={{backgroundColor: 'var(--bs-gray-50)', minHeight: '100vh', padding: '24px'}}>
-            {/* Professional Header with Gradient */}
-            <div style={{
-                background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                padding: '32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                color: 'white',
-                marginBottom: '24px'
-            }}>
-                <div className="d-flex justify-content-between align-items-center flex-wrap">
-                    <div>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '8px' }}>
-                            <i className="bi bi-table me-3"></i>
-                            Item Pivot Report
-                        </h1>
-                        <p style={{ fontSize: '0.95rem', marginBottom: '0', opacity: '0.95' }}>
-                            {reportData && (
-                                <>
-                                    <i className="bi bi-calendar-event me-1"></i>
-                                    Report Date: {reportData.report_date}
-                                    <span className="mx-2">•</span>
-                                </>
-                            )}
-                            <i className="bi bi-tag-fill me-1"></i>
-                            Active Norm: {activeNormTab || 'None Selected'}
-                            {reportData && (
-                                <>
-                                    <span className="mx-2">•</span>
-                                    <i className="bi bi-bell me-1"></i>
-                                    {getTotalNotificationCount()} Notifications
-                                    <span className="mx-2">•</span>
-                                    <i className="bi bi-file-text me-1"></i>
-                                    {getTotalLicenseCount()} Licenses
-                                </>
-                            )}
-                        </p>
+        <div style={{ minHeight: '100vh' }}>
+            {/* Tabler-style page header */}
+            <div className="page-header">
+                <div style={{ minWidth: 0 }}>
+                    <div className="page-pretitle">
+                        <a
+                            href="/"
+                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
+                            style={{ color: 'inherit', textDecoration: 'none' }}
+                        >
+                            Home
+                        </a>
+                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        Reports
+                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        Item Pivot Report
                     </div>
-                    <div className="btn-group" style={{ marginTop: '12px' }}>
-                        <button
-                            className="btn"
-                            onClick={() => setFiltersCollapsed(!filtersCollapsed)}
-                            style={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                border: '1px solid rgba(255, 255, 255, 0.3)',
-                                color: 'white',
-                                fontWeight: '500',
-                                backdropFilter: 'blur(10px)'
-                            }}
-                        >
-                            <i className={`bi bi-funnel${hasActiveFilters ? '-fill' : ''} me-2`}></i>
-                            {filtersCollapsed ? 'Show' : 'Hide'} Filters
-                            {hasActiveFilters && <span className="badge bg-light text-dark ms-2">Active</span>}
-                        </button>
-                        <button
-                            className="btn"
-                            onClick={handleUpdateBalance}
-                            title="Update balance_cif, is_active, is_expired, and restrictions. Runs in background."
-                            style={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                border: '1px solid rgba(255, 255, 255, 0.3)',
-                                color: 'white',
-                                fontWeight: '500',
-                                backdropFilter: 'blur(10px)'
-                            }}
-                        >
-                            <i className="bi bi-arrow-clockwise me-2"></i>
-                            Update Balance
-                        </button>
-                        <button
-                            className="btn"
-                            onClick={handleExport}
-                            disabled={downloading}
-                            style={{
-                                backgroundColor: 'white',
-                                border: '2px solid white',
-                                color: 'var(--primary-color)',
-                                fontWeight: '600',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                            }}
-                        >
-                            {downloading ? (
-                                <>
-                                    <span className="spinner-border spinner-border-sm me-2" role="status"
-                                          aria-hidden="true"></span>
-                                    Downloading...
-                                </>
-                            ) : (
-                                <>
-                                    <i className="bi bi-file-earmark-excel me-2"></i>
-                                    Export to Excel
-                                </>
-                            )}
-                        </button>
+                    <h1>Item Pivot Report</h1>
+                    <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
+                        {reportData && (
+                            <>
+                                <i className="bi bi-calendar-event me-1"></i>
+                                {reportData.report_date}
+                                <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
+                            </>
+                        )}
+                        <i className="bi bi-tag-fill me-1"></i>
+                        Active Norm: {activeNormTab || 'None'}
+                        {reportData && (
+                            <>
+                                <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
+                                <i className="bi bi-bell me-1"></i>
+                                {getTotalNotificationCount()} Notifications
+                                <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
+                                <i className="bi bi-file-text me-1"></i>
+                                {getTotalLicenseCount()} Licenses
+                            </>
+                        )}
                     </div>
+                </div>
+                <div className="page-actions">
+                    <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+                    >
+                        <i className={`bi bi-funnel${hasActiveFilters ? '-fill' : ''} me-1`}></i>
+                        {filtersCollapsed ? 'Show' : 'Hide'} Filters
+                        {hasActiveFilters && <span className="badge bg-primary ms-2">Active</span>}
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={handleUpdateBalance}
+                        title="Update balance_cif, is_active, is_expired, and restrictions. Runs in background."
+                    >
+                        <i className="bi bi-arrow-clockwise me-1"></i>
+                        Update Balance
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={handleExport}
+                        disabled={downloading}
+                    >
+                        {downloading ? (
+                            <>
+                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style={{ width: 12, height: 12 }} />
+                                Generating…
+                            </>
+                        ) : (
+                            <>
+                                <i className="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>
+                                Excel
+                            </>
+                        )}
+                    </button>
                 </div>
             </div>
 
             {/* Filters Section */}
             {!filtersCollapsed && (
-                <div className="row mb-4">
+                <div className="row mb-3">
                     <div className="col-12">
-                        <div className="card shadow-sm border-0" style={{maxWidth: '1400px'}}>
-                            <div
-                                className="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
-                                <h5 className="mb-0">
-                                    <i className="bi bi-sliders me-2"></i>
+                        <div className="surface-card" style={{maxWidth: '1400px'}}>
+                            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}
+                                 className="d-flex justify-content-between align-items-center">
+                                <h5 className="mb-0" style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                                    <i className="bi bi-sliders me-2" style={{ color: 'var(--primary-color)' }}></i>
                                     Filters
                                 </h5>
                                 {hasActiveFilters && (
                                     <button
-                                        className="btn btn-sm"
+                                        type="button"
+                                        className="btn btn-outline-secondary btn-sm"
                                         onClick={handleClearFilters}
-                                        style={{
-                                            backgroundColor: 'var(--bs-gray-500)',
-                                            border: 'none',
-                                            color: 'white',
-                                            fontWeight: '500',
-                                            padding: '6px 16px',
-                                            borderRadius: '6px'
-                                        }}
                                     >
                                         <i className="bi bi-x-circle me-1"></i>
                                         Clear Filters
                                     </button>
                                 )}
                             </div>
-                            <div className="card-body">
+                            <div style={{ padding: '14px 16px' }}>
                                 <div className="row g-3">
                                     <div className="col-lg-3 col-md-6">
                                         <label className="form-label fw-bold mb-2">
@@ -573,11 +551,11 @@ export default function ItemPivotReport() {
             )}
 
             {/* Norm Tabs */}
-            <div className="row mb-4">
+            <div className="row mb-3">
                 <div className="col-12">
-                    <div className="card shadow-sm border-0">
-                        <div className="card-body p-3">
-                            <h6 className="mb-3 text-primary">
+                    <div className="surface-card">
+                        <div style={{ padding: '14px 16px' }}>
+                            <h6 className="mb-3" style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--primary-color)' }}>
                                 <i className="bi bi-tag-fill me-2"></i>
                                 Available Norms ({availableNorms.length})
                                 <small className="text-muted ms-2">(includes E1, E5, E126, E132 conversion norms)</small>
@@ -1012,6 +990,9 @@ export default function ItemPivotReport() {
                                                                         key={`${license.license_number}-${item.id}`}>
                                                                         <td className={hasData ? 'bg-light' : ''}>
                                                                             {itemData.hs_code || '-'}
+                                                                            {itemData.condition_type && (
+                                                                                <ConditionBadge type={itemData.condition_type} size="xs" />
+                                                                            )}
                                                                         </td>
                                                                         <td className={`text-truncate ${hasData ? 'bg-light' : ''}`}
                                                                             style={{maxWidth: '180px'}}

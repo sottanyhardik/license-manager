@@ -11,6 +11,8 @@ class RowDetailsSerializer(serializers.ModelSerializer):
     license_number = serializers.CharField(source='sr_number.license.license_number', read_only=True)
     item_description = serializers.CharField(source='sr_number.description', read_only=True)
     hs_code = serializers.CharField(source='sr_number.hs_code.hs_code', read_only=True)
+    item_serial_number = serializers.IntegerField(source='sr_number.serial_number', read_only=True)
+    condition_type = serializers.CharField(source='sr_number.condition_type', read_only=True)
     purchase_status = serializers.SerializerMethodField()
 
     def get_purchase_status(self, obj):
@@ -32,6 +34,8 @@ class RowDetailsSerializer(serializers.ModelSerializer):
             'license_number',
             'item_description',
             'hs_code',
+            'item_serial_number',
+            'condition_type',
             'purchase_status',
         ]
         read_only_fields = ['is_frozen', 'is_dispute']

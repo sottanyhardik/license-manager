@@ -145,7 +145,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                   'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value',
                   'license_number', 'license_date', 'license_expiry_date',
                   'notification_number', 'exporter_name', 'notes', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
-                  'is_restricted']
+                  'is_restricted', 'condition_type']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly
         extra_kwargs = {
@@ -192,46 +192,45 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         return None
 
     def get_available_quantity(self, obj):
-        from core.scripts.calculate_balance import calculate_available_quantity
-        return self._cached_float(obj, f'_cached_available_quantity_{obj.id}', calculate_available_quantity)
+        # Stored field is kept in sync by update_balance_values / the bulk
+        # serializer flow; reading it avoids N round-trips per list response.
+        return float(obj.available_quantity or 0)
 
     def get_available_value(self, obj):
         """
         Return calculated available value based on restriction logic.
 
-        This ensures available_value in the API response matches balance_cif_fc.
-        Both use the same underlying calculation (available_value_calculated).
+        Reads the stored `available_value` field rather than re-computing the
+        pool model on every read — the pool is recalculated on every save by
+        `_update_all_import_items_available_value`, so the stored field is
+        authoritative. Avoids O(N) compute_condition_pools calls per list view.
         """
-        return obj.available_value_calculated
+        return float(obj.available_value or 0)
 
+    # All balance read-outs use the stored fields (kept in sync by
+    # update_balance_values + the bulk serializer flow). Reading from the
+    # DB column is O(1) and avoids per-item SUM aggregations on every list
+    # / detail response. Stored values are recomputed any time a BOE,
+    # allotment, trade line, or licence item is saved.
     def get_debited_quantity(self, obj):
-        from core.scripts.calculate_balance import calculate_debited_quantity
-        return self._cached_float(obj, f'_cached_debited_quantity_{obj.id}', calculate_debited_quantity)
+        return float(obj.debited_quantity or 0)
 
     def get_debited_value(self, obj):
-        from core.scripts.calculate_balance import calculate_debited_value
-        return self._cached_float(obj, f'_cached_debited_value_{obj.id}', calculate_debited_value)
+        return float(obj.debited_value or 0)
 
     def get_allotted_quantity(self, obj):
-        from core.scripts.calculate_balance import calculate_allotted_quantity
-        return self._cached_float(obj, f'_cached_allotted_quantity_{obj.id}', calculate_allotted_quantity)
+        return float(obj.allotted_quantity or 0)
 
     def get_allotted_value(self, obj):
-        from core.scripts.calculate_balance import calculate_allotted_value
-        return self._cached_float(obj, f'_cached_allotted_value_{obj.id}', calculate_allotted_value)
+        return float(obj.allotted_value or 0)
 
     def get_balance_cif_fc(self, obj):
         """
-        ITEM-LEVEL available CIF FC calculation.
-
-        Uses balance_cif_fc property which calculates:
-        - For restricted items: restriction-based calculation
-        - For special rows (CIF 0/0.01/0.1): license-level calculation
-        - For regular items: item-level calculation (item_credit - item_debit - item_allotment)
-
-        This is different from available_value which uses license-level balance for non-restricted items.
+        ITEM-LEVEL available CIF FC. Under the new condition_type model the
+        per-item balance is the same value we store in `available_value` —
+        return the stored field to keep this O(1).
         """
-        return obj.balance_cif_fc
+        return float(obj.available_value or 0)
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -741,6 +740,8 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         from django.db import transaction
+        from license.signals import suspend_license_flag_recalc, update_license_flags
+        from license.utils.item_matcher import bulk_auto_link_license_items
 
         exports = validated_data.pop("export_license", [])
         imports = validated_data.pop("import_license", [])
@@ -750,7 +751,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
 
         # Wrap entire license creation in atomic transaction
         # If any error occurs, the entire license creation will be rolled back
-        with transaction.atomic():
+        with transaction.atomic(), suspend_license_flag_recalc():
             instance = LicenseDetailsModel.objects.create(**validated_data)
 
             for e in exports:
@@ -809,10 +810,24 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             for p in purchases:
                 LicensePurchase.objects.create(license=instance, **p)
 
+        # Bulk auto-link ItemNames in O(M) queries instead of O(N×M).
+        bulk_auto_link_license_items(instance)
+        # For a fresh licence, available_quantity = quantity (no debits yet).
+        # Bulk-set in one query instead of letting the on_commit hook fire
+        # update_balance_values 38× post-commit.
+        from django.db.models import F
+        LicenseImportItemsModel.objects.filter(
+            license=instance, available_quantity=0
+        ).update(available_quantity=F("quantity"))
+        # Final balance / is_null / is_expired recalc + pool-based
+        # available_value (single pass).
+        update_license_flags(instance)
         return instance
 
     def update(self, instance, validated_data):
         from django.db import transaction
+        from license.signals import suspend_license_flag_recalc, update_license_flags
+        from license.utils.item_matcher import bulk_auto_link_license_items
         import logging
         logger = logging.getLogger(__name__)
 
@@ -835,8 +850,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 for i, doc in enumerate(docs):
                     logger.debug("Document %s: keys=%s, type=%s, file=%s", i, list(doc.keys()), doc.get('type'), doc.get('file'))
 
-        # Use atomic transaction with row-level locking to prevent race conditions
-        with transaction.atomic():
+        # Use atomic transaction with row-level locking to prevent race conditions.
+        # Suspend per-item balance recalcs — we flush them once at the end.
+        with transaction.atomic(), suspend_license_flag_recalc():
             # Lock the license record for update to prevent concurrent modifications
             locked_instance = LicenseDetailsModel.objects.select_for_update().get(pk=instance.pk)
 
@@ -1382,6 +1398,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                     if item_id not in processed_ids:
                         item.delete()
 
+        # Bulk auto-link ItemNames + single recalc pass.
+        bulk_auto_link_license_items(instance)
+        update_license_flags(instance)
         return instance
 
 

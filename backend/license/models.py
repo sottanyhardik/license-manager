@@ -229,17 +229,15 @@ class LicenseDetailsModel(AuditModel):
         from license.services.balance_calculator import LicenseBalanceCalculator
         return LicenseBalanceCalculator.calculate_balance(self)
 
-    def get_restriction_balances(self) -> Dict[Decimal, Decimal]:
+    def get_restriction_balances(self) -> Dict[str, Decimal]:
         """
-        Calculate restriction balances using centralized service.
-        Returns a dictionary mapping restriction_percentage -> remaining balance.
+        Per-condition_type remaining pool balances for this licence.
 
-        Returns:
-            Dict[Decimal, Decimal]: {restriction_percentage: balance_remaining}
+        Returns: {condition_type ("2%" / "3%" / "5%" / "10%"): remaining_balance}
+        Delegates to the new `condition_pool.compute_condition_pools` helper.
         """
-        from license.services.restriction_calculator import RestrictionCalculator
-        total_export_cif = self._calculate_license_credit()
-        return RestrictionCalculator.calculate_all_restriction_balances(self, total_export_cif)
+        from license.services.condition_pool import compute_condition_pools
+        return compute_condition_pools(self)
 
     # ---------- grouped import summaries ----------
     @cached_property
@@ -810,6 +808,12 @@ class LicenseImportItemsModel(models.Model):
 
     is_restricted = models.BooleanField(default=False,
                                         help_text="If True, uses restriction-based calculation (2%, 3%, 5%, 10% etc.). If False, uses license balance.")
+    condition_type = models.CharField(
+        max_length=8,
+        blank=True,
+        default="",
+        help_text="Per-item licence condition extracted from the condition sheet: 'AU', '2%', '3%', '5%', '10%' etc. Drives the colour badge in the UI. Empty means no special condition.",
+    )
     comment = models.TextField(blank=True, null=True)
 
     admin_search_fields = ("license__license_number",)
@@ -826,6 +830,14 @@ class LicenseImportItemsModel(models.Model):
 
     def __str__(self) -> str:
         return f"{self.license}-{self.serial_number}"
+
+    def save(self, *args, **kwargs):
+        # `is_restricted` is now a DERIVED flag — true iff a licence condition
+        # (AU / N%) applies to this item. The new restriction model lives in
+        # `condition_type` + `license.services.condition_pool`; the boolean is
+        # kept purely as a fast filter/index for existing queries.
+        self.is_restricted = bool((self.condition_type or "").strip())
+        super().save(*args, **kwargs)
 
     @cached_property
     def required_cif(self) -> Decimal:
@@ -876,201 +888,75 @@ class LicenseImportItemsModel(models.Model):
             DEC_0,
         )
 
-    def _calculate_head_restriction_balance(self) -> Decimal:
-        """
-        Calculate balance for items with head-based restrictions.
-        Formula: (license CIF × restriction_percentage) - (allotted + debited for same head in license)
-        Exception 1: Don't subtract allotments that already have BOE
-        Exception 2: Restrictions do NOT apply for notification 098/2009 OR Purchase Status = Conversion
-        """
-        from core.models import ItemNameModel
-        from core.constants import N2009, CO
-
-        # Check exception: 098/2009 OR Conversion - restrictions do not apply
-        if self.license and (self.license.notification_number == N2009 or (self.license.purchase_status and self.license.purchase_status.code == CO)):
-            return DEC_0  # No restriction applies
-
-        # Get all item names linked to this import item
-        item_names = self.items.all()
-        if not item_names:
-            return DEC_0
-
-        # Get heads with restrictions from linked item names
-        restricted_heads = []
-
-        # Get license export norm classes
-        license_norm_classes = []
-        if self.license:
-            license_norm_classes = list(
-                self.license.export_license.all()
-                .values_list("norm_class__norm_class", flat=True)
-            )
-
-        # Check for restrictions on items based on sion_norm_class and restriction_percentage
-        restricted_items = []
-
-        for item_name in item_names:
-            if (item_name.sion_norm_class and item_name.restriction_percentage > DEC_0):
-                # Check if license export norm class matches item restriction norm
-                restriction_norm_class = item_name.sion_norm_class.norm_class if item_name.sion_norm_class else None
-                if restriction_norm_class and restriction_norm_class in license_norm_classes:
-                    restricted_items.append(item_name)
-
-        if not restricted_items:
-            return DEC_0  # No restriction applies
-
-        # Use the first restricted item found
-        item = restricted_items[0]
-
-        # Calculate license CIF value × restriction percentage
-        license_cif = self.license._calculate_license_credit()
-        # Convert restriction_percentage to Decimal to avoid float * Decimal error
-        restriction_pct = Decimal(str(item.restriction_percentage)) if not isinstance(item.restriction_percentage, Decimal) else item.restriction_percentage
-        allowed_value = license_cif * (restriction_pct / Decimal("100"))
-
-        # Calculate total debited + allotted for all items with same sion_norm_class and restriction_percentage
-        # Get all import items in this license that have items with matching restriction
-        same_restriction_items = LicenseImportItemsModel.objects.filter(
-            license=self.license,
-            items__sion_norm_class=item.sion_norm_class,
-            items__restriction_percentage=item.restriction_percentage
-        ).distinct()
-
-        total_debited = DEC_0
-        total_allotted = DEC_0
-
-        for import_item in same_restriction_items:
-            total_debited += import_item._calculate_item_debit()
-            # Only count allotments that don't have BOE (bill_of_entry IS NULL)
-            allotted_no_boe = _to_decimal(
-                AllotmentItems.objects.filter(
-                    item=import_item,
-                    allotment__bill_of_entry__isnull=True
-                ).aggregate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))["total"],
-                DEC_0,
-            )
-            total_allotted += allotted_no_boe
-
-        balance = allowed_value - total_debited - total_allotted
-        return balance if balance >= DEC_0 else DEC_0
-
     @property
     def balance_cif_fc(self) -> Decimal:
         """
-        Row-level balance. For special rows (0 / 0.01 / 0.1), fall back to license-level sums.
+        Row-level balance under the new condition_type model.
 
-        Business Logic (Priority Order):
-        1. If is_restricted=True: use license-level balance (non-restricted)
-        2. If item has head with restriction percentage: use restriction-based calculation
-        3. If all items OTHER THAN serial_number = 1 have CIF = 0: use license balance
-        4. If item CIF is 0/0.01/0.1: use license-level calculation
-        5. Otherwise: use item-level calculation
+        - condition_type ending in "%": pool-based shared limit (delegated to
+          `condition_pool.remaining_for_condition`), capped at the licence
+          balance.
+        - condition_type "AU" or empty: tracks the licence balance.
 
-        Always calculated fresh from database without caching.
-        Uses centralized license calculation methods for consistency.
+        Always calculated fresh from database (no caching) — see
+        `available_value_calculated` for the same logic used by the cached
+        `available_value` field. Prefer the stored field when reading in bulk.
         """
         if not self.license:
             return DEC_0
-
-        # PRIORITY 1: Check is_restricted flag
-        # Non-restricted items with no own CIF FC share the full license balance.
-        # Non-restricted items that DO have their own CIF FC use item-level calc (fall through).
-        if not self.is_restricted:
-            if not self.cif_fc or self.cif_fc == Decimal("0"):
-                return self.license.get_balance_cif
-            # else: fall through to item-level calculation below
-
-        # PRIORITY 2: If is_restricted=True, check if item has restriction percentage
-        restriction_balance = self._calculate_head_restriction_balance()
-        has_restriction_pct = self.items.filter(
-            sion_norm_class__isnull=False,
-            restriction_percentage__gt=DEC_0
-        ).exists()
-
-        if has_restriction_pct:
-            # This item has restrictions, use restriction calculation
-            # BUT: Cannot exceed license-level balance (if license only has 151.86, restricted item can't show 1367.07)
-            license_balance = self.license.get_balance_cif
-            return min(restriction_balance, license_balance)
-
-        # PRIORITY 3: Check if business logic applies: all other items have zero CIF and this is serial_number 1
-        if self.serial_number == 1:
-            all_items = LicenseImportItemsModel.objects.filter(license=self.license)
-            other_items = [item for item in all_items if item.serial_number != 1]
-
-            # Check if all other items have zero CIF
-            all_others_zero_cif = all(
-                _to_decimal(item.cif_fc or DEC_0, DEC_0) == DEC_0 and
-                _to_decimal(item.cif_inr or DEC_0, DEC_0) == DEC_0
-                for item in other_items
-            ) if other_items else False
-
-            if all_others_zero_cif:
-                # Return the license's balance directly - use centralized calculation
-                return self.license.get_balance_cif
-
-        # PRIORITY 4 & 5: Original logic - use centralized methods where possible
-        license_balance = self.license.get_balance_cif
-
-        if not self.cif_fc or self.cif_fc == Decimal("0"):
-            # Item has no own CIF FC — the full license balance is available
-            return license_balance
-        else:
-            # Item has its own CIF FC — use item-level credit/debit/allotment,
-            # but cap at license balance so it never shows more than the license has left.
-            credit = _to_decimal(self.cif_fc or DEC_0, DEC_0)
-            debit = self._calculate_item_debit()
-            allotment = self._calculate_item_allotment()
-            item_balance = max(credit - debit - allotment, DEC_0)
-            return min(item_balance, license_balance)
+        license_balance = self.license.balance_cif or DEC_0
+        cond = (self.condition_type or "").strip()
+        if cond.endswith("%"):
+            from license.services.condition_pool import remaining_for_condition
+            remaining = remaining_for_condition(self.license, cond)
+            if remaining is None:
+                return license_balance
+            return min(remaining, license_balance)
+        return license_balance
 
     @property
     def available_value_calculated(self) -> Decimal:
         """
-        CENTRALIZED available_value calculation - SINGLE SOURCE OF TRUTH.
+        CENTRALIZED available_value calculation — SINGLE SOURCE OF TRUTH.
 
-        Business Logic:
-        1. If cif_inr is 0.01: Return 0.01 directly (special marker value)
-        2. If is_restricted=True: Calculate based on item's restriction (2%, 3%, 5%, 10% etc.)
-           Formula: (License Export CIF × restriction_percentage / 100) - (debits + allotments for this restriction)
-        3. Otherwise: Use license.balance_cif (shared across all non-restricted items)
+        NEW model (driven by `condition_type` on the import item):
 
-        IMPORTANT: The is_restricted flag is authoritative. If is_restricted=False, always use license balance
-        even if linked items have restriction_percentage > 0.
+        1. If cif_inr / cif_fc == 0.01: return 0.01 (special marker value).
+        2. If condition_type ends with "%" (e.g. "10%"):
+              Collective pool = N% × license total CIF.
+              All items on this licence sharing the same condition_type share
+              that pool. available_value = min(pool_remaining, license_balance).
+              (Computed via `license.services.condition_pool`.)
+        3. If condition_type == "AU": item is non-transferable; available_value
+              still tracks license_balance (the restriction is on transfer of
+              the licence, not on use of the item).
+        4. Otherwise (empty condition_type / "open"): available_value = license_balance.
 
-        This property should be used EVERYWHERE in the project:
-        - Frontend display
-        - Backend serializers
-        - PDF reports
-        - Management commands
-        - API responses
-
-        DO NOT calculate available_value anywhere else - always use this property.
+        For BULK contexts (many items on the same licence) prefer
+        `condition_pool.compute_condition_pools(license)` once and reuse the
+        returned dict, rather than calling this property per-item — see
+        `_update_all_import_items_available_value` in license.signals.
         """
         if not self.license:
             return DEC_0
 
-        # Special case: If cif_inr is 0.01, return 0.01
+        # Special marker value
         if self.cif_inr == Decimal("0.01") or self.cif_fc == Decimal("0.01"):
             return Decimal("0.01")
 
-        # Use restriction calculation ONLY if is_restricted=True
-        # The is_restricted flag is the authoritative source - if it's False,
-        # use license balance even if linked items have restrictions
-        if self.is_restricted:
-            # Use restriction-based calculation
-            restriction_balance = self._calculate_head_restriction_balance()
-            # Only return restriction balance if it's valid (>= 0)
-            if restriction_balance >= DEC_0:
-                # CRITICAL: Cannot exceed license-level balance
-                # If license only has 151.86, restricted item can't use 1367.07
-                license_balance = self.license.balance_cif
-                return min(restriction_balance, license_balance)
-            # Fallback to license balance if restriction calculation returns invalid
-            return self.license.balance_cif
-        else:
-            # Use license balance_cif directly
-            return self.license.balance_cif
+        license_balance = self.license.balance_cif or DEC_0
+        cond = (self.condition_type or "").strip()
+
+        # Percentage condition — pool-based shared limit.
+        if cond.endswith("%"):
+            from license.services.condition_pool import remaining_for_condition
+            remaining = remaining_for_condition(self.license, cond)
+            if remaining is None:
+                return license_balance
+            return min(remaining, license_balance)
+
+        # "AU" or open: track licence balance directly.
+        return license_balance
 
     @cached_property
     def license_expiry(self) -> Optional[date]:
@@ -1274,8 +1160,17 @@ def update_balance(sender, instance, **kwargs):
     Use transaction.on_commit so the update sees committed DB state.
 
     Guards against infinite recursion by checking if balance fields changed.
+    Also honours the per-thread suspend flag used by bulk serializer save
+    operations — `_update_all_import_items_available_value` will run once at
+    the end of the bulk save instead of 38 times per item via this on_commit.
     """
     from core.scripts.calculate_balance import update_balance_values
+    from license.signals import _flags_suspended
+
+    # Bulk serializer operation in progress — skip the per-item on_commit
+    # rebalance, the serializer's final flush handles it once.
+    if _flags_suspended():
+        return
 
     # Prevent infinite recursion: only update if non-balance fields changed
     update_fields = kwargs.get('update_fields')

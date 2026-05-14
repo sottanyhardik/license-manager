@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import Select from "react-select";
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
+import ConditionBadge from "../components/ConditionBadge";
 import TransferLetterForm from "../components/TransferLetterForm";
 import {useBackButton} from "../hooks/useBackButton";
 
@@ -822,7 +823,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 {allotment.allotment_details.map((detail) => (
                                     <tr key={detail.id}>
                                         <td style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{detail.license_number}</td>
-                                        <td style={{whiteSpace: 'nowrap'}}>{detail.serial_number}</td>
+                                        <td style={{whiteSpace: 'nowrap'}}>
+                                            {detail.serial_number}
+                                            <ConditionBadge type={detail.condition_type} size="xs" />
+                                        </td>
                                         <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
                                         <td style={{whiteSpace: 'nowrap'}}>{detail.hs_code || '-'}</td>
                                         <td style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
@@ -1210,6 +1214,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             background: 'var(--bs-gray-200)', color: 'var(--text-secondary)',
                                             borderRadius: '4px', padding: '1px 7px', fontSize: '0.75rem', fontWeight: '600'
                                         }}>#{item.serial_number}</span>
+                                        <ConditionBadge type={item.condition_type} size="xs" />
 
                                         {item.hs_code_label && (
                                             <span style={{
@@ -1230,31 +1235,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             <i className="bi bi-calendar3" style={{fontSize: '0.7rem'}}></i>
                                             Exp: {item.license_expiry_date || '—'}
                                         </span>
-                                        {togglingRestriction[item.id] ? (
-                                            <span className="badge" style={{fontSize: '0.7rem', background: 'var(--bs-gray-100)', color: 'var(--text-secondary)'}}>
-                                                <span className="spinner-border spinner-border-sm me-1" style={{width: '0.6rem', height: '0.6rem'}}></span>
-                                                Updating...
-                                            </span>
-                                        ) : (
-                                            <button
-                                                onClick={() => handleToggleRestriction(item)}
-                                                title={item.is_restricted ? 'Click to mark as Open' : 'Click to mark as Restricted'}
-                                                style={{
-                                                    background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                                                    display: 'inline-flex', alignItems: 'center'
-                                                }}
-                                            >
-                                                {item.is_restricted ? (
-                                                    <span className="badge" style={{background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid var(--warning-border)', fontSize: '0.7rem'}}>
-                                                        <i className="bi bi-lock-fill me-1"></i>Restricted
-                                                    </span>
-                                                ) : (
-                                                    <span className="badge" style={{background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid var(--success-border)', fontSize: '0.7rem'}}>
-                                                        <i className="bi bi-unlock-fill me-1"></i>Open
-                                                    </span>
-                                                )}
-                                            </button>
-                                        )}
+                                        {/* Restriction is read-only — driven by the licence's
+                                            condition_type. Use the shared badge. */}
+                                        {item.condition_type
+                                            ? <ConditionBadge type={item.condition_type} size="xs" />
+                                            : (
+                                                <span className="badge" style={{background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid var(--success-border)', fontSize: '0.7rem'}}>
+                                                    <i className="bi bi-unlock-fill me-1"></i>Open
+                                                </span>
+                                            )}
                                     </div>
 
                                     {/* ── Row 2: Description (full width) ── */}

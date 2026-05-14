@@ -124,29 +124,20 @@ class LicenseValidationService:
         """
         required = to_decimal(required_value, DEC_0)
 
-        # If import_item provided and is_restricted=True, use restriction balance
-        if import_item and import_item.is_restricted:
-            from license.services.restriction_calculator import RestrictionCalculator
-
-            # Get restriction percentage for this item
-            restriction_pct = RestrictionCalculator.get_item_restriction_percentage(import_item)
-
-            if restriction_pct > DEC_0:
-                # Calculate restriction balance
-                total_export_cif = license_obj._calculate_license_credit()
-                available_balance = RestrictionCalculator.calculate_restriction_balance(
-                    license_obj,
-                    restriction_pct,
-                    total_export_cif
+        # If the import item carries a percentage condition, the remaining
+        # pool is the binding limit; otherwise the licence balance applies.
+        cond = (getattr(import_item, "condition_type", "") or "").strip() if import_item else ""
+        if cond.endswith("%"):
+            from license.services.condition_pool import remaining_for_condition
+            available_balance = remaining_for_condition(license_obj, cond)
+            if available_balance is not None and available_balance < required:
+                return False, (
+                    f"Insufficient pool balance ({cond}). Available: "
+                    f"{available_balance}, Required: {required}"
                 )
-
-                if available_balance < required:
-                    return False, f"Insufficient restricted balance ({restriction_pct}%). Available: {available_balance}, Required: {required}"
-            else:
-                # Item marked as restricted but no restriction percentage found
+            if available_balance is None:
                 available_balance = license_obj.get_balance_cif
         else:
-            # Use license-level balance for non-restricted items
             available_balance = license_obj.get_balance_cif
 
         if available_balance < required:
@@ -186,38 +177,21 @@ class LicenseValidationService:
             required_value: Decimal
     ) -> tuple[bool, str]:
         """
-        Validate that allocation doesn't exceed restriction limits.
-        
-        Args:
-            license_obj: LicenseDetailsModel instance
-            import_item: LicenseImportItemsModel instance
-            required_value: Required value to allocate
-            
-        Returns:
-            Tuple of (is_valid, error_message)
+        Validate that allocation doesn't exceed the licence-condition pool
+        for this item (NEW condition_type model).
         """
-        from license.services.restriction_calculator import RestrictionCalculator
+        cond = (getattr(import_item, "condition_type", "") or "").strip()
+        if not cond.endswith("%"):
+            return True, ""  # AU / open: no pool ceiling
 
-        # Get restriction percentage for this item
-        restriction_pct = RestrictionCalculator.get_item_restriction_percentage(import_item)
-
-        if restriction_pct <= DEC_0:
-            # No restriction, always valid
+        from license.services.condition_pool import remaining_for_condition
+        remaining = remaining_for_condition(license_obj, cond)
+        if remaining is None:
             return True, ""
 
-        # Get restriction balance
-        total_export_cif = license_obj._calculate_license_credit()
-        restriction_balance = RestrictionCalculator.calculate_restriction_balance(
-            license_obj,
-            restriction_pct,
-            total_export_cif
-        )
-
         required = to_decimal(required_value, DEC_0)
-
-        if restriction_balance < required:
-            return False, f"Exceeds {restriction_pct}% restriction limit. Available: {restriction_balance}, Required: {required}"
-
+        if remaining < required:
+            return False, f"Exceeds {cond} pool limit. Available: {remaining}, Required: {required}"
         return True, ""
 
     @classmethod

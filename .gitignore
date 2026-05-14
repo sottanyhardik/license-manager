@@ -69,3 +69,4 @@ Thumbs.db
 # Master sync audit outputs (ephemeral)
 master-audit-*/
 phase3-replication-*/
+/sample/

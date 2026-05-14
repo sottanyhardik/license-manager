@@ -65,3 +65,7 @@ Thumbs.db
 /backend/celerybeat-schedule
 /backend/celerybeat-schedule-shm
 /backend/celerybeat-schedule-wal
+
+# Master sync audit outputs (ephemeral)
+master-audit-*/
+phase3-replication-*/

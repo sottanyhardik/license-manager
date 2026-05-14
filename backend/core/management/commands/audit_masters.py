@@ -71,10 +71,33 @@ def _serialize_value(value):
 
 def _record_to_dict(instance):
     """Convert a model instance to a flat dict of field name → JSON-safe value.
-    Audit fields (created_*, modified_*) are kept but excluded from the hash."""
+    Audit fields (created_*, modified_*) are kept but excluded from the hash.
+
+    For ForeignKey fields, also exports `<fk_name>__<business_key>` so the
+    importer can resolve FKs by business key on the destination server.
+    """
     out = {}
     for field in instance._meta.fields:
-        out[field.name] = _serialize_value(getattr(instance, field.attname, None))
+        if field.is_relation and field.many_to_one:
+            # ForeignKey — export the FK id AND a resolvable business key.
+            # Use attname (e.g. "head_norm_id") to read the raw FK id without
+            # triggering a DB fetch that can raise DoesNotExist on orphan FKs.
+            fk_id = getattr(instance, field.attname, None)
+            out[field.name] = fk_id
+            if fk_id is not None:
+                try:
+                    related_obj = getattr(instance, field.name, None)
+                except field.related_model.DoesNotExist:
+                    related_obj = None
+                if related_obj is not None:
+                    for candidate in ("name", "code", "iec", "hs_code", "norm_class"):
+                        if hasattr(related_obj, candidate):
+                            val = getattr(related_obj, candidate, None)
+                            if val:
+                                out[f"{field.name}__{candidate}"] = str(val)
+                                break
+        else:
+            out[field.name] = _serialize_value(getattr(instance, field.attname, None))
     return out
 
 

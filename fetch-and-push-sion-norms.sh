@@ -36,9 +36,9 @@ warn() { echo -e "${YELLOW}⚠${NC} $*"; }
 err()  { echo -e "${RED}✗${NC} $*"; }
 
 LANDING_URL="https://www.dgft.gov.in/CP/?opt=norms-search"
-COOKIE_FILE=$(mktemp /tmp/dgft-sion-cookies-XXXXXX.txt)
+COOKIE_FILE=$(mktemp -t dgft-sion-cookies)
 RAW_DIR=$(mktemp -d /tmp/dgft-sion-raw-XXXXXX)
-PAYLOAD_FILE=$(mktemp /tmp/sion-payload-XXXXXX.json)
+PAYLOAD_FILE=$(mktemp -t sion-payload)
 trap "rm -rf $COOKIE_FILE $RAW_DIR $PAYLOAD_FILE" EXIT
 
 # ── 1. Discover SION codes to fetch ──────────────────────────
@@ -151,7 +151,7 @@ PY
 # `manage.py shell < file.py` avoids all the shell-quoting hell that comes
 # with `manage.py shell -c "…"`.
 
-PY_TEMPLATE=$(mktemp /tmp/sion-import-XXXXXX.py)
+PY_TEMPLATE=$(mktemp -t sion-import)
 cat > "$PY_TEMPLATE" << 'PY'
 # Standalone Django script — bootstrap Django, then run.
 import os, sys, django
@@ -229,7 +229,7 @@ for entry in "143.110.252.201:license-manager" "139.59.92.226:labdhi" "165.232.1
     REMOTE_SCRIPT="/tmp/sion-import-$$.py"
 
     # Substitute the remote payload path into the script before uploading
-    PY_REAL=$(mktemp /tmp/sion-import-real-XXXXXX.py)
+    PY_REAL=$(mktemp -t sion-import-real)
     sed "s|__PAYLOAD_PATH__|$REMOTE_PAYLOAD|g" "$PY_TEMPLATE" > "$PY_REAL"
 
     sshpass -p admin scp -o StrictHostKeyChecking=no -o LogLevel=ERROR "$PAYLOAD_FILE" "django@$IP:$REMOTE_PAYLOAD" >/dev/null

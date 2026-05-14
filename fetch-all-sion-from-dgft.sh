@@ -34,8 +34,8 @@ done
 RAW_DIR="/tmp/dgft-sion-raw"
 mkdir -p "$RAW_DIR"
 LANDING_URL="https://www.dgft.gov.in/CP/?opt=norms-search"
-COOKIE_FILE=$(mktemp /tmp/dgft-sion-cookies-XXXXXX.txt)
-PAYLOAD_FILE=$(mktemp /tmp/sion-full-payload-XXXXXX.json)
+COOKIE_FILE=$(mktemp -t dgft-sion-cookies)
+PAYLOAD_FILE=$(mktemp -t sion-full-payload)
 trap "rm -f $COOKIE_FILE $PAYLOAD_FILE" EXIT
 
 # Product groups (id:letter:name)
@@ -65,7 +65,7 @@ PREVIEW_URL="https://www.dgft.gov.in/CP/webHP?requestType=ApplicationRH&actionVa
 DETAIL_URL_TPL="https://www.dgft.gov.in/CP/webHP?requestType=ApplicationRH&actionVal=exportImportDetail&screenId=90000534&sion=__CODE__&_csrf=$CSRF"
 
 # ── 2. List SION codes per group ────────────────────────────
-LIST_FILE=$(mktemp /tmp/sion-list-XXXXXX.txt)
+LIST_FILE=$(mktemp -t sion-list)
 log "Listing SION codes per product group..."
 total=0
 for entry in "${PRODUCT_GROUPS[@]}"; do
@@ -198,7 +198,7 @@ if [ "$DRY_RUN" = "1" ]; then
 fi
 
 # ── 5. Push to all 3 servers (creates missing SION classes) ──
-PY_TEMPLATE=$(mktemp /tmp/sion-full-import-XXXXXX.py)
+PY_TEMPLATE=$(mktemp -t sion-full-import)
 cat > "$PY_TEMPLATE" << 'PY'
 import os, sys, django
 sys.path.insert(0, '/home/django/license-manager/backend')
@@ -242,8 +242,9 @@ for code, payload in data.items():
             continue
     else:
         changed = False
-        if payload['description'] and sion.description != payload['description']:
-            sion.description = payload['description'][:255]
+        new_desc = (payload['description'] or '')[:255]
+        if new_desc and sion.description != new_desc:
+            sion.description = new_desc
             changed = True
         if head and sion.head_norm_id != head.id:
             sion.head_norm = head
@@ -260,7 +261,7 @@ for code, payload in data.items():
     for e in payload['exports']:
         SIONExportModel.objects.create(
             norm_class=sion,
-            description=(e['description'] or '')[:500],
+            description=(e['description'] or '')[:255],
             quantity=dec(e['quantity']),
             unit=(e['unit'] or '')[:50],
         )
@@ -270,7 +271,7 @@ for code, payload in data.items():
             serial_number=i['serial_number'],
             norm_class=sion,
             hsn_code=None,
-            description=(i['description'] or '')[:500],
+            description=(i['description'] or '')[:255],
             quantity=dec(i['quantity']),
             unit=(i['unit'] or '')[:50],
             condition=(i['condition'] or '')[:255],
@@ -290,7 +291,7 @@ for entry in "143.110.252.201:license-manager" "139.59.92.226:labdhi" "165.232.1
     log "Pushing to $LABEL ($IP)..."
     REMOTE_PAYLOAD="/tmp/sion-full-payload-$$.json"
     REMOTE_SCRIPT="/tmp/sion-full-import-$$.py"
-    PY_REAL=$(mktemp /tmp/sion-full-import-real-XXXXXX.py)
+    PY_REAL=$(mktemp -t sion-full-import-real)
     sed "s|__PAYLOAD_PATH__|$REMOTE_PAYLOAD|g" "$PY_TEMPLATE" > "$PY_REAL"
 
     sshpass -p admin scp -o StrictHostKeyChecking=no -o LogLevel=ERROR "$PAYLOAD_FILE" "django@$IP:$REMOTE_PAYLOAD" >/dev/null

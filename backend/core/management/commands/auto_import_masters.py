@@ -42,6 +42,13 @@ IMPORTABLE_TABLES = {
 # Fields we never copy from another server
 EXCLUDED_FIELDS = {"id", "created_on", "modified_on", "created_by", "modified_by"}
 
+# Per-table field overrides applied AFTER copying source data.
+# Use to force a value that should be set locally regardless of what the
+# source server has — e.g., SION classes are activated per-server.
+FIELD_OVERRIDES = {
+    "core.sionnormclassmodel": {"is_active": False},
+}
+
 
 def get_unique_keys(Model):
     """Return list of tuples of field names for each unique constraint."""
@@ -147,6 +154,11 @@ class Command(BaseCommand):
                     if existing:
                         stats[table]["skipped_existing"] += 1
                         continue
+
+                    # Apply per-table field overrides (e.g. SION is_active=False)
+                    overrides = FIELD_OVERRIDES.get(table, {})
+                    for k, v in overrides.items():
+                        src_data[k] = v
 
                     # 2. Try to create it (skip Django field validators — DB constraints only)
                     try:

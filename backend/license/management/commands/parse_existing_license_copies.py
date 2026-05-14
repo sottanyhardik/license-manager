@@ -157,7 +157,7 @@ class Command(BaseCommand):
             if single:
                 lic_qs = lic_qs.filter(license_number=single)
 
-            for lic in lic_qs.iterator():
+            for lic in lic_qs.iterator(chunk_size=200):
                 for exp in lic.export_license.all():
                     if exp.norm_class_id is None:
                         continue
@@ -279,8 +279,22 @@ class Command(BaseCommand):
                 stats["items_created"] += 1
             changes.append(f"{len(parsed_items)} import items created")
 
-        # Condition types — stamp on existing items where blank
-        item_conditions: dict = parsed.get("item_conditions") or {}
+        # Condition types — stamp on existing items where blank.
+        # The parser may return a dict {serial: cond} or a list of
+        # [{"serial_number": N, "condition": "AU"}, ...] — normalise to dict.
+        raw_conds = parsed.get("item_conditions") or {}
+        if isinstance(raw_conds, list):
+            item_conditions = {}
+            for entry in raw_conds:
+                if isinstance(entry, dict):
+                    k = entry.get("serial_number") or entry.get("serial") or entry.get("sr_no")
+                    v = entry.get("condition") or entry.get("condition_type")
+                    if k is not None and v:
+                        item_conditions[int(k)] = v
+                        item_conditions[str(k)] = v
+        else:
+            item_conditions = {k: v for k, v in raw_conds.items()} if raw_conds else {}
+
         if item_conditions:
             for imp in lic.import_license.all():
                 if imp.condition_type:

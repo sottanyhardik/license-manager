@@ -61,17 +61,11 @@ app.conf.beat_schedule = {
         }
     },
 
-    # Fetch DGFT exchange rates daily at 07:30 IST (02:00 UTC)
-    # DGFT publishes a new rate notification roughly every 15 days; daily
-    # polling makes sure we capture each new effective date the day it lands.
-    "fetch-exchange-rates-daily": {
-        "task": "core.tasks.fetch_exchange_rates",
-        "schedule": crontab(minute=0, hour=2),  # 02:00 UTC = 07:30 IST
-        "args": (),
-        "options": {
-            "expires": 3600,
-        }
-    },
+    # NOTE: DGFT's WAF blocks our DigitalOcean server IPs (403), so we don't
+    # schedule `core.tasks.fetch_exchange_rates` on Celery beat here.  Instead,
+    # the fetch runs from a local cron on the dev machine and pushes the result
+    # to license-manager; the existing master-sync cron replicates it to the
+    # other servers.  See: fetch-and-push-rates.sh
 
     # Cleanup old task records every hour
     "cleanup-old-tasks-hourly": {

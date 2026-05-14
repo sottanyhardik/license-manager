@@ -14,10 +14,12 @@ this daily ensures every rate change gets captured on the day it's published.
 import json
 import logging
 import re
+import urllib.parse
+import urllib.request
 from datetime import datetime
 from decimal import Decimal
+from http.cookiejar import CookieJar
 
-import requests
 from django.core.management.base import BaseCommand
 
 from core.models import ExchangeRateModel
@@ -31,6 +33,10 @@ API_URL_TPL = (
     "requestType=ApplicationRH&actionVal=service"
     "&screen=viewRates&screenId=9000012354&_csrf={csrf}"
 )
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+)
 
 # Currency code in DGFT response → field name on ExchangeRateModel
 CURRENCY_FIELD_MAP = {
@@ -41,40 +47,87 @@ CURRENCY_FIELD_MAP = {
 }
 
 
-def _fetch_dgft_rates(timeout=20):
-    """Fetch the latest exchange rates from DGFT (returns the raw 'data' list)."""
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-    })
+def _fetch_dgft_rates(timeout=30):
+    """Fetch the latest exchange rates from DGFT (returns the raw 'data' list).
+    Uses stdlib only — no external requests dependency.
+    """
+    cookie_jar = CookieJar()
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(cookie_jar)
+    )
 
-    # 1. Hit the landing page to get JSESSIONID + CSRF token
-    landing = session.get(LANDING_URL, timeout=timeout, verify=True)
-    landing.raise_for_status()
-    csrf_match = re.search(r'name="_csrf"\s+content="([a-f0-9-]+)"', landing.text)
+    # Full Chrome-on-Mac headers — DGFT's WAF blocks minimal headers as bots
+    browser_headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Sec-Ch-Ua": '"Chromium";v="123", "Google Chrome";v="123", "Not?A_Brand";v="24"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"macOS"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    }
+
+    # 1. Hit the landing page to obtain JSESSIONID + CSRF token
+    landing_req = urllib.request.Request(LANDING_URL, headers=browser_headers)
+    with opener.open(landing_req, timeout=timeout) as resp:
+        raw = resp.read()
+        # Handle gzip transparently (urllib doesn't auto-decompress)
+        if resp.headers.get("Content-Encoding") == "gzip":
+            import gzip
+            raw = gzip.decompress(raw)
+        elif resp.headers.get("Content-Encoding") == "br":
+            try:
+                import brotli
+                raw = brotli.decompress(raw)
+            except ImportError:
+                # Retry without br
+                pass
+        landing_html = raw.decode("utf-8", errors="replace")
+    csrf_match = re.search(r'name="_csrf"\s+content="([a-f0-9-]+)"', landing_html)
     if not csrf_match:
         raise RuntimeError("CSRF token not found on DGFT landing page")
     csrf = csrf_match.group(1)
 
-    # 2. POST to the API with the session cookies
+    # 2. POST to the API with the cookies attached
     api_url = API_URL_TPL.format(csrf=csrf)
-    payload = {
+    payload = urllib.parse.urlencode({
         "dataJson[formData]": json.dumps({
             "dateFrom": "",
             "dateTo": "",
             "currencyCodeInput": "",
         })
-    }
-    headers = {
+    }).encode("utf-8")
+    api_headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         "Origin": "https://www.dgft.gov.in",
         "Referer": LANDING_URL,
         "X-Requested-With": "XMLHttpRequest",
+        "Sec-Ch-Ua": '"Chromium";v="123", "Google Chrome";v="123", "Not?A_Brand";v="24"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"macOS"',
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
     }
-    resp = session.post(api_url, headers=headers, data=payload, timeout=timeout)
-    resp.raise_for_status()
-    data = resp.json()
+    req = urllib.request.Request(api_url, data=payload, headers=api_headers, method="POST")
+    with opener.open(req, timeout=timeout) as resp:
+        raw = resp.read()
+        if resp.headers.get("Content-Encoding") == "gzip":
+            import gzip
+            raw = gzip.decompress(raw)
+        body = raw.decode("utf-8", errors="replace")
+    data = json.loads(body)
     return data.get("data", [])
 
 

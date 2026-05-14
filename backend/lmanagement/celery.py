@@ -61,6 +61,18 @@ app.conf.beat_schedule = {
         }
     },
 
+    # Fetch DGFT exchange rates daily at 07:30 IST (02:00 UTC)
+    # DGFT publishes a new rate notification roughly every 15 days; daily
+    # polling makes sure we capture each new effective date the day it lands.
+    "fetch-exchange-rates-daily": {
+        "task": "core.tasks.fetch_exchange_rates",
+        "schedule": crontab(minute=0, hour=2),  # 02:00 UTC = 07:30 IST
+        "args": (),
+        "options": {
+            "expires": 3600,
+        }
+    },
+
     # Cleanup old task records every hour
     "cleanup-old-tasks-hourly": {
         "task": "cleanup_old_task_records",

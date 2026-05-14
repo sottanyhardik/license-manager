@@ -202,7 +202,9 @@ def _to_iso_date(value: str | None) -> str | None:
 # `S.No.`, `Sl.No.`, `Sr.No.`, `Sl.No-3`, `sl.no` — DGFT uses several variants.
 # The `[.\s-]*` between "No" and the digit also accepts the hyphen form
 # "Sl.No-3" / "Sl.No.-4" seen in newer licences (e.g. 0311044762).
-_SLNO_PREFIX = r"(?:S|Sl|Sr|S\.\s*L)\.?\s*[Nn]o[.\s-]*"
+# The trailing `s?` accepts the plural "Nos" form used in some PDFs:
+#   "Input item Sl. Nos 2, 3 and 4 are subjected to actual user condition"
+_SLNO_PREFIX = r"(?:S|Sl|Sr|S\.\s*L)\.?\s*[Nn]os?[.\s-]*"
 
 _AU_CONDITION_RX = re.compile(
     r"(?:input\s+)?item[s]?\s+" + _SLNO_PREFIX +

@@ -364,26 +364,40 @@ class Command(BaseCommand):
             changes.append(f"{len(parsed_items)} import items created")
 
         # Condition types — stamp on existing items where blank.
-        # The parser may return a dict {serial: cond} or a list of
-        # [{"serial_number": N, "condition": "AU"}, ...] — normalise to dict.
+        # Parser returns: [{"serial_numbers": [2, 3, 4], "type": "AU"}, ...]
+        # Normalise to {serial_number: type} so we can look up by SR.
         raw_conds = parsed.get("item_conditions") or {}
+        item_conditions: dict[int, str] = {}
         if isinstance(raw_conds, list):
-            item_conditions = {}
             for entry in raw_conds:
-                if isinstance(entry, dict):
-                    k = entry.get("serial_number") or entry.get("serial") or entry.get("sr_no")
-                    v = entry.get("condition") or entry.get("condition_type")
-                    if k is not None and v:
-                        item_conditions[int(k)] = v
-                        item_conditions[str(k)] = v
-        else:
-            item_conditions = {k: v for k, v in raw_conds.items()} if raw_conds else {}
+                if not isinstance(entry, dict):
+                    continue
+                cond_type = entry.get("type") or entry.get("condition") or entry.get("condition_type")
+                if not cond_type:
+                    continue
+                # "serial_numbers" is a list; "serial_number" / "serial" are scalars
+                sns = entry.get("serial_numbers") or []
+                if not sns:
+                    sv = entry.get("serial_number") or entry.get("serial") or entry.get("sr_no")
+                    if sv is not None:
+                        sns = [sv]
+                for sn in sns:
+                    try:
+                        item_conditions[int(sn)] = cond_type
+                    except (TypeError, ValueError):
+                        pass
+        elif isinstance(raw_conds, dict):
+            for k, v in raw_conds.items():
+                try:
+                    item_conditions[int(k)] = v
+                except (TypeError, ValueError):
+                    pass
 
         if item_conditions:
             for imp in lic.import_license.all():
                 if imp.condition_type:
                     continue
-                cond = item_conditions.get(imp.serial_number) or item_conditions.get(str(imp.serial_number))
+                cond = item_conditions.get(imp.serial_number) or item_conditions.get(int(imp.serial_number))
                 if cond:
                     if not dry:
                         imp.condition_type = cond

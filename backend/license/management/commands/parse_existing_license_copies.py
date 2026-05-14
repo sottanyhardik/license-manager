@@ -21,14 +21,16 @@ Pass 2 – Norm-to-description rule (ALL licences)
       E132 → "Namkeen"
 
 Usage:
-    python manage.py parse_existing_license_copies
+    python manage.py parse_existing_license_copies --list     # show status, no changes
     python manage.py parse_existing_license_copies --dry-run
     python manage.py parse_existing_license_copies --license-number 0311005034
     python manage.py parse_existing_license_copies --norm-desc-only
     python manage.py parse_existing_license_copies --parse-only
+    python manage.py parse_existing_license_copies            # live run
 """
 from __future__ import annotations
 
+import logging
 import traceback
 from decimal import Decimal, InvalidOperation
 
@@ -43,6 +45,10 @@ from license.models import (
     LicenseImportItemsModel,
 )
 from license.parsers.dfia_pdf import parse_dfia_pdf
+
+# Silence pypdf's "Ignoring wrong pointing object" spam — these are harmless
+# structural warnings emitted for many real-world DFIA PDFs.
+logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 # ── Norm → product-description rule ─────────────────────────────────────────
 NORM_DESCRIPTIONS: dict[str, str] = {
@@ -69,6 +75,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
+            "--list", action="store_true",
+            help="Show licence status (copy exists, blanks, norm) — no changes made",
+        )
+        parser.add_argument(
             "--dry-run", action="store_true",
             help="Show what would be changed without saving anything",
         )
@@ -92,13 +102,87 @@ class Command(BaseCommand):
     def _warn(self, msg):  self.stdout.write(self.style.WARNING(msg))
     def _err(self,  msg):  self.stdout.write(self.style.ERROR(msg))
 
+    def _handle_list(self, single):
+        """Show per-licence status without changing anything."""
+        # Licences with a LICENSE COPY document
+        docs_qs = (
+            LicenseDocumentModel.objects
+            .filter(type="LICENSE COPY")
+            .select_related("license", "license__exporter", "license__port")
+            .exclude(file="")
+            .order_by("license__license_number")
+        )
+        if single:
+            docs_qs = docs_qs.filter(license__license_number=single)
+
+        # Licences WITHOUT a copy
+        all_lic_ids = set(
+            LicenseDetailsModel.objects.values_list("id", flat=True)
+        ) if not single else set()
+        lic_with_copy = set()
+
+        BLANK = "—"
+
+        self._info(f"\n{'Licence No':<18} {'Has Copy':<9} {'Norm':<8} "
+                   f"{'Export Desc':<18} {'File No':<14} "
+                   f"{'Condition Sheet':<22} {'Import Items'}")
+        self._info("-" * 105)
+
+        count_with = count_without = 0
+
+        for doc in docs_qs.iterator(chunk_size=200):
+            lic = doc.license
+            lic_with_copy.add(lic.id)
+            count_with += 1
+
+            # norm classes from export rows
+            norms = list(
+                lic.export_license
+                   .filter(norm_class__isnull=False)
+                   .values_list("norm_class__norm_class", "description")
+            )
+            norm_str = ", ".join(n for n, _ in norms) or BLANK
+            exp_desc = ", ".join((d or BLANK) for _, d in norms) or BLANK
+
+            import_count = lic.import_license.count()
+            blanks = []
+            if not lic.file_number:       blanks.append("file_no")
+            if not lic.condition_sheet:   blanks.append("cond_sheet")
+            if not lic.exporter_id:       blanks.append("exporter")
+            if not lic.port_id:           blanks.append("port")
+
+            line = (f"{lic.license_number:<18} {'YES':<9} {norm_str:<8} "
+                    f"{exp_desc[:17]:<18} {(lic.file_number or BLANK)[:13]:<14} "
+                    f"{(lic.condition_sheet or BLANK)[:21]:<22} {import_count}")
+            if blanks:
+                self._warn(line + f"  [blank: {', '.join(blanks)}]")
+            else:
+                self._info(line)
+
+        # Licences with NO copy (summary count only unless single)
+        if not single:
+            no_copy_count = LicenseDetailsModel.objects.exclude(
+                id__in=lic_with_copy
+            ).count()
+            self._info("-" * 105)
+            self._info(f"\nTotal with LICENSE COPY  : {count_with}")
+            self._info(f"Total WITHOUT copy       : {no_copy_count}")
+        else:
+            if count_with == 0:
+                self._warn(f"No LICENSE COPY document found for {single}")
+
+
     # ── main ─────────────────────────────────────────────────────────────────
 
     def handle(self, *args, **options):
-        dry = options["dry_run"]
+        list_only = options["list"]
+        dry = options["dry_run"] or list_only
         single = options["license_number"]
         norm_only = options["norm_desc_only"]
         parse_only = options["parse_only"]
+
+        if list_only:
+            return self._handle_list(single)
 
         if dry:
             self._warn("DRY-RUN — nothing will be saved.")

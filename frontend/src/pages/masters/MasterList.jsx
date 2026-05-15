@@ -1185,6 +1185,11 @@ export default function MasterList() {
                                                         Copy
                                                     </button>
                                                 )}
+                                                {item.has_condition_sheet && (
+                                                    <span title="Condition sheet parsed from license copy" style={{ fontSize: '0.72rem', color: '#4338ca', background: '#e0e7ff', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                                                        <i className="bi bi-file-earmark-text me-1"></i>Cond. Sheet
+                                                    </span>
+                                                )}
                                             </div>
 
                                             {/* Row 2: Norm class + Transfer */}

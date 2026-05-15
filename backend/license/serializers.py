@@ -289,6 +289,7 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     get_balance_cif = serializers.SerializerMethodField()
     has_tl = serializers.SerializerMethodField()
     has_copy = serializers.SerializerMethodField()
+    has_condition_sheet = serializers.SerializerMethodField()
 
     # Nested serializers - separate for read/write to avoid validation issues
     export_license_read = LicenseExportItemSerializer(source='export_license', many=True, read_only=True)
@@ -620,6 +621,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
     def get_has_copy(self, obj):
         """Check if license has License Copy documents"""
         return obj.license_documents.filter(type='LICENSE COPY').exists()
+
+    def get_has_condition_sheet(self, obj):
+        return bool((obj.condition_sheet or "").strip())
 
     def get_purchase_status_code(self, obj):
         """Get purchase status code for display"""

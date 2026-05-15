@@ -191,6 +191,7 @@ class Command(BaseCommand):
             "parsed": 0, "parse_fail": 0, "parse_skip": 0,
             "updated": 0, "items_created": 0, "cond_updated": 0,
             "norm_desc_updated": 0,
+            "cond_sheet_found": 0, "cond_sheet_missing": 0,
         }
 
         # ── Pass 1: PDF parse ────────────────────────────────────────────────
@@ -227,6 +228,12 @@ class Command(BaseCommand):
                     continue
 
                 stats["parsed"] += 1
+                if ((parsed.get("condition_sheet") or "").strip()):
+                    stats["cond_sheet_found"] += 1
+                    self._info(f"{prefix} — condition sheet: FOUND")
+                else:
+                    stats["cond_sheet_missing"] += 1
+                    self._warn(f"{prefix} — condition sheet: not found")
                 changes = self._apply_parse(lic, parsed, dry, stats, prefix)
                 if changes:
                     stats["updated"] += 1
@@ -266,6 +273,8 @@ class Command(BaseCommand):
         self._info(f"  Licences updated:        {stats['updated']}")
         self._info(f"  Import items created:    {stats['items_created']}")
         self._info(f"  Condition types stamped: {stats['cond_updated']}")
+        self._info(f"  Condition sheets found:  {stats['cond_sheet_found']}")
+        self._info(f"  Condition sheets missing:{stats['cond_sheet_missing']}")
         self._info(f"  Norm desc. updated:      {stats['norm_desc_updated']}")
         if dry:
             self._warn("DRY-RUN — no changes were saved.")

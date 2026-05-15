@@ -689,6 +689,34 @@ def _parse_items(text: str) -> list[dict[str, Any]]:
     block_end = text.find("Name and Address of the Supporting Manufacturer", block_start)
     block = text[block_start:block_end] if block_end > 0 else text[block_start:]
 
+    # Strip per-page footer / header artifacts that sit between rows when an
+    # item spans a page break (e.g. row 12's description is on page 2 but its
+    # HSN/qty data line lands on page 3 after these markers). Replacing each
+    # with an empty string lets the description walker pass over the page
+    # boundary and pick up the real description and SI# above.
+    block = re.sub(
+        r"Authorisation Number\s+\d+\s+Date\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}\s*",
+        "", block,
+    )
+    block = re.sub(
+        r"Import Validity\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}\s*",
+        "", block,
+    )
+    block = re.sub(
+        r"This document has been digitally signed by[^\n]*",
+        "", block,
+    )
+    block = re.sub(r"UDIN\s*\S+", "", block)
+    # Page numbers — a standalone short number that sits immediately above
+    # a data row (HSN+qty+UOM) is the next page's page-number, not an SI#.
+    # We must leave SI#-only lines (like the "12" right above the milk row's
+    # description block) intact, so we only match when followed by a data line.
+    block = re.sub(
+        r"(?m)^\s*\d{1,3}\s*\n(?=\s*\n*\s*\d{7,8}\s+\d+(?:\.\d+)?\s)",
+        "",
+        block,
+    )
+
     # 2025 templates use "namely," group headers; we'll include such a line
     # even if its trailing characters don't otherwise look like a wrap.
     multi_line_descriptions = "namely," in block

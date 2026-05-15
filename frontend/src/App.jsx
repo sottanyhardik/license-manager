@@ -43,7 +43,6 @@ const ItemReport = lazyLoadWithRetry(() => import("./pages/reports/ItemReport"))
 
 // Trade & Ledger Upload
 const TradeForm = lazy(() => import("./pages/TradeForm"));
-const LedgerCSVUpload = lazy(() => import("./pages/LedgerCSVUpload"));
 const LedgerUpload = lazy(() => import("./pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("./pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("./pages/LicenseLedgerDetail"));
@@ -226,11 +225,6 @@ export default function App() {
                                 </ProtectedRoute>
                             }/>
 
-                            <Route path="/ledger-csv-upload" element={
-                                <ProtectedRoute requiredAnyRole={['LICENSE_MANAGER','LEDGER_MANAGER']}>
-                                    <AdminLayout><LedgerCSVUpload/></AdminLayout>
-                                </ProtectedRoute>
-                            }/>
                             <Route path="/ledger-upload" element={
                                 <ProtectedRoute requiredAnyRole={['LICENSE_MANAGER','LEDGER_MANAGER']}>
                                     <AdminLayout><LedgerUpload/></AdminLayout>

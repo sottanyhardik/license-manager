@@ -49,8 +49,10 @@ export default function DownloadLicense() {
     };
 
     const handleBulkDownload = async () => {
+        // Accept commas, newlines, tabs, or any whitespace as separators so
+        // users can paste a column copied from Excel as well as a CSV string.
         const numbers = bulkInput
-            .split(',')
+            .split(/[\s,]+/)
             .map(s => s.trim())
             .filter(Boolean);
 
@@ -84,7 +86,7 @@ export default function DownloadLicense() {
     };
 
     const parsedCount = bulkInput
-        .split(',')
+        .split(/[\s,]+/)
         .map(s => s.trim())
         .filter(Boolean).length;
 
@@ -122,7 +124,7 @@ export default function DownloadLicense() {
                         </div>
                         <div className="d-flex flex-column" style={{ padding: '14px 16px' }}>
                             <p className="text-muted small mb-3">
-                                Enter DFIA license numbers separated by commas. Each license will get its own sheet in the downloaded Excel file.
+                                Enter DFIA license numbers separated by commas or new lines. Each license will get its own sheet in the downloaded Excel file.
                             </p>
 
                             <div className="mb-3 flex-grow-1">
@@ -135,12 +137,12 @@ export default function DownloadLicense() {
                                 <textarea
                                     className="form-control font-monospace"
                                     rows={5}
-                                    placeholder="e.g. 3011007415, 3011007018, 3011008321"
+                                    placeholder={"e.g. 3011007415, 3011007018, 3011008321\nor one per line"}
                                     value={bulkInput}
                                     onChange={(e) => setBulkInput(e.target.value)}
                                 />
                                 <small className="form-text text-muted">
-                                    Comma-separated. Each license = one sheet named after the license number.
+                                    Comma- or newline-separated. Each license = one sheet named after the license number.
                                 </small>
                             </div>
 

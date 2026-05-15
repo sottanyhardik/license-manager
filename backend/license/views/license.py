@@ -1402,9 +1402,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _norm_vals = list(license_obj.export_license.values_list('norm_class__norm_class', flat=True))
             _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
             _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
+            _exporter_name = license_obj.exporter.name if license_obj.exporter else ''
+            _exporter_iec  = license_obj.exporter.iec  if license_obj.exporter else ''
+            _port_code     = license_obj.port.code     if license_obj.port     else ''
             _util_return = {
                 'lic_no': lic_no, 'norm_type': 'other',
                 'balance_cif': _license_balance,
+                'license_date': license_obj.license_date,
+                'port_code': _port_code,
+                'exporter_name': _exporter_name, 'iec': _exporter_iec,
                 'planned': {}, 'qty_per_cat': {}, 'total_planned': _license_balance, 'categories': []
             }
             if _is_e1:
@@ -1901,22 +1907,38 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _sr += 2
 
         # ── Other licenses section ─────────────────────────────────────────────
+        # Layout chosen to share column widths with the E1/E5 tables above:
+        #   A=License No, B=Balance CIF (matches E1/E5), C=Exporter, D=IEC,
+        #   E=License Date, F=Port.
         if _other_rows:
-            _merge_hdr(_sw, _sr, 1, 2, 'OTHER LICENSES', "595959")
+            _merge_hdr(_sw, _sr, 1, 6, 'OTHER LICENSES', "595959")
             _sr += 1
             _shdr(_sw, _sr, 1, 'License No')
             _shdr(_sw, _sr, 2, 'Balance CIF $')
+            _shdr(_sw, _sr, 3, 'Exporter')
+            _shdr(_sw, _sr, 4, 'IEC')
+            _shdr(_sw, _sr, 5, 'License Date')
+            _shdr(_sw, _sr, 6, 'Port')
             _sr += 1
             for _i, _row in enumerate(_other_rows):
                 _rf = None if _i % 2 == 0 else ALT_FILL
+                _ld = _row.get('license_date')
+                _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
                 _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
                 _scell(_sw, _sr, 2, _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, 3, _row.get('exporter_name') or '-', fill=_rf)
+                _scell(_sw, _sr, 4, _row.get('iec') or '-', fill=_rf, align='center')
+                _scell(_sw, _sr, 5, _ld_str, fill=_rf, align='center')
+                _scell(_sw, _sr, 6, _row.get('port_code') or '-', fill=_rf, align='center')
                 _sr += 1
 
         # Column widths for summary sheet
         _sw.column_dimensions['A'].width = 18
         _sw.column_dimensions['B'].width = 16
-        for _col_idx in range(3, _MAX_COL + 1):
+        # Column C is shared with E1/E5 category columns — widen modestly to
+        # fit exporter names without dwarfing the category data above.
+        _sw.column_dimensions['C'].width = 24
+        for _col_idx in range(4, _MAX_COL + 1):
             _sw.column_dimensions[_gcl(_col_idx)].width = 14
         _sw.freeze_panes = 'A4'
 

@@ -568,11 +568,11 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                         }}>
                             <button
                                 type="button"
-                                className="btn btn-secondary"
+                                className="btn btn-outline-secondary"
                                 onClick={onHide}
                                 disabled={loading}
                             >
-                                Cancel
+                                <i className="bi bi-x-lg me-2"></i>Cancel
                             </button>
                             <button
                                 type="submit"

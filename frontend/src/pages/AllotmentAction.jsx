@@ -865,7 +865,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         <td className="text-end" style={{whiteSpace: 'nowrap'}}>{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
                                         <td className="text-center" style={{whiteSpace: 'nowrap'}}>
                                             <button
-                                                className="btn btn-danger btn-sm"
+                                                className="btn btn-outline-secondary btn-sm"
                                                 onClick={() => handleDeleteAllotment(detail.id)}
                                                 disabled={deletingItems[detail.id]}
                                                 title="Remove this allocation"

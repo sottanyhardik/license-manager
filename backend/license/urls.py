@@ -11,7 +11,6 @@ from license.views.inventory_balance_viewset import InventoryBalanceViewSet
 from license.views.license_items import LicenseItemViewSet
 from license.views.dashboard import DashboardDataView
 from license.views.ledger_upload import LedgerUploadView, LedgerTaskStatusView
-from license.views.ledger_csv_upload import LedgerCSVUploadView
 from license.views.ledger import LicenseLedgerViewSet
 from license.views.parse_pdf import LicensePdfParseView
 from license.views_actions import LicenseActionViewSet
@@ -37,7 +36,6 @@ urlpatterns = [
     path("licenses/parse-pdf/", LicensePdfParseView.as_view(), name="licenses-parse-pdf"),
     # Ledger Upload endpoint
     path("upload-ledger/", LedgerUploadView.as_view(), name="upload-ledger"),
-    path("ledger-csv-upload/", LedgerCSVUploadView.as_view(), name="ledger-csv-upload"),
     # Ledger Task Status endpoint
     path("ledger-task-status/<str:task_id>/", LedgerTaskStatusView.as_view(), name="ledger-task-status"),
     # Report endpoints

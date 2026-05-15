@@ -237,7 +237,7 @@ export default function TransferLetterForm({
                         </label>
                         <button
                             type="button"
-                            className="btn btn-sm btn-outline-primary"
+                            className="btn btn-sm btn-outline-secondary"
                             onClick={addParty}
                             disabled={disabled}
                         >
@@ -334,7 +334,7 @@ export default function TransferLetterForm({
                                         <div className="col-auto">
                                             <button
                                                 type="button"
-                                                className="btn btn-sm btn-outline-danger"
+                                                className="btn btn-sm btn-outline-secondary"
                                                 onClick={() => removeParty(party.id)}
                                                 disabled={disabled}
                                                 title="Remove party"
@@ -420,7 +420,7 @@ export default function TransferLetterForm({
                                             <td>
                                                 {isSelected ? (
                                                     <button
-                                                        className="btn btn-sm btn-danger"
+                                                        className="btn btn-sm btn-outline-secondary"
                                                         onClick={() => toggleGroup(group.license_number)}
                                                         disabled={disabled}
                                                         title="Remove from transfer letter"
@@ -429,7 +429,7 @@ export default function TransferLetterForm({
                                                     </button>
                                                 ) : (
                                                     <button
-                                                        className="btn btn-sm btn-success"
+                                                        className="btn btn-sm btn-outline-secondary"
                                                         onClick={() => toggleGroup(group.license_number)}
                                                         disabled={disabled}
                                                         title="Add to transfer letter"
@@ -457,7 +457,8 @@ export default function TransferLetterForm({
                 <div className="d-flex justify-content-end gap-2 flex-wrap">
                     <button
                         type="button"
-                        className="btn btn-success"
+                        className="btn btn-primary"
+                        style={{ background: 'linear-gradient(135deg, #4F46E5, #4338CA)', border: 'none' }}
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -480,7 +481,7 @@ export default function TransferLetterForm({
                     </button>
                     <button
                         type="button"
-                        className="btn btn-primary"
+                        className="btn btn-outline-secondary"
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -502,7 +503,7 @@ export default function TransferLetterForm({
                     </button>
                     <button
                         type="button"
-                        className="btn btn-warning"
+                        className="btn btn-outline-secondary"
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();

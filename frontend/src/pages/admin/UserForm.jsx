@@ -276,20 +276,26 @@ export default function UserForm() {
                 </div>
 
                 <div className="d-flex gap-2">
-                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                    <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={saving}
+                        style={{ background: 'linear-gradient(135deg, #4F46E5, #4338CA)', border: 'none' }}
+                    >
+                        <i className="bi bi-check-circle me-2"></i>
                         {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create User'}
                     </button>
                     <button type="button" className="btn btn-outline-secondary"
                             onClick={() => navigate('/admin/users')}>
-                        Cancel
+                        <i className="bi bi-x-lg me-2"></i>Cancel
                     </button>
                     {isEdit && (
                         <button
                             type="button"
-                            className="btn btn-outline-warning ms-auto"
+                            className="btn btn-outline-secondary ms-auto"
                             onClick={() => setShowPwReset(v => !v)}
                         >
-                            Reset Password
+                            <i className="bi bi-key me-2"></i>Reset Password
                         </button>
                     )}
                 </div>
@@ -309,10 +315,12 @@ export default function UserForm() {
                             autoComplete="new-password"
                         />
                         <button
-                            className="btn btn-warning"
+                            className="btn btn-primary"
                             onClick={handleResetPassword}
                             disabled={resettingPw || !newPassword}
+                            style={{ background: 'linear-gradient(135deg, #4F46E5, #4338CA)', border: 'none' }}
                         >
+                            <i className="bi bi-check-circle me-2"></i>
                             {resettingPw ? 'Saving…' : 'Set Password'}
                         </button>
                     </div>

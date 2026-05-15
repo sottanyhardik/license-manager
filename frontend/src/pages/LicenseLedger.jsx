@@ -423,7 +423,7 @@ export default function LicenseLedger() {
                         <>
                             <button
                                 type="button"
-                                className="btn btn-sm btn-danger"
+                                className="btn btn-sm btn-outline-secondary"
                                 onClick={handleBulkExportPDF}
                                 disabled={bulkExporting}
                             >
@@ -432,7 +432,7 @@ export default function LicenseLedger() {
                             </button>
                             <button
                                 type="button"
-                                className="btn btn-sm btn-success"
+                                className="btn btn-sm btn-outline-secondary"
                                 onClick={handleBulkExportExcel}
                                 disabled={bulkExporting}
                             >

@@ -1,8 +1,8 @@
 /**
  * useFileUpload Hook
  *
- * Comprehensive file upload hook that consolidates 780+ lines of duplicate
- * file upload logic from LedgerUpload.jsx and LedgerCSVUpload.jsx.
+ * Comprehensive file upload hook that consolidates file upload logic
+ * across the app (used by LedgerUpload.jsx and other upload pages).
  *
  * Features:
  * - Drag and drop support

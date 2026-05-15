@@ -47,7 +47,6 @@ const PATH_TITLES = [
     { pattern: '/reports/expiring-licenses',                    title: 'Expiring Licenses' },
     { pattern: '/reports/active-licenses',                      title: 'Active Licenses' },
     // Uploads
-    { pattern: '/ledger-csv-upload',                            title: 'Custom Ledger Upload' },
     { pattern: '/ledger-upload',                                title: 'Ledger Upload' },
     // Auth / misc
     { pattern: '/settings',                                     title: 'Settings' },

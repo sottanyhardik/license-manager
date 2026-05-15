@@ -1006,7 +1006,7 @@ export default function ItemReport() {
                                                                             className="d-flex align-items-center justify-content-between">
                                                                             <span>{firstItem.license_number}</span>
                                                                             <button
-                                                                                className="btn btn-sm btn-outline-success ms-2"
+                                                                                className="btn btn-sm btn-outline-secondary ms-2"
                                                                                 style={{
                                                                                     padding: '2px 8px',
                                                                                     fontSize: '0.75rem'

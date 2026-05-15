@@ -1698,11 +1698,11 @@ export default function TradeForm() {
                             </button>
                             {formData.direction === 'SALE' && (
                                 <div className="btn-group">
-                                    <button type="button" className="btn btn-outline-primary" onClick={() => handleDownloadPDF(true)}
+                                    <button type="button" className="btn btn-outline-secondary" onClick={() => handleDownloadPDF(true)}
                                         style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
                                         <i className="bi bi-file-pdf me-1"></i>Bill of Supply
                                     </button>
-                                    <button type="button" className="btn btn-outline-primary dropdown-toggle dropdown-toggle-split"
+                                    <button type="button" className="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split"
                                         data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
                                         <span className="visually-hidden">Toggle Dropdown</span>
                                     </button>
@@ -1738,11 +1738,11 @@ export default function TradeForm() {
                             )}
                             {formData.direction === 'PURCHASE' && (
                                 <div className="btn-group">
-                                    <button type="button" className="btn btn-outline-success" onClick={() => handleDownloadPurchaseInvoice(true)}
+                                    <button type="button" className="btn btn-outline-secondary" onClick={() => handleDownloadPurchaseInvoice(true)}
                                         style={{ borderRadius: '8px 0 0 8px', fontWeight: '500' }}>
                                         <i className="bi bi-file-pdf me-1"></i>Purchase Invoice
                                     </button>
-                                    <button type="button" className="btn btn-outline-success dropdown-toggle dropdown-toggle-split"
+                                    <button type="button" className="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split"
                                         data-bs-toggle="dropdown" aria-expanded="false" style={{ borderRadius: '0 8px 8px 0' }}>
                                         <span className="visually-hidden">Toggle Dropdown</span>
                                     </button>

@@ -59,18 +59,19 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                             onClick={handleSave}
                             disabled={saving}
                             style={{
-                                backgroundColor: 'var(--primary-color)',
-                                borderColor: 'var(--primary-color)'
+                                background: 'linear-gradient(135deg, #4F46E5, #4338CA)',
+                                border: 'none'
                             }}
                         >
+                            <i className="bi bi-check-circle me-1"></i>
                             {saving ? 'Saving...' : 'Save'}
                         </button>
                         <button
-                            className="btn btn-sm btn-secondary"
+                            className="btn btn-sm btn-outline-secondary"
                             onClick={handleCancel}
                             disabled={saving}
                         >
-                            Cancel
+                            <i className="bi bi-x-lg me-1"></i>Cancel
                         </button>
                     </div>
                 </div>

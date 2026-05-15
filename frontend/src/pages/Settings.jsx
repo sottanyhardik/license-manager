@@ -241,14 +241,14 @@ export default function Settings() {
                                     <td className="small text-muted">{fmtDate(user.date_joined)}</td>
                                     <td className="text-end pe-3">
                                         <button
-                                            className="btn btn-sm btn-outline-primary me-1"
+                                            className="btn btn-sm btn-outline-secondary me-1"
                                             onClick={() => handleOpenModal(user)}
                                             title="Edit User"
                                         >
                                             <i className="bi bi-pencil"></i>
                                         </button>
                                         <button
-                                            className="btn btn-sm btn-outline-danger"
+                                            className="btn btn-sm btn-outline-secondary"
                                             onClick={() => handleDelete(user.id)}
                                             title="Delete User"
                                         >

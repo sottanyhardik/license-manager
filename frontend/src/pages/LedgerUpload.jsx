@@ -328,7 +328,7 @@ const LedgerUpload = () => {
                       {files.length} file{files.length > 1 ? 's' : ''} selected
                     </span>
                     <button
-                      className="btn btn-sm btn-outline-danger"
+                      className="btn btn-sm btn-outline-secondary"
                       onClick={() => {
                         clearFiles();
                         document.getElementById('file-input').value = '';

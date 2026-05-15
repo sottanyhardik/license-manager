@@ -308,11 +308,14 @@ class AllotmentActionViewSet(ViewSet):
                 # Get the license import item
                 license_item = LicenseImportItemsModel.objects.get(id=item_id)
 
-                # Calculate actual available quantity (same logic as serializer)
-                # This is critical because DB field includes all allotments, but calculation
-                # only includes AT-type allotments without BOE (active allotments)
-                from core.scripts.calculate_balance import calculate_available_quantity
-                actual_available_qty = Decimal(str(calculate_available_quantity(license_item)))
+                # Use the stored available_quantity field — this is the value the
+                # user sees in the Available License Items list (AVAIL QTY column)
+                # and is kept in sync by update_balance_values() via post_save
+                # signals. Recomputing dynamically via calculate_available_quantity
+                # diverges from the UI for restricted items: it sets credit =
+                # old_quantity (the already-debited amount) and returns 0 even
+                # when the stored field correctly shows balance remaining.
+                actual_available_qty = Decimal(str(license_item.available_quantity or 0))
 
                 # Check if available quantity is sufficient
                 if actual_available_qty < qty:

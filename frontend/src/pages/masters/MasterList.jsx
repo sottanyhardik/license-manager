@@ -1358,8 +1358,8 @@ export default function MasterList() {
                                                         render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—' },
                                                     { key: 'cif_fc',          label: 'CIF FC $',   align: 'right', nowrap: true,
                                                         render: v => v ? `$${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—' },
-                                                    { key: 'rate_inr_per_kg', label: 'Rate ₹/KG',  align: 'right', nowrap: true,
-                                                        render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                                                    { key: 'cif_inr',         label: 'CIF INR',    align: 'right', nowrap: true,
+                                                        render: v => v ? fmtInr(v) : '—' },
                                                     { key: 'amount_inr',      label: 'Amount',     align: 'right', nowrap: true, bold: true,
                                                         render: v => fmtInr(v) },
                                                 ]}

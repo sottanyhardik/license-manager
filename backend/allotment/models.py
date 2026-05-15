@@ -248,13 +248,22 @@ class AllotmentItems(AuditModel):
     def __str__(self):
         return getattr(self.item, "description", "Unknown Item")
 
+    # `item` is nullable on this model, so every walk through self.item.license
+    # must short-circuit on a missing item or license. Bare
+    # `getattr(self.item.license, ...)` evaluates `self.item.license` BEFORE
+    # getattr's default kicks in, so it crashes whenever item is None.
+    @property
+    def _license(self):
+        item = self.item
+        return getattr(item, "license", None) if item is not None else None
+
     @cached_property
     def serial_number(self) -> Optional[str]:
         return getattr(self.item, "serial_number", None)
 
     @cached_property
     def ledger(self):
-        return getattr(self.item.license, "ledger_date", None)
+        return getattr(self._license, "ledger_date", None)
 
     @cached_property
     def product_description(self) -> str:
@@ -262,15 +271,15 @@ class AllotmentItems(AuditModel):
 
     @cached_property
     def license_number(self) -> Optional[str]:
-        return getattr(self.item.license, "license_number", None)
+        return getattr(self._license, "license_number", None)
 
     @cached_property
     def license_date(self):
-        return getattr(self.item.license, "license_date", None)
+        return getattr(self._license, "license_date", None)
 
     @cached_property
     def exporter(self):
-        return getattr(self.item.license, "exporter", None)
+        return getattr(self._license, "exporter", None)
 
     @cached_property
     def hs_code(self) -> Optional[str]:
@@ -281,27 +290,27 @@ class AllotmentItems(AuditModel):
 
     @cached_property
     def license_expiry(self):
-        return getattr(self.item.license, "license_expiry_date", None)
+        return getattr(self._license, "license_expiry_date", None)
 
     @cached_property
     def registration_number(self) -> Optional[str]:
-        return getattr(self.item.license, "registration_number", None)
+        return getattr(self._license, "registration_number", None)
 
     @cached_property
     def registration_date(self):
-        return getattr(self.item.license, "registration_date", None)
+        return getattr(self._license, "registration_date", None)
 
     @cached_property
     def notification_number(self) -> Optional[str]:
-        return getattr(self.item.license, "notification_number", None)
+        return getattr(self._license, "notification_number", None)
 
     @cached_property
     def file_number(self) -> Optional[str]:
-        return getattr(self.item.license, "file_number", None)
+        return getattr(self._license, "file_number", None)
 
     @cached_property
     def port_code(self):
-        return getattr(self.item.license, "port", None)
+        return getattr(self._license, "port", None)
 
     @cached_property
     def get_delete_url(self) -> str:

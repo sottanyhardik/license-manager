@@ -8,24 +8,26 @@ from core.serializers.fields import IndianDateField
 
 
 class AllotmentItemSerializer(serializers.ModelSerializer):
-    # Read-only fields from cached properties
-    serial_number = serializers.CharField(read_only=True, required=False)
+    # Read-only fields from cached properties. allow_null=True on every chain
+    # that walks self.item.license.* so an item or license that's been unset
+    # doesn't raise AttributeError before DRF's safety net catches it.
+    serial_number = serializers.CharField(read_only=True, required=False, allow_null=True)
     ledger = serializers.SerializerMethodField()
-    product_description = serializers.CharField(read_only=True, required=False)
-    hs_code = serializers.CharField(read_only=True, required=False)
-    license_number = serializers.CharField(read_only=True, required=False)
+    product_description = serializers.CharField(read_only=True, required=False, allow_blank=True)
+    hs_code = serializers.CharField(read_only=True, required=False, allow_null=True)
+    license_number = serializers.CharField(read_only=True, required=False, allow_null=True)
     license_date = serializers.SerializerMethodField()
-    exporter = serializers.CharField(read_only=True, required=False, source='exporter.name')
+    exporter = serializers.CharField(read_only=True, required=False, allow_null=True, source='exporter.name')
     license_expiry = serializers.SerializerMethodField()
-    registration_number = serializers.CharField(read_only=True, required=False)
+    registration_number = serializers.CharField(read_only=True, required=False, allow_null=True)
     registration_date = serializers.SerializerMethodField()
-    notification_number = serializers.CharField(read_only=True, required=False)
-    file_number = serializers.CharField(read_only=True, required=False)
-    port_code = serializers.CharField(read_only=True, required=False, source='port_code.name')
+    notification_number = serializers.CharField(read_only=True, required=False, allow_null=True)
+    file_number = serializers.CharField(read_only=True, required=False, allow_null=True)
+    port_code = serializers.CharField(read_only=True, required=False, allow_null=True, source='port_code.name')
     purchase_status = serializers.SerializerMethodField()
-    current_owner = serializers.CharField(source='item.license.current_owner.name', read_only=True, allow_null=True)
-    file_transfer_status = serializers.CharField(source='item.license.file_transfer_status', read_only=True, allow_null=True)
-    condition_type = serializers.CharField(source='item.condition_type', read_only=True, allow_blank=True, default='')
+    current_owner = serializers.SerializerMethodField()
+    file_transfer_status = serializers.SerializerMethodField()
+    condition_type = serializers.SerializerMethodField()
 
     def get_ledger(self, obj):
         ledger = obj.ledger
@@ -64,6 +66,19 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
         if obj.item and obj.item.license and obj.item.license.purchase_status:
             return obj.item.license.purchase_status.code
         return None
+
+    def get_current_owner(self, obj):
+        if obj.item and obj.item.license and obj.item.license.current_owner:
+            return obj.item.license.current_owner.name
+        return None
+
+    def get_file_transfer_status(self, obj):
+        if obj.item and obj.item.license:
+            return obj.item.license.file_transfer_status
+        return None
+
+    def get_condition_type(self, obj):
+        return getattr(obj.item, 'condition_type', '') or ''
 
     class Meta:
         model = AllotmentItems

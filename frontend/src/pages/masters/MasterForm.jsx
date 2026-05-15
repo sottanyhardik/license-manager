@@ -1288,6 +1288,10 @@ export default function MasterForm({
                 };
 
                 Object.entries(formData).forEach(([key, value]) => {
+                    // boe_pdf_copy is handled by the dedicated PATCH below — never
+                    // include the existing URL string (or even a new File) here, or
+                    // DRF rejects the string as "not a file".
+                    if (entityName === 'bill-of-entries' && key === 'boe_pdf_copy') return;
                     appendToFormData(key, value);
                 });
 
@@ -1310,6 +1314,13 @@ export default function MasterForm({
                 delete cleanedFormData.created_by;
                 delete cleanedFormData.modified_on;
                 delete cleanedFormData.modified_by;
+
+                // boe_pdf_copy comes back from GET as a URL string. Sending it on
+                // PATCH triggers DRF's "submitted data was not a file" error. The
+                // dedicated multipart PATCH below handles new uploads.
+                if (entityName === 'bill-of-entries') {
+                    delete cleanedFormData.boe_pdf_copy;
+                }
 
                 Object.keys(cleanedFormData).forEach(key => {
                     if (key.includes('date') || key.includes('_at') || key.includes('_on')) {

@@ -216,11 +216,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
         const allottedValue = parseFloat(allotment.allotted_value || 0);
         const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableQty = parseFloat(item.available_quantity);
+        // Floor to integer — backend's calculate_available_quantity() rounds DOWN
+        // to whole units, so any fractional part of the stored available_quantity
+        // would be rejected on submit.
+        const availableQty = Math.floor(parseFloat(item.available_quantity || 0));
         const availableCifFc = parseFloat(item.balance_cif_fc || 0);
 
         // Max quantity is the minimum of balanced quantity and available quantity
-        let maxQty = Math.min(balancedQty, availableQty);
+        let maxQty = Math.floor(Math.min(balancedQty, availableQty));
 
         // Calculate value for this quantity
         let maxValue = maxQty * unitPrice;
@@ -238,6 +241,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             maxQty = Math.floor(balancedValueWithBuffer / unitPrice);
             maxValue = maxQty * unitPrice;
         }
+
+        // Belt-and-suspenders: clamp maxValue to all caps (restricted CIF + balanced
+        // value) and truncate to 2 decimal places. Math.floor(X/Y)*Y can drift past
+        // X by a float-epsilon, and .toFixed(2) can round half-cents UP — this
+        // line ensures the requested cif_fc never crosses the backend's check.
+        maxValue = Math.min(maxValue, availableCifFc, balancedValueWithBuffer);
+        maxValue = Math.floor(maxValue * 100) / 100;
 
         return {
             qty: maxQty,
@@ -260,7 +270,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         const allottedValue = parseFloat(allotment.allotted_value || 0);
         const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
         const availableCifFc = parseFloat(item.balance_cif_fc || 0);
-        const availableQty = parseFloat(item.available_quantity || 0);
+        // Floor: backend rounds available_quantity DOWN to whole units, so we must too.
+        const availableQty = Math.floor(parseFloat(item.available_quantity || 0));
 
         // Show warning if user tries to exceed limits
         if (inputQty > balancedQty) {

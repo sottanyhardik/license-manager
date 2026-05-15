@@ -1356,6 +1356,8 @@ export default function MasterList() {
                                                         render: v => v ? <code>{v}</code> : '—' },
                                                     { key: 'qty_kg',          label: 'Qty (KG)',   align: 'right', nowrap: true,
                                                         render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—' },
+                                                    { key: 'cif_fc',          label: 'CIF FC $',   align: 'right', nowrap: true,
+                                                        render: v => v ? `$${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—' },
                                                     { key: 'rate_inr_per_kg', label: 'Rate ₹/KG',  align: 'right', nowrap: true,
                                                         render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
                                                     { key: 'amount_inr',      label: 'Amount',     align: 'right', nowrap: true, bold: true,

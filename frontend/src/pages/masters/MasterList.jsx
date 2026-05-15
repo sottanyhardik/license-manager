@@ -1349,7 +1349,8 @@ export default function MasterList() {
                                         detail={() => (
                                             <DetailTable
                                                 columns={[
-                                                    { key: 'sr_number',       label: 'Sr#',        nowrap: true, align: 'right' },
+                                                    { key: 'sr_number_label', label: 'Sr#',        nowrap: true,
+                                                        render: (v, row) => v || (row.sr_number != null ? String(row.sr_number) : '—') },
                                                     { key: 'description',     label: 'Description', muted: true },
                                                     { key: 'hsn_code',        label: 'HSN',         nowrap: true,
                                                         render: v => v ? <code>{v}</code> : '—' },

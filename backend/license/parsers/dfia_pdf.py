@@ -98,7 +98,13 @@ _NOTIFICATION_RX = re.compile(
     r"Custom\s+Noti[a-z]+\s+Number[^\n]*?(?:&[^\n]*?)?(\d{2,3}/\d{4})\s*&",
 )
 _NOTIFICATION_RX_MULTILINE = re.compile(
-    r"Custom\s+Noti[a-z]+\s+Number[^\n]*\n\s*(\d{2,3}/\d{4})",
+    # The 2025 DGFT layout wraps the bilingual label onto two lines so the
+    # value lands ≥2 lines below "Custom Notification Number":
+    #     Custom Notification Number / ... एवं ितिथ &
+    #     Date
+    #     025/2023 & Dated 01.04.2023
+    # Allow an optional "Date" continuation line between label and value.
+    r"Custom\s+Noti[a-z]+\s+Number[^\n]*\n(?:\s*Date[^\n]*\n)?\s*(\d{2,3}/\d{4})",
 )
 _VALIDITY_MONTHS_RX = re.compile(
     r"Validity of Authorisation\s*/\s*Scrip for Import.*?\n\s*(\d{1,3})\s*$",
@@ -707,13 +713,29 @@ def _parse_items(text: str) -> list[dict[str, Any]]:
         "", block,
     )
     block = re.sub(r"UDIN\s*\S+", "", block)
-    # Page numbers — a standalone short number that sits immediately above
-    # a data row (HSN+qty+UOM) is the next page's page-number, not an SI#.
-    # We must leave SI#-only lines (like the "12" right above the milk row's
-    # description block) intact, so we only match when followed by a data line.
+    # Multi-line digital-signing block and the bare "Signature Not Verified"
+    # marker land between items when the items table spans a page boundary.
+    # Clear them so the page-number heuristic below can recognise a real
+    # page break (blank space above the digit).
     block = re.sub(
-        r"(?m)^\s*\d{1,3}\s*\n(?=\s*\n*\s*\d{7,8}\s+\d+(?:\.\d+)?\s)",
+        r"Digitally Signed\.\s*\n"
+        r"(?:Name:[^\n]*\n)?"
+        r"(?:[^\n]*\n)?"
+        r"(?:Date:[^\n]*\n)?"
+        r"(?:Reason:[^\n]*\n)?"
+        r"(?:[^\n]*@[^\n]*\n)?"
+        r"(?:Location:[^\n]*\n)?",
         "",
+        block,
+    )
+    block = re.sub(r"(?m)^\s*Signature Not Verified\s*$", "", block)
+    # Page numbers — strip a standalone short-digit line ONLY when it sits in
+    # whitespace (i.e., a page-break signature: the line immediately above is
+    # empty after the cleanups above). Real SI numbers in the items table are
+    # preceded by description TEXT, so this rule keeps them.
+    block = re.sub(
+        r"(?m)^[ \t]*\n[ \t]*\d{1,3}[ \t]*\n(?=\s*\n*\s*\d{7,8}\s+\d+(?:\.\d+)?\s)",
+        "\n",
         block,
     )
 

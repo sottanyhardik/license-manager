@@ -297,22 +297,35 @@ sync_db() {
     pkill -f "python.*manage.py runserver" 2>/dev/null || true
 
     print_info "Recreating database..."
-    psql -U hardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;" 2>/dev/null
-    psql -U hardiksottany -d postgres -c "CREATE DATABASE $LOCAL_DB_NAME OWNER $LOCAL_DB_USER;" 2>/dev/null
-
-    if [ $? -ne 0 ]; then
-        print_error "Failed to recreate database"
+    if ! psql -U hardiksottany -d postgres -c "DROP DATABASE IF EXISTS $LOCAL_DB_NAME;"; then
+        print_error "Failed to drop existing database"
+        exit 1
+    fi
+    if ! psql -U hardiksottany -d postgres -c "CREATE DATABASE $LOCAL_DB_NAME OWNER $LOCAL_DB_USER;"; then
+        print_error "Failed to create database"
         exit 1
     fi
 
     print_info "Restoring backup (this may take a while)..."
-    PGPASSWORD="$LOCAL_DB_PASS" pg_restore -U $LOCAL_DB_USER -d $LOCAL_DB_NAME -j 4 --no-owner --no-acl "$BACKUP_DIR/$BACKUP_FILE" 2>/dev/null
-
-    if [ $? -ne 0 ]; then
-        print_error "Failed to restore backup"
-        exit 1
+    local restore_log
+    restore_log=$(mktemp)
+    if PGPASSWORD="$LOCAL_DB_PASS" pg_restore -U "$LOCAL_DB_USER" -d "$LOCAL_DB_NAME" -j 4 --no-owner --no-acl "$BACKUP_DIR/$BACKUP_FILE" 2>"$restore_log"; then
+        print_success "Database restored"
+    else
+        local rc=$?
+        # PG 17+ dumps contain `SET transaction_timeout = 0`, which PG <17 rejects.
+        # pg_restore returns 1 even when only this benign SET fails and all data is loaded.
+        if grep -q 'transaction_timeout' "$restore_log" && ! grep -qE 'ERROR.*(COPY|TABLE|INDEX|CONSTRAINT|SEQUENCE)' "$restore_log"; then
+            print_warning "pg_restore exit=$rc, but only PG17+ session params failed (local server is older). Data likely intact."
+            cat "$restore_log" >&2
+        else
+            print_error "Failed to restore backup (pg_restore exit=$rc):"
+            cat "$restore_log" >&2
+            rm -f "$restore_log"
+            exit 1
+        fi
     fi
-    print_success "Database restored"
+    rm -f "$restore_log"
 
     print_info "Running migrations..."
     cd backend

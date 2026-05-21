@@ -6,6 +6,7 @@ import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import ConditionBadge from "../components/ConditionBadge";
 import TransferLetterForm from "../components/TransferLetterForm";
+import {openPdfPreview} from "../utils/pdfPreview";
 import {useBackButton} from "../hooks/useBackButton";
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
@@ -1203,9 +1204,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 try {
                                                     const licenseId = item.license_id || item.license;
                                                     const response = await api.get(`licenses/${licenseId}/merged-documents/`, { responseType: 'blob' });
-                                                    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-                                                    window.open(url, '_blank');
-                                                    setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+                                                    openPdfPreview(response.data, `${item.license_number || licenseId}-copy.pdf`);
                                                 } catch {
                                                     toast.error('Failed to load license document');
                                                 }

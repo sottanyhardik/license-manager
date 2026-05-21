@@ -5,6 +5,7 @@ import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
 import {formatIndianNumber} from "../../utils/numberFormatter";
+import {openPdfPreview} from "../../utils/pdfPreview";
 import {toast} from "react-toastify";
 
 export default function ItemPivotReport() {
@@ -905,10 +906,7 @@ export default function ItemPivotReport() {
                                                                                         responseType: 'blob',
                                                                                         headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                                                                     });
-                                                                                    const blob = new Blob([response.data], { type: 'application/pdf' });
-                                                                                    const url = window.URL.createObjectURL(blob);
-                                                                                    window.open(url, '_blank');
-                                                                                    setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+                                                                                    openPdfPreview(response.data, `${license.license_number || license.id}-copy.pdf`);
                                                                                 } catch {
                                                                                     toast.error('Failed to load merged documents');
                                                                                 }

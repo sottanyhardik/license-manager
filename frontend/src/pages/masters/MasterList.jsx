@@ -12,6 +12,7 @@ import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import TransferLetterModal from "../../components/TransferLetterModal";
 import { EntityCard, DetailTable } from "../../components/ui";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
+import {openPdfPreview} from "../../utils/pdfPreview";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 
 /**
@@ -611,12 +612,10 @@ export default function MasterList() {
                             headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                         });
                         const blob = new Blob([response.data], { type: 'application/pdf' });
-                        const url = window.URL.createObjectURL(blob);
-                        const opened = window.open(url, '_blank');
+                        const opened = openPdfPreview(blob, `${entityName}_${new Date().toISOString().split('T')[0]}.pdf`);
                         if (!opened) {
                             toast.error('Pop-up blocked. Allow pop-ups for this site to view the PDF.');
                         }
-                        setTimeout(() => window.URL.revokeObjectURL(url), 30000);
                     } finally {
                         setPdfLoading(false);
                     }
@@ -1030,9 +1029,7 @@ export default function MasterList() {
                                                     onClick: async () => {
                                                         try {
                                                             const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            window.open(url, '_blank');
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+                                                            openPdfPreview(r.data, `${item.invoice_number || item.id}.pdf`);
                                                         } catch (err) { toast.error(err.response?.data?.error || 'Failed to generate PDF'); }
                                                     } },
                                                 { icon: 'download', title: 'Download',
@@ -1171,9 +1168,7 @@ export default function MasterList() {
                                                         e.stopPropagation();
                                                         try {
                                                             const r = await api.get(`licenses/${item.id}/merged-documents/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            window.open(url, '_blank');
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+                                                            openPdfPreview(r.data, `${item.license_number || item.id}-copy.pdf`);
                                                         } catch (err) {
                                                             if (err.response?.status === 404) {
                                                                 toast.warning('Document files are not available on this server. The files may not have been uploaded yet.');
@@ -1231,9 +1226,7 @@ export default function MasterList() {
                                                     <button onClick={async () => {
                                                         try {
                                                             const r = await api.get(`licenses/${item.id}/balance-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            window.open(url, '_blank');
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+                                                            openPdfPreview(r.data, `${item.license_number || item.id}-balance.pdf`);
                                                         } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate PDF'); }
                                                     }} title="Download PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-file-pdf"></i>
@@ -1737,10 +1730,7 @@ export default function MasterList() {
                                                 responseType: 'blob',
                                                 headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                             });
-                                            const blob = new Blob([response.data], { type: 'application/pdf' });
-                                            const url = window.URL.createObjectURL(blob);
-                                            window.open(url, '_blank');
-                                            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+                                            openPdfPreview(response.data, `${item.license_number || item.id}-ledger.pdf`);
                                         } catch (err) {
                                             toast.error(err?.response?.data?.error || 'Failed to generate ledger PDF');
                                         }
@@ -1808,10 +1798,7 @@ export default function MasterList() {
                                                 responseType: 'blob',
                                                 headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                             });
-                                            const blob = new Blob([response.data], { type: 'application/pdf' });
-                                            const url = window.URL.createObjectURL(blob);
-                                            window.open(url, '_blank');
-                                            setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+                                            openPdfPreview(response.data, `${item.invoice_number || item.id}.pdf`);
                                         } catch (err) {
                                             toast.error(err.response?.data?.error || 'Failed to preview PDF');
                                         }

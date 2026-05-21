@@ -3,6 +3,7 @@ import api from '../api/axios';
 import AsyncSelect from 'react-select/async';
 import { toast } from 'react-toastify';
 import { formatDate } from '../utils/dateFormatter';
+import { openPdfPreview } from '../utils/pdfPreview';
 import ConditionBadge from './ConditionBadge';
 
 // Inline Editable Text Component
@@ -288,10 +289,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                 responseType: 'blob',
                 headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
             });
-            const blob = new Blob([response.data], { type: 'application/pdf' });
-            const url = window.URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+            openPdfPreview(response.data, `${licenseData?.license_number || licenseId}-balance.pdf`);
 
             toast.success('PDF file is being generated!');
         } catch (error) {
@@ -474,10 +472,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 responseType: 'blob',
                                                                                 headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
                                                                             });
-                                                                            const blob = new Blob([response.data], { type: 'application/pdf' });
-                                                                            const url = window.URL.createObjectURL(blob);
-                                                                            window.open(url, '_blank');
-                                                                            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+                                                                            openPdfPreview(response.data, `${licenseData?.license_number || licenseData?.id}-copy.pdf`);
                                                                         } catch {
                                                                             toast.error('Failed to load merged documents');
                                                                         }

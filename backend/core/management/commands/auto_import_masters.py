@@ -94,6 +94,15 @@ class Command(BaseCommand):
         parser.add_argument("--failed-out", default="failed-imports.csv", help="Where to write the failures CSV")
         parser.add_argument("--apply", action="store_true", help="Actually commit (default: dry-run)")
         parser.add_argument("--only-tables", nargs="*", help="Limit to specific tables (e.g. core.companymodel)")
+        parser.add_argument(
+            "--update-existing",
+            action="store_true",
+            help=(
+                "When a record matched by unique key exists locally, update its non-key "
+                "fields from source instead of skipping. Per-table FIELD_OVERRIDES and "
+                "EXCLUDED_FIELDS are preserved on the local side."
+            ),
+        )
 
     def handle(self, *args, **opts):
         sources = []
@@ -103,7 +112,12 @@ class Command(BaseCommand):
             self.stdout.write(f"Loaded {snap['server_name']} from {path}")
 
         failed_rows = []
-        stats = defaultdict(lambda: {"skipped_existing": 0, "imported": 0, "failed": 0})
+        stats = defaultdict(lambda: {
+            "skipped_existing": 0, "imported": 0,
+            "updated": 0, "unchanged": 0,
+            "failed": 0,
+        })
+        do_update = bool(opts.get("update_existing"))
 
         for snap in sources:
             server = snap["server_name"]
@@ -152,7 +166,61 @@ class Command(BaseCommand):
                     # 1. Check if it already exists locally (any unique key match)
                     existing, matched_key = find_existing(Model, src_data, unique_keys)
                     if existing:
-                        stats[table]["skipped_existing"] += 1
+                        if not do_update:
+                            stats[table]["skipped_existing"] += 1
+                            continue
+
+                        # --update-existing: copy non-key, non-excluded, non-override
+                        # fields from source into the local record. Idempotent: only
+                        # writes when at least one field actually changed (compared
+                        # after coercing source JSON values to the Python type via
+                        # field.to_python — otherwise date/Decimal compare wrong).
+                        unique_field_names = {f for tup in unique_keys for f in tup}
+                        override_fields = set(FIELD_OVERRIDES.get(table, {}).keys())
+                        skip_fields = unique_field_names | override_fields | EXCLUDED_FIELDS
+
+                        # Build a name→field lookup over both .name and .attname
+                        # so FK keys like "head_id" resolve to the right field.
+                        field_by_key = {}
+                        for _f in Model._meta.fields:
+                            field_by_key[_f.name] = _f
+                            field_by_key[_f.attname] = _f
+
+                        changed = {}
+                        for fname, sval in src_data.items():
+                            if fname in skip_fields:
+                                continue
+                            fobj = field_by_key.get(fname)
+                            if fobj is None:
+                                continue
+                            try:
+                                coerced = fobj.to_python(sval) if sval is not None else None
+                            except Exception:
+                                coerced = sval
+                            current = getattr(existing, fname, None)
+                            if current != coerced:
+                                changed[fname] = coerced
+
+                        if not changed:
+                            stats[table]["unchanged"] += 1
+                            continue
+
+                        try:
+                            with transaction.atomic():
+                                for k, v in changed.items():
+                                    setattr(existing, k, v)
+                                existing.save()
+                            stats[table]["updated"] += 1
+                        except (IntegrityError, Exception) as e:
+                            stats[table]["failed"] += 1
+                            failed_rows.append({
+                                "table": table,
+                                "source_server": server,
+                                "source_key": rec["key"],
+                                "source_id": rec["id"],
+                                "error": "UPDATE: " + str(e)[:280],
+                                "data": json.dumps(changed, default=str)[:500],
+                            })
                         continue
 
                     # Apply per-table field overrides (e.g. SION is_active=False)
@@ -182,18 +250,23 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("SUMMARY"))
         self.stdout.write(self.style.SUCCESS("=" * 70))
         total_imported = total_skipped = total_failed = 0
+        total_updated = total_unchanged = 0
         for table, s in sorted(stats.items()):
             self.stdout.write(
                 f"  {table:38s}  imported={s['imported']:5d}  "
+                f"updated={s['updated']:5d}  unchanged={s['unchanged']:5d}  "
                 f"skipped(exists)={s['skipped_existing']:5d}  failed={s['failed']:4d}"
             )
             total_imported += s["imported"]
+            total_updated += s["updated"]
+            total_unchanged += s["unchanged"]
             total_skipped += s["skipped_existing"]
             total_failed += s["failed"]
 
         self.stdout.write(self.style.SUCCESS("-" * 70))
         self.stdout.write(self.style.SUCCESS(
             f"  TOTAL:                                  imported={total_imported:5d}  "
+            f"updated={total_updated:5d}  unchanged={total_unchanged:5d}  "
             f"skipped(exists)={total_skipped:5d}  failed={total_failed:4d}"
         ))
 

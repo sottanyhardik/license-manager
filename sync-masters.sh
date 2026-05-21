@@ -55,6 +55,7 @@ ok "Source audit pulled"
 
 # ── Step 2: Push + apply to each follower ───────────────────
 TOTAL_IMPORTED=0
+TOTAL_UPDATED=0
 TOTAL_FAILED=0
 SUMMARY=""
 
@@ -66,13 +67,15 @@ for entry in "${FOLLOWER_IPS[@]}"; do
     $SSH "django@$IP" "mkdir -p $REMOTE_TMP"
     $SCP "$TMPFILE" "django@$IP:$REMOTE_TMP/source.json"
 
-    OUTPUT=$($SSH "django@$IP" "cd $REMOTE_PATH && source $VENV_ACTIVATE && python manage.py auto_import_masters --sources $REMOTE_TMP/source.json --failed-out $REMOTE_TMP/failed.csv --apply 2>&1" || true)
+    OUTPUT=$($SSH "django@$IP" "cd $REMOTE_PATH && source $VENV_ACTIVATE && python manage.py auto_import_masters --sources $REMOTE_TMP/source.json --failed-out $REMOTE_TMP/failed.csv --update-existing --apply 2>&1" || true)
 
     IMPORTED=$(echo "$OUTPUT" | grep -oE "imported= *[0-9]+" | tail -1 | grep -oE "[0-9]+" || echo "0")
-    FAILED=$(echo "$OUTPUT"   | grep -oE "failed= *[0-9]+"   | tail -1 | grep -oE "[0-9]+" || echo "0")
+    UPDATED=$( echo "$OUTPUT" | grep -oE "updated= *[0-9]+"  | tail -1 | grep -oE "[0-9]+" || echo "0")
+    FAILED=$(  echo "$OUTPUT" | grep -oE "failed= *[0-9]+"   | tail -1 | grep -oE "[0-9]+" || echo "0")
 
-    SUMMARY="$SUMMARY  $LABEL: imported=$IMPORTED, failed=$FAILED\n"
+    SUMMARY="$SUMMARY  $LABEL: imported=$IMPORTED, updated=$UPDATED, failed=$FAILED\n"
     TOTAL_IMPORTED=$((TOTAL_IMPORTED + IMPORTED))
+    TOTAL_UPDATED=$((TOTAL_UPDATED + UPDATED))
     TOTAL_FAILED=$((TOTAL_FAILED + FAILED))
 
     if [ "$FAILED" != "0" ] && [ "$FAILED" != "" ]; then
@@ -82,7 +85,7 @@ for entry in "${FOLLOWER_IPS[@]}"; do
     fi
 
     $SSH "django@$IP" "rm -rf $REMOTE_TMP"
-    ok "Done $LABEL — imported=$IMPORTED, failed=$FAILED"
+    ok "Done $LABEL — imported=$IMPORTED, updated=$UPDATED, failed=$FAILED"
 done
 
 # ── Final summary ────────────────────────────────────────────
@@ -90,7 +93,7 @@ if [ "$QUIET" != "--quiet" ] || [ $TOTAL_FAILED -gt 0 ]; then
     echo ""
     echo "═══ Sync summary [$TIMESTAMP] ═══"
     echo -e "$SUMMARY"
-    echo "  TOTAL: imported=$TOTAL_IMPORTED  failed=$TOTAL_FAILED"
+    echo "  TOTAL: imported=$TOTAL_IMPORTED  updated=$TOTAL_UPDATED  failed=$TOTAL_FAILED"
 fi
 
 # Exit non-zero if there were failures (so cron emails get triggered)

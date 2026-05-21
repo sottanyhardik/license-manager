@@ -1424,6 +1424,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 def _cat_match(hs, desc, hs_kw, name_kw):
                     return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
                 _cat_totals = {label: 0.0 for label, *_ in _UTIL_PLAN}
+                _cat_first_desc = {label: '' for label, *_ in _UTIL_PLAN}
                 _unclassified = []
                 for _ik in _bal_agg:
                     _bq = _bal_agg[_ik]['qty']
@@ -1433,6 +1434,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     for _lbl, _rt, _hskw, _nkw in _UTIL_PLAN:
                         if _cat_match(_hs, _de, _hskw, _nkw):
                             _cat_totals[_lbl] += _bq
+                            if not _cat_first_desc[_lbl]:
+                                _cat_first_desc[_lbl] = _de
                             _found = True
                             break
                     if not _found:
@@ -1444,6 +1447,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     is_wheat_flour as _is_wheat_flour,
                 )
                 _e5_totals = {c: 0.0 for c in _E5_PLAN_CATS}
+                _e5_first_desc = {}
                 _e5_unclassified = []
                 _wf_qty = 0.0
                 for _ik in _bal_agg:
@@ -1453,12 +1457,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _cat = _classify_e5(_hs)
                     if _cat:
                         _e5_totals[_cat] += _bq
+                        if not _e5_first_desc.get(_cat):
+                            _e5_first_desc[_cat] = _de
                     elif _is_wheat_flour(_hs):
                         _wf_qty += _bq
+                        if not _e5_first_desc.get('WHEAT FLOUR'):
+                            _e5_first_desc['WHEAT FLOUR'] = _de
                     else:
                         _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
 
-            ws.merge_cells(f'A{r}:E{r}')
+            ws.merge_cells(f'A{r}:F{r}')
             bh = ws[f'A{r}']
             bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
             bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
@@ -1479,7 +1487,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             r += 1
 
             if _is_e1:
-                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
 
@@ -1499,18 +1507,19 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 6, _cat_first_desc.get(_lbl, ''), fill=_rf)
                     r += 1
 
                 if _unclassified:
                     r += 1
-                    ws.merge_cells(f'A{r}:E{r}')
+                    ws.merge_cells(f'A{r}:F{r}')
                     _uh = ws[f'A{r}']
                     _uh.value = 'UNCLASSIFIED ITEMS'
                     _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
                     r += 1
-                    for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                    for col, h in enumerate(['Product Description', 'HS Code', 'Bal Qty', '', ''], 1):
                         _hdr(ws, r, col, h)
                     r += 1
                     for _i2, (_de2, _hs2, _bq2) in enumerate(_unclassified):
@@ -1560,7 +1569,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _e5_totals, _wf_qty, _license_balance, _pool_10,
                 )
 
-                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
 
@@ -1584,18 +1593,19 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _cell(ws, r, 3, '-', fill=_rf, align='center')
                         _cell(ws, r, 4, '-', fill=_rf, align='center')
                     _cell(ws, r, 5, _pc, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 6, _e5_first_desc.get(_lbl, ''), fill=_rf)
                     r += 1
 
                 if _e5_unclassified:
                     r += 1
-                    ws.merge_cells(f'A{r}:E{r}')
+                    ws.merge_cells(f'A{r}:F{r}')
                     _uh = ws[f'A{r}']
                     _uh.value = 'UNCLASSIFIED ITEMS'
                     _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
                     r += 1
-                    for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                    for col, h in enumerate(['Product Description', 'HS Code', 'Bal Qty', '', ''], 1):
                         _hdr(ws, r, col, h)
                     r += 1
                     for _i2, (_de2, _hs2, _bq2) in enumerate(_e5_unclassified):
@@ -2180,6 +2190,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             def _cat_match(hs, desc, hs_kw, name_kw):
                 return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
             _cat_totals = {label: 0.0 for label, *_ in _UTIL_PLAN}
+            _cat_first_desc = {label: '' for label, *_ in _UTIL_PLAN}
             _unclassified = []
             for _ik in _bal_agg:
                 _bq = _bal_agg[_ik]['qty']
@@ -2189,12 +2200,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 for _lbl, _rt, _hskw, _nkw in _UTIL_PLAN:
                     if _cat_match(_hs, _de, _hskw, _nkw):
                         _cat_totals[_lbl] += _bq
+                        if not _cat_first_desc[_lbl]:
+                            _cat_first_desc[_lbl] = _de
                         _found = True
                         break
                 if not _found:
                     _unclassified.append((_de, _hs, _bq))
 
-        ws.merge_cells(f'A{r}:E{r}')
+        ws.merge_cells(f'A{r}:F{r}')
         bh = ws[f'A{r}']
         bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
         bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
@@ -2216,7 +2229,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         r += 1
 
         if _is_e1:
-            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description'], 1):
                 _hdr(ws, r, col, h)
             r += 1
 
@@ -2234,18 +2247,19 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 6, _cat_first_desc.get(_lbl, ''), fill=_rf)
                 r += 1
 
             if _unclassified:
                 r += 1
-                ws.merge_cells(f'A{r}:E{r}')
+                ws.merge_cells(f'A{r}:F{r}')
                 _uh = ws[f'A{r}']
                 _uh.value = 'UNCLASSIFIED ITEMS'
                 _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
                 _uh.alignment = Alignment(horizontal='center', vertical='center')
                 _uh.border = THIN_BORDER
                 r += 1
-                for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                for col, h in enumerate(['Product Description', 'HS Code', 'Bal Qty', '', ''], 1):
                     _hdr(ws, r, col, h)
                 r += 1
                 for _i2, (_de2, _hs2, _bq2) in enumerate(_unclassified):
@@ -2288,6 +2302,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 compute_e5_plan as _compute_e5_plan_be,
             )
             _e5_totals = {c: 0.0 for c in _E5_PLAN_CATS_BE}
+            _e5_first_desc = {}
             _e5_unclassified = []
             _wf_qty = 0.0
             for _ik in _bal_agg:
@@ -2297,8 +2312,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _cat = _classify_e5_be(_hs)
                 if _cat:
                     _e5_totals[_cat] += _bq
+                    if not _e5_first_desc.get(_cat):
+                        _e5_first_desc[_cat] = _de
                 elif _is_wheat_flour_be(_hs):
                     _wf_qty += _bq
+                    if not _e5_first_desc.get('WHEAT FLOUR'):
+                        _e5_first_desc['WHEAT FLOUR'] = _de
                 else:
                     _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
 
@@ -2307,7 +2326,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _e5_totals, _wf_qty, _license_balance, _pool_10_be,
             )
 
-            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)'], 1):
+            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description'], 1):
                 _hdr(ws, r, col, h)
             r += 1
 
@@ -2329,18 +2348,19 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _cell(ws, r, 3, '-', fill=_rf, align='center')
                     _cell(ws, r, 4, '-', fill=_rf, align='center')
                 _cell(ws, r, 5, _pc, fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 6, _e5_first_desc.get(_lbl, ''), fill=_rf)
                 r += 1
 
             if _e5_unclassified:
                 r += 1
-                ws.merge_cells(f'A{r}:E{r}')
+                ws.merge_cells(f'A{r}:F{r}')
                 _uh = ws[f'A{r}']
                 _uh.value = 'UNCLASSIFIED ITEMS'
                 _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
                 _uh.alignment = Alignment(horizontal='center', vertical='center')
                 _uh.border = THIN_BORDER
                 r += 1
-                for col, h in enumerate(['Item Name', 'HS Code', 'Bal Qty', '', ''], 1):
+                for col, h in enumerate(['Product Description', 'HS Code', 'Bal Qty', '', ''], 1):
                     _hdr(ws, r, col, h)
                 r += 1
                 for _i2, (_de2, _hs2, _bq2) in enumerate(_e5_unclassified):

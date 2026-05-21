@@ -238,8 +238,16 @@ class ItemReportView(View):
         """Export item report to Excel with separate sheets for Restricted and Not Restricted items"""
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
         from io import BytesIO
         from license.utils.condition_excel import annotate_cell as _annotate_condition_cell
+
+        # Strip control chars that openpyxl rejects (\x00-\x08, \x0b-\x0c, \x0e-\x1f).
+        # PDF-sourced fields like condition_sheet sometimes carry these.
+        def _safe(v):
+            if isinstance(v, str):
+                return ILLEGAL_CHARACTERS_RE.sub('', v)
+            return v
 
         # Generate report data
         report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
@@ -332,16 +340,16 @@ class ItemReportView(View):
                     # License-level columns (only for first row, will be merged)
                     if item_idx == 0:
                         ws.cell(row=current_row, column=1, value=sr_no)  # Sr No
-                        ws.cell(row=current_row, column=2, value=item['license_number'])  # License No
-                        ws.cell(row=current_row, column=3, value=item['license_date'])  # License Date
-                        ws.cell(row=current_row, column=4, value=item['license_expiry_date'])  # License Expiry Date
-                        ws.cell(row=current_row, column=5, value=item.get('ledger_date'))  # Ledger Date
-                        ws.cell(row=current_row, column=6, value=item['exporter_name'])  # Exporter Name
+                        ws.cell(row=current_row, column=2, value=_safe(item['license_number']))  # License No
+                        ws.cell(row=current_row, column=3, value=_safe(item['license_date']))  # License Date
+                        ws.cell(row=current_row, column=4, value=_safe(item['license_expiry_date']))  # License Expiry Date
+                        ws.cell(row=current_row, column=5, value=_safe(item.get('ledger_date')))  # Ledger Date
+                        ws.cell(row=current_row, column=6, value=_safe(item['exporter_name']))  # Exporter Name
                         ws.cell(row=current_row, column=13, value=item['available_balance'])  # Available Balance
                         ws.cell(row=current_row, column=14, value=item['balance_cif'])  # Balance CIF
-                        ws.cell(row=current_row, column=15, value=item['notes'])  # Notes
-                        ws.cell(row=current_row, column=16, value=item['condition_sheet'])  # Condition Sheet
-                        ws.cell(row=current_row, column=17, value=item.get('latest_transfer', ''))  # Transfer Status
+                        ws.cell(row=current_row, column=15, value=_safe(item['notes']))  # Notes
+                        ws.cell(row=current_row, column=16, value=_safe(item['condition_sheet']))  # Condition Sheet
+                        ws.cell(row=current_row, column=17, value=_safe(item.get('latest_transfer', '')))  # Transfer Status
 
                     # Item-level columns (for each row)
                     sn_cell = ws.cell(row=current_row, column=7, value=item['serial_number'])  # Serial Number
@@ -351,9 +359,9 @@ class ItemReportView(View):
                     # stands out at a glance.
                     _annotate_condition_cell(sn_cell, cond)
                     _annotate_condition_cell(cond_cell, cond)
-                    ws.cell(row=current_row, column=9, value=item['hs_code'])  # HSN Code
-                    ws.cell(row=current_row, column=10, value=item['product_description'])  # Product Description
-                    ws.cell(row=current_row, column=11, value=item_names_str)  # Item Name
+                    ws.cell(row=current_row, column=9, value=_safe(item['hs_code']))  # HSN Code
+                    ws.cell(row=current_row, column=10, value=_safe(item['product_description']))  # Product Description
+                    ws.cell(row=current_row, column=11, value=_safe(item_names_str))  # Item Name
                     ws.cell(row=current_row, column=12, value=item['available_quantity'])  # Available Quantity
 
                     current_row += 1

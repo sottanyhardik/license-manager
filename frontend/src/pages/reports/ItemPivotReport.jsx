@@ -25,6 +25,7 @@ export default function ItemPivotReport() {
     const [licenseStatus, setLicenseStatus] = useState('active');
     const [expiryDateFrom, setExpiryDateFrom] = useState('');
     const [expiryDateTo, setExpiryDateTo] = useState('');
+    const [conditionModal, setConditionModal] = useState(null); // { licenseNumber, content }
 
     useEffect(() => {
         loadFilterOptions();
@@ -925,6 +926,34 @@ export default function ItemPivotReport() {
                                                                             Copy
                                                                         </a>
                                                                     )}
+                                                                    {license.condition_sheet && (
+                                                                        <button
+                                                                            type="button"
+                                                                            title="View condition sheet"
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                setConditionModal({
+                                                                                    licenseNumber: license.license_number,
+                                                                                    content: license.condition_sheet,
+                                                                                });
+                                                                            }}
+                                                                            style={{
+                                                                                fontSize: '0.7rem',
+                                                                                color: '#7c4a00',
+                                                                                border: 'none',
+                                                                                padding: '1px 6px',
+                                                                                backgroundColor: 'var(--row-yellow-bg)',
+                                                                                borderRadius: '2px',
+                                                                                fontWeight: 500,
+                                                                                whiteSpace: 'nowrap',
+                                                                                lineHeight: 1.4,
+                                                                            }}
+                                                                        >
+                                                                            <i className="bi bi-file-earmark-text me-1"></i>
+                                                                            Condition
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             </td>
                                                             <td className="text-nowrap" style={{
@@ -1031,30 +1060,14 @@ export default function ItemPivotReport() {
                                                                 );
                                                             })}
                                                         </tr>
-                                                        {/* Notes, Condition Sheet and Latest Transfer Row */}
-                                                        {(license.balance_report_notes || license.condition_sheet || license.latest_transfer) && (
+                                                        {/* Notes and Latest Transfer Row (Condition Sheet moved to button + modal) */}
+                                                        {(license.balance_report_notes || license.latest_transfer) && (
                                                             <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--bs-gray-50)' }}>
                                                                 <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 6 : 4))} style={{
                                                                     padding: '10px 15px',
                                                                     borderTop: 'none'
                                                                 }}>
                                                                     <div style={{ fontSize: '0.85rem', lineHeight: '1.5' }}>
-                                                                        {license.condition_sheet && (
-                                                                            <div style={{
-                                                                                marginBottom: (license.balance_report_notes || license.latest_transfer) ? '8px' : '0',
-                                                                                backgroundColor: 'var(--row-yellow-bg)',
-                                                                                padding: '6px 10px',
-                                                                                borderRadius: '4px'
-                                                                            }}>
-                                                                                <strong style={{ color: '#000000' }}>
-                                                                                    <i className="bi bi-file-earmark-text me-1"></i>
-                                                                                    Condition Sheet:
-                                                                                </strong>
-                                                                                <span style={{ color: '#000000', marginLeft: '8px' }}>
-                                                                                    {license.condition_sheet}
-                                                                                </span>
-                                                                            </div>
-                                                                        )}
                                                                         {license.balance_report_notes && (
                                                                             <div style={{
                                                                                 marginBottom: license.latest_transfer ? '8px' : '0',
@@ -1368,6 +1381,60 @@ export default function ItemPivotReport() {
                     )}
                 </div>
             </div>
+
+            {conditionModal && (
+                <>
+                    <div
+                        className="modal show d-block"
+                        tabIndex="-1"
+                        role="dialog"
+                        style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+                        onClick={() => setConditionModal(null)}
+                    >
+                        <div
+                            className="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered"
+                            role="document"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="modal-content" style={{ borderRadius: '8px' }}>
+                                <div className="modal-header" style={{ backgroundColor: 'var(--row-yellow-bg)' }}>
+                                    <h5 className="modal-title">
+                                        <i className="bi bi-file-earmark-text me-2"></i>
+                                        Condition Sheet — {conditionModal.licenseNumber}
+                                    </h5>
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        aria-label="Close"
+                                        onClick={() => setConditionModal(null)}
+                                    />
+                                </div>
+                                <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                                    <pre style={{
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        fontFamily: 'inherit',
+                                        fontSize: '0.9rem',
+                                        margin: 0,
+                                        color: '#000',
+                                    }}>
+                                        {conditionModal.content}
+                                    </pre>
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => setConditionModal(null)}
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

@@ -1415,11 +1415,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             }
             if _is_e1:
                 _UTIL_PLAN = [
-                    ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
-                    ('FRUIT JUICE',                                   3.0, [],       ['fruit juice']),
-                    ('TARTARIC ACID / CITRIC ACID',                   0.7, [],       ['tartaric', 'citric']),
-                    ('POLYPROPYLENE',                                  1.0, [],       ['polypropylene']),
-                    ('PAPER & PAPER BOARD',                           0.7, [],       ['paper']),
+                    ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7,  ['0802'],         ['confectionery', 'fruit & fruit', 'fruit product']),
+                    ('FRUIT JUICE',                                   3.0,  [],               ['fruit juice']),
+                    ('COCOA, MILK & MILK PRODUCTS - MILK SOLIDS',    12.0,  ['3501', '3502'], ['cocoa', 'milk solid', 'milk product']),
+                    ('TARTARIC ACID / CITRIC ACID',                   2.0,  [],               ['tartaric', 'citric']),
+                    ('POLYPROPYLENE',                                 1.0,  [],               ['polypropylene']),
+                    ('PAPER & PAPER BOARD',                           0.7,  [],               ['paper']),
                 ]
                 def _cat_match(hs, desc, hs_kw, name_kw):
                     return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
@@ -1466,7 +1467,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     else:
                         _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
 
-            ws.merge_cells(f'A{r}:F{r}')
+            ws.merge_cells(f'A{r}:G{r}')
             bh = ws[f'A{r}']
             bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
             bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
@@ -1487,7 +1488,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             r += 1
 
             if _is_e1:
-                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description'], 1):
+                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
 
@@ -1508,11 +1509,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 6, _cat_first_desc.get(_lbl, ''), fill=_rf)
+                    _cell(ws, r, 7, _e1_remaining, fill=_rf, align='right', num_fmt='#,##0.00')
                     r += 1
 
                 if _unclassified:
                     r += 1
-                    ws.merge_cells(f'A{r}:F{r}')
+                    ws.merge_cells(f'A{r}:G{r}')
                     _uh = ws[f'A{r}']
                     _uh.value = 'UNCLASSIFIED ITEMS'
                     _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
@@ -1569,7 +1571,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _e5_totals, _wf_qty, _license_balance, _pool_10,
                 )
 
-                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description'], 1):
+                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
 
@@ -1594,11 +1596,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _cell(ws, r, 4, '-', fill=_rf, align='center')
                     _cell(ws, r, 5, _pc, fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 6, _e5_first_desc.get(_lbl, ''), fill=_rf)
+                    _cell(ws, r, 7, _license_balance - _e5_planned, fill=_rf, align='right', num_fmt='#,##0.00')
                     r += 1
 
                 if _e5_unclassified:
                     r += 1
-                    ws.merge_cells(f'A{r}:F{r}')
+                    ws.merge_cells(f'A{r}:G{r}')
                     _uh = ws[f'A{r}']
                     _uh.value = 'UNCLASSIFIED ITEMS'
                     _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
@@ -2181,11 +2184,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
         if _is_e1:
             _UTIL_PLAN = [
-                ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7, ['0802'], ['confectionery', 'fruit & fruit', 'fruit product']),
-                ('FRUIT JUICE',                                   3.0, [],       ['fruit juice']),
-                ('TARTARIC ACID / CITRIC ACID',                   0.7, [],       ['tartaric', 'citric']),
-                ('POLYPROPYLENE',                                  1.0, [],       ['polypropylene']),
-                ('PAPER & PAPER BOARD',                           0.7, [],       ['paper']),
+                ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7,  ['0802'],         ['confectionery', 'fruit & fruit', 'fruit product']),
+                ('FRUIT JUICE',                                   3.0,  [],               ['fruit juice']),
+                ('COCOA, MILK & MILK PRODUCTS - MILK SOLIDS',    12.0,  ['3501', '3502'], ['cocoa', 'milk solid', 'milk product']),
+                ('TARTARIC ACID / CITRIC ACID',                   2.0,  [],               ['tartaric', 'citric']),
+                ('POLYPROPYLENE',                                 1.0,  [],               ['polypropylene']),
+                ('PAPER & PAPER BOARD',                           0.7,  [],               ['paper']),
             ]
             def _cat_match(hs, desc, hs_kw, name_kw):
                 return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
@@ -2207,7 +2211,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 if not _found:
                     _unclassified.append((_de, _hs, _bq))
 
-        ws.merge_cells(f'A{r}:F{r}')
+        ws.merge_cells(f'A{r}:G{r}')
         bh = ws[f'A{r}']
         bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
         bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
@@ -2229,7 +2233,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         r += 1
 
         if _is_e1:
-            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description'], 1):
+            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
                 _hdr(ws, r, col, h)
             r += 1
 
@@ -2248,11 +2252,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 6, _cat_first_desc.get(_lbl, ''), fill=_rf)
+                _cell(ws, r, 7, _e1_remaining, fill=_rf, align='right', num_fmt='#,##0.00')
                 r += 1
 
             if _unclassified:
                 r += 1
-                ws.merge_cells(f'A{r}:F{r}')
+                ws.merge_cells(f'A{r}:G{r}')
                 _uh = ws[f'A{r}']
                 _uh.value = 'UNCLASSIFIED ITEMS'
                 _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
@@ -2326,7 +2331,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _e5_totals, _wf_qty, _license_balance, _pool_10_be,
             )
 
-            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description'], 1):
+            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
                 _hdr(ws, r, col, h)
             r += 1
 
@@ -2349,11 +2354,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _cell(ws, r, 4, '-', fill=_rf, align='center')
                 _cell(ws, r, 5, _pc, fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 6, _e5_first_desc.get(_lbl, ''), fill=_rf)
+                _cell(ws, r, 7, _license_balance - _e5_planned, fill=_rf, align='right', num_fmt='#,##0.00')
                 r += 1
 
             if _e5_unclassified:
                 r += 1
-                ws.merge_cells(f'A{r}:F{r}')
+                ws.merge_cells(f'A{r}:G{r}')
                 _uh = ws[f'A{r}']
                 _uh.value = 'UNCLASSIFIED ITEMS'
                 _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)

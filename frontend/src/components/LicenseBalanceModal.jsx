@@ -291,7 +291,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             const blob = new Blob([response.data], { type: 'application/pdf' });
             const url = window.URL.createObjectURL(blob);
             window.open(url, '_blank');
-            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
 
             toast.success('PDF file is being generated!');
         } catch (error) {
@@ -477,7 +477,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                             const blob = new Blob([response.data], { type: 'application/pdf' });
                                                                             const url = window.URL.createObjectURL(blob);
                                                                             window.open(url, '_blank');
-                                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                                            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
                                                                         } catch {
                                                                             toast.error('Failed to load merged documents');
                                                                         }

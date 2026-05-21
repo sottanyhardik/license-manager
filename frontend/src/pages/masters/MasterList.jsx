@@ -1173,7 +1173,7 @@ export default function MasterList() {
                                                             const r = await api.get(`licenses/${item.id}/merged-documents/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
                                                             const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
                                                             window.open(url, '_blank');
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
                                                         } catch (err) {
                                                             if (err.response?.status === 404) {
                                                                 toast.warning('Document files are not available on this server. The files may not have been uploaded yet.');
@@ -1233,7 +1233,7 @@ export default function MasterList() {
                                                             const r = await api.get(`licenses/${item.id}/balance-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
                                                             const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
                                                             window.open(url, '_blank');
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
                                                         } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate PDF'); }
                                                     }} title="Download PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-file-pdf"></i>
@@ -1244,7 +1244,7 @@ export default function MasterList() {
                                                             const blob = new Blob([r.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
                                                             const url = window.URL.createObjectURL(blob);
                                                             const a = document.createElement('a'); a.href = url; a.download = `${item.license_number || item.id}-balance.xlsx`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
                                                         } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate Excel'); }
                                                     }} title="Download Excel" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-file-earmark-excel"></i>
@@ -1740,7 +1740,7 @@ export default function MasterList() {
                                             const blob = new Blob([response.data], { type: 'application/pdf' });
                                             const url = window.URL.createObjectURL(blob);
                                             window.open(url, '_blank');
-                                            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
                                         } catch (err) {
                                             toast.error(err?.response?.data?.error || 'Failed to generate ledger PDF');
                                         }

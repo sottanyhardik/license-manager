@@ -908,7 +908,7 @@ export default function ItemPivotReport() {
                                                                                     const blob = new Blob([response.data], { type: 'application/pdf' });
                                                                                     const url = window.URL.createObjectURL(blob);
                                                                                     window.open(url, '_blank');
-                                                                                    setTimeout(() => window.URL.revokeObjectURL(url), 100);
+                                                                                    setTimeout(() => window.URL.revokeObjectURL(url), 60000);
                                                                                 } catch {
                                                                                     toast.error('Failed to load merged documents');
                                                                                 }

@@ -1116,11 +1116,21 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     Q(direction__in=['SALE', 'COMMISSION_SALE'], from_company_id=company_id)
                 )
 
-            trades = trades_query.prefetch_related(
+            trades = list(trades_query.prefetch_related(
                 'incentive_lines__incentive_license',
                 'from_company',
                 'to_company',
-            ).distinct().order_by('invoice_date', 'id')
+            ).distinct())
+
+            # Sort: purchases always before sales (regardless of date) so that
+            # per-sale P/L can be computed against the accumulated purchase cost,
+            # even when a sale is recorded before its corresponding purchase
+            # in chronological order (mirrors the DFIA branch above).
+            trades.sort(key=lambda t: (
+                t.direction not in ('PURCHASE', 'COMMISSION_PURCHASE'),
+                t.invoice_date or timezone.now().date(),
+                t.id,
+            ))
 
             # Process trades
             # The queryset is already filtered to only trades involving the company (from_company or to_company),
@@ -2826,6 +2836,9 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
             if not company:
                 continue
 
+            # Compute per-license amount for this trade so a multi-license invoice
+            # does not attribute its FULL total to each license it touches.
+            license_amounts = {}  # license_id -> Decimal sum of line.amount_inr
             if trade.license_type == 'DFIA':
                 lic_entries = list({
                     (line.sr_number.license.id,
@@ -2836,6 +2849,10 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     if line.sr_number and line.sr_number.license
                     and (not terms or any(t.lower() in line.sr_number.license.license_number.lower() for t in terms))
                 })
+                for line in trade.lines.all():
+                    if line.sr_number and line.sr_number.license:
+                        _lid = line.sr_number.license.id
+                        license_amounts[_lid] = license_amounts.get(_lid, Decimal('0')) + (line.amount_inr or Decimal('0'))
             else:
                 lic_entries = list({
                     (tl.incentive_license.id,
@@ -2846,13 +2863,10 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                     if tl.incentive_license
                     and (not terms or any(t.lower() in tl.incentive_license.license_number.lower() for t in terms))
                 })
-
-            amount = trade.total_amount or Decimal('0')
-            row = {
-                'trade_id': trade.id,
-                'invoice_date': str(trade.invoice_date) if trade.invoice_date else '-',
-                'amount': float(amount),
-            }
+                for tl in trade.incentive_lines.all():
+                    if tl.incentive_license:
+                        _lid = tl.incentive_license.id
+                        license_amounts[_lid] = license_amounts.get(_lid, Decimal('0')) + (tl.amount_inr or Decimal('0'))
 
             for lic_id, lic_num, lic_date, lic_type in lic_entries:
                 if lic_id not in licenses_dict:
@@ -2875,6 +2889,12 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                         'sale_total': Decimal('0'),
                     }
 
+                amount = license_amounts.get(lic_id, Decimal('0'))
+                row = {
+                    'trade_id': trade.id,
+                    'invoice_date': str(trade.invoice_date) if trade.invoice_date else '-',
+                    'amount': float(amount),
+                }
                 if trade.direction == 'PURCHASE':
                     licenses_dict[lic_id]['companies'][cid]['purchases'].append(row)
                     licenses_dict[lic_id]['companies'][cid]['purchase_total'] += amount

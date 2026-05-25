@@ -15,7 +15,7 @@ from license.models import LicenseDetailsModel
 SERVER_BASE_URL = os.getenv('SERVER_BASE_URL', 'https://license-manager.duckdns.org')
 SERVER_API = f"{SERVER_BASE_URL}/api/license-actions/update-license-transfer/"
 SERVER_AUTH_URL = f"{SERVER_BASE_URL}/api/auth/login/"
-SERVER_USERNAME = os.getenv('SERVER_USERNAME', 'admin')
+SERVER_USERNAME = os.getenv('SERVER_USERNAME', 'hardik')
 SERVER_PASSWORD = os.getenv('SERVER_PASSWORD', 'admin@123')
 
 # IP fallbacks use plain HTTP so SSL certificates are not involved — no verify=False needed

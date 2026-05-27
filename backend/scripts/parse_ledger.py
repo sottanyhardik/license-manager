@@ -2,10 +2,10 @@ import datetime
 from django.db import transaction
 from django.db.models import Q
 
-from bill_of_entry.models import BillOfEntryModel, RowDetails
-from core.models import CompanyModel, PortModel
-from core.scripts.calculate_balance import update_balance_values
-from license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
+from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.core.models import CompanyModel, PortModel
+from apps.core.scripts.calculate_balance import update_balance_values
+from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
 
 
 def parse_date(date_str):
@@ -123,8 +123,8 @@ def bulk_get_or_create_license_items(type_credit_list, license, skip_signals=Fal
         skip_signals: If True, temporarily disable post_save signals during bulk operations
     """
     from django.db.models.signals import post_save, post_delete
-    from license.models import update_balance
-    from license.signals import update_license_on_import_item_change, update_license_on_import_item_delete
+    from apps.license.models import update_balance
+    from apps.license.signals import update_license_on_import_item_change, update_license_on_import_item_delete
 
     license_import_list = [
         LicenseImportItemsModel(
@@ -308,7 +308,7 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
         skip_signals: If True, temporarily disable post_save signals during bulk operations
     """
     from django.db.models.signals import post_save, post_delete
-    from bill_of_entry.models import update_stock, delete_stock
+    from apps.bill_of_entry.models import update_stock, delete_stock
 
     # Skip rows that are missing licence (import item) — can't create RowDetails without it
     valid_items = [item for item in boe_row if item.get('licence') is not None]
@@ -389,7 +389,7 @@ def _recalculate_boe_exchange_rates_for_rows(debit_row):
     """After bulk_create (which skips signals), force-recalculate exchange_rate for
     each unique BOE in the debit rows. force=True always writes the computed rate,
     overriding whatever was stored before (ledger is the authoritative source)."""
-    from bill_of_entry.models import _recalculate_boe_exchange_rate
+    from apps.bill_of_entry.models import _recalculate_boe_exchange_rate
     seen = set()
     for data in debit_row:
         boe = data.get('boe')

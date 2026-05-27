@@ -148,7 +148,7 @@ export default function AdvancedFilter({
                     </div>
                 );
 
-            case "date_range":
+            case "date_range": {
                 const fromValue = filterValues[`${fieldName}_from`] || "";
                 const toValue = filterValues[`${fieldName}_to`] || "";
 
@@ -183,8 +183,9 @@ export default function AdvancedFilter({
                         </div>
                     </div>
                 );
+            }
 
-            case "range":
+            case "range": {
                 const minField = config.min_field || `${fieldName}_min`;
                 const maxField = config.max_field || `${fieldName}_max`;
 
@@ -217,6 +218,7 @@ export default function AdvancedFilter({
                         </div>
                     </div>
                 );
+            }
 
             case "exact":
                 // Check if this field has choices (dropdown select)
@@ -349,7 +351,7 @@ export default function AdvancedFilter({
                     </div>
                 );
 
-            case "button_group":
+            case "button_group": {
                 // Button group filter (e.g., All | Yes | No | Incomplete)
                 const buttonGroupChoices = config.choices?.map(choice => {
                     if (Array.isArray(choice)) {
@@ -392,8 +394,9 @@ export default function AdvancedFilter({
                         </div>
                     </div>
                 );
+            }
 
-            case "choice":
+            case "choice": {
                 // Choice field filter with static multi-select
                 const choiceOptions = config.choices?.map(choice => {
                     if (Array.isArray(choice)) {
@@ -455,6 +458,7 @@ export default function AdvancedFilter({
                         />
                     </div>
                 );
+            }
 
             case "exclude_fk":
                 // Exclude Foreign Key filter with async multi-select (debounced)

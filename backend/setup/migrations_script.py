@@ -15,9 +15,9 @@ def null_all_export_items():
 
 def delete_all_items():
     from django.db import models, connection
-    from core.models import ItemNameModel
+    from apps.core.models import ItemNameModel
     ItemNameModel.objects.all().delete()
-    from core.models import ItemHeadModel
+    from apps.core.models import ItemHeadModel
     ItemHeadModel.objects.all().delete()
     with connection.cursor() as cursor:
         cursor.execute("ALTER SEQUENCE core_itemnamemodel_id_seq RESTART WITH 1;")

@@ -106,8 +106,8 @@ export const PURCHASE_STATUS = {
 };
 
 // Environment
-export const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
-export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+export const IS_DEVELOPMENT = import.meta.env.DEV;
+export const IS_PRODUCTION = import.meta.env.PROD;
 
 // Validation Rules
 export const VALIDATION = {

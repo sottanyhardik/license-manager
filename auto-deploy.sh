@@ -31,7 +31,19 @@ SERVER_USER="django"
 ALL_SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
 BRANCH="${1:-feature/Version5}"
-PASSWORD="admin"
+
+# Deploy password is read from the DEPLOY_PASSWORD env var; never committed.
+# Prefer: SSH key auth + NOPASSWD sudo for the django user (then leave this unset).
+PASSWORD="${DEPLOY_PASSWORD:-}"
+
+if [ -z "$PASSWORD" ] && ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$SERVER_USER@${ALL_SERVERS[0]}" true 2>/dev/null; then
+    echo "ERROR: DEPLOY_PASSWORD env var is empty and SSH key auth is not configured."
+    echo "Fix one of:"
+    echo "  1. Set up SSH key auth + passwordless sudo for the django user (recommended)."
+    echo "  2. Export DEPLOY_PASSWORD=... in your shell before running this script."
+    echo "Hardcoded passwords in the script have been removed for security."
+    exit 1
+fi
 
 # Target: single server or all
 if [ -n "$2" ]; then
@@ -132,6 +144,12 @@ cd $SERVER_PATH/backend
 pip install --upgrade pip --quiet
 pip install --upgrade -r requirements.txt --quiet
 echo_ok "Python dependencies installed"
+
+echo_info "Reconciling migration history (squashed-initial layout)..."
+# Idempotent. Detects orphan rows from the pre-squash layout and replaces
+# them with the new single-initial rows in one transaction. No-op on
+# fresh DBs and on DBs already on the new layout.
+python manage.py reset_migration_history 2>&1 | sed 's/^/    /'
 
 echo_info "Running database migrations..."
 python manage.py makemigrations --no-input 2>&1 | grep -E "No changes|Created|Apply" || true
@@ -279,6 +297,22 @@ sleep 2
 cd $SERVER_PATH/backend && source $SERVER_PATH/venv/bin/activate
 celery -A lmanagement purge -f 2>/dev/null || true
 echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery
+
+# ── 8b. Post-deploy health check ─────────────────────────────
+echo_info "Waiting for the app to come up..."
+sleep 3
+HEALTH_URL="https://${SERVER_DOMAIN}/api/health/"
+for attempt in 1 2 3 4 5; do
+    if curl -fsS --max-time 10 "\$HEALTH_URL" | grep -q '"status":"ok"'; then
+        echo_ok "Health check passed on attempt \$attempt"
+        break
+    fi
+    if [ "\$attempt" = "5" ]; then
+        echo_err "Health check failed after 5 attempts. Server may be degraded."
+        exit 1
+    fi
+    sleep 3
+done
 
 # ── 9. Summary ───────────────────────────────────────────────
 echo ""

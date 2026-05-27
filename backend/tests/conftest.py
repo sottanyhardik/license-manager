@@ -12,11 +12,11 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 # Import models
-from core.models import Company, Port, ExchangeRate
-from license.models import License, LicenseImportItem
-from trade.models import Trade, TradeLine
-from bill_of_entry.models import BillOfEntry, BillOfEntryItemDetail
-from allotment.models import Allotment
+from apps.core.models import Company, Port, ExchangeRate
+from apps.license.models import License, LicenseImportItem
+from apps.trade.models import Trade, TradeLine
+from apps.bill_of_entry.models import BillOfEntry, BillOfEntryItemDetail
+from apps.allotment.models import Allotment
 
 User = get_user_model()
 fake = Faker()

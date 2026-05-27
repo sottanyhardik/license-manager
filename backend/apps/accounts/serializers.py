@@ -42,6 +42,9 @@ class UserSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "date_joined", "is_superuser", "is_staff", "roles")
 
+    def get_roles(self, obj):
+        return obj.get_role_codes()
+
 
 class UserManagementSerializer(serializers.ModelSerializer):
     """Serializer for admin user management — includes role assignment."""

@@ -18,8 +18,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from core.constants import DEC_0
-from license.services.balance_calculator import LicenseBalanceCalculator, ItemBalanceCalculator
+from apps.core.constants import DEC_0
+from apps.license.services.balance_calculator import LicenseBalanceCalculator, ItemBalanceCalculator
 
 User = get_user_model()
 

@@ -5,15 +5,18 @@ from django.views.generic import TemplateView
 from django.views.static import serve
 from django.conf import settings
 
+from apps.core.views.health import HealthView
+
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/auth/", include("accounts.urls")),  # auth endpoints
-    path("api/", include("license.urls")),  # license CRUD + schema
-    path("api/", include("allotment.urls")),  # allotment CRUD
-    path("api/", include("bill_of_entry.urls")),  # bill of entry CRUD
-    path("api/", include("trade.urls")),  # trade in/out CRUD
-    path("api/", include("tasks.urls")),  # personal tasks / todo
-    path("api/masters/", include("core.urls")),  # options/select endpoints
+    path("api/health/", HealthView.as_view(), name="api-health"),
+    path("api/auth/", include("apps.accounts.urls")),
+    path("api/", include("apps.license.urls")),
+    path("api/", include("apps.allotment.urls")),
+    path("api/", include("apps.bill_of_entry.urls")),
+    path("api/", include("apps.trade.urls")),
+    path("api/", include("apps.tasks.urls")),
+    path("api/masters/", include("apps.core.urls")),
 
     # Serve media files in development
     re_path(

@@ -22,3 +22,8 @@ pyzbar==0.1.9
 requests>=2.31.0
 psycopg==3.3.3
 docxtpl==0.20.2
+
+# numpy is used by apps.core.scripts.calculation.optimize_milk_distribution
+# (called from apps.license.models.get_glass_formers).
+# 2.1+ has prebuilt wheels for Python 3.14.
+numpy>=2.1,<3

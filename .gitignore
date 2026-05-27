@@ -70,3 +70,4 @@ Thumbs.db
 master-audit-*/
 phase3-replication-*/
 /sample/
+.aider*

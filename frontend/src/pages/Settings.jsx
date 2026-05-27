@@ -19,12 +19,6 @@ export default function Settings() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
-
-    // Guard: superusers only — hooks must all be declared before this
-    if (currentUser && !currentUser.is_superuser) {
-        return <Navigate to="/403" replace />;
-    }
-
     const [formData, setFormData] = useState({
         username: "",
         email: "",
@@ -36,11 +30,15 @@ export default function Settings() {
     });
 
     useEffect(() => {
+        if (!currentUser?.is_superuser) {
+            setLoading(false);
+            return;
+        }
         loadUsers();
         api.get("auth/users/available-roles/")
             .then(r => setAvailableRoles(r.data))
             .catch(() => {});
-    }, []);
+    }, [currentUser?.is_superuser]);
 
     const loadUsers = async () => {
         try {
@@ -128,6 +126,10 @@ export default function Settings() {
             toast.error("Failed to delete user");
         }
     };
+
+    if (currentUser && !currentUser.is_superuser) {
+        return <Navigate to="/403" replace />;
+    }
 
     if (loading) {
         return (

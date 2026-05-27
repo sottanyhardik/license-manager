@@ -1,8 +1,4 @@
-"""
-Django settings for lmanagement project (cleaned + modernized).
-For Django 5.x with DRF + JWT + Celery + Redis + Vite/React frontend.
-"""
-
+# FILE: lmanagement/settings.py
 import os
 from datetime import timedelta
 from pathlib import Path

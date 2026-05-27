@@ -34,9 +34,6 @@ class UserSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
     is_staff = serializers.BooleanField(read_only=True)
 
-    def get_roles(self, obj):
-        return obj.get_role_codes()
-
     class Meta:
         model = User
         fields = (

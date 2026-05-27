@@ -86,6 +86,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         upload_to="avatars/",
         null=True,
         blank=True,
+        validators=[FileExtensionValidator(allowed_extensions=['png', 'jpg', 'jpeg'])],
     )
 
     objects = UserManager()
@@ -116,3 +117,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     def get_role_codes(self) -> list:
         """Return a list of group names this user belongs to."""
         return list(self.groups.values_list('name', flat=True))
+
+    def is_admin(self):
+        """Return True if the user is an admin."""
+        return self.is_superuser

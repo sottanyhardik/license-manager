@@ -15,9 +15,30 @@ class Command(BaseCommand):
     help = "Create and backfill split license sub-tables when migration state was faked."
 
     def handle(self, *args, **options):
+        self._repair_model_columns(LicenseDetailsModel)
         self._repair_lookup_fks()
         self._repair_split_tables()
         self._report_counts()
+
+    def _repair_model_columns(self, model):
+        table_name = model._meta.db_table
+        columns = self._columns(table_name)
+        missing_fields = [
+            field
+            for field in model._meta.local_fields
+            if not field.primary_key and field.column not in columns
+        ]
+        if not missing_fields:
+            self.stdout.write(f"{table_name}: model columns OK")
+            return
+
+        with connection.schema_editor() as schema_editor:
+            for field in missing_fields:
+                schema_editor.add_field(model, field)
+                columns.add(field.column)
+                self.stdout.write(
+                    self.style.WARNING(f"{table_name}.{field.column}: created")
+                )
 
     def _repair_lookup_fks(self):
         columns = self._columns("license_licensedetailsmodel")

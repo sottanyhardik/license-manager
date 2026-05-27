@@ -251,35 +251,6 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
         setEditingItems([]);
     };
 
-    const handleRestrictedToggle = async (itemId, isRestricted) => {
-        try {
-            // Update via the license-items API endpoint
-            // Using the item-specific endpoint prevents overriding other concurrent changes
-            await api.patch(`license-items/${itemId}/`, {
-                is_restricted: isRestricted
-            });
-
-            // Update local state
-            setLicenseData(prevData => ({
-                ...prevData,
-                import_license: prevData.import_license.map(importItem => {
-                    if (importItem.id === itemId) {
-                        return {
-                            ...importItem,
-                            is_restricted: isRestricted
-                        };
-                    }
-                    return importItem;
-                })
-            }));
-
-            toast.success(`Item ${isRestricted ? 'marked as restricted' : 'unmarked as restricted'}`);
-        } catch (error) {
-            console.error('Error updating is_restricted:', error);
-            toast.error('Failed to update restriction status');
-        }
-    };
-
     const handleDownloadPDF = async () => {
         try {
             toast.info('Generating PDF file...');

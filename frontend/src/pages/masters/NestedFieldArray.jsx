@@ -1,4 +1,3 @@
-import {useState} from "react";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
 import Select from "react-select";
@@ -88,8 +87,6 @@ export default function NestedFieldArray({
 
         // Bill of Entry calculations for item_details
         if (entityName === "bill-of-entries" && fieldKey === "item_details") {
-            const currentItem = {...newArray[index], ...updates};
-
             // Calculate cif_fc from cif_inr when cif_inr changes
             if (fieldName === "cif_inr" && fieldValue && formData.exchange_rate) {
                 const cifInr = parseFloat(fieldValue);

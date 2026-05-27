@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import api from "../api/axios";
 import TransferLetterForm from "../components/TransferLetterForm";
 
-export default function BOETransferLetter({ boeId: propId, isModal = false, onClose }) {
+export default function BOETransferLetter({ boeId: propId, isModal = false }) {
     const {id: paramId} = useParams();
     const navigate = useNavigate();
 
@@ -14,7 +14,7 @@ export default function BOETransferLetter({ boeId: propId, isModal = false, onCl
     const [boe, setBoe] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [success, setSuccess] = useState("");
+    const [success] = useState("");
 
     useEffect(() => {
         const fetchBOE = async () => {

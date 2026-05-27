@@ -318,7 +318,7 @@ export default function TransferLetterForm({
                                             isClearable
                                             isDisabled={disabled}
                                             styles={{
-                                                control: (base, state) => ({
+                                                control: (base) => ({
                                                     ...base,
                                                     minHeight: '34px',
                                                     fontSize: '0.875rem',

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
-import { formatDate } from '../utils/dateFormatter';
 import { generatePDF, generateExcel } from '../utils/ledgerExport';
 import AsyncSelectField from '../components/AsyncSelectField';
 
@@ -50,10 +49,6 @@ function LicenseWiseLedger({ data, navigate }) {
                         </thead>
                         <tbody>
                             {lic.companies.map((company, ci) => {
-                                const allRows = [
-                                    ...company.purchases.map(r => ({ ...r, dir: 'PURCHASE' })),
-                                    ...company.sales.map(r => ({ ...r, dir: 'SALE' })),
-                                ];
                                 return (
                                     <React.Fragment key={company.company_id}>
                                         {/* Company name row */}
@@ -63,7 +58,7 @@ function LicenseWiseLedger({ data, navigate }) {
                                             </td>
                                         </tr>
                                         {/* Purchase rows */}
-                                        {company.purchases.map((row, ri) => (
+                                        {company.purchases.map((row) => (
                                             <tr key={`p-${row.trade_id}`} style={{ background: '#f0fdf4', borderBottom: '1px solid #d1fae5' }}>
                                                 <td style={{ padding: '4px 12px 4px 24px', color: '#374151' }}>
                                                     <i className="bi bi-arrow-down-circle text-success me-1"></i>Purchase
@@ -75,7 +70,7 @@ function LicenseWiseLedger({ data, navigate }) {
                                             </tr>
                                         ))}
                                         {/* Sale rows */}
-                                        {company.sales.map((row, ri) => (
+                                        {company.sales.map((row) => (
                                             <tr key={`s-${row.trade_id}`} style={{ background: '#fef2f2', borderBottom: '1px solid #fecaca' }}>
                                                 <td style={{ padding: '4px 12px 4px 24px', color: '#374151' }}>
                                                     <i className="bi bi-arrow-up-circle text-danger me-1"></i>Sale
@@ -119,9 +114,9 @@ function LicenseWiseLedger({ data, navigate }) {
 
 export default function LicenseLedger() {
     const navigate = useNavigate();
-    const [licenses, setLicenses] = useState([]);
+    const [, setLicenses] = useState([]);
     const [summary, setSummary] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [, setLoading] = useState(true);
     const [companyWiseData, setCompanyWiseData] = useState(null);
     const [companyWiseLoading, setCompanyWiseLoading] = useState(false);
 
@@ -316,46 +311,6 @@ export default function LicenseLedger() {
         }));
     };
 
-    const formatCurrency = (value, currency) => {
-        const formatted = formatIndianNumber(value, 2);
-        return currency === 'USD' ? `$ ${formatted}` : `₹ ${formatted}`;
-    };
-
-    const getSoldStatusBadge = (status) => {
-        const badges = {
-            'NO': { bg: 'success', text: 'Available', icon: 'bi-check-circle' },
-            'PARTIAL': { bg: 'warning', text: 'Partial', icon: 'bi-hourglass-split' },
-            'YES': { bg: 'danger', text: 'Sold Out', icon: 'bi-x-circle' }
-        };
-        const badge = badges[status] || { bg: 'secondary', text: status, icon: 'bi-question-circle' };
-        return (
-            <span className={`badge bg-${badge.bg}`} style={{ fontSize: '0.8rem', fontWeight: '500' }}>
-                <i className={`bi ${badge.icon} me-1`}></i>
-                {badge.text}
-            </span>
-        );
-    };
-
-    const handleViewDetails = (license) => {
-        const companyId = filters.company?.value || filters.company;
-        const path = companyId
-            ? `/license-ledger/${license.id}/${companyId}`
-            : `/license-ledger/${license.id}`;
-        navigate(path, {
-            state: { license_type: license.license_type }
-        });
-    };
-
-    const handleCreateTrade = (license) => {
-        navigate('/trades/new', {
-            state: {
-                license_type: license.license_type === 'DFIA' ? 'DFIA' : 'INCENTIVE',
-                license_id: license.id,
-                license_number: license.license_number
-            }
-        });
-    };
-
     const [bulkExporting, setBulkExporting] = useState(false);
 
     const fetchFullLedgerDetails = async () => {
@@ -366,7 +321,7 @@ export default function LicenseLedger() {
             try {
                 const { data } = await api.get(`license-ledger/${lic.license_id}/ledger_detail/`);
                 results.push(data);
-            } catch (_) { /* skip failed */ }
+            } catch (e) { /* skip failed */ }
         }
         return results;
     };

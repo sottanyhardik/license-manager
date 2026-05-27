@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 /**
  * Custom hook to handle browser back button with filter preservation
@@ -10,12 +9,10 @@ import { useNavigate } from 'react-router-dom';
  * @param {boolean} enabled - Whether to enable the back button handler (default: true)
  */
 export const useBackButton = (entityName, enabled = true) => {
-    const navigate = useNavigate();
-
     useEffect(() => {
         if (!enabled) return;
 
-        const handlePopState = (event) => {
+        const handlePopState = () => {
             // Set flag to restore filters when using browser back button
             try {
                 sessionStorage.setItem(`${entityName}ListFilters`, JSON.stringify({

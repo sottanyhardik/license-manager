@@ -24,7 +24,6 @@ export default function DataTable({
     onDelete,
     customActions = [],
     loading = false,
-    basePath = "",
     inlineEditable = [],
     onInlineUpdate,
     customCellRender = {},

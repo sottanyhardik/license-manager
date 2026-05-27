@@ -1,11 +1,9 @@
 import {useContext, useState} from "react";
-import {useNavigate} from "react-router-dom";
 import {AuthContext} from "../context/AuthContext";
 import api from "../api/axios";
 
 export default function Profile() {
     const {user, loginSuccess} = useContext(AuthContext);
-    const navigate = useNavigate();
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");

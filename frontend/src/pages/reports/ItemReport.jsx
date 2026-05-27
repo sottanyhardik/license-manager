@@ -34,7 +34,6 @@ export default function ItemReport() {
     // Inline edit states
     const [editingCell, setEditingCell] = useState(null); // {itemId, field}
     const [editValue, setEditValue] = useState("");
-    const [togglingRestriction, setTogglingRestriction] = useState({});
 
     // Debounce all filters together - wait 500ms after last change
     const filters = useMemo(() => ({
@@ -289,7 +288,7 @@ export default function ItemReport() {
     const saveEdit = async (item) => {
         if (!editingCell) return;
 
-        const {itemId, field} = editingCell;
+        const {field} = editingCell;
 
         try {
             // Update notes or condition_sheet on the license
@@ -377,45 +376,6 @@ export default function ItemReport() {
             }
         } catch (error) {
             toast.error('Failed to update item names. Please try again.');
-        }
-    };
-
-    const handleToggleRestriction = async (item, e) => {
-        e.stopPropagation();
-
-        if (togglingRestriction[item.id]) return; // Prevent double clicks
-
-        setTogglingRestriction({...togglingRestriction, [item.id]: true});
-
-        try {
-            const newValue = !item.is_restricted;
-            await api.patch(`license-items/${item.id}/`, {
-                is_restricted: newValue
-            });
-
-            // Update the item in the list
-            const updatedItems = reportData.items.map(i => {
-                if (i.id === item.id) {
-                    return {...i, is_restricted: newValue};
-                }
-                // Update all items from the same license (they share is_restricted)
-                if (i.license_id === item.license_id) {
-                    return {...i, is_restricted: newValue};
-                }
-                return i;
-            });
-
-            setReportData({
-                ...reportData,
-                items: updatedItems
-            });
-
-            toast.success(`Is Restricted updated to ${newValue ? 'Yes' : 'No'}`);
-        } catch (err) {
-            console.error('Failed to toggle restriction:', err);
-            toast.error('Failed to update Is Restricted');
-        } finally {
-            setTogglingRestriction({...togglingRestriction, [item.id]: false});
         }
     };
 

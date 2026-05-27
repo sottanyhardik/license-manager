@@ -1885,10 +1885,6 @@ export default function MasterList() {
                                         if (typeof val === 'object') return JSON.stringify(val);
                                         return String(val);
                                     };
-                                    const primaryCol = cols[0];
-                                    const primaryVal = primaryCol ? getVal(primaryCol) : null;
-                                    const badgeCols = cols.slice(1, 5);
-                                    const extraCols = cols.slice(5);
                                     return (
                                         <div key={item.id} style={{
                                             display: 'flex',

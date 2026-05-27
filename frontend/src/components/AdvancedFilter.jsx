@@ -58,7 +58,7 @@ export default function AdvancedFilter({
             // Update filter values (excluding search)
             const {search: _s, ...filtersWithoutSearch} = initialFilters;
             // Merge with existing filterValues to preserve any local changes
-            setFilterValues(prev => {
+            setFilterValues(() => {
                 const merged = {...defaultFilters, ...filtersWithoutSearch};
                 return merged;
             });
@@ -111,10 +111,6 @@ export default function AdvancedFilter({
 
         return () => clearTimeout(timeoutId);
     }, [searchTerm, filterValues, onFilterChange]);
-
-    const handleSearchChange = (e) => {
-        setSearchTerm(e.target.value);
-    };
 
     const handleFilterChange = (field, value) => {
         setFilterValues(prev => ({

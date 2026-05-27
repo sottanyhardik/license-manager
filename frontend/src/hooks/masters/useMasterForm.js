@@ -6,7 +6,6 @@
  */
 
 import {useCallback, useEffect, useState} from 'react';
-import {useNavigate} from 'react-router-dom';
 import {toast} from 'react-toastify';
 import {masterApi} from '../../services/api';
 import {formCalculator} from '../../services/calculators';
@@ -18,8 +17,6 @@ export const useMasterForm = (endpoint, recordId = null, options = {}) => {
         onError,
         enableAutoCalculation = true,
     } = options;
-
-    const navigate = useNavigate();
 
     // State
     const [formData, setFormData] = useState({});

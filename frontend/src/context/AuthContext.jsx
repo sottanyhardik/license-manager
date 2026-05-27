@@ -2,6 +2,7 @@ import axios from "axios";
 import {createContext, useCallback, useEffect, useRef, useState} from "react";
 import api from "../api/axios";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext();
 
 // ─── Session config ───────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const [initialLoading, setInitialLoading] = useState(true);
     const [tableLoading, setTableLoading] = useState(false);
     const [saving, setSaving] = useState({});
-    const [search, setSearch] = useState("");
+    const [search] = useState("");
     const [filters, setFilters] = useState({
         description: "",
         exporter: "",
@@ -56,7 +56,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [deletingItems, setDeletingItems] = useState({});
-    const [togglingRestriction, setTogglingRestriction] = useState({});
     const [initialAllocationData, setInitialAllocationData] = useState({});
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -516,23 +515,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             toast.error(errorMsg);
         } finally{
             setDeletingItems({...deletingItems, [allotmentItemId]: false});
-        }
-    };
-
-    const handleToggleRestriction = async (item) => {
-        if (togglingRestriction[item.id]) return;
-        setTogglingRestriction(prev => ({...prev, [item.id]: true}));
-        try {
-            const newValue = !item.is_restricted;
-            await api.patch(`license-items/${item.id}/`, { is_restricted: newValue });
-            setAvailableItems(prev => prev.map(i =>
-                i.id === item.id ? {...i, is_restricted: newValue} : i
-            ));
-            toast.success(`Item marked as ${newValue ? 'Restricted' : 'Open'}`);
-        } catch {
-            toast.error('Failed to update restriction status');
-        } finally {
-            setTogglingRestriction(prev => ({...prev, [item.id]: false}));
         }
     };
 

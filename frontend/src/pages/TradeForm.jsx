@@ -462,50 +462,11 @@ export default function TradeForm() {
         }));
     };
 
-    const handleAddPayment = () => {
-        setFormData(prev => ({
-            ...prev,
-            payments: [...prev.payments, {
-                date: new Date(),
-                amount: 0,
-                note: ""
-            }]
-        }));
-    };
-
-    const handleRemovePayment = (index) => {
-        setFormData(prev => ({
-            ...prev,
-            payments: prev.payments.filter((_, i) => i !== index)
-        }));
-    };
-
-    const handlePaymentChange = (index, field, value) => {
-        const updatedPayments = [...formData.payments];
-        updatedPayments[index][field] = value;
-        setFormData(prev => ({
-            ...prev,
-            payments: updatedPayments
-        }));
-    };
-
     const calculateTotal = () => {
         if (formData.license_type === "INCENTIVE") {
             return formData.incentive_lines.reduce((sum, line) => sum + (parseFloat(line.amount_inr) || 0), 0);
         }
         return formData.lines.reduce((sum, line) => sum + (parseFloat(line.amount_inr) || 0), 0);
-    };
-
-    const calculateTotalPaid = () => {
-        return formData.payments.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
-    };
-
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        setFormData(prev => ({
-            ...prev,
-            purchase_invoice_copy: file
-        }));
     };
 
     // Validation function for trade form

@@ -17,7 +17,7 @@ export default function ItemPivotReport() {
     // Filter states
     const [selectedCompanies, setSelectedCompanies] = useState([]);
     const [excludeCompanies, setExcludeCompanies] = useState([]);
-    const [sionNorms, setSionNorms] = useState([]);
+    const [, setSionNorms] = useState([]);
     const [filtersCollapsed, setFiltersCollapsed] = useState(false);
     const [activeNormTab, setActiveNormTab] = useState(null);
     const [availableNorms, setAvailableNorms] = useState([]);

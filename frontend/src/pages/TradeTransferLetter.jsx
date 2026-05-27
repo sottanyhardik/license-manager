@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import api from "../api/axios";
 import TransferLetterForm from "../components/TransferLetterForm";
 
-export default function TradeTransferLetter({ tradeId: propId, isModal = false, onClose }) {
+export default function TradeTransferLetter({ tradeId: propId, isModal = false }) {
     const {id: paramId} = useParams();
     const navigate = useNavigate();
 
@@ -14,7 +14,7 @@ export default function TradeTransferLetter({ tradeId: propId, isModal = false, 
     const [trade, setTrade] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [success, setSuccess] = useState("");
+    const [success] = useState("");
 
     useEffect(() => {
         const fetchTrade = async () => {

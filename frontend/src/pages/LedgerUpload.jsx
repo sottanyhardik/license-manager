@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useFileUpload } from '../hooks';
-import axios from 'axios';
 import api from '../api/axios';
 
 const UPLOAD_BATCH_SIZE = 20;

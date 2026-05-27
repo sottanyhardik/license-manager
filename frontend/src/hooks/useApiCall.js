@@ -22,8 +22,6 @@ export const useApiCall = (options = {}) => {
     const {
         onSuccess,
         onError,
-        showErrorAlert = true,
-        showSuccessAlert = true,
     } = options;
 
     const [loading, setLoading] = useState(false);
@@ -31,7 +29,7 @@ export const useApiCall = (options = {}) => {
     const [data, setData] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    const execute = useCallback(async (apiFunction, config = {}) => {
+    const execute = useCallback(async (apiFunction) => {
         setLoading(true);
         setError(null);
         setSuccess(false);

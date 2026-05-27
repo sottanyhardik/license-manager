@@ -53,14 +53,14 @@ INSTALLED_APPS = [
     "corsheaders",
     "whitenoise.runserver_nostatic",
 
-    # Local apps
-    "accounts",
-    "core",
-    "license",
-    "bill_of_entry",
-    "allotment",
-    "trade",
-    "tasks",
+    # Local apps (modules under backend/apps/; app_label preserved via AppConfig)
+    "apps.accounts",
+    "apps.core",
+    "apps.license",
+    "apps.bill_of_entry",
+    "apps.allotment",
+    "apps.trade",
+    "apps.tasks",
 ]
 
 # ---------------------------------------------------------------------
@@ -74,13 +74,13 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     # Disable CSRF for API endpoints (JWT authenticated)
-    "core.middleware.DisableCSRFForAPIMiddleware",
+    "apps.core.middleware.DisableCSRFForAPIMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Activity audit log — must be AFTER AuthenticationMiddleware so request.user is set
-    "core.middleware.ActivityLogMiddleware",
+    "apps.core.middleware.ActivityLogMiddleware",
 ]
 
 ROOT_URLCONF = "lmanagement.urls"
@@ -172,7 +172,7 @@ AUTH_USER_MODEL = "accounts.User"
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework.authentication.SessionAuthentication",  # Session auth for browser
-        "core.authentication.JWTAuthenticationFromQueryParam",  # JWT auth for API
+        "apps.core.authentication.JWTAuthenticationFromQueryParam",  # JWT auth for API
     ),
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend"
@@ -180,7 +180,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardPagination",
+    "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.StandardPagination",
     "PAGE_SIZE": 25,
     "DATETIME_FORMAT": "%d-%m-%Y %H:%M",
     "DATE_FORMAT": "%d-%m-%Y",
@@ -190,8 +190,8 @@ REST_FRAMEWORK = {
     ),
     # Throttling configuration
     "DEFAULT_THROTTLE_CLASSES": [
-        "core.throttling.BurstRateThrottle",  # Short-term burst protection
-        "core.throttling.UserRateThrottle",   # General user throttling
+        "apps.core.throttling.BurstRateThrottle",  # Short-term burst protection
+        "apps.core.throttling.UserRateThrottle",   # General user throttling
     ],
     "DEFAULT_THROTTLE_RATES": {
         # Anonymous users (unauthenticated)
@@ -334,3 +334,8 @@ FRONTEND_URL = "http://localhost:5173"  # update for production
 # ---------------------------------------------------------------------
 EXPIRY_DAY = 60
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
+
+# Company that owns biscuits-side glass-formers heuristic
+# (used in LicenseDetailsModel.get_glass_formers to scope BOE+allotment debits).
+# Override per environment via env var if the owning company differs.
+BISCUIT_COMPANY_ID = int(os.getenv("BISCUIT_COMPANY_ID", "567"))

@@ -185,7 +185,12 @@ def bulk_get_or_create_license_items(type_credit_list, license, skip_signals=Fal
 
 
 def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
-    """Bulk create Bill of Entry records."""
+    """Bulk create Bill of Entry records.
+
+    Dedup is by (bill_of_entry_number, bill_of_entry_date) — matching the unique
+    constraint on the model. If a BOE with the same number+date already exists
+    with a different port, the existing record wins; we do not create a duplicate.
+    """
     # Skip debit rows with missing be_number or port — can't create/find a BOE without them
     type_debit_list = [
         item for item in type_debit_list
@@ -196,7 +201,6 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
 
     unique_bill_entries = {}
 
-    # Normalize date format and deduplicate by (be_number, be_date)
     for item in type_debit_list:
         try:
             date_object = datetime.datetime.strptime(item["be_date"], "%Y/%m/%d")
@@ -206,43 +210,37 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
                 item["be_date"] = item["be_date"].strftime("%Y-%m-%d")
             except AttributeError:
                 pass
-        key = (item["be_number"], item["be_date"], existing_ports[item["port"]])
+        key = (item["be_number"], item["be_date"])
         unique_bill_entries[key] = item
 
-    fetch_numbers = set((k[0], k[1], k[2].id) for k in unique_bill_entries.keys())
-
-    # Fetch existing (be_number, be_date, port) to skip them
     existing = BillOfEntryModel.objects.filter(
-        bill_of_entry_number__in=[k[0] for k in fetch_numbers],
-        bill_of_entry_date__in=[k[1] for k in fetch_numbers],
-        port_id__in=[k[2] for k in fetch_numbers]
+        bill_of_entry_number__in=[k[0] for k in unique_bill_entries.keys()],
+        bill_of_entry_date__in=[k[1] for k in unique_bill_entries.keys()],
     )
 
-    # Build a set of (be_number, be_date, port_model) already in DB
-    # Guard against BOEs that have a null port in the database
     existing_set = set(
-        (be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d'), existing_ports.get(be.port.code) if be.port else None)
+        (be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d'))
         for be in existing
     )
 
     to_create = []
-    for (be_number, be_date, port_id), item in unique_bill_entries.items():
-        if (be_number, be_date, port_id) not in existing_set:
+    for (be_number, be_date), item in unique_bill_entries.items():
+        if (be_number, be_date) not in existing_set:
+            port_model = existing_ports[item["port"]]
             to_create.append(
                 BillOfEntryModel(
                     bill_of_entry_number=be_number,
                     bill_of_entry_date=be_date,
-                    port_id=port_id.id,
+                    port_id=port_model.id,
                 )
             )
 
     with transaction.atomic():
         BillOfEntryModel.objects.bulk_create(to_create)
 
-    # Return all related entries
     result = BillOfEntryModel.objects.filter(
-        bill_of_entry_number__in=[item['be_number'] for item in type_debit_list],
-        bill_of_entry_date__in=[item['be_date'] for item in type_debit_list]
+        bill_of_entry_number__in=[k[0] for k in unique_bill_entries.keys()],
+        bill_of_entry_date__in=[k[1] for k in unique_bill_entries.keys()],
     )
 
     return {

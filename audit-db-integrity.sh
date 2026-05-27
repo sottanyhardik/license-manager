@@ -2,10 +2,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/.venv/bin/python3}"
 
-if [ ! -x "$PYTHON_BIN" ]; then
-    PYTHON_BIN="${PYTHON_BIN:-python3}"
+if [ -n "${PYTHON_BIN:-}" ]; then
+    :
+elif [ -x "$ROOT_DIR/.venv/bin/python3" ]; then
+    PYTHON_BIN="$ROOT_DIR/.venv/bin/python3"
+elif [ -x "$ROOT_DIR/venv/bin/python3" ]; then
+    PYTHON_BIN="$ROOT_DIR/venv/bin/python3"
+else
+    PYTHON_BIN="python3"
 fi
 
 cd "$ROOT_DIR/backend"

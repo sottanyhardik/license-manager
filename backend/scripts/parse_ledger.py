@@ -330,6 +330,15 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
         ) for item in valid_items
     ]
 
+    # Sort by (bill_of_entry_id, sr_number_id) so the FK share-locks Postgres
+    # takes on parent BOE/LicenseImportItem rows are acquired in a deterministic
+    # global order — prevents deadlocks between concurrent uploads that share BOEs.
+    row_details_list.sort(key=lambda r: (
+        r.bill_of_entry_id or 0,
+        r.sr_number_id or 0,
+        r.transaction_type,
+    ))
+
     with transaction.atomic():
         # Build the existence query correctly for both credit (null BOE) and debit rows.
         # Django's bill_of_entry__in=[None] does NOT find NULL FK rows in PostgreSQL,
@@ -391,14 +400,18 @@ def bulk_get_or_create_boe(boe_row, skip_signals=False):
 def _recalculate_boe_exchange_rates_for_rows(debit_row):
     """After bulk_create (which skips signals), force-recalculate exchange_rate for
     each unique BOE in the debit rows. force=True always writes the computed rate,
-    overriding whatever was stored before (ledger is the authoritative source)."""
+    overriding whatever was stored before (ledger is the authoritative source).
+
+    BOE PKs are sorted before iteration so concurrent uploads acquire row locks in
+    the same global order, preventing deadlocks on overlapping BOEs.
+    """
     from apps.bill_of_entry.models import _recalculate_boe_exchange_rate
-    seen = set()
-    for data in debit_row:
-        boe = data.get('boe')
-        if boe and boe.pk and boe.pk not in seen:
-            seen.add(boe.pk)
-            _recalculate_boe_exchange_rate(boe.pk, force=True)
+    boe_pks = sorted({
+        data['boe'].pk for data in debit_row
+        if data.get('boe') and data['boe'].pk
+    })
+    for pk in boe_pks:
+        _recalculate_boe_exchange_rate(pk, force=True)
 
 
 def create_object(data_dict):

@@ -397,7 +397,7 @@ echo -e "\${GREEN}================================================\${NC}"
 echo -e "\${GREEN}🎉 Deployment complete — $SERVER_IP\${NC}"
 echo -e "\${GREEN}================================================\${NC}"
 echo_info "URL: \${APP_SCHEME}://${SERVER_DOMAIN}"
-if command -v supervisorctl >/dev/null 2>&1; then
+if have_sudo && command -v supervisorctl >/dev/null 2>&1; then
     sudo_cmd supervisorctl status | grep license-manager || true
 fi
 ENDSSH

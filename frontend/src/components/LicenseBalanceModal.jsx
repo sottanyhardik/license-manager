@@ -118,23 +118,23 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
+        const fetchLicenseData = async () => {
+            setLoading(true);
+            try {
+                const { data } = await api.get(`licenses/${licenseId}/`);
+                setLicenseData(data);
+            } catch (error) {
+                console.error('Error fetching license data:', error);
+                toast.error('Failed to load license data');
+            } finally {
+                setLoading(false);
+            }
+        };
+
         if (show && licenseId) {
             fetchLicenseData();
         }
     }, [show, licenseId]);
-
-    const fetchLicenseData = async () => {
-        setLoading(true);
-        try {
-            const { data } = await api.get(`licenses/${licenseId}/`);
-            setLicenseData(data);
-        } catch (error) {
-            console.error('Error fetching license data:', error);
-            toast.error('Failed to load license data');
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const fetchItemUsage = async (item, type) => {
         try {

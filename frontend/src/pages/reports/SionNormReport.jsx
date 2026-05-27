@@ -16,20 +16,20 @@ export default function SionNormReport({ sionNorm, title }) {
         sion_norm: sionNorm,
     });
 
-    const fetchReport = async () => {
-        try {
-            setLoading(true);
-            const params = new URLSearchParams(filters).toString();
-            const response = await api.get(`licenses/active-dfia-report/?${params}`);
-            setData(response.data);
-        } catch (error) {
-            toast.error('Failed to load report data. Please try again.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
     useEffect(() => {
+        const fetchReport = async () => {
+            try {
+                setLoading(true);
+                const params = new URLSearchParams(filters).toString();
+                const response = await api.get(`licenses/active-dfia-report/?${params}`);
+                setData(response.data);
+            } catch (error) {
+                toast.error('Failed to load report data. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchReport();
     }, [filters]);
 

@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useMemo} from "react";
+import React, {useEffect, useState, useMemo, useCallback} from "react";
 import {useNavigate} from "react-router-dom";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
@@ -82,16 +82,14 @@ export default function ItemReport() {
     }, []);
 
     useEffect(() => {
-        // Load report if at least one item name is selected OR if searching by product description or HSN code
-        // Uses debounced filters to avoid excessive API calls
         if (debouncedFilters.selectedItemNames.length > 0 || debouncedFilters.productDescSearch || debouncedFilters.hsnCodeSearch) {
             loadReport();
         } else {
             setReportData(null);
         }
-    }, [debouncedFilters]);
+    }, [debouncedFilters, loadReport]);
 
-    const loadReport = async () => {
+    const loadReport = useCallback(async () => {
         setLoading(true);
         try {
             let url = `reports/item-report/?format=json`;
@@ -165,7 +163,7 @@ export default function ItemReport() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [debouncedFilters]);
 
     const handleExport = async () => {
         setDownloading(true);

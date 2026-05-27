@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useState, useCallback} from "react";
 import {useNavigate} from "react-router-dom";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
@@ -45,7 +45,7 @@ export default function ItemPivotReport() {
         if (activeNormTab) {
             loadReport(activeNormTab);
         }
-    }, [activeNormTab, selectedCompanies, excludeCompanies, minBalance, licenseStatus, expiryDateFrom, expiryDateTo]);
+    }, [activeNormTab, loadReport]);
 
     const loadFilterOptions = async () => {
         try {
@@ -74,7 +74,7 @@ export default function ItemPivotReport() {
         }
     };
 
-    const loadReport = async (normClass) => {
+    const loadReport = useCallback(async (normClass) => {
         if (!normClass) return;
 
         setLoading(true);
@@ -100,7 +100,7 @@ export default function ItemPivotReport() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [selectedCompanies, excludeCompanies, minBalance, licenseStatus, expiryDateFrom, expiryDateTo]);
 
     const handleUpdateBalance = async () => {
         const statusText = licenseStatus === 'active' ? 'active' : licenseStatus === 'inactive' ? 'inactive' : 'all';

@@ -1,4 +1,4 @@
-import {useState, useEffect, useCallback} from "react";
+import {useState, useEffect, useCallback, useMemo} from "react";
 import AsyncSelect from "react-select/async";
 import api from "../api/axios";
 import { useDebouncedCallback } from "../hooks/useDebounce";
@@ -51,12 +51,12 @@ export default function DebouncedAsyncSelect({
 
     // Parse endpoint to separate base URL and existing query params
     const [baseEndpoint, queryString] = cleanEndpoint?.split('?') || [cleanEndpoint, ''];
-    const existingParams = new URLSearchParams(queryString);
+    const existingParams = useMemo(() => new URLSearchParams(queryString), [queryString]);
 
     const [selectedOption, setSelectedOption] = useState(null);
     const [isSearching, setIsSearching] = useState(false);
 
-    const formatOption = (item) => {
+    const formatOption = useCallback((item) => {
         let label;
 
         if (formatLabel) {
@@ -70,7 +70,7 @@ export default function DebouncedAsyncSelect({
             label: label,
             data: item
         };
-    };
+    }, [formatLabel, labelField, valueField]);
 
     const fetchOptionById = async (id) => {
         try {
@@ -146,7 +146,7 @@ export default function DebouncedAsyncSelect({
         } finally {
             setIsSearching(false);
         }
-    }, [baseEndpoint, existingParams]);
+    }, [baseEndpoint, existingParams, formatOption]);
 
     // Create debounced version
     const debouncedFetch = useDebouncedCallback(fetchOptionsFromAPI, debounceDelay);

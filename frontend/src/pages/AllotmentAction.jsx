@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react";
+import {useEffect, useState, useCallback, useRef} from "react";
 import {useParams, useNavigate, useLocation} from "react-router-dom";
 import { toast } from 'react-toastify';
 import Select from "react-select";
@@ -83,63 +83,24 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [hasUnsavedChanges]);
 
-    useEffect(() => {
-        fetchNotificationOptions();
-        fetchAvailableItemNames();
-        // Fetch allotment info first to get item_name
-        fetchAllotmentInfo();
-    }, []);
+    // Refs for state fetchData reads but should not be reactive on
+    const isFirstFetchRef = useRef(true);
+    const initialAllocationDataRef = useRef(initialAllocationData);
+    initialAllocationDataRef.current = initialAllocationData;
+    const pageSizeRef = useRef(pagination.pageSize);
+    pageSizeRef.current = pagination.pageSize;
 
-    // Set description from allotment item_name on first load
-    useEffect(() => {
-        if (isFirstLoad && allotment?.item_name) {
-            setFilters(prev => ({...prev, description: allotment.item_name}));
-            setIsFirstLoad(false);
-        }
-    }, [allotment, isFirstLoad]);
-
-    useEffect(() => {
-        // Skip initial fetch if we're waiting for allotment data to set the description filter
-        if (isFirstLoad && !allotment?.item_name) {
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setPagination(prev => ({...prev, currentPage: 1})); // Reset to page 1 on filter change
-            fetchData(1);
-        }, 300); // Debounce for 300ms
-        return () => clearTimeout(timer);
-    }, [id, search, filters, isFirstLoad, allotment?.item_name]);
-
-    useEffect(() => {
-        // Skip pagination fetch if we're still on first load waiting for description filter
-        if (isFirstLoad && !allotment?.item_name) {
-            return;
-        }
-        fetchData(pagination.currentPage);
-    }, [pagination.currentPage]);
-
-    // Scroll to transfer letter section if navigated from list
-    useEffect(() => {
-        if (location.state?.scrollToTransferLetter && allotment) {
-            setTimeout(() => {
-                document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' });
-            }, 500);
-        }
-    }, [location.state, allotment]);
-
-    const fetchNotificationOptions = async () => {
+    const fetchNotificationOptions = useCallback(async () => {
         try {
-            // Fetch notification number options from licenses
             const {data} = await api.options('/licenses/');
             const notificationChoices = data?.actions?.POST?.notification_number?.choices || [];
             setNotificationOptions(notificationChoices);
         } catch (err) {
             // Silently fail for notification options
         }
-    };
+    }, []);
 
-    const fetchAvailableItemNames = async () => {
+    const fetchAvailableItemNames = useCallback(async () => {
         try {
             const {data} = await api.get('item-report/available-items/');
             const items = data || [];
@@ -147,32 +108,29 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         } catch (err) {
             // Silently fail for item names
         }
-    };
+    }, []);
 
-    const fetchAllotmentInfo = async () => {
+    const fetchAllotmentInfo = useCallback(async () => {
         try {
-            // Fetch just the allotment info without available items
             const {data} = await api.get(`allotments/${id}/`);
             setAllotment(data);
         } catch (err) {
             setError(err.response?.data?.detail || "Failed to load allotment info");
         }
-    };
+    }, [id]);
 
-    const fetchData = async (page = 1) => {
-        // Use initialLoading only on first load, tableLoading for subsequent loads
-        if (allotment === null) {
+    const fetchData = useCallback(async (page = 1) => {
+        if (isFirstFetchRef.current) {
             setInitialLoading(true);
         } else {
             setTableLoading(true);
         }
         setError("");
         try {
-            // Build params object, only include non-empty values
             const params = {
                 search,
                 page,
-                page_size: pagination.pageSize
+                page_size: pageSizeRef.current
             };
             Object.keys(filters).forEach(key => {
                 if (filters[key]) {
@@ -186,12 +144,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             setAllotment(data.allotment);
             setAvailableItems(data.available_items || data.results || []);
 
-            // Set initial allocation data on first load
-            if (Object.keys(initialAllocationData).length === 0) {
+            if (Object.keys(initialAllocationDataRef.current).length === 0) {
                 setInitialAllocationData({});
             }
 
-            // Update pagination info if provided by backend
             if (data.count !== undefined) {
                 setPagination(prev => ({
                     ...prev,
@@ -199,13 +155,59 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     totalPages: Math.ceil(data.count / prev.pageSize)
                 }));
             }
+            isFirstFetchRef.current = false;
         } catch (err) {
             setError(err.response?.data?.detail || "Failed to load data");
         } finally {
             setInitialLoading(false);
             setTableLoading(false);
         }
-    };
+    }, [id, search, filters]);
+
+    useEffect(() => {
+        fetchNotificationOptions();
+        fetchAvailableItemNames();
+        fetchAllotmentInfo();
+    }, [fetchNotificationOptions, fetchAvailableItemNames, fetchAllotmentInfo]);
+
+    // Set description from allotment item_name on first load
+    useEffect(() => {
+        if (isFirstLoad && allotment?.item_name) {
+            setFilters(prev => ({...prev, description: allotment.item_name}));
+            setIsFirstLoad(false);
+        }
+    }, [allotment, isFirstLoad]);
+
+    const fetchDataRef = useRef(fetchData);
+    fetchDataRef.current = fetchData;
+
+    useEffect(() => {
+        if (isFirstLoad && !allotment?.item_name) {
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setPagination(prev => ({...prev, currentPage: 1}));
+            fetchDataRef.current(1);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [id, search, filters, isFirstLoad, allotment?.item_name]);
+
+    useEffect(() => {
+        if (isFirstLoad && !allotment?.item_name) {
+            return;
+        }
+        fetchDataRef.current(pagination.currentPage);
+    }, [pagination.currentPage, isFirstLoad, allotment?.item_name]);
+
+    // Scroll to transfer letter section if navigated from list
+    useEffect(() => {
+        if (location.state?.scrollToTransferLetter && allotment) {
+            setTimeout(() => {
+                document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' });
+            }, 500);
+        }
+    }, [location.state, allotment]);
 
     const calculateMaxAllocation = (item) => {
         if (!allotment?.unit_value_per_unit) return { qty: 0, value: 0 };

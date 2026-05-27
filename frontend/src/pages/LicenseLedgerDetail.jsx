@@ -18,26 +18,26 @@ export default function LicenseLedgerDetail() {
     const licenseType = queryParams.get('license_type') || location.state?.license_type || 'DFIA';
 
     useEffect(() => {
+        const fetchLedgerDetail = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const params = new URLSearchParams();
+                if (companyId) params.append('company', companyId);
+                const queryString = params.toString();
+                const url = `license-ledger/${id}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
+                const response = await api.get(url);
+                setLedger(response.data);
+            } catch (err) {
+                console.error('Error fetching ledger detail:', err);
+                setError(err.response?.data?.error || 'Failed to load ledger details');
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchLedgerDetail();
     }, [id, licenseType, companyId]);
-
-    const fetchLedgerDetail = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = new URLSearchParams();
-            if (companyId) params.append('company', companyId);
-            const queryString = params.toString();
-            const url = `license-ledger/${id}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
-            const response = await api.get(url);
-            setLedger(response.data);
-        } catch (err) {
-            console.error('Error fetching ledger detail:', err);
-            setError(err.response?.data?.error || 'Failed to load ledger details');
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';

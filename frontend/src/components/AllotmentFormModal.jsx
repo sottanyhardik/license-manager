@@ -27,91 +27,89 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
     const [nonFieldErrors, setNonFieldErrors] = useState([]);
 
     useEffect(() => {
+        const fetchAllotmentData = async () => {
+            setInitialLoad(true);
+            try {
+                const { data } = await api.get(`allotments/${allotmentId}/`);
+
+                setFormData({
+                    company: data.company ? { value: data.company, label: data.company_name } : null,
+                    type: data.type || 'AT',
+                    port: data.port ? { value: data.port, label: data.port_name } : null,
+                    item_name: data.item_name || '',
+                    required_quantity: data.required_quantity || '',
+                    cif_inr: data.cif_inr || '',
+                    exchange_rate: data.exchange_rate || '',
+                    cif_fc: data.cif_fc || '',
+                    unit_value_per_unit: data.unit_value_per_unit || '',
+                    invoice: mode === 'copy' ? '' : data.invoice || '',
+                    estimated_arrival_date: data.estimated_arrival_date || '',
+                    bl_detail: data.bl_detail || '',
+                    is_boe: data.is_boe || false,
+                    is_approved: mode === 'copy' ? false : data.is_approved || false
+                });
+            } catch (error) {
+                console.error('Error fetching allotment:', error);
+                toast.error('Failed to load allotment data');
+            } finally {
+                setInitialLoad(false);
+            }
+        };
+
+        const fetchDefaultExchangeRate = async () => {
+            setInitialLoad(true);
+            try {
+                const { data } = await api.get('masters/exchange-rates/', {
+                    params: { page_size: 1, ordering: '-date' }
+                });
+
+                const defaultRate = data.results?.[0]?.usd || '';
+
+                setFormData({
+                    company: null,
+                    type: 'AT',
+                    port: null,
+                    item_name: '',
+                    required_quantity: '',
+                    cif_inr: '',
+                    exchange_rate: defaultRate,
+                    cif_fc: '',
+                    unit_value_per_unit: '',
+                    invoice: '',
+                    estimated_arrival_date: '',
+                    bl_detail: '',
+                    is_boe: false,
+                    is_approved: false
+                });
+            } catch (error) {
+                console.error('Error fetching exchange rate:', error);
+                setFormData({
+                    company: null,
+                    type: 'AT',
+                    port: null,
+                    item_name: '',
+                    required_quantity: '',
+                    cif_inr: '',
+                    exchange_rate: '',
+                    cif_fc: '',
+                    unit_value_per_unit: '',
+                    invoice: '',
+                    estimated_arrival_date: '',
+                    bl_detail: '',
+                    is_boe: false,
+                    is_approved: false
+                });
+            } finally {
+                setInitialLoad(false);
+            }
+        };
+
         if (show && allotmentId && (mode === 'edit' || mode === 'copy')) {
             fetchAllotmentData();
         } else if (show && mode === 'create') {
             fetchDefaultExchangeRate();
         }
     }, [show, allotmentId, mode]);
-
-    const fetchAllotmentData = async () => {
-        setInitialLoad(true);
-        try {
-            const { data } = await api.get(`allotments/${allotmentId}/`);
-
-            setFormData({
-                company: data.company ? { value: data.company, label: data.company_name } : null,
-                type: data.type || 'AT',
-                port: data.port ? { value: data.port, label: data.port_name } : null,
-                item_name: data.item_name || '',
-                required_quantity: data.required_quantity || '',
-                cif_inr: data.cif_inr || '',
-                exchange_rate: data.exchange_rate || '',
-                cif_fc: data.cif_fc || '',
-                unit_value_per_unit: data.unit_value_per_unit || '',
-                invoice: mode === 'copy' ? '' : data.invoice || '',
-                estimated_arrival_date: data.estimated_arrival_date || '',
-                bl_detail: data.bl_detail || '',
-                is_boe: data.is_boe || false,
-                is_approved: mode === 'copy' ? false : data.is_approved || false
-            });
-        } catch (error) {
-            console.error('Error fetching allotment:', error);
-            toast.error('Failed to load allotment data');
-        } finally {
-            setInitialLoad(false);
-        }
-    };
-
-    const fetchDefaultExchangeRate = async () => {
-        setInitialLoad(true);
-        try {
-            // Fetch the latest exchange rate
-            const { data } = await api.get('masters/exchange-rates/', {
-                params: { page_size: 1, ordering: '-date' }
-            });
-
-            const defaultRate = data.results?.[0]?.usd || '';
-
-            setFormData({
-                company: null,
-                type: 'AT',
-                port: null,
-                item_name: '',
-                required_quantity: '',
-                cif_inr: '',
-                exchange_rate: defaultRate,
-                cif_fc: '',
-                unit_value_per_unit: '',
-                invoice: '',
-                estimated_arrival_date: '',
-                bl_detail: '',
-                is_boe: false,
-                is_approved: false
-            });
-        } catch (error) {
-            console.error('Error fetching exchange rate:', error);
-            // Reset form with empty exchange rate if fetch fails
-            setFormData({
-                company: null,
-                type: 'AT',
-                port: null,
-                item_name: '',
-                required_quantity: '',
-                cif_inr: '',
-                exchange_rate: '',
-                cif_fc: '',
-                unit_value_per_unit: '',
-                invoice: '',
-                estimated_arrival_date: '',
-                bl_detail: '',
-                is_boe: false,
-                is_approved: false
-            });
-        } finally {
-            setInitialLoad(false);
-        }
-    };
 
     const loadCompanyOptions = async (inputValue) => {
         try {

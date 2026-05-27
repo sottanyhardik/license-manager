@@ -42,41 +42,37 @@ export const useMasterForm = (endpoint, recordId = null, options = {}) => {
 
     // Fetch metadata and record data on mount
     useEffect(() => {
+        const fetchInitialData = async () => {
+            setLoading(true);
+            try {
+                const meta = await masterApi.fetchMasterMetadata(endpoint);
+                setMetadata(meta);
+
+                if (recordId) {
+                    const record = await masterApi.fetchMasterRecord(endpoint, recordId);
+                    setFormData(record);
+                    setOriginalData(record);
+                } else {
+                    const defaults = {};
+                    if (meta?.actions?.POST) {
+                        Object.entries(meta.actions.POST).forEach(([fieldName, fieldMeta]) => {
+                            if (fieldMeta.default !== undefined) {
+                                defaults[fieldName] = fieldMeta.default;
+                            }
+                        });
+                    }
+                    setFormData(defaults);
+                    setOriginalData(defaults);
+                }
+            } catch (error) {
+                toast.error('Failed to load form data');
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchInitialData();
     }, [endpoint, recordId]);
-
-    // Fetch metadata and record data
-    const fetchInitialData = async () => {
-        setLoading(true);
-        try {
-            // Fetch metadata
-            const meta = await masterApi.fetchMasterMetadata(endpoint);
-            setMetadata(meta);
-
-            // Fetch record if editing
-            if (recordId) {
-                const record = await masterApi.fetchMasterRecord(endpoint, recordId);
-                setFormData(record);
-                setOriginalData(record);
-            } else {
-                // Initialize with default values from metadata
-                const defaults = {};
-                if (meta?.actions?.POST) {
-                    Object.entries(meta.actions.POST).forEach(([fieldName, fieldMeta]) => {
-                        if (fieldMeta.default !== undefined) {
-                            defaults[fieldName] = fieldMeta.default;
-                        }
-                    });
-                }
-                setFormData(defaults);
-                setOriginalData(defaults);
-            }
-        } catch (error) {
-            toast.error('Failed to load form data');
-        } finally {
-            setLoading(false);
-        }
-    };
 
     // Handle field change
     const handleChange = useCallback((fieldName, value) => {

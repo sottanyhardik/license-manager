@@ -17,19 +17,19 @@ export default function TradeTransferLetter({ tradeId: propId, isModal = false, 
     const [success, setSuccess] = useState("");
 
     useEffect(() => {
+        const fetchTrade = async () => {
+            try {
+                const {data} = await api.get(`trades/${id}/`);
+                setTrade(data);
+            } catch (err) {
+                setError("Failed to load Trade details");
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchTrade();
     }, [id]);
-
-    const fetchTrade = async () => {
-        try {
-            const {data} = await api.get(`trades/${id}/`);
-            setTrade(data);
-        } catch (err) {
-            setError("Failed to load Trade details");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     if (loading) return <div className="p-4">Loading...</div>;
 

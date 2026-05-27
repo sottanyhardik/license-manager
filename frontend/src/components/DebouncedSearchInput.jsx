@@ -20,7 +20,7 @@
  * />
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDebouncedState } from '../hooks/useDebounce';
 
 export default function DebouncedSearchInput({
@@ -36,15 +36,20 @@ export default function DebouncedSearchInput({
     const [localValue, setLocalValue] = useState(value);
     const { debouncedValue, isPending } = useDebouncedState(localValue, delay);
 
-    // Update local value when external value changes
+    const valueRef = useRef(value);
+    const onChangeRef = useRef(onChange);
+    useEffect(() => {
+        valueRef.current = value;
+        onChangeRef.current = onChange;
+    });
+
     useEffect(() => {
         setLocalValue(value);
     }, [value]);
 
-    // Call onChange when debounced value changes
     useEffect(() => {
-        if (debouncedValue !== value) {
-            onChange(debouncedValue);
+        if (debouncedValue !== valueRef.current) {
+            onChangeRef.current(debouncedValue);
         }
     }, [debouncedValue]);
 

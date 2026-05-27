@@ -131,28 +131,10 @@ export default function TradeForm() {
         }
     }, [formData.boe, formData.lines, billingMode]);
 
-    // Fetch existing trade if editing
-    useEffect(() => {
-        if (isEdit) {
-            fetchTrade();
-        } else {
-            // In create mode, mark initial load as complete immediately
-            isInitialLoadRef.current = false;
-            // Set initial form data for create mode
-            setInitialFormData(JSON.parse(JSON.stringify(formData)));
-        }
-    }, [isEdit, id]);
+    const formDataRef = useRef(formData);
+    formDataRef.current = formData;
 
-    // Auto-prefill from BOE when BOE is selected (only if lines are empty)
-    useEffect(() => {
-        if (formData.boe) {
-            handlePrefillFromBOE();
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.boe]);
-
-
-    const fetchTrade = async () => {
+    const fetchTrade = useCallback(async () => {
         try {
             const { data } = await api.get(`trades/${id}/`);
 
@@ -216,7 +198,25 @@ export default function TradeForm() {
         } catch (err) {
             setError("Failed to load trade");
         }
-    };
+    }, [id]);
+
+    // Fetch existing trade if editing
+    useEffect(() => {
+        if (isEdit) {
+            fetchTrade();
+        } else {
+            isInitialLoadRef.current = false;
+            setInitialFormData(JSON.parse(JSON.stringify(formDataRef.current)));
+        }
+    }, [isEdit, id, fetchTrade]);
+
+    // Auto-prefill from BOE when BOE is selected (only if lines are empty)
+    useEffect(() => {
+        if (formData.boe) {
+            handlePrefillFromBOE();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.boe]);
 
     const handleFromCompanyChange = async (val) => {
         setFormData(prev => ({ ...prev, from_company: val }));

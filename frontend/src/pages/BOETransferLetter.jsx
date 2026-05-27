@@ -17,19 +17,19 @@ export default function BOETransferLetter({ boeId: propId, isModal = false, onCl
     const [success, setSuccess] = useState("");
 
     useEffect(() => {
+        const fetchBOE = async () => {
+            try {
+                const {data} = await api.get(`bill-of-entries/${id}/`);
+                setBoe(data);
+            } catch (err) {
+                setError("Failed to load BOE details");
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchBOE();
     }, [id]);
-
-    const fetchBOE = async () => {
-        try {
-            const {data} = await api.get(`bill-of-entries/${id}/`);
-            setBoe(data);
-        } catch (err) {
-            setError("Failed to load BOE details");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     if (loading) return <div className="p-4">Loading...</div>;
 

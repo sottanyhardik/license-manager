@@ -383,7 +383,7 @@ export const useFileUpload = (options = {}) => {
       successCount: uploadResults.filter(r => r.success).length,
       failureCount: failedCount,
     };
-  }, [files, endpoint, timeout, onSuccess, onError]);
+  }, [files, endpoint, timeout, onSuccess, onError, fileFieldName, uploadMode]);
 
   /**
    * Format file size for display

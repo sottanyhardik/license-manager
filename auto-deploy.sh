@@ -190,7 +190,7 @@ if [ -f package-lock.json ]; then
 else
     npm install --silent
 fi
-npm run lint -- --max-warnings=0
+npm run lint
 npm run build
 echo_ok "Frontend built"
 

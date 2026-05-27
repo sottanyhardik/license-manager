@@ -13,8 +13,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-this-in-production")
-DEBUG = os.getenv("DEBUG", "True").lower() == "true"  # default OFF in production
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY",
+    "local-dev-only-secret-key-change-for-production-7f8e6d5c4b3a2910",
+)
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS",
                           "127.0.0.1,localhost,139.59.92.226,labdhi.duckdns.org,143.110.252.201,license-manager.duckdns.org,178.128.58.219,165.232.185.220,license-tractor.duckdns.org").split(
     ",")
@@ -27,6 +30,9 @@ _https_default = "False" if DEBUG else "True"
 SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", _https_default).lower() == "true"
 SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", _https_default).lower() == "true"
 CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", _https_default).lower() == "true"
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", _https_default).lower() == "true"
+SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", _https_default).lower() == "true"
 
 # ---------------------------------------------------------------------
 # Applications

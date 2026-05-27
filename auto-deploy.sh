@@ -121,24 +121,58 @@ sudo_cmd() {
 have_sudo() {
     sudo_cmd true >/dev/null 2>&1
 }
+prepare_django_env() {
+    export DEBUG="\${DEBUG:-False}"
+    export SECURE_SSL_REDIRECT="\${SECURE_SSL_REDIRECT:-True}"
+    export SESSION_COOKIE_SECURE="\${SESSION_COOKIE_SECURE:-True}"
+    export CSRF_COOKIE_SECURE="\${CSRF_COOKIE_SECURE:-True}"
+    export SECURE_HSTS_SECONDS="\${SECURE_HSTS_SECONDS:-31536000}"
+    export SECURE_HSTS_INCLUDE_SUBDOMAINS="\${SECURE_HSTS_INCLUDE_SUBDOMAINS:-True}"
+    export SECURE_HSTS_PRELOAD="\${SECURE_HSTS_PRELOAD:-True}"
+
+    if [ -z "\${DJANGO_SECRET_KEY:-}" ]; then
+        SECRET_FILE="$SERVER_PATH/.django-secret-key"
+        if [ ! -s "\$SECRET_FILE" ]; then
+            python - <<'PY' > "\$SECRET_FILE"
+import secrets
+print(secrets.token_urlsafe(64))
+PY
+            chmod 600 "\$SECRET_FILE"
+        fi
+        export DJANGO_SECRET_KEY
+        DJANGO_SECRET_KEY="$(cat "\$SECRET_FILE")"
+    fi
+}
+prepare_log_file() {
+    LOG_FILE="\$1"
+    if [ -e "\$LOG_FILE" ] && [ ! -w "\$LOG_FILE" ]; then
+        LOG_FILE="$SERVER_PATH/logs/\$(basename "\$LOG_FILE" .log)-django.log"
+    fi
+    touch "\$LOG_FILE"
+    printf '%s\n' "\$LOG_FILE"
+}
 restart_owned_processes() {
     echo_warn "Sudo unavailable; restarting django-owned gunicorn/celery processes directly"
     mkdir -p $SERVER_PATH/logs
     cd $SERVER_PATH/backend
     source $SERVER_PATH/venv/bin/activate
+    prepare_django_env
+
+    GUNICORN_LOG="$(prepare_log_file "$SERVER_PATH/logs/gunicorn.log")"
+    CELERY_LOG="$(prepare_log_file "$SERVER_PATH/logs/celery.log")"
 
     pkill -TERM -f "$SERVER_PATH/venv/bin/gunicorn.*lmanagement.wsgi" 2>/dev/null || true
     sleep 3
     if ! pgrep -f "$SERVER_PATH/venv/bin/gunicorn.*lmanagement.wsgi" >/dev/null; then
         nohup gunicorn --workers 3 --timeout 300 --graceful-timeout 300 --bind 0.0.0.0:8000 lmanagement.wsgi:application \
-            > $SERVER_PATH/logs/gunicorn.log 2>&1 &
+            > "\$GUNICORN_LOG" 2>&1 &
     fi
 
     pkill -TERM -f "$SERVER_PATH/venv/bin/celery -A lmanagement" 2>/dev/null || true
     sleep 3
     if ! pgrep -f "$SERVER_PATH/venv/bin/celery -A lmanagement" >/dev/null; then
         nohup celery -A lmanagement worker --beat -Q celery,ledger -l info \
-            > $SERVER_PATH/logs/celery.log 2>&1 &
+            > "\$CELERY_LOG" 2>&1 &
     fi
 }
 
@@ -173,6 +207,7 @@ source $SERVER_PATH/venv/bin/activate
 cd $SERVER_PATH/backend
 pip install --upgrade pip --quiet
 pip install --upgrade -r requirements.txt --quiet
+prepare_django_env
 echo_ok "Python dependencies installed"
 
 echo_info "Running Django system checks..."
@@ -311,6 +346,7 @@ fi
 echo_info "Refreshing materialized views..."
 cd $SERVER_PATH/backend
 source $SERVER_PATH/venv/bin/activate
+prepare_django_env
 python manage.py shell -c "
 from apps.core.materialized_views import create_all_materialized_views
 try: create_all_materialized_views(); print('Views OK')

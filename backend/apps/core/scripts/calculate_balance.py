@@ -193,8 +193,13 @@ def update_balance_values(item):
 
     # Check and update license is_null if balance_cif < 100
     if item.license:
+        from apps.license.models import LicenseFlags
+
         license = item.license
         balance_cif = license.get_balance_cif
-        if balance_cif < Decimal("100") and not license.is_null:
-            license.is_null = True
-            license.save(update_fields=['is_null'])
+        is_null = balance_cif < Decimal("100")
+        if license.is_null != is_null:
+            LicenseFlags.objects.update_or_create(
+                license=license,
+                defaults={'is_null': is_null},
+            )

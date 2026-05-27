@@ -3,9 +3,14 @@ from django.db import transaction
 from django.db.models import Q
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
-from apps.core.models import CompanyModel, PortModel
+from apps.core.models import CompanyModel, NotificationNumber, PortModel, SchemeCode
 from apps.core.scripts.calculate_balance import update_balance_values
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
+from apps.license.models import (
+    LicenseBalance,
+    LicenseDetailsModel,
+    LicenseExportItemModel,
+    LicenseImportItemsModel,
+)
 
 
 def parse_date(date_str):
@@ -411,6 +416,18 @@ def create_object(data_dict):
 def _create_object_inner(data_dict):
     # Get or create company
     company, _ = CompanyModel.objects.get_or_create(iec=data_dict['iec'])
+    scheme_code = None
+    if data_dict.get('scheme_code'):
+        scheme_code, _ = SchemeCode.objects.get_or_create(
+            code=data_dict['scheme_code'],
+            defaults={'label': data_dict['scheme_code']},
+        )
+    notification_number = None
+    if data_dict.get('notification'):
+        notification_number, _ = NotificationNumber.objects.get_or_create(
+            code=data_dict['notification'],
+            defaults={'label': data_dict['notification']},
+        )
 
     # Update or create license
     license, _ = LicenseDetailsModel.objects.update_or_create(
@@ -418,13 +435,22 @@ def _create_object_inner(data_dict):
         defaults={
             'license_date': datetime.datetime.strptime(data_dict['lic_date'], '%d/%m/%Y').strftime('%Y-%m-%d'),
             'exporter_id': company.pk,
-            'notification_number': data_dict['notification'],
+            'notification_number': notification_number,
             'registration_number': data_dict['registration_no'],
             'registration_date': datetime.datetime.strptime(data_dict['registration_date'], '%d/%m/%Y').strftime('%Y-%m-%d'),
             'port': PortModel.objects.get_or_create(code=data_dict['port'])[0],
-            'scheme_code': data_dict['scheme_code'],
-            'ledger_date': data_dict['ledger_date'].strftime('%Y-%m-%d') if isinstance(data_dict['ledger_date'], datetime.datetime) else data_dict['ledger_date']
+            'scheme_code': scheme_code,
         }
+    )
+    LicenseBalance.objects.update_or_create(
+        license=license,
+        defaults={
+            'ledger_date': (
+                data_dict['ledger_date'].strftime('%Y-%m-%d')
+                if isinstance(data_dict['ledger_date'], datetime.datetime)
+                else data_dict['ledger_date']
+            )
+        },
     )
 
     # Update or create export item

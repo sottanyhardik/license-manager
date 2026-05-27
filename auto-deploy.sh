@@ -131,7 +131,12 @@ prepare_django_env() {
     export SECURE_HSTS_PRELOAD="\${SECURE_HSTS_PRELOAD:-True}"
 
     if [ -z "\${DJANGO_SECRET_KEY:-}" ]; then
-        SECRET_FILE="$SERVER_PATH/.django-secret-key"
+        SECRET_FILE="\$HOME/.license-manager-django-secret-key"
+        LEGACY_SECRET_FILE="$SERVER_PATH/.django-secret-key"
+        if [ ! -s "\$SECRET_FILE" ] && [ -s "\$LEGACY_SECRET_FILE" ]; then
+            cp "\$LEGACY_SECRET_FILE" "\$SECRET_FILE"
+            chmod 600 "\$SECRET_FILE"
+        fi
         if [ ! -s "\$SECRET_FILE" ]; then
             python - <<'PY' > "\$SECRET_FILE"
 import secrets
@@ -139,6 +144,7 @@ print(secrets.token_urlsafe(64))
 PY
             chmod 600 "\$SECRET_FILE"
         fi
+        rm -f "\$LEGACY_SECRET_FILE" 2>/dev/null || true
         export DJANGO_SECRET_KEY
         DJANGO_SECRET_KEY="\$(cat "\$SECRET_FILE")"
     fi

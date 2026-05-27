@@ -240,6 +240,7 @@ if ! python manage.py migrate --no-input 2>&1 | tee /tmp/migration.log; then
     fi
 fi
 rm -f /tmp/migration.log
+python manage.py repair_license_subtables
 echo_ok "Migrations applied"
 
 # ── 3. Static files ─────────────────────────────────────────

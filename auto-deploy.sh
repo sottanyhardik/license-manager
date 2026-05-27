@@ -140,7 +140,7 @@ PY
             chmod 600 "\$SECRET_FILE"
         fi
         export DJANGO_SECRET_KEY
-        DJANGO_SECRET_KEY="$(cat "\$SECRET_FILE")"
+        DJANGO_SECRET_KEY="\$(cat "\$SECRET_FILE")"
     fi
 }
 prepare_log_file() {
@@ -158,8 +158,8 @@ restart_owned_processes() {
     source $SERVER_PATH/venv/bin/activate
     prepare_django_env
 
-    GUNICORN_LOG="$(prepare_log_file "$SERVER_PATH/logs/gunicorn.log")"
-    CELERY_LOG="$(prepare_log_file "$SERVER_PATH/logs/celery.log")"
+    GUNICORN_LOG="\$(prepare_log_file "$SERVER_PATH/logs/gunicorn.log")"
+    CELERY_LOG="\$(prepare_log_file "$SERVER_PATH/logs/celery.log")"
 
     pkill -TERM -f "$SERVER_PATH/venv/bin/gunicorn.*lmanagement.wsgi" 2>/dev/null || true
     sleep 3

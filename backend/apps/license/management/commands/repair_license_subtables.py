@@ -1,13 +1,87 @@
 from django.core.management.base import BaseCommand
 from django.db import connection
 
-from apps.license.models import LicenseBalance, LicenseFlags, LicenseNotes, LicenseOwnership
+from apps.core.models import NotificationNumber, SchemeCode
+from apps.license.models import (
+    LicenseBalance,
+    LicenseDetailsModel,
+    LicenseFlags,
+    LicenseNotes,
+    LicenseOwnership,
+)
 
 
 class Command(BaseCommand):
     help = "Create and backfill split license sub-tables when migration state was faked."
 
     def handle(self, *args, **options):
+        self._repair_lookup_fks()
+        self._repair_split_tables()
+        self._report_counts()
+
+    def _repair_lookup_fks(self):
+        columns = self._columns("license_licensedetailsmodel")
+        fields_to_add = []
+        if "scheme_code" in columns and "scheme_code_id" not in columns:
+            fields_to_add.append(LicenseDetailsModel._meta.get_field("scheme_code"))
+        if "notification_number" in columns and "notification_number_id" not in columns:
+            fields_to_add.append(LicenseDetailsModel._meta.get_field("notification_number"))
+
+        if fields_to_add:
+            with connection.schema_editor() as schema_editor:
+                for field in fields_to_add:
+                    schema_editor.add_field(LicenseDetailsModel, field)
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"license_licensedetailsmodel.{field.column}: created"
+                        )
+                    )
+
+        columns = self._columns("license_licensedetailsmodel")
+        if "scheme_code" in columns and "scheme_code_id" in columns:
+            self._backfill_lookup_fk(
+                legacy_column="scheme_code",
+                fk_column="scheme_code_id",
+                model=SchemeCode,
+            )
+        if "notification_number" in columns and "notification_number_id" in columns:
+            self._backfill_lookup_fk(
+                legacy_column="notification_number",
+                fk_column="notification_number_id",
+                model=NotificationNumber,
+            )
+
+    def _backfill_lookup_fk(self, legacy_column, fk_column, model):
+        table_name = model._meta.db_table
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                INSERT INTO {table_name} (code, label)
+                SELECT DISTINCT {legacy_column}, {legacy_column}
+                FROM license_licensedetailsmodel
+                WHERE {legacy_column} IS NOT NULL AND {legacy_column} != ''
+                ON CONFLICT (code) DO NOTHING
+                """
+            )
+            cursor.execute(
+                f"""
+                UPDATE license_licensedetailsmodel license
+                SET {fk_column} = lookup.id
+                FROM {table_name} lookup
+                WHERE license.{legacy_column} = lookup.code
+                  AND license.{legacy_column} IS NOT NULL
+                  AND license.{legacy_column} != ''
+                  AND license.{fk_column} IS NULL
+                """
+            )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"{fk_column}: backfilled from {legacy_column} using {table_name}"
+            )
+        )
+
+    def _repair_split_tables(self):
         existing_tables = set(connection.introspection.table_names())
         models = [LicenseNotes, LicenseBalance, LicenseFlags, LicenseOwnership]
 
@@ -36,8 +110,6 @@ class Command(BaseCommand):
             self._backfill_from_legacy_columns()
         else:
             self._backfill_defaults()
-
-        self._report_counts()
 
     def _columns(self, table_name):
         with connection.cursor() as cursor:

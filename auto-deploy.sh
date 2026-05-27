@@ -14,7 +14,7 @@
 #      DUCKDNS_TOKEN=your_token_here
 # ============================================================
 
-set -e
+set -Eeuo pipefail
 
 # ── Colors ──────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -32,24 +32,24 @@ ALL_SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
 BRANCH="${1:-feature/Version5}"
 
+# Target: single server or all
+if [ -n "${2:-}" ]; then
+    SERVERS=("$2")
+else
+    SERVERS=("${ALL_SERVERS[@]}")
+fi
+
 # Deploy password is read from the DEPLOY_PASSWORD env var; never committed.
 # Prefer: SSH key auth + NOPASSWD sudo for the django user (then leave this unset).
 PASSWORD="${DEPLOY_PASSWORD:-}"
 
-if [ -z "$PASSWORD" ] && ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$SERVER_USER@${ALL_SERVERS[0]}" true 2>/dev/null; then
+if [ -z "$PASSWORD" ] && ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$SERVER_USER@${SERVERS[0]}" true 2>/dev/null; then
     echo "ERROR: DEPLOY_PASSWORD env var is empty and SSH key auth is not configured."
     echo "Fix one of:"
     echo "  1. Set up SSH key auth + passwordless sudo for the django user (recommended)."
     echo "  2. Export DEPLOY_PASSWORD=... in your shell before running this script."
     echo "Hardcoded passwords in the script have been removed for security."
     exit 1
-fi
-
-# Target: single server or all
-if [ -n "$2" ]; then
-    SERVERS=("$2")
-else
-    SERVERS=("${ALL_SERVERS[@]}")
 fi
 
 # ── Per-server metadata ──────────────────────────────────────
@@ -90,7 +90,7 @@ get_server_meta() {
 
 # ── SSH helper ───────────────────────────────────────────────
 ssh_cmd() {
-    if command -v sshpass &>/dev/null; then
+    if [ -n "$PASSWORD" ] && command -v sshpass &>/dev/null; then
         sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "$@"
     else
         ssh "$SERVER_USER@$SERVER_IP" "$@"
@@ -111,6 +111,13 @@ echo_ok()   { echo -e "\${GREEN}  ✅ \$1\${NC}"; }
 echo_info() { echo -e "\${BLUE}  → \$1\${NC}"; }
 echo_warn() { echo -e "\${YELLOW}  ⚠️  \$1\${NC}"; }
 echo_err()  { echo -e "\${RED}  ❌ \$1\${NC}"; }
+sudo_cmd() {
+    if [ -n "${PASSWORD}" ]; then
+        printf '%s\n' "${PASSWORD}" | sudo -S "\$@"
+    else
+        sudo -n "\$@" 2>/dev/null || sudo "\$@"
+    fi
+}
 
 # ── 0. DuckDNS: keep domain pointing to this server ─────────
 echo_info "Updating DuckDNS IP for ${DUCKDNS_SUBDOMAIN}..."
@@ -130,7 +137,7 @@ fi
 # ── 1. Pull latest code ──────────────────────────────────────
 echo_info "Pulling latest code from ${BRANCH}..."
 cd $SERVER_PATH
-git stash
+git stash push -u -m "auto-deploy-\$(date +%Y%m%d%H%M%S)" || true
 git clean -fd
 git fetch --all --prune
 git checkout $BRANCH || git checkout -b $BRANCH origin/$BRANCH
@@ -145,6 +152,11 @@ pip install --upgrade pip --quiet
 pip install --upgrade -r requirements.txt --quiet
 echo_ok "Python dependencies installed"
 
+echo_info "Running Django system checks..."
+python manage.py check
+python manage.py check --deploy 2>&1 | sed 's/^/    /' || true
+echo_ok "Django checks completed"
+
 echo_info "Reconciling migration history (squashed-initial layout)..."
 # Idempotent. Detects orphan rows from the pre-squash layout and replaces
 # them with the new single-initial rows in one transaction. No-op on
@@ -156,7 +168,7 @@ python manage.py makemigrations --no-input 2>&1 | grep -E "No changes|Created|Ap
 if ! python manage.py migrate --no-input 2>&1 | tee /tmp/migration.log; then
     if grep -q "InsufficientPrivilege\|must be owner" /tmp/migration.log; then
         echo_warn "Permission issue — attempting fix..."
-        echo '$PASSWORD' | sudo -S -u postgres psql -d ${DB_NAME} \
+        sudo_cmd -u postgres psql -d ${DB_NAME} \
             -c "REASSIGN OWNED BY postgres TO ${DB_USER};" 2>/dev/null || true
         python manage.py migrate --no-input
     else
@@ -173,39 +185,44 @@ echo_ok "Static files collected"
 # ── 4. Frontend build ────────────────────────────────────────
 echo_info "Building frontend..."
 cd $SERVER_PATH/frontend
-npm install --silent
+if [ -f package-lock.json ]; then
+    npm ci --silent
+else
+    npm install --silent
+fi
+npm run lint -- --max-warnings=0
 npm run build
 echo_ok "Frontend built"
 
 # ── 5. Nginx config — HTTP phase (needed for cert verify) ────
 echo_info "Installing HTTP nginx config..."
-echo '$PASSWORD' | sudo -S cp $SERVER_PATH/${NGINX_CONF_HTTP} /etc/nginx/sites-available/${NGINX_SITE_NAME}-http
+sudo_cmd cp $SERVER_PATH/${NGINX_CONF_HTTP} /etc/nginx/sites-available/${NGINX_SITE_NAME}-http
 
 # Remove wrong/default sites
 for WRONG in default license-manager labdhi license-tractor nginx-http-only; do
     [ "\$WRONG" = "${NGINX_SITE_NAME}-http" ] && continue
     [ "\$WRONG" = "${NGINX_SITE_NAME}" ] && continue
-    echo '$PASSWORD' | sudo -S rm -f "/etc/nginx/sites-enabled/\$WRONG" 2>/dev/null || true
+    sudo_cmd rm -f "/etc/nginx/sites-enabled/\$WRONG" 2>/dev/null || true
 done
 
-echo '$PASSWORD' | sudo -S ln -sf \
+sudo_cmd ln -sf \
     /etc/nginx/sites-available/${NGINX_SITE_NAME}-http \
     /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
 
-echo '$PASSWORD' | sudo -S nginx -t
-echo '$PASSWORD' | sudo -S systemctl reload nginx
+sudo_cmd nginx -t
+sudo_cmd systemctl reload nginx
 echo_ok "HTTP nginx config active"
 
 # ── 6. SSL certificate (get or renew) ───────────────────────
 echo_info "Checking SSL certificate for ${SERVER_DOMAIN}..."
 CERT_EXISTS=0
-if echo '$PASSWORD' | sudo -S test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+if sudo_cmd test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
     CERT_EXISTS=1
 fi
 
 if [ \$CERT_EXISTS -eq 1 ]; then
     echo_info "Certificate found — renewing if needed..."
-    echo '$PASSWORD' | sudo -S certbot renew --quiet --no-random-sleep-on-renew 2>&1 | \
+    sudo_cmd certbot renew --quiet --no-random-sleep-on-renew 2>&1 | \
         grep -E "renewed|no action|Congratulations" || true
     echo_ok "Certificate renewal checked"
 else
@@ -214,7 +231,7 @@ else
     ADMIN_EMAIL="admin@${SERVER_DOMAIN}"
     [ -f ~/duckdns.env ] && source ~/duckdns.env && [ -n "\$ADMIN_EMAIL" ] && ADMIN_EMAIL=\$ADMIN_EMAIL
 
-    echo '$PASSWORD' | sudo -S certbot certonly --webroot \
+    sudo_cmd certbot certonly --webroot \
         -w /var/www/html \
         -d ${SERVER_DOMAIN} \
         --non-interactive \
@@ -224,7 +241,7 @@ else
         grep -E "Congratulations|Certificate|Error|failed" || true
 
     # Verify cert was obtained
-    if echo '$PASSWORD' | sudo -S test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+    if sudo_cmd test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
         echo_ok "SSL certificate obtained for ${SERVER_DOMAIN}"
     else
         echo_warn "SSL cert could not be obtained — HTTPS will not work until DNS resolves correctly"
@@ -233,27 +250,30 @@ else
 fi
 
 # ── 7. Switch to HTTPS nginx config (if cert exists) ─────────
-if echo '$PASSWORD' | sudo -S test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+if sudo_cmd test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
     echo_info "Installing HTTPS nginx config..."
-    echo '$PASSWORD' | sudo -S cp $SERVER_PATH/${NGINX_CONF_HTTPS} /etc/nginx/sites-available/${NGINX_SITE_NAME}
+    APP_SCHEME="https"
+    sudo_cmd cp $SERVER_PATH/${NGINX_CONF_HTTPS} /etc/nginx/sites-available/${NGINX_SITE_NAME}
 
     # Remove HTTP-only variant, enable HTTPS variant
-    echo '$PASSWORD' | sudo -S rm -f /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
-    echo '$PASSWORD' | sudo -S ln -sf \
+    sudo_cmd rm -f /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
+    sudo_cmd ln -sf \
         /etc/nginx/sites-available/${NGINX_SITE_NAME} \
         /etc/nginx/sites-enabled/${NGINX_SITE_NAME}
 
-    if echo '$PASSWORD' | sudo -S nginx -t 2>/dev/null; then
-        echo '$PASSWORD' | sudo -S systemctl reload nginx
+    if sudo_cmd nginx -t 2>/dev/null; then
+        sudo_cmd systemctl reload nginx
         echo_ok "HTTPS nginx config active for https://${SERVER_DOMAIN}"
     else
         echo_err "HTTPS nginx config invalid — keeping HTTP config"
-        echo '$PASSWORD' | sudo -S ln -sf \
+        APP_SCHEME="http"
+        sudo_cmd ln -sf \
             /etc/nginx/sites-available/${NGINX_SITE_NAME}-http \
             /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
-        echo '$PASSWORD' | sudo -S systemctl reload nginx
+        sudo_cmd systemctl reload nginx
     fi
 else
+    APP_SCHEME="http"
     echo_warn "Running HTTP only — HTTPS requires a valid DNS record first"
 fi
 
@@ -262,7 +282,7 @@ echo_info "Refreshing materialized views..."
 cd $SERVER_PATH/backend
 source $SERVER_PATH/venv/bin/activate
 python manage.py shell -c "
-from core.materialized_views import create_all_materialized_views
+from apps.core.materialized_views import create_all_materialized_views
 try: create_all_materialized_views(); print('Views OK')
 except Exception as e: print(f'Views: {e}')
 " 2>&1 | grep -E "OK|Views" || true
@@ -272,7 +292,7 @@ python manage.py refresh_materialized_views --all 2>&1 | tail -3 || true
 echo_info "Warming caches..."
 python manage.py shell -c "
 from django.core.cache import cache
-from core.models import CompanyModel
+from apps.core.models import CompanyModel
 import json
 try:
     companies = list(CompanyModel.objects.values('id','name'))
@@ -283,25 +303,44 @@ except Exception as e: print(f'Cache: {e}')
 echo_ok "Cache warmed"
 
 echo_info "Setting file permissions..."
-echo '$PASSWORD' | sudo -S chown -R django:django $SERVER_PATH/backend/media 2>/dev/null || true
-echo '$PASSWORD' | sudo -S chmod -R 775 $SERVER_PATH/backend/media 2>/dev/null || true
-echo '$PASSWORD' | sudo -S chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null || true
+sudo_cmd chown -R django:django $SERVER_PATH/backend/media 2>/dev/null || true
+sudo_cmd chmod -R 775 $SERVER_PATH/backend/media 2>/dev/null || true
+sudo_cmd chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null || true
 
 echo_info "Restarting application services..."
-echo '$PASSWORD' | sudo -S supervisorctl restart license-manager
+if command -v supervisorctl >/dev/null 2>&1 && sudo_cmd supervisorctl status license-manager >/dev/null 2>&1; then
+    sudo_cmd supervisorctl restart license-manager
+elif systemctl list-unit-files | grep -q '^gunicorn\\.service'; then
+    sudo_cmd systemctl restart gunicorn
+elif systemctl list-unit-files | grep -q '^license-manager-gunicorn\\.service'; then
+    sudo_cmd systemctl restart license-manager-gunicorn
+else
+    echo_err "No known application service found (supervisor license-manager, gunicorn, license-manager-gunicorn)"
+    exit 1
+fi
 
 echo_info "Restarting Celery..."
-echo '$PASSWORD' | sudo -S supervisorctl stop license-manager-celery 2>/dev/null || true
-echo '$PASSWORD' | sudo -S pkill -9 -f "celery" 2>/dev/null || true
+if command -v supervisorctl >/dev/null 2>&1 && sudo_cmd supervisorctl status license-manager-celery >/dev/null 2>&1; then
+    sudo_cmd supervisorctl stop license-manager-celery 2>/dev/null || true
+fi
+sudo_cmd pkill -9 -f "celery" 2>/dev/null || true
 sleep 2
 cd $SERVER_PATH/backend && source $SERVER_PATH/venv/bin/activate
 celery -A lmanagement purge -f 2>/dev/null || true
-echo '$PASSWORD' | sudo -S supervisorctl start license-manager-celery
+if command -v supervisorctl >/dev/null 2>&1 && sudo_cmd supervisorctl status license-manager-celery >/dev/null 2>&1; then
+    sudo_cmd supervisorctl start license-manager-celery
+elif systemctl list-unit-files | grep -q '^celery\\.service'; then
+    sudo_cmd systemctl restart celery
+elif systemctl list-unit-files | grep -q '^license-manager-celery\\.service'; then
+    sudo_cmd systemctl restart license-manager-celery
+else
+    echo_warn "No known Celery service found; skipped service restart"
+fi
 
 # ── 8b. Post-deploy health check ─────────────────────────────
 echo_info "Waiting for the app to come up..."
 sleep 3
-HEALTH_URL="https://${SERVER_DOMAIN}/api/health/"
+HEALTH_URL="\${APP_SCHEME}://${SERVER_DOMAIN}/api/health/"
 for attempt in 1 2 3 4 5; do
     if curl -fsS --max-time 10 "\$HEALTH_URL" | grep -q '"status":"ok"'; then
         echo_ok "Health check passed on attempt \$attempt"
@@ -319,8 +358,10 @@ echo ""
 echo -e "\${GREEN}================================================\${NC}"
 echo -e "\${GREEN}🎉 Deployment complete — $SERVER_IP\${NC}"
 echo -e "\${GREEN}================================================\${NC}"
-echo_info "URL: https://${SERVER_DOMAIN}"
-echo '$PASSWORD' | sudo -S supervisorctl status | grep license-manager
+echo_info "URL: \${APP_SCHEME}://${SERVER_DOMAIN}"
+if command -v supervisorctl >/dev/null 2>&1; then
+    sudo_cmd supervisorctl status | grep license-manager || true
+fi
 ENDSSH
 }
 
@@ -333,7 +374,7 @@ SUCCESS=0
 
 for IP in "${SERVERS[@]}"; do
     if deploy_to_server "$IP"; then
-        ((SUCCESS++))
+        ((SUCCESS+=1))
         get_server_meta "$IP"
         print_success "Deployed: $IP → https://$SERVER_DOMAIN"
     else

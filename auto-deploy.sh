@@ -115,7 +115,30 @@ sudo_cmd() {
     if [ -n "${PASSWORD}" ]; then
         printf '%s\n' "${PASSWORD}" | sudo -S "\$@"
     else
-        sudo -n "\$@" 2>/dev/null || sudo "\$@"
+        sudo -n "\$@"
+    fi
+}
+have_sudo() {
+    sudo_cmd true >/dev/null 2>&1
+}
+restart_owned_processes() {
+    echo_warn "Sudo unavailable; restarting django-owned gunicorn/celery processes directly"
+    mkdir -p $SERVER_PATH/logs
+    cd $SERVER_PATH/backend
+    source $SERVER_PATH/venv/bin/activate
+
+    pkill -TERM -f "$SERVER_PATH/venv/bin/gunicorn.*lmanagement.wsgi" 2>/dev/null || true
+    sleep 3
+    if ! pgrep -f "$SERVER_PATH/venv/bin/gunicorn.*lmanagement.wsgi" >/dev/null; then
+        nohup gunicorn --workers 3 --timeout 300 --graceful-timeout 300 --bind 0.0.0.0:8000 lmanagement.wsgi:application \
+            > $SERVER_PATH/logs/gunicorn.log 2>&1 &
+    fi
+
+    pkill -TERM -f "$SERVER_PATH/venv/bin/celery -A lmanagement" 2>/dev/null || true
+    sleep 3
+    if ! pgrep -f "$SERVER_PATH/venv/bin/celery -A lmanagement" >/dev/null; then
+        nohup celery -A lmanagement worker --beat -Q celery,ledger -l info \
+            > $SERVER_PATH/logs/celery.log 2>&1 &
     fi
 }
 
@@ -195,6 +218,7 @@ npm run build
 echo_ok "Frontend built"
 
 # ── 5. Nginx config — HTTP phase (needed for cert verify) ────
+if have_sudo; then
 echo_info "Installing HTTP nginx config..."
 sudo_cmd cp $SERVER_PATH/${NGINX_CONF_HTTP} /etc/nginx/sites-available/${NGINX_SITE_NAME}-http
 
@@ -212,15 +236,21 @@ sudo_cmd ln -sf \
 sudo_cmd nginx -t
 sudo_cmd systemctl reload nginx
 echo_ok "HTTP nginx config active"
+else
+    echo_warn "Sudo unavailable; skipping nginx/certbot config update"
+fi
 
 # ── 6. SSL certificate (get or renew) ───────────────────────
 echo_info "Checking SSL certificate for ${SERVER_DOMAIN}..."
 CERT_EXISTS=0
-if sudo_cmd test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+if have_sudo && sudo_cmd test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
     CERT_EXISTS=1
 fi
 
-if [ \$CERT_EXISTS -eq 1 ]; then
+if ! have_sudo; then
+    APP_SCHEME="https"
+    echo_warn "Sudo unavailable; assuming existing nginx/SSL config is active"
+elif [ \$CERT_EXISTS -eq 1 ]; then
     echo_info "Certificate found — renewing if needed..."
     sudo_cmd certbot renew --quiet --no-random-sleep-on-renew 2>&1 | \
         grep -E "renewed|no action|Congratulations" || true
@@ -250,7 +280,7 @@ else
 fi
 
 # ── 7. Switch to HTTPS nginx config (if cert exists) ─────────
-if sudo_cmd test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+if have_sudo && sudo_cmd test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
     echo_info "Installing HTTPS nginx config..."
     APP_SCHEME="https"
     sudo_cmd cp $SERVER_PATH/${NGINX_CONF_HTTPS} /etc/nginx/sites-available/${NGINX_SITE_NAME}
@@ -272,7 +302,7 @@ if sudo_cmd test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/de
             /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
         sudo_cmd systemctl reload nginx
     fi
-else
+elif have_sudo; then
     APP_SCHEME="http"
     echo_warn "Running HTTP only — HTTPS requires a valid DNS record first"
 fi
@@ -303,12 +333,16 @@ except Exception as e: print(f'Cache: {e}')
 echo_ok "Cache warmed"
 
 echo_info "Setting file permissions..."
-sudo_cmd chown -R django:django $SERVER_PATH/backend/media 2>/dev/null || true
-sudo_cmd chmod -R 775 $SERVER_PATH/backend/media 2>/dev/null || true
-sudo_cmd chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null || true
+if have_sudo; then
+    sudo_cmd chown -R django:django $SERVER_PATH/backend/media 2>/dev/null || true
+fi
+chmod -R 775 $SERVER_PATH/backend/media 2>/dev/null || true
+chmod -R 755 $SERVER_PATH/frontend/dist 2>/dev/null || true
 
 echo_info "Restarting application services..."
-if command -v supervisorctl >/dev/null 2>&1 && sudo_cmd supervisorctl status license-manager >/dev/null 2>&1; then
+if ! have_sudo; then
+    restart_owned_processes
+elif command -v supervisorctl >/dev/null 2>&1 && sudo_cmd supervisorctl status license-manager >/dev/null 2>&1; then
     sudo_cmd supervisorctl restart license-manager
 elif systemctl list-unit-files | grep -q '^gunicorn\\.service'; then
     sudo_cmd systemctl restart gunicorn
@@ -320,21 +354,25 @@ else
 fi
 
 echo_info "Restarting Celery..."
-if command -v supervisorctl >/dev/null 2>&1 && sudo_cmd supervisorctl status license-manager-celery >/dev/null 2>&1; then
-    sudo_cmd supervisorctl stop license-manager-celery 2>/dev/null || true
-fi
-sudo_cmd pkill -9 -f "celery" 2>/dev/null || true
-sleep 2
-cd $SERVER_PATH/backend && source $SERVER_PATH/venv/bin/activate
-celery -A lmanagement purge -f 2>/dev/null || true
-if command -v supervisorctl >/dev/null 2>&1 && sudo_cmd supervisorctl status license-manager-celery >/dev/null 2>&1; then
-    sudo_cmd supervisorctl start license-manager-celery
-elif systemctl list-unit-files | grep -q '^celery\\.service'; then
-    sudo_cmd systemctl restart celery
-elif systemctl list-unit-files | grep -q '^license-manager-celery\\.service'; then
-    sudo_cmd systemctl restart license-manager-celery
+if ! have_sudo; then
+    echo_ok "Celery handled by direct process restart"
 else
-    echo_warn "No known Celery service found; skipped service restart"
+    if command -v supervisorctl >/dev/null 2>&1 && sudo_cmd supervisorctl status license-manager-celery >/dev/null 2>&1; then
+        sudo_cmd supervisorctl stop license-manager-celery 2>/dev/null || true
+    fi
+    sudo_cmd pkill -9 -f "celery" 2>/dev/null || true
+    sleep 2
+    cd $SERVER_PATH/backend && source $SERVER_PATH/venv/bin/activate
+    celery -A lmanagement purge -f 2>/dev/null || true
+    if command -v supervisorctl >/dev/null 2>&1 && sudo_cmd supervisorctl status license-manager-celery >/dev/null 2>&1; then
+        sudo_cmd supervisorctl start license-manager-celery
+    elif systemctl list-unit-files | grep -q '^celery\\.service'; then
+        sudo_cmd systemctl restart celery
+    elif systemctl list-unit-files | grep -q '^license-manager-celery\\.service'; then
+        sudo_cmd systemctl restart license-manager-celery
+    else
+        echo_warn "No known Celery service found; skipped service restart"
+    fi
 fi
 
 # ── 8b. Post-deploy health check ─────────────────────────────

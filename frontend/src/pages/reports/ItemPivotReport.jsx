@@ -40,13 +40,6 @@ export default function ItemPivotReport() {
         }
     }, [minBalance, licenseStatus]);
 
-    // Load report when active norm tab changes or filters change
-    useEffect(() => {
-        if (activeNormTab) {
-            loadReport(activeNormTab);
-        }
-    }, [activeNormTab, loadReport]);
-
     const loadFilterOptions = async () => {
         try {
             // Load SION norms (only active ones)
@@ -101,6 +94,13 @@ export default function ItemPivotReport() {
             setLoading(false);
         }
     }, [selectedCompanies, excludeCompanies, minBalance, licenseStatus, expiryDateFrom, expiryDateTo]);
+
+    // Load report when active norm tab changes or filters change
+    useEffect(() => {
+        if (activeNormTab) {
+            loadReport(activeNormTab);
+        }
+    }, [activeNormTab, loadReport]);
 
     const handleUpdateBalance = async () => {
         const statusText = licenseStatus === 'active' ? 'active' : licenseStatus === 'inactive' ? 'inactive' : 'all';

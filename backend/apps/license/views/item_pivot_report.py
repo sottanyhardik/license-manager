@@ -150,11 +150,16 @@ class ItemPivotReportView(View):
             item_names_qs = item_names_qs.filter(sion_norm_class__norm_class=sion_norm)
             export_items_qs = export_items_qs.filter(norm_class__norm_class=sion_norm)
 
-        # Optimize with select_related and prefetch_related to reduce queries
+        # Optimize with select_related and prefetch_related to reduce queries.
+        # balance_cif / balance_report_notes / condition_sheet / current_owner now
+        # live on OneToOne sub-tables (LicenseBalance / LicenseNotes / LicenseOwnership);
+        # they're accessed via @property shims, so pull the sub-rows in one shot.
         licenses = licenses.select_related(
             'exporter',
             'port',
-            'current_owner'
+            'balance',
+            'notes',
+            'ownership__current_owner',
         ).prefetch_related(
             Prefetch('import_license',
                      queryset=import_items_qs.prefetch_related(
@@ -165,9 +170,6 @@ class ItemPivotReportView(View):
                      queryset=export_items_qs.only('id', 'license_id', 'norm_class_id', 'cif_fc')),
             'license_documents',
             'transfers'
-        ).only('id', 'license_number', 'license_date', 'license_expiry_date', 'exporter_id',
-               'port_id', 'notification_number', 'purchase_status', 'balance_cif',
-               'balance_report_notes', 'condition_sheet', 'current_owner_id'
         ).order_by('license_expiry_date', 'license_date')
 
         # Collect all unique items across all licenses

@@ -17,7 +17,7 @@ SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
     "local-dev-only-secret-key-change-for-production-7f8e6d5c4b3a2910",
 )
-DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS",
                           "127.0.0.1,localhost,139.59.92.226,labdhi.duckdns.org,143.110.252.201,license-manager.duckdns.org,178.128.58.219,165.232.185.220,license-tractor.duckdns.org").split(
     ",")

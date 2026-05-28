@@ -59,8 +59,39 @@ export default function AsyncSelectField({
 
     const fetchOptionById = async (id) => {
         try {
-            const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-            const url = `${baseEndpoint}${numId}/`;
+            // Resolve the lookup string. Some FKs use integer PKs (port,
+            // company), others use slug/code values ("26", "025/2023" — when
+            // the API exposes the field via SlugRelatedField). Don't parseInt
+            // unconditionally — that turns "025/2023" into 25 and we'd fetch
+            // the wrong row.
+            const idStr = typeof id === 'number' ? String(id) : String(id);
+            const isNumericId = /^\d+$/.test(idStr);
+
+            // Slugs that contain a "/" cannot ride in a URL path segment —
+            // the dev server (and Django's URL resolver) decode "%2F" before
+            // pattern matching, so `[^/]+` lookup regexes never match. Fall
+            // back to the list endpoint with a search filter and pick the
+            // exact match by labelField.
+            if (!isNumericId && idStr.includes('/')) {
+                const params = new URLSearchParams(existingParams);
+                params.set('search', idStr);
+                params.set('page_size', '10');
+                const listUrl = `${baseEndpoint}?${params.toString()}`;
+                if (_fkDetailCache.has(listUrl)) {
+                    return formatOption(_fkDetailCache.get(listUrl));
+                }
+                const {data} = await api.get(listUrl);
+                const results = data.results || data || [];
+                const exact = results.find(r => String(r[labelField] ?? '') === idStr);
+                const match = exact || results[0];
+                if (!match) return null;
+                _fkDetailCache.set(listUrl, match);
+                return formatOption(match);
+            }
+
+            // URL-safe detail lookup. encodeURIComponent so weird (but
+            // path-legal) chars in slugs survive.
+            const url = `${baseEndpoint}${encodeURIComponent(idStr)}/`;
 
             // Cached response — no network call.
             if (_fkDetailCache.has(url)) {

@@ -216,6 +216,139 @@ def test_item_pivot_click_first_norm(logged_in_driver, frontend_url):
 
 
 # ---------------------------------------------------------------------------
+# License create form — every FK dropdown must populate on first click.
+# Regression for the bug where HybridSelect didn't pass loadOnMount, leaving
+# every dropdown showing "No options" until the user typed a search term.
+# Also implicitly covers the "no obsolete varchar columns left in the DB"
+# migration: this page would 500 if scheme_code/notification_number were
+# still NOT NULL on the parent table.
+# ---------------------------------------------------------------------------
+def test_license_create_dropdowns_populate(logged_in_driver, frontend_url):
+    from selenium.webdriver.common.keys import Keys
+
+    driver = logged_in_driver
+    # Hard reset between tests: the SPA's in-flight requests and component
+    # state from the previous test (item-pivot report etc.) can otherwise
+    # interfere with this page's first click. about:blank guarantees the
+    # next navigation is a full fresh load.
+    driver.get("about:blank")
+    driver.get(f"{frontend_url}/licenses/create")
+
+    # The form fetches its field metadata + master lookups in parallel.
+    # Wait until react-select controls are mounted for every FK we care about.
+    _wait(driver, timeout=20).until(
+        lambda d: len(d.find_elements(By.CSS_SELECTOR, "div.react-select__control")) >= 4
+    )
+
+    # Map each control to its preceding label so we can pick by name.
+    controls = driver.find_elements(By.CSS_SELECTOR, "div.react-select__control")
+    by_label = {}
+    for c in controls:
+        try:
+            lbl = c.find_element(By.XPATH, "./preceding::label[1]")
+            by_label[lbl.text.strip()] = c
+        except Exception:
+            pass
+
+    expected_min_options = {
+        "Scheme Code": 1,
+        "Notification Number": 1,
+        "Purchase Status": 1,
+    }
+
+    # Give the 5 simultaneous loadOnMount fetches a beat to land BEFORE
+    # interacting — otherwise ARROW_DOWN can open the menu while react-select
+    # is still in its initial "Loading…" state and our option assertion races
+    # the fetch.
+    import time as _t
+    _t.sleep(2)
+
+    for label_text, min_count in expected_min_options.items():
+        control = by_label.get(label_text)
+        assert control is not None, f"no react-select control found for {label_text!r}"
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", control)
+        # Click the dropdown indicator (chevron) — this is the most reliable
+        # way to open a react-select menu in headless mode. ARROW_DOWN on the
+        # input requires focus to already be on the input, which isn't
+        # guaranteed when running after other tests in the same browser.
+        try:
+            indicator = control.find_element(By.CSS_SELECTOR, ".react-select__dropdown-indicator")
+            driver.execute_script("arguments[0].click();", indicator)
+        except Exception:
+            inp = control.find_element(By.CSS_SELECTOR, "input")
+            driver.execute_script("arguments[0].focus();", inp)
+            inp.send_keys(Keys.ARROW_DOWN)
+        inp = control.find_element(By.CSS_SELECTOR, "input")
+        try:
+            _wait(driver, timeout=15).until(
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, ".react-select__option")) >= min_count
+            )
+        except TimeoutException:
+            try:
+                driver.save_screenshot(f"/tmp/lm_dropdown_{label_text.replace(' ', '_')}.png")
+            except Exception:
+                pass
+            menus = driver.find_elements(By.CSS_SELECTOR, ".react-select__menu")
+            menu_text = menus[0].text if menus else "(no menu rendered)"
+            raise AssertionError(
+                f"{label_text}: dropdown showed no options within 15s. "
+                f"Menu content: {menu_text!r}"
+            )
+        options = driver.find_elements(By.CSS_SELECTOR, ".react-select__option")
+        assert len(options) >= min_count, (
+            f"{label_text}: expected ≥{min_count} options, got {len(options)}"
+        )
+        # Close so the next iteration sees a fresh menu.
+        inp.send_keys(Keys.ESCAPE)
+
+
+# ---------------------------------------------------------------------------
+# License edit — FK dropdowns must resolve their label, including codes that
+# contain a "/" (notification_number = "025/2023"). Regression for the
+# AsyncSelectField parseInt-corrupts-slug bug.
+# ---------------------------------------------------------------------------
+def test_license_edit_fk_labels_resolve(logged_in_driver, frontend_url, api_get):
+    driver = logged_in_driver
+
+    # Grab the first license id from the API so the test doesn't hard-code one.
+    r = api_get("licenses/?page_size=1")
+    assert r.status_code == 200, r.text[:200]
+    lic_id = r.json()["results"][0]["id"]
+
+    driver.get(f"{frontend_url}/licenses/{lic_id}/edit")
+    _wait(driver, timeout=20).until(
+        lambda d: len(d.find_elements(By.CSS_SELECTOR, "div.react-select__control")) >= 4
+    )
+    # Give the AsyncSelect detail-fetches a beat to land.
+    import time as _t
+    _t.sleep(3)
+
+    controls = driver.find_elements(By.CSS_SELECTOR, "div.react-select__control")
+    by_label = {}
+    for c in controls:
+        try:
+            lbl = c.find_element(By.XPATH, "./preceding::label[1]")
+            by_label[lbl.text.strip()] = c
+        except Exception:
+            pass
+
+    # Each of these FKs should display a non-empty selected label. If the
+    # license's value is unset, the test is inconclusive — but for the API's
+    # default first row it should have Port + Exporter + Scheme Code +
+    # Notification Number all populated.
+    for name in ("Port", "Scheme Code", "Notification Number", "Exporter"):
+        c = by_label.get(name)
+        assert c is not None, f"no react-select control found for {name!r}"
+        single_value_els = c.find_elements(By.CSS_SELECTOR, ".react-select__single-value")
+        assert single_value_els, (
+            f"{name}: dropdown rendered no selected label — the FK detail fetch "
+            f"likely failed (check AsyncSelectField parseInt / URL-encoding)."
+        )
+        text = single_value_els[0].text.strip()
+        assert text, f"{name}: selected label is empty"
+
+
+# ---------------------------------------------------------------------------
 # ItemReport — same idea, exercise the debounced-filter load path.
 # ---------------------------------------------------------------------------
 def test_item_report_typing_hsn(logged_in_driver, frontend_url):

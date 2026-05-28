@@ -66,6 +66,13 @@ export default function HybridSelect({
                 isDisabled={isDisabled}
                 formatLabel={formatLabel}
                 className={className}
+                // Pre-populate the dropdown on first open so small lookup
+                // tables (scheme codes, notification numbers, purchase
+                // statuses, …) show their options without forcing the user
+                // to type a search string. AsyncSelect still page-limits to
+                // 50 results, so large endpoints (companies, hs-codes) stay
+                // responsive.
+                loadOnMount={true}
             />
         );
     }

@@ -15,9 +15,22 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import LicensePermission
-from apps.core.models import CompanyModel, HSCodeModel, PortModel
+from apps.core.models import (
+    CompanyModel,
+    HSCodeModel,
+    NotificationNumber,
+    PortModel,
+    SchemeCode,
+)
 from apps.license.models import LicenseDetailsModel
 from apps.license.parsers.dfia_pdf import parse_dfia_pdf
+
+
+# DFIA licences historically all had scheme code "26" (≈99% of existing rows).
+# The parser doesn't read scheme_code from the PDF text — there's no consistent
+# header for it — so we default to "26" so the form's Scheme Code dropdown
+# arrives pre-selected the way it used to before this column became an FK.
+DFIA_DEFAULT_SCHEME_CODE = "26"
 
 
 def _decimal(value, default=None):
@@ -61,6 +74,34 @@ def _match_hs_code(hsn: str | None):
     if not hsn:
         return None
     return HSCodeModel.objects.filter(hs_code=hsn.strip()).first()
+
+
+def _resolve_notification_number(code: str | None):
+    """Look up a NotificationNumber row by code, creating one if the PDF
+    contains a new notification value we haven't seen before.
+
+    Before the CharField→FK conversion the form took whatever string the PDF
+    yielded; now we need an integer FK to populate the Select. Auto-creating
+    keeps that behaviour transparent to the user — they get to see the
+    parsed notification number preselected in the dropdown either way.
+    """
+    if not code:
+        return None
+    code = code.strip()
+    if not code:
+        return None
+    obj, _ = NotificationNumber.objects.get_or_create(
+        code=code, defaults={"label": code}
+    )
+    return obj
+
+
+def _resolve_scheme_code(code: str | None):
+    """Look up a SchemeCode row by code. The DFIA parser does not extract a
+    scheme code from the PDF, so callers pass `DFIA_DEFAULT_SCHEME_CODE`."""
+    if not code:
+        return None
+    return SchemeCode.objects.filter(code=code.strip()).first()
 
 
 def _annotate_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -121,6 +162,8 @@ class LicensePdfParseView(APIView):
         create_company = str(request.data.get("create_company", "true")).lower() != "false"
         company, company_created = _match_or_create_company(parsed, create_company)
         port = _match_port(parsed.get("port_code"))
+        notification = _resolve_notification_number(parsed.get("notification_number"))
+        scheme = _resolve_scheme_code(DFIA_DEFAULT_SCHEME_CODE)
 
         items = _annotate_items(parsed.get("items") or [])
 
@@ -138,7 +181,13 @@ class LicensePdfParseView(APIView):
             "file_number": parsed.get("file_number"),
             "registration_number": reg_number,
             "registration_date": parsed.get("license_date"),
-            "notification_number": parsed.get("notification_number"),
+            # scheme_code / notification_number on the License serializer are
+            # SlugRelatedField(slug_field="code"), so the form expects the
+            # CODE string ("26", "025/2023") — not the PK. Pass the code
+            # straight through; AsyncSelectField resolves the label via the
+            # masters detail endpoint, whose lookup_field is also "code".
+            "notification_number": notification.code if notification else None,
+            "scheme_code": scheme.code if scheme else None,
             "exporter": company.id if company else None,
             "port": port.id if port else None,
             "condition_sheet": parsed.get("condition_sheet"),

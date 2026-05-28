@@ -510,6 +510,7 @@ export default function MasterForm({
         if (prefill.registration_number) patch.registration_number = prefill.registration_number;
         if (prefill.registration_date) patch.registration_date = prefill.registration_date;
         if (prefill.notification_number) patch.notification_number = prefill.notification_number;
+        if (prefill.scheme_code) patch.scheme_code = prefill.scheme_code;
         if (prefill.exporter) patch.exporter = prefill.exporter;
         if (prefill.port) patch.port = prefill.port;
         if (prefill.condition_sheet) patch.condition_sheet = prefill.condition_sheet;

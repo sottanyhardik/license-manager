@@ -15,7 +15,58 @@ from apps.license.models import (
     LicenseTransferModel,
     LicensePurchase,
     IncentiveLicense,
+    LicenseBalance,
+    LicenseFlags,
+    LicenseNotes,
+    LicenseOwnership,
 )
+
+
+# Fields that moved from LicenseDetailsModel into OneToOne sub-tables. Reads
+# still work via @property shims on the parent, but writes have to be routed
+# to the correct sub-row — `setattr(parent, "balance_cif", v)` would AttributeError
+# because the property has no setter.
+_SUB_TABLE_FIELDS = {
+    "balance":   ("balance_cif", "ledger_date"),
+    "flags":     ("is_active", "is_audit", "is_mnm", "is_not_registered", "is_null",
+                  "is_au", "is_incomplete", "is_expired", "is_individual"),
+    "ownership": ("current_owner", "file_transfer_status", "last_ownership_fetch"),
+    "notes":     ("user_comment", "condition_sheet", "user_restrictions",
+                  "balance_report_notes"),
+}
+
+
+def _pop_sub_table_writes(validated_data):
+    """Split validated_data into (parent_data, {related_name: {field: value}}).
+
+    Parent_data is what's safe to setattr / pass to .objects.create on
+    LicenseDetailsModel. The returned mapping is keyed by the OneToOne
+    related_name on the parent (balance / flags / ownership / notes).
+    """
+    sub_writes = {rel: {} for rel in _SUB_TABLE_FIELDS}
+    for rel, fields in _SUB_TABLE_FIELDS.items():
+        for f in fields:
+            if f in validated_data:
+                sub_writes[rel][f] = validated_data.pop(f)
+    return validated_data, sub_writes
+
+
+def _apply_sub_table_writes(license_instance, sub_writes):
+    """Persist the popped moved-field values to the right sub-table rows.
+
+    Sub-rows are guaranteed to exist by the post_save signal on
+    LicenseDetailsModel, so `.filter(license_id=...).update(...)` always
+    matches exactly one row.
+    """
+    model_map = {
+        "balance": LicenseBalance,
+        "flags": LicenseFlags,
+        "ownership": LicenseOwnership,
+        "notes": LicenseNotes,
+    }
+    for rel, values in sub_writes.items():
+        if values:
+            model_map[rel].objects.filter(license_id=license_instance.pk).update(**values)
 
 
 def _safe_iso(val: Any) -> Any:
@@ -794,10 +845,17 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
         transfers = validated_data.pop("transfers", [])
         purchases = validated_data.pop("purchases", [])
 
+        # Route moved fields (balance_cif, is_*, current_owner, condition_sheet, …)
+        # away from the parent so .create()/setattr won't hit read-only @properties.
+        validated_data, sub_writes = _pop_sub_table_writes(validated_data)
+
         # Wrap entire license creation in atomic transaction
         # If any error occurs, the entire license creation will be rolled back
         with transaction.atomic(), suspend_license_flag_recalc():
             instance = LicenseDetailsModel.objects.create(**validated_data)
+            # Sub-rows are created by the post_save signal on the parent;
+            # apply moved-field values to them now.
+            _apply_sub_table_writes(instance, sub_writes)
 
             for e in exports:
                 # Remove form-only fields and empty id fields
@@ -895,6 +953,10 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
                 for i, doc in enumerate(docs):
                     logger.debug("Document %s: keys=%s, type=%s, file=%s", i, list(doc.keys()), doc.get('type'), doc.get('file'))
 
+        # Route moved fields to their sub-tables before touching the parent —
+        # setattr on a read-only @property would raise AttributeError.
+        validated_data, sub_writes = _pop_sub_table_writes(validated_data)
+
         # Use atomic transaction with row-level locking to prevent race conditions.
         # Suspend per-item balance recalcs — we flush them once at the end.
         with transaction.atomic(), suspend_license_flag_recalc():
@@ -905,6 +967,9 @@ class LicenseDetailsSerializer(serializers.ModelSerializer):
             for k, v in validated_data.items():
                 setattr(locked_instance, k, v)
             locked_instance.save()
+
+            # Persist moved fields into their sub-rows.
+            _apply_sub_table_writes(locked_instance, sub_writes)
 
             # Update instance reference to use locked instance
             instance = locked_instance

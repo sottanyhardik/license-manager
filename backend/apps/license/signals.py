@@ -69,9 +69,10 @@ def _update_all_import_items_available_value(license_instance):
             return
 
         # `update_license_flags` writes the new balance via .filter().update()
-        # which doesn't refresh the in-memory instance — pull the fresh value
-        # explicitly before using it as the cap.
-        license_instance.refresh_from_db(fields=["balance_cif"])
+        # on the LicenseBalance sub-table — refresh that sub-row, not the parent.
+        # (balance_cif is no longer a field on LicenseDetailsModel.)
+        if hasattr(license_instance, "balance") and license_instance.balance is not None:
+            license_instance.balance.refresh_from_db(fields=["balance_cif"])
         license_balance = license_instance.balance_cif or DEC_0
 
         # One-shot computation of remaining pools for every %-condition on

@@ -99,9 +99,11 @@ class Command(BaseCommand):
         Update balance_cif for a single license.
         Uses update() to avoid triggering signals.
         """
+        from apps.license.models import LicenseBalance
         balance = LicenseBalanceCalculator.calculate_balance(license_obj)
 
-        # Use update() to avoid triggering signals (prevents recursion)
-        LicenseDetailsModel.objects.filter(pk=license_obj.pk).update(
+        # Use update() to avoid triggering signals (prevents recursion).
+        # balance_cif now lives on LicenseBalance (OneToOne sub-table).
+        LicenseBalance.objects.filter(license_id=license_obj.pk).update(
             balance_cif=balance
         )

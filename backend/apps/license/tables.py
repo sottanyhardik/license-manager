@@ -223,6 +223,12 @@ class LicenseDetailTable(dt2.Table):
     license_expiry_date = dt2.DateTimeColumn(format='d-m-Y')
     balance_cif = BalanceCIFColumn(verbose_name='Balance CIF', accessor='get_balance_cif', orderable=False)
     norm_class = dt2.Column(verbose_name='Norm Class', accessor='get_norm_class', orderable=False)
+    # is_au / is_audit / ledger_date moved to OneToOne sub-tables and are exposed as
+    # @property accessors on the parent. Declare them with explicit accessors so
+    # django_tables2 reads via the property instead of trying to resolve a model field.
+    is_au = dt2.BooleanColumn(verbose_name='AU', accessor='is_au', orderable=False)
+    is_audit = dt2.BooleanColumn(verbose_name='Audit', accessor='is_audit', orderable=False)
+    ledger_date = dt2.DateColumn(verbose_name='Ledger Date', accessor='ledger_date', format='d-m-Y', orderable=False)
 
     class Meta:
         model = models.LicenseDetailsModel

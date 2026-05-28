@@ -80,14 +80,6 @@ export default function ItemReport() {
         };
     }, []);
 
-    useEffect(() => {
-        if (debouncedFilters.selectedItemNames.length > 0 || debouncedFilters.productDescSearch || debouncedFilters.hsnCodeSearch) {
-            loadReport();
-        } else {
-            setReportData(null);
-        }
-    }, [debouncedFilters, loadReport]);
-
     const loadReport = useCallback(async () => {
         setLoading(true);
         try {
@@ -163,6 +155,14 @@ export default function ItemReport() {
             setLoading(false);
         }
     }, [debouncedFilters]);
+
+    useEffect(() => {
+        if (debouncedFilters.selectedItemNames.length > 0 || debouncedFilters.productDescSearch || debouncedFilters.hsnCodeSearch) {
+            loadReport();
+        } else {
+            setReportData(null);
+        }
+    }, [debouncedFilters, loadReport]);
 
     const handleExport = async () => {
         setDownloading(true);

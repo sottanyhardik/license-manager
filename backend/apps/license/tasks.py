@@ -45,7 +45,12 @@ def update_all_license_balances(self, license_status='all'):
     """
     from django.utils import timezone
     from decimal import Decimal
-    from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+    from apps.license.models import (
+        LicenseDetailsModel,
+        LicenseImportItemsModel,
+        LicenseBalance,
+        LicenseFlags,
+    )
     from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
     logger.info(f"Starting update_all_license_balances task: task_id={self.request.id}, license_status={license_status}")
@@ -98,12 +103,15 @@ def update_all_license_balances(self, license_status='all'):
                     skipped_count += 1
                     continue
 
-                # Update license fields only if something changed
-                LicenseDetailsModel.objects.filter(pk=license_obj.pk).update(
+                # Update license fields only if something changed.
+                # balance_cif lives on LicenseBalance; the is_* flags on LicenseFlags.
+                LicenseBalance.objects.filter(license_id=license_obj.pk).update(
                     balance_cif=balance,
+                )
+                LicenseFlags.objects.filter(license_id=license_obj.pk).update(
                     is_expired=is_expired,
                     is_null=is_null,
-                    is_active=is_active
+                    is_active=is_active,
                 )
 
                 updated_count += 1
@@ -585,7 +593,7 @@ def update_identified_licenses(license_ids):
     """
     from django.utils import timezone
     from decimal import Decimal
-    from apps.license.models import LicenseDetailsModel
+    from apps.license.models import LicenseDetailsModel, LicenseBalance, LicenseFlags
     from apps.license.services.balance_calculator import LicenseBalanceCalculator
     from apps.core.models import CeleryTaskTracker
 
@@ -621,12 +629,15 @@ def update_identified_licenses(license_ids):
                 is_null = balance < Decimal('500')
                 is_active = not is_expired
 
-                # Update license (we already know it needs updating from level-1)
-                LicenseDetailsModel.objects.filter(pk=license_obj.pk).update(
+                # Update license (we already know it needs updating from level-1).
+                # balance_cif is on LicenseBalance; is_* flags on LicenseFlags.
+                LicenseBalance.objects.filter(license_id=license_obj.pk).update(
                     balance_cif=balance,
+                )
+                LicenseFlags.objects.filter(license_id=license_obj.pk).update(
                     is_expired=is_expired,
                     is_null=is_null,
-                    is_active=is_active
+                    is_active=is_active,
                 )
 
                 updated_count += 1

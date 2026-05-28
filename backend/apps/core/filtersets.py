@@ -78,10 +78,10 @@ class LicenseFilterSet(BaseFilterSet):
     license_expiry_date_from = filters.DateFilter(field_name='license_expiry_date', lookup_expr='gte')
     license_expiry_date_to = filters.DateFilter(field_name='license_expiry_date', lookup_expr='lte')
 
-    # Status filters
-    is_active = filters.BooleanFilter(field_name='is_active')
-    is_expired = filters.BooleanFilter(field_name='is_expired')
-    is_incomplete = filters.BooleanFilter(field_name='is_incomplete')
+    # Status filters — flags now live on LicenseFlags (OneToOne, related_name='flags')
+    is_active = filters.BooleanFilter(field_name='flags__is_active')
+    is_expired = filters.BooleanFilter(field_name='flags__is_expired')
+    is_incomplete = filters.BooleanFilter(field_name='flags__is_incomplete')
 
     # Status special filters
     status = filters.ChoiceFilter(
@@ -95,9 +95,9 @@ class LicenseFilterSet(BaseFilterSet):
         label='License Status'
     )
 
-    # Balance filters
-    balance_cif_min = filters.NumberFilter(field_name='balance_cif', lookup_expr='gte')
-    balance_cif_max = filters.NumberFilter(field_name='balance_cif', lookup_expr='lte')
+    # Balance filters — balance_cif now lives on LicenseBalance (OneToOne, related_name='balance')
+    balance_cif_min = filters.NumberFilter(field_name='balance__balance_cif', lookup_expr='gte')
+    balance_cif_max = filters.NumberFilter(field_name='balance__balance_cif', lookup_expr='lte')
     has_balance = filters.BooleanFilter(method='filter_has_balance', label='Has Balance > 0')
 
     # Purchase status
@@ -137,7 +137,7 @@ class LicenseFilterSet(BaseFilterSet):
             today = date.today()
             thirty_days = today + timedelta(days=30)
             return queryset.filter(
-                is_active=True,
+                flags__is_active=True,
                 license_expiry_date__gte=today,
                 license_expiry_date__lte=thirty_days
             )
@@ -184,11 +184,12 @@ class LicenseFilterSet(BaseFilterSet):
         return queryset
 
     class Meta:
+        # is_active / balance_cif moved to LicenseFlags / LicenseBalance sub-tables.
+        # They're exposed via the explicitly declared filters above (is_active,
+        # balance_cif_min/max); don't auto-introspect them here.
         fields = {
             'license_number': ['exact', 'icontains'],
             'exporter__name': ['icontains'],
-            'is_active': ['exact'],
-            'balance_cif': ['gte', 'lte', 'exact'],
         }
 
 

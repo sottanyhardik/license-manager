@@ -129,7 +129,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         # that have trades with that company are still shown in the company's history.
         if is_active_only and not company_id:
             dfia_qs = dfia_qs.filter(flags__is_expired=False)
-            incentive_qs = incentive_qs.filter(flags__is_active=True, license_expiry_date__gte=timezone.now().date())
+            # IncentiveLicense has its own direct `is_active` field — no flags sub-table here.
+            incentive_qs = incentive_qs.filter(is_active=True, license_expiry_date__gte=timezone.now().date())
 
         if exporter_id:
             dfia_qs = dfia_qs.filter(exporter_id=exporter_id)
@@ -668,8 +669,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         # opening_balance is a @cached_property (not a DB column), must sum in Python
         dfia_total = sum(_get_safe_balance(lic, 'opening_balance') for lic in dfia_qs)
-        # balance_cif IS a DB column — aggregate at DB level to avoid loading all objects
-        dfia_balance = float(dfia_qs.aggregate(balance=Sum('balance_cif'))['balance'] or 0)
+        # balance_cif is a DB column on the LicenseBalance sub-table — aggregate via the OneToOne relation
+        dfia_balance = float(dfia_qs.aggregate(balance=Sum('balance__balance_cif'))['balance'] or 0)
         dfia_sold = dfia_total - dfia_balance
 
         # license_value, balance_value, sold_value are all real DB columns on IncentiveLicense
@@ -1285,8 +1286,8 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         # DFIA with balance
         dfia_data = self._prepare_dfia_data(
             LicenseDetailsModel.objects.filter(
-                is_expired=False,
-                balance_cif__gte=min_balance
+                flags__is_expired=False,
+                balance__balance_cif__gte=min_balance
             ).select_related('exporter', 'port')
         )
 

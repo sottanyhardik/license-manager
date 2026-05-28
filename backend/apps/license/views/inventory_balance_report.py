@@ -84,7 +84,7 @@ class InventoryBalanceReportView(View):
         # Get all licenses with this SION norm in export items
         licenses_with_norm = LicenseDetailsModel.objects.filter(
             export_license__norm_class=norm,
-            is_active=True
+            flags__is_active=True
         ).distinct()
 
         # Get all import items from these licenses

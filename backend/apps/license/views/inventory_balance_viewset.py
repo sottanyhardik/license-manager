@@ -146,7 +146,7 @@ class InventoryBalanceViewSet(viewsets.ViewSet):
 
         # Get all active licenses with SION norms
         active_licenses = LicenseDetailsModel.objects.filter(
-            is_active=True,
+            flags__is_active=True,
             export_license__norm_class__isnull=False
         ).distinct()
 

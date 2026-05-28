@@ -12,6 +12,9 @@
 export function openPdfPreview(data, filename) {
     const blob = data instanceof Blob ? data : new Blob([data], { type: 'application/pdf' });
     const url = window.URL.createObjectURL(blob);
+    // #zoom=100 forces the in-browser PDF viewer to render at 100% and makes
+    // the print dialog default to "Actual size" instead of "Fit to page".
+    const viewerUrl = `${url}#zoom=100`;
 
     const safeName = sanitizeFilename(filename);
     const win = window.open('', '_blank');
@@ -43,7 +46,7 @@ export function openPdfPreview(data, filename) {
 </head>
 <body>
 <a class="dl" href="${url}" download="${escapeHtml(safeName)}">⬇ Download</a>
-<embed src="${url}" type="application/pdf">
+<embed src="${viewerUrl}" type="application/pdf">
 </body>
 </html>`);
     win.document.close();

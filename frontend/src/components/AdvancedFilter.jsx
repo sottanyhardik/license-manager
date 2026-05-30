@@ -255,8 +255,13 @@ export default function AdvancedFilter({
                     );
                 }
 
-                // Check if this is a boolean field (starts with is_ or has_)
-                if (fieldName.startsWith("is_") || fieldName.startsWith("has_")) {
+                // Check if this is a boolean field (starts with is_/has_, or nested via __ e.g. flags__is_expired)
+                if (
+                    fieldName.startsWith("is_") ||
+                    fieldName.startsWith("has_") ||
+                    fieldName.includes("__is_") ||
+                    fieldName.includes("__has_")
+                ) {
                     return (
                         <div key={fieldName} className="col-md-4">
                             <label className="form-label d-block">{label}</label>

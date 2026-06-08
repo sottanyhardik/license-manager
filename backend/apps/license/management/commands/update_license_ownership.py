@@ -39,10 +39,13 @@ SERVER_IP_FALLBACKS = {
     'license-tractor.duckdns.org': 'http://165.232.185.220',
 }
 
-# DGFT API Config
-APP_ID = "204000000"
-SESSION_ID = "ECDCCFE06566EB25ECD234D0B7159888"
-CSRF_TOKEN = "fc86ccf3-4638-4828-b271-150b04a3f6cd"
+# DGFT API Config — session and CSRF tokens expire and must be refreshed from
+# a live browser session. Override via env vars DGFT_SESSION_ID and DGFT_CSRF_TOKEN
+# (no code edit needed). The fallback values below are for backwards compatibility
+# and will fail once expired.
+APP_ID = os.getenv("DGFT_APP_ID", "204000000")
+SESSION_ID = os.getenv("DGFT_SESSION_ID", "ECDCCFE06566EB25ECD234D0B7159888")
+CSRF_TOKEN = os.getenv("DGFT_CSRF_TOKEN", "fc86ccf3-4638-4828-b271-150b04a3f6cd")
 
 # Proxy configuration - set via DGFT_PROXY environment variable
 # Examples:

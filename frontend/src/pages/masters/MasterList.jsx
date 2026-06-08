@@ -98,6 +98,9 @@ export default function MasterList() {
     const [showBalanceModal, setShowBalanceModal] = useState(false);
     const [selectedLicenseId, setSelectedLicenseId] = useState(null);
 
+    // Tracks license IDs currently fetching ownership from DGFT
+    const [fetchingOwnershipIds, setFetchingOwnershipIds] = useState(() => new Set());
+
     // Transfer Letter Modal state (for BOE)
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
     const [transferLetterType, setTransferLetterType] = useState('');
@@ -1223,6 +1226,25 @@ export default function MasterList() {
                                                     <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-eye"></i>
                                                     </button>
+                                                    {canWrite && <button
+                                                        disabled={fetchingOwnershipIds.has(item.id)}
+                                                        onClick={async () => {
+                                                            setFetchingOwnershipIds(prev => { const n = new Set(prev); n.add(item.id); return n; });
+                                                            try {
+                                                                const r = await api.post(`license-actions/${item.id}/fetch-ownership/`);
+                                                                const owner = r.data?.current_owner?.name || '—';
+                                                                toast.success(`Ownership updated: ${owner} (${r.data?.transfers_count ?? 0} transfers)`);
+                                                                fetchData(currentPage, pageSize, filterParams);
+                                                            } catch (err) {
+                                                                toast.error(err?.response?.data?.error || err?.message || 'Failed to fetch ownership');
+                                                            } finally {
+                                                                setFetchingOwnershipIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
+                                                            }
+                                                        }}
+                                                        title="Fetch ownership from DGFT"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#6d28d9', background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: '5px', padding: '4px 9px', cursor: fetchingOwnershipIds.has(item.id) ? 'wait' : 'pointer', opacity: fetchingOwnershipIds.has(item.id) ? 0.6 : 1 }}>
+                                                        <i className={fetchingOwnershipIds.has(item.id) ? 'bi bi-arrow-repeat spinner-border spinner-border-sm' : 'bi bi-cloud-download'}></i>
+                                                    </button>}
                                                     <button onClick={async () => {
                                                         try {
                                                             const r = await api.get(`licenses/${item.id}/balance-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });

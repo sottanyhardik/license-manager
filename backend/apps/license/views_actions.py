@@ -439,3 +439,55 @@ class LicenseActionViewSet(ViewSet):
                 api_error('Failed to bulk update license transfers', e, __name__),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @action(detail=True, methods=['post'], url_path='fetch-ownership', permission_classes=[IsAuthenticated])
+    def fetch_ownership(self, request, pk=None):
+        """
+        Fetch ownership info for a single license from DGFT and save locally.
+        Reuses the same fetch+save logic as the update_license_ownership command.
+        Returns the saved ownership state for UI to update.
+        """
+        license_obj = get_object_or_404(
+            LicenseDetailsModel.objects.select_related('exporter', 'ownership__current_owner'),
+            pk=pk,
+        )
+
+        # Lazy import — pulls in DGFT helpers via the command module
+        from apps.license.management.commands.update_license_ownership import (
+            fetch_and_update_ownership,
+            DGFT_PROXY,
+        )
+
+        default_iec = request.data.get('default_iec') if isinstance(request.data, dict) else None
+        try:
+            ok, payload, error = fetch_and_update_ownership(
+                license_obj, max_retries=2, proxy=DGFT_PROXY, default_iec=default_iec,
+            )
+        except Exception as e:
+            return Response(
+                api_error('Unexpected error fetching ownership', e, __name__),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        if not ok:
+            return Response(
+                {'success': False, 'error': error or 'Failed to fetch ownership from DGFT'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Reload to pick up the new ownership row
+        license_obj.refresh_from_db()
+        ownership = license_obj.ownership
+        transfers_count = LicenseTransferModel.objects.filter(license=license_obj).count()
+
+        return Response({
+            'success': True,
+            'license_number': license_obj.license_number,
+            'last_ownership_fetch': ownership.last_ownership_fetch.isoformat() if ownership.last_ownership_fetch else None,
+            'file_transfer_status': ownership.file_transfer_status,
+            'current_owner': (
+                {'iec': ownership.current_owner.iec, 'name': ownership.current_owner.name}
+                if ownership.current_owner_id else None
+            ),
+            'transfers_count': transfers_count,
+        })

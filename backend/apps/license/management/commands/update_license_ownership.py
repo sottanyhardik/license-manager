@@ -16,7 +16,21 @@ SERVER_BASE_URL = os.getenv('SERVER_BASE_URL', 'https://license-manager.duckdns.
 SERVER_API = f"{SERVER_BASE_URL}/api/license-actions/update-license-transfer/"
 SERVER_AUTH_URL = f"{SERVER_BASE_URL}/api/auth/login/"
 SERVER_USERNAME = os.getenv('SERVER_USERNAME', 'hardik')
-SERVER_PASSWORD = os.getenv('SERVER_PASSWORD', 'admin@123')
+# Password is never hardcoded. Set SERVER_PASSWORD env var for unattended runs
+# (e.g. cron); otherwise the script prompts interactively via getpass on first use.
+SERVER_PASSWORD = os.getenv('SERVER_PASSWORD')
+
+
+def _get_server_password():
+    """Return the server password. Prompts securely via getpass if not in env. Cached."""
+    global SERVER_PASSWORD
+    if SERVER_PASSWORD:
+        return SERVER_PASSWORD
+    import getpass
+    SERVER_PASSWORD = getpass.getpass(f"Password for {SERVER_USERNAME}: ")
+    if not SERVER_PASSWORD:
+        raise RuntimeError("Server password is required (set SERVER_PASSWORD env var or enter at prompt).")
+    return SERVER_PASSWORD
 
 # IP fallbacks use plain HTTP so SSL certificates are not involved — no verify=False needed
 SERVER_IP_FALLBACKS = {
@@ -60,7 +74,7 @@ def fetch_eligible_licenses(order=None, expired_only=False):
     today = date.today()
     if expired_only:
         # Expired licenses where:
-        #   - never fetched (last_ownership_fetch IS NULL), OR
+        #   - never fetched (ownership__last_ownership_fetch IS NULL), OR
         #   - expiry date is AFTER the last fetch date (expired after we last checked — new info may exist)
         # Skips licenses already fetched post-expiry (last fetch >= expiry date).
         # Also skips any license already fetched today.
@@ -68,16 +82,18 @@ def fetch_eligible_licenses(order=None, expired_only=False):
             license_expiry_date__isnull=False,
             license_expiry_date__lte=today,
         ).filter(
-            Q(last_ownership_fetch__isnull=True) |
-            Q(license_expiry_date__gt=TruncDate('last_ownership_fetch'))
-        ).exclude(last_ownership_fetch__date=today)
+            Q(ownership__last_ownership_fetch__isnull=True) |
+            Q(license_expiry_date__gt=TruncDate('ownership__last_ownership_fetch'))
+        ).exclude(ownership__last_ownership_fetch__date=today)
     else:
         # Only active licenses (expiry > today) or licenses with no expiry date.
         # Expired licenses are always skipped — last_ownership_fetch is not a reason to re-include them.
         # Skips any license already fetched today.
         qs = LicenseDetailsModel.objects.filter(
             Q(license_expiry_date__isnull=True) | Q(license_expiry_date__gt=today)
-        ).exclude(last_ownership_fetch__date=today)
+        ).exclude(ownership__last_ownership_fetch__date=today)
+    # Drop rows that can never be fetched: DGFT requires both license_number and license_date.
+    qs = qs.exclude(license_date__isnull=True).exclude(license_number__in=['', '0']).exclude(license_number__isnull=True)
     if order == 'asc':
         qs = qs.order_by(F('license_expiry_date').asc(nulls_first=True))
     else:
@@ -227,7 +243,7 @@ def authenticate(server_url=None):
 
             response = requests.post(
                 auth_url,
-                json={'username': SERVER_USERNAME, 'password': SERVER_PASSWORD},
+                json={'username': SERVER_USERNAME, 'password': _get_server_password()},
                 timeout=30
             )
 
@@ -263,7 +279,7 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
     """
     Save ownership information to local database.
     """
-    from apps.license.models import LicenseTransferModel
+    from apps.license.models import LicenseTransferModel, LicenseOwnership
     from apps.core.models import CompanyModel
 
     try:
@@ -329,33 +345,35 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
             except (ValueError, AttributeError) as e:
                 print(f"   ⚠️  Could not parse validity date '{validity_date}': {e}")
 
-        # Update license with current owner - find or create company by IEC
-        update_fields = []
+        # current_owner / file_transfer_status live on LicenseOwnership (OneToOne).
+        # Sub-row is auto-created by post_save signal on LicenseDetailsModel; get_or_create
+        # is a defensive no-op for legacy rows.
+        ownership_row, _ = LicenseOwnership.objects.get_or_create(license=dfia)
+        ownership_update_fields = []
+
         if current_owner.get("iec"):
             owner_iec = current_owner.get("iec")
             owner_name = current_owner.get("firm")
 
-            # Try to find existing company by IEC
             try:
                 owner_company = CompanyModel.objects.get(iec=owner_iec)
             except CompanyModel.DoesNotExist:
-                # Create new company if not found
                 owner_company = CompanyModel.objects.create(
                     iec=owner_iec,
                     name=owner_name or f"Company {owner_iec}"
                 )
 
-            dfia.current_owner = owner_company
-            update_fields.append('current_owner')
+            if ownership_row.current_owner_id != owner_company.id:
+                ownership_row.current_owner = owner_company
+                ownership_update_fields.append('current_owner')
 
-        # Set file_transfer_status from the latest transfer (pending/withdrawn shows here)
         file_transfer_status = _derive_file_transfer_status(transfers)
-        if file_transfer_status != dfia.file_transfer_status:
-            dfia.file_transfer_status = file_transfer_status
-            update_fields.append('file_transfer_status')
+        if file_transfer_status != ownership_row.file_transfer_status:
+            ownership_row.file_transfer_status = file_transfer_status
+            ownership_update_fields.append('file_transfer_status')
 
-        if update_fields:
-            dfia.save(update_fields=update_fields)
+        if ownership_update_fields:
+            ownership_row.save(update_fields=ownership_update_fields)
 
         # Save/update transfers
         for transfer_data in transfers:
@@ -428,9 +446,9 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
                     }
                 )
 
-        # Record the timestamp of this successful fetch
-        dfia.last_ownership_fetch = timezone.now()
-        dfia.save(update_fields=['last_ownership_fetch'])
+        # Record the timestamp of this successful fetch (on LicenseOwnership sub-row)
+        ownership_row.last_ownership_fetch = timezone.now()
+        ownership_row.save(update_fields=['last_ownership_fetch'])
 
         return True
     except Exception as e:

@@ -12,7 +12,7 @@ from apps.accounts.permissions import LicensePermission, LicenseLedgerViewPermis
 from apps.core.models import CompanyModel
 from apps.core.utils.exceptions import api_error
 from apps.license.ledger_pdf import generate_license_ledger_pdf
-from apps.license.models import LicenseDetailsModel, LicenseTransferModel
+from apps.license.models import LicenseDetailsModel, LicenseOwnership, LicenseTransferModel
 
 
 class LicenseActionViewSet(ViewSet):
@@ -135,15 +135,16 @@ class LicenseActionViewSet(ViewSet):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Update current owner if provided
+            # Update current owner if provided (lives on LicenseOwnership sub-row)
             if current_owner_data and current_owner_data.get('iec'):
                 owner_iec = current_owner_data.get('iec')
 
-                # Try to find company by IEC
                 try:
                     owner_company = CompanyModel.objects.get(iec=owner_iec)
-                    license_obj.current_owner = owner_company
-                    license_obj.save(update_fields=['current_owner'])
+                    ownership_row, _ = LicenseOwnership.objects.get_or_create(license=license_obj)
+                    if ownership_row.current_owner_id != owner_company.id:
+                        ownership_row.current_owner = owner_company
+                        ownership_row.save(update_fields=['current_owner'])
                 except CompanyModel.DoesNotExist:
                     # Log but don't fail - we might want to create the company later
                     pass
@@ -301,10 +302,14 @@ class LicenseActionViewSet(ViewSet):
                             failed_count += 1
                             continue
 
-                        # Track fields to update
-                        update_fields = []
+                        # current_owner / file_transfer_status / last_ownership_fetch live on
+                        # LicenseOwnership (OneToOne, related_name="ownership"). license_expiry_date
+                        # remains on the parent.
+                        parent_update_fields = []
+                        ownership_update_fields = []
+                        ownership_row, _ = LicenseOwnership.objects.get_or_create(license=license_obj)
 
-                        # Update validity/expiry date if provided
+                        # Update validity/expiry date if provided (parent field)
                         validity = license_data.get('validity')
                         if validity:
                             try:
@@ -317,22 +322,22 @@ class LicenseActionViewSet(ViewSet):
 
                                 if parsed_validity and parsed_validity != license_obj.license_expiry_date:
                                     license_obj.license_expiry_date = parsed_validity
-                                    update_fields.append('license_expiry_date')
+                                    parent_update_fields.append('license_expiry_date')
                             except (ValueError, AttributeError):
                                 pass  # Skip invalid validity dates
 
-                        # Update last_ownership_fetch timestamp
+                        # Update last_ownership_fetch timestamp (ownership sub-row)
                         last_fetch_raw = license_data.get('last_ownership_fetch')
                         if last_fetch_raw:
                             try:
                                 last_fetch_dt = parse_datetime(last_fetch_raw)
                                 if last_fetch_dt:
-                                    license_obj.last_ownership_fetch = last_fetch_dt
-                                    update_fields.append('last_ownership_fetch')
+                                    ownership_row.last_ownership_fetch = last_fetch_dt
+                                    ownership_update_fields.append('last_ownership_fetch')
                             except (ValueError, AttributeError):
                                 pass
 
-                        # Update current owner if provided
+                        # Update current owner if provided (ownership sub-row)
                         if current_owner_data and current_owner_data.get('iec'):
                             owner_iec = current_owner_data.get('iec')
                             owner_name = current_owner_data.get('name')
@@ -342,18 +347,21 @@ class LicenseActionViewSet(ViewSet):
                                 iec=owner_iec,
                                 defaults={'name': owner_name or f"Company {owner_iec}"}
                             )
-                            license_obj.current_owner = owner_company
-                            update_fields.append('current_owner')
+                            if ownership_row.current_owner_id != owner_company.id:
+                                ownership_row.current_owner = owner_company
+                                ownership_update_fields.append('current_owner')
 
-                        # Update file_transfer_status (pending/withdrawn label from latest transfer)
+                        # Update file_transfer_status (ownership sub-row)
                         file_transfer_status = license_data.get('file_transfer_status')
-                        if file_transfer_status != license_obj.file_transfer_status:
-                            license_obj.file_transfer_status = file_transfer_status
-                            update_fields.append('file_transfer_status')
+                        if file_transfer_status != ownership_row.file_transfer_status:
+                            ownership_row.file_transfer_status = file_transfer_status
+                            ownership_update_fields.append('file_transfer_status')
 
-                        # Save if any fields were updated
-                        if update_fields:
-                            license_obj.save(update_fields=update_fields)
+                        # Save parent + ownership separately
+                        if parent_update_fields:
+                            license_obj.save(update_fields=parent_update_fields)
+                        if ownership_update_fields:
+                            ownership_row.save(update_fields=ownership_update_fields)
 
                         # Store transfer data in LicenseTransferModel
                         transfers = license_data.get('transfers', [])

@@ -91,9 +91,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
     const fetchNotificationOptions = useCallback(async () => {
         try {
-            const {data} = await api.options('/licenses/');
-            const notificationChoices = data?.actions?.POST?.notification_number?.choices || [];
-            setNotificationOptions(notificationChoices);
+            const {data} = await api.get('masters/notification-numbers/', {
+                params: {page_size: 200, ordering: 'code'},
+            });
+            const results = data?.results ?? data ?? [];
+            setNotificationOptions(
+                results.map(({code, label}) => ({
+                    value: code,
+                    display_name: label ? `${code} — ${label}` : code,
+                }))
+            );
         } catch (err) {
             // Silently fail for notification options
         }

@@ -28,6 +28,7 @@ export default function ItemReport() {
     const [hsnCodeSearch, setHsnCodeSearch] = useState('');
     const [selectedNorms, setSelectedNorms] = useState([]);
     const [selectedNotifications, setSelectedNotifications] = useState([]);
+    const [notificationOptions, setNotificationOptions] = useState([]);
     const [expiryDateFrom, setExpiryDateFrom] = useState('');
     const [expiryDateTo, setExpiryDateTo] = useState('');
 
@@ -73,7 +74,30 @@ export default function ItemReport() {
             }
         };
 
+        const fetchNotificationOptions = async () => {
+            try {
+                const response = await api.get('masters/notification-numbers/', {
+                    params: {page_size: 200, ordering: 'code'},
+                });
+                const results = response.data?.results ?? response.data ?? [];
+                if (isMounted) {
+                    setNotificationOptions(
+                        results.map(({code, label}) => ({
+                            value: code,
+                            label: label ? `${code} — ${label}` : code,
+                        }))
+                    );
+                }
+            } catch (error) {
+                console.error('Failed to load notification options:', error);
+                if (isMounted) {
+                    setNotificationOptions([]);
+                }
+            }
+        };
+
         fetchItems();
+        fetchNotificationOptions();
 
         return () => {
             isMounted = false;
@@ -661,17 +685,9 @@ export default function ItemReport() {
                                     </label>
                                     <Select
                                         isMulti
-                                        value={[
-                                            {value: '019/2015', label: '019/2015'},
-                                            {value: '098/2009', label: '098/2009'},
-                                            {value: '025/2023', label: '025/2023'}
-                                        ].filter(opt => selectedNotifications.includes(opt.value))}
+                                        value={notificationOptions.filter(opt => selectedNotifications.includes(opt.value))}
                                         onChange={(selected) => handleNotificationsChange(selected ? selected.map(s => s.value) : [])}
-                                        options={[
-                                            {value: '019/2015', label: '019/2015'},
-                                            {value: '098/2009', label: '098/2009'},
-                                            {value: '025/2023', label: '025/2023'}
-                                        ]}
+                                        options={notificationOptions}
                                         placeholder="Select notification..."
                                         className="basic-multi-select"
                                         classNamePrefix="select"

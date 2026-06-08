@@ -61,11 +61,22 @@ export const deleteAllocation = async (allotmentId, allocationId) => {
 
 /**
  * Fetch notification options
+ *
+ * notification_number was migrated from a CharField-with-choices to a FK on
+ * core.NotificationNumber, so DRF's OPTIONS metadata no longer enumerates
+ * the values. Read them from the masters endpoint instead and normalize the
+ * shape to {value, display_name, label} for legacy callers.
  */
 export const fetchNotificationOptions = async () => {
-    const response = await api.options('/licenses/');
-    const choices = response.data?.actions?.POST?.notification_number?.choices || [];
-    return choices;
+    const response = await api.get('masters/notification-numbers/', {
+        params: { page_size: 200, ordering: 'code' },
+    });
+    const results = response.data?.results ?? response.data ?? [];
+    return results.map(({ code, label }) => ({
+        value: code,
+        label: label ? `${code} — ${label}` : code,
+        display_name: label ? `${code} — ${label}` : code,
+    }));
 };
 
 /**

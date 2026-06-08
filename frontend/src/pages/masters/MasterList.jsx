@@ -9,6 +9,7 @@ import DataPagination from "../../components/DataPagination";
 import DataTable from "../../components/DataTable";
 import AccordionTable from "../../components/AccordionTable";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
+import OwnershipDetailsModal from "../../components/OwnershipDetailsModal";
 import TransferLetterModal from "../../components/TransferLetterModal";
 import { EntityCard, DetailTable } from "../../components/ui";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
@@ -100,6 +101,10 @@ export default function MasterList() {
 
     // Tracks license IDs currently fetching ownership from DGFT
     const [fetchingOwnershipIds, setFetchingOwnershipIds] = useState(() => new Set());
+
+    // Ownership details modal state
+    const [showOwnershipModal, setShowOwnershipModal] = useState(false);
+    const [ownershipLicense, setOwnershipLicense] = useState(null); // { id, number }
 
     // Transfer Letter Modal state (for BOE)
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
@@ -1226,6 +1231,12 @@ export default function MasterList() {
                                                     <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#0369a1', background: '#e0f2fe', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
                                                         <i className="bi bi-eye"></i>
                                                     </button>
+                                                    <button
+                                                        onClick={() => { setOwnershipLicense({ id: item.id, number: item.license_number }); setShowOwnershipModal(true); }}
+                                                        title="View ownership & transfers"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#4338ca', background: '#eef2ff', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
+                                                        <i className="bi bi-diagram-3"></i>
+                                                    </button>
                                                     {canWrite && <button
                                                         disabled={fetchingOwnershipIds.has(item.id)}
                                                         onClick={async () => {
@@ -1987,6 +1998,16 @@ export default function MasterList() {
                     show={showBalanceModal}
                     onHide={() => setShowBalanceModal(false)}
                     licenseId={selectedLicenseId}
+                />
+            )}
+
+            {/* Ownership Details Modal */}
+            {entityName === 'licenses' && (
+                <OwnershipDetailsModal
+                    show={showOwnershipModal}
+                    onHide={() => { setShowOwnershipModal(false); setOwnershipLicense(null); }}
+                    licenseId={ownershipLicense?.id}
+                    licenseNumber={ownershipLicense?.number}
                 />
             )}
 

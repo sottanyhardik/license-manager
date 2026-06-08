@@ -440,6 +440,58 @@ class LicenseActionViewSet(ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @action(detail=True, methods=['get'], url_path='ownership-data', permission_classes=[IsAuthenticated])
+    def ownership_data(self, request, pk=None):
+        """
+        Return the locally-saved DGFT ownership snapshot for a license:
+        current owner + ordered transfer history. Read-only; does not call DGFT.
+        """
+        license_obj = get_object_or_404(
+            LicenseDetailsModel.objects.select_related('ownership__current_owner'),
+            pk=pk,
+        )
+
+        try:
+            ownership = license_obj.ownership
+        except LicenseOwnership.DoesNotExist:
+            ownership = None
+
+        co = ownership.current_owner if ownership else None
+        current_owner = None
+        if co is not None:
+            address = ", ".join(p for p in (co.address_line_1, co.address_line_2) if p) or None
+            current_owner = {
+                'iec': co.iec,
+                'name': co.name,
+                'address': address,
+            }
+
+        transfers_qs = (
+            LicenseTransferModel.objects.filter(license=license_obj)
+            .select_related('from_company', 'to_company')
+            .order_by('transfer_initiation_date')
+        )
+        transfers = [
+            {
+                'transfer_initiation_date': t.transfer_initiation_date.isoformat() if t.transfer_initiation_date else None,
+                'transfer_acceptance_date': t.transfer_acceptance_date.isoformat() if t.transfer_acceptance_date else None,
+                'from_iec': t.from_company.iec if t.from_company else None,
+                'from_name': t.from_company.name if t.from_company else None,
+                'to_iec': t.to_company.iec if t.to_company else None,
+                'to_name': t.to_company.name if t.to_company else None,
+                'transfer_status': t.transfer_status,
+            }
+            for t in transfers_qs
+        ]
+
+        return Response({
+            'license_number': license_obj.license_number,
+            'last_ownership_fetch': ownership.last_ownership_fetch.isoformat() if (ownership and ownership.last_ownership_fetch) else None,
+            'file_transfer_status': ownership.file_transfer_status if ownership else None,
+            'current_owner': current_owner,
+            'transfers': transfers,
+        })
+
     @action(detail=True, methods=['post'], url_path='fetch-ownership', permission_classes=[IsAuthenticated])
     def fetch_ownership(self, request, pk=None):
         """

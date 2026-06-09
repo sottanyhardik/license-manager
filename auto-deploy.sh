@@ -161,24 +161,35 @@ npm install --silent
 npm run build
 echo_ok "Frontend built"
 
-# ── 5. Nginx config — HTTP phase (needed for cert verify) ────
-echo_info "Installing HTTP nginx config..."
-echo '$PASSWORD' | sudo -S cp $SERVER_PATH/${NGINX_CONF_HTTP} /etc/nginx/sites-available/${NGINX_SITE_NAME}-http
+# ── 5. Nginx config — HTTP phase (needed only when cert doesn't exist) ──
+# Skip HTTP-only swap when a cert already exists — keeping the current HTTPS
+# config avoids a transient "conflicting server name" warning when both the
+# new -http symlink and the old HTTPS symlink overlap on port 80.
+if echo '$PASSWORD' | sudo -S test -f "/etc/letsencrypt/live/${SERVER_DOMAIN}/fullchain.pem" 2>/dev/null; then
+    echo_info "SSL cert exists — skipping HTTP-only nginx phase"
+else
+    echo_info "No SSL cert yet — installing HTTP-only nginx config to let certbot bootstrap..."
+    echo '$PASSWORD' | sudo -S cp $SERVER_PATH/${NGINX_CONF_HTTP} /etc/nginx/sites-available/${NGINX_SITE_NAME}-http
 
-# Remove wrong/default sites
-for WRONG in default license-manager labdhi license-tractor nginx-http-only; do
-    [ "\$WRONG" = "${NGINX_SITE_NAME}-http" ] && continue
-    [ "\$WRONG" = "${NGINX_SITE_NAME}" ] && continue
-    echo '$PASSWORD' | sudo -S rm -f "/etc/nginx/sites-enabled/\$WRONG" 2>/dev/null || true
-done
+    # Remove wrong/default sites that could shadow our port-80 server block
+    for WRONG in default license-manager labdhi license-tractor nginx-http-only; do
+        [ "\$WRONG" = "${NGINX_SITE_NAME}-http" ] && continue
+        [ "\$WRONG" = "${NGINX_SITE_NAME}" ] && continue
+        echo '$PASSWORD' | sudo -S rm -f "/etc/nginx/sites-enabled/\$WRONG" 2>/dev/null || true
+    done
 
-echo '$PASSWORD' | sudo -S ln -sf \
-    /etc/nginx/sites-available/${NGINX_SITE_NAME}-http \
-    /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
+    # Remove any existing HTTPS-variant symlink during bootstrap to avoid
+    # two port-80 server blocks declaring the same server_name.
+    echo '$PASSWORD' | sudo -S rm -f /etc/nginx/sites-enabled/${NGINX_SITE_NAME} 2>/dev/null || true
 
-echo '$PASSWORD' | sudo -S nginx -t
-echo '$PASSWORD' | sudo -S systemctl reload nginx
-echo_ok "HTTP nginx config active"
+    echo '$PASSWORD' | sudo -S ln -sf \
+        /etc/nginx/sites-available/${NGINX_SITE_NAME}-http \
+        /etc/nginx/sites-enabled/${NGINX_SITE_NAME}-http
+
+    echo '$PASSWORD' | sudo -S nginx -t
+    echo '$PASSWORD' | sudo -S systemctl reload nginx
+    echo_ok "HTTP nginx config active (bootstrap)"
+fi
 
 # ── 6. SSL certificate (get or renew) ───────────────────────
 echo_info "Checking SSL certificate for ${SERVER_DOMAIN}..."

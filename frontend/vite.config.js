@@ -37,6 +37,21 @@ export default defineConfig({
         manualChunks: (id) => {
           // Vendor chunks - separate large dependencies
           if (id.includes('node_modules')) {
+            // Excel (exceljs is ~1.5 MB on its own — must be its own chunk)
+            if (id.includes('exceljs')) {
+              return 'vendor-excel';
+            }
+
+            // PDF generation
+            if (id.includes('jspdf')) {
+              return 'vendor-pdf';
+            }
+
+            // Date pickers / date utilities
+            if (id.includes('react-datepicker') || id.includes('date-fns') || id.includes('moment')) {
+              return 'vendor-date';
+            }
+
             // React core libraries
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
               return 'vendor-react';
@@ -50,11 +65,6 @@ export default defineConfig({
             // Toast/notification libraries
             if (id.includes('react-toastify')) {
               return 'vendor-toast';
-            }
-
-            // Date/time libraries
-            if (id.includes('date-fns') || id.includes('moment')) {
-              return 'vendor-date';
             }
 
             // All other node_modules

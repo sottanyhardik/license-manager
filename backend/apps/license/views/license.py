@@ -946,10 +946,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         from apps.license.services.condition_pool import compute_condition_pools as _ccp
         _cond_pools = _ccp(license_obj)
 
-        _bal_agg = defaultdict(lambda: {'qty': 0.0, 'sr_ids': [], 'description': '', 'hs_code': '', 'condition_type': ''})
+        _bal_agg = defaultdict(lambda: {'qty': 0.0, 'total_qty': 0.0, 'sr_ids': [], 'description': '', 'hs_code': '', 'condition_type': ''})
         for _item in license_obj.import_license.all():
             _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
             _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+            _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)
             _bal_agg[_key]['sr_ids'].append(_item.serial_number)
             if not _bal_agg[_key]['description']:
                 _bal_agg[_key]['description'] = _item.description or _key
@@ -1322,12 +1323,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _cond_pools = _ccp(license_obj)
 
             _bal_agg = defaultdict(lambda: {
-                'qty': 0.0, 'sr_ids': [],
+                'qty': 0.0, 'total_qty': 0.0, 'sr_ids': [],
                 'description': '', 'hs_code': '', 'condition_type': ''
             })
             for _item in license_obj.import_license.all():
                 _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
                 _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+                _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)
                 _bal_agg[_key]['sr_ids'].append(_item.serial_number)
                 if not _bal_agg[_key]['description']:
                     _bal_agg[_key]['description'] = _item.description or _key
@@ -1542,7 +1544,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
                     r += 1
-                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
+                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty', 'Balance Qty'], 1):
                         _hdr(ws, r, col, h)
                     r += 1
                     for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
@@ -1551,12 +1553,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _hs2 = _agg2['hs_code']
                         _de2 = _agg2['description'] or _ik2
                         _bq2 = _agg2['qty']
+                        _tq2 = _agg2['total_qty']
                         _rf2 = None if _i2 % 2 == 0 else ALT_FILL
                         _cell(ws, r, 1, _ik2, fill=_rf2)
                         _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
                         _cell(ws, r, 3, _hs2, fill=_rf2)
                         _cell(ws, r, 4, _de2, fill=_rf2)
-                        _cell(ws, r, 5, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                         r += 1
 
                 r += 1
@@ -1639,7 +1643,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
                     r += 1
-                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
+                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty', 'Balance Qty'], 1):
                         _hdr(ws, r, col, h)
                     r += 1
                     for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
@@ -1648,12 +1652,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _hs2 = _agg2['hs_code']
                         _de2 = _agg2['description'] or _ik2
                         _bq2 = _agg2['qty']
+                        _tq2 = _agg2['total_qty']
                         _rf2 = None if _i2 % 2 == 0 else ALT_FILL
                         _cell(ws, r, 1, _ik2, fill=_rf2)
                         _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
                         _cell(ws, r, 3, _hs2, fill=_rf2)
                         _cell(ws, r, 4, _de2, fill=_rf2)
-                        _cell(ws, r, 5, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                         r += 1
 
                 r += 1
@@ -2206,12 +2212,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         _cond_pools = _ccp(license_obj)
 
         _bal_agg = defaultdict(lambda: {
-            'qty': 0.0, 'sr_ids': [],
+            'qty': 0.0, 'total_qty': 0.0, 'sr_ids': [],
             'description': '', 'hs_code': '', 'condition_type': ''
         })
         for _item in license_obj.import_license.all():
             _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
             _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+            _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)
             _bal_agg[_key]['sr_ids'].append(_item.serial_number)
             if not _bal_agg[_key]['description']:
                 _bal_agg[_key]['description'] = _item.description or _key
@@ -2385,7 +2392,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _uh.alignment = Alignment(horizontal='center', vertical='center')
                 _uh.border = THIN_BORDER
                 r += 1
-                for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
+                for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty', 'Balance Qty'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
                 for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
@@ -2394,12 +2401,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _hs2 = _agg2['hs_code']
                     _de2 = _agg2['description'] or _ik2
                     _bq2 = _agg2['qty']
+                    _tq2 = _agg2['total_qty']
                     _rf2 = None if _i2 % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _ik2, fill=_rf2)
                     _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
                     _cell(ws, r, 3, _hs2, fill=_rf2)
                     _cell(ws, r, 4, _de2, fill=_rf2)
-                    _cell(ws, r, 5, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                     r += 1
 
             r += 1
@@ -2493,7 +2502,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _uh.alignment = Alignment(horizontal='center', vertical='center')
                 _uh.border = THIN_BORDER
                 r += 1
-                for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
+                for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty', 'Balance Qty'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
                 for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
@@ -2502,12 +2511,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _hs2 = _agg2['hs_code']
                     _de2 = _agg2['description'] or _ik2
                     _bq2 = _agg2['qty']
+                    _tq2 = _agg2['total_qty']
                     _rf2 = None if _i2 % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _ik2, fill=_rf2)
                     _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
                     _cell(ws, r, 3, _hs2, fill=_rf2)
                     _cell(ws, r, 4, _de2, fill=_rf2)
-                    _cell(ws, r, 5, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                     r += 1
 
             r += 1

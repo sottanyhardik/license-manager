@@ -1533,11 +1533,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _util_return['cell_refs']['planned'][_lbl] = _planned_cell.coordinate
                     r += 1
 
-                if _unclassified:
+                if _bal_agg:
                     r += 1
                     ws.merge_cells(f'A{r}:G{r}')
                     _uh = ws[f'A{r}']
-                    _uh.value = 'UNCLASSIFIED ITEMS'
+                    _uh.value = 'LICENSE ITEM LIST'
                     _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
@@ -1545,7 +1545,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
                         _hdr(ws, r, col, h)
                     r += 1
-                    for _i2, (_ik2, _sr2, _hs2, _de2, _bq2) in enumerate(_unclassified):
+                    for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
+                        _agg2 = _bal_agg[_ik2]
+                        _sr2 = ', '.join(str(s) for s in sorted(set(_agg2['sr_ids'])))
+                        _hs2 = _agg2['hs_code']
+                        _de2 = _agg2['description'] or _ik2
+                        _bq2 = _agg2['qty']
                         _rf2 = None if _i2 % 2 == 0 else ALT_FILL
                         _cell(ws, r, 1, _ik2, fill=_rf2)
                         _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
@@ -1625,11 +1630,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _util_return['cell_refs']['wastage'] = _remaining_cell.coordinate
                     r += 1
 
-                if _e5_unclassified:
+                if _bal_agg:
                     r += 1
                     ws.merge_cells(f'A{r}:G{r}')
                     _uh = ws[f'A{r}']
-                    _uh.value = 'UNCLASSIFIED ITEMS'
+                    _uh.value = 'LICENSE ITEM LIST'
                     _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
@@ -1637,7 +1642,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
                         _hdr(ws, r, col, h)
                     r += 1
-                    for _i2, (_ik2, _sr2, _hs2, _de2, _bq2) in enumerate(_e5_unclassified):
+                    for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
+                        _agg2 = _bal_agg[_ik2]
+                        _sr2 = ', '.join(str(s) for s in sorted(set(_agg2['sr_ids'])))
+                        _hs2 = _agg2['hs_code']
+                        _de2 = _agg2['description'] or _ik2
+                        _bq2 = _agg2['qty']
                         _rf2 = None if _i2 % 2 == 0 else ALT_FILL
                         _cell(ws, r, 1, _ik2, fill=_rf2)
                         _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
@@ -2366,11 +2376,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _cell(ws, r, 7, _e1_remaining, fill=_rf, align='right', num_fmt='#,##0.00')
                 r += 1
 
-            if _unclassified:
+            if _bal_agg:
                 r += 1
                 ws.merge_cells(f'A{r}:G{r}')
                 _uh = ws[f'A{r}']
-                _uh.value = 'UNCLASSIFIED ITEMS'
+                _uh.value = 'LICENSE ITEM LIST'
                 _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
                 _uh.alignment = Alignment(horizontal='center', vertical='center')
                 _uh.border = THIN_BORDER
@@ -2378,7 +2388,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
-                for _i2, (_ik2, _sr2, _hs2, _de2, _bq2) in enumerate(_unclassified):
+                for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
+                    _agg2 = _bal_agg[_ik2]
+                    _sr2 = ', '.join(str(s) for s in sorted(set(_agg2['sr_ids'])))
+                    _hs2 = _agg2['hs_code']
+                    _de2 = _agg2['description'] or _ik2
+                    _bq2 = _agg2['qty']
                     _rf2 = None if _i2 % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _ik2, fill=_rf2)
                     _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
@@ -2469,11 +2484,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _cell(ws, r, 7, _license_balance - _e5_planned, fill=_rf, align='right', num_fmt='#,##0.00')
                 r += 1
 
-            if _e5_unclassified:
+            if _bal_agg:
                 r += 1
                 ws.merge_cells(f'A{r}:G{r}')
                 _uh = ws[f'A{r}']
-                _uh.value = 'UNCLASSIFIED ITEMS'
+                _uh.value = 'LICENSE ITEM LIST'
                 _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
                 _uh.alignment = Alignment(horizontal='center', vertical='center')
                 _uh.border = THIN_BORDER
@@ -2481,7 +2496,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
-                for _i2, (_ik2, _sr2, _hs2, _de2, _bq2) in enumerate(_e5_unclassified):
+                for _i2, _ik2 in enumerate(sorted(_bal_agg.keys())):
+                    _agg2 = _bal_agg[_ik2]
+                    _sr2 = ', '.join(str(s) for s in sorted(set(_agg2['sr_ids'])))
+                    _hs2 = _agg2['hs_code']
+                    _de2 = _agg2['description'] or _ik2
+                    _bq2 = _agg2['qty']
                     _rf2 = None if _i2 % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _ik2, fill=_rf2)
                     _cell(ws, r, 2, _sr2, fill=_rf2, align='center')

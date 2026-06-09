@@ -46,6 +46,7 @@ SERVER_IP_FALLBACKS = {
 APP_ID = os.getenv("DGFT_APP_ID", "204000000")
 SESSION_ID = os.getenv("DGFT_SESSION_ID", "ECDCCFE06566EB25ECD234D0B7159888")
 CSRF_TOKEN = os.getenv("DGFT_CSRF_TOKEN", "fc86ccf3-4638-4828-b271-150b04a3f6cd")
+AWS_ALB = os.getenv("DGFT_AWSALB")  # Optional; required when DGFT sits behind an AWS ALB
 
 # Proxy configuration - set via DGFT_PROXY environment variable
 # Examples:
@@ -491,7 +492,8 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None,
                 app_id=APP_ID,
                 session_id=SESSION_ID,
                 csrf_token=CSRF_TOKEN,
-                proxy=proxy
+                proxy=proxy,
+                aws_alb=AWS_ALB,
             )
 
             if response is None:

@@ -50,8 +50,8 @@ get_server_meta() {
             NGINX_CONF_HTTPS="nginx-license-manager.conf" # used after cert
             NGINX_SITE_NAME="license-manager"
             DUCKDNS_SUBDOMAIN="license-manager"
-            DB_NAME="license_manager_db"
-            DB_USER="django"
+            DB_NAME="lmanagement"
+            DB_USER="lmanagement"
             ;;
         "139.59.92.226")
             SERVER_DOMAIN="labdhi.duckdns.org"
@@ -134,7 +134,9 @@ pip install --upgrade -r requirements.txt --quiet
 echo_ok "Python dependencies installed"
 
 echo_info "Running database migrations..."
-python manage.py makemigrations --no-input 2>&1 | grep -E "No changes|Created|Apply" || true
+# Note: do NOT run makemigrations on production — migrations must be committed
+# to git and pulled. Running makemigrations here risks creating divergent
+# auto-generated migration files across servers.
 if ! python manage.py migrate --no-input 2>&1 | tee /tmp/migration.log; then
     if grep -q "InsufficientPrivilege\|must be owner" /tmp/migration.log; then
         echo_warn "Permission issue — attempting fix..."
@@ -240,27 +242,33 @@ else
 fi
 
 # ── 8. Services: materialized views, cache, gunicorn ────────
-echo_info "Refreshing materialized views..."
+# Migration core/0003_create_materialized_views.py creates the MVs on first
+# migrate (idempotent via CREATE ... IF NOT EXISTS). This extra step refreshes
+# their data and is harmless if the views already exist.
+echo_info "Ensuring materialized views exist + refreshing..."
 cd $SERVER_PATH/backend
 source $SERVER_PATH/venv/bin/activate
 python manage.py shell -c "
-from core.materialized_views import create_all_materialized_views
-try: create_all_materialized_views(); print('Views OK')
-except Exception as e: print(f'Views: {e}')
-" 2>&1 | grep -E "OK|Views" || true
-
-python manage.py refresh_materialized_views --all 2>&1 | tail -3 || true
+from apps.core.materialized_views import create_materialized_views, refresh_all_materialized_views
+try:
+    create_materialized_views()
+    refresh_all_materialized_views(concurrently=False)
+    print('Views OK')
+except Exception as e:
+    print(f'Views error: {e}')
+" 2>&1 | grep -E "Views" || true
 
 echo_info "Warming caches..."
 python manage.py shell -c "
 from django.core.cache import cache
-from core.models import CompanyModel
+from apps.core.models import CompanyModel
 import json
 try:
     companies = list(CompanyModel.objects.values('id','name'))
     cache.set('active_companies_list', json.dumps(companies), 3600)
     print(f'Cached {len(companies)} companies')
-except Exception as e: print(f'Cache: {e}')
+except Exception as e:
+    print(f'Cache error: {e}')
 " 2>&1 | grep -E "Cached|Cache" || true
 echo_ok "Cache warmed"
 

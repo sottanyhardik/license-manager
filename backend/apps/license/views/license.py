@@ -1414,6 +1414,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _util_return = {
                 'lic_no': lic_no, 'norm_type': 'other',
                 'balance_cif': _license_balance,
+                'total_license_cif': total_license_cif,
                 'license_date': license_obj.license_date,
                 'license_expiry_date': license_obj.license_expiry_date,
                 'port_code': _port_code,
@@ -1787,15 +1788,20 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             if num_fmt: c.number_format = num_fmt
             return c
 
-        # Fixed summary columns: License No, License Date, Expiry Date,
-        # Exporter, Balance CIF. Then category quantity/CIF pairs.
-        _FIXED_SUMMARY_COLS = 5
+        # Fixed summary columns:
+        #   1=Sr No (global counter), 2=License No, 3=License Date, 4=Expiry,
+        #   5=Exporter, 6=Balance CIF, 7=Total CIF. Then category quantity/CIF pairs.
+        _FIXED_SUMMARY_COLS = 7
         _CAT_START_COL = _FIXED_SUMMARY_COLS + 1
         _E1_TOTAL_COL  = _FIXED_SUMMARY_COLS + len(_E1_CATS_LABELS) * 2 + 1
         _E1_WASTE_COL  = _E1_TOTAL_COL + 1
         _E5_TOTAL_COL  = _FIXED_SUMMARY_COLS + len(_E5_CATS_LABELS) * 2 + 1
         _E5_WASTE_COL  = _E5_TOTAL_COL + 1
-        _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 7)
+        # Other-licenses section has IEC at col 8 and Port at col 9
+        _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 9)
+
+        # Global Sr No counter, shared across E1 / E5 / Other sections
+        _global_sr = [0]
 
         WASTE_FILL = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
 
@@ -1830,11 +1836,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _merge_hdr(_sw, _sr, 1, _E1_WASTE_COL, 'E1 NORM LICENSES', "2E75B6")
             _sr += 1
 
-            _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'License No')
-            _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License Date')
-            _sw.merge_cells(f'C{_sr}:C{_sr+1}'); _shdr(_sw, _sr, 3, 'License Expiry Date')
-            _sw.merge_cells(f'D{_sr}:D{_sr+1}'); _shdr(_sw, _sr, 4, 'Exporter Name')
-            _sw.merge_cells(f'E{_sr}:E{_sr+1}'); _shdr(_sw, _sr, 5, 'Balance CIF $')
+            _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'Sr No')
+            _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License No')
+            _sw.merge_cells(f'C{_sr}:C{_sr+1}'); _shdr(_sw, _sr, 3, 'License Date')
+            _sw.merge_cells(f'D{_sr}:D{_sr+1}'); _shdr(_sw, _sr, 4, 'License Expiry Date')
+            _sw.merge_cells(f'E{_sr}:E{_sr+1}'); _shdr(_sw, _sr, 5, 'Total CIF $')
+            _sw.merge_cells(f'F{_sr}:F{_sr+1}'); _shdr(_sw, _sr, 6, 'Balance CIF $')
+            _sw.merge_cells(f'G{_sr}:G{_sr+1}'); _shdr(_sw, _sr, 7, 'Exporter Name')
             for _ci, _cat in enumerate(_E1_CATS_LABELS):
                 _cc = _CAT_START_COL + _ci * 2
                 _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+1)}{_sr}')
@@ -1865,11 +1873,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _ed = _row.get('license_expiry_date')
                 _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
                 _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
-                _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
-                _scell(_sw, _sr, 2, _ld_str, fill=_rf, align='center')
-                _scell(_sw, _sr, 3, _ed_str, fill=_rf, align='center')
-                _scell(_sw, _sr, 4, _row.get('exporter_name') or '-', fill=_rf)
-                _scell(_sw, _sr, 5, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                _global_sr[0] += 1
+                _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
+                _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
+                _scell(_sw, _sr, 3, _ld_str, fill=_rf, align='center')
+                _scell(_sw, _sr, 4, _ed_str, fill=_rf, align='center')
+                _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
                 for _ci, _cat in enumerate(_E1_CATS_LABELS):
                     _cc = _CAT_START_COL + _ci * 2
                     _q = _row['qty_per_cat'].get(_cat, 0.0)
@@ -1892,11 +1903,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _e1_data_end = _sr - 1
 
             # E1 total row
-            _scell(_sw, _sr, 1, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
-            _scell(_sw, _sr, 2, '', fill=TOTAL_FILL)
+            _scell(_sw, _sr, 1, '', fill=TOTAL_FILL)
+            _scell(_sw, _sr, 2, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
             _scell(_sw, _sr, 3, '', fill=TOTAL_FILL)
             _scell(_sw, _sr, 4, '', fill=TOTAL_FILL)
             _scell(_sw, _sr, 5, _sum_formula(5, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, 6, _sum_formula(6, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
             for _ci, _cat in enumerate(_E1_CATS_LABELS):
                 _cc = _CAT_START_COL + _ci * 2
                 _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
@@ -1913,11 +1926,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _merge_hdr(_sw, _sr, 1, _E5_WASTE_COL, 'E5 NORM LICENSES', "375623")
             _sr += 1
 
-            _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'License No')
-            _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License Date')
-            _sw.merge_cells(f'C{_sr}:C{_sr+1}'); _shdr(_sw, _sr, 3, 'License Expiry Date')
-            _sw.merge_cells(f'D{_sr}:D{_sr+1}'); _shdr(_sw, _sr, 4, 'Exporter Name')
-            _sw.merge_cells(f'E{_sr}:E{_sr+1}'); _shdr(_sw, _sr, 5, 'Balance CIF $')
+            _sw.merge_cells(f'A{_sr}:A{_sr+1}'); _shdr(_sw, _sr, 1, 'Sr No')
+            _sw.merge_cells(f'B{_sr}:B{_sr+1}'); _shdr(_sw, _sr, 2, 'License No')
+            _sw.merge_cells(f'C{_sr}:C{_sr+1}'); _shdr(_sw, _sr, 3, 'License Date')
+            _sw.merge_cells(f'D{_sr}:D{_sr+1}'); _shdr(_sw, _sr, 4, 'License Expiry Date')
+            _sw.merge_cells(f'E{_sr}:E{_sr+1}'); _shdr(_sw, _sr, 5, 'Total CIF $')
+            _sw.merge_cells(f'F{_sr}:F{_sr+1}'); _shdr(_sw, _sr, 6, 'Balance CIF $')
+            _sw.merge_cells(f'G{_sr}:G{_sr+1}'); _shdr(_sw, _sr, 7, 'Exporter Name')
             for _ci, _cat in enumerate(_E5_CATS_LABELS):
                 _cc = _CAT_START_COL + _ci * 2
                 _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+1)}{_sr}')
@@ -1948,11 +1963,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _ed = _row.get('license_expiry_date')
                 _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
                 _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
-                _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
-                _scell(_sw, _sr, 2, _ld_str, fill=_rf, align='center')
-                _scell(_sw, _sr, 3, _ed_str, fill=_rf, align='center')
-                _scell(_sw, _sr, 4, _row.get('exporter_name') or '-', fill=_rf)
-                _scell(_sw, _sr, 5, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                _global_sr[0] += 1
+                _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
+                _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
+                _scell(_sw, _sr, 3, _ld_str, fill=_rf, align='center')
+                _scell(_sw, _sr, 4, _ed_str, fill=_rf, align='center')
+                _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
                 for _ci, _cat in enumerate(_E5_CATS_LABELS):
                     _cc = _CAT_START_COL + _ci * 2
                     _q = _row['qty_per_cat'].get(_cat, 0.0)
@@ -1975,11 +1993,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _e5_data_end = _sr - 1
 
             # E5 total row
-            _scell(_sw, _sr, 1, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
-            _scell(_sw, _sr, 2, '', fill=TOTAL_FILL)
+            _scell(_sw, _sr, 1, '', fill=TOTAL_FILL)
+            _scell(_sw, _sr, 2, 'TOTAL', fill=TOTAL_FILL, bold=True, align='center')
             _scell(_sw, _sr, 3, '', fill=TOTAL_FILL)
             _scell(_sw, _sr, 4, '', fill=TOTAL_FILL)
             _scell(_sw, _sr, 5, _sum_formula(5, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, 6, _sum_formula(6, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
             for _ci, _cat in enumerate(_E5_CATS_LABELS):
                 _cc = _CAT_START_COL + _ci * 2
                 _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
@@ -1996,15 +2016,17 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         #   A=License No, B=License Date, C=License Expiry Date,
         #   D=Exporter, E=Balance CIF, F=IEC, G=Port.
         if _other_rows:
-            _merge_hdr(_sw, _sr, 1, 7, 'OTHER LICENSES', "595959")
+            _merge_hdr(_sw, _sr, 1, 9, 'OTHER LICENSES', "595959")
             _sr += 1
-            _shdr(_sw, _sr, 1, 'License No')
-            _shdr(_sw, _sr, 2, 'License Date')
-            _shdr(_sw, _sr, 3, 'License Expiry Date')
-            _shdr(_sw, _sr, 4, 'Exporter Name')
+            _shdr(_sw, _sr, 1, 'Sr No')
+            _shdr(_sw, _sr, 2, 'License No')
+            _shdr(_sw, _sr, 3, 'License Date')
+            _shdr(_sw, _sr, 4, 'License Expiry Date')
             _shdr(_sw, _sr, 5, 'Balance CIF $')
-            _shdr(_sw, _sr, 6, 'IEC')
-            _shdr(_sw, _sr, 7, 'Port')
+            _shdr(_sw, _sr, 6, 'Total CIF $')
+            _shdr(_sw, _sr, 7, 'Exporter Name')
+            _shdr(_sw, _sr, 8, 'IEC')
+            _shdr(_sw, _sr, 9, 'Port')
             _sr += 1
             for _i, _row in enumerate(_other_rows):
                 _rf = None if _i % 2 == 0 else ALT_FILL
@@ -2013,22 +2035,27 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _ed = _row.get('license_expiry_date')
                 _ld_str = _ld.strftime('%d-%m-%Y') if _ld else '-'
                 _ed_str = _ed.strftime('%d-%m-%Y') if _ed else '-'
-                _scell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
-                _scell(_sw, _sr, 2, _ld_str, fill=_rf, align='center')
-                _scell(_sw, _sr, 3, _ed_str, fill=_rf, align='center')
-                _scell(_sw, _sr, 4, _row.get('exporter_name') or '-', fill=_rf)
+                _global_sr[0] += 1
+                _scell(_sw, _sr, 1, _global_sr[0], fill=_rf, bold=True, align='center')
+                _scell(_sw, _sr, 2, _row['lic_no'], fill=_rf, bold=True)
+                _scell(_sw, _sr, 3, _ld_str, fill=_rf, align='center')
+                _scell(_sw, _sr, 4, _ed_str, fill=_rf, align='center')
                 _scell(_sw, _sr, 5, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
-                _scell(_sw, _sr, 6, _row.get('iec') or '-', fill=_rf, align='center')
-                _scell(_sw, _sr, 7, _row.get('port_code') or '-', fill=_rf, align='center')
+                _scell(_sw, _sr, 6, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
+                _scell(_sw, _sr, 8, _row.get('iec') or '-', fill=_rf, align='center')
+                _scell(_sw, _sr, 9, _row.get('port_code') or '-', fill=_rf, align='center')
                 _sr += 1
 
         # Column widths for summary sheet
-        _sw.column_dimensions['A'].width = 18
-        _sw.column_dimensions['B'].width = 14
-        _sw.column_dimensions['C'].width = 18
-        _sw.column_dimensions['D'].width = 28
-        _sw.column_dimensions['E'].width = 16
-        for _col_idx in range(6, _MAX_COL + 1):
+        _sw.column_dimensions['A'].width = 6   # Sr No
+        _sw.column_dimensions['B'].width = 18  # License No
+        _sw.column_dimensions['C'].width = 14  # License Date
+        _sw.column_dimensions['D'].width = 18  # Expiry Date
+        _sw.column_dimensions['E'].width = 16  # Balance CIF
+        _sw.column_dimensions['F'].width = 16  # Total CIF
+        _sw.column_dimensions['G'].width = 28  # Exporter
+        for _col_idx in range(8, _MAX_COL + 1):
             _sw.column_dimensions[_gcl(_col_idx)].width = 14
         _sw.freeze_panes = 'A4'
 

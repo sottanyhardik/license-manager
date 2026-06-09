@@ -950,7 +950,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         for _item in license_obj.import_license.all():
             _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
             _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
-            _bal_agg[_key]['sr_ids'].append(_item.id)
+            _bal_agg[_key]['sr_ids'].append(_item.serial_number)
             if not _bal_agg[_key]['description']:
                 _bal_agg[_key]['description'] = _item.description or _key
             if not _bal_agg[_key]['hs_code']:
@@ -1328,7 +1328,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             for _item in license_obj.import_license.all():
                 _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
                 _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
-                _bal_agg[_key]['sr_ids'].append(_item.id)
+                _bal_agg[_key]['sr_ids'].append(_item.serial_number)
                 if not _bal_agg[_key]['description']:
                     _bal_agg[_key]['description'] = _item.description or _key
                 if not _bal_agg[_key]['hs_code']:
@@ -1456,7 +1456,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                             _found = True
                             break
                     if not _found:
-                        _unclassified.append((_de, _hs, _bq))
+                        _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
+                        _unclassified.append((_ik, _sr_str, _hs, _de, _bq))
             elif _is_e5:
                 from apps.license.services.e5_plan import (
                     E5_PLAN_CATS as _E5_PLAN_CATS,
@@ -1481,7 +1482,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         if not _e5_first_desc.get('WHEAT FLOUR'):
                             _e5_first_desc['WHEAT FLOUR'] = _de
                     else:
-                        _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+                        _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
+                        _e5_unclassified.append((_ik, _sr_str, _bal_agg[_ik]['hs_code'], _de, _bq))
 
             ws.merge_cells(f'A{r}:G{r}')
             bh = ws[f'A{r}']
@@ -1540,16 +1542,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
                     r += 1
-                    for col, h in enumerate(['Product Description', 'HS Code', 'Bal Qty', '', ''], 1):
+                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
                         _hdr(ws, r, col, h)
                     r += 1
-                    for _i2, (_de2, _hs2, _bq2) in enumerate(_unclassified):
+                    for _i2, (_ik2, _sr2, _hs2, _de2, _bq2) in enumerate(_unclassified):
                         _rf2 = None if _i2 % 2 == 0 else ALT_FILL
-                        _cell(ws, r, 1, _de2, fill=_rf2)
-                        _cell(ws, r, 2, _hs2, fill=_rf2)
-                        _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
-                        _cell(ws, r, 4, '',   fill=_rf2)
-                        _cell(ws, r, 5, '',   fill=_rf2)
+                        _cell(ws, r, 1, _ik2, fill=_rf2)
+                        _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
+                        _cell(ws, r, 3, _hs2, fill=_rf2)
+                        _cell(ws, r, 4, _de2, fill=_rf2)
+                        _cell(ws, r, 5, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                         r += 1
 
                 r += 1
@@ -1632,16 +1634,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _uh.alignment = Alignment(horizontal='center', vertical='center')
                     _uh.border = THIN_BORDER
                     r += 1
-                    for col, h in enumerate(['Product Description', 'HS Code', 'Bal Qty', '', ''], 1):
+                    for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
                         _hdr(ws, r, col, h)
                     r += 1
-                    for _i2, (_de2, _hs2, _bq2) in enumerate(_e5_unclassified):
+                    for _i2, (_ik2, _sr2, _hs2, _de2, _bq2) in enumerate(_e5_unclassified):
                         _rf2 = None if _i2 % 2 == 0 else ALT_FILL
-                        _cell(ws, r, 1, _de2, fill=_rf2)
-                        _cell(ws, r, 2, _hs2, fill=_rf2)
-                        _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
-                        _cell(ws, r, 4, '',   fill=_rf2)
-                        _cell(ws, r, 5, '',   fill=_rf2)
+                        _cell(ws, r, 1, _ik2, fill=_rf2)
+                        _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
+                        _cell(ws, r, 3, _hs2, fill=_rf2)
+                        _cell(ws, r, 4, _de2, fill=_rf2)
+                        _cell(ws, r, 5, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                         r += 1
 
                 r += 1
@@ -2200,7 +2202,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         for _item in license_obj.import_license.all():
             _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
             _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
-            _bal_agg[_key]['sr_ids'].append(_item.id)
+            _bal_agg[_key]['sr_ids'].append(_item.serial_number)
             if not _bal_agg[_key]['description']:
                 _bal_agg[_key]['description'] = _item.description or _key
             if not _bal_agg[_key]['hs_code']:
@@ -2317,7 +2319,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _found = True
                         break
                 if not _found:
-                    _unclassified.append((_de, _hs, _bq))
+                    _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
+                    _unclassified.append((_ik, _sr_str, _hs, _de, _bq))
 
         ws.merge_cells(f'A{r}:G{r}')
         bh = ws[f'A{r}']
@@ -2372,16 +2375,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _uh.alignment = Alignment(horizontal='center', vertical='center')
                 _uh.border = THIN_BORDER
                 r += 1
-                for col, h in enumerate(['Product Description', 'HS Code', 'Bal Qty', '', ''], 1):
+                for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
-                for _i2, (_de2, _hs2, _bq2) in enumerate(_unclassified):
+                for _i2, (_ik2, _sr2, _hs2, _de2, _bq2) in enumerate(_unclassified):
                     _rf2 = None if _i2 % 2 == 0 else ALT_FILL
-                    _cell(ws, r, 1, _de2, fill=_rf2)
-                    _cell(ws, r, 2, _hs2, fill=_rf2)
-                    _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 4, '',   fill=_rf2)
-                    _cell(ws, r, 5, '',   fill=_rf2)
+                    _cell(ws, r, 1, _ik2, fill=_rf2)
+                    _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
+                    _cell(ws, r, 3, _hs2, fill=_rf2)
+                    _cell(ws, r, 4, _de2, fill=_rf2)
+                    _cell(ws, r, 5, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                     r += 1
 
             r += 1
@@ -2432,7 +2435,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     if not _e5_first_desc.get('WHEAT FLOUR'):
                         _e5_first_desc['WHEAT FLOUR'] = _de
                 else:
-                    _e5_unclassified.append((_de, _bal_agg[_ik]['hs_code'], _bq))
+                    _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
+                    _e5_unclassified.append((_ik, _sr_str, _bal_agg[_ik]['hs_code'], _de, _bq))
 
             _pool_10_be = _cond_pools.get('10%', _Dec('0'))
             _e5_planned_per_cat_be, _e5_rate_per_cat_be = _compute_e5_plan_be(
@@ -2474,16 +2478,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _uh.alignment = Alignment(horizontal='center', vertical='center')
                 _uh.border = THIN_BORDER
                 r += 1
-                for col, h in enumerate(['Product Description', 'HS Code', 'Bal Qty', '', ''], 1):
+                for col, h in enumerate(['Item Name', 'Sr No(s)', 'HS Code', 'Product Description', 'Total Qty'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
-                for _i2, (_de2, _hs2, _bq2) in enumerate(_e5_unclassified):
+                for _i2, (_ik2, _sr2, _hs2, _de2, _bq2) in enumerate(_e5_unclassified):
                     _rf2 = None if _i2 % 2 == 0 else ALT_FILL
-                    _cell(ws, r, 1, _de2, fill=_rf2)
-                    _cell(ws, r, 2, _hs2, fill=_rf2)
-                    _cell(ws, r, 3, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 4, '',   fill=_rf2)
-                    _cell(ws, r, 5, '',   fill=_rf2)
+                    _cell(ws, r, 1, _ik2, fill=_rf2)
+                    _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
+                    _cell(ws, r, 3, _hs2, fill=_rf2)
+                    _cell(ws, r, 4, _de2, fill=_rf2)
+                    _cell(ws, r, 5, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                     r += 1
 
             r += 1

@@ -37,6 +37,8 @@ IMPORTABLE_TABLES = {
     "core.hscodemodel":               "core.HSCodeModel",
     "core.sionnormclassmodel":        "core.SionNormClassModel",
     "core.exchangeratemodel":         "core.ExchangeRateModel",
+    "core.schemecode":                "core.SchemeCode",
+    "core.notificationnumber":        "core.NotificationNumber",
 }
 
 # Fields we never copy from another server

@@ -53,6 +53,8 @@ MASTER_MODELS = [
     ("core.TransferLetterModel",             None),
     ("core.UnitPriceModel",                  None),
     ("core.ExchangeRateModel",               "date"),
+    ("core.SchemeCode",                      "code"),
+    ("core.NotificationNumber",              "code"),
 ]
 
 

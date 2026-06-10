@@ -168,11 +168,13 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
                 "type": "fk",
                 "fk_endpoint": "/masters/scheme-codes/",
                 "label_field": "code",
+                "value_field": "code",
             },
             "notification_number": {
                 "type": "fk",
                 "fk_endpoint": "/masters/notification-numbers/",
                 "label_field": "code",
+                "value_field": "code",
             },
         }
     }

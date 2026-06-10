@@ -34,6 +34,7 @@ export default function HybridSelect({
     if (useAsync) {
         const endpoint = fieldMeta.endpoint || fieldMeta.fk_endpoint;
         const labelField = fieldMeta.label_field || "name";
+        const valueField = fieldMeta.value_field || "id";
 
         // Custom label formatter based on field type
         const defaultFormatLabel = (item) => {
@@ -58,6 +59,7 @@ export default function HybridSelect({
             <AsyncSelectField
                 endpoint={endpoint}
                 labelField={labelField}
+                valueField={valueField}
                 value={value}
                 onChange={onChange}
                 isMulti={isMulti}

@@ -8,6 +8,17 @@ import {formatIndianNumber} from "../../utils/numberFormatter";
 import {openPdfPreview} from "../../utils/pdfPreview";
 import {toast} from "react-toastify";
 
+// Mirrors the team palette used in ConditionBadge / Excel annotate_cell so
+// utilisation-mode cells colour-match the bulk Balance Excel exactly.
+const CONDITION_CELL_STYLES = {
+    "AU":  { backgroundColor: "#DBEAFE", color: "#1E3A8A", fontWeight: 600 },
+    "2%":  { backgroundColor: "#FEE2E2", color: "#7F1D1D", fontWeight: 600 },
+    "3%":  { backgroundColor: "#FED7AA", color: "#7C2D12", fontWeight: 600 },
+    "5%":  { backgroundColor: "#FEF3C7", color: "#78350F", fontWeight: 600 },
+    "10%": { backgroundColor: "#D1FAE5", color: "#065F46", fontWeight: 600 },
+};
+const getConditionStyle = (cond) => (cond && CONDITION_CELL_STYLES[cond]) || null;
+
 export default function ItemPivotReport() {
     const navigate = useNavigate();
     const [reportData, setReportData] = useState(null);
@@ -754,7 +765,15 @@ export default function ItemPivotReport() {
                                                         }}>Balance CIF
                                                         </th>
                                                         {reportData.items.filter(item => item.name).map(item => {
-                                                            const colSpan = item.has_restriction ? 8 : 6;
+                                                            // Utilisation-mode columns mirror the bulk Balance Excel:
+                                                            //   E1 → 4 sub-cols (Display Qty | Util Qty | Unit Price | Planned CIF)
+                                                            //   E5 → 3 sub-cols (Bal Qty | Unit Price | Planned CIF)
+                                                            // Legacy item-pivot mode keeps the existing 6/8 sub-cols.
+                                                            const utilMode = reportData.mode === 'utilization';
+                                                            const isUtilE1 = utilMode && reportData.sion_norm === 'E1';
+                                                            let colSpan;
+                                                            if (utilMode) colSpan = isUtilE1 ? 4 : 3;
+                                                            else colSpan = item.has_restriction ? 8 : 6;
                                                             return (
                                                                 <th key={`${item.id}-qty`} colSpan={colSpan}
                                                                     className="text-center bg-info bg-opacity-10"
@@ -822,7 +841,22 @@ export default function ItemPivotReport() {
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid #dee2e6'
                                                         }}></th>
-                                                        {reportData.items.filter(item => item.name).map(item => (
+                                                        {reportData.items.filter(item => item.name).map(item => {
+                                                            const utilMode = reportData.mode === 'utilization';
+                                                            const isUtilE1 = utilMode && reportData.sion_norm === 'E1';
+                                                            if (utilMode) {
+                                                                return (
+                                                                    <React.Fragment key={`${item.id}-headers`}>
+                                                                        <th className="text-end" style={{minWidth: '110px', fontSize: '0.85rem'}}>{isUtilE1 ? 'Display Qty' : 'Bal Qty'}</th>
+                                                                        {isUtilE1 && (
+                                                                            <th className="text-end" style={{minWidth: '110px', fontSize: '0.85rem'}}>Util Qty</th>
+                                                                        )}
+                                                                        <th className="text-end" style={{minWidth: '100px', fontSize: '0.85rem'}}>Unit Price</th>
+                                                                        <th className="text-end" style={{minWidth: '120px', fontSize: '0.85rem'}}>Planned CIF</th>
+                                                                    </React.Fragment>
+                                                                );
+                                                            }
+                                                            return (
                                                             <React.Fragment key={`${item.id}-headers`}>
                                                                 <th style={{minWidth: '90px', fontSize: '0.85rem'}}>HSN
                                                                     Code
@@ -874,7 +908,8 @@ export default function ItemPivotReport() {
                                                                     </th>
                                                                 )}
                                                             </React.Fragment>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </tr>
                                                     </thead>
                                                     <tbody>
@@ -1011,6 +1046,31 @@ export default function ItemPivotReport() {
                                                             }}>{license.balance_cif.toFixed(2)}</td>
                                                             {reportData.items.filter(item => item.name).map(item => {
                                                                 const itemData = license.items[item.name] || {};
+                                                                const utilMode = reportData.mode === 'utilization';
+                                                                const isUtilE1 = utilMode && reportData.sion_norm === 'E1';
+
+                                                                if (utilMode) {
+                                                                    // Category cells in utilisation mode mirror the bulk Excel.
+                                                                    const dispQty   = itemData.display_qty   || 0;
+                                                                    const utilQty   = itemData.util_qty      || 0;
+                                                                    const unitPrice = itemData.unit_price    || 0;
+                                                                    const planned   = itemData.planned_cif   || 0;
+                                                                    const condStyle = getConditionStyle(itemData.condition_type) || {};
+                                                                    const hasData   = dispQty > 0;
+                                                                    const baseStyle = hasData ? { ...condStyle } : {};
+                                                                    const num = (v, dp = 2) => v ? v.toFixed(dp) : '-';
+                                                                    return (
+                                                                        <React.Fragment key={`${license.license_number}-${item.id}`}>
+                                                                            <td className="text-end" style={baseStyle}>{num(dispQty, 3)}</td>
+                                                                            {isUtilE1 && (
+                                                                                <td className="text-end" style={baseStyle}>{num(utilQty, 3)}</td>
+                                                                            )}
+                                                                            <td className="text-end" style={baseStyle}>{num(unitPrice, 2)}</td>
+                                                                            <td className="text-end fw-semibold" style={baseStyle}>{num(planned, 2)}</td>
+                                                                        </React.Fragment>
+                                                                    );
+                                                                }
+
                                                                 const hasData = itemData.quantity > 0;
                                                                 return (
                                                                     <React.Fragment
@@ -1063,7 +1123,15 @@ export default function ItemPivotReport() {
                                                         {/* Notes and Latest Transfer Row (Condition Sheet moved to button + modal) */}
                                                         {(license.balance_report_notes || license.latest_transfer) && (
                                                             <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--bs-gray-50)' }}>
-                                                                <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 6 : 4))} style={{
+                                                                <td colSpan={(() => {
+                                                                    const utilMode = reportData.mode === 'utilization';
+                                                                    const isUtilE1 = utilMode && reportData.sion_norm === 'E1';
+                                                                    const catCount = reportData.items.filter(item => item.name).length;
+                                                                    const perCat = utilMode
+                                                                        ? (isUtilE1 ? 4 : 3)
+                                                                        : (reportData.items.some(i => i.has_restriction) ? 6 : 4);
+                                                                    return 8 + (catCount * perCat);
+                                                                })()} style={{
                                                                     padding: '10px 15px',
                                                                     borderTop: 'none'
                                                                 }}>

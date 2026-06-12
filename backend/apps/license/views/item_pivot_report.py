@@ -145,7 +145,7 @@ class ItemPivotReportView(View):
         export_items_qs = LicenseExportItemModel.objects.select_related('norm_class')
         item_names_qs = ItemNameModel.objects.filter(is_active=True).select_related('sion_norm_class')
 
-        # If sion_norm specified, filter prefetch queries to only that norm
+        # If sion_norm specified, filter prefetch queries to only that norm.
         if sion_norm:
             item_names_qs = item_names_qs.filter(sion_norm_class__norm_class=sion_norm)
             export_items_qs = export_items_qs.filter(norm_class__norm_class=sion_norm)
@@ -165,7 +165,8 @@ class ItemPivotReportView(View):
                      queryset=import_items_qs.prefetch_related(
                          Prefetch('items', queryset=item_names_qs)
                      ).only('id', 'license_id', 'hs_code_id', 'quantity', 'allotted_quantity',
-                            'debited_quantity', 'available_quantity', 'debited_value', 'cif_fc', 'description')),
+                            'debited_quantity', 'available_quantity', 'debited_value', 'cif_fc', 'description',
+                            'condition_type', 'serial_number')),
             Prefetch('export_license',
                      queryset=export_items_qs.only('id', 'license_id', 'norm_class_id', 'cif_fc')),
             'license_documents',
@@ -176,6 +177,13 @@ class ItemPivotReportView(View):
         # Use list() with prefetch_related for optimal performance (iterator breaks prefetch)
         all_items = {}  # Changed to dict to store item object for sorting
         valid_licenses = list(licenses)  # Licenses already filtered by balance_cif at DB level
+
+        # E1 / E5 norm filter → category-based "utilization mode" report that
+        # mirrors the bulk License Balance Excel's utilisation-planning view.
+        if sion_norm in ('E1', 'E5'):
+            return self._generate_utilization_report(
+                valid_licenses, sion_norm, today,
+            )
 
         for license_obj in valid_licenses:
             for import_item in license_obj.import_license.all():
@@ -546,6 +554,272 @@ class ItemPivotReportView(View):
 
         return row_data
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Utilization-mode (E1 / E5) — category-based pivot that mirrors the
+    # bulk License Balance Excel's utilisation-planning view.
+    # ──────────────────────────────────────────────────────────────────────
+
+    # Strictest-first priority for picking the per-category License Marking
+    # to colour-code in the pivot (matches the logic in views/license.py).
+    _COND_PRIORITY = {"2%": 5, "3%": 4, "5%": 3, "10%": 2, "AU": 1}
+
+    def _generate_utilization_report(
+        self,
+        valid_licenses: list,
+        sion_norm: str,
+        today,
+    ) -> Dict[str, Any]:
+        """E1 / E5 norm path — pivots by waterfall category, not by item name."""
+        from collections import defaultdict
+        from apps.license.services.e1_plan import (
+            E1_CATS, classify_e1_item, compute_e1_plan, E1_EXCLUDED_CONDITIONS,
+        )
+        from apps.license.services.e5_plan import (
+            E5_CATS, classify_e5_item, compute_e5_plan,
+        )
+
+        if sion_norm == 'E1':
+            categories = list(E1_CATS)
+            is_e1 = True
+        else:
+            categories = list(E5_CATS)
+            is_e1 = False
+
+        # Build licence rows.
+        licenses_by_norm_notification = defaultdict(lambda: defaultdict(list))
+        for license_obj in valid_licenses:
+            row = self._build_license_row_utilization(
+                license_obj, sion_norm, categories,
+                E1_EXCLUDED_CONDITIONS if is_e1 else None,
+                classify_e1_item if is_e1 else classify_e5_item,
+                compute_e1_plan if is_e1 else compute_e5_plan,
+                is_e1,
+            )
+            if not row:
+                continue
+
+            notification = (license_obj.notification_number.code if license_obj.notification_number_id else '').strip() or 'Unknown'
+            norm_class = sion_norm
+            is_conversion = license_obj.purchase_status and license_obj.purchase_status.code == CO
+            exporter_name_upper = (license_obj.exporter.name or '').upper() if license_obj.exporter else ''
+
+            # Same exporter-split logic as the legacy path (E5 splits by exporter category).
+            exporter_category = None
+            if 'PARLE' in exporter_name_upper:
+                exporter_category = 'Parle'
+            elif 'HALDIRAM SNACKS' in exporter_name_upper:
+                exporter_category = 'Haldiram Snacks'
+            elif 'HALDIRAM FOODS' in exporter_name_upper:
+                exporter_category = 'Haldiram Foods'
+            elif 'HARIOMKAR FOOD' in exporter_name_upper:
+                exporter_category = 'Hariomkar Food'
+
+            if norm_class == 'E5':
+                base = f"{notification} - Conversion" if is_conversion else f"{notification}"
+                notification_key = f"{base} - {exporter_category}" if exporter_category else (
+                    f"{base} - Others" if not is_conversion else base
+                )
+            else:  # E1
+                notification_key = f"{notification} - Conversion" if is_conversion else notification
+
+            licenses_by_norm_notification[norm_class][notification_key].append(row)
+
+        # Convert nested defaultdict to regular dict.
+        result_dict = {norm: dict(nd) for norm, nd in licenses_by_norm_notification.items()}
+
+        # Fetch SION-norm notes/conditions (same query as the legacy path).
+        from apps.core.models import SionNormClassModel
+        norm_notes_conditions = {}
+        sion_norms_qs = SionNormClassModel.objects.filter(
+            norm_class__in=list(result_dict.keys())
+        ).prefetch_related('notes', 'conditions')
+        sion_norms_dict = {sn.norm_class: sn for sn in sion_norms_qs}
+        for norm_class in result_dict:
+            sn = sion_norms_dict.get(norm_class)
+            if sn:
+                norm_notes_conditions[norm_class] = {
+                    'notes': [{'note_text': n.note_text, 'display_order': n.display_order} for n in sn.notes.all()],
+                    'conditions': [{'condition_text': c.condition_text, 'display_order': c.display_order} for c in sn.conditions.all()],
+                }
+            else:
+                norm_notes_conditions[norm_class] = {'notes': [], 'conditions': []}
+
+        # `items` is the list of categories. The frontend's "has_restriction"
+        # flag stays useful (matches the existing pivot's column-width logic):
+        # for E1 it's True iff the category supports a Util Qty column.
+        items = [
+            {
+                'id': f'cat-{i}',
+                'name': cat,
+                'is_category': True,
+                'has_util': is_e1 and bool(E1_EXCLUDED_CONDITIONS.get(cat)),
+                'has_restriction': False,  # legacy flag, unused for categories
+            }
+            for i, cat in enumerate(categories)
+        ]
+
+        return {
+            'mode': 'utilization',
+            'sion_norm': sion_norm,
+            'items': items,
+            'licenses_by_norm_notification': result_dict,
+            'norm_notes_conditions': norm_notes_conditions,
+            'report_date': today.isoformat(),
+        }
+
+    def _build_license_row_utilization(
+        self,
+        license_obj: LicenseDetailsModel,
+        sion_norm: str,
+        categories: list,
+        excluded_conditions,        # E1_EXCLUDED_CONDITIONS for E1, None for E5
+        classify_fn,                # classify_e1_item or classify_e5_item
+        compute_fn,                 # compute_e1_plan or compute_e5_plan
+        is_e1: bool,
+    ) -> Dict[str, Any]:
+        """Aggregate this licence into the waterfall categories and run the planner.
+
+        Mirrors the per-licence aggregation in views/license.py:1449-1518 so
+        the numbers match the bulk Excel.
+        """
+        from collections import defaultdict as _dd
+
+        # Header-level totals (same as legacy path).
+        total_cif = Decimal('0')
+        for item in license_obj.export_license.all():
+            total_cif += Decimal(str(item.cif_fc)) if item.cif_fc is not None else Decimal('0')
+
+        from apps.allotment.models import AllotmentItems
+        alloted_cif = Decimal('0')
+        for allot_item in AllotmentItems.objects.filter(
+            item__license=license_obj,
+            allotment__is_allotted=True,
+            allotment__bill_of_entry__isnull=True,
+        ).select_related('allotment'):
+            alloted_cif += Decimal(str(allot_item.cif_fc)) if allot_item.cif_fc is not None else Decimal('0')
+
+        balance_cif = Decimal(str(license_obj.balance_cif)) if license_obj.balance_cif is not None else Decimal('0')
+
+        # Build the bal_agg-equivalent: one entry per item-key, with
+        # per-condition qty breakdown for the Display/Util split.
+        # NOTE: we do a fresh query for import_items here so we get the
+        # UNFILTERED master items list (the parent report's prefetch filters
+        # by ItemNameModel.is_active=True, which would silently drop
+        # quantities tied to items marked inactive in the master data).
+        bal_agg = _dd(lambda: {
+            'qty': 0.0, 'description': '', 'hs_code': '', 'condition_type': '',
+            'qty_by_cond': _dd(float),
+        })
+        import_items = (
+            LicenseImportItemsModel.objects
+            .filter(license=license_obj)
+            .select_related('hs_code')
+            .prefetch_related('items')
+        )
+        for ii in import_items:
+            item_names = list(ii.items.values_list('name', flat=True))
+            key = ', '.join(sorted(item_names)) if item_names else (ii.description or '-')
+            avail = float(ii.available_quantity or 0)
+            bal_agg[key]['qty'] += avail
+            if not bal_agg[key]['description']:
+                bal_agg[key]['description'] = ii.description or key
+            if not bal_agg[key]['hs_code']:
+                bal_agg[key]['hs_code'] = str(ii.hs_code.hs_code if ii.hs_code else '-')
+            if ii.condition_type and not bal_agg[key]['condition_type']:
+                bal_agg[key]['condition_type'] = ii.condition_type
+            bal_agg[key]['qty_by_cond'][(ii.condition_type or '').strip()] += avail
+
+        # Classify + aggregate per category.
+        display_qty = {c: 0.0 for c in categories}
+        util_qty    = {c: 0.0 for c in categories}
+        first_desc  = {c: '' for c in categories}
+        cond_per_cat: Dict[str, str] = {}
+
+        for key, agg in bal_agg.items():
+            cat = classify_fn(key, agg['hs_code'], agg['description'])
+            if not cat or cat not in display_qty:
+                continue
+            display_qty[cat] += agg['qty']
+            if is_e1 and excluded_conditions is not None:
+                excl = excluded_conditions.get(cat, frozenset())
+                for ct, q in agg['qty_by_cond'].items():
+                    if ct not in excl:
+                        util_qty[cat] += q
+            else:
+                util_qty[cat] += agg['qty']
+            if not first_desc[cat]:
+                first_desc[cat] = agg['description']
+            cond = (agg.get('condition_type') or '').strip()
+            if cond and (
+                cat not in cond_per_cat
+                or self._COND_PRIORITY.get(cond, 0) > self._COND_PRIORITY.get(cond_per_cat[cat], 0)
+            ):
+                cond_per_cat[cat] = cond
+
+        # Run the waterfall.
+        if is_e1:
+            planned, rates = compute_fn(display_qty, util_qty, float(balance_cif))
+        else:
+            planned, rates = compute_fn(display_qty, None, float(balance_cif), None)
+
+        # Pull the licence's 10% balance for E5 (same source the bulk Excel uses).
+        ten_balance = 0.0
+        if not is_e1:
+            try:
+                per_cif = license_obj.get_per_cif() or {}
+                ten_balance = float(per_cif.get('tenRestriction', 0) or 0)
+            except Exception:
+                ten_balance = 0.0
+
+        # Licence metadata (matches the legacy row shape).
+        notification_display = (license_obj.notification_number.code if license_obj.notification_number_id else '').strip() or 'Unknown'
+        has_tl   = license_obj.license_documents.filter(type='TRANSFER LETTER').exists()
+        has_copy = license_obj.license_documents.filter(type='LICENSE COPY').exists()
+        transfer_qs = license_obj.transfers.order_by('-transfer_date', '-id')
+        if transfer_qs.exists():
+            latest_transfer_text = str(transfer_qs.first())
+        elif license_obj.current_owner:
+            latest_transfer_text = f"Current Owner is {license_obj.current_owner.name}"
+        else:
+            latest_transfer_text = "Data Not Found"
+
+        row_data = {
+            'id': license_obj.id,
+            'license_number': license_obj.license_number,
+            'license_date': license_obj.license_date.isoformat() if license_obj.license_date else None,
+            'license_expiry_date': license_obj.license_expiry_date.isoformat() if license_obj.license_expiry_date else None,
+            'ledger_date': license_obj.ledger_date.isoformat() if license_obj.ledger_date else None,
+            'exporter': str(license_obj.exporter) if license_obj.exporter else '',
+            'port': str(license_obj.port) if license_obj.port else '',
+            'notification_number': notification_display,
+            'total_cif': float(total_cif),
+            'alloted_cif': float(alloted_cif),
+            'balance_cif': float(balance_cif),
+            'balance_report_notes': license_obj.balance_report_notes or '',
+            'condition_sheet': license_obj.condition_sheet or '',
+            'latest_transfer': latest_transfer_text,
+            'has_tl': has_tl,
+            'has_copy': has_copy,
+            'ten_percent_balance': ten_balance,
+            'items': {},
+        }
+
+        for cat in categories:
+            dq = display_qty.get(cat, 0.0)
+            uq = util_qty.get(cat, 0.0)
+            pc = planned.get(cat, 0.0)
+            up = round(pc / uq, 2) if uq else 0.0
+            row_data['items'][cat] = {
+                'is_category':    True,
+                'display_qty':    dq,
+                'util_qty':       uq,
+                'unit_price':     up,
+                'planned_cif':    pc,
+                'condition_type': cond_per_cat.get(cat, ''),
+                'description':    first_desc.get(cat, ''),
+            }
+        return row_data
+
     def export_to_excel(self, report_data: Dict[str, Any]) -> HttpResponse:
         """
         Export report to Excel format with items as columns, split by norm then notification.
@@ -845,10 +1119,18 @@ class ItemPivotReportView(View):
 
             workbook = openpyxl.Workbook(write_only=True)
             licenses_by_norm_notif = report_data.get('licenses_by_norm_notification', {})
+            is_utilization = report_data.get('mode') == 'utilization'
+            is_e1 = is_utilization and report_data.get('sion_norm') == 'E1'
 
             for norm_class in sorted(licenses_by_norm_notif.keys()):
                 notifications_dict = licenses_by_norm_notif[norm_class]
                 for notification, licenses_list in sorted(notifications_dict.items()):
+                    if is_utilization:
+                        self._write_utilization_sheet(
+                            workbook, norm_class, notification, licenses_list,
+                            report_data['items'], is_e1, _annotate_condition_cell,
+                        )
+                        continue
                     # Filter items to only those with data in THIS norm-notification
                     items_with_data = []
                     for item in report_data['items']:
@@ -1016,6 +1298,109 @@ class ItemPivotReportView(View):
             except OSError:
                 pass
             raise e
+
+    def _write_utilization_sheet(
+        self, workbook, norm_class, notification, licenses_list,
+        categories_meta, is_e1, annotate_cell,
+    ):
+        """Render one Excel sheet for a (norm, notification) using the
+        category-based utilisation pivot.
+
+        Sub-cols per category:
+          E1 → Display Qty | Util Qty | Unit Price | Planned CIF
+          E5 → Bal Qty     |          | Unit Price | Planned CIF
+        """
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.cell import WriteOnlyCell
+
+        # Only keep categories that have non-zero qty in this sheet.
+        cats_with_data = [
+            cat for cat in categories_meta
+            if any((lic['items'].get(cat['name'], {}).get('display_qty') or 0) > 0 for lic in licenses_list)
+        ]
+
+        sheet_name = f"{norm_class}_{notification}"[:31].replace('/', '-').replace('\\', '-').replace('*', '-').replace('[', '(').replace(']', ')')
+        ws = workbook.create_sheet(title=sheet_name)
+
+        # Title row.
+        title = WriteOnlyCell(ws, value=f"Item Pivot Report - {norm_class} - {notification} (Utilisation Planning)")
+        title.font = Font(bold=True, size=14)
+        title.alignment = Alignment(horizontal='center')
+        ws.append([title])
+        ws.append([])
+
+        # Headers — base + per-category sub-cols.
+        base_headers = ['Sr no', 'DFIA No', 'DFIA Dt', 'Expiry Dt', 'Exporter', 'Total CIF', 'Alloted CIF', 'Balance CIF', 'Notes', 'Condition Sheet']
+        sub_per_cat = ['Display Qty', 'Util Qty', 'Unit Price', 'Planned CIF'] if is_e1 else ['Bal Qty', 'Unit Price', 'Planned CIF']
+
+        item_headers = []
+        for cat in cats_with_data:
+            for sub in sub_per_cat:
+                item_headers.append(f"{cat['name']} — {sub}")
+        all_headers = base_headers + item_headers
+
+        header_row = []
+        for h in all_headers:
+            c = WriteOnlyCell(ws, value=h)
+            c.font = Font(bold=True, color='FFFFFF')
+            c.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+            c.alignment = Alignment(horizontal='center', wrap_text=True)
+            header_row.append(c)
+        ws.append(header_row)
+
+        # Data rows.
+        for idx, lic in enumerate(licenses_list, 1):
+            row = [
+                idx,
+                lic['license_number'],
+                lic['license_date'],
+                lic['license_expiry_date'],
+                lic['exporter'],
+                lic['total_cif'],
+                lic['alloted_cif'],
+                lic['balance_cif'],
+                lic.get('balance_report_notes', ''),
+                lic.get('condition_sheet', ''),
+            ]
+            for cat in cats_with_data:
+                d = lic['items'].get(cat['name'], {})
+                cond = (d.get('condition_type') or '')
+                cells = []
+                if is_e1:
+                    vals = [d.get('display_qty', 0), d.get('util_qty', 0), d.get('unit_price', 0), d.get('planned_cif', 0)]
+                else:
+                    vals = [d.get('display_qty', 0), d.get('unit_price', 0), d.get('planned_cif', 0)]
+                for v in vals:
+                    cell = WriteOnlyCell(ws, value=v)
+                    if cond:
+                        annotate_cell(cell, cond)
+                    cells.append(cell)
+                row.extend(cells)
+            ws.append(row)
+
+        # Totals row (per category sub-cell sums; Unit Price = total_planned/total_disp).
+        totals_row = [WriteOnlyCell(ws, value='TOTAL')]
+        totals_row[0].font = Font(bold=True)
+        totals_row.extend([None, None, None, None])  # license cols
+        for key in ('total_cif', 'alloted_cif', 'balance_cif'):
+            v = sum((l.get(key) or 0) for l in licenses_list)
+            c = WriteOnlyCell(ws, value=v); c.font = Font(bold=True)
+            totals_row.append(c)
+        totals_row.extend([None, None])  # Notes, Condition Sheet
+        for cat in cats_with_data:
+            name = cat['name']
+            tot_disp = sum((l['items'].get(name, {}).get('display_qty') or 0) for l in licenses_list)
+            tot_util = sum((l['items'].get(name, {}).get('util_qty') or 0) for l in licenses_list)
+            tot_plan = sum((l['items'].get(name, {}).get('planned_cif') or 0) for l in licenses_list)
+            tot_up = round(tot_plan / tot_util, 2) if tot_util else 0.0
+            if is_e1:
+                vals = [tot_disp, tot_util, tot_up, tot_plan]
+            else:
+                vals = [tot_disp, tot_up, tot_plan]
+            for v in vals:
+                c = WriteOnlyCell(ws, value=v); c.font = Font(bold=True)
+                totals_row.append(c)
+        ws.append(totals_row)
 
 
 class ItemPivotViewSet(viewsets.ViewSet):

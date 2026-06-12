@@ -14,8 +14,8 @@ step. The user-defined waterfall is:
     Step 6  SWP rate recalc          (if balance remains AND SWP qty > 0, fold
                                       the remainder into SWP rate and zero
                                       the balance before WPC)
-    Step 7  WPC             @ 12-27  (Item "WPC" AND HSN|Desc contains 3502;
-                                      unit price is dynamic in [12, 27], picked
+    Step 7  WPC             @ 0-22   (Item "WPC" AND HSN|Desc contains 3502;
+                                      unit price is dynamic in [0, 22], picked
                                       to maximize utilization without breaching
                                       the balance)
     Step 8  WHEAT FLOUR     dynamic  (Item "Wheat Flour"; absorbs any residual
@@ -57,8 +57,8 @@ E5_UNIT_PRICES: dict[str, Decimal] = {
 
 # WPC price band — the unit rate is picked dynamically inside this range
 # to consume as much of the balance as possible without exceeding it.
-WPC_MIN_PRICE: Decimal = Decimal('12')
-WPC_MAX_PRICE: Decimal = Decimal('27')
+WPC_MIN_PRICE: Decimal = Decimal('0')
+WPC_MAX_PRICE: Decimal = Decimal('22')
 
 # Hard-coded reference balance used in the original spec for hand-calculations
 # and unit tests. Production callers pass the per-licence balance in instead.
@@ -86,45 +86,60 @@ def classify_e5_item(
 ) -> str | None:
     """Return the E5 planner category for an item, or None if no rule matches.
 
-    Match rules (item-name signals are evaluated first so an explicitly tagged
-    item routes correctly even when the HSN looks ambiguous):
+    Precedence (high → low):
 
-      * DIETARY FIBRE — item contains 'walnut' OR description contains
-        'dietary fibre'
-      * WPC           — item is/contains 'wpc' AND (HSN contains '3502' OR
-        description contains '3502')
-      * SWP           — item is 'swp' OR HSN contains '0404' OR description
-        contains '0404'
-      * PKO           — item is 'pko' OR HSN contains '1513' OR description
-        contains '1513'
-      * RBD           — item is 'rbd' OR HSN contains '1511' OR description
-        contains '1511'
-      * OLIVE OIL     — item contains 'olive oil'
-      * WHEAT FLOUR   — item contains 'wheat flour' (or legacy HSN 11010000)
+      1. Unambiguous full-name item signals (these BEAT any HSN signal so an
+         item explicitly named "OLIVE OIL" with an HSN in the 1513 range
+         still routes to OLIVE OIL, not PKO):
+            * 'walnut'        → DIETARY FIBRE
+            * 'olive oil'     → OLIVE OIL
+            * 'wheat flour'   → WHEAT FLOUR
+
+      2. WPC compound rule: item is/contains 'wpc' AND (HSN contains '3502'
+         OR description contains '3502').
+
+      3. Description fallback for dietary fibre.
+
+      4. SWP / PKO / RBD — item-acronym OR HSN/description signal:
+            * SWP  ← item 'swp'    or HSN/desc contains '0404'
+            * PKO  ← item 'pko'    or HSN/desc contains '1513'
+            * RBD  ← item 'rbd'    or HSN/desc contains '1511'
+
+      5. Wheat-flour legacy HSN 11010000.
     """
     item = _norm(item_key)
     hs = _norm(hs_code)
     desc = _norm(description)
     tokens = _item_tokens(item_key)
 
-    if 'walnut' in item or 'dietary fibre' in desc:
+    # 1. Unambiguous full-name item signals — win over HSN.
+    if 'walnut' in item:
         return 'DIETARY FIBRE'
-    # WPC requires BOTH the item-name signal AND a 3502 HSN/desc signal —
-    # the joint condition is checked before the simpler SWP/PKO/RBD rules
-    # so a "WPC" line with HSN 0404 still falls through to SWP rather than
-    # being silently dropped.
+    if 'olive oil' in item:
+        return 'OLIVE OIL'
+    if 'wheat flour' in item:
+        return 'WHEAT FLOUR'
+
+    # 2. WPC compound rule.
     if ('wpc' in tokens or 'wpc' in item) and ('3502' in hs or '3502' in desc):
         return 'WPC'
+
+    # 3. Dietary fibre by description.
+    if 'dietary fibre' in desc:
+        return 'DIETARY FIBRE'
+
+    # 4. SWP / PKO / RBD — acronym OR HSN/desc.
     if 'swp' in tokens or 'swp' in item or '0404' in hs or '0404' in desc:
         return 'SWP'
     if 'pko' in tokens or 'pko' in item or '1513' in hs or '1513' in desc:
         return 'PKO'
     if 'rbd' in tokens or 'rbd' in item or '1511' in hs or '1511' in desc:
         return 'RBD'
-    if 'olive oil' in item:
-        return 'OLIVE OIL'
-    if 'wheat flour' in item or '11010000' in hs:
+
+    # 5. Wheat-flour legacy HSN.
+    if '11010000' in hs:
         return 'WHEAT FLOUR'
+
     return None
 
 
@@ -170,21 +185,21 @@ def _allocate_wpc(qty: Decimal, balance: Decimal) -> tuple[Decimal, Decimal]:
 
     Picks a unit price in ``[WPC_MIN_PRICE, WPC_MAX_PRICE]`` to maximize the
     utilization without exceeding the available balance, and returns
-    ``(utilization, unit_price)``. When the qty cannot fit even at the
-    minimum price the step is skipped (utilization = 0, price = min).
+    ``(utilization, unit_price)``.
+
+    With a 0 floor the step is always feasible — if the balance is below
+    ``qty * MAX_PRICE`` the rate drops to ``balance / qty`` and consumes the
+    entire remaining balance; otherwise the rate caps at ``MAX_PRICE`` and
+    Wheat Flour absorbs whatever is left.
     """
     if qty <= 0 or balance <= 0:
         return Decimal('0'), WPC_MIN_PRICE
     requested_at_max = qty * WPC_MAX_PRICE
-    requested_at_min = qty * WPC_MIN_PRICE
     if balance >= requested_at_max:
         # Cap at the max — Wheat Flour will absorb the rest.
         return requested_at_max, WPC_MAX_PRICE
-    if balance >= requested_at_min:
-        # Pick the rate that consumes the balance exactly.
-        return balance, balance / qty
-    # Cannot fit at the min price — leave the residual for Wheat Flour.
-    return Decimal('0'), WPC_MIN_PRICE
+    # Pick the rate that consumes the balance exactly.
+    return balance, balance / qty
 
 
 def _quantize_money(value: Decimal) -> float:

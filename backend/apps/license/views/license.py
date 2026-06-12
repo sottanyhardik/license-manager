@@ -1517,7 +1517,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _bq = _cat_totals[_lbl]
                     _pc = min(_rt * _bq, _e1_remaining)
                     _planned_per_cat[_lbl] = _pc
-                    _up = _pc / _bq if _bq else 0.0
+                    _up = round(_pc / _bq, 2) if _bq else 0.0
                     _e1_remaining -= _pc
                     _total_planned += _pc
                     _rf = None if _idx % 2 == 0 else ALT_FILL
@@ -1613,7 +1613,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _e5_qty[_lbl] = _bq
                     _pc = _e5_planned_per_cat.get(_lbl, 0.0)
                     _rt = _e5_rate_per_cat.get(_lbl, 0.0)
-                    _up = (_pc / _bq) if _bq else 0.0
+                    _up = round(_pc / _bq, 2) if _bq else 0.0
                     _e5_planned += _pc
                     _rf = None if _idx % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _lbl, fill=_rf)
@@ -2369,7 +2369,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
                 _bq = _cat_totals[_lbl]
                 _pc = min(_rt * _bq, _e1_remaining)
-                _up = _pc / _bq if _bq else 0.0
+                _up = round(_pc / _bq, 2) if _bq else 0.0
                 _e1_remaining -= _pc
                 _total_planned += _pc
                 _rf = None if _idx % 2 == 0 else ALT_FILL
@@ -2472,7 +2472,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _bq = _e5_totals.get(_lbl, 0.0)
                 _pc = _e5_planned_per_cat_be.get(_lbl, 0.0)
                 _rt = _e5_rate_per_cat_be.get(_lbl, 0.0)
-                _up = (_pc / _bq) if _bq else 0.0
+                _up = round(_pc / _bq, 2) if _bq else 0.0
                 _e5_planned += _pc
                 _rf = None if _idx % 2 == 0 else ALT_FILL
                 _cell(ws, r, 1, _lbl, fill=_rf)

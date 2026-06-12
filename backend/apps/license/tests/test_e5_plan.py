@@ -165,24 +165,24 @@ class TestSwpReallocation(TestCase):
 
 
 class TestWpcDynamicPricing(TestCase):
-    """Step 7 WPC dynamic price band [12, 27]."""
+    """Step 7 WPC dynamic price band [0, 22]."""
 
     def test_wpc_at_max_price_when_balance_is_plentiful(self):
-        # Balance large enough that 27 * qty fits — cap at max.
+        # Balance large enough that 22 * qty fits — cap at max.
         totals = _totals(**{'WPC': 100.0})
         planned, rate = compute_e5_plan(totals, license_balance=Decimal('5000'))
-        assert planned['WPC'] == 2700.0     # 100 * 27
+        assert planned['WPC'] == 2200.0     # 100 * 22
         assert rate['WPC'] == float(WPC_MAX_PRICE)
 
-    def test_wpc_at_min_price_when_balance_exactly_fits_min(self):
-        # 100 * 12 = 1200, balance = 1200 → exactly min price.
+    def test_wpc_at_min_price_when_balance_is_zero(self):
+        # With a 0 floor, an exhausted balance simply means no WPC.
         totals = _totals(**{'WPC': 100.0})
-        planned, rate = compute_e5_plan(totals, license_balance=Decimal('1200'))
-        assert planned['WPC'] == 1200.0
+        planned, rate = compute_e5_plan(totals, license_balance=Decimal('0'))
+        assert planned['WPC'] == 0.0
         assert rate['WPC'] == float(WPC_MIN_PRICE)
 
     def test_wpc_within_range_when_balance_in_middle(self):
-        # Balance between 12*qty and 27*qty → dynamic rate consumes balance.
+        # Balance below 22*qty → dynamic rate consumes the whole balance.
         totals = _totals(**{'WPC': 100.0})
         planned, rate = compute_e5_plan(totals, license_balance=Decimal('1800'))
         assert planned['WPC'] == 1800.0
@@ -190,14 +190,13 @@ class TestWpcDynamicPricing(TestCase):
         # Expected rate = 1800 / 100 = 18.
         assert rate['WPC'] == 18.0
 
-    def test_wpc_skipped_when_balance_below_min_price(self):
-        # 100 * 12 = 1200 needed at min — balance is only 500. Skip WPC and
-        # leave the residual for wheat flour.
+    def test_wpc_consumes_full_balance_when_below_max(self):
+        # 100 * 22 = 2200 fits comfortably above balance 500 → WPC takes the
+        # entire 500 at an effective rate of 5.0 (in band since min is 0).
         totals = _totals(**{'WPC': 100.0})
         planned, rate = compute_e5_plan(totals, license_balance=Decimal('500'))
-        assert planned['WPC'] == 0.0
-        # Rate defaults to the minimum (display value), but utilization is 0.
-        assert rate['WPC'] == float(WPC_MIN_PRICE)
+        assert planned['WPC'] == 500.0
+        assert rate['WPC'] == 5.0
 
 
 class TestWheatFlourMopUp(TestCase):
@@ -295,17 +294,17 @@ class TestFullWaterfall(TestCase):
 
         # 1000*2.7 + 3000*2.3 + 4000*1.2 + 1000*5.5 = 2700+6900+4800+5500 = 19900
         # Remaining after step 5 = 69046.90 - 19900 = 49146.90
-        # WPC: balance 49146.90 vs qty 100 → max price 27 fits (100*27=2700)
-        # → planned WPC = 2700, rate = 27.
-        # Remaining after WPC = 49146.90 - 2700 = 46446.90
-        # Wheat Flour eats all of it: 46446.90 / 5000 = 9.28938 per unit.
+        # WPC: balance 49146.90 vs qty 100 → max price 22 fits (100*22=2200)
+        # → planned WPC = 2200, rate = 22.
+        # Remaining after WPC = 49146.90 - 2200 = 46946.90
+        # Wheat Flour eats all of it: 46946.90 / 5000 = 9.3894 per unit.
         assert planned['DIETARY FIBRE'] == 2700.0
         assert planned['PKO'] == 6900.0
         assert planned['RBD'] == 4800.0
         assert planned['OLIVE OIL'] == 5500.0
-        assert planned['WPC'] == 2700.0
+        assert planned['WPC'] == 2200.0
         assert rate['WPC'] == float(WPC_MAX_PRICE)
-        assert abs(planned['WHEAT FLOUR'] - 46446.90) < 1e-4
+        assert abs(planned['WHEAT FLOUR'] - 46946.90) < 1e-4
         # Final balance == 0.
         assert abs(_planned_sum(planned) - float(BALANCE_CIF_USD)) < 1e-4
 

@@ -1424,6 +1424,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 'port_code': _port_code,
                 'exporter_name': _exporter_name, 'iec': _exporter_iec,
                 'planned': {}, 'qty_per_cat': {}, 'total_planned': _license_balance, 'categories': [],
+                # 10% condition-pool — surfaced for the bulk-summary "10% Balance"
+                # column next to DIETARY FIBRE. Default 0; the E5 branch fills it
+                # with the real value from compute_condition_pools().
+                'pool_10': 0.0,
                 'sheet_name': sheet_name,
                 'cell_refs': {
                     'balance_cif': None,
@@ -1517,14 +1521,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _bq = _cat_totals[_lbl]
                     _pc = min(_rt * _bq, _e1_remaining)
                     _planned_per_cat[_lbl] = _pc
-                    _up = round(_pc / _bq, 2) if _bq else 0.0
+                    # Live formula: unit price updates whenever Bal Qty or
+                    # Planned CIF changes. Falls back to 0 when Bal Qty is 0.
+                    _up_formula = f'=IF(C{r}=0,0,ROUNDDOWN(E{r}/C{r},2))'
                     _e1_remaining -= _pc
                     _total_planned += _pc
                     _rf = None if _idx % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _lbl, fill=_rf)
                     _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
                     _qty_cell = _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, _up_formula, fill=_rf, align='right', num_fmt='#,##0.00')
                     _planned_cell = _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 6, _cat_first_desc.get(_lbl, ''), fill=_rf)
                     _cell(ws, r, 7, _e1_remaining, fill=_rf, align='right', num_fmt='#,##0.00')
@@ -1613,14 +1619,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _e5_qty[_lbl] = _bq
                     _pc = _e5_planned_per_cat.get(_lbl, 0.0)
                     _rt = _e5_rate_per_cat.get(_lbl, 0.0)
-                    _up = round(_pc / _bq, 2) if _bq else 0.0
+                    # Live formula referencing this row's Bal Qty (col C) and
+                    # Planned CIF (col E). Zero-qty rows render '-' below.
+                    _up_formula = f'=IF(C{r}=0,0,ROUNDDOWN(E{r}/C{r},2))'
                     _e5_planned += _pc
                     _rf = None if _idx % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _lbl, fill=_rf)
                     if _bq or _pc:
                         _cell(ws, r, 2, _rt, fill=_rf, align='right', num_fmt='#,##0.00')
                         _qty_cell = _cell(ws, r, 3, _bq, fill=_rf, align='right', num_fmt='#,##0.00')
-                        _cell(ws, r, 4, _up, fill=_rf, align='right', num_fmt='#,##0.00')
+                        _cell(ws, r, 4, _up_formula, fill=_rf, align='right', num_fmt='#,##0.00')
                     else:
                         _cell(ws, r, 2, '-', fill=_rf, align='center')
                         _qty_cell = _cell(ws, r, 3, '-', fill=_rf, align='center')
@@ -1669,11 +1677,23 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _e5_total_cell = _cell(ws, r, 5, _e5_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 _util_return['cell_refs']['total_planned'] = _e5_total_cell.coordinate
                 r += 1
+                # "10% Balance" displayed in the bulk summary uses the
+                # licence's canonical E5 10% restriction figure
+                # (`get_per_cif().tenRestriction`) — falls back to the local
+                # condition_pool value, then to 10% of the licence credit.
+                try:
+                    _per_cif = license_obj.get_per_cif() or {}
+                except Exception:
+                    _per_cif = {}
+                _ten_balance = _per_cif.get('tenRestriction')
+                if _ten_balance is None or _ten_balance == 0:
+                    _ten_balance = _pool_10
                 _util_return.update({
                     'norm_type': 'E5', 'planned': _e5_planned_per_cat,
                     'qty_per_cat': _e5_qty,
                     'total_planned': _e5_planned,
                     'categories': list(_E5_CATS_ORDERED),
+                    'pool_10': float(_ten_balance or 0),
                 })
             else:
                 from apps.license.utils.condition_excel import annotate_cell as _annotate_cond
@@ -1809,11 +1829,21 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         #   1=Sr No (global counter), 2=License No, 3=License Date, 4=Expiry,
         #   5=Exporter, 6=Balance CIF, 7=Total CIF. Then category quantity/CIF pairs.
         _FIXED_SUMMARY_COLS = 7
+        # Each category occupies 3 sub-columns: Bal Qty, Unit Price, Planned CIF ($).
+        # E5 inserts an extra single "10% Balance" column right after the first
+        # category (DIETARY FIBRE), so the E5 total/waste columns shift by +1.
         _CAT_START_COL = _FIXED_SUMMARY_COLS + 1
-        _E1_TOTAL_COL  = _FIXED_SUMMARY_COLS + len(_E1_CATS_LABELS) * 2 + 1
+        _E1_TOTAL_COL  = _FIXED_SUMMARY_COLS + len(_E1_CATS_LABELS) * 3 + 1
         _E1_WASTE_COL  = _E1_TOTAL_COL + 1
-        _E5_TOTAL_COL  = _FIXED_SUMMARY_COLS + len(_E5_CATS_LABELS) * 2 + 1
+        _E5_POOL10_COL = _CAT_START_COL + 3   # one extra column between cat 0 (DF) and cat 1
+        _E5_TOTAL_COL  = _FIXED_SUMMARY_COLS + len(_E5_CATS_LABELS) * 3 + 1 + 1
         _E5_WASTE_COL  = _E5_TOTAL_COL + 1
+
+        def _e5_cat_col(ci):
+            """Start column for E5 category index `ci`. Categories after DIETARY
+            FIBRE (ci > 0) are pushed right by 1 to make room for the inserted
+            '10% Balance' column."""
+            return _CAT_START_COL + ci * 3 + (1 if ci > 0 else 0)
         # Other-licenses section has IEC at col 8 and Port at col 9
         _MAX_COL = max(_E1_WASTE_COL, _E5_WASTE_COL, 9)
 
@@ -1861,8 +1891,8 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _sw.merge_cells(f'F{_sr}:F{_sr+1}'); _shdr(_sw, _sr, 6, 'Balance CIF $')
             _sw.merge_cells(f'G{_sr}:G{_sr+1}'); _shdr(_sw, _sr, 7, 'Exporter Name')
             for _ci, _cat in enumerate(_E1_CATS_LABELS):
-                _cc = _CAT_START_COL + _ci * 2
-                _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+1)}{_sr}')
+                _cc = _CAT_START_COL + _ci * 3
+                _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+2)}{_sr}')
                 _shdr(_sw, _sr, _cc, _cat)
             _sw.merge_cells(f'{_gcl(_E1_TOTAL_COL)}{_sr}:{_gcl(_E1_TOTAL_COL)}{_sr+1}')
             _shdr(_sw, _sr, _E1_TOTAL_COL, 'TOTAL PLANNED CIF $')
@@ -1873,9 +1903,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
             _sr += 1
             for _ci in range(len(_E1_CATS_LABELS)):
-                _cc = _CAT_START_COL + _ci * 2
+                _cc = _CAT_START_COL + _ci * 3
                 _shdr(_sw, _sr, _cc,     'Bal Qty')
-                _shdr(_sw, _sr, _cc + 1, 'Planned CIF ($)')
+                _shdr(_sw, _sr, _cc + 1, 'Unit Price')
+                _shdr(_sw, _sr, _cc + 2, 'Planned CIF ($)')
             _sr += 1
 
             _e1_tot = {'bal': 0.0, 'planned': 0.0, 'waste': 0.0,
@@ -1899,13 +1930,19 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
                 _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
                 for _ci, _cat in enumerate(_E1_CATS_LABELS):
-                    _cc = _CAT_START_COL + _ci * 2
+                    _cc = _CAT_START_COL + _ci * 3
                     _q = _row['qty_per_cat'].get(_cat, 0.0)
                     _p = _row['planned'].get(_cat, 0.0)
                     _q_ref = (_refs.get('qty_per_cat') or {}).get(_cat)
                     _p_ref = (_refs.get('planned') or {}).get(_cat)
+                    # Live unit-price formula off this row's Bal Qty (_cc) and
+                    # Planned CIF (_cc+2). Auto-updates if either changes.
+                    _q_col = _gcl(_cc)
+                    _p_col = _gcl(_cc + 2)
+                    _up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
                     _scell(_sw, _sr, _cc,     _sheet_formula(_row, _q_ref) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
-                    _scell(_sw, _sr, _cc + 1, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _scell(_sw, _sr, _cc + 1, _up_formula,                         fill=_rf, align='right', num_fmt='#,##0.00')
+                    _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
                     _e1_tot['qty'][_cat] += _q
                     _e1_tot['cif'][_cat] += _p
                 _scell(_sw, _sr, _E1_TOTAL_COL, _sheet_formula(_row, _refs.get('total_planned')) or _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
@@ -1928,9 +1965,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _scell(_sw, _sr, 6, _sum_formula(6, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
             for _ci, _cat in enumerate(_E1_CATS_LABELS):
-                _cc = _CAT_START_COL + _ci * 2
-                _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-                _scell(_sw, _sr, _cc + 1, _sum_formula(_cc + 1, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cc = _CAT_START_COL + _ci * 3
+                # Total-row unit price = SUM(Planned CIF) / SUM(Bal Qty),
+                # referencing the live total cells on this same row.
+                _q_col = _gcl(_cc)
+                _p_col = _gcl(_cc + 2)
+                _tot_up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
+                _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e1_data_start, _e1_data_end),     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 1, _tot_up_formula,                                      fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 2, _sum_formula(_cc + 2, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _scell(_sw, _sr, _E1_TOTAL_COL, _sum_formula(_E1_TOTAL_COL, _e1_data_start, _e1_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _wt = _sw.cell(row=_sr, column=_E1_WASTE_COL, value=_sum_formula(_E1_WASTE_COL, _e1_data_start, _e1_data_end))
             _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
@@ -1951,9 +1994,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _sw.merge_cells(f'F{_sr}:F{_sr+1}'); _shdr(_sw, _sr, 6, 'Balance CIF $')
             _sw.merge_cells(f'G{_sr}:G{_sr+1}'); _shdr(_sw, _sr, 7, 'Exporter Name')
             for _ci, _cat in enumerate(_E5_CATS_LABELS):
-                _cc = _CAT_START_COL + _ci * 2
-                _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+1)}{_sr}')
+                _cc = _e5_cat_col(_ci)
+                _sw.merge_cells(f'{_gcl(_cc)}{_sr}:{_gcl(_cc+2)}{_sr}')
                 _shdr(_sw, _sr, _cc, _cat)
+            # 10% Balance — single column wedged between DIETARY FIBRE and SWP.
+            _sw.merge_cells(f'{_gcl(_E5_POOL10_COL)}{_sr}:{_gcl(_E5_POOL10_COL)}{_sr+1}')
+            _shdr(_sw, _sr, _E5_POOL10_COL, '10% Balance')
             _sw.merge_cells(f'{_gcl(_E5_TOTAL_COL)}{_sr}:{_gcl(_E5_TOTAL_COL)}{_sr+1}')
             _shdr(_sw, _sr, _E5_TOTAL_COL, 'TOTAL ALLOCATED CIF $')
             _sw.merge_cells(f'{_gcl(_E5_WASTE_COL)}{_sr}:{_gcl(_E5_WASTE_COL)}{_sr+1}')
@@ -1963,9 +2009,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
             _sr += 1
             for _ci in range(len(_E5_CATS_LABELS)):
-                _cc = _CAT_START_COL + _ci * 2
+                _cc = _e5_cat_col(_ci)
                 _shdr(_sw, _sr, _cc,     'Bal Qty')
-                _shdr(_sw, _sr, _cc + 1, 'Planned CIF ($)')
+                _shdr(_sw, _sr, _cc + 1, 'Unit Price')
+                _shdr(_sw, _sr, _cc + 2, 'Planned CIF ($)')
             _sr += 1
 
             _e5_tot = {'bal': 0.0, 'planned': 0.0, 'waste': 0.0,
@@ -1989,15 +2036,28 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
                 _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
                 for _ci, _cat in enumerate(_E5_CATS_LABELS):
-                    _cc = _CAT_START_COL + _ci * 2
+                    _cc = _e5_cat_col(_ci)
                     _q = _row['qty_per_cat'].get(_cat, 0.0)
                     _p = _row['planned'].get(_cat, 0.0)
                     _q_ref = (_refs.get('qty_per_cat') or {}).get(_cat)
                     _p_ref = (_refs.get('planned') or {}).get(_cat)
+                    # Live unit price = ROUNDDOWN(Planned / Bal Qty, 2), guarded
+                    # against /0. Both source cells are pulled live from the
+                    # per-licence sheet via _sheet_formula, so the unit price
+                    # updates if the user edits either side.
+                    _q_col = _gcl(_cc)
+                    _p_col = _gcl(_cc + 2)
+                    _up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
                     _scell(_sw, _sr, _cc,     _sheet_formula(_row, _q_ref) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
-                    _scell(_sw, _sr, _cc + 1, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _scell(_sw, _sr, _cc + 1, _up_formula,                         fill=_rf, align='right', num_fmt='#,##0.00')
+                    _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
                     _e5_tot['qty'][_cat] += _q
                     _e5_tot['cif'][_cat] += _p
+                # 10% Balance — display-only, not part of the waterfall arithmetic.
+                _row_pool10 = _row.get('pool_10', 0.0)
+                _scell(_sw, _sr, _E5_POOL10_COL, _row_pool10, fill=_rf, align='right', num_fmt='#,##0.00')
+                _e5_tot.setdefault('pool_10', 0.0)
+                _e5_tot['pool_10'] += _row_pool10
                 _scell(_sw, _sr, _E5_TOTAL_COL, _sheet_formula(_row, _refs.get('total_planned')) or _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
                 _wc = _sw.cell(row=_sr, column=_E5_WASTE_COL, value=_sheet_formula(_row, _refs.get('wastage')) or _waste)
                 _wc.fill = WASTE_FILL; _wc.font = Font(bold=True, size=9)
@@ -2018,9 +2078,19 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _scell(_sw, _sr, 6, _sum_formula(6, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _scell(_sw, _sr, 7, '', fill=TOTAL_FILL)
             for _ci, _cat in enumerate(_E5_CATS_LABELS):
-                _cc = _CAT_START_COL + _ci * 2
-                _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-                _scell(_sw, _sr, _cc + 1, _sum_formula(_cc + 1, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cc = _e5_cat_col(_ci)
+                # Total-row unit price = SUM(Planned CIF) / SUM(Bal Qty),
+                # referencing the live total cells on this same row.
+                _q_col = _gcl(_cc)
+                _p_col = _gcl(_cc + 2)
+                _tot_up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
+                _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e5_data_start, _e5_data_end),     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 1, _tot_up_formula,                                      fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _scell(_sw, _sr, _cc + 2, _sum_formula(_cc + 2, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            # 10% Balance total — sum of per-license pool values.
+            _scell(_sw, _sr, _E5_POOL10_COL,
+                   _sum_formula(_E5_POOL10_COL, _e5_data_start, _e5_data_end),
+                   fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _scell(_sw, _sr, _E5_TOTAL_COL, _sum_formula(_E5_TOTAL_COL, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _wt = _sw.cell(row=_sr, column=_E5_WASTE_COL, value=_sum_formula(_E5_WASTE_COL, _e5_data_start, _e5_data_end))
             _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
@@ -2369,14 +2439,16 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
                 _bq = _cat_totals[_lbl]
                 _pc = min(_rt * _bq, _e1_remaining)
-                _up = round(_pc / _bq, 2) if _bq else 0.0
+                # Live unit-price formula off this row's Bal Qty (C) and
+                # Planned CIF (E). Returns 0 when Bal Qty is 0.
+                _up_formula = f'=IF(C{r}=0,0,ROUNDDOWN(E{r}/C{r},2))'
                 _e1_remaining -= _pc
                 _total_planned += _pc
                 _rf = None if _idx % 2 == 0 else ALT_FILL
                 _cell(ws, r, 1, _lbl, fill=_rf)
                 _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 4, _up,  fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, _up_formula, fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
                 _cell(ws, r, 6, _cat_first_desc.get(_lbl, ''), fill=_rf)
                 _cell(ws, r, 7, _e1_remaining, fill=_rf, align='right', num_fmt='#,##0.00')
@@ -2472,14 +2544,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _bq = _e5_totals.get(_lbl, 0.0)
                 _pc = _e5_planned_per_cat_be.get(_lbl, 0.0)
                 _rt = _e5_rate_per_cat_be.get(_lbl, 0.0)
-                _up = round(_pc / _bq, 2) if _bq else 0.0
+                # Live unit-price formula off Bal Qty (C) and Planned CIF (E).
+                _up_formula = f'=IF(C{r}=0,0,ROUNDDOWN(E{r}/C{r},2))'
                 _e5_planned += _pc
                 _rf = None if _idx % 2 == 0 else ALT_FILL
                 _cell(ws, r, 1, _lbl, fill=_rf)
                 if _bq or _pc:
                     _cell(ws, r, 2, _rt, fill=_rf, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 3, _bq, fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 4, _up, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, _up_formula, fill=_rf, align='right', num_fmt='#,##0.00')
                 else:
                     _cell(ws, r, 2, '-', fill=_rf, align='center')
                     _cell(ws, r, 3, '-', fill=_rf, align='center')

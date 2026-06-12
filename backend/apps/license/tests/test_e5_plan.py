@@ -29,11 +29,22 @@ def _planned_sum(planned: dict[str, float]) -> float:
 class TestClassifyE5Item(TestCase):
     """Item / HSN / description bucketing."""
 
-    def test_walnut_item_is_dietary_fibre(self):
-        assert classify_e5_item('Walnut', '08023100', '') == 'DIETARY FIBRE'
+    def test_dietary_fibre_item_routes_to_dietary_fibre(self):
+        # The "DIETARY FIBRE - E5, WALNUT - E5" combo (the real-world pattern)
+        # has 'dietary fibre' in its item key.
+        assert classify_e5_item('DIETARY FIBRE - E5, WALNUT - E5', '08029900', '') == 'DIETARY FIBRE'
 
     def test_dietary_fibre_description_routes_to_dietary_fibre(self):
         assert classify_e5_item('FOOD ITEM', '', 'Dietary Fibre') == 'DIETARY FIBRE'
+
+    def test_walnut_alone_does_not_match_dietary_fibre(self):
+        # 'FOOD FLAVOUR - E5, FRUIT JUICE - E5, WALNUT - E5' contains 'walnut'
+        # but is NOT a dietary-fibre row — must not fold into DIETARY FIBRE.
+        assert classify_e5_item(
+            'FOOD FLAVOUR - E5, FRUIT JUICE - E5, WALNUT - E5',
+            '08022200',
+            'Food Flavour - Fruit Flavour',
+        ) is None
 
     def test_swp_item_matches(self):
         assert classify_e5_item('SWP', '', '') == 'SWP'

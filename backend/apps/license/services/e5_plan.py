@@ -91,21 +91,24 @@ def classify_e5_item(
       1. Unambiguous full-name item signals (these BEAT any HSN signal so an
          item explicitly named "OLIVE OIL" with an HSN in the 1513 range
          still routes to OLIVE OIL, not PKO):
-            * 'walnut'        → DIETARY FIBRE
-            * 'olive oil'     → OLIVE OIL
-            * 'wheat flour'   → WHEAT FLOUR
+            * 'dietary fibre' (in item OR description) → DIETARY FIBRE
+            * 'olive oil'                              → OLIVE OIL
+            * 'wheat flour'                            → WHEAT FLOUR
+
+         NOTE: a bare 'walnut' substring is NOT enough for DIETARY FIBRE —
+         the row must be explicitly tagged DIETARY FIBRE. A combo row like
+         'FOOD FLAVOUR - E5, FRUIT JUICE - E5, WALNUT - E5' must not be
+         folded into DIETARY FIBRE.
 
       2. WPC compound rule: item is/contains 'wpc' AND (HSN contains '3502'
          OR description contains '3502').
 
-      3. Description fallback for dietary fibre.
-
-      4. SWP / PKO / RBD — item-acronym OR HSN/description signal:
+      3. SWP / PKO / RBD — item-acronym OR HSN/description signal:
             * SWP  ← item 'swp'    or HSN/desc contains '0404'
             * PKO  ← item 'pko'    or HSN/desc contains '1513'
             * RBD  ← item 'rbd'    or HSN/desc contains '1511'
 
-      5. Wheat-flour legacy HSN 11010000.
+      4. Wheat-flour legacy HSN 11010000.
     """
     item = _norm(item_key)
     hs = _norm(hs_code)
@@ -113,7 +116,7 @@ def classify_e5_item(
     tokens = _item_tokens(item_key)
 
     # 1. Unambiguous full-name item signals — win over HSN.
-    if 'walnut' in item:
+    if 'dietary fibre' in item or 'dietary fibre' in desc:
         return 'DIETARY FIBRE'
     if 'olive oil' in item:
         return 'OLIVE OIL'
@@ -124,11 +127,7 @@ def classify_e5_item(
     if ('wpc' in tokens or 'wpc' in item) and ('3502' in hs or '3502' in desc):
         return 'WPC'
 
-    # 3. Dietary fibre by description.
-    if 'dietary fibre' in desc:
-        return 'DIETARY FIBRE'
-
-    # 4. SWP / PKO / RBD — acronym OR HSN/desc.
+    # 3. SWP / PKO / RBD — acronym OR HSN/desc.
     if 'swp' in tokens or 'swp' in item or '0404' in hs or '0404' in desc:
         return 'SWP'
     if 'pko' in tokens or 'pko' in item or '1513' in hs or '1513' in desc:
@@ -136,7 +135,7 @@ def classify_e5_item(
     if 'rbd' in tokens or 'rbd' in item or '1511' in hs or '1511' in desc:
         return 'RBD'
 
-    # 5. Wheat-flour legacy HSN.
+    # 4. Wheat-flour legacy HSN.
     if '11010000' in hs:
         return 'WHEAT FLOUR'
 

@@ -948,10 +948,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         from apps.license.services.condition_pool import compute_condition_pools as _ccp
         _cond_pools = _ccp(license_obj)
 
-        _bal_agg = defaultdict(lambda: {'qty': 0.0, 'total_qty': 0.0, 'sr_ids': [], 'description': '', 'hs_code': '', 'condition_type': ''})
+        _bal_agg = defaultdict(lambda: {'qty': 0.0, 'total_qty': 0.0, 'sr_ids': [], 'description': '', 'hs_code': '', 'condition_type': '', 'qty_by_cond': {}})
         for _item in license_obj.import_license.all():
             _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
-            _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+            _avail = float(_item.available_quantity or 0)
+            _bal_agg[_key]['qty'] += _avail
             _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)
             _bal_agg[_key]['sr_ids'].append(_item.serial_number)
             if not _bal_agg[_key]['description']:
@@ -960,6 +961,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _bal_agg[_key]['hs_code'] = str(_item.hs_code.hs_code if _item.hs_code else '-')
             if _item.condition_type and not _bal_agg[_key]['condition_type']:
                 _bal_agg[_key]['condition_type'] = _item.condition_type
+            # Per-condition qty breakdown for E1's Display/Util-qty split.
+            _ct = (_item.condition_type or '').strip()
+            _bal_agg[_key]['qty_by_cond'][_ct] = _bal_agg[_key]['qty_by_cond'].get(_ct, 0.0) + _avail
 
         for item in license_obj.import_license.all():
             item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
@@ -1326,11 +1330,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
             _bal_agg = defaultdict(lambda: {
                 'qty': 0.0, 'total_qty': 0.0, 'sr_ids': [],
-                'description': '', 'hs_code': '', 'condition_type': ''
+                'description': '', 'hs_code': '', 'condition_type': '',
+                'qty_by_cond': {},
             })
             for _item in license_obj.import_license.all():
                 _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
-                _bal_agg[_key]['qty'] += float(_item.available_quantity or 0)
+                _avail = float(_item.available_quantity or 0)
+                _bal_agg[_key]['qty'] += _avail
                 _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)
                 _bal_agg[_key]['sr_ids'].append(_item.serial_number)
                 if not _bal_agg[_key]['description']:
@@ -1341,6 +1347,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 # through to the bulk-balance Excel cell.
                 if _item.condition_type and not _bal_agg[_key]['condition_type']:
                     _bal_agg[_key]['condition_type'] = _item.condition_type
+                # Per-condition qty breakdown for E1's Display/Util-qty split.
+                _ct = (_item.condition_type or '').strip()
+                _bal_agg[_key]['qty_by_cond'][_ct] = _bal_agg[_key]['qty_by_cond'].get(_ct, 0.0) + _avail
 
             _license_balance = float(license_obj.get_balance_cif or 0)
             total_license_cif = total_cif + _license_balance
@@ -1438,33 +1447,41 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 },
             }
             if _is_e1:
-                _UTIL_PLAN = [
-                    ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7,  ['0802'],         ['confectionery', 'fruit & fruit', 'fruit product']),
-                    ('FRUIT JUICE',                                   3.0,  [],               ['fruit juice']),
-                    ('COCOA, MILK & MILK PRODUCTS - MILK SOLIDS',    12.0,  ['3501', '3502'], ['cocoa', 'milk solid', 'milk product']),
-                    ('TARTARIC ACID / CITRIC ACID',                   2.0,  [],               ['tartaric', 'citric']),
-                    ('POLYPROPYLENE',                                 1.0,  [],               ['polypropylene']),
-                    ('PAPER & PAPER BOARD',                           0.7,  [],               ['paper']),
-                ]
-                def _cat_match(hs, desc, hs_kw, name_kw):
-                    return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
-                _cat_totals = {label: 0.0 for label, *_ in _UTIL_PLAN}
-                _cat_first_desc = {label: '' for label, *_ in _UTIL_PLAN}
+                from apps.license.services.e1_plan import (
+                    E1_CATS as _E1_CATS_ORDERED,
+                    E1_EXCLUDED_CONDITIONS as _E1_EXCL,
+                    classify_e1_item as _classify_e1,
+                )
+                _e1_display = {c: 0.0 for c in _E1_CATS_ORDERED}
+                _e1_util    = {c: 0.0 for c in _E1_CATS_ORDERED}
+                _cat_first_desc = {c: '' for c in _E1_CATS_ORDERED}
                 _unclassified = []
+                # Per-category License Marking (priority: stricter % wins).
+                _cond_priority_e1 = {"2%": 5, "3%": 4, "5%": 3, "10%": 2, "AU": 1}
+                _e1_cond_per_cat: dict[str, str] = {}
                 for _ik in _bal_agg:
-                    _bq = _bal_agg[_ik]['qty']
-                    _de = _bal_agg[_ik]['description'] or _ik
-                    _hs = _bal_agg[_ik]['hs_code']
-                    _found = False
-                    for _lbl, _rt, _hskw, _nkw in _UTIL_PLAN:
-                        if _cat_match(_hs, _de, _hskw, _nkw):
-                            _cat_totals[_lbl] += _bq
-                            if not _cat_first_desc[_lbl]:
-                                _cat_first_desc[_lbl] = _de
-                            _found = True
-                            break
-                    if not _found:
-                        _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
+                    _agg = _bal_agg[_ik]
+                    _bq = _agg['qty']
+                    _de = _agg['description'] or _ik
+                    _hs = _agg['hs_code']
+                    _cond = _agg.get('condition_type') or ''
+                    _lbl = _classify_e1(_ik, _hs, _de)
+                    if _lbl:
+                        _e1_display[_lbl] += _bq
+                        # Util qty = sum across non-excluded conditions for this step.
+                        _excl = _E1_EXCL.get(_lbl, frozenset())
+                        for _ct, _q in _agg.get('qty_by_cond', {}).items():
+                            if _ct not in _excl:
+                                _e1_util[_lbl] += _q
+                        if not _cat_first_desc[_lbl]:
+                            _cat_first_desc[_lbl] = _de
+                        if _cond and (
+                            _lbl not in _e1_cond_per_cat
+                            or _cond_priority_e1.get(_cond, 0) > _cond_priority_e1.get(_e1_cond_per_cat[_lbl], 0)
+                        ):
+                            _e1_cond_per_cat[_lbl] = _cond
+                    else:
+                        _sr_str = ', '.join(str(s) for s in sorted(set(_agg['sr_ids'])))
                         _unclassified.append((_ik, _sr_str, _hs, _de, _bq))
             elif _is_e5:
                 from apps.license.services.e5_plan import (
@@ -1475,33 +1492,49 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _e5_first_desc = {}
                 _e5_unclassified = []
                 _wf_qty = 0.0
+                # Per-category License Marking — surfaced to the bulk summary
+                # so each category's cells inherit the ConditionBadge colour.
+                # Priority: stricter % wins; "AU" only if no % is present.
+                _cond_priority = {"2%": 5, "3%": 4, "5%": 3, "10%": 2, "AU": 1}
+                _e5_cond_per_cat: dict[str, str] = {}
                 for _ik in _bal_agg:
                     _bq = _bal_agg[_ik]['qty']
                     _hs = _bal_agg[_ik]['hs_code'] or ''
                     _de = _bal_agg[_ik]['description'] or _ik
+                    _cond = _bal_agg[_ik].get('condition_type') or ''
                     _cat = _classify_e5(_ik, _hs, _de)
                     if _cat:
                         _e5_totals[_cat] += _bq
                         if not _e5_first_desc.get(_cat):
                             _e5_first_desc[_cat] = _de
+                        if _cond and (
+                            _cat not in _e5_cond_per_cat
+                            or _cond_priority.get(_cond, 0) > _cond_priority.get(_e5_cond_per_cat[_cat], 0)
+                        ):
+                            _e5_cond_per_cat[_cat] = _cond
                     else:
                         _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
                         _e5_unclassified.append((_ik, _sr_str, _bal_agg[_ik]['hs_code'], _de, _bq))
 
-            ws.merge_cells(f'A{r}:G{r}')
+            # E1's utilisation table is 8 cols wide (extra Util Qty column);
+            # E5 and "other" stay 7 cols. The banner widths follow suit.
+            _util_span = 'H' if _is_e1 else 'G'
+            _balcif_label_span = 'E' if _is_e1 else 'D'
+            _balcif_value_col = 6 if _is_e1 else 5
+            ws.merge_cells(f'A{r}:{_util_span}{r}')
             bh = ws[f'A{r}']
             bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
             bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
             bh.alignment = Alignment(horizontal='center', vertical='center')
             r += 1
 
-            ws.merge_cells(f'A{r}:D{r}')
+            ws.merge_cells(f'A{r}:{_balcif_label_span}{r}')
             bc = ws[f'A{r}']
             bc.value = 'BALANCE CIF $'
             bc.fill = HDR_FILL; bc.font = Font(bold=True, color="FFFFFF", size=9)
             bc.alignment = Alignment(horizontal='center', vertical='center')
             bc.border = THIN_BORDER
-            yc = ws.cell(row=r, column=5, value=_license_balance)
+            yc = ws.cell(row=r, column=_balcif_value_col, value=_license_balance)
             yc.fill = YEL_FILL; yc.font = Font(bold=True, size=9)
             yc.border = THIN_BORDER
             yc.alignment = Alignment(horizontal='right', vertical='center')
@@ -1510,30 +1543,42 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             r += 1
 
             if _is_e1:
-                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
+                from apps.license.services.e1_plan import (
+                    compute_e1_plan as _compute_e1_plan,
+                    E1_MAX_PRICES as _E1_MAX_PRICES,
+                )
+                # 8-column layout adds a Util Qty column (col 4) so the spec's
+                # "Display vs Utilization quantity" split is visible.
+                # Cols: A=Cat B=Rate C=Bal(Display) D=Util E=UnitPrice F=Planned G=Desc H=Remaining
+                for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Util Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
                     _hdr(ws, r, col, h)
                 r += 1
 
+                _e1_planned_per_cat, _e1_rate_per_cat = _compute_e1_plan(
+                    _e1_display, _e1_util, _license_balance,
+                )
                 _total_planned = 0.0
                 _e1_remaining = _license_balance
                 _planned_per_cat = {}
-                for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
-                    _bq = _cat_totals[_lbl]
-                    _pc = min(_rt * _bq, _e1_remaining)
+                for _idx, _lbl in enumerate(_E1_CATS_ORDERED):
+                    _bq = _e1_display[_lbl]
+                    _uq = _e1_util[_lbl]
+                    _pc = _e1_planned_per_cat.get(_lbl, 0.0)
+                    _rt = float(_E1_MAX_PRICES[_lbl])
                     _planned_per_cat[_lbl] = _pc
-                    # Live formula: unit price updates whenever Bal Qty or
-                    # Planned CIF changes. Falls back to 0 when Bal Qty is 0.
-                    _up_formula = f'=IF(C{r}=0,0,ROUNDDOWN(E{r}/C{r},2))'
+                    # Unit Price = Planned / Util Qty (D), with guard against /0.
+                    _up_formula = f'=IF(D{r}=0,0,ROUNDDOWN(F{r}/D{r},2))'
                     _e1_remaining -= _pc
                     _total_planned += _pc
                     _rf = None if _idx % 2 == 0 else ALT_FILL
                     _cell(ws, r, 1, _lbl, fill=_rf)
-                    _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
-                    _qty_cell = _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 4, _up_formula, fill=_rf, align='right', num_fmt='#,##0.00')
-                    _planned_cell = _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
-                    _cell(ws, r, 6, _cat_first_desc.get(_lbl, ''), fill=_rf)
-                    _cell(ws, r, 7, _e1_remaining, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 2, _rt, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _qty_cell = _cell(ws, r, 3, _bq, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 4, _uq, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 5, _up_formula, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _planned_cell = _cell(ws, r, 6, _pc, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cell(ws, r, 7, _cat_first_desc.get(_lbl, ''), fill=_rf)
+                    _cell(ws, r, 8, _e1_remaining, fill=_rf, align='right', num_fmt='#,##0.00')
                     _util_return['cell_refs']['qty_per_cat'][_lbl] = _qty_cell.coordinate
                     _util_return['cell_refs']['planned'][_lbl] = _planned_cell.coordinate
                     r += 1
@@ -1541,7 +1586,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 if _bal_agg:
                     from apps.license.utils.condition_excel import annotate_cell as _annotate_e1_item
                     r += 1
-                    ws.merge_cells(f'A{r}:G{r}')
+                    ws.merge_cells(f'A{r}:H{r}')
                     _uh = ws[f'A{r}']
                     _uh.value = 'LICENSE ITEM LIST'
                     _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
@@ -1575,20 +1620,21 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _cell(ws, r, 1, '', fill=TOTAL_FILL)
                 _cell(ws, r, 2, '', fill=TOTAL_FILL)
                 _cell(ws, r, 3, '', fill=TOTAL_FILL)
-                _cell(ws, r, 4, 'TOTAL PLANNED CIF $', fill=TOTAL_FILL, bold=True, align='right')
-                _total_planned_cell = _cell(ws, r, 5, _total_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, '', fill=TOTAL_FILL)
+                _cell(ws, r, 5, 'TOTAL PLANNED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+                _total_planned_cell = _cell(ws, r, 6, _total_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 _util_return['cell_refs']['total_planned'] = _total_planned_cell.coordinate
                 r += 1
                 _rem = _license_balance - _total_planned
                 _RF = PatternFill(start_color="C00000" if _rem < 0 else "1F4E79",
                                   end_color="C00000" if _rem < 0 else "1F4E79", fill_type="solid")
-                for _ci in range(1, 5):
+                for _ci in range(1, 6):
                     _cx = ws.cell(row=r, column=_ci)
                     _cx.fill = _RF; _cx.border = THIN_BORDER
-                _rc = ws.cell(row=r, column=4, value='REMAINING BALANCE CIF $')
+                _rc = ws.cell(row=r, column=5, value='REMAINING BALANCE CIF $')
                 _rc.fill = _RF; _rc.font = Font(bold=True, color="FFFFFF", size=9)
                 _rc.border = THIN_BORDER; _rc.alignment = Alignment(horizontal='right', vertical='center')
-                _rc2 = ws.cell(row=r, column=5, value=_rem)
+                _rc2 = ws.cell(row=r, column=6, value=_rem)
                 _rc2.fill = _RF; _rc2.font = Font(bold=True, color="FFFFFF", size=9)
                 _rc2.border = THIN_BORDER
                 _rc2.alignment = Alignment(horizontal='right', vertical='center')
@@ -1597,9 +1643,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 r += 1
                 _util_return.update({
                     'norm_type': 'E1', 'planned': _planned_per_cat,
-                    'qty_per_cat': dict(_cat_totals),
+                    'qty_per_cat': dict(_e1_display),
                     'total_planned': _total_planned,
-                    'categories': [lbl for lbl, *_ in _UTIL_PLAN]
+                    'categories': list(_E1_CATS_ORDERED),
+                    'condition_per_cat': dict(_e1_cond_per_cat),
                 })
             elif _is_e5:
                 from apps.license.services.e5_plan import (
@@ -1704,6 +1751,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     'total_planned': _e5_planned,
                     'categories': list(_E5_CATS_ORDERED),
                     'pool_10': float(_ten_balance or 0),
+                    'condition_per_cat': dict(_e5_cond_per_cat),
                 })
             else:
                 from apps.license.utils.condition_excel import annotate_cell as _annotate_cond
@@ -1800,15 +1848,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _util_summaries.append(_write_license_sheet(wb, license_obj))
 
         # ── Create Utilization Planning Summary as first sheet ─────────────────
-        _E1_CATS_LABELS = [
-            'OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS',
-            'FRUIT JUICE',
-            'COCOA, MILK & MILK PRODUCTS - MILK SOLIDS',
-            'TARTARIC ACID / CITRIC ACID',
-            'POLYPROPYLENE',
-            'PAPER & PAPER BOARD',
-        ]
+        from apps.license.services.e1_plan import E1_CATS as _E1_CATS_ORDERED_SUMM
         from apps.license.services.e5_plan import E5_CATS as _E5_CATS_ORDERED_SUMM
+        from apps.license.utils.condition_excel import annotate_cell as _annotate_summary
+        _E1_CATS_LABELS = list(_E1_CATS_ORDERED_SUMM)
         _E5_CATS_LABELS = list(_E5_CATS_ORDERED_SUMM)
         _e1_rows = [s for s in _util_summaries if s['norm_type'] == 'E1']
         _e5_rows = [s for s in _util_summaries if s['norm_type'] == 'E5']
@@ -1939,6 +1982,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
                 _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
                 _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
+                _e1_cond_map = _row.get('condition_per_cat') or {}
                 for _ci, _cat in enumerate(_E1_CATS_LABELS):
                     _cc = _CAT_START_COL + _ci * 3
                     _q = _row['qty_per_cat'].get(_cat, 0.0)
@@ -1950,9 +1994,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _q_col = _gcl(_cc)
                     _p_col = _gcl(_cc + 2)
                     _up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
-                    _scell(_sw, _sr, _cc,     _sheet_formula(_row, _q_ref) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
-                    _scell(_sw, _sr, _cc + 1, _up_formula,                         fill=_rf, align='right', num_fmt='#,##0.00')
-                    _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cq = _scell(_sw, _sr, _cc,     _sheet_formula(_row, _q_ref) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cu = _scell(_sw, _sr, _cc + 1, _up_formula,                         fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cp = _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    # Colour the triplet by the category's License Marking.
+                    _cat_cond = _e1_cond_map.get(_cat) or ''
+                    if _cat_cond:
+                        _annotate_summary(_cq, _cat_cond)
+                        _annotate_summary(_cu, _cat_cond)
+                        _annotate_summary(_cp, _cat_cond)
                     _e1_tot['qty'][_cat] += _q
                     _e1_tot['cif'][_cat] += _p
                 _scell(_sw, _sr, _E1_TOTAL_COL, _sheet_formula(_row, _refs.get('total_planned')) or _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
@@ -2045,6 +2095,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _scell(_sw, _sr, 5, _row.get('total_license_cif') or 0.0, fill=_rf, align='right', num_fmt='#,##0.00')
                 _scell(_sw, _sr, 6, _sheet_formula(_row, _refs.get('balance_cif')) or _row['balance_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
                 _scell(_sw, _sr, 7, _row.get('exporter_name') or '-', fill=_rf)
+                _e5_cond_map = _row.get('condition_per_cat') or {}
                 for _ci, _cat in enumerate(_E5_CATS_LABELS):
                     _cc = _e5_cat_col(_ci)
                     _q = _row['qty_per_cat'].get(_cat, 0.0)
@@ -2058,14 +2109,22 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _q_col = _gcl(_cc)
                     _p_col = _gcl(_cc + 2)
                     _up_formula = f'=IF({_q_col}{_sr}=0,0,ROUNDDOWN({_p_col}{_sr}/{_q_col}{_sr},2))'
-                    _scell(_sw, _sr, _cc,     _sheet_formula(_row, _q_ref) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
-                    _scell(_sw, _sr, _cc + 1, _up_formula,                         fill=_rf, align='right', num_fmt='#,##0.00')
-                    _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cq = _scell(_sw, _sr, _cc,     _sheet_formula(_row, _q_ref) or _q, fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cu = _scell(_sw, _sr, _cc + 1, _up_formula,                         fill=_rf, align='right', num_fmt='#,##0.00')
+                    _cp = _scell(_sw, _sr, _cc + 2, _sheet_formula(_row, _p_ref) or _p, fill=_rf, align='right', num_fmt='#,##0.00')
+                    # Colour the triplet by the category's License Marking.
+                    _cat_cond = _e5_cond_map.get(_cat) or ''
+                    if _cat_cond:
+                        _annotate_summary(_cq, _cat_cond)
+                        _annotate_summary(_cu, _cat_cond)
+                        _annotate_summary(_cp, _cat_cond)
                     _e5_tot['qty'][_cat] += _q
                     _e5_tot['cif'][_cat] += _p
-                # 10% Balance — display-only, not part of the waterfall arithmetic.
+                # 10% Balance — display-only; always painted with the 10% colour
+                # since it literally represents the 10% restriction budget.
                 _row_pool10 = _row.get('pool_10', 0.0)
-                _scell(_sw, _sr, _E5_POOL10_COL, _row_pool10, fill=_rf, align='right', num_fmt='#,##0.00')
+                _pool10_cell = _scell(_sw, _sr, _E5_POOL10_COL, _row_pool10, fill=_rf, align='right', num_fmt='#,##0.00')
+                _annotate_summary(_pool10_cell, '10%')
                 _e5_tot.setdefault('pool_10', 0.0)
                 _e5_tot['pool_10'] += _row_pool10
                 _scell(_sw, _sr, _E5_TOTAL_COL, _sheet_formula(_row, _refs.get('total_planned')) or _row['total_planned'], fill=_rf, bold=True, align='right', num_fmt='#,##0.00')
@@ -2097,10 +2156,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _scell(_sw, _sr, _cc,     _sum_formula(_cc, _e5_data_start, _e5_data_end),     fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 _scell(_sw, _sr, _cc + 1, _tot_up_formula,                                      fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
                 _scell(_sw, _sr, _cc + 2, _sum_formula(_cc + 2, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            # 10% Balance total — sum of per-license pool values.
-            _scell(_sw, _sr, _E5_POOL10_COL,
+            # 10% Balance total — sum of per-license pool values; painted with
+            # the 10% colour to stay consistent with the data rows above.
+            _pool10_tot_cell = _scell(_sw, _sr, _E5_POOL10_COL,
                    _sum_formula(_E5_POOL10_COL, _e5_data_start, _e5_data_end),
                    fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _annotate_summary(_pool10_tot_cell, '10%')
             _scell(_sw, _sr, _E5_TOTAL_COL, _sum_formula(_E5_TOTAL_COL, _e5_data_start, _e5_data_end), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             _wt = _sw.cell(row=_sr, column=_E5_WASTE_COL, value=_sum_formula(_E5_WASTE_COL, _e5_data_start, _e5_data_end))
             _wt.fill = WASTE_FILL; _wt.font = Font(bold=True, size=9)
@@ -2389,50 +2450,54 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         _is_e1 = any(n and 'E1' in str(n) and 'E126' not in str(n) and 'E132' not in str(n) for n in _norm_vals)
         _is_e5 = any(n and str(n).strip() == 'E5' for n in _norm_vals)
         if _is_e1:
-            _UTIL_PLAN = [
-                ('OTHER CONFECTIONERY / FRUIT & FRUIT PRODUCTS', 2.7,  ['0802'],         ['confectionery', 'fruit & fruit', 'fruit product']),
-                ('FRUIT JUICE',                                   3.0,  [],               ['fruit juice']),
-                ('COCOA, MILK & MILK PRODUCTS - MILK SOLIDS',    12.0,  ['3501', '3502'], ['cocoa', 'milk solid', 'milk product']),
-                ('TARTARIC ACID / CITRIC ACID',                   2.0,  [],               ['tartaric', 'citric']),
-                ('POLYPROPYLENE',                                 1.0,  [],               ['polypropylene']),
-                ('PAPER & PAPER BOARD',                           0.7,  [],               ['paper']),
-            ]
-            def _cat_match(hs, desc, hs_kw, name_kw):
-                return any(k in (hs or '').lower() for k in hs_kw) or any(k in (desc or '').lower() for k in name_kw)
-            _cat_totals = {label: 0.0 for label, *_ in _UTIL_PLAN}
-            _cat_first_desc = {label: '' for label, *_ in _UTIL_PLAN}
+            from apps.license.services.e1_plan import (
+                E1_CATS as _E1_CATS_BE,
+                E1_EXCLUDED_CONDITIONS as _E1_EXCL_BE,
+                E1_MAX_PRICES as _E1_MAX_PRICES_BE,
+                classify_e1_item as _classify_e1_be,
+                compute_e1_plan as _compute_e1_plan_be,
+            )
+            _e1_display = {c: 0.0 for c in _E1_CATS_BE}
+            _e1_util    = {c: 0.0 for c in _E1_CATS_BE}
+            _cat_first_desc = {c: '' for c in _E1_CATS_BE}
             _unclassified = []
             for _ik in _bal_agg:
-                _bq = _bal_agg[_ik]['qty']
-                _de = _bal_agg[_ik]['description'] or _ik
-                _hs = _bal_agg[_ik]['hs_code']
-                _found = False
-                for _lbl, _rt, _hskw, _nkw in _UTIL_PLAN:
-                    if _cat_match(_hs, _de, _hskw, _nkw):
-                        _cat_totals[_lbl] += _bq
-                        if not _cat_first_desc[_lbl]:
-                            _cat_first_desc[_lbl] = _de
-                        _found = True
-                        break
-                if not _found:
-                    _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
+                _agg = _bal_agg[_ik]
+                _bq = _agg['qty']
+                _de = _agg['description'] or _ik
+                _hs = _agg['hs_code']
+                _lbl = _classify_e1_be(_ik, _hs, _de)
+                if _lbl:
+                    _e1_display[_lbl] += _bq
+                    _excl = _E1_EXCL_BE.get(_lbl, frozenset())
+                    for _ct, _q in _agg.get('qty_by_cond', {}).items():
+                        if _ct not in _excl:
+                            _e1_util[_lbl] += _q
+                    if not _cat_first_desc[_lbl]:
+                        _cat_first_desc[_lbl] = _de
+                else:
+                    _sr_str = ', '.join(str(s) for s in sorted(set(_agg['sr_ids'])))
                     _unclassified.append((_ik, _sr_str, _hs, _de, _bq))
 
-        ws.merge_cells(f'A{r}:G{r}')
+        # E1's utilisation table is 8 cols wide; E5 and "other" stay 7 cols.
+        _util_span = 'H' if _is_e1 else 'G'
+        _balcif_label_span = 'E' if _is_e1 else 'D'
+        _balcif_value_col = 6 if _is_e1 else 5
+        ws.merge_cells(f'A{r}:{_util_span}{r}')
         bh = ws[f'A{r}']
         bh.value = 'Utilization Planning' if (_is_e1 or _is_e5) else 'Summary (Balance Quantity)'
         bh.fill = HDR_FILL; bh.font = Font(bold=True, color="FFFFFF", size=10)
         bh.alignment = Alignment(horizontal='center', vertical='center')
         r += 1
 
-        # BALANCE CIF $ row: cols A-D merged + col E yellow
-        ws.merge_cells(f'A{r}:D{r}')
+        # BALANCE CIF $ row.
+        ws.merge_cells(f'A{r}:{_balcif_label_span}{r}')
         bc = ws[f'A{r}']
         bc.value = 'BALANCE CIF $'
         bc.fill = HDR_FILL; bc.font = Font(bold=True, color="FFFFFF", size=9)
         bc.alignment = Alignment(horizontal='center', vertical='center')
         bc.border = THIN_BORDER
-        yc = ws.cell(row=r, column=5, value=_license_balance)
+        yc = ws.cell(row=r, column=_balcif_value_col, value=_license_balance)
         yc.fill = YEL_FILL; yc.font = Font(bold=True, size=9)
         yc.border = THIN_BORDER
         yc.alignment = Alignment(horizontal='right', vertical='center')
@@ -2440,34 +2505,38 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         r += 1
 
         if _is_e1:
-            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
+            for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Util Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
                 _hdr(ws, r, col, h)
             r += 1
 
+            _e1_planned_per_cat, _e1_rate_per_cat = _compute_e1_plan_be(
+                _e1_display, _e1_util, _license_balance,
+            )
             _total_planned = 0.0
             _e1_remaining = _license_balance
-            for _idx, (_lbl, _rt, _hskw, _nkw) in enumerate(_UTIL_PLAN):
-                _bq = _cat_totals[_lbl]
-                _pc = min(_rt * _bq, _e1_remaining)
-                # Live unit-price formula off this row's Bal Qty (C) and
-                # Planned CIF (E). Returns 0 when Bal Qty is 0.
-                _up_formula = f'=IF(C{r}=0,0,ROUNDDOWN(E{r}/C{r},2))'
+            for _idx, _lbl in enumerate(_E1_CATS_BE):
+                _bq = _e1_display[_lbl]
+                _uq = _e1_util[_lbl]
+                _pc = _e1_planned_per_cat.get(_lbl, 0.0)
+                _rt = float(_E1_MAX_PRICES_BE[_lbl])
+                _up_formula = f'=IF(D{r}=0,0,ROUNDDOWN(F{r}/D{r},2))'
                 _e1_remaining -= _pc
                 _total_planned += _pc
                 _rf = None if _idx % 2 == 0 else ALT_FILL
                 _cell(ws, r, 1, _lbl, fill=_rf)
-                _cell(ws, r, 2, _rt,  fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 3, _bq,  fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 4, _up_formula, fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 5, _pc,  fill=_rf, align='right', num_fmt='#,##0.00')
-                _cell(ws, r, 6, _cat_first_desc.get(_lbl, ''), fill=_rf)
-                _cell(ws, r, 7, _e1_remaining, fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 2, _rt, fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 3, _bq, fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 4, _uq, fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 5, _up_formula, fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 6, _pc, fill=_rf, align='right', num_fmt='#,##0.00')
+                _cell(ws, r, 7, _cat_first_desc.get(_lbl, ''), fill=_rf)
+                _cell(ws, r, 8, _e1_remaining, fill=_rf, align='right', num_fmt='#,##0.00')
                 r += 1
 
             if _bal_agg:
                 from apps.license.utils.condition_excel import annotate_cell as _annotate_e1_item_be
                 r += 1
-                ws.merge_cells(f'A{r}:G{r}')
+                ws.merge_cells(f'A{r}:H{r}')
                 _uh = ws[f'A{r}']
                 _uh.value = 'LICENSE ITEM LIST'
                 _uh.fill = HDR_FILL; _uh.font = Font(bold=True, color="FFFFFF", size=9)
@@ -2492,8 +2561,6 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _cell(ws, r, 4, _de2, fill=_rf2)
                     _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
-                    # Colour the Item Name cell by License Marking so the
-                    # Excel matches the ConditionBadge palette in the UI.
                     _annotate_e1_item_be(_name_cell, _cond2)
                     r += 1
 
@@ -2501,19 +2568,20 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             _cell(ws, r, 1, '', fill=TOTAL_FILL)
             _cell(ws, r, 2, '', fill=TOTAL_FILL)
             _cell(ws, r, 3, '', fill=TOTAL_FILL)
-            _cell(ws, r, 4, 'TOTAL PLANNED CIF $', fill=TOTAL_FILL, bold=True, align='right')
-            _cell(ws, r, 5, _total_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 4, '', fill=TOTAL_FILL)
+            _cell(ws, r, 5, 'TOTAL PLANNED CIF $', fill=TOTAL_FILL, bold=True, align='right')
+            _cell(ws, r, 6, _total_planned, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
             r += 1
             _rem = _license_balance - _total_planned
             _RF = PatternFill(start_color="C00000" if _rem < 0 else "1F4E79",
                               end_color="C00000" if _rem < 0 else "1F4E79", fill_type="solid")
-            for _ci in range(1, 5):
+            for _ci in range(1, 6):
                 _cx = ws.cell(row=r, column=_ci)
                 _cx.fill = _RF; _cx.border = THIN_BORDER
-            _rc = ws.cell(row=r, column=4, value='REMAINING BALANCE CIF $')
+            _rc = ws.cell(row=r, column=5, value='REMAINING BALANCE CIF $')
             _rc.fill = _RF; _rc.font = Font(bold=True, color="FFFFFF", size=9)
             _rc.border = THIN_BORDER; _rc.alignment = Alignment(horizontal='right', vertical='center')
-            _rc2 = ws.cell(row=r, column=5, value=_rem)
+            _rc2 = ws.cell(row=r, column=6, value=_rem)
             _rc2.fill = _RF; _rc2.font = Font(bold=True, color="FFFFFF", size=9)
             _rc2.border = THIN_BORDER
             _rc2.alignment = Alignment(horizontal='right', vertical='center')

@@ -1465,8 +1465,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             elif _is_e5:
                 from apps.license.services.e5_plan import (
                     E5_PLAN_CATS as _E5_PLAN_CATS,
-                    classify_e5_hsn as _classify_e5,
-                    is_wheat_flour as _is_wheat_flour,
+                    classify_e5_item as _classify_e5,
                 )
                 _e5_totals = {c: 0.0 for c in _E5_PLAN_CATS}
                 _e5_first_desc = {}
@@ -1476,15 +1475,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _bq = _bal_agg[_ik]['qty']
                     _hs = _bal_agg[_ik]['hs_code'] or ''
                     _de = _bal_agg[_ik]['description'] or _ik
-                    _cat = _classify_e5(_hs)
+                    _cat = _classify_e5(_ik, _hs, _de)
                     if _cat:
                         _e5_totals[_cat] += _bq
                         if not _e5_first_desc.get(_cat):
                             _e5_first_desc[_cat] = _de
-                    elif _is_wheat_flour(_hs):
-                        _wf_qty += _bq
-                        if not _e5_first_desc.get('WHEAT FLOUR'):
-                            _e5_first_desc['WHEAT FLOUR'] = _de
                     else:
                         _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
                         _e5_unclassified.append((_ik, _sr_str, _bal_agg[_ik]['hs_code'], _de, _bq))
@@ -1601,8 +1596,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     compute_e5_plan as _compute_e5_plan,
                 )
                 _pool_10 = _cond_pools.get('10%', _Dec('0'))
+                # `_wf_qty` is None — wheat-flour qty is already aggregated
+                # into `_e5_totals['WHEAT FLOUR']` by the classifier.
                 _e5_planned_per_cat, _e5_rate_per_cat = _compute_e5_plan(
-                    _e5_totals, _wf_qty, _license_balance, _pool_10,
+                    _e5_totals, None, _license_balance, _pool_10,
                 )
 
                 for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
@@ -1612,7 +1609,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _e5_planned = 0.0
                 _e5_qty = {}
                 for _idx, _lbl in enumerate(_E5_CATS_ORDERED):
-                    _bq = _wf_qty if _lbl == 'WHEAT FLOUR' else _e5_totals.get(_lbl, 0.0)
+                    _bq = _e5_totals.get(_lbl, 0.0)
                     _e5_qty[_lbl] = _bq
                     _pc = _e5_planned_per_cat.get(_lbl, 0.0)
                     _rt = _e5_rate_per_cat.get(_lbl, 0.0)
@@ -2439,8 +2436,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             from apps.license.services.e5_plan import (
                 E5_CATS as _E5_CATS_ORDERED_BE,
                 E5_PLAN_CATS as _E5_PLAN_CATS_BE,
-                classify_e5_hsn as _classify_e5_be,
-                is_wheat_flour as _is_wheat_flour_be,
+                classify_e5_item as _classify_e5_be,
                 compute_e5_plan as _compute_e5_plan_be,
             )
             _e5_totals = {c: 0.0 for c in _E5_PLAN_CATS_BE}
@@ -2451,22 +2447,20 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 _bq = _bal_agg[_ik]['qty']
                 _hs = _bal_agg[_ik]['hs_code'] or ''
                 _de = _bal_agg[_ik]['description'] or _ik
-                _cat = _classify_e5_be(_hs)
+                _cat = _classify_e5_be(_ik, _hs, _de)
                 if _cat:
                     _e5_totals[_cat] += _bq
                     if not _e5_first_desc.get(_cat):
                         _e5_first_desc[_cat] = _de
-                elif _is_wheat_flour_be(_hs):
-                    _wf_qty += _bq
-                    if not _e5_first_desc.get('WHEAT FLOUR'):
-                        _e5_first_desc['WHEAT FLOUR'] = _de
                 else:
                     _sr_str = ', '.join(str(s) for s in sorted(set(_bal_agg[_ik]['sr_ids'])))
                     _e5_unclassified.append((_ik, _sr_str, _bal_agg[_ik]['hs_code'], _de, _bq))
 
             _pool_10_be = _cond_pools.get('10%', _Dec('0'))
+            # `_wf_qty` is None — wheat-flour qty is already aggregated
+            # into `_e5_totals['WHEAT FLOUR']` by the classifier.
             _e5_planned_per_cat_be, _e5_rate_per_cat_be = _compute_e5_plan_be(
-                _e5_totals, _wf_qty, _license_balance, _pool_10_be,
+                _e5_totals, None, _license_balance, _pool_10_be,
             )
 
             for col, h in enumerate(['Item Category', 'Rate ($/unit)', 'Bal Qty', 'Unit Price', 'Planned CIF ($)', 'Product Description', 'Remaining Bal $'], 1):
@@ -2475,7 +2469,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
             _e5_planned = 0.0
             for _idx, _lbl in enumerate(_E5_CATS_ORDERED_BE):
-                _bq = _wf_qty if _lbl == 'WHEAT FLOUR' else _e5_totals.get(_lbl, 0.0)
+                _bq = _e5_totals.get(_lbl, 0.0)
                 _pc = _e5_planned_per_cat_be.get(_lbl, 0.0)
                 _rt = _e5_rate_per_cat_be.get(_lbl, 0.0)
                 _up = (_pc / _bq) if _bq else 0.0

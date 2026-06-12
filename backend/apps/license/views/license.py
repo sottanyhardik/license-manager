@@ -1539,6 +1539,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     r += 1
 
                 if _bal_agg:
+                    from apps.license.utils.condition_excel import annotate_cell as _annotate_e1_item
                     r += 1
                     ws.merge_cells(f'A{r}:G{r}')
                     _uh = ws[f'A{r}']
@@ -1557,13 +1558,17 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _de2 = _agg2['description'] or _ik2
                         _bq2 = _agg2['qty']
                         _tq2 = _agg2['total_qty']
+                        _cond2 = _agg2.get('condition_type') or ''
                         _rf2 = None if _i2 % 2 == 0 else ALT_FILL
-                        _cell(ws, r, 1, _ik2, fill=_rf2)
+                        _name_cell = _cell(ws, r, 1, _ik2, fill=_rf2)
                         _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
                         _cell(ws, r, 3, _hs2, fill=_rf2)
                         _cell(ws, r, 4, _de2, fill=_rf2)
                         _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                         _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        # Colour the Item Name cell by License Marking so the
+                        # Excel matches the ConditionBadge palette in the UI.
+                        _annotate_e1_item(_name_cell, _cond2)
                         r += 1
 
                 r += 1
@@ -1642,6 +1647,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     r += 1
 
                 if _bal_agg:
+                    from apps.license.utils.condition_excel import annotate_cell as _annotate_e5_item
                     r += 1
                     ws.merge_cells(f'A{r}:G{r}')
                     _uh = ws[f'A{r}']
@@ -1660,13 +1666,17 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         _de2 = _agg2['description'] or _ik2
                         _bq2 = _agg2['qty']
                         _tq2 = _agg2['total_qty']
+                        _cond2 = _agg2.get('condition_type') or ''
                         _rf2 = None if _i2 % 2 == 0 else ALT_FILL
-                        _cell(ws, r, 1, _ik2, fill=_rf2)
+                        _name_cell = _cell(ws, r, 1, _ik2, fill=_rf2)
                         _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
                         _cell(ws, r, 3, _hs2, fill=_rf2)
                         _cell(ws, r, 4, _de2, fill=_rf2)
                         _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                         _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                        # Colour the Item Name cell by License Marking so the
+                        # Excel matches the ConditionBadge palette in the UI.
+                        _annotate_e5_item(_name_cell, _cond2)
                         r += 1
 
                 r += 1
@@ -2455,6 +2465,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 r += 1
 
             if _bal_agg:
+                from apps.license.utils.condition_excel import annotate_cell as _annotate_e1_item_be
                 r += 1
                 ws.merge_cells(f'A{r}:G{r}')
                 _uh = ws[f'A{r}']
@@ -2473,13 +2484,17 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _de2 = _agg2['description'] or _ik2
                     _bq2 = _agg2['qty']
                     _tq2 = _agg2['total_qty']
+                    _cond2 = _agg2.get('condition_type') or ''
                     _rf2 = None if _i2 % 2 == 0 else ALT_FILL
-                    _cell(ws, r, 1, _ik2, fill=_rf2)
+                    _name_cell = _cell(ws, r, 1, _ik2, fill=_rf2)
                     _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
                     _cell(ws, r, 3, _hs2, fill=_rf2)
                     _cell(ws, r, 4, _de2, fill=_rf2)
                     _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    # Colour the Item Name cell by License Marking so the
+                    # Excel matches the ConditionBadge palette in the UI.
+                    _annotate_e1_item_be(_name_cell, _cond2)
                     r += 1
 
             r += 1
@@ -2563,6 +2578,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 r += 1
 
             if _bal_agg:
+                from apps.license.utils.condition_excel import annotate_cell as _annotate_e5_item_be
                 r += 1
                 ws.merge_cells(f'A{r}:G{r}')
                 _uh = ws[f'A{r}']
@@ -2581,13 +2597,17 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     _de2 = _agg2['description'] or _ik2
                     _bq2 = _agg2['qty']
                     _tq2 = _agg2['total_qty']
+                    _cond2 = _agg2.get('condition_type') or ''
                     _rf2 = None if _i2 % 2 == 0 else ALT_FILL
-                    _cell(ws, r, 1, _ik2, fill=_rf2)
+                    _name_cell = _cell(ws, r, 1, _ik2, fill=_rf2)
                     _cell(ws, r, 2, _sr2, fill=_rf2, align='center')
                     _cell(ws, r, 3, _hs2, fill=_rf2)
                     _cell(ws, r, 4, _de2, fill=_rf2)
                     _cell(ws, r, 5, _tq2, fill=_rf2, align='right', num_fmt='#,##0.00')
                     _cell(ws, r, 6, _bq2, fill=_rf2, align='right', num_fmt='#,##0.00')
+                    # Colour the Item Name cell by License Marking so the
+                    # Excel matches the ConditionBadge palette in the UI.
+                    _annotate_e5_item_be(_name_cell, _cond2)
                     r += 1
 
             r += 1

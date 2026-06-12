@@ -1,10 +1,22 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import AsyncSelect from 'react-select/async';
+import Select from 'react-select';
 import { toast } from 'react-toastify';
 import { formatDate } from '../utils/dateFormatter';
 import { openPdfPreview } from '../utils/pdfPreview';
 import ConditionBadge from './ConditionBadge';
+
+// License Marking values map directly to the backend `condition_type` field.
+// "" is rendered as "None" and clears the restriction.
+const LICENSE_MARKING_OPTIONS = [
+    { value: "",    label: "None" },
+    { value: "AU",  label: "AU"   },
+    { value: "10%", label: "10%"  },
+    { value: "5%",  label: "5%"   },
+    { value: "3%",  label: "3%"   },
+    { value: "2%",  label: "2%"   },
+];
 
 // Inline Editable Text Component
 function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
@@ -242,6 +254,34 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to update items');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleConditionTypeChange = async (item, newValue) => {
+        const previous = item.condition_type || "";
+        if (previous === newValue) return;
+        // Optimistic UI: update local state first; revert if the PATCH fails.
+        setLicenseData(prev => ({
+            ...prev,
+            import_license: prev.import_license.map(it =>
+                it.id === item.id ? { ...it, condition_type: newValue } : it
+            ),
+        }));
+        try {
+            await api.patch(`license-items/${item.id}/`, { condition_type: newValue });
+            toast.success("License marking updated");
+        } catch (err) {
+            setLicenseData(prev => ({
+                ...prev,
+                import_license: prev.import_license.map(it =>
+                    it.id === item.id ? { ...it, condition_type: previous } : it
+                ),
+            }));
+            toast.error(
+                err.response?.data?.detail ||
+                err.response?.data?.condition_type?.[0] ||
+                "Failed to update license marking"
+            );
         }
     };
 
@@ -755,7 +795,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Allotted Qty</th>
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Debited Qty</th>
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Available Qty</th>
-                                                        <th style={{ minWidth: '120px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Is Restricted</th>
+                                                        <th style={{ minWidth: '120px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>License Marking</th>
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>CIF FC</th>
                                                         <th style={{ minWidth: '100px', border: 'none', padding: '0.75rem', fontSize: '0.875rem' }}>Balance CIF FC</th>
                                                     </tr>
@@ -891,12 +931,42 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                     {parseFloat(item.available_quantity || 0).toFixed(2)}
                                                                 </td>
                                                                 <td
+                                                                    onClick={(e) => e.stopPropagation()}
                                                                     style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef', textAlign: 'center' }}
                                                                 >
-                                                                    {/* Read-only — driven by condition_type. */}
-                                                                    {item.condition_type
-                                                                        ? <ConditionBadge type={item.condition_type} size="xs" />
-                                                                        : <span style={{ color: '#9ca3af', fontSize: '0.7rem' }}>—</span>}
+                                                                    {/* Editable license marking — writes to backend `condition_type`. */}
+                                                                    <Select
+                                                                        options={LICENSE_MARKING_OPTIONS}
+                                                                        value={LICENSE_MARKING_OPTIONS.find(o => o.value === (item.condition_type || ""))}
+                                                                        onChange={(sel) => handleConditionTypeChange(item, sel?.value ?? "")}
+                                                                        isSearchable={false}
+                                                                        menuPortalTarget={document.body}
+                                                                        menuPosition="fixed"
+                                                                        styles={{
+                                                                            control: (base) => ({
+                                                                                ...base,
+                                                                                minHeight: '32px',
+                                                                                fontSize: '0.8rem',
+                                                                                minWidth: '110px',
+                                                                            }),
+                                                                            valueContainer: (base) => ({
+                                                                                ...base,
+                                                                                padding: '0 6px',
+                                                                            }),
+                                                                            indicatorsContainer: (base) => ({
+                                                                                ...base,
+                                                                                height: '30px',
+                                                                            }),
+                                                                            menuPortal: (base) => ({
+                                                                                ...base,
+                                                                                zIndex: 9999,
+                                                                            }),
+                                                                            menu: (base) => ({
+                                                                                ...base,
+                                                                                fontSize: '0.8rem',
+                                                                            }),
+                                                                        }}
+                                                                    />
                                                                 </td>
                                                                 <td style={{ padding: '0.6rem', fontSize: '0.875rem', border: 'none', borderBottom: '1px solid #e9ecef' }}>
                                                                     {parseFloat(item.cif_fc || 0).toFixed(2)}

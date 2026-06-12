@@ -1,5 +1,6 @@
 import React, {useEffect, useState, useCallback} from "react";
 import {useNavigate} from "react-router-dom";
+import Select from "react-select";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
@@ -8,16 +9,9 @@ import {formatIndianNumber} from "../../utils/numberFormatter";
 import {openPdfPreview} from "../../utils/pdfPreview";
 import {toast} from "react-toastify";
 
-// Mirrors the team palette used in ConditionBadge / Excel annotate_cell so
-// utilisation-mode cells colour-match the bulk Balance Excel exactly.
-const CONDITION_CELL_STYLES = {
-    "AU":  { backgroundColor: "#DBEAFE", color: "#1E3A8A", fontWeight: 600 },
-    "2%":  { backgroundColor: "#FEE2E2", color: "#7F1D1D", fontWeight: 600 },
-    "3%":  { backgroundColor: "#FED7AA", color: "#7C2D12", fontWeight: 600 },
-    "5%":  { backgroundColor: "#FEF3C7", color: "#78350F", fontWeight: 600 },
-    "10%": { backgroundColor: "#D1FAE5", color: "#065F46", fontWeight: 600 },
-};
-const getConditionStyle = (cond) => (cond && CONDITION_CELL_STYLES[cond]) || null;
+// Default Purchase Status selection on first load — Global Exim, MITC,
+// Conversion (matches the bulk License Balance report's default filter).
+const DEFAULT_PURCHASE_STATUS = ['GE', 'MI', 'CO'];
 
 export default function ItemPivotReport() {
     const navigate = useNavigate();
@@ -36,6 +30,9 @@ export default function ItemPivotReport() {
     const [licenseStatus, setLicenseStatus] = useState('active');
     const [expiryDateFrom, setExpiryDateFrom] = useState('');
     const [expiryDateTo, setExpiryDateTo] = useState('');
+    // Purchase Status filter — populated from /masters/purchase-statuses/.
+    const [purchaseStatus, setPurchaseStatus] = useState(DEFAULT_PURCHASE_STATUS);
+    const [purchaseStatusOptions, setPurchaseStatusOptions] = useState([]);
     const [conditionModal, setConditionModal] = useState(null); // { licenseNumber, content }
 
     useEffect(() => {
@@ -59,6 +56,18 @@ export default function ItemPivotReport() {
             setSionNorms(Array.isArray(normsData) ? normsData : []);
         } catch (error) {
             setSionNorms([]);
+        }
+        try {
+            // Purchase Status dropdown — show only active rows, ordered by display_order.
+            const psResp = await api.get('masters/purchase-statuses/');
+            const psData = psResp.data?.results || psResp.data || [];
+            const opts = (Array.isArray(psData) ? psData : [])
+                .filter(p => p.is_active !== false)
+                .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+                .map(p => ({value: p.code, label: p.label}));
+            setPurchaseStatusOptions(opts);
+        } catch (error) {
+            setPurchaseStatusOptions([]);
         }
     };
 
@@ -95,6 +104,9 @@ export default function ItemPivotReport() {
             url += `&license_status=${licenseStatus}`;
             if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
             if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
+            if (purchaseStatus.length > 0) {
+                url += `&purchase_status=${purchaseStatus.join(',')}`;
+            }
 
             const response = await api.get(url);
             setReportData(response.data);
@@ -104,7 +116,7 @@ export default function ItemPivotReport() {
         } finally {
             setLoading(false);
         }
-    }, [selectedCompanies, excludeCompanies, minBalance, licenseStatus, expiryDateFrom, expiryDateTo]);
+    }, [selectedCompanies, excludeCompanies, minBalance, licenseStatus, expiryDateFrom, expiryDateTo, purchaseStatus]);
 
     // Load report when active norm tab changes or filters change
     useEffect(() => {
@@ -181,6 +193,9 @@ export default function ItemPivotReport() {
             url += `&license_status=${licenseStatus}`;
             if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
             if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
+            if (purchaseStatus.length > 0) {
+                url += `&purchase_status=${purchaseStatus.join(',')}`;
+            }
 
             const response = await api.get(url, {
                 responseType: 'blob',
@@ -216,9 +231,14 @@ export default function ItemPivotReport() {
         setLicenseStatus('active');
         setExpiryDateFrom('');
         setExpiryDateTo('');
+        setPurchaseStatus(DEFAULT_PURCHASE_STATUS);
     };
 
-    const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active' || expiryDateFrom || expiryDateTo;
+    // Purchase Status is "active" only when it differs from the default trio.
+    const isDefaultPurchaseStatus =
+        purchaseStatus.length === DEFAULT_PURCHASE_STATUS.length &&
+        DEFAULT_PURCHASE_STATUS.every(v => purchaseStatus.includes(v));
+    const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active' || expiryDateFrom || expiryDateTo || !isDefaultPurchaseStatus;
 
     const getTotalLicenseCount = () => {
         if (!reportData) return 0;
@@ -286,6 +306,7 @@ export default function ItemPivotReport() {
         if (reportData?.items) {
             reportData.items.forEach(item => {
                 let itemAvailable = 0;
+                let itemPlanned   = 0;
                 let hasRestriction = false;
                 let restrictionPercentage = 0;
 
@@ -294,6 +315,8 @@ export default function ItemPivotReport() {
                     if (itemData) {
                         // Available quantity
                         itemAvailable += parseFloat(itemData.available_quantity || 0);
+                        // Planned CIF (sum) — sourced from the e1_plan/e5_plan waterfall.
+                        itemPlanned   += parseFloat(itemData.planned_cif || 0);
 
                         // Check if item has restriction
                         if (itemData.restriction !== null && itemData.restriction !== undefined) {
@@ -305,7 +328,9 @@ export default function ItemPivotReport() {
 
                 if (itemAvailable > 0) {
                     const itemSummary = {
-                        available: itemAvailable
+                        available:   itemAvailable,
+                        planned_cif: itemPlanned,
+                        unit_price:  itemAvailable > 0 ? itemPlanned / itemAvailable : 0,
                     };
 
                     if (hasRestriction) {
@@ -322,6 +347,7 @@ export default function ItemPivotReport() {
                     }
 
                     summary.totalAvailable += itemAvailable;
+                    summary.totalPlanned = (summary.totalPlanned || 0) + itemPlanned;
                 }
             });
         }
@@ -475,6 +501,27 @@ export default function ItemPivotReport() {
 
                                     <div className="col-lg-3 col-md-6">
                                         <label className="form-label fw-bold mb-2">
+                                            <i className="bi bi-cart-check me-1"></i>
+                                            Purchase Status
+                                        </label>
+                                        <Select
+                                            isMulti
+                                            options={purchaseStatusOptions}
+                                            value={purchaseStatusOptions.filter(o => purchaseStatus.includes(o.value))}
+                                            onChange={(selected) => setPurchaseStatus(selected ? selected.map(s => s.value) : [])}
+                                            placeholder="Select purchase status..."
+                                            classNamePrefix="select"
+                                            menuPortalTarget={document.body}
+                                            menuPosition="fixed"
+                                            styles={{
+                                                menuPortal: (base) => ({...base, zIndex: 9999}),
+                                                control: (base) => ({...base, minHeight: '38px'}),
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className="col-lg-3 col-md-6">
+                                        <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-calendar-range me-1"></i>
                                             Expiry Date From
                                         </label>
@@ -545,6 +592,11 @@ export default function ItemPivotReport() {
                                             <div>
                                                 <i className="bi bi-funnel-fill me-2"></i>
                                                 <strong>Active Filters:</strong>
+                                                {!isDefaultPurchaseStatus && (
+                                                    <span className="badge bg-primary ms-2">
+                                                        Purchase: {purchaseStatus.length > 0 ? purchaseStatus.join(', ') : 'none'}
+                                                    </span>
+                                                )}
                                                 {minBalance !== 200 && <span className="badge bg-primary ms-2">Min Balance: ₹{minBalance}</span>}
                                                 {licenseStatus !== 'active' && <span
                                                     className="badge bg-primary ms-2">Status: {licenseStatus.replace('_', ' ')}</span>}
@@ -765,15 +817,14 @@ export default function ItemPivotReport() {
                                                         }}>Balance CIF
                                                         </th>
                                                         {reportData.items.filter(item => item.name).map(item => {
-                                                            // Utilisation-mode columns mirror the bulk Balance Excel:
-                                                            //   E1 → 4 sub-cols (Display Qty | Util Qty | Unit Price | Planned CIF)
-                                                            //   E5 → 3 sub-cols (Bal Qty | Unit Price | Planned CIF)
-                                                            // Legacy item-pivot mode keeps the existing 6/8 sub-cols.
-                                                            const utilMode = reportData.mode === 'utilization';
-                                                            const isUtilE1 = utilMode && reportData.sion_norm === 'E1';
-                                                            let colSpan;
-                                                            if (utilMode) colSpan = isUtilE1 ? 4 : 3;
-                                                            else colSpan = item.has_restriction ? 8 : 6;
+                                                            // Sub-cols per item: HSN, Description, Total, Allotted,
+                                                            // Debited, Balance, Unit Price, Planned CIF
+                                                            // + 2 optional restriction cols when applicable
+                                                            // + 1 optional RUTILE-specific Unit Price.
+                                                            const isRutile = item.name === 'RUTILE - A3627';
+                                                            const colSpan = 8
+                                                                + (item.has_restriction ? 2 : 0)
+                                                                + (isRutile ? 1 : 0);
                                                             return (
                                                                 <th key={`${item.id}-qty`} colSpan={colSpan}
                                                                     className="text-center bg-info bg-opacity-10"
@@ -841,22 +892,7 @@ export default function ItemPivotReport() {
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid #dee2e6'
                                                         }}></th>
-                                                        {reportData.items.filter(item => item.name).map(item => {
-                                                            const utilMode = reportData.mode === 'utilization';
-                                                            const isUtilE1 = utilMode && reportData.sion_norm === 'E1';
-                                                            if (utilMode) {
-                                                                return (
-                                                                    <React.Fragment key={`${item.id}-headers`}>
-                                                                        <th className="text-end" style={{minWidth: '110px', fontSize: '0.85rem'}}>{isUtilE1 ? 'Display Qty' : 'Bal Qty'}</th>
-                                                                        {isUtilE1 && (
-                                                                            <th className="text-end" style={{minWidth: '110px', fontSize: '0.85rem'}}>Util Qty</th>
-                                                                        )}
-                                                                        <th className="text-end" style={{minWidth: '100px', fontSize: '0.85rem'}}>Unit Price</th>
-                                                                        <th className="text-end" style={{minWidth: '120px', fontSize: '0.85rem'}}>Planned CIF</th>
-                                                                    </React.Fragment>
-                                                                );
-                                                            }
-                                                            return (
+                                                        {reportData.items.filter(item => item.name).map(item => (
                                                             <React.Fragment key={`${item.id}-headers`}>
                                                                 <th style={{minWidth: '90px', fontSize: '0.85rem'}}>HSN
                                                                     Code
@@ -900,16 +936,28 @@ export default function ItemPivotReport() {
                                                                         </th>
                                                                     </>
                                                                 )}
+                                                                {/* Per-item Unit Price + Planned CIF — sourced from
+                                                                    the same e1_plan/e5_plan waterfall the bulk
+                                                                    Balance Excel uses. */}
+                                                                <th className="text-end" style={{
+                                                                    minWidth: '100px',
+                                                                    fontSize: '0.85rem'
+                                                                }}>Unit Price
+                                                                </th>
+                                                                <th className="text-end" style={{
+                                                                    minWidth: '120px',
+                                                                    fontSize: '0.85rem'
+                                                                }}>Planned CIF
+                                                                </th>
                                                                 {item.name === 'RUTILE - A3627' && (
                                                                     <th className="text-end" style={{
                                                                         minWidth: '100px',
                                                                         fontSize: '0.85rem'
-                                                                    }}>Unit Price
+                                                                    }}>Unit Price (RUTILE)
                                                                     </th>
                                                                 )}
                                                             </React.Fragment>
-                                                            );
-                                                        })}
+                                                        ))}
                                                     </tr>
                                                     </thead>
                                                     <tbody>
@@ -1046,31 +1094,6 @@ export default function ItemPivotReport() {
                                                             }}>{license.balance_cif.toFixed(2)}</td>
                                                             {reportData.items.filter(item => item.name).map(item => {
                                                                 const itemData = license.items[item.name] || {};
-                                                                const utilMode = reportData.mode === 'utilization';
-                                                                const isUtilE1 = utilMode && reportData.sion_norm === 'E1';
-
-                                                                if (utilMode) {
-                                                                    // Category cells in utilisation mode mirror the bulk Excel.
-                                                                    const dispQty   = itemData.display_qty   || 0;
-                                                                    const utilQty   = itemData.util_qty      || 0;
-                                                                    const unitPrice = itemData.unit_price    || 0;
-                                                                    const planned   = itemData.planned_cif   || 0;
-                                                                    const condStyle = getConditionStyle(itemData.condition_type) || {};
-                                                                    const hasData   = dispQty > 0;
-                                                                    const baseStyle = hasData ? { ...condStyle } : {};
-                                                                    const num = (v, dp = 2) => v ? v.toFixed(dp) : '-';
-                                                                    return (
-                                                                        <React.Fragment key={`${license.license_number}-${item.id}`}>
-                                                                            <td className="text-end" style={baseStyle}>{num(dispQty, 3)}</td>
-                                                                            {isUtilE1 && (
-                                                                                <td className="text-end" style={baseStyle}>{num(utilQty, 3)}</td>
-                                                                            )}
-                                                                            <td className="text-end" style={baseStyle}>{num(unitPrice, 2)}</td>
-                                                                            <td className="text-end fw-semibold" style={baseStyle}>{num(planned, 2)}</td>
-                                                                        </React.Fragment>
-                                                                    );
-                                                                }
-
                                                                 const hasData = itemData.quantity > 0;
                                                                 return (
                                                                     <React.Fragment
@@ -1111,6 +1134,14 @@ export default function ItemPivotReport() {
                                                                                 </td>
                                                                             </>
                                                                         )}
+                                                                        {/* Unit Price + Planned CIF — sourced from
+                                                                            the e1_plan/e5_plan waterfall. */}
+                                                                        <td className={`text-end ${hasData ? 'bg-light' : ''}`}>
+                                                                            {itemData.unit_price ? Number(itemData.unit_price).toFixed(2) : '-'}
+                                                                        </td>
+                                                                        <td className={`text-end ${hasData ? 'bg-light fw-semibold' : ''}`}>
+                                                                            {itemData.planned_cif ? Number(itemData.planned_cif).toFixed(2) : '-'}
+                                                                        </td>
                                                                         {item.name === 'RUTILE - A3627' && (
                                                                             <td className={`text-end ${hasData ? 'bg-light fw-semibold text-warning' : ''}`}>
                                                                                 {itemData.unit_price ? itemData.unit_price.toFixed(4) : '-'}
@@ -1123,15 +1154,7 @@ export default function ItemPivotReport() {
                                                         {/* Notes and Latest Transfer Row (Condition Sheet moved to button + modal) */}
                                                         {(license.balance_report_notes || license.latest_transfer) && (
                                                             <tr key={`${license.license_number}-details`} style={{ backgroundColor: 'var(--bs-gray-50)' }}>
-                                                                <td colSpan={(() => {
-                                                                    const utilMode = reportData.mode === 'utilization';
-                                                                    const isUtilE1 = utilMode && reportData.sion_norm === 'E1';
-                                                                    const catCount = reportData.items.filter(item => item.name).length;
-                                                                    const perCat = utilMode
-                                                                        ? (isUtilE1 ? 4 : 3)
-                                                                        : (reportData.items.some(i => i.has_restriction) ? 6 : 4);
-                                                                    return 8 + (catCount * perCat);
-                                                                })()} style={{
+                                                                <td colSpan={8 + (reportData.items.filter(item => item.name).length * (reportData.items.some(i => i.has_restriction) ? 8 : 6))} style={{
                                                                     padding: '10px 15px',
                                                                     borderTop: 'none'
                                                                 }}>
@@ -1235,6 +1258,11 @@ export default function ItemPivotReport() {
                                                             const totalRestrictionVal = licenses.reduce((sum, lic) => {
                                                                 return sum + (lic.items[item.name]?.restriction_value || 0);
                                                             }, 0);
+                                                            const totalPlanned = licenses.reduce((sum, lic) => {
+                                                                return sum + (lic.items[item.name]?.planned_cif || 0);
+                                                            }, 0);
+                                                            // Effective unit price across all licences = total planned / total avail.
+                                                            const effectiveUnit = totalAvail > 0 ? totalPlanned / totalAvail : 0;
                                                             return (
                                                                 <React.Fragment key={`total-${item.id}`}>
                                                                     <td className="text-muted">-</td>
@@ -1259,6 +1287,13 @@ export default function ItemPivotReport() {
                                                                             </td>
                                                                         </>
                                                                     )}
+                                                                    {/* Unit Price (effective rate) + Planned CIF total. */}
+                                                                    <td className="text-end">
+                                                                        {effectiveUnit > 0 ? effectiveUnit.toFixed(2) : '-'}
+                                                                    </td>
+                                                                    <td className="text-end fw-bold">
+                                                                        {totalPlanned > 0 ? totalPlanned.toFixed(2) : '-'}
+                                                                    </td>
                                                                     {item.name === 'RUTILE - A3627' && (
                                                                         <td className="text-muted">-</td>
                                                                     )}
@@ -1279,13 +1314,15 @@ export default function ItemPivotReport() {
                                                             <i className="bi bi-calculator me-2"></i>
                                                             Summary
                                                         </h6>
-                                                        <div style={{maxWidth: '1200px'}}>
-                                                            <table className="table table-bordered table-sm" style={{tableLayout: 'fixed', width: '1200px'}}>
+                                                        <div style={{maxWidth: '1400px'}}>
+                                                            <table className="table table-bordered table-sm" style={{tableLayout: 'fixed', width: '1400px'}}>
                                                                 <thead className="table-light">
                                                                 <tr>
-                                                                    <th style={{width: '100px'}}>Sr No</th>
-                                                                    <th style={{width: '800px'}}>Item Name</th>
-                                                                    <th className="text-end" style={{width: '300px'}}>Available Balance QTY</th>
+                                                                    <th style={{width: '80px'}}>Sr No</th>
+                                                                    <th style={{width: '620px'}}>Item Name</th>
+                                                                    <th className="text-end" style={{width: '230px'}}>Available Balance QTY</th>
+                                                                    <th className="text-end" style={{width: '170px'}}>Unit Price</th>
+                                                                    <th className="text-end" style={{width: '300px'}}>Total Planned CIF</th>
                                                                 </tr>
                                                                 </thead>
                                                                 <tbody>
@@ -1295,6 +1332,8 @@ export default function ItemPivotReport() {
                                                                     <td className="text-end fw-bold">
                                                                         {formatIndianNumber(summary.openingBalance, 2)}
                                                                     </td>
+                                                                    <td className="text-end fw-bold">-</td>
+                                                                    <td className="text-end fw-bold">-</td>
                                                                 </tr>
 
                                                                 {/* Regular Items */}
@@ -1304,6 +1343,12 @@ export default function ItemPivotReport() {
                                                                         <td className="fw-bold">{itemName}</td>
                                                                         <td className="text-end">
                                                                             {formatIndianNumber(itemData.available, 2)}
+                                                                        </td>
+                                                                        <td className="text-end">
+                                                                            {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
+                                                                        </td>
+                                                                        <td className="text-end fw-semibold">
+                                                                            {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
                                                                         </td>
                                                                     </tr>
                                                                 ))}
@@ -1322,7 +1367,7 @@ export default function ItemPivotReport() {
                                                                                 return (
                                                                                     <React.Fragment key={percentage}>
                                                                                         <tr className="table-warning">
-                                                                                            <td colSpan="3" className="text-center fw-bold">
+                                                                                            <td colSpan="5" className="text-center fw-bold">
                                                                                                 <i className="bi bi-exclamation-triangle-fill me-2"></i>
                                                                                                 RESTRICTED ITEMS - {percentage}%
                                                                                             </td>
@@ -1334,6 +1379,12 @@ export default function ItemPivotReport() {
                                                                                                 <td className="text-end">
                                                                                                     {formatIndianNumber(itemData.available, 2)}
                                                                                                 </td>
+                                                                                                <td className="text-end">
+                                                                                                    {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
+                                                                                                </td>
+                                                                                                <td className="text-end fw-semibold">
+                                                                                                    {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
+                                                                                                </td>
                                                                                             </tr>
                                                                                         ))}
                                                                                         {/* Balance for this restriction percentage (shared across all items) */}
@@ -1342,12 +1393,25 @@ export default function ItemPivotReport() {
                                                                                             <td className="text-end fw-bold">
                                                                                                 {formatIndianNumber(groupData.sharedRestrictionValue, 2)}
                                                                                             </td>
+                                                                                            <td className="text-end fw-bold">-</td>
+                                                                                            <td className="text-end fw-bold">-</td>
                                                                                         </tr>
                                                                                     </React.Fragment>
                                                                                 );
                                                                             })}
                                                                     </>
                                                                 )}
+                                                                {/* Grand-total row for the Summary table. */}
+                                                                <tr className="table-success">
+                                                                    <td colSpan="2" className="text-center fw-bold">TOTAL PLANNED CIF</td>
+                                                                    <td className="text-end fw-bold">
+                                                                        {formatIndianNumber(summary.totalAvailable || 0, 2)}
+                                                                    </td>
+                                                                    <td className="text-end fw-bold">-</td>
+                                                                    <td className="text-end fw-bold">
+                                                                        {formatIndianNumber(summary.totalPlanned || 0, 2)}
+                                                                    </td>
+                                                                </tr>
                                                                 </tbody>
                                                             </table>
                                                         </div>

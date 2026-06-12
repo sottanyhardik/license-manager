@@ -13,6 +13,45 @@ import {toast} from "react-toastify";
 // Conversion (matches the bulk License Balance report's default filter).
 const DEFAULT_PURCHASE_STATUS = ['GE', 'MI', 'CO'];
 
+// Colour palette for the per-row Purchase Status badge. Codes map to a
+// pastel-on-deep-text scheme so the badge stays readable against the
+// table's alternating row backgrounds. Unknown codes get a neutral grey.
+const PURCHASE_STATUS_STYLES = {
+    GE: { bg: '#DBEAFE', color: '#1E3A8A', short: 'GE' },  // Global Exim — blue
+    MI: { bg: '#D1FAE5', color: '#065F46', short: 'MI' },  // MITC         — green
+    CO: { bg: '#EDE9FE', color: '#5B21B6', short: 'CO' },  // Conversion   — purple
+    IP: { bg: '#FED7AA', color: '#7C2D12', short: 'IP' },  // Item Purch.  — orange
+    SM: { bg: '#FCE7F3', color: '#831843', short: 'SM' },  // Snehav       — pink
+    OT: { bg: '#FEF3C7', color: '#78350F', short: 'OT' },  // OT Purchase  — amber
+    GO: { bg: '#E2E8F0', color: '#1E293B', short: 'GO' },  // GO Purchase  — slate
+    RA: { bg: '#CCFBF1', color: '#134E4A', short: 'RA' },  // Ravi Foods   — teal
+    LM: { bg: '#FEE2E2', color: '#7F1D1D', short: 'LM' },  // LM (inactive) — red
+};
+const UNKNOWN_PS_STYLE = { bg: '#E5E7EB', color: '#374151', short: '?' };
+
+function PurchaseStatusBadge({ code, label }) {
+    if (!code) return null;
+    const s = PURCHASE_STATUS_STYLES[code] || UNKNOWN_PS_STYLE;
+    return (
+        <span
+            title={label || code}
+            style={{
+                display: 'inline-block',
+                backgroundColor: s.bg,
+                color: s.color,
+                fontWeight: 600,
+                fontSize: '0.7rem',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                lineHeight: 1.4,
+                whiteSpace: 'nowrap',
+            }}
+        >
+            {s.short}
+        </span>
+    );
+}
+
 export default function ItemPivotReport() {
     const navigate = useNavigate();
     const [reportData, setReportData] = useState(null);
@@ -978,6 +1017,10 @@ export default function ItemPivotReport() {
                                                             }}>
                                                                 <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
                                                                     <span>{license.license_number}</span>
+                                                                    <PurchaseStatusBadge
+                                                                        code={license.purchase_status_code}
+                                                                        label={license.purchase_status_label}
+                                                                    />
                                                                     {(license.has_tl || license.has_copy) && (
                                                                         <a
                                                                             href="#"

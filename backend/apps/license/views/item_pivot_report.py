@@ -167,6 +167,7 @@ class ItemPivotReportView(View):
             'balance',
             'notes',
             'ownership__current_owner',
+            'purchase_status',
         ).prefetch_related(
             Prefetch('import_license',
                      queryset=import_items_qs.prefetch_related(
@@ -469,6 +470,14 @@ class ItemPivotReportView(View):
         else:
             latest_transfer_text = "Data Not Found"
 
+        # Purchase Status — emitted so the frontend can colour-code each row.
+        ps_code  = ''
+        ps_label = ''
+        if license_obj.purchase_status_id:
+            ps = license_obj.purchase_status
+            ps_code  = ps.code or ''
+            ps_label = ps.label or ''
+
         row_data = {
             'id': license_obj.id,
             'license_number': license_obj.license_number,
@@ -478,6 +487,8 @@ class ItemPivotReportView(View):
             'exporter': str(license_obj.exporter) if license_obj.exporter else '',
             'port': str(license_obj.port) if license_obj.port else '',
             'notification_number': notification_display,
+            'purchase_status_code': ps_code,
+            'purchase_status_label': ps_label,
             'total_cif': float(total_cif),
             'alloted_cif': float(alloted_cif),
             'balance_cif': float(balance_cif),  # Reuse already calculated balance

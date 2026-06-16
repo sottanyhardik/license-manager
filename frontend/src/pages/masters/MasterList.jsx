@@ -793,7 +793,7 @@ export default function MasterList() {
                     {entityName === 'bill-of-entries' && (
                         loading ? (
                             <div className="text-center py-5">
-                                <div className="spinner-border text-primary" role="status"></div>
+                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                 <div className="mt-2 text-muted">Loading Bill of Entries...</div>
                             </div>
                         ) : data.length === 0 ? (
@@ -960,7 +960,7 @@ export default function MasterList() {
                     {entityName === 'allotments' && (
                         loading ? (
                             <div className="text-center py-5">
-                                <div className="spinner-border text-primary" role="status"></div>
+                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                 <div className="mt-2 text-muted">Loading Allotments...</div>
                             </div>
                         ) : data.length === 0 ? (
@@ -1079,7 +1079,7 @@ export default function MasterList() {
                     {entityName === 'licenses' && (
                         loading ? (
                             <div className="text-center py-5">
-                                <div className="spinner-border text-primary" role="status"></div>
+                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                 <div className="mt-2 text-muted">Loading Licenses...</div>
                             </div>
                         ) : data.length === 0 ? (
@@ -1230,7 +1230,7 @@ export default function MasterList() {
                                                         }}
                                                         title="Fetch ownership from DGFT"
                                                         style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--accent-color)', background: 'var(--tb-sunken)', border: '1px solid #c4b5fd', borderRadius: '5px', padding: '4px 9px', cursor: fetchingOwnershipIds.has(item.id) ? 'wait' : 'pointer', opacity: fetchingOwnershipIds.has(item.id) ? 0.6 : 1 }}>
-                                                        <i className={fetchingOwnershipIds.has(item.id) ? 'bi bi-arrow-repeat spinner-border spinner-border-sm' : 'bi bi-cloud-download'}></i>
+                                                        <i className={fetchingOwnershipIds.has(item.id) ? 'bi bi-arrow-repeat ' : 'bi bi-cloud-download'}></i>
                                                     </button>}
                                                     <button onClick={async () => {
                                                         try {
@@ -1266,7 +1266,7 @@ export default function MasterList() {
                     {/* Trades Card Layout */}
                     {entityName === 'trades' && (
                         loading ? (
-                            <div className="text-center py-5"><div className="spinner-border text-primary" role="status"></div><div className="mt-2 text-muted">Loading Trades...</div></div>
+                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted">Loading Trades...</div></div>
                         ) : data.length === 0 ? (
                             <div className="text-center py-5 text-muted"><i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i><div className="mt-2">No trades found</div></div>
                         ) : (() => {
@@ -1464,7 +1464,7 @@ export default function MasterList() {
                     {/* Incentive Licenses Card Layout */}
                     {entityName === 'incentive-licenses' && (
                         loading ? (
-                            <div className="text-center py-5"><div className="spinner-border text-primary" role="status"></div><div className="mt-2 text-muted">Loading Incentive Licenses...</div></div>
+                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted">Loading Incentive Licenses...</div></div>
                         ) : data.length === 0 ? (
                             <div className="text-center py-5 text-muted"><i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i><div className="mt-2">No incentive licenses found</div></div>
                         ) : (
@@ -1872,7 +1872,7 @@ export default function MasterList() {
                     ) : (
                         loading ? (
                             <div className="text-center py-5">
-                                <div className="spinner-border text-primary" role="status"></div>
+                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                 <div className="mt-2 text-muted">Loading {entityTitle}...</div>
                             </div>
                         ) : data.length === 0 ? (
@@ -2022,7 +2022,7 @@ export default function MasterList() {
                             onChange={e => setLinkSearch(e.target.value)}
                             style={{ marginBottom: '12px' }}
                         />
-                        {linkSearching && <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px' }}><div className="spinner-border spinner-border-sm text-primary me-2"></div>Searching...</div>}
+                        {linkSearching && <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px' }}><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent me-2" aria-hidden="true" />Searching...</div>}
                         {!linkSearching && linkSearch && linkResults.length === 0 && (
                             <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px', fontSize: 14 }}>No unlinked trades found for "{linkSearch}"</div>
                         )}
@@ -2080,7 +2080,7 @@ export default function MasterList() {
 
                         {mergeCandidatesLoading && (
                             <div style={{ textAlign: 'center', padding: '20px', color: 'var(--tb-text-tertiary)' }}>
-                                <div className="spinner-border spinner-border-sm text-primary me-2"></div>Loading candidates...
+                                <span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent me-2" aria-hidden="true" />Loading candidates...
                             </div>
                         )}
 
@@ -2144,7 +2144,7 @@ export default function MasterList() {
                                 style={{ padding: '6px 16px', borderRadius: 'var(--tb-r-sm)', border: 'none', background: mergeBoeSource && !mergeBoeLoading ? 'var(--accent-color)' : 'var(--accent-light)', color: '#fff', cursor: mergeBoeSource && !mergeBoeLoading ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}
                             >
                                 {mergeBoeLoading
-                                    ? <><div className="spinner-border spinner-border-sm" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>Merging...</>
+                                    ? <><div className="" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>Merging...</>
                                     : <><i className="bi bi-intersect"></i>Confirm Merge</>
                                 }
                             </button>

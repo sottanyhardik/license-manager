@@ -10,7 +10,8 @@ import {openPdfPreview} from "../../utils/pdfPreview";
 import {toast} from "react-toastify";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, FileSpreadsheet, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { RefreshCw, FileSpreadsheet, Loader2, FileText } from "lucide-react";
 
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
@@ -681,8 +682,7 @@ export default function ItemPivotReport() {
                                                     <i className={`bi ${isConversionNorm ? 'bi-arrow-repeat' : 'bi-tag-fill'} me-1`}></i>
                                                     <span style={{fontSize: 16, fontWeight: '600'}}>{normClass}</span>
                                                     {loading && activeNormTab === normClass && (
-                                                        <span className="spinner-border spinner-border-sm ms-2" role="status"
-                                                              style={{width: '0.8rem', height: '0.8rem'}}></span>
+                                                        <Loader2 className="ml-1.5 size-3.5 animate-spin text-primary" />
                                                     )}
                                                 </div>
                                                 {description && (
@@ -711,11 +711,9 @@ export default function ItemPivotReport() {
                     {/* Loading state */}
                     {loading && activeNormTab && (
                         <div className="card">
-                            <div className="card-body text-center py-5">
-                                <div className="spinner-border text-primary mb-3" role="status" style={{width: '3rem', height: '3rem'}}>
-                                    <span className="visually-hidden">Loading...</span>
-                                </div>
-                                <h5 className="text-muted">Loading {activeNormTab} Report...</h5>
+                            <div className="card-body flex flex-col items-center py-12 text-center">
+                                <Loader2 className="mb-3 size-10 animate-spin text-primary" />
+                                <h5 className="text-muted">Loading {activeNormTab} Report…</h5>
                                 <p className="text-muted small">Please wait while we fetch the data</p>
                             </div>
                         </div>
@@ -1543,57 +1541,24 @@ export default function ItemPivotReport() {
             </div>
 
             {conditionModal && (
-                <>
-                    <div
-                        className="modal show d-block"
-                        tabIndex="-1"
-                        role="dialog"
-                        style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
-                        onClick={() => setConditionModal(null)}
-                    >
-                        <div
-                            className="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered"
-                            role="document"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="modal-content" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                                <div className="modal-header" style={{ backgroundColor: 'var(--row-yellow-bg)' }}>
-                                    <h5 className="modal-title">
-                                        <i className="bi bi-file-earmark-text me-2"></i>
-                                        Condition Sheet — {conditionModal.licenseNumber}
-                                    </h5>
-                                    <button
-                                        type="button"
-                                        className="btn-close"
-                                        aria-label="Close"
-                                        onClick={() => setConditionModal(null)}
-                                    />
-                                </div>
-                                <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                                    <pre style={{
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-word',
-                                        fontFamily: 'inherit',
-                                        fontSize: 14.5,
-                                        margin: 0,
-                                        color: '#000',
-                                    }}>
-                                        {conditionModal.content}
-                                    </pre>
-                                </div>
-                                <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => setConditionModal(null)}
-                                    >
-                                        Close
-                                    </button>
-                                </div>
-                            </div>
+                <Dialog open={!!conditionModal} onOpenChange={(o) => !o && setConditionModal(null)}>
+                    <DialogContent className="max-h-[85vh] max-w-4xl overflow-hidden">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <FileText className="size-4" />
+                                Condition Sheet — {conditionModal.licenseNumber}
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="max-h-[65vh] overflow-y-auto">
+                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 14.5, margin: 0, color: 'var(--tb-text)' }}>
+                                {conditionModal.content}
+                            </pre>
                         </div>
-                    </div>
-                </>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setConditionModal(null)}>Close</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             )}
         </div>
     );

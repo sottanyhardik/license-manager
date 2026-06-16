@@ -1874,7 +1874,7 @@ export default function MasterForm({
 
                     {fetchingAllotment && (
                         <div className="alert alert-info d-flex align-items-center gap-2 mb-4">
-                            <span className="spinner-border spinner-border-sm flex-shrink-0"></span>
+                            <span className="inline-block size-4 flex-shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
                             Fetching allotment details...
                         </div>
                     )}
@@ -1936,7 +1936,7 @@ export default function MasterForm({
                                             disabled={!boePdfFile || boeParsing}
                                         >
                                             {boeParsing ? (
-                                                <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Fetching…</>
+                                                <><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent" role="status" aria-hidden="true"></span>Fetching…</>
                                             ) : (
                                                 <><i className="bi bi-magic me-1"></i>Re-fetch</>
                                             )}
@@ -1987,7 +1987,7 @@ export default function MasterForm({
                                             disabled={!boePdfFile || boeParsing}
                                         >
                                             {boeParsing ? (
-                                                <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Fetching…</>
+                                                <><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent" role="status" aria-hidden="true"></span>Fetching…</>
                                             ) : (
                                                 <><i className="bi bi-magic me-1"></i>Fetch</>
                                             )}
@@ -2099,7 +2099,7 @@ export default function MasterForm({
                                             disabled={!licensePdfFile || licenseParsing}
                                         >
                                             {licenseParsing ? (
-                                                <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Fetching…</>
+                                                <><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent" role="status" aria-hidden="true"></span>Fetching…</>
                                             ) : (
                                                 <><i className="bi bi-magic me-1"></i>Fetch</>
                                             )}
@@ -2140,7 +2140,7 @@ export default function MasterForm({
                                                 title="Re-fetch & parse the saved Licence Copy"
                                             >
                                                 {licenseParsing ? (
-                                                    <><span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Re-fetching…</>
+                                                    <><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent" role="status" aria-hidden="true"></span>Re-fetching…</>
                                                 ) : (
                                                     <><i className="bi bi-arrow-clockwise me-1"></i>Re-fetch &amp; parse</>
                                                 )}

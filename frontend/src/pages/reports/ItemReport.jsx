@@ -460,7 +460,7 @@ export default function ItemReport() {
                                 Filters
                                 {isPending && (
                                     <span className="ms-2" style={{ fontSize: 13.5, color: 'var(--tb-text-secondary)' }}>
-                                        <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                         Updating...
                                     </span>
                                 )}

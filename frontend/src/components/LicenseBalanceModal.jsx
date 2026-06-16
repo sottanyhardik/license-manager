@@ -6,6 +6,9 @@ import { toast } from 'react-toastify';
 import { formatDate } from '../utils/dateFormatter';
 import { openPdfPreview } from '../utils/pdfPreview';
 import ConditionBadge from './ConditionBadge';
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { FileText, FileSpreadsheet, X, Loader2 } from "lucide-react";
 
 // License Marking values map directly to the backend `condition_type` field.
 // "" is rendered as "None" and clears the restriction.
@@ -343,104 +346,58 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
     if (!show) return null;
 
     return (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-            <div className="modal-dialog modal-xl" style={{ maxWidth: '95%' }}>
-                <div className="modal-content" style={{
-                    borderRadius: 'var(--tb-r-md)',
-                    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-                    border: 'none'
-                }}>
-                    <div className="modal-header" style={{
-                        background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))',
-                        color: '#fff',
-                        borderTopLeftRadius: '12px',
-                        borderTopRightRadius: '12px',
-                        padding: '1.5rem',
-                        borderBottom: 'none'
-                    }}>
-                        <h5 className="modal-title" style={{
-                            fontWeight: '600',
-                            fontSize: '1.25rem',
-                            letterSpacing: '0.3px',
-                            flex: 1
-                        }}>
-                            <i className="bi bi-file-text me-2"></i>
-                            License Balance Report{licenseData ? ` - ${licenseData.license_number}` : ''}
-                        </h5>
-                        <div className="d-flex gap-2 align-items-center">
-                            {licenseData && (
-                                <>
-                                    <button
-                                        type="button"
-                                        className="btn btn-sm"
-                                        onClick={handleDownloadPDF}
-                                        disabled={loading}
-                                        style={{
-                                            backgroundColor: 'var(--tb-card-bg)',
-                                            color: 'var(--primary-color)',
-                                            border: 'none',
-                                            fontWeight: '500',
-                                            padding: '0.5rem 1rem',
-                                            borderRadius: 'var(--tb-r-sm)',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                            transition: 'all 0.3s'
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.transform = 'translateY(-2px)';
-                                            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.transform = 'translateY(0)';
-                                            e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-                                        }}
-                                    >
-                                        <i className="bi bi-file-earmark-pdf me-2"></i>
-                                        Download PDF
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-sm"
-                                        onClick={handleDownloadExcel}
-                                        disabled={loading}
-                                        style={{
-                                            backgroundColor: 'var(--tb-card-bg)',
-                                            color: 'var(--success-color)',
-                                            border: 'none',
-                                            fontWeight: '500',
-                                            padding: '0.5rem 1rem',
-                                            borderRadius: 'var(--tb-r-sm)',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                            transition: 'all 0.3s'
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.transform = 'translateY(-2px)';
-                                            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.transform = 'translateY(0)';
-                                            e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-                                        }}
-                                    >
-                                        <i className="bi bi-file-earmark-excel me-2"></i>
-                                        Download Excel
-                                    </button>
-                                </>
-                            )}
-                            <button
-                                type="button"
-                                className="btn-close btn-close-white"
-                                onClick={onHide}
-                                style={{ fontSize: 14 }}
-                            ></button>
-                        </div>
+        <Dialog open={show} onOpenChange={(o) => !o && onHide()}>
+            <DialogContent
+                className="max-h-[95vh] w-[95vw] max-w-[1400px] overflow-hidden p-0"
+                // Hide default close button — we render our own in the header
+                style={{ '--dialog-close-display': 'none' }}
+            >
+                {/* Custom gradient header */}
+                <div
+                    className="flex items-center justify-between px-6 py-4 text-white"
+                    style={{ background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))' }}
+                >
+                    <h5 className="flex items-center gap-2 text-[1.15rem] font-semibold tracking-tight text-white">
+                        <FileText className="size-5" />
+                        License Balance Report{licenseData ? ` — ${licenseData.license_number}` : ''}
+                    </h5>
+                    <div className="flex items-center gap-2">
+                        {licenseData && (
+                            <>
+                                <Button
+                                    size="sm"
+                                    onClick={handleDownloadPDF}
+                                    disabled={loading}
+                                    className="bg-card text-primary hover:bg-card/90 border-0"
+                                    variant="outline"
+                                >
+                                    <FileText className="size-3.5" />Download PDF
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    onClick={handleDownloadExcel}
+                                    disabled={loading}
+                                    className="bg-card text-success hover:bg-card/90 border-0"
+                                    variant="outline"
+                                >
+                                    <FileSpreadsheet className="size-3.5" />Download Excel
+                                </Button>
+                            </>
+                        )}
+                        <button
+                            type="button"
+                            onClick={onHide}
+                            aria-label="Close"
+                            className="ml-1 flex size-8 items-center justify-center rounded-sm opacity-70 hover:opacity-100 cursor-pointer bg-transparent border-0 text-white"
+                        >
+                            <X className="size-4" />
+                        </button>
                     </div>
-                    <div className="modal-body" style={{
-                        padding: '2rem',
-                        backgroundColor: 'var(--tb-sunken)'
-                    }}>
+                </div>
+                <div className="overflow-y-auto bg-muted/40" style={{ maxHeight: 'calc(95vh - 130px)', padding: '1.5rem' }}>
                         {loading || !licenseData ? (
-                            <div className="text-center py-5">
-                                <div className="spinner-border" style={{ color: 'var(--primary-color)' }}></div>
+                            <div className="flex flex-col items-center gap-2 py-10 text-center">
+                                <Loader2 className="size-8 animate-spin text-primary" />
                                 <p className="mt-2" style={{ color: 'var(--tb-text-secondary)' }}>Loading...</p>
                             </div>
                         ) : (
@@ -1081,43 +1038,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                             </>
                         )}
                     </div>
-                    <div className="modal-footer" style={{
-                        backgroundColor: 'var(--tb-sunken)',
-                        borderTop: '1px solid var(--tb-border)',
-                        padding: '1rem 2rem',
-                        borderBottomLeftRadius: '12px',
-                        borderBottomRightRadius: '12px'
-                    }}>
-                        <button
-                            type="button"
-                            className="btn"
-                            onClick={onHide}
-                            style={{
-                                backgroundColor: 'var(--tb-text-secondary)',
-                                color: '#fff',
-                                borderRadius: 'var(--tb-r-sm)',
-                                padding: '0.5rem 1.5rem',
-                                fontWeight: '500',
-                                border: 'none',
-                                transition: 'all 0.3s'
-                            }}
-                            onMouseOver={(e) => {
-                                e.target.style.backgroundColor = 'var(--tb-text-secondary)';
-                                e.target.style.transform = 'translateY(-2px)';
-                                e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                            }}
-                            onMouseOut={(e) => {
-                                e.target.style.backgroundColor = 'var(--tb-text-secondary)';
-                                e.target.style.transform = 'translateY(0)';
-                                e.target.style.boxShadow = 'none';
-                            }}
-                        >
-                            <i className="bi bi-x-circle me-2"></i>
-                            Close
-                        </button>
-                    </div>
+                <div className="flex justify-end border-t border-border bg-muted/40 px-6 py-3">
+                    <Button variant="outline" onClick={onHide}>
+                        <X className="size-4" />Close
+                    </Button>
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

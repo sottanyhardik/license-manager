@@ -3,6 +3,9 @@ import api from '../api/axios';
 import { toast } from 'react-toastify';
 import AsyncSelect from 'react-select/async';
 import { extractFormErrors, formatNonFieldErrors, getFieldError, getFieldErrorClass } from '../utils/formErrors';
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { X, Check, Loader2, Package } from "lucide-react";
 
 export default function AllotmentFormModal({ show, onHide, allotmentId = null, mode = 'create', onSuccess, onSaveNavigate }) {
     const [formData, setFormData] = useState({
@@ -268,40 +271,21 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
     if (!show) return null;
 
     return (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-            <div className="modal-dialog modal-xl">
-                <div className="modal-content" style={{
-                    borderRadius: 'var(--tb-r-md)',
-                    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-                    border: 'none'
-                }}>
-                    <div className="modal-header" style={{
-                        background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))',
-                        color: '#fff',
-                        borderTopLeftRadius: '12px',
-                        borderTopRightRadius: '12px',
-                        padding: '1.5rem',
-                        borderBottom: 'none'
-                    }}>
-                        <h5 className="modal-title" style={{
-                            fontWeight: '600',
-                            fontSize: '1.25rem',
-                            letterSpacing: '0.3px',
-                            flex: 1
-                        }}>
-                            <i className="bi bi-box-arrow-in-down me-2"></i>
-                            {mode === 'create' ? 'Create Allotment' : mode === 'edit' ? 'Edit Allotment' : 'Copy Allotment'}
-                        </h5>
-                        <button
-                            type="button"
-                            className="btn-close btn-close-white"
-                            onClick={onHide}
-                            disabled={loading}
-                        ></button>
-                    </div>
+        <Dialog open={show} onOpenChange={(o) => !o && !loading && onHide()}>
+            <DialogContent className="max-h-[95vh] w-[95vw] max-w-4xl overflow-hidden p-0">
+                {/* Custom gradient header */}
+                <div className="flex items-center justify-between px-6 py-4 text-white" style={{ background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))' }}>
+                    <h5 className="flex items-center gap-2 text-[1.15rem] font-semibold tracking-tight text-white">
+                        <Package className="size-5" />
+                        {mode === 'create' ? 'Create Allotment' : mode === 'edit' ? 'Edit Allotment' : 'Copy Allotment'}
+                    </h5>
+                    <button type="button" onClick={onHide} disabled={loading} aria-label="Close" className="flex size-8 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent text-white opacity-70 hover:opacity-100">
+                        <X className="size-4" />
+                    </button>
+                </div>
 
                     <form onSubmit={handleSubmit}>
-                        <div className="modal-body" style={{ padding: '2rem', backgroundColor: 'var(--tb-sunken)' }}>
+                        <div className="overflow-y-auto bg-muted/40" style={{ maxHeight: 'calc(95vh - 130px)', padding: '1.5rem' }}>
                             {/* Non-Field Errors */}
                             {nonFieldErrors.length > 0 && (
                                 <div className="alert alert-danger mb-3" role="alert">
@@ -314,7 +298,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
 
                             {initialLoad ? (
                                 <div className="text-center py-5">
-                                    <div className="spinner-border" style={{ color: 'var(--primary-color)' }}></div>
+                                    <span className="inline-block size-7 animate-spin rounded-full border-2 border-current border-t-transparent text-primary" />
                                     <p className="mt-2 text-muted">Loading...</p>
                                 </div>
                             ) : (
@@ -559,45 +543,17 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                             )}
                         </div>
 
-                        <div className="modal-footer" style={{
-                            backgroundColor: 'var(--tb-sunken)',
-                            borderTop: '1px solid var(--tb-border)',
-                            padding: '1rem 2rem'
-                        }}>
-                            <button
-                                type="button"
-                                className="btn btn-outline-secondary"
-                                onClick={onHide}
-                                disabled={loading}
-                            >
-                                <i className="bi bi-x-lg me-2"></i>Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="btn"
-                                disabled={loading || initialLoad}
-                                style={{
-                                    background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))',
-                                    color: '#fff',
-                                    border: 'none'
-                                }}
-                            >
-                                {loading ? (
-                                    <>
-                                        <span className="spinner-border spinner-border-sm me-2"></span>
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>
-                                        <i className="bi bi-check-circle me-2"></i>
-                                        {mode === 'create' ? 'Create' : mode === 'edit' ? 'Update' : 'Create Copy'}
-                                    </>
-                                )}
-                            </button>
+                        <div className="flex justify-end gap-2 border-t border-border bg-muted/40 px-6 py-3">
+                            <Button type="button" variant="outline" onClick={onHide} disabled={loading}>
+                                <X className="size-4" />Cancel
+                            </Button>
+                            <Button type="submit" disabled={loading || initialLoad}>
+                                {loading ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                                {loading ? 'Saving…' : mode === 'create' ? 'Create' : mode === 'edit' ? 'Update' : 'Create Copy'}
+                            </Button>
                         </div>
                     </form>
-                </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

@@ -1,103 +1,60 @@
+import { useState, useEffect, useRef } from "react";
+import { Search, X, Loader2 } from "lucide-react";
+import { useDebouncedState } from "../hooks/useDebounce";
+
 /**
- * Debounced Search Input Component
- *
- * A text input that debounces changes to reduce API calls while typing.
- * Shows a loading indicator during the debounce period.
- *
- * @param {string} value - Current search value
- * @param {function} onChange - Callback when debounced value changes
- * @param {number} delay - Debounce delay in milliseconds (default: 500)
- * @param {string} placeholder - Input placeholder text
- * @param {string} className - Additional CSS classes
- * @param {object} style - Inline styles
- *
- * @example
- * <DebouncedSearchInput
- *   value={searchTerm}
- *   onChange={setSearchTerm}
- *   delay={500}
- *   placeholder="Search licenses..."
- * />
+ * Debounced search input — fires onChange only after the user stops typing.
+ * Debounce logic preserved exactly; Bootstrap input-group replaced with Tailwind.
  */
-
-import React, { useState, useEffect, useRef } from 'react';
-import { useDebouncedState } from '../hooks/useDebounce';
-
 export default function DebouncedSearchInput({
     value,
     onChange,
     delay = 500,
     placeholder = "Search...",
-    className = "form-control",
+    className = "",
     style = {},
     showPendingIndicator = true,
-    icon = "bi-search"
 }) {
     const [localValue, setLocalValue] = useState(value);
     const { debouncedValue, isPending } = useDebouncedState(localValue, delay);
 
     const valueRef = useRef(value);
     const onChangeRef = useRef(onChange);
-    useEffect(() => {
-        valueRef.current = value;
-        onChangeRef.current = onChange;
-    });
+    useEffect(() => { valueRef.current = value; onChangeRef.current = onChange; });
+
+    useEffect(() => { setLocalValue(value); }, [value]);
 
     useEffect(() => {
-        setLocalValue(value);
-    }, [value]);
-
-    useEffect(() => {
-        if (debouncedValue !== valueRef.current) {
-            onChangeRef.current(debouncedValue);
-        }
+        if (debouncedValue !== valueRef.current) onChangeRef.current(debouncedValue);
     }, [debouncedValue]);
 
-    const handleChange = (e) => {
-        setLocalValue(e.target.value);
-    };
-
-    const handleClear = () => {
-        setLocalValue('');
-        onChange('');
-    };
-
     return (
-        <div className="position-relative">
-            <div className="input-group">
-                <span className="input-group-text bg-white border-end-0">
-                    <i className={`bi ${icon}`}></i>
-                </span>
-                <input
-                    type="text"
-                    className={`${className} border-start-0 ps-0`}
-                    placeholder={placeholder}
-                    value={localValue}
-                    onChange={handleChange}
-                    style={style}
-                />
-                {localValue && (
-                    <button
-                        className="btn btn-sm border-0 position-absolute end-0 top-50 translate-middle-y"
-                        onClick={handleClear}
-                        style={{ zIndex: 10, marginRight: '8px' }}
-                        type="button"
-                    >
-                        <i className="bi bi-x-circle" style={{ color: 'var(--tb-text-secondary)' }}></i>
-                    </button>
-                )}
-            </div>
-
-            {/* Debounce pending indicator */}
-            {showPendingIndicator && isPending && (
-                <div
-                    className="position-absolute end-0 top-50 translate-middle-y me-5"
-                    style={{ pointerEvents: 'none' }}
+        <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-muted-foreground">
+                <Search className="size-4" />
+            </span>
+            <input
+                type="text"
+                className={`flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 pl-8 text-sm shadow-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/30 focus-visible:ring-[3px] ${className}`}
+                placeholder={placeholder}
+                value={localValue}
+                onChange={(e) => setLocalValue(e.target.value)}
+                style={style}
+            />
+            {localValue && (
+                <button
+                    type="button"
+                    onClick={() => { setLocalValue(""); onChange(""); }}
+                    className="absolute inset-y-0 right-0 flex w-8 cursor-pointer items-center justify-center border-0 bg-transparent text-muted-foreground hover:text-foreground"
+                    style={{ zIndex: 10 }}
                 >
-                    <span className="spinner-border spinner-border-sm text-primary" role="status">
-                        <span className="visually-hidden">Searching...</span>
-                    </span>
-                </div>
+                    <X className="size-3.5" />
+                </button>
+            )}
+            {showPendingIndicator && isPending && (
+                <span className="pointer-events-none absolute inset-y-0 right-8 flex items-center">
+                    <Loader2 className="size-3.5 animate-spin text-primary" />
+                </span>
             )}
         </div>
     );

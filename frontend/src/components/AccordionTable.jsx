@@ -3,6 +3,8 @@ import {Link} from "react-router-dom";
 import {toast} from "react-toastify";
 import api from "../api/axios";
 import {formatDate} from "../utils/dateFormatter";
+import { Loader2, Check, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {formatIndianNumber} from "../utils/numberFormatter";
 
 /**
@@ -118,10 +120,9 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
 
     if (loading) {
         return (
-            <div className="text-center py-5">
-                <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
-                </div>
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <Loader2 className="size-8 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Loading…</span>
             </div>
         );
     }
@@ -342,7 +343,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                             <tr className={isExpanded ? "table-active" : ""}>
                                 <td>
                                     <button
-                                        className="btn btn-sm btn-link p-0 text-primary"
+                                        className="cursor-pointer border-0 bg-transparent p-0 text-primary hover:opacity-70"
                                         onClick={() => toggleRow(item.id, item)}
                                         title={isExpanded ? "Collapse" : "Expand"}
                                     >
@@ -385,9 +386,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                         disabled={isToggling}
                                                         style={{cursor: isToggling ? 'wait' : 'pointer'}}
                                                     />
-                                                    {isToggling && (
-                                                        <span className="spinner-border spinner-border-sm ms-2" role="status"></span>
-                                                    )}
+                                                    {isToggling && <Loader2 className="ml-1.5 inline size-3.5 animate-spin text-primary" />}
                                                 </div>
                                             </td>
                                         );
@@ -419,28 +418,12 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                         disabled={saving}
                                                         onClick={(e) => e.stopPropagation()}
                                                     />
-                                                    <button
-                                                        className="btn btn-sm btn-success"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleSave(item, col);
-                                                        }}
-                                                        disabled={saving}
-                                                        title="Save"
-                                                    >
-                                                        <i className="bi bi-check"></i>
-                                                    </button>
-                                                    <button
-                                                        className="btn btn-sm btn-secondary"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleCancel();
-                                                        }}
-                                                        disabled={saving}
-                                                        title="Cancel"
-                                                    >
-                                                        <i className="bi bi-x"></i>
-                                                    </button>
+                                                    <Button size="icon" className="size-7" onClick={(e) => { e.stopPropagation(); handleSave(item, col); }} disabled={saving} title="Save">
+                                                        <Check className="size-3.5" />
+                                                    </Button>
+                                                    <Button size="icon" variant="outline" className="size-7" onClick={(e) => { e.stopPropagation(); handleCancel(); }} disabled={saving} title="Cancel">
+                                                        <X className="size-3.5" />
+                                                    </Button>
                                                 </div>
                                             ) : col === "id" ? (
                                                 <Link to={`${basePath}/${item.id}/edit`}>
@@ -489,20 +472,14 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                 </button>
                                             );
                                         })}
-                                        <Link
-                                            to={`${basePath}/${item.id}/edit`}
-                                            className="btn btn-outline-primary"
-                                            title="Edit"
-                                        >
-                                            <i className="bi bi-pencil"></i>
-                                        </Link>
-                                        <button
-                                            onClick={() => onDelete(item)}
-                                            className="btn btn-outline-danger"
-                                            title="Delete"
-                                        >
-                                            <i className="bi bi-trash"></i>
-                                        </button>
+                                        <Button size="sm" variant="outline" asChild title="Edit">
+                                            <Link to={`${basePath}/${item.id}/edit`}>
+                                                <i className="bi bi-pencil" aria-hidden="true" />
+                                            </Link>
+                                        </Button>
+                                        <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => onDelete(item)} title="Delete">
+                                            <i className="bi bi-trash" aria-hidden="true" />
+                                        </Button>
                                     </div>
                                 </td>
                             </tr>
@@ -510,13 +487,11 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                             {/* Nested Row (Expanded) */}
                             {isExpanded && (
                                 <tr className="border-0">
-                                    <td colSpan={columns.length + 2} className="bg-light border-0 p-4">
+                                    <td colSpan={columns.length + 2} className="border-0 bg-muted/30 p-4">
                                         {loadingNested[item.id] ? (
-                                            <div className="text-center py-3">
-                                                <div className="spinner-border spinner-border-sm text-primary" role="status">
-                                                    <span className="visually-hidden">Loading...</span>
-                                                </div>
-                                                <span className="ms-2">Loading nested items...</span>
+                                            <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+                                                <Loader2 className="size-4 animate-spin text-primary" />
+                                                Loading nested items…
                                             </div>
                                         ) : (
                                             Object.entries(nestedFieldDefs).map(([fieldKey, fieldConfig]) => {

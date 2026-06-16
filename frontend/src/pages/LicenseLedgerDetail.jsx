@@ -163,8 +163,8 @@ export default function LicenseLedgerDetail() {
                 padding: '25px 30px',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
             }}>
-                <div className="row align-items-center">
-                    <div className="col-md-8">
+                <div className="grid grid-cols-1 items-center gap-4 md:grid-cols-3">
+                    <div className="md:col-span-2">
                         <h4 style={{ marginBottom: '15px', color: 'var(--tb-text)', fontWeight: '600' }}>
                             {ledger.license_number}
                             <span style={{
@@ -215,7 +215,7 @@ export default function LicenseLedgerDetail() {
                             </div>
                         </div>
                     </div>
-                    <div className="col-md-4 text-end">
+                    <div className="text-end">
                         <div style={{
                             padding: '20px',
                             backgroundColor: 'var(--tb-sunken)',

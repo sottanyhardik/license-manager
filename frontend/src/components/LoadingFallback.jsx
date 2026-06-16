@@ -94,9 +94,9 @@ export function FormSkeletonLoader({ fields = 6 }) {
         <div className="card">
             <div className="card-body">
                 <div className="skeleton" style={{ height: 22, width: "30%", borderRadius: 6, marginBottom: 20 }} />
-                <div className="row g-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {Array.from({ length: fields }).map((_, i) => (
-                        <div key={i} className="col-md-6">
+                        <div key={i}>
                             <div className="skeleton" style={{ height: 10, width: "40%", borderRadius: 4, marginBottom: 6 }} />
                             <div className="skeleton" style={{ height: 36, width: "100%", borderRadius: 6 }} />
                         </div>

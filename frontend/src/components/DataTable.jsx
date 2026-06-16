@@ -240,7 +240,7 @@ export default function DataTable({
                                                     style={{ minWidth: 80 }}
                                                 />
                                                 <button
-                                                    className="btn btn-sm btn-success"
+                                                    className="flex items-center justify-center rounded px-2 py-1 text-xs bg-success text-white cursor-pointer hover:bg-success/90"
                                                     onClick={() => handleSave(item, col)}
                                                     disabled={saving}
                                                     title="Save"
@@ -249,7 +249,7 @@ export default function DataTable({
                                                     <i className="bi bi-check" aria-hidden="true" />
                                                 </button>
                                                 <button
-                                                    className="btn btn-sm btn-outline-secondary"
+                                                    className="flex items-center justify-center rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground cursor-pointer hover:bg-muted"
                                                     onClick={handleCancel}
                                                     disabled={saving}
                                                     title="Cancel"
@@ -294,7 +294,7 @@ export default function DataTable({
                                     })}
                                     {onEdit && (
                                         <button
-                                            className="btn btn-sm btn-outline-primary"
+                                            className="flex items-center justify-center rounded border border-primary/30 bg-primary/5 px-2 py-1 text-xs text-primary cursor-pointer hover:bg-primary/10"
                                             onClick={() => onEdit(item)}
                                             title="Edit"
                                             aria-label={`Edit ${item.id || "record"}`}
@@ -305,7 +305,7 @@ export default function DataTable({
                                     )}
                                     {onDelete && (
                                         <button
-                                            className="btn btn-sm btn-outline-danger"
+                                            className="flex items-center justify-center rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive cursor-pointer hover:bg-destructive/10"
                                             onClick={() => onDelete(item)}
                                             title="Delete"
                                             aria-label={`Delete ${item.id || "record"}`}

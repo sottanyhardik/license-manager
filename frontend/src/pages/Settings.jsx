@@ -5,6 +5,8 @@ import api from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
 import { ROLE_LABELS, getRoleBadgeProps } from "../utils/roleConstants";
 import { PageHeader, Button, Skeleton } from "../components/ui";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 function fmtDate(val) {
     if (!val) return "—";
@@ -184,8 +186,8 @@ export default function Settings() {
                                         <td style={{ fontSize: 12, color: "var(--tb-text-secondary)", whiteSpace: "nowrap" }}>{fmtDate(user.date_joined)}</td>
                                         <td className="text-end" style={{ paddingRight: 16 }}>
                                             <div style={{ display: "inline-flex", gap: 4 }}>
-                                                <button className="btn btn-sm btn-outline-secondary" onClick={() => handleOpenModal(user)} title="Edit" aria-label={`Edit ${user.username}`} style={{ padding: "3px 8px" }}><i className="bi bi-pencil" aria-hidden="true" /></button>
-                                                <button className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(user.id)} title="Delete" aria-label={`Delete ${user.username}`} style={{ padding: "3px 8px" }}><i className="bi bi-trash" aria-hidden="true" /></button>
+                                                <Button variant="outline" size="sm" onClick={() => handleOpenModal(user)} title="Edit" aria-label={`Edit ${user.username}`}><i className="bi bi-pencil" aria-hidden="true" /></Button>
+                                                <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => handleDelete(user.id)} title="Delete" aria-label={`Delete ${user.username}`}><i className="bi bi-trash" aria-hidden="true" /></Button>
                                             </div>
                                         </td>
                                     </tr>
@@ -214,32 +216,32 @@ export default function Settings() {
                         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
                             <div style={{ padding: "20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
                                 <SectionBox icon="shield-lock" label="Account Credentials" tone="primary">
-                                    <div className="row g-3">
-                                        <div className="col-md-6">
-                                            <label className="form-label required" htmlFor="modal-username">Username</label>
-                                            <input id="modal-username" type="text" className="form-control" value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} required disabled={!!editingUser} placeholder="Enter username" autoComplete="off" />
-                                            {editingUser && <div className="form-text">Username cannot be changed.</div>}
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <div>
+                                            <Label className="mb-1.5 required" htmlFor="modal-username">Username</Label>
+                                            <Input id="modal-username" value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} required disabled={!!editingUser} placeholder="Enter username" autoComplete="off" />
+                                            {editingUser && <p className="mt-1 text-[11.5px] text-muted-foreground">Username cannot be changed.</p>}
                                         </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label" htmlFor="modal-password">Password {!editingUser && <span style={{ color: "var(--tb-danger)" }}>*</span>}</label>
-                                            <input id="modal-password" type="password" className="form-control" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} required={!editingUser} placeholder={editingUser ? "Leave blank to keep current" : "Enter password"} autoComplete="new-password" />
+                                        <div>
+                                            <Label className="mb-1.5" htmlFor="modal-password">Password {!editingUser && <span className="text-destructive">*</span>}</Label>
+                                            <Input id="modal-password" type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} required={!editingUser} placeholder={editingUser ? "Leave blank to keep current" : "Enter password"} autoComplete="new-password" />
                                         </div>
                                     </div>
                                 </SectionBox>
                                 <SectionBox icon="person" label="Personal Information" tone="success">
-                                    <div className="row g-3">
-                                        <div className="col-md-4"><label className="form-label" htmlFor="modal-fname">First Name</label><input id="modal-fname" type="text" className="form-control" value={formData.first_name} onChange={e => setFormData({ ...formData, first_name: e.target.value })} placeholder="First name" /></div>
-                                        <div className="col-md-4"><label className="form-label" htmlFor="modal-lname">Last Name</label><input id="modal-lname" type="text" className="form-control" value={formData.last_name} onChange={e => setFormData({ ...formData, last_name: e.target.value })} placeholder="Last name" /></div>
-                                        <div className="col-md-4"><label className="form-label" htmlFor="modal-email">Email</label><input id="modal-email" type="email" className="form-control" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="email@example.com" /></div>
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                        <div><Label className="mb-1.5" htmlFor="modal-fname">First Name</Label><Input id="modal-fname" value={formData.first_name} onChange={e => setFormData({ ...formData, first_name: e.target.value })} placeholder="First name" /></div>
+                                        <div><Label className="mb-1.5" htmlFor="modal-lname">Last Name</Label><Input id="modal-lname" value={formData.last_name} onChange={e => setFormData({ ...formData, last_name: e.target.value })} placeholder="Last name" /></div>
+                                        <div><Label className="mb-1.5" htmlFor="modal-email">Email</Label><Input id="modal-email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="email@example.com" /></div>
                                     </div>
                                 </SectionBox>
                                 {availableRoles.length > 0 && (
                                     <SectionBox icon="shield-check" label="Roles" tone="info">
-                                        <div className="row g-2">
+                                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                                             {availableRoles.map(code => {
                                                 const checked = formData.roles.includes(code);
                                                 return (
-                                                    <div className="col-md-4 col-6" key={code}>
+                                                    <div key={code}>
                                                         <div onClick={() => toggleRole(code)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: "var(--tb-r-sm)", border: `1px solid ${checked ? "var(--tb-brand-200)" : "var(--tb-border)"}`, background: checked ? "var(--tb-brand-50)" : "var(--tb-card-bg)", cursor: "pointer", transition: "all var(--tb-tx-fast)" }}>
                                                             <input type="checkbox" className="form-check-input" id={`role-${code}`} checked={checked} onChange={() => toggleRole(code)} onClick={e => e.stopPropagation()} style={{ margin: 0, flexShrink: 0 }} />
                                                             <label htmlFor={`role-${code}`} style={{ fontSize: 11.5, cursor: "pointer", color: checked ? "var(--tb-brand-active)" : "var(--tb-text-secondary)", fontWeight: checked ? 500 : 400, margin: 0 }}>{ROLE_LABELS[code] ?? code}</label>

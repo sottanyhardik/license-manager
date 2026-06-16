@@ -6,6 +6,9 @@ import { formatIndianNumber } from '../utils/numberFormatter';
 import { generatePDF, generateExcel } from '../utils/ledgerExport';
 import AsyncSelectField from '../components/AsyncSelectField';
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import DebouncedSearchInput from '../components/DebouncedSearchInput';
 import { FileText, FileSpreadsheet, Loader2 } from "lucide-react";
 
 function LicenseWiseLedger({ data, navigate }) {
@@ -393,69 +396,65 @@ export default function LicenseLedger() {
 
             {/* Summary Cards */}
             {summary && (
-                <div className="row g-3 mb-4">
-                    <div className="col-lg-6">
-                        <div className="card" style={{ borderLeft: '3px solid var(--tb-brand)' }}>
+                <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    <div className="card" style={{ borderLeft: '3px solid var(--tb-brand)' }}>
                             <div className="card-header border-bottom py-2 px-3 d-flex align-items-center gap-2">
                                 <i className="bi bi-globe" style={{ color: 'var(--tb-brand)', fontSize: 15 }}></i>
                                 <span className="fw-semibold small">DFIA Licenses</span>
                                 <span className="badge ms-auto" style={{ background: 'var(--tb-brand)', fontSize: 11 }}>{summary.dfia.total_licenses} active</span>
                             </div>
                             <div className="card-body py-2 px-3">
-                                <div className="row g-0 text-center">
-                                    <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Total Value</div>
-                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-brand)' }}>$ {formatIndianNumber(summary.dfia.total_value_usd, 2)}</div>
+                                <div className="grid grid-cols-4 divide-x divide-border text-center">
+                                    <div className="py-2">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total Value</div>
+                                        <div className="text-sm font-bold text-primary">$ {formatIndianNumber(summary.dfia.total_value_usd, 2)}</div>
                                     </div>
-                                    <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Balance</div>
-                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-success)' }}>$ {formatIndianNumber(summary.dfia.balance_value_usd, 2)}</div>
+                                    <div className="py-2">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Balance</div>
+                                        <div className="text-sm font-bold text-success">$ {formatIndianNumber(summary.dfia.balance_value_usd, 2)}</div>
                                     </div>
-                                    <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Purchase</div>
-                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-warning)' }}>₹{formatIndianNumber(summary.dfia.purchase_amount_inr, 0)}</div>
+                                    <div className="py-2">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Purchase</div>
+                                        <div className="text-sm font-bold text-warning">₹{formatIndianNumber(summary.dfia.purchase_amount_inr, 0)}</div>
                                     </div>
-                                    <div className="col-3 py-2">
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>P / L</div>
-                                        <div style={{ fontSize: 14, fontWeight: '700', color: summary.dfia.profit_loss_inr >= 0 ? 'var(--tb-success)' : 'var(--tb-danger)' }}>
+                                    <div className="py-2">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">P / L</div>
+                                        <div className="text-sm font-bold" style={{ color: summary.dfia.profit_loss_inr >= 0 ? 'var(--tb-success)' : 'var(--tb-danger)' }}>
                                             {summary.dfia.profit_loss_inr >= 0 ? '+' : ''}₹{formatIndianNumber(Math.abs(summary.dfia.profit_loss_inr), 0)}
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="col-lg-6">
-                        <div className="card" style={{ borderLeft: '3px solid var(--tb-info)' }}>
+                    <div className="card" style={{ borderLeft: '3px solid var(--tb-info)' }}>
                             <div className="card-header border-bottom py-2 px-3 d-flex align-items-center gap-2">
                                 <i className="bi bi-trophy" style={{ color: 'var(--tb-info)', fontSize: 15 }}></i>
                                 <span className="fw-semibold small">Incentive Licenses</span>
                                 <span className="badge ms-auto" style={{ background: 'var(--tb-info)', fontSize: 11 }}>{summary.incentive.total_licenses} active</span>
                             </div>
                             <div className="card-body py-2 px-3">
-                                <div className="row g-0 text-center">
-                                    <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Total Value</div>
-                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-brand)' }}>₹{formatIndianNumber(summary.incentive.total_value_inr, 2)}</div>
+                                <div className="grid grid-cols-4 divide-x divide-border text-center">
+                                    <div className="py-2">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total Value</div>
+                                        <div className="text-sm font-bold text-primary">₹{formatIndianNumber(summary.incentive.total_value_inr, 2)}</div>
                                     </div>
-                                    <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Balance</div>
-                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-success)' }}>₹{formatIndianNumber(summary.incentive.balance_value_inr, 2)}</div>
+                                    <div className="py-2">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Balance</div>
+                                        <div className="text-sm font-bold text-success">₹{formatIndianNumber(summary.incentive.balance_value_inr, 2)}</div>
                                     </div>
-                                    <div className="col-3 py-2 border-end">
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Purchase</div>
-                                        <div style={{ fontSize: 14, fontWeight: '700', color: 'var(--tb-warning)' }}>₹{formatIndianNumber(summary.incentive.purchase_amount_inr, 0)}</div>
+                                    <div className="py-2">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Purchase</div>
+                                        <div className="text-sm font-bold text-warning">₹{formatIndianNumber(summary.incentive.purchase_amount_inr, 0)}</div>
                                     </div>
-                                    <div className="col-3 py-2">
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>P / L</div>
-                                        <div style={{ fontSize: 14, fontWeight: '700', color: summary.incentive.profit_loss_inr >= 0 ? 'var(--tb-success)' : 'var(--tb-danger)' }}>
+                                    <div className="py-2">
+                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">P / L</div>
+                                        <div className="text-sm font-bold" style={{ color: summary.incentive.profit_loss_inr >= 0 ? 'var(--tb-success)' : 'var(--tb-danger)' }}>
                                             {summary.incentive.profit_loss_inr >= 0 ? '+' : ''}₹{formatIndianNumber(Math.abs(summary.incentive.profit_loss_inr), 0)}
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
                 </div>
             )}
 
@@ -472,179 +471,81 @@ export default function LicenseLedger() {
                         )}
                     </div>
                     {filters.company && (
-                        <button className="btn btn-sm btn-outline-secondary" onClick={() => handleFilterChange('company', null)}>
-                            <i className="bi bi-x-circle me-1"></i>Clear Company
-                        </button>
+                        <Button size="sm" variant="outline" onClick={() => handleFilterChange('company', null)}>
+                            <i className="bi bi-x-circle me-1" aria-hidden="true" />Clear Company
+                        </Button>
                     )}
                 </div>
                 <div className="card-body p-3">
-                    <div className="row g-3">
-                        <div className="col-lg-3 col-md-5">
-                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
-                                <i className="bi bi-building me-1"></i>
-                                Company Filter
-                            </label>
-                            <AsyncSelectField
-                                endpoint="masters/companies/"
-                                labelField="name"
-                                valueField="id"
-                                value={filters.company}
-                                onChange={(value) => handleFilterChange('company', value)}
-                                isMulti={false}
-                                placeholder="Select company to view their ledger..."
-                                loadOnMount={false}
-                            />
-                            <small className="text-muted">Filter by trades with specific company</small>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                        <div className="lg:col-span-2">
+                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><i className="bi bi-building me-1" aria-hidden="true" />Company Filter</label>
+                            <AsyncSelectField endpoint="masters/companies/" labelField="name" valueField="id" value={filters.company} onChange={(value) => handleFilterChange('company', value)} isMulti={false} placeholder="Select company to view their ledger..." loadOnMount={false} />
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">Filter by trades with specific company</p>
                         </div>
-                        <div className="col-lg-3 col-md-6">
-                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
-                                License Type
-                            </label>
-                            <div className="d-flex flex-wrap gap-1">
-                                {licenseTypeOptions.map(opt => (
-                                    <button
-                                        key={opt.value}
-                                        type="button"
-                                        onClick={() => handleFilterChange('license_type', opt.value)}
-                                        style={{
-                                            fontSize: 12, fontWeight: '600', padding: '4px 10px', borderRadius: '20px',
-                                            background: filters.license_type === opt.value ? 'var(--tb-brand)' : 'white',
-                                            color: filters.license_type === opt.value ? 'white' : 'var(--text-secondary)',
-                                            border: `1px solid ${filters.license_type === opt.value ? 'var(--tb-brand)' : 'var(--tb-border)'}`,
-                                            cursor: 'pointer', transition: 'all 0.15s',
-                                        }}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
+                        <div className="lg:col-span-2">
+                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">License Type</label>
+                            <div className="flex flex-wrap gap-1">
+                                {licenseTypeOptions.map(opt => {
+                                    const active = filters.license_type === opt.value;
+                                    return (
+                                        <button key={opt.value} type="button" onClick={() => handleFilterChange('license_type', opt.value)} className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:bg-muted'}`}>
+                                            {opt.label}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
-                        <div className="col-lg-2 col-md-3">
-                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
-                                Min Balance
-                            </label>
-                            <input
-                                type="number"
-                                className="form-control"
-                                value={filters.min_balance}
-                                onChange={(e) => handleFilterChange('min_balance', e.target.value)}
-                                placeholder="0"
-                                step="100"
-                                style={{ borderColor: 'var(--tb-border-strong)', fontSize: 15 }}
-                            />
+                        <div>
+                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Min Balance</label>
+                            <Input type="number" value={filters.min_balance} onChange={(e) => handleFilterChange('min_balance', e.target.value)} placeholder="0" step="100" />
                         </div>
-                        <div className="col-lg-3 col-md-5">
-                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
-                                Search
-                            </label>
-                            <div className="input-group">
-                                <span className="input-group-text bg-white" style={{ borderRight: 'none' }}>
-                                    <i className="bi bi-search text-muted"></i>
-                                </span>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    value={filters.search}
-                                    onChange={(e) => handleFilterChange('search', e.target.value)}
-                                    placeholder="License # or exporter..."
-                                    style={{ borderLeft: 'none', fontSize: 15 }}
-                                />
-                            </div>
+                        <div>
+                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Search</label>
+                            <DebouncedSearchInput value={filters.search} onChange={(v) => handleFilterChange('search', v)} placeholder="License # or exporter..." />
                         </div>
-                        <div className="col-lg-2 col-md-4">
-                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
-                                Sort By
-                            </label>
-                            <select
-                                className="form-select"
-                                value={filters.ordering}
-                                onChange={(e) => handleFilterChange('ordering', e.target.value)}
-                                style={{ borderColor: 'var(--tb-border-strong)', fontSize: 15 }}
-                            >
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Sort By</label>
+                            <select className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm" value={filters.ordering} onChange={(e) => handleFilterChange('ordering', e.target.value)}>
                                 <option value="-license_date">Latest First</option>
                                 <option value="license_date">Oldest First</option>
                                 <option value="-balance_value">Highest Balance</option>
                                 <option value="balance_value">Lowest Balance</option>
                             </select>
                         </div>
-                        <div className="col-lg-2 col-md-4 d-flex align-items-end">
-                            <div className="form-check form-switch">
-                                <input
-                                    type="checkbox"
-                                    className="form-check-input"
-                                    id="activeOnly"
-                                    checked={filters.active_only}
-                                    onChange={(e) => handleFilterChange('active_only', e.target.checked)}
-                                    style={{ cursor: 'pointer' }}
-                                />
-                                <label className="form-check-label" htmlFor="activeOnly" style={{ fontSize: 12, fontWeight: '600', cursor: 'pointer', color: 'var(--text-secondary)' }}>
-                                    Active Only
-                                </label>
-                            </div>
+                        <div className="flex items-end">
+                            <label className="flex cursor-pointer items-center gap-2.5 text-sm" htmlFor="activeOnly">
+                                <Switch id="activeOnly" checked={filters.active_only} onCheckedChange={(v) => handleFilterChange('active_only', v)} />
+                                <span className="text-xs font-semibold text-muted-foreground">Active Only</span>
+                            </label>
                         </div>
                     </div>
 
-                    {/* Purchase Date Filter Row */}
-                    <div className="row g-3 mt-2">
-                        <div className="col-12">
-                            <div className="d-flex align-items-center justify-content-between mb-2">
-                                <div className="d-flex align-items-center">
-                                    <i className="bi bi-calendar-range text-primary me-2"></i>
-                                    <strong style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Purchase Date Range</strong>
-                                    <small className="text-muted ms-2" style={{ fontSize: 12.5 }}>(Defaults to current FY: Apr-Mar)</small>
-                                </div>
-                                <div className="btn-group" role="group">
-                                    <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline-primary"
-                                        onClick={setCurrentFinancialYear}
-                                        style={{ fontSize: 12 }}
-                                    >
-                                        <i className="bi bi-calendar-check me-1"></i>Current FY
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline-secondary"
-                                        onClick={setPreviousFinancialYear}
-                                        style={{ fontSize: 12 }}
-                                    >
-                                        <i className="bi bi-calendar3 me-1"></i>Previous FY
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline-danger"
-                                        onClick={clearDateFilter}
-                                        disabled={!filters.purchase_date_from && !filters.purchase_date_to}
-                                        style={{ fontSize: 12 }}
-                                    >
-                                        <i className="bi bi-x-circle me-1"></i>Clear
-                                    </button>
-                                </div>
+                    {/* Purchase Date Filter */}
+                    <div className="mt-3 border-t border-border/60 pt-3">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-[12px] font-semibold text-muted-foreground">
+                                <i className="bi bi-calendar-range text-primary" aria-hidden="true" />
+                                Purchase Date Range
+                                <span className="text-[11.5px] font-normal text-muted-foreground">(Defaults to current FY: Apr-Mar)</span>
+                            </div>
+                            <div className="flex gap-1">
+                                <Button size="sm" variant="outline" onClick={setCurrentFinancialYear}><i className="bi bi-calendar-check me-1" aria-hidden="true" />Current FY</Button>
+                                <Button size="sm" variant="outline" onClick={setPreviousFinancialYear}><i className="bi bi-calendar3 me-1" aria-hidden="true" />Previous FY</Button>
+                                <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={clearDateFilter} disabled={!filters.purchase_date_from && !filters.purchase_date_to}><i className="bi bi-x-circle me-1" aria-hidden="true" />Clear</Button>
                             </div>
                         </div>
-                        <div className="col-lg-3 col-md-4">
-                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
-                                <i className="bi bi-calendar-check me-1"></i>From Date
-                            </label>
-                            <input
-                                type="date"
-                                className="form-control"
-                                value={filters.purchase_date_from}
-                                onChange={(e) => handleFilterChange('purchase_date_from', e.target.value)}
-                                style={{ borderColor: 'var(--tb-border-strong)', fontSize: 15 }}
-                            />
-                        </div>
-                        <div className="col-lg-3 col-md-4">
-                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>
-                                <i className="bi bi-calendar-x me-1"></i>To Date
-                            </label>
-                            <input
-                                type="date"
-                                className="form-control"
-                                value={filters.purchase_date_to}
-                                onChange={(e) => handleFilterChange('purchase_date_to', e.target.value)}
-                                style={{ borderColor: 'var(--tb-border-strong)', fontSize: 15 }}
-                            />
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <div>
+                                <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><i className="bi bi-calendar-check me-1" aria-hidden="true" />From Date</label>
+                                <Input type="date" value={filters.purchase_date_from} onChange={(e) => handleFilterChange('purchase_date_from', e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><i className="bi bi-calendar-x me-1" aria-hidden="true" />To Date</label>
+                                <Input type="date" value={filters.purchase_date_to} onChange={(e) => handleFilterChange('purchase_date_to', e.target.value)} />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -654,11 +555,9 @@ export default function LicenseLedger() {
             <div className="card">
                 <div className="card-body p-0">
                     {companyWiseLoading ? (
-                        <div className="text-center py-5">
-                            <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
-                                <span className="visually-hidden">Loading...</span>
-                            </div>
-                            <p className="text-muted mt-3 mb-0">Loading license-wise ledger...</p>
+                        <div className="flex flex-col items-center gap-2 py-10 text-center">
+                            <span className="inline-block size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
+                            <p className="text-sm text-muted-foreground">Loading license-wise ledger…</p>
                         </div>
                     ) : companyWiseData ? (
                         <LicenseWiseLedger

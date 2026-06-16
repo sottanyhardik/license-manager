@@ -476,7 +476,7 @@ export default function ItemPivotReport() {
                                 {hasActiveFilters && (
                                     <button
                                         type="button"
-                                        className="btn btn-outline-secondary btn-sm"
+                                        className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted cursor-pointer"
                                         onClick={handleClearFilters}
                                     >
                                         <i className="bi bi-x-circle me-1"></i>
@@ -485,8 +485,8 @@ export default function ItemPivotReport() {
                                 )}
                             </div>
                             <div style={{ padding: '14px 16px' }}>
-                                <div className="row g-3">
-                                    <div className="col-lg-3 col-md-6">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                    <div>
                                         <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-currency-dollar me-1"></i>
                                             Minimum Balance (CIF)
@@ -507,7 +507,7 @@ export default function ItemPivotReport() {
                                         </select>
                                     </div>
 
-                                    <div className="col-lg-3 col-md-6">
+                                    <div>
                                         <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-calendar-check me-1"></i>
                                             License Status
@@ -524,7 +524,7 @@ export default function ItemPivotReport() {
                                         </select>
                                     </div>
 
-                                    <div className="col-lg-3 col-md-6">
+                                    <div>
                                         <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-cart-check me-1"></i>
                                             Purchase Status
@@ -545,7 +545,7 @@ export default function ItemPivotReport() {
                                         />
                                     </div>
 
-                                    <div className="col-lg-3 col-md-6">
+                                    <div>
                                         <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-calendar-range me-1"></i>
                                             Expiry Date From
@@ -558,7 +558,7 @@ export default function ItemPivotReport() {
                                         />
                                     </div>
 
-                                    <div className="col-lg-3 col-md-6">
+                                    <div>
                                         <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-calendar-range me-1"></i>
                                             Expiry Date To
@@ -571,7 +571,7 @@ export default function ItemPivotReport() {
                                         />
                                     </div>
 
-                                    <div className="col-lg-3 col-md-6">
+                                    <div>
                                         <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-building me-1"></i>
                                             Include Companies
@@ -590,7 +590,7 @@ export default function ItemPivotReport() {
                                         </div>
                                     </div>
 
-                                    <div className="col-lg-3 col-md-6">
+                                    <div>
                                         <label className="form-label fw-bold mb-2">
                                             <i className="bi bi-dash-circle me-1"></i>
                                             Exclude Companies
@@ -1464,7 +1464,7 @@ export default function ItemPivotReport() {
                                         <div className="row">
                                             {/* Notes Section */}
                                             {reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 && (
-                                                <div className="col-md-6 mb-3 mb-md-0">
+                                                <div>
                                                     <h6 className="text-primary mb-3">
                                                         <i className="bi bi-sticky-fill me-2"></i>
                                                         Notes
@@ -1488,7 +1488,7 @@ export default function ItemPivotReport() {
 
                                             {/* Conditions Section */}
                                             {reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0 && (
-                                                <div className="col-md-6">
+                                                <div>
                                                     <h6 className="text-warning mb-3">
                                                         <i className="bi bi-exclamation-triangle-fill me-2"></i>
                                                         Conditions

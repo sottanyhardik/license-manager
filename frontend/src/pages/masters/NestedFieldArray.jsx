@@ -539,6 +539,16 @@ export default function NestedFieldArray({
         },
     };
 
+    // Map Bootstrap col-md-N → Tailwind sm:col-span-N (12-col grid)
+    const colToSpan = (cls) => {
+        const m = (cls || '').match(/col(?:-md)?-(\d+)/);
+        if (!m) return 'sm:col-span-4'; // default ~col-md-4
+        const n = parseInt(m[1]);
+        // Bootstrap col-12 → full width; col-md-2 → 2 spans; etc.
+        const span = n === 12 ? 'col-span-full' : `sm:col-span-${n}`;
+        return span;
+    };
+
     const getItemTitle = (item) => {
         if (fieldKey === 'import_license') {
             const parts = [];
@@ -580,124 +590,111 @@ export default function NestedFieldArray({
 
     return (
         <div className="mb-4">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <h6 className="mb-0 fw-semibold" style={{ color: 'var(--tb-text)' }}>
-                        <i className="bi bi-table me-2" style={{ color: 'var(--tb-brand)' }}></i>
-                        {sectionLabel}
-                        {value.length > 0 && (
-                            <span className="badge ms-2" style={{ backgroundColor: 'var(--tb-brand-100)', color: 'var(--tb-brand)', fontSize: 11 }}>
-                                {value.length}
-                            </span>
-                        )}
-                    </h6>
-                </div>
-                <button
-                    type="button"
-                    className="btn btn-sm btn-outline-success"
-                    onClick={handleAdd}
-                    style={{ borderRadius: 'var(--tb-r-md)' }}
-                >
-                    <i className="bi bi-plus-lg me-1"></i>Add Item
+            <div className="mb-3 flex items-center justify-between">
+                <h6 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <i className="bi bi-table text-primary" aria-hidden="true" />
+                    {sectionLabel}
+                    {value.length > 0 && (
+                        <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{value.length}</span>
+                    )}
+                </h6>
+                <button type="button" onClick={handleAdd} className="flex items-center gap-1.5 rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success transition-colors hover:bg-success/20 cursor-pointer">
+                    <i className="bi bi-plus-lg" aria-hidden="true" />Add Item
                 </button>
             </div>
 
             {value.length === 0 ? (
-                <div className="text-center py-4" style={{ border: '2px dashed #d1d5db', borderRadius: 'var(--tb-r-md)', color: 'var(--text-secondary)' }}>
-                    <i className="bi bi-inbox d-block mb-1" style={{ fontSize: '1.5rem', opacity: 0.5 }}></i>
-                    <small>No items yet — click <strong>Add Item</strong> to add the first one</small>
+                <div className="rounded-lg border-2 border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                    <i className="bi bi-inbox mb-1 block text-2xl opacity-50" aria-hidden="true" />
+                    No items yet — click <strong>Add Item</strong> to add the first one
                 </div>
             ) : (
-                <div className="d-flex flex-column gap-2">
+                <div className="flex flex-col gap-2">
                     {value.map((item, index) => {
                         const isFrozen = fieldKey === 'item_details' && item.is_frozen;
                         return (
-                        <div key={index} className="card" style={{ borderRadius: 'var(--tb-r-md)', opacity: isFrozen ? 0.92 : 1 }}>
-                            <div className="card-header border-bottom d-flex justify-content-between align-items-center py-2 px-3" style={{ borderRadius: '10px 10px 0 0', background: isFrozen ? 'var(--tb-brand-50)' : 'white' }}>
-                                <span className="fw-semibold small d-flex align-items-center gap-2" style={{ color: 'var(--tb-brand)', minWidth: 0 }}>
-                                    <i className="bi bi-hash flex-shrink-0"></i>
-                                    <span className="flex-shrink-0">Item {index + 1}</span>
+                        <div key={index} className="card" style={{ opacity: isFrozen ? 0.92 : 1 }}>
+                            <div className="flex items-center justify-between border-b border-border px-3 py-2" style={{ background: isFrozen ? 'var(--tb-brand-50)' : 'var(--tb-card-bg)' }}>
+                                <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-primary">
+                                    <i className="bi bi-hash shrink-0" aria-hidden="true" />
+                                    <span className="shrink-0">Item {index + 1}</span>
                                     {isFrozen && (
-                                        <span className="badge" style={{ background: 'var(--tb-brand-100)', color: 'var(--tb-brand-hover)', fontSize: 10.5, fontWeight: 600 }}>
-                                            <i className="bi bi-lock-fill me-1"></i>Ledger
+                                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-primary">
+                                            <i className="bi bi-lock-fill me-1" aria-hidden="true" />Ledger
                                         </span>
                                     )}
-                                    {/* Condition badge: licence-level Import Items, BOE rows, and trade lines */}
                                     {(fieldKey === "import_license" || fieldKey === "item_details" || fieldKey === "lines") && (
                                         <ConditionBadge type={item.condition_type || itemConditionsBySerial?.[item.serial_number]} />
                                     )}
                                     {getItemTitle(item) && (
-                                        <span className="fw-normal text-muted text-truncate" style={{ fontSize: 12, maxWidth: 300 }}>
+                                        <span className="truncate text-xs font-normal text-muted-foreground" style={{ maxWidth: 300 }}>
                                             — {getItemTitle(item)}
                                         </span>
                                     )}
                                 </span>
-                                <div className="d-flex gap-1 flex-shrink-0">
+                                <div className="flex shrink-0 gap-1">
                                     {fieldKey === "export_license" && onFetchImports && (() => {
                                         const canFetch = item.norm_class && item.start_serial_number && item.net_quantity;
                                         return (
                                             <button
                                                 type="button"
-                                                className={`btn btn-sm ${canFetch ? 'btn-primary' : 'btn-outline-secondary'}`}
                                                 onClick={() => onFetchImports(index, item)}
                                                 disabled={!canFetch}
                                                 title={!canFetch ? "Fill Norm Class, Net Quantity and Start Serial first" : "Auto-fill import items from SION norm"}
-                                                style={{ borderRadius: 'var(--tb-r-sm)', fontSize: 12 }}
+                                                className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium cursor-pointer ${canFetch ? 'bg-primary text-primary-foreground' : 'border border-border text-muted-foreground'}`}
                                             >
-                                                <i className="bi bi-magic me-1"></i>Fetch Imports
+                                                <i className="bi bi-magic" aria-hidden="true" />Fetch Imports
                                             </button>
                                         );
                                     })()}
                                     <button
                                         type="button"
-                                        className="btn btn-sm btn-outline-danger"
                                         onClick={() => handleRemove(index)}
                                         disabled={isFrozen}
                                         title={isFrozen ? "Ledger rows cannot be deleted" : "Remove item"}
-                                        style={{ borderRadius: 'var(--tb-r-sm)' }}
+                                        className="flex size-7 cursor-pointer items-center justify-center rounded border border-destructive/30 text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                        <i className={`bi ${isFrozen ? 'bi-lock' : 'bi-trash'}`}></i>
+                                        <i className={`bi ${isFrozen ? 'bi-lock' : 'bi-trash'} text-xs`} aria-hidden="true" />
                                     </button>
                                 </div>
                             </div>
-                            <div className="card-body p-3">
+                            <div className="p-3">
                                 {isFrozen && (
-                                    <div className="alert d-flex align-items-center gap-2 py-2 mb-3" style={{ background: 'var(--tb-brand-100)', border: '1px solid #c7d2fe', borderRadius: 'var(--tb-r-md)', color: 'var(--tb-brand-hover)' }}>
-                                        <i className="bi bi-lock-fill flex-shrink-0"></i>
-                                        <small>This row was imported from the ledger and is read-only.</small>
+                                    <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-[12.5px] text-primary">
+                                        <i className="bi bi-lock-fill shrink-0" aria-hidden="true" />
+                                        This row was imported from the ledger and is read-only.
                                     </div>
                                 )}
                                 {errors[index]?.non_field_errors && (
-                                    <div className="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3">
-                                        <i className="bi bi-exclamation-circle-fill flex-shrink-0"></i>
-                                        <div className="small">
-                                            {errors[index].non_field_errors.map((e, i) => <div key={i}>{e}</div>)}
-                                        </div>
+                                    <div className="mb-3 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive">
+                                        <i className="bi bi-exclamation-circle-fill shrink-0" aria-hidden="true" />
+                                        <div>{errors[index].non_field_errors.map((e, i) => <div key={i}>{e}</div>)}</div>
                                     </div>
                                 )}
 
-                                <div className="row g-3">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
                                     {fields
                                         .filter(f => f.name !== "id" && f.name !== "is_frozen")
                                         .map((field) => {
                                             const isTextarea = field.type === "textarea" ||
                                                 (field.name.includes("note") || field.name.includes("comment"));
-                                            const colClass = FIELD_WIDTHS[fieldKey]?.[field.name]
+                                            const bsCol = FIELD_WIDTHS[fieldKey]?.[field.name]
                                                 || (isTextarea ? "col-12" : "col-md-4");
+                                            const colClass = colToSpan(bsCol);
                                             return (
                                                 <div key={field.name} className={colClass} style={{ pointerEvents: isFrozen ? 'none' : undefined, opacity: isFrozen ? 0.7 : undefined }}>
-                                                    <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                                                    <label className="mb-1 block text-[12px] font-semibold text-muted-foreground">
                                                         {field.label || field.name.replace(/_/g, ' ')}
-                                                        {field.required && <span className="text-danger ms-1">*</span>}
+                                                        {field.required && <span className="ml-0.5 text-destructive">*</span>}
                                                     </label>
                                                     {renderNestedField(field, item, index, isFrozen)}
                                                     {errors[index]?.[field.name] && (
-                                                        <div className="invalid-feedback d-block" style={{ fontSize: 12 }}>
-                                                            <i className="bi bi-exclamation-circle me-1"></i>
+                                                        <p className="mt-0.5 text-[11.5px] text-destructive">
+                                                            <i className="bi bi-exclamation-circle me-1" aria-hidden="true" />
                                                             {Array.isArray(errors[index][field.name])
                                                                 ? errors[index][field.name].join(', ')
                                                                 : errors[index][field.name]}
-                                                        </div>
+                                                        </p>
                                                     )}
                                                 </div>
                                             );
@@ -716,32 +713,29 @@ export default function NestedFieldArray({
                 const totCif = value.reduce((s, i) => s + (parseFloat(i.cif_inr) || 0), 0);
                 const totAmt = value.reduce((s, i) => s + (parseFloat(i.amount_inr) || 0), 0);
                 return (
-                    <div className="d-flex gap-4 justify-content-end align-items-center mt-2 px-2 py-2"
-                        style={{ background: 'var(--tb-sunken)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #e5e7eb' }}>
-                        <span className="text-muted">Totals:</span>
-                        <span><span className="text-muted me-1">Qty</span><strong>{totQty.toFixed(3)} kg</strong></span>
-                        <span><span className="text-muted me-1">CIF INR</span><strong>₹{totCif.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
-                        <span style={{ color: 'var(--tb-success-text)' }}><span className="text-muted me-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                    <div className="mt-2 flex items-center justify-end gap-4 rounded-md border-t-2 border-border bg-muted/40 px-2 py-2 text-[13px]">
+                        <span className="text-muted-foreground">Totals:</span>
+                        <span><span className="text-muted-foreground mr-1">Qty</span><strong>{totQty.toFixed(3)} kg</strong></span>
+                        <span><span className="text-muted-foreground mr-1">CIF INR</span><strong>₹{totCif.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
                     </div>
                 );
             })()}
             {value.length > 0 && fieldKey === 'incentive_lines' && (() => {
                 const totAmt = value.reduce((s, i) => s + (parseFloat(i.amount_inr) || 0), 0);
                 return (
-                    <div className="d-flex gap-4 justify-content-end align-items-center mt-2 px-2 py-2"
-                        style={{ background: 'var(--tb-sunken)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #e5e7eb' }}>
-                        <span className="text-muted">Total:</span>
-                        <span style={{ color: 'var(--tb-success-text)' }}><span className="text-muted me-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                    <div className="mt-2 flex items-center justify-end gap-4 rounded-md border-t-2 border-border bg-muted/40 px-2 py-2 text-[13px]">
+                        <span className="text-muted-foreground">Total:</span>
+                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
                     </div>
                 );
             })()}
             {value.length > 0 && fieldKey === 'payments' && (() => {
                 const totPaid = value.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
                 return (
-                    <div className="d-flex gap-4 justify-content-end align-items-center mt-2 px-2 py-2"
-                        style={{ background: 'var(--tb-success-soft)', borderRadius: 8, fontSize: '0.83rem', borderTop: '2px solid #a7f3d0' }}>
-                        <span className="text-muted">Total Paid:</span>
-                        <span style={{ color: 'var(--tb-success-text)', fontWeight: '700' }}>₹{totPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    <div className="mt-2 flex items-center justify-end gap-4 rounded-md border-t-2 border-success/40 bg-success/10 px-2 py-2 text-[13px]">
+                        <span className="text-muted-foreground">Total Paid:</span>
+                        <strong className="text-success">₹{totPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
                     </div>
                 );
             })()}

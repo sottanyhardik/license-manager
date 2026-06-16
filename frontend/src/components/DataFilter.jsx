@@ -1,74 +1,51 @@
-import {useState} from "react";
+import { useState } from "react";
+import { Search, Filter, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 
-/**
- * Reusable DataFilter Component
- *
- * Props:
- * - filters: array of filter field definitions from backend
- * - searchFields: array of searchable fields
- * - onFilterChange: callback function(filterParams)
- */
-export default function DataFilter({filters = [], searchFields = [], onFilterChange}) {
+export default function DataFilter({ filters = [], searchFields = [], onFilterChange }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [filterValues, setFilterValues] = useState({});
 
-    const handleSearchChange = (e) => {
-        setSearchTerm(e.target.value);
-    };
+    const handleFilterChange = (field, value) =>
+        setFilterValues((prev) => ({ ...prev, [field]: value }));
 
-    const handleFilterChange = (field, value) => {
-        setFilterValues(prev => ({
-            ...prev,
-            [field]: value
-        }));
-    };
-
-    const handleApplyFilters = () => {
-        const params = {...filterValues};
-        if (searchTerm) {
-            params.search = searchTerm;
-        }
+    const handleApply = () => {
+        const params = { ...filterValues };
+        if (searchTerm) params.search = searchTerm;
         onFilterChange(params);
     };
 
-    const handleResetFilters = () => {
+    const handleReset = () => {
         setSearchTerm("");
         setFilterValues({});
         onFilterChange({});
     };
 
     return (
-        <div className="card mb-3">
-            <div className="card-body">
-                <h6 className="card-title mb-3">
-                    <i className="bi bi-funnel me-2"></i>
-                    Filters
+        <Card className="mb-3">
+            <CardContent className="pt-4">
+                <h6 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                    <Filter className="size-4" />Filters
                 </h6>
 
-                <div className="row g-3">
-                    {/* Search Field */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {searchFields.length > 0 && (
-                        <div className="col-md-4">
-                            <label className="form-label">Search</label>
-                            <input
-                                type="text"
-                                className="form-control"
+                        <div>
+                            <Label className="mb-1.5">Search</Label>
+                            <Input
                                 placeholder={`Search by ${searchFields.join(", ")}`}
                                 value={searchTerm}
-                                onChange={handleSearchChange}
+                                onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
                     )}
-
-                    {/* Dynamic Filter Fields */}
                     {filters.map((field) => (
-                        <div key={field} className="col-md-4">
-                            <label className="form-label text-capitalize">
-                                {field.replace(/_/g, " ")}
-                            </label>
-                            <input
-                                type="text"
-                                className="form-control"
+                        <div key={field}>
+                            <Label className="mb-1.5 capitalize">{field.replace(/_/g, " ")}</Label>
+                            <Input
                                 placeholder={`Filter by ${field.replace(/_/g, " ")}`}
                                 value={filterValues[field] || ""}
                                 onChange={(e) => handleFilterChange(field, e.target.value)}
@@ -77,23 +54,15 @@ export default function DataFilter({filters = [], searchFields = [], onFilterCha
                     ))}
                 </div>
 
-                <div className="mt-3">
-                    <button
-                        className="btn btn-primary me-2"
-                        onClick={handleApplyFilters}
-                    >
-                        <i className="bi bi-search me-1"></i>
-                        Apply
-                    </button>
-                    <button
-                        className="btn btn-secondary"
-                        onClick={handleResetFilters}
-                    >
-                        <i className="bi bi-x-circle me-1"></i>
-                        Reset
-                    </button>
+                <div className="mt-3 flex gap-2">
+                    <Button onClick={handleApply}>
+                        <Search className="size-4" />Apply
+                    </Button>
+                    <Button variant="outline" onClick={handleReset}>
+                        <X className="size-4" />Reset
+                    </Button>
                 </div>
-            </div>
-        </div>
+            </CardContent>
+        </Card>
     );
 }

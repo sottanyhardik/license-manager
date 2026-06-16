@@ -14,11 +14,10 @@ export function PageLoader() {
                 gap: 12,
             }}
         >
-            <div
-                className="spinner-border"
+            <span
+                className="inline-block size-7 animate-spin rounded-full border-2 border-primary border-t-transparent"
                 role="status"
                 aria-label="Loading"
-                style={{ width: 28, height: 28 }}
             />
             <span style={{ fontSize: 13, color: "var(--tb-text-tertiary)" }}>Loading…</span>
         </div>
@@ -113,7 +112,7 @@ export function InlineLoader({ text = "Loading…" }) {
     return (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--tb-text-secondary)", fontSize: 13 }}>
             <span
-                className="spinner-border spinner-border-sm"
+                className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
                 role="status"
                 aria-hidden="true"
                 style={{ width: 13, height: 13 }}

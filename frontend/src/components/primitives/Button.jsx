@@ -52,7 +52,7 @@ const Button = forwardRef(function Button(
         >
             {loading && (
                 <span
-                    className="spinner-border spinner-border-sm"
+                    className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
                     role="status"
                     aria-hidden="true"
                     style={{ width: 14, height: 14, marginRight: iconOnly ? 0 : 6 }}

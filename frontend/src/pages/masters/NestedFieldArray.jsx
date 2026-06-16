@@ -6,6 +6,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import api from "../../api/axios";
 import {formatDateForInput, parseDate as parseDateUtil} from "../../utils/dateFormatter";
+import { AlertCircle, Calculator, Hash, Inbox, Lock, Plus, Table, Trash2, Wand2 } from "lucide-react";
 
 /**
  * NestedFieldArray Component
@@ -152,7 +153,7 @@ export default function NestedFieldArray({
                 <div className="flex h-8 items-center justify-between rounded-md border border-input bg-card px-2 py-1 text-sm"
                     style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand-hover)', fontWeight: '600', borderColor: 'var(--tb-brand-200)', cursor: 'default' }}>
                     <span>{displayVal}</span>
-                    <i className="bi bi-lock-fill" style={{ fontSize: 11, opacity: 0.5, color: 'var(--tb-info)' }}></i>
+                    <Lock className="size-4" aria-hidden="true" />
                 </div>
             );
         }
@@ -292,7 +293,7 @@ export default function NestedFieldArray({
                 <div className="flex h-8 items-center justify-between rounded-md border border-input bg-card px-2 py-1 text-sm"
                     style={{ background: 'var(--tb-success-soft)', color: 'var(--tb-success-text)', fontWeight: '600', borderColor: 'var(--tb-success-border)', cursor: 'default' }}>
                     <span>{displayVal}</span>
-                    <i className="bi bi-calculator text-success" style={{ fontSize: 11, opacity: 0.6 }}></i>
+                    <Calculator className="size-4" aria-hidden="true" />
                 </div>
             );
         }
@@ -300,7 +301,7 @@ export default function NestedFieldArray({
         // Handle date fields with DatePicker
         if (field.type === "date" || field.name.includes("date") || field.name.includes("_at") || field.name.includes("_on")) {
             return (
-                <div className="w-100">
+                <div className="w-full">
                     <DatePicker
                         selected={parseDate(fieldValue)}
                         onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}
@@ -592,20 +593,20 @@ export default function NestedFieldArray({
         <div className="mb-4">
             <div className="mb-3 flex items-center justify-between">
                 <h6 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <i className="bi bi-table text-primary" aria-hidden="true" />
+                    <Table className="size-4" aria-hidden="true" />
                     {sectionLabel}
                     {value.length > 0 && (
                         <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{value.length}</span>
                     )}
                 </h6>
                 <button type="button" onClick={handleAdd} className="flex items-center gap-1.5 rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success transition-colors hover:bg-success/20 cursor-pointer">
-                    <i className="bi bi-plus-lg" aria-hidden="true" />Add Item
+                    <Plus className="size-4" aria-hidden="true" />Add Item
                 </button>
             </div>
 
             {value.length === 0 ? (
                 <div className="rounded-lg border-2 border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                    <i className="bi bi-inbox mb-1 block text-2xl opacity-50" aria-hidden="true" />
+                    <Inbox className="size-4" aria-hidden="true" />
                     No items yet — click <strong>Add Item</strong> to add the first one
                 </div>
             ) : (
@@ -616,11 +617,11 @@ export default function NestedFieldArray({
                         <div key={index} className="card" style={{ opacity: isFrozen ? 0.92 : 1 }}>
                             <div className="flex items-center justify-between border-b border-border px-3 py-2" style={{ background: isFrozen ? 'var(--tb-brand-50)' : 'var(--tb-card-bg)' }}>
                                 <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-primary">
-                                    <i className="bi bi-hash shrink-0" aria-hidden="true" />
+                                    <Hash className="size-4" aria-hidden="true" />
                                     <span className="shrink-0">Item {index + 1}</span>
                                     {isFrozen && (
                                         <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-primary">
-                                            <i className="bi bi-lock-fill me-1" aria-hidden="true" />Ledger
+                                            <Lock className="size-4" aria-hidden="true" />Ledger
                                         </span>
                                     )}
                                     {(fieldKey === "import_license" || fieldKey === "item_details" || fieldKey === "lines") && (
@@ -643,7 +644,7 @@ export default function NestedFieldArray({
                                                 title={!canFetch ? "Fill Norm Class, Net Quantity and Start Serial first" : "Auto-fill import items from SION norm"}
                                                 className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium cursor-pointer ${canFetch ? 'bg-primary text-primary-foreground' : 'border border-border text-muted-foreground'}`}
                                             >
-                                                <i className="bi bi-magic" aria-hidden="true" />Fetch Imports
+                                                <Wand2 className="size-4" aria-hidden="true" />Fetch Imports
                                             </button>
                                         );
                                     })()}
@@ -654,20 +655,20 @@ export default function NestedFieldArray({
                                         title={isFrozen ? "Ledger rows cannot be deleted" : "Remove item"}
                                         className="flex size-7 cursor-pointer items-center justify-center rounded border border-destructive/30 text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                        <i className={`bi ${isFrozen ? 'bi-lock' : 'bi-trash'} text-xs`} aria-hidden="true" />
+                                        {isFrozen ? <Lock className="size-3" aria-hidden="true" /> : <Trash2 className="size-3" aria-hidden="true" />}
                                     </button>
                                 </div>
                             </div>
                             <div className="p-3">
                                 {isFrozen && (
                                     <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-[12.5px] text-primary">
-                                        <i className="bi bi-lock-fill shrink-0" aria-hidden="true" />
+                                        <Lock className="size-4" aria-hidden="true" />
                                         This row was imported from the ledger and is read-only.
                                     </div>
                                 )}
                                 {errors[index]?.non_field_errors && (
                                     <div className="mb-3 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive">
-                                        <i className="bi bi-exclamation-circle-fill shrink-0" aria-hidden="true" />
+                                        <AlertCircle className="size-4" aria-hidden="true" />
                                         <div>{errors[index].non_field_errors.map((e, i) => <div key={i}>{e}</div>)}</div>
                                     </div>
                                 )}
@@ -690,7 +691,7 @@ export default function NestedFieldArray({
                                                     {renderNestedField(field, item, index, isFrozen)}
                                                     {errors[index]?.[field.name] && (
                                                         <p className="mt-0.5 text-[11.5px] text-destructive">
-                                                            <i className="bi bi-exclamation-circle me-1" aria-hidden="true" />
+                                                            <AlertCircle className="size-4" aria-hidden="true" />
                                                             {Array.isArray(errors[index][field.name])
                                                                 ? errors[index][field.name].join(', ')
                                                                 : errors[index][field.name]}

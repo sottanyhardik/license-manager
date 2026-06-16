@@ -39,7 +39,7 @@ function ToolbarSearch({ value, onChange, placeholder = "Search…", style }) {
     return (
         <div className="input-group input-group-sm" style={{ maxWidth: 280, ...style }}>
             <span className="input-group-text" aria-hidden="true">
-                <i className="bi bi-search" />
+                <Search className="size-4" aria-hidden="true" />
             </span>
             <input
                 type="search"

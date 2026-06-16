@@ -8,7 +8,7 @@ import { openPdfPreview } from '../utils/pdfPreview';
 import ConditionBadge from './ConditionBadge';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FileText, FileSpreadsheet, X, Loader2 } from "lucide-react";
+import { FileText, FileSpreadsheet, X, Loader2, Check, CheckCircle, Inbox, Package, PenSquare, Pencil } from "lucide-react";
 
 // License Marking values map directly to the backend `condition_type` field.
 // "" is rendered as "None" and clears the restriction.
@@ -79,7 +79,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                                 border: 'none'
                             }}
                         >
-                            <i className="bi bi-check-circle me-1"></i>
+                            <CheckCircle className="size-4 mr-1" />
                             {saving ? 'Saving...' : 'Save'}
                         </button>
                         <button
@@ -87,7 +87,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                             onClick={handleCancel}
                             disabled={saving}
                         >
-                            <i className="bi bi-x-lg me-1"></i>Cancel
+                            <X className="size-4 mr-1" />Cancel
                         </button>
                     </div>
                 </div>
@@ -530,7 +530,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             marginBottom: '0',
                                             flex: 1
                                         }}>
-                                            <i className="bi bi-file-earmark-text me-2"></i>
+                                            <FileText className="size-4 mr-2" />
                                             Condition Sheet
                                         </h5>
                                     </div>
@@ -561,7 +561,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             marginBottom: '0',
                                             flex: 1
                                         }}>
-                                            <i className="bi bi-pencil-square me-2"></i>
+                                            <PenSquare className="size-4 mr-2" />
                                             Notes
                                         </h5>
                                     </div>
@@ -590,7 +590,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             borderBottom: '2px solid var(--tb-brand)',
                                             paddingBottom: '0.5rem'
                                         }}>
-                                            <i className="bi bi-box-seam me-2"></i>
+                                            <Package className="size-4 mr-2" />
                                             Export Items
                                         </h5>
                                         <table className="table table-hover" style={{
@@ -731,7 +731,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                             borderBottom: '2px solid var(--tb-brand)',
                                             paddingBottom: '0.5rem'
                                         }}>
-                                            <i className="bi bi-inbox me-2"></i>
+                                            <Inbox className="size-4 mr-2" />
                                             Import Items
                                         </h5>
                                         <div className="table-responsive">
@@ -846,14 +846,14 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 onClick={(e) => handleSaveItems(e, item)}
                                                                                 disabled={saving}
                                                                             >
-                                                                                <i className="bi bi-check"></i>
+                                                                                <Check className="size-4" />
                                                                             </button>
                                                                             <button
                                                                                 className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                                                                 onClick={handleCancelEdit}
                                                                                 disabled={saving}
                                                                             >
-                                                                                <i className="bi bi-x"></i>
+                                                                                <X className="size-4" />
                                                                             </button>
                                                                         </div>
                                                                     ) : (
@@ -868,7 +868,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                     : '-'}
                                                                             </span>
                                                                             <i
-                                                                                className="bi bi-pencil text-muted ms-2"
+                                                                                className="text-muted-foreground ml-2 size-3.5"
                                                                                 onClick={(e) => handleEditClick(e, item)}
                                                                                 style={{ fontSize: 12.5 }}
                                                                             ></i>

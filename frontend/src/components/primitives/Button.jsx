@@ -37,7 +37,7 @@ const Button = forwardRef(function Button(
         "btn",
         `btn-${safeVariant}`,
         size === "sm" ? "btn-sm" : size === "lg" ? "btn-lg" : "",
-        block ? "w-100" : "",
+        block ? "w-full" : "",
         className,
     ].filter(Boolean).join(" ");
 

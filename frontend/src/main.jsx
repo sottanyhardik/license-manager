@@ -6,7 +6,6 @@ import App from "./App";
 import "./index.css";
 
 // Bootstrap Icons — keep for bi-* icon references still in the codebase
-import "bootstrap-icons/font/bootstrap-icons.css";
 
 // Design system tokens + component overrides
 import "./theme/tabler.css";

@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { masterEntities, reportEntities } from "../routes/config";
+import { Search } from "lucide-react";
 
 const BASE_COMMANDS = [
     { id: "dashboard",      label: "Dashboard",          icon: "speedometer2",          path: "/dashboard",        group: "Navigation" },
@@ -98,7 +99,7 @@ export default function CommandPalette({ open, onClose }) {
             <div className="cmd-panel" onKeyDown={handleKey}>
                 {/* Search row */}
                 <div className="cmd-search-row">
-                    <i className="bi bi-search cmd-search-icon" aria-hidden="true" />
+                    <Search className="size-4" aria-hidden="true" />
                     <input
                         ref={inputRef}
                         className="cmd-input"

@@ -7,6 +7,7 @@ import { ROLE_LABELS, getRoleBadgeProps } from "../utils/roleConstants";
 import { PageHeader, Button, Skeleton } from "../components/ui";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Pencil, Trash2, Users, X } from "lucide-react";
 
 function fmtDate(val) {
     if (!val) return "—";
@@ -134,7 +135,7 @@ export default function Settings() {
 
             <div className="card">
                 <div className="card-header" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <i className="bi bi-people" style={{ color: "var(--tb-brand)", fontSize: 15 }} aria-hidden="true" />
+                    <Users className="size-4" aria-hidden="true" />
                     <span style={{ fontSize: 13.5, fontWeight: 600 }}>User Management</span>
                     <span style={{ fontSize: 11, background: "var(--tb-brand-50)", color: "var(--tb-brand-active)", border: "1px solid var(--tb-brand-100)", borderRadius: "var(--tb-r-pill)", padding: "1px 8px", fontWeight: 500, marginLeft: 4 }}>
                         {users.length}
@@ -186,14 +187,14 @@ export default function Settings() {
                                         <td style={{ fontSize: 12, color: "var(--tb-text-secondary)", whiteSpace: "nowrap" }}>{fmtDate(user.date_joined)}</td>
                                         <td className="text-end" style={{ paddingRight: 16 }}>
                                             <div style={{ display: "inline-flex", gap: 4 }}>
-                                                <Button variant="outline" size="sm" onClick={() => handleOpenModal(user)} title="Edit" aria-label={`Edit ${user.username}`}><i className="bi bi-pencil" aria-hidden="true" /></Button>
-                                                <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => handleDelete(user.id)} title="Delete" aria-label={`Delete ${user.username}`}><i className="bi bi-trash" aria-hidden="true" /></Button>
+                                                <Button variant="outline" size="sm" onClick={() => handleOpenModal(user)} title="Edit" aria-label={`Edit ${user.username}`}><Pencil className="size-4" aria-hidden="true" /></Button>
+                                                <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => handleDelete(user.id)} title="Delete" aria-label={`Delete ${user.username}`}><Trash2 className="size-4" aria-hidden="true" /></Button>
                                             </div>
                                         </td>
                                     </tr>
                                 ))}
                                 {users.length === 0 && (
-                                    <tr><td colSpan={7} style={{ textAlign: "center", padding: "48px 24px", color: "var(--tb-text-tertiary)" }}><i className="bi bi-people" style={{ fontSize: 28, display: "block", marginBottom: 8, color: "var(--tb-text-muted)" }} />No users found</td></tr>
+                                    <tr><td colSpan={7} style={{ textAlign: "center", padding: "48px 24px", color: "var(--tb-text-tertiary)" }}><Users className="size-4" aria-hidden="true" />No users found</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -211,7 +212,7 @@ export default function Settings() {
                                 </div>
                                 <h5 id="user-modal-title" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>{editingUser ? "Edit User" : "Add New User"}</h5>
                             </div>
-                            <button type="button" onClick={handleCloseModal} aria-label="Close" style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--tb-text-tertiary)", fontSize: 20, lineHeight: 1, padding: 4, borderRadius: "var(--tb-r-sm)" }}><i className="bi bi-x" aria-hidden="true" /></button>
+                            <button type="button" onClick={handleCloseModal} aria-label="Close" style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--tb-text-tertiary)", fontSize: 20, lineHeight: 1, padding: 4, borderRadius: "var(--tb-r-sm)" }}><X className="size-4" aria-hidden="true" /></button>
                         </div>
                         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
                             <div style={{ padding: "20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>

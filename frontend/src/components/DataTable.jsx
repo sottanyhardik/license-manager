@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
 import { formatDate } from "../utils/dateFormatter";
+import { Check, Inbox, Pencil, Trash2, X } from "lucide-react";
 
 const NUMERIC_PATTERNS = [
     "amount", "price", "rate", "cost", "total", "subtotal",
@@ -163,11 +164,7 @@ export default function DataTable({
                     color: "var(--tb-text-tertiary)",
                 }}
             >
-                <i
-                    className="bi bi-inbox"
-                    style={{ fontSize: 36, color: "var(--tb-text-muted)", display: "block", marginBottom: 12 }}
-                    aria-hidden="true"
-                />
+                <Inbox className="size-4" aria-hidden="true" />
                 <div style={{ fontSize: 14, fontWeight: 500, color: "var(--tb-text-secondary)", marginBottom: 4 }}>
                     No records found
                 </div>
@@ -246,7 +243,7 @@ export default function DataTable({
                                                     title="Save"
                                                     style={{ padding: "2px 7px" }}
                                                 >
-                                                    <i className="bi bi-check" aria-hidden="true" />
+                                                    <Check className="size-4" aria-hidden="true" />
                                                 </button>
                                                 <button
                                                     className="flex items-center justify-center rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground cursor-pointer hover:bg-muted"
@@ -255,7 +252,7 @@ export default function DataTable({
                                                     title="Cancel"
                                                     style={{ padding: "2px 7px" }}
                                                 >
-                                                    <i className="bi bi-x" aria-hidden="true" />
+                                                    <X className="size-4" aria-hidden="true" />
                                                 </button>
                                             </div>
                                         ) : (
@@ -264,11 +261,7 @@ export default function DataTable({
                                                     ? customCellRender[col](item, value)
                                                     : formatValue(value, col, isEditableField)}
                                                 {isEditableField && typeof value !== "boolean" && (
-                                                    <i
-                                                        className="bi bi-pencil ms-2"
-                                                        aria-hidden="true"
-                                                        style={{ fontSize: "0.75rem", color: "var(--tb-text-muted)", opacity: 0.7 }}
-                                                    />
+                                                    <Pencil className="size-4" aria-hidden="true" />
                                                 )}
                                             </span>
                                         )}
@@ -300,7 +293,7 @@ export default function DataTable({
                                             aria-label={`Edit ${item.id || "record"}`}
                                             style={{ padding: "3px 8px" }}
                                         >
-                                            <i className="bi bi-pencil" aria-hidden="true" />
+                                            <Pencil className="size-4" aria-hidden="true" />
                                         </button>
                                     )}
                                     {onDelete && (
@@ -311,7 +304,7 @@ export default function DataTable({
                                             aria-label={`Delete ${item.id || "record"}`}
                                             style={{ padding: "3px 8px" }}
                                         >
-                                            <i className="bi bi-trash" aria-hidden="true" />
+                                            <Trash2 className="size-4" aria-hidden="true" />
                                         </button>
                                     )}
                                 </div>

@@ -2,6 +2,7 @@ import {Link, useLocation} from "react-router-dom";
 import {useContext, useState} from "react";
 import {masterEntities, routes, reportEntities} from "../routes/config";
 import {AuthContext} from "../context/AuthContext";
+import { BarChart3, Database, Grid3x3, Users } from "lucide-react";
 
 export default function Sidebar() {
     const location = useLocation();
@@ -37,24 +38,24 @@ export default function Sidebar() {
             background: 'var(--tb-card-bg)',
             boxShadow: '2px 0 8px rgba(0, 0, 0, 0.1)'
         }}>
-            <div className="d-flex align-items-center justify-content-center mb-4 mt-2">
-                <i className="bi bi-grid-3x3-gap-fill me-2" style={{color: 'var(--primary-light)', fontSize: '1.5rem'}}></i>
-                <h5 className="mb-0 fw-bold">Dashboard</h5>
+            <div className="flex items-center justify-center mb-4 mt-2">
+                <Grid3x3 className="size-4" aria-hidden="true" />
+                <h5 className="mb-0 font-bold">Dashboard</h5>
             </div>
 
-            <ul className="nav flex-column">
+            <ul className="nav flex-col">
                 {routes
                     .filter((r) => !r.protected)
                     .map((r) => (
                         <li key={r.path} className="nav-item mb-1">
                             <Link
-                                className={`nav-link d-flex align-items-center ${isActive(r.path) ? "active" : ""}`}
+                                className={`nav-link flex items-center ${isActive(r.path) ? "active" : ""}`}
                                 to={r.path}
                                 style={navLinkStyle(isActive(r.path))}
                                 onMouseEnter={handleMouseEnter(isActive(r.path))}
                                 onMouseLeave={handleMouseLeave(isActive(r.path))}
                             >
-                                <i className={`bi bi-${r.icon} me-2`} style={{fontSize: '1.1rem'}}/>
+                                <i className={`bi bi-${r.icon} mr-2`} style={{fontSize: '1.1rem'}}/>
                                 <span>{r.label}</span>
                             </Link>
                         </li>
@@ -63,21 +64,21 @@ export default function Sidebar() {
                 {/* Reports Dropdown */}
                 <li className="nav-item mb-1">
                     <button
-                        className={`nav-link w-100 text-start d-flex align-items-center justify-content-between ${isActive("/reports") ? "active" : ""}`}
+                        className={`nav-link w-full text-start flex items-center justify-between ${isActive("/reports") ? "active" : ""}`}
                         onClick={() => setReportsOpen(!reportsOpen)}
                         style={{ ...navLinkStyle(isActive("/reports")), border: 'none' }}
                         onMouseEnter={handleMouseEnter(isActive("/reports"))}
                         onMouseLeave={handleMouseLeave(isActive("/reports"))}
                     >
-                        <div className="d-flex align-items-center">
-                            <i className="bi bi-file-earmark-bar-graph me-2" style={{fontSize: '1.1rem'}}/>
+                        <div className="flex items-center">
+                            <BarChart3 className="size-4" aria-hidden="true" />
                             <span>Reports</span>
                         </div>
-                        <i className={`bi bi-chevron-${reportsOpen ? "up" : "down"}`} style={{fontSize: 12.5}}/>
+                        <span className="ml-auto" style={{fontSize: 12.5}}>{ reportsOpen ? "▲" : "▼" }</span>
                     </button>
 
                     {reportsOpen && (
-                        <ul className="nav flex-column ms-2 mt-1">
+                        <ul className="nav flex-col ml-2 mt-1">
                             {reportEntities.map((report) => (
                                 <li key={report.path} className="nav-item mb-1">
                                     <Link
@@ -87,7 +88,7 @@ export default function Sidebar() {
                                         onMouseEnter={handleMouseEnter(isActive(report.path))}
                                         onMouseLeave={handleMouseLeave(isActive(report.path))}
                                     >
-                                        <i className={`bi bi-${report.icon} me-2`} style={{fontSize: 14.5}}/>
+                                        <i className={`bi bi-${report.icon} mr-2`} style={{fontSize: 14.5}}/>
                                         {report.label}
                                     </Link>
                                 </li>
@@ -100,13 +101,13 @@ export default function Sidebar() {
                 {canManageUsers && canManageUsers() && (
                     <li className="nav-item mb-1">
                         <Link
-                            className={`nav-link d-flex align-items-center ${isActive('/admin/users') ? 'active' : ''}`}
+                            className={`nav-link flex items-center ${isActive('/admin/users') ? 'active' : ''}`}
                             to="/admin/users"
                             style={navLinkStyle(isActive('/admin/users'))}
                             onMouseEnter={handleMouseEnter(isActive('/admin/users'))}
                             onMouseLeave={handleMouseLeave(isActive('/admin/users'))}
                         >
-                            <i className="bi bi-people me-2" style={{fontSize: '1.1rem'}}/>
+                            <Users className="size-4" aria-hidden="true" />
                             <span>Users</span>
                         </Link>
                     </li>
@@ -115,21 +116,21 @@ export default function Sidebar() {
                 {/* Masters Dropdown */}
                 <li className="nav-item mb-1">
                     <button
-                        className={`nav-link w-100 text-start d-flex align-items-center justify-content-between ${isActive("/masters") ? "active" : ""}`}
+                        className={`nav-link w-full text-start flex items-center justify-between ${isActive("/masters") ? "active" : ""}`}
                         onClick={() => setMastersOpen(!mastersOpen)}
                         style={{ ...navLinkStyle(isActive("/masters")), border: 'none' }}
                         onMouseEnter={handleMouseEnter(isActive("/masters"))}
                         onMouseLeave={handleMouseLeave(isActive("/masters"))}
                     >
-                        <div className="d-flex align-items-center">
-                            <i className="bi bi-database me-2" style={{fontSize: '1.1rem'}}/>
+                        <div className="flex items-center">
+                            <Database className="size-4" aria-hidden="true" />
                             <span>Masters</span>
                         </div>
-                        <i className={`bi bi-chevron-${mastersOpen ? "up" : "down"}`} style={{fontSize: 12.5}}/>
+                        <span className="ml-auto" style={{fontSize: 12.5}}>{ mastersOpen ? "▲" : "▼" }</span>
                     </button>
 
                     {mastersOpen && (
-                        <ul className="nav flex-column ms-2 mt-1">
+                        <ul className="nav flex-col ml-2 mt-1">
                             {masterEntities.map((master) => (
                                 <li key={master.path} className="nav-item mb-1">
                                     <Link
@@ -139,7 +140,7 @@ export default function Sidebar() {
                                         onMouseEnter={handleMouseEnter(isActive(master.path))}
                                         onMouseLeave={handleMouseLeave(isActive(master.path))}
                                     >
-                                        <i className={`bi bi-${master.icon} me-2`} style={{fontSize: 14.5}}/>
+                                        <i className={`bi bi-${master.icon} mr-2`} style={{fontSize: 14.5}}/>
                                         {master.label}
                                     </Link>
                                 </li>

@@ -5,7 +5,7 @@ import { formatIndianNumber } from '../utils/numberFormatter';
 import { formatDate as formatDateUtil } from '../utils/dateFormatter';
 import { generatePDF, generateExcel } from '../utils/ledgerExport';
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, FileText, FileSpreadsheet, Loader2, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, TriangleAlert } from "lucide-react";
 
 export default function LicenseLedgerDetail() {
     const { id, companyId } = useParams();
@@ -105,7 +105,7 @@ export default function LicenseLedgerDetail() {
                 padding: '10px 20px',
                 borderBottom: '2px solid var(--tb-border-strong)'
             }}>
-                <div className="d-flex justify-content-between align-items-center">
+                <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
                             <ArrowLeft className="size-4" />Back
@@ -138,7 +138,7 @@ export default function LicenseLedgerDetail() {
                     alignItems: 'center',
                     gap: '15px'
                 }}>
-                    <i className="bi bi-exclamation-triangle-fill" style={{ fontSize: '1.5rem', color: 'var(--warning-text)' }}></i>
+                    <TriangleAlert className="size-4" aria-hidden="true" />
                     <div>
                         <strong style={{ color: 'var(--warning-text)', display: 'block', marginBottom: '5px' }}>
                             ⚠️ Action Required
@@ -302,7 +302,7 @@ export default function LicenseLedgerDetail() {
                                 alignItems: 'center',
                                 gap: '8px'
                             }}>
-                                <i className="bi bi-building"></i>
+                                <Building2 className="size-4" aria-hidden="true" />
                                 {company.company_name}
                             </div>
 

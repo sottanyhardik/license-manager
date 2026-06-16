@@ -1,5 +1,6 @@
 import React from 'react';
 import { getFieldError, getFieldErrorClass } from '../utils/formErrors';
+import { TriangleAlert } from "lucide-react";
 
 /**
  * Reusable form field component with error handling
@@ -21,7 +22,7 @@ export const FormField = ({
 
   return (
     <div className={className}>
-      <label className="form-label fw-bold">
+      <label className="form-label font-bold">
         {label} {required && '*'}
       </label>
       <input
@@ -60,7 +61,7 @@ export const FormTextArea = ({
 
   return (
     <div className={className}>
-      <label className="form-label fw-bold">
+      <label className="form-label font-bold">
         {label} {required && '*'}
       </label>
       <textarea
@@ -98,7 +99,7 @@ export const FormSelect = ({
 
   return (
     <div className={className}>
-      <label className="form-label fw-bold">
+      <label className="form-label font-bold">
         {label} {required && '*'}
       </label>
       <select
@@ -131,7 +132,7 @@ export const NonFieldErrors = ({ errors = [], formatFunction }) => {
 
   return (
     <div className="alert alert-danger mb-3" role="alert">
-      <strong><i className="bi bi-exclamation-triangle-fill me-2"></i>ERROR:</strong>
+      <strong><TriangleAlert className="size-4" aria-hidden="true" />ERROR:</strong>
       <div className="mt-1" style={{ textTransform: 'uppercase', fontWeight: '600' }}>
         {formattedErrors}
       </div>

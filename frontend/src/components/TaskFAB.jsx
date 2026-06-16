@@ -1,5 +1,6 @@
 import { useState } from "react";
 import TaskDrawer from "./TaskDrawer";
+import { CheckSquare } from "lucide-react";
 
 /**
  * Floating action button that opens the global task drawer.
@@ -61,7 +62,7 @@ export default function TaskFAB({ bottomOffset = 110 }) {
                         transition: "margin 180ms cubic-bezier(0.16,1,0.3,1)",
                     }}
                 >
-                    <i className="bi bi-check2-square" style={{ fontSize: "1rem" }}></i>
+                    <CheckSquare className="size-4" aria-hidden="true" />
                 </span>
                 <span
                     style={{

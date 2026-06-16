@@ -65,7 +65,7 @@ export default function DataPagination({
                 <ul className="pagination mb-0" style={{ gap: 2 }}>
                     <li className={`page-item ${!hasPrevious ? "disabled" : ""}`}>
                         <button className="page-link" onClick={() => handlePageChange(currentPage - 1)} disabled={!hasPrevious} aria-label="Previous page" style={{ borderRadius: "var(--tb-r-sm)" }}>
-                            <i className="bi bi-chevron-left" aria-hidden="true" />
+                            <ChevronLeft className="size-4" aria-hidden="true" />
                         </button>
                     </li>
                     {getPageNumbers().map((page, idx) => {
@@ -83,7 +83,7 @@ export default function DataPagination({
                     })}
                     <li className={`page-item ${!hasNext ? "disabled" : ""}`}>
                         <button className="page-link" onClick={() => handlePageChange(currentPage + 1)} disabled={!hasNext} aria-label="Next page" style={{ borderRadius: "var(--tb-r-sm)" }}>
-                            <i className="bi bi-chevron-right" aria-hidden="true" />
+                            <ChevronRight className="size-4" aria-hidden="true" />
                         </button>
                     </li>
                 </ul>

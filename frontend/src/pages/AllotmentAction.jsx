@@ -8,6 +8,7 @@ import ConditionBadge from "../components/ConditionBadge";
 import TransferLetterForm from "../components/TransferLetterForm";
 import {openPdfPreview} from "../utils/pdfPreview";
 import {useBackButton} from "../hooks/useBackButton";
+import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, XCircle } from "lucide-react";
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
     const {id: paramId} = useParams();
@@ -527,12 +528,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
     if (initialLoading) return (
         <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
-            <div className="d-flex justify-content-between align-items-center mb-4 placeholder-glow">
+            <div className="flex justify-between items-center mb-4 placeholder-glow">
                 <div>
                     <div className="placeholder col-5" style={{ height: 28, borderRadius: 6, display: 'block' }}></div>
                     <div className="placeholder col-3 mt-1" style={{ height: 14, borderRadius: 4, display: 'block' }}></div>
                 </div>
-                <div className="d-flex gap-2">
+                <div className="flex gap-2">
                     {[80, 90, 110, 90, 100].map((w, i) => (
                         <div key={i} className="placeholder" style={{ width: w, height: 32, borderRadius: 6 }}></div>
                     ))}
@@ -542,7 +543,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 <div className="card-header py-3" style={{ borderRadius: '12px 12px 0 0' }}>
                     <div className="placeholder col-3" style={{ height: 18, borderRadius: 4 }}></div>
                 </div>
-                <div className="card-body d-flex gap-3 p-4">
+                <div className="card-body flex gap-3 p-4">
                     {[1,2,3,4].map(i => <div key={i} className="placeholder flex-fill" style={{ borderRadius: 8, height: 72 }}></div>)}
                 </div>
             </div>
@@ -551,7 +552,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     <div className="placeholder col-4" style={{ height: 18, borderRadius: 4 }}></div>
                 </div>
                 <div className="card-body p-4">
-                    {[1,2,3].map(i => <div key={i} className="placeholder w-100 mb-2" style={{ height: 90, borderRadius: 8 }}></div>)}
+                    {[1,2,3].map(i => <div key={i} className="placeholder w-full mb-2" style={{ height: 90, borderRadius: 8 }}></div>)}
                 </div>
             </div>
         </div>
@@ -567,10 +568,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             minHeight: isModal ? 'auto' : '100vh'
         }}>
             {!isModal && (
-                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+                <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
                     <div>
-                        <h4 className="mb-0 fw-bold" style={{ color: 'var(--tb-text)' }}>
-                            <i className="bi bi-diagram-3 me-2" style={{ color: 'var(--tb-brand)' }}></i>
+                        <h4 className="mb-0 font-bold" style={{ color: 'var(--tb-text)' }}>
+                            <Network className="size-4" aria-hidden="true" />
                             Allocate License Items
                         </h4>
                         {allotment && (
@@ -580,7 +581,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </small>
                         )}
                     </div>
-                    <div className="d-flex gap-2 flex-wrap">
+                    <div className="flex gap-2 flex-wrap">
                         <button
                             className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                             onClick={() => {
@@ -590,7 +591,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             }}
                             title="Edit Allotment"
                         >
-                            <i className="bi bi-pencil-square me-1"></i>Edit
+                            <PenSquare className="size-4" aria-hidden="true" />Edit
                         </button>
                         <button
                             className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
@@ -606,7 +607,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             }}
                             title="Create a copy of this allotment"
                         >
-                            <i className="bi bi-files me-1"></i>Copy
+                            <Files className="size-4" aria-hidden="true" />Copy
                         </button>
                         <button
                             className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
@@ -628,7 +629,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             title="Download Allotment PDF"
                             style={{ background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))', border: 'none' }}
                         >
-                            <i className="bi bi-file-pdf me-1"></i>Download PDF
+                            <FileText className="size-4" aria-hidden="true" />Download PDF
                         </button>
                         {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
                             <button
@@ -636,7 +637,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 onClick={() => document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' })}
                                 title="Generate Transfer Letter"
                             >
-                                <i className="bi bi-file-earmark-text me-1"></i>Transfer Letter
+                                <FileText className="size-4" aria-hidden="true" />Transfer Letter
                             </button>
                         )}
                         <button
@@ -646,7 +647,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 navigate('/allotments');
                             }}
                         >
-                            <i className="bi bi-arrow-left me-1"></i>Back
+                            <ArrowLeft className="size-4" aria-hidden="true" />Back
                         </button>
                     </div>
                 </div>
@@ -670,11 +671,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                 return (
                     <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                        <div className="card-header border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                            <h6 className="mb-0 fw-semibold">
-                                <i className="bi bi-info-circle me-2" style={{ color: 'var(--tb-brand)' }}></i>
+                        <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                            <h6 className="mb-0 font-semibold">
+                                <Info className="size-4" aria-hidden="true" />
                                 Allotment Details
-                                <span className="ms-2 text-muted fw-normal" style={{ fontSize: 13.5 }}>{allotment.item_name}</span>
+                                <span className="ms-2 text-muted-foreground font-normal" style={{ fontSize: 13.5 }}>{allotment.item_name}</span>
                             </h6>
                             <span className="badge" style={{
                                 background: progressPct >= 100 ? 'var(--tb-success-soft)' : 'var(--tb-brand-50)',
@@ -686,7 +687,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </div>
                         <div className="card-body" style={{ padding: '20px 24px' }}>
                             <div className="mb-4">
-                                <div className="d-flex justify-content-between mb-1" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                <div className="flex justify-between mb-1" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                                     <span>Allotted: <strong>{allotedQty.toLocaleString()}</strong></span>
                                     <span>Required: <strong>{requiredQty.toLocaleString()}</strong></span>
                                 </div>
@@ -697,8 +698,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12 items-stretch">
                                 {/* Unit Price */}
                                 <div className="lg:col-span-2">
-                                    <div className="h-100 p-3 d-flex flex-column justify-content-center" style={{ backgroundColor: 'rgba(23,162,184,0.06)', borderRadius: 'var(--tb-r-md)', border: '1px solid rgba(23,162,184,0.2)' }}>
-                                        <small className="text-muted d-block mb-1" style={{ fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Unit Price</small>
+                                    <div className="h-100 p-3 flex flex-col justify-center" style={{ backgroundColor: 'rgba(23,162,184,0.06)', borderRadius: 'var(--tb-r-md)', border: '1px solid rgba(23,162,184,0.2)' }}>
+                                        <small className="text-muted-foreground block mb-1" style={{ fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Unit Price</small>
                                         <strong style={{ fontSize: '1.15rem', color: 'var(--info-color)' }}>{unitPrice.toFixed(3)}</strong>
                                     </div>
                                 </div>
@@ -707,14 +708,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <div className="lg:col-span-3">
                                     <div className="h-100 p-3" style={{ backgroundColor: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-border-soft)', borderTop: '3px solid #6c757d' }}>
                                         <small className="d-block mb-2" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-text-secondary)' }}>Required</small>
-                                        <div className="d-flex gap-3">
+                                        <div className="flex gap-3">
                                             <div>
-                                                <small className="text-muted d-block" style={{ fontSize: 11 }}>Quantity</small>
+                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Quantity</small>
                                                 <strong style={{ fontSize: 17, color: 'var(--tb-text)' }}>{requiredQty.toLocaleString()}</strong>
                                             </div>
                                             <div style={{ width: 1, backgroundColor: 'var(--tb-border)' }} />
                                             <div>
-                                                <small className="text-muted d-block" style={{ fontSize: 11 }}>Value</small>
+                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Value</small>
                                                 <strong style={{ fontSize: 17, color: 'var(--tb-text)' }}>{requiredValue.toFixed(2)}</strong>
                                             </div>
                                         </div>
@@ -725,14 +726,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <div className="lg:col-span-3">
                                     <div className="h-100 p-3" style={{ backgroundColor: 'rgba(40,167,69,0.04)', borderRadius: 'var(--tb-r-md)', border: '1px solid rgba(40,167,69,0.2)', borderTop: '3px solid #28a745' }}>
                                         <small className="d-block mb-2" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-success-text)' }}>Allotted</small>
-                                        <div className="d-flex gap-3">
+                                        <div className="flex gap-3">
                                             <div>
-                                                <small className="text-muted d-block" style={{ fontSize: 11 }}>Quantity</small>
+                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Quantity</small>
                                                 <strong style={{ fontSize: 17, color: 'var(--success-color)' }}>{allotedQty.toLocaleString()}</strong>
                                             </div>
                                             <div style={{ width: 1, backgroundColor: 'rgba(40,167,69,0.2)' }} />
                                             <div>
-                                                <small className="text-muted d-block" style={{ fontSize: 11 }}>Value</small>
+                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Value</small>
                                                 <strong style={{ fontSize: 17, color: 'var(--success-color)' }}>{allotedValue.toFixed(2)}</strong>
                                             </div>
                                         </div>
@@ -743,14 +744,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <div className="lg:col-span-4">
                                     <div className="h-100 p-3" style={{ backgroundColor: 'var(--tb-brand-50)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-brand-200)', borderTop: '3px solid var(--tb-brand)' }}>
                                         <small className="d-block mb-2" style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tb-brand)' }}>Balance</small>
-                                        <div className="d-flex gap-3 align-items-end">
+                                        <div className="flex gap-3 items-end">
                                             <div>
-                                                <small className="text-muted d-block" style={{ fontSize: 11 }}>Quantity</small>
+                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Quantity</small>
                                                 <strong style={{ fontSize: 17, color: 'var(--primary-color)' }}>{balanceQty.toLocaleString()}</strong>
                                             </div>
                                             <div style={{ width: 1, backgroundColor: 'var(--tb-brand-200)' }} />
                                             <div>
-                                                <small className="text-muted d-block" style={{ fontSize: 11 }}>Value <span className="text-muted" style={{ fontWeight: '400' }}>(+$20 buffer)</span></small>
+                                                <small className="text-muted-foreground block" style={{ fontSize: 11 }}>Value <span className="text-muted" style={{ fontWeight: '400' }}>(+$20 buffer)</span></small>
                                                 <strong style={{ fontSize: 17, color: 'var(--primary-color)' }}>{balanceValue.toFixed(2)}</strong>
                                             </div>
                                         </div>
@@ -765,9 +766,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             {/* Allotted Items Table */}
             {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
                 <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                    <div className="card-header border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                        <h6 className="mb-0 fw-semibold">
-                            <i className="bi bi-check-square me-2" style={{ color: 'var(--tb-success)' }}></i>
+                    <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                        <h6 className="mb-0 font-semibold">
+                            <CheckSquare className="size-4" aria-hidden="true" />
                             Allotted Items
                             <span className="ms-2 badge" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--tb-success-text)', fontWeight: '600', fontSize: 11 }}>
                                 {allotment.allotment_details.length}
@@ -801,7 +802,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 }}
                                 title="Copy table data to clipboard"
                             >
-                                <i className="bi bi-clipboard"></i> Copy
+                                <Clipboard className="size-4" aria-hidden="true" /> Copy
                             </button>
                     </div>
                     <div className="card-body p-0">
@@ -865,7 +866,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 {deletingItems[detail.id] ? (
                                                     <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                                 ) : (
-                                                    <i className="bi bi-trash"></i>
+                                                    <Trash2 className="size-4" aria-hidden="true" />
                                                 )}
                                             </button>
                                         </td>
@@ -905,12 +906,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             )}
 
             <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                <div className="card-header border-bottom d-flex justify-content-between align-items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                    <h6 className="mb-0 fw-semibold">
-                        <i className="bi bi-list-check me-2" style={{ color: 'var(--tb-brand)' }}></i>
+                <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
+                    <h6 className="mb-0 font-semibold">
+                        <ListChecks className="size-4" aria-hidden="true" />
                         Available License Items
                         {pagination.totalItems > 0 && (
-                            <span className="ms-2 text-muted fw-normal" style={{ fontSize: '0.82rem' }}>{pagination.totalItems} items</span>
+                            <span className="ms-2 text-muted-foreground font-normal" style={{ fontSize: '0.82rem' }}>{pagination.totalItems} items</span>
                         )}
                     </h6>
                 </div>
@@ -918,24 +919,24 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                     {/* Show success/error messages near the table for better visibility */}
                     {error && (
-                        <div className="alert alert-danger alert-dismissible fade show d-flex align-items-start gap-2" role="alert" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <i className="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+                        <div className="alert alert-danger alert-dismissible fade show flex items-start gap-2" role="alert" style={{ borderRadius: 'var(--tb-r-md)' }}>
+                            <TriangleAlert className="size-4" aria-hidden="true" />
                             <div className="flex-fill">{error}</div>
                             <button type="button" className="btn-close" onClick={() => setError("")}></button>
                         </div>
                     )}
                     {success && (
-                        <div className="alert alert-success alert-dismissible fade show d-flex align-items-start gap-2" role="alert" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <i className="bi bi-check-circle-fill flex-shrink-0 mt-1"></i>
+                        <div className="alert alert-success alert-dismissible fade show flex items-start gap-2" role="alert" style={{ borderRadius: 'var(--tb-r-md)' }}>
+                            <CheckCircle2 className="size-4" aria-hidden="true" />
                             <div className="flex-fill">{success}</div>
                             <button type="button" className="btn-close" onClick={() => setSuccess("")}></button>
                         </div>
                     )}
 
                     <div className="card mb-3" style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', border: '1px solid var(--tb-border)' }}>
-                        <div className="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3" style={{ background: 'transparent', borderBottom: '1px solid var(--tb-border-soft)' }}>
+                        <div className="card-header border-0 flex justify-between items-center py-2 px-3" style={{ background: 'transparent', borderBottom: '1px solid var(--tb-border-soft)' }}>
                             <span style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <i className="bi bi-funnel"></i> Filters
+                                <Filter className="size-4" aria-hidden="true" /> Filters
                             </span>
                             <button
                                 className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline bg-transparent border-0 p-0"
@@ -961,7 +962,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     expiry_date_to: ""
                                 })}
                             >
-                                <i className="bi bi-x-circle me-1"></i>Clear All
+                                <XCircle className="size-4" aria-hidden="true" />Clear All
                             </button>
                         </div>
                         <div className="card-body" style={{ padding: '16px' }}>
@@ -1208,7 +1209,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationStyle: 'dotted'
                                             }}
                                         >
-                                            <i className="bi bi-file-earmark-text me-1" style={{fontSize: 12.5}}></i>
+                                            <FileText className="size-4" aria-hidden="true" />
                                             {item.license_number}
                                         </button>
                                         <span style={{
@@ -1233,7 +1234,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             marginLeft: 'auto', fontSize: 12, color: 'var(--text-secondary)',
                                             display: 'flex', alignItems: 'center', gap: '4px'
                                         }}>
-                                            <i className="bi bi-calendar3" style={{fontSize: 11}}></i>
+                                            <Calendar className="size-4" aria-hidden="true" />
                                             Exp: {item.license_expiry_date || '—'}
                                         </span>
                                         {/* Restriction is read-only — driven by the licence's
@@ -1242,7 +1243,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             ? <ConditionBadge type={item.condition_type} size="xs" />
                                             : (
                                                 <span className="badge" style={{background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid var(--success-border)', fontSize: 11}}>
-                                                    <i className="bi bi-unlock-fill me-1"></i>Open
+                                                    <Unlock className="size-4" aria-hidden="true" />Open
                                                 </span>
                                             )}
                                     </div>
@@ -1253,7 +1254,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             {item.description}
                                         </div>
                                         <div style={{fontSize: 12, color: 'var(--text-secondary)', marginBottom: '6px'}}>
-                                            <i className="bi bi-building me-1" style={{fontSize: 11}}></i>{item.exporter_name}
+                                            <Building2 className="size-4" aria-hidden="true" />{item.exporter_name}
                                         </div>
                                         <div style={{display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center'}}>
                                             {item.items_detail && item.items_detail.length > 0
@@ -1269,7 +1270,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             }
                                             {item.notes && (
                                                 <span style={{fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic', marginLeft: '4px'}}>
-                                                    <i className="bi bi-sticky me-1"></i>{item.notes}
+                                                    <StickyNote className="size-4" aria-hidden="true" />{item.notes}
                                                 </span>
                                             )}
                                         </div>
@@ -1358,12 +1359,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             >
                                                 {saving[item.id] ? (
                                                     <>
-                                                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent me-1" aria-hidden="true" />
+                                                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-1" aria-hidden="true" />
                                                         Saving…
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <i className="bi bi-check2-circle me-1"></i>
+                                                        <CheckCircle2 className="size-4" aria-hidden="true" />
                                                         Confirm
                                                     </>
                                                 )}
@@ -1384,15 +1385,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                     {!tableLoading && availableItems.length === 0 && (
                         <div className="text-center py-5" style={{ border: '2px dashed #d1d5db', borderRadius: 'var(--tb-r-md)', background: 'var(--tb-card-bg)' }}>
-                            <i className="bi bi-inbox d-block mb-2" style={{ fontSize: '2rem', color: 'var(--tb-text-tertiary)' }}></i>
-                            <div className="fw-semibold text-muted mb-1">No available license items found</div>
+                            <Inbox className="size-4" aria-hidden="true" />
+                            <div className="fw-semibold text-muted-foreground mb-1">No available license items found</div>
                             <small className="text-muted">Try adjusting the filters above</small>
                         </div>
                     )}
 
                     {/* Pagination */}
                     {pagination.totalPages > 1 && (
-                        <div className="d-flex justify-content-between align-items-center mt-3 pt-3" style={{ borderTop: '1px solid var(--tb-border)' }}>
+                        <div className="flex justify-between items-center mt-3 pt-3" style={{ borderTop: '1px solid var(--tb-border)' }}>
                             <div className="text-muted" style={{ fontSize: 14.5 }}>
                                 Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1} to {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)} of {pagination.totalItems} items
                             </div>

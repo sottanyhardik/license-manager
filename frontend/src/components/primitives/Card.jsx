@@ -42,8 +42,8 @@ export const CardHeader = ({
     style,
 }) => (
     <div className={`card-header ${className}`.trim()} style={style}>
-        <div className="d-flex justify-content-between align-items-center" style={{ gap: 12 }}>
-            <div className="d-flex align-items-center" style={{ gap: 12, minWidth: 0 }}>
+        <div className="flex justify-between items-center" style={{ gap: 12 }}>
+            <div className="flex items-center" style={{ gap: 12, minWidth: 0 }}>
                 {icon && (
                     <span
                         aria-hidden="true"

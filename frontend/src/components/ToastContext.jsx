@@ -48,19 +48,19 @@ export const ToastProvider = ({children}) => {
                 {toasts.map((toast) => (
                     <div
                         key={toast.id}
-                        className={`toast align-items-center text-bg-${getToastClass(toast.type)} border-0 show fade-in-slide`}
+                        className={`toast items-center text-bg-${getToastClass(toast.type)} border-0 show fade-in-slide`}
                         role="alert"
                         aria-live="assertive"
                         aria-atomic="true"
                     >
                         <div className="d-flex">
-                            <div className="toast-body d-flex align-items-center">
-                                <i className={`bi ${getToastIcon(toast.type)} me-2 fs-5`}></i>
+                            <div className="toast-body flex items-center">
+                                <i className={`bi ${getToastIcon(toast.type)} mr-2 fs-5`}></i>
                                 <span>{toast.message}</span>
                             </div>
                             <button
                                 type="button"
-                                className="btn-close btn-close-white me-2 m-auto"
+                                className="btn-close btn-close-white mr-2 m-auto"
                                 onClick={() =>
                                     setToasts((prev) => prev.filter((t) => t.id !== toast.id))
                                 }

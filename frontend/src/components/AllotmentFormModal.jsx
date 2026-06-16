@@ -5,7 +5,7 @@ import AsyncSelect from 'react-select/async';
 import { extractFormErrors, formatNonFieldErrors, getFieldError, getFieldErrorClass } from '../utils/formErrors';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X, Check, Loader2, Package } from "lucide-react";
+import { AlertCircle, Building2, Check, DollarSign, FileText, Loader2, Package, ToggleRight, TriangleAlert, X } from "lucide-react";
 
 export default function AllotmentFormModal({ show, onHide, allotmentId = null, mode = 'create', onSuccess, onSaveNavigate }) {
     const [formData, setFormData] = useState({
@@ -289,7 +289,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                             {/* Non-Field Errors */}
                             {nonFieldErrors.length > 0 && (
                                 <div className="alert alert-danger mb-3" role="alert">
-                                    <strong><i className="bi bi-exclamation-triangle-fill me-2"></i>ERROR:</strong>
+                                    <strong><TriangleAlert className="size-4" aria-hidden="true" />ERROR:</strong>
                                     <div className="mt-1" style={{ textTransform: 'uppercase', fontWeight: '600' }}>
                                         {formatNonFieldErrors(nonFieldErrors)}
                                     </div>
@@ -299,15 +299,15 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                             {initialLoad ? (
                                 <div className="text-center py-5">
                                     <span className="inline-block size-7 animate-spin rounded-full border-2 border-current border-t-transparent text-primary" />
-                                    <p className="mt-2 text-muted">Loading...</p>
+                                    <p className="mt-2 text-muted-foreground">Loading...</p>
                                 </div>
                             ) : (
-                                <div className="d-flex flex-column gap-3">
+                                <div className="flex flex-col gap-3">
 
                                     {/* Section: Basic Information */}
                                     <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-brand)' }}>
                                         <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-brand)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <i className="bi bi-building"></i> Basic Information
+                                            <Building2 className="size-4" aria-hidden="true" /> Basic Information
                                         </div>
                                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
                                             <div className="sm:col-span-3">
@@ -325,7 +325,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                 />
                                                 {getFieldError(fieldErrors, 'company') && (
                                                     <div className="mt-0.5 text-[11.5px] text-destructive" style={{ fontSize: 12 }}>
-                                                        <i className="bi bi-exclamation-circle me-1"></i>{getFieldError(fieldErrors, 'company')}
+                                                        <AlertCircle className="size-4" aria-hidden="true" />{getFieldError(fieldErrors, 'company')}
                                                     </div>
                                                 )}
                                             </div>
@@ -355,7 +355,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                                 />
                                                 {getFieldError(fieldErrors, 'port') && (
                                                     <div className="mt-0.5 text-[11.5px] text-destructive" style={{ fontSize: 12 }}>
-                                                        <i className="bi bi-exclamation-circle me-1"></i>{getFieldError(fieldErrors, 'port')}
+                                                        <AlertCircle className="size-4" aria-hidden="true" />{getFieldError(fieldErrors, 'port')}
                                                     </div>
                                                 )}
                                             </div>
@@ -392,7 +392,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                     {/* Section: Financial Details */}
                                     <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-success)' }}>
                                         <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-success)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <i className="bi bi-currency-dollar"></i> Financial Details
+                                            <DollarSign className="size-4" aria-hidden="true" /> Financial Details
                                         </div>
                                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
                                             <div className="sm:col-span-2">
@@ -466,7 +466,7 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                     {/* Section: Additional Info */}
                                     <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-warning)' }}>
                                         <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-warning-text)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <i className="bi bi-file-text"></i> Additional Info
+                                            <FileText className="size-4" aria-hidden="true" /> Additional Info
                                         </div>
                                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
                                             <div className="sm:col-span-2">
@@ -507,9 +507,9 @@ export default function AllotmentFormModal({ show, onHide, allotmentId = null, m
                                     {/* Section: Status */}
                                     <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid var(--tb-brand)' }}>
                                         <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-brand)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <i className="bi bi-toggle-on"></i> Status Flags
+                                            <ToggleRight className="size-4" aria-hidden="true" /> Status Flags
                                         </div>
-                                        <div className="d-flex gap-4">
+                                        <div className="flex gap-4">
                                             <div className="form-check form-switch">
                                                 <input
                                                     className="form-check-input"

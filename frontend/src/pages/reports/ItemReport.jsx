@@ -8,7 +8,7 @@ import {toast} from "react-toastify";
 import Select from "react-select";
 import {useDebouncedFilters} from "../../hooks/useDebounce";
 import { Button } from "@/components/ui/button";
-import { FileSpreadsheet, XCircle, Loader2 } from "lucide-react";
+import { Bell, Building2, CalendarCheck, CalendarDays, CalendarRange, Check, DollarSign, FileSpreadsheet, FileText, Filter, Inbox, Loader2, MinusCircle, Package, Pencil, ScanBarcode, ShieldCheck, ShoppingCart, SlidersHorizontal, Tag, Tags, X, XCircle } from "lucide-react";
 
 export default function ItemReport() {
     const navigate = useNavigate();
@@ -428,10 +428,10 @@ export default function ItemReport() {
                     <h1>Item Report</h1>
                     {reportData && (
                         <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
-                            <i className="bi bi-calendar-event me-1"></i>
+                            <CalendarDays className="size-4" aria-hidden="true" />
                             {reportData.report_date}
                             <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
-                            <i className="bi bi-box-seam me-1"></i>
+                            <Package className="size-4" aria-hidden="true" />
                             {reportData.total_items} items
                         </div>
                     )}
@@ -454,9 +454,9 @@ export default function ItemReport() {
                 <div className="col-span-full">
                     <div className="surface-card">
                         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}
-                             className="d-flex justify-content-between align-items-center">
+                             className="flex justify-between items-center">
                             <h5 className="mb-0" style={{ fontWeight: 600, fontSize: 15 }}>
-                                <i className="bi bi-sliders me-2" style={{ color: 'var(--primary-color)' }}></i>
+                                <SlidersHorizontal className="size-4" aria-hidden="true" />
                                 Filters
                                 {isPending && (
                                     <span className="ms-2" style={{ fontSize: 13.5, color: 'var(--tb-text-secondary)' }}>
@@ -475,8 +475,8 @@ export default function ItemReport() {
                         <div style={{ padding: '14px 16px' }}>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-currency-dollar me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <DollarSign className="size-4" aria-hidden="true" />
                                         Min Balance (CIF)
                                     </label>
                                     <select
@@ -494,8 +494,8 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-box-seam me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <Package className="size-4" aria-hidden="true" />
                                         Min Avail Qty
                                     </label>
                                     <select
@@ -513,8 +513,8 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-calendar-check me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <CalendarCheck className="size-4" aria-hidden="true" />
                                         License Status
                                     </label>
                                     <select
@@ -530,8 +530,8 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-calendar-range me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <CalendarRange className="size-4" aria-hidden="true" />
                                         Expiry Date From
                                     </label>
                                     <input
@@ -543,8 +543,8 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-calendar-range me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <CalendarRange className="size-4" aria-hidden="true" />
                                         Expiry Date To
                                     </label>
                                     <input
@@ -556,8 +556,8 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-building me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <Building2 className="size-4" aria-hidden="true" />
                                         Include Companies
                                     </label>
                                     <div style={{minHeight: '38px'}}>
@@ -575,8 +575,8 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-dash-circle me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <MinusCircle className="size-4" aria-hidden="true" />
                                         Exclude Companies
                                     </label>
                                     <div style={{minHeight: '38px'}}>
@@ -596,8 +596,8 @@ export default function ItemReport() {
 
                             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-shield-lock me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <ShieldCheck className="size-4" aria-hidden="true" />
                                         Is Restricted
                                     </label>
                                     <select
@@ -612,8 +612,8 @@ export default function ItemReport() {
                                 </div>
 
                                 <div className="sm:col-span-2">
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-cart-check me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <ShoppingCart className="size-4" aria-hidden="true" />
                                         Purchase Status
                                     </label>
                                     <Select
@@ -642,8 +642,8 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-tags me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <Tags className="size-4" aria-hidden="true" />
                                         Norms
                                     </label>
                                     <Select
@@ -668,8 +668,8 @@ export default function ItemReport() {
                                 </div>
 
                                 <div>
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-bell me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <Bell className="size-4" aria-hidden="true" />
                                         Notification
                                     </label>
                                     <Select
@@ -686,8 +686,8 @@ export default function ItemReport() {
 
                             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="sm:col-span-full">
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-file-text me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <FileText className="size-4" aria-hidden="true" />
                                         Product Description
                                     </label>
                                     <input
@@ -699,8 +699,8 @@ export default function ItemReport() {
                                     />
                                 </div>
                                 <div className="sm:col-span-full">
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-upc-scan me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <ScanBarcode className="size-4" aria-hidden="true" />
                                         HSN Code
                                     </label>
                                     <input
@@ -715,8 +715,8 @@ export default function ItemReport() {
 
                             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="col-span-full">
-                                    <label className="form-label fw-bold mb-2">
-                                        <i className="bi bi-tag me-1"></i>
+                                    <label className="form-label font-bold mb-2">
+                                        <Tag className="size-4" aria-hidden="true" />
                                         Filter by Item Name (Multi-select)
                                     </label>
                                     <Select
@@ -734,22 +734,22 @@ export default function ItemReport() {
                             {hasActiveFilters && (
                                 <div className="mt-3">
                                     <div
-                                        className="alert alert-info d-flex justify-content-between align-items-center py-2 mb-0">
+                                        className="alert alert-info flex justify-between items-center py-2 mb-0">
                                         <div>
-                                            <i className="bi bi-funnel-fill me-2"></i>
+                                            <Filter className="size-4" aria-hidden="true" />
                                             <strong>Active Filters:</strong>
-                                            {minBalance !== 200 && <span className="badge bg-primary ms-2">Min Balance: ₹{minBalance}</span>}
-                                            {minAvailQty !== 0 && <span className="badge bg-primary ms-2">Min Qty: {minAvailQty}</span>}
+                                            {minBalance !== 200 && <span className="badge bg-primary ml-2">Min Balance: ₹{minBalance}</span>}
+                                            {minAvailQty !== 0 && <span className="badge bg-primary ml-2">Min Qty: {minAvailQty}</span>}
                                             {licenseStatus !== 'active' && <span
-                                                className="badge bg-primary ms-2">Status: {licenseStatus.replace('_', ' ')}</span>}
-                                            {selectedCompanies.length > 0 && <span className="badge bg-primary ms-2">Incl. Companies: {selectedCompanies.length}</span>}
-                                            {excludeCompanies.length > 0 && <span className="badge bg-primary ms-2">Excl. Companies: {excludeCompanies.length}</span>}
-                                            {isRestricted !== 'all' && <span className="badge bg-primary ms-2">Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span>}
-                                            {purchaseStatus.length > 0 && purchaseStatus.length < 6 && <span className="badge bg-primary ms-2">Purchase Status: {purchaseStatus.length}</span>}
-                                            {selectedItemNames.length > 0 && <span className="badge bg-primary ms-2">Item Names: {selectedItemNames.length}</span>}
-                                            {productDescSearch !== '' && <span className="badge bg-primary ms-2">Product Desc: "{productDescSearch}"</span>}
-                                            {hsnCodeSearch !== '' && <span className="badge bg-primary ms-2">HSN Code: "{hsnCodeSearch}"</span>}
-                                            {selectedNorms.length > 0 && <span className="badge bg-primary ms-2">Norms: {selectedNorms.length}</span>}
+                                                className="badge bg-primary ml-2">Status: {licenseStatus.replace('_', ' ')}</span>}
+                                            {selectedCompanies.length > 0 && <span className="badge bg-primary ml-2">Incl. Companies: {selectedCompanies.length}</span>}
+                                            {excludeCompanies.length > 0 && <span className="badge bg-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>}
+                                            {isRestricted !== 'all' && <span className="badge bg-primary ml-2">Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span>}
+                                            {purchaseStatus.length > 0 && purchaseStatus.length < 6 && <span className="badge bg-primary ml-2">Purchase Status: {purchaseStatus.length}</span>}
+                                            {selectedItemNames.length > 0 && <span className="badge bg-primary ml-2">Item Names: {selectedItemNames.length}</span>}
+                                            {productDescSearch !== '' && <span className="badge bg-primary ml-2">Product Desc: "{productDescSearch}"</span>}
+                                            {hsnCodeSearch !== '' && <span className="badge bg-primary ml-2">HSN Code: "{hsnCodeSearch}"</span>}
+                                            {selectedNorms.length > 0 && <span className="badge bg-primary ml-2">Norms: {selectedNorms.length}</span>}
                                         </div>
                                     </div>
                                 </div>
@@ -769,9 +769,9 @@ export default function ItemReport() {
                             zIndex: 1020
                         }}>
                             <div className="card-body py-2">
-                                <div className="d-flex justify-content-end align-items-center gap-4">
+                                <div className="flex justify-end items-center gap-4">
                                     <div className="fw-bold">Total:</div>
-                                    <div className="d-flex align-items-center gap-2">
+                                    <div className="flex items-center gap-2">
                                         <span className="text-muted small">Avail Qty:</span>
                                         <span className="fw-bold">
                                             {reportData.items.reduce((sum, item) => sum + (item.available_quantity || 0), 0).toLocaleString('en-IN', {
@@ -780,7 +780,7 @@ export default function ItemReport() {
                                             })}
                                         </span>
                                     </div>
-                                    <div className="d-flex align-items-center gap-2">
+                                    <div className="flex items-center gap-2">
                                         <span className="text-muted small">Avail Bal:</span>
                                         <span className="fw-bold text-success">
                                             {(() => {
@@ -797,7 +797,7 @@ export default function ItemReport() {
                                             })()}
                                         </span>
                                     </div>
-                                    <div className="d-flex align-items-center gap-2">
+                                    <div className="flex items-center gap-2">
                                         <span className="text-muted small">Balance CIF:</span>
                                         <span className="fw-bold text-primary">
                                             {(() => {
@@ -837,7 +837,7 @@ export default function ItemReport() {
                     {!loading && selectedItemNames.length === 0 && !productDescSearch && !hsnCodeSearch && (
                         <div className="card">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-tag" style={{fontSize: '3rem', color: 'var(--primary-color)'}}></i>
+                                <Tag className="size-4" aria-hidden="true" />
                                 <h5 className="mt-3 text-primary">Select Filters to View Report</h5>
                                 <p className="text-muted">Please select item names, search by product description, or search by HSN code to load the report data</p>
                             </div>
@@ -847,12 +847,12 @@ export default function ItemReport() {
                     {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length === 0 && (
                         <div className="card">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--tb-border-strong)'}}></i>
-                                <h5 className="mt-3 text-muted">No items found</h5>
+                                <Inbox className="size-4" aria-hidden="true" />
+                                <h5 className="mt-3 text-muted-foreground">No items found</h5>
                                 <p className="text-muted">Try adjusting your filters to see more results.</p>
                                 <div className="mt-3 text-start" style={{maxWidth: '600px', margin: '0 auto'}}>
-                                    <p className="small text-muted mb-2"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
-                                    <ul className="small text-muted">
+                                    <p className="small text-muted-foreground mb-2"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
+                                    <ul className="small text-muted-foreground">
                                         <li>Setting License Status to "All"</li>
                                         <li>Lowering the Min Balance (CIF) to 100</li>
                                         <li>Checking if your search term matches exactly (case-insensitive partial match)</li>
@@ -963,7 +963,7 @@ export default function ItemReport() {
                                                                         fontWeight: '600'
                                                                     }}>
                                                                         <div
-                                                                            className="d-flex align-items-center justify-content-between">
+                                                                            className="flex items-center justify-between">
                                                                             <span>{firstItem.license_number}</span>
                                                                             <button
                                                                                 className="ml-2 flex items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
@@ -1033,12 +1033,12 @@ export default function ItemReport() {
                                                             <td className="text-end">{item.available_quantity.toFixed(3)}</td>
                                                             {isFirstRow && (
                                                                 <>
-                                                                    <td className="text-end text-success fw-semibold"
+                                                                    <td className="text-end text-success font-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
                                                                         backgroundColor: 'var(--tb-sunken)'
                                                                     }}>{firstItem.available_balance.toFixed(2)}</td>
-                                                                    <td className="text-end text-primary fw-semibold"
+                                                                    <td className="text-end text-primary font-semibold"
                                                                         rowSpan={rowSpan} style={{
                                                                         verticalAlign: 'middle',
                                                                         backgroundColor: 'var(--tb-sunken)'
@@ -1053,7 +1053,7 @@ export default function ItemReport() {
                                                                         {firstItem.condition_type
                                                                             ? <ConditionBadge type={firstItem.condition_type} />
                                                                             : <span className="badge bg-success">
-                                                                                  <i className="bi bi-shield-check me-1"></i>Open
+                                                                                  <ShieldCheck className="size-4" aria-hidden="true" />Open
                                                                               </span>}
                                                                     </td>
                                                                     <td rowSpan={rowSpan} style={{
@@ -1061,7 +1061,7 @@ export default function ItemReport() {
                                                                         backgroundColor: 'var(--tb-sunken)'
                                                                     }}>
                                                                         {editingCell?.itemId === firstItem.id && editingCell?.field === 'notes' ? (
-                                                                            <div className="d-flex gap-1">
+                                                                            <div className="flex gap-1">
                                                                                 <input
                                                                                     type="text"
                                                                                     className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
@@ -1073,23 +1073,23 @@ export default function ItemReport() {
                                                                                     className="flex items-center gap-1.5 rounded bg-success px-2 py-1 text-xs font-medium text-white cursor-pointer"
                                                                                     onClick={() => saveEdit(firstItem)}
                                                                                 >
-                                                                                    <i className="bi bi-check"></i>
+                                                                                    <Check className="size-4" aria-hidden="true" />
                                                                                 </button>
                                                                                 <button
                                                                                     className="flex items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                                                                     onClick={cancelEdit}
                                                                                 >
-                                                                                    <i className="bi bi-x"></i>
+                                                                                    <X className="size-4" aria-hidden="true" />
                                                                                 </button>
                                                                             </div>
                                                                         ) : (
                                                                             <div
-                                                                                className="d-flex align-items-center justify-content-between"
+                                                                                className="flex items-center justify-between"
                                                                                 style={{cursor: 'pointer'}}
                                                                                 onClick={() => startEdit(firstItem.id, 'notes', firstItem.notes)}
                                                                             >
                                                                                 <span>{firstItem.notes || '-'}</span>
-                                                                                <i className="bi bi-pencil text-muted ms-2"></i>
+                                                                                <Pencil className="size-4" aria-hidden="true" />
                                                                             </div>
                                                                         )}
                                                                     </td>
@@ -1098,7 +1098,7 @@ export default function ItemReport() {
                                                                         backgroundColor: 'var(--tb-sunken)'
                                                                     }}>
                                                                         {editingCell?.itemId === firstItem.id && editingCell?.field === 'condition_sheet' ? (
-                                                                            <div className="d-flex gap-1">
+                                                                            <div className="flex gap-1">
                                                                                 <input
                                                                                     type="text"
                                                                                     className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
@@ -1110,23 +1110,23 @@ export default function ItemReport() {
                                                                                     className="flex items-center gap-1.5 rounded bg-success px-2 py-1 text-xs font-medium text-white cursor-pointer"
                                                                                     onClick={() => saveEdit(firstItem)}
                                                                                 >
-                                                                                    <i className="bi bi-check"></i>
+                                                                                    <Check className="size-4" aria-hidden="true" />
                                                                                 </button>
                                                                                 <button
                                                                                     className="flex items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                                                                     onClick={cancelEdit}
                                                                                 >
-                                                                                    <i className="bi bi-x"></i>
+                                                                                    <X className="size-4" aria-hidden="true" />
                                                                                 </button>
                                                                             </div>
                                                                         ) : (
                                                                             <div
-                                                                                className="d-flex align-items-center justify-content-between"
+                                                                                className="flex items-center justify-between"
                                                                                 style={{cursor: 'pointer'}}
                                                                                 onClick={() => startEdit(firstItem.id, 'condition_sheet', firstItem.condition_sheet)}
                                                                             >
                                                                                 <span>{firstItem.condition_sheet || '-'}</span>
-                                                                                <i className="bi bi-pencil text-muted ms-2"></i>
+                                                                                <Pencil className="size-4" aria-hidden="true" />
                                                                             </div>
                                                                         )}
                                                                     </td>
@@ -1151,7 +1151,7 @@ export default function ItemReport() {
                                         })()}
                                         </tbody>
                                         <tfoot style={{position: 'sticky', bottom: 0, zIndex: 10}}>
-                                        <tr className="table-secondary fw-bold">
+                                        <tr className="table-secondary font-bold">
                                             <td colSpan="10" className="text-end" style={{
                                                 position: 'sticky',
                                                 left: 0,

@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { AuthContext } from "../context/AuthContext";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
+import { AlertCircle, Check, CheckSquare, ChevronDown, ClipboardCheck, OctagonX, X } from "lucide-react";
 import {
     TASK_PRIORITY,
     TASK_STATUS,
@@ -414,7 +415,7 @@ export default function TaskDrawer({ show, onClose }) {
                                 color: "var(--primary-color)",
                             }}
                         >
-                            <i className="bi bi-check2-square" style={{ fontSize: "0.95rem" }}></i>
+                            <CheckSquare className="size-4" />
                         </span>
                         <span style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.01em" }}>Tasks</span>
                     </div>
@@ -424,7 +425,7 @@ export default function TaskDrawer({ show, onClose }) {
                         aria-label="Close"
                         style={{ width: 32, height: 32, padding: 0, borderRadius: 8 }}
                     >
-                        <i className="bi bi-x-lg" style={{ fontSize: "0.85rem" }}></i>
+                        <X className="size-4" />
                     </button>
                 </div>
 
@@ -452,7 +453,7 @@ export default function TaskDrawer({ show, onClose }) {
                             title={speech.isSupported ? "Voice input" : "Voice not supported in this browser"}
                             disabled={!speech.isSupported}
                         >
-                            <i className={`bi ${speech.listening ? "bi-mic-mute-fill" : "bi-mic-fill"}`}></i>
+                            {speech.listening ? <span className="size-4">🔇</span> : <span className="size-4">🎤</span>}
                         </button>
                     </div>
 
@@ -506,7 +507,7 @@ export default function TaskDrawer({ show, onClose }) {
                                 marginTop: 4,
                             }}
                         >
-                            <i className="bi bi-exclamation-circle-fill" aria-hidden="true" style={{ marginTop: 1 }} />
+                            <AlertCircle className="size-4" aria-hidden="true" />
                             <div style={{ flex: 1 }}>{speech.error.message}</div>
                             <button
                                 type="button"
@@ -608,7 +609,7 @@ export default function TaskDrawer({ show, onClose }) {
                     )}
                     {!loading && tasks.length === 0 && (
                         <div className="empty-state">
-                            <div className="empty-icon"><i className="bi bi-clipboard-check"></i></div>
+                            <div className="empty-icon"><ClipboardCheck className="size-9" /></div>
                             <div className="empty-title">No tasks yet</div>
                             <div className="empty-sub">Add one above or hold the mic and dictate.</div>
                         </div>
@@ -693,7 +694,7 @@ export default function TaskDrawer({ show, onClose }) {
                                             onClick={() => setExpanded(open ? null : task.id)}
                                             title="Details"
                                         >
-                                            <i className={`bi bi-chevron-${open ? "up" : "down"}`}></i>
+                                            <span className="inline-block transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}><ChevronDown className="size-4" /></span>
                                         </button>
                                         {!closed && (
                                             <button
@@ -701,7 +702,7 @@ export default function TaskDrawer({ show, onClose }) {
                                                 onClick={() => handleReject(task)}
                                                 title="Reject"
                                             >
-                                                <i className="bi bi-x-octagon"></i>
+                                                <OctagonX className="size-4" />
                                             </button>
                                         )}
                                         {mine && (
@@ -710,7 +711,7 @@ export default function TaskDrawer({ show, onClose }) {
                                                 onClick={() => handleDelete(task)}
                                                 title="Delete"
                                             >
-                                                <i className="bi bi-trash"></i>
+                                                <Trash2 className="size-4" />
                                             </button>
                                         )}
                                     </div>

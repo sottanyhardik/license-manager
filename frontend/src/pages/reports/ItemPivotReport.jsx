@@ -11,7 +11,7 @@ import {toast} from "react-toastify";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { RefreshCw, FileSpreadsheet, Loader2, FileText } from "lucide-react";
+import { ArrowLeftRight, Bell, Building2, Calculator, CalendarCheck, CalendarDays, CalendarRange, DollarSign, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, MinusCircle, Package, RefreshCw, ShoppingCart, SlidersHorizontal, StickyNote, Tag, TriangleAlert, XCircle } from "lucide-react";
 
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
@@ -421,20 +421,20 @@ export default function ItemPivotReport() {
                     <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
                         {reportData && (
                             <>
-                                <i className="bi bi-calendar-event me-1"></i>
+                                <CalendarDays className="size-4" aria-hidden="true" />
                                 {reportData.report_date}
                                 <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
                             </>
                         )}
-                        <i className="bi bi-tag-fill me-1"></i>
+                        <Tag className="size-4" aria-hidden="true" />
                         Active Norm: {activeNormTab || 'None'}
                         {reportData && (
                             <>
                                 <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
-                                <i className="bi bi-bell me-1"></i>
+                                <Bell className="size-4" aria-hidden="true" />
                                 {getTotalNotificationCount()} Notifications
                                 <span style={{ margin: '0 8px', opacity: 0.5 }}>•</span>
-                                <i className="bi bi-file-text me-1"></i>
+                                <FileText className="size-4" aria-hidden="true" />
                                 {getTotalLicenseCount()} Licenses
                             </>
                         )}
@@ -442,7 +442,7 @@ export default function ItemPivotReport() {
                 </div>
                 <div className="page-actions">
                     <Button variant="outline" size="sm" onClick={() => setFiltersCollapsed(!filtersCollapsed)}>
-                        <i className={`bi bi-funnel${hasActiveFilters ? '-fill' : ''}`} />
+                        <Filter className="size-4" />
                         {filtersCollapsed ? 'Show' : 'Hide'} Filters
                         {hasActiveFilters && <Badge className="ml-1">Active</Badge>}
                     </Button>
@@ -468,9 +468,9 @@ export default function ItemPivotReport() {
                     <div className="col-12">
                         <div className="surface-card" style={{maxWidth: '1400px'}}>
                             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}
-                                 className="d-flex justify-content-between align-items-center">
+                                 className="flex justify-between items-center">
                                 <h5 className="mb-0" style={{ fontWeight: 600, fontSize: 15 }}>
-                                    <i className="bi bi-sliders me-2" style={{ color: 'var(--primary-color)' }}></i>
+                                    <SlidersHorizontal className="size-4" aria-hidden="true" />
                                     Filters
                                 </h5>
                                 {hasActiveFilters && (
@@ -479,7 +479,7 @@ export default function ItemPivotReport() {
                                         className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted cursor-pointer"
                                         onClick={handleClearFilters}
                                     >
-                                        <i className="bi bi-x-circle me-1"></i>
+                                        <XCircle className="size-4" aria-hidden="true" />
                                         Clear Filters
                                     </button>
                                 )}
@@ -487,8 +487,8 @@ export default function ItemPivotReport() {
                             <div style={{ padding: '14px 16px' }}>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                     <div>
-                                        <label className="form-label fw-bold mb-2">
-                                            <i className="bi bi-currency-dollar me-1"></i>
+                                        <label className="form-label font-bold mb-2">
+                                            <DollarSign className="size-4" aria-hidden="true" />
                                             Minimum Balance (CIF)
                                         </label>
                                         <select
@@ -508,8 +508,8 @@ export default function ItemPivotReport() {
                                     </div>
 
                                     <div>
-                                        <label className="form-label fw-bold mb-2">
-                                            <i className="bi bi-calendar-check me-1"></i>
+                                        <label className="form-label font-bold mb-2">
+                                            <CalendarCheck className="size-4" aria-hidden="true" />
                                             License Status
                                         </label>
                                         <select
@@ -525,8 +525,8 @@ export default function ItemPivotReport() {
                                     </div>
 
                                     <div>
-                                        <label className="form-label fw-bold mb-2">
-                                            <i className="bi bi-cart-check me-1"></i>
+                                        <label className="form-label font-bold mb-2">
+                                            <ShoppingCart className="size-4" aria-hidden="true" />
                                             Purchase Status
                                         </label>
                                         <Select
@@ -546,8 +546,8 @@ export default function ItemPivotReport() {
                                     </div>
 
                                     <div>
-                                        <label className="form-label fw-bold mb-2">
-                                            <i className="bi bi-calendar-range me-1"></i>
+                                        <label className="form-label font-bold mb-2">
+                                            <CalendarRange className="size-4" aria-hidden="true" />
                                             Expiry Date From
                                         </label>
                                         <input
@@ -559,8 +559,8 @@ export default function ItemPivotReport() {
                                     </div>
 
                                     <div>
-                                        <label className="form-label fw-bold mb-2">
-                                            <i className="bi bi-calendar-range me-1"></i>
+                                        <label className="form-label font-bold mb-2">
+                                            <CalendarRange className="size-4" aria-hidden="true" />
                                             Expiry Date To
                                         </label>
                                         <input
@@ -572,8 +572,8 @@ export default function ItemPivotReport() {
                                     </div>
 
                                     <div>
-                                        <label className="form-label fw-bold mb-2">
-                                            <i className="bi bi-building me-1"></i>
+                                        <label className="form-label font-bold mb-2">
+                                            <Building2 className="size-4" aria-hidden="true" />
                                             Include Companies
                                         </label>
                                         <div style={{minHeight: '38px'}}>
@@ -591,8 +591,8 @@ export default function ItemPivotReport() {
                                     </div>
 
                                     <div>
-                                        <label className="form-label fw-bold mb-2">
-                                            <i className="bi bi-dash-circle me-1"></i>
+                                        <label className="form-label font-bold mb-2">
+                                            <MinusCircle className="size-4" aria-hidden="true" />
                                             Exclude Companies
                                         </label>
                                         <div style={{minHeight: '38px'}}>
@@ -613,23 +613,23 @@ export default function ItemPivotReport() {
                                 {hasActiveFilters && (
                                     <div className="mt-3">
                                         <div
-                                            className="alert alert-info d-flex justify-content-between align-items-center py-2 mb-0">
+                                            className="alert alert-info flex justify-between items-center py-2 mb-0">
                                             <div>
-                                                <i className="bi bi-funnel-fill me-2"></i>
+                                                <Filter className="size-4" aria-hidden="true" />
                                                 <strong>Active Filters:</strong>
                                                 {!isDefaultPurchaseStatus && (
-                                                    <span className="badge bg-primary ms-2">
+                                                    <span className="badge bg-primary ml-2">
                                                         Purchase: {purchaseStatus.length > 0 ? purchaseStatus.join(', ') : 'none'}
                                                     </span>
                                                 )}
-                                                {minBalance !== 200 && <span className="badge bg-primary ms-2">Min Balance: ₹{minBalance}</span>}
+                                                {minBalance !== 200 && <span className="badge bg-primary ml-2">Min Balance: ₹{minBalance}</span>}
                                                 {licenseStatus !== 'active' && <span
-                                                    className="badge bg-primary ms-2">Status: {licenseStatus.replace('_', ' ')}</span>}
-                                                {expiryDateFrom && <span className="badge bg-primary ms-2">Expiry From: {expiryDateFrom}</span>}
-                                                {expiryDateTo && <span className="badge bg-primary ms-2">Expiry To: {expiryDateTo}</span>}
+                                                    className="badge bg-primary ml-2">Status: {licenseStatus.replace('_', ' ')}</span>}
+                                                {expiryDateFrom && <span className="badge bg-primary ml-2">Expiry From: {expiryDateFrom}</span>}
+                                                {expiryDateTo && <span className="badge bg-primary ml-2">Expiry To: {expiryDateTo}</span>}
                                                 {selectedCompanies.length > 0 && <span
-                                                    className="badge bg-primary ms-2">Incl. Companies: {selectedCompanies.length}</span>}
-                                                {excludeCompanies.length > 0 && <span className="badge bg-primary ms-2">Excl. Companies: {excludeCompanies.length}</span>}
+                                                    className="badge bg-primary ml-2">Incl. Companies: {selectedCompanies.length}</span>}
+                                                {excludeCompanies.length > 0 && <span className="badge bg-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>}
                                             </div>
                                         </div>
                                     </div>
@@ -646,12 +646,12 @@ export default function ItemPivotReport() {
                     <div className="surface-card">
                         <div style={{ padding: '14px 16px' }}>
                             <h6 className="mb-3" style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--primary-color)' }}>
-                                <i className="bi bi-tag-fill me-2"></i>
+                                <Tag className="size-4" aria-hidden="true" />
                                 Available Norms ({availableNorms.length})
-                                <small className="text-muted ms-2">(includes E1, E5, E126, E132 conversion norms)</small>
+                                <small className="text-muted ml-2">(includes E1, E5, E126, E132 conversion norms)</small>
                             </h6>
                             {availableNorms.length > 0 ? (
-                                <div className="d-flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-2">
                                     {availableNorms.map((normObj) => {
                                         const normClass = normObj.norm_class || normObj;
                                         const description = normObj.description || '';
@@ -679,7 +679,7 @@ export default function ItemPivotReport() {
                                                 }}
                                             >
                                                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: description ? '4px' : '0'}}>
-                                                    <i className={`bi ${isConversionNorm ? 'bi-arrow-repeat' : 'bi-tag-fill'} me-1`}></i>
+                                                    {isConversionNorm ? <RefreshCw className="size-3.5 mr-1" aria-hidden="true" /> : <Tag className="size-3.5 mr-1" aria-hidden="true" />}
                                                     <span style={{fontSize: 16, fontWeight: '600'}}>{normClass}</span>
                                                     {loading && activeNormTab === normClass && (
                                                         <Loader2 className="ml-1.5 size-3.5 animate-spin text-primary" />
@@ -696,7 +696,7 @@ export default function ItemPivotReport() {
                                 </div>
                             ) : (
                                 <div className="text-center py-3">
-                                    <i className="bi bi-inbox text-muted" style={{fontSize: '2rem'}}></i>
+                                    <Inbox className="size-4" aria-hidden="true" />
                                     <p className="text-muted mb-0 mt-2">No norms available.</p>
                                 </div>
                             )}
@@ -723,8 +723,8 @@ export default function ItemPivotReport() {
                     {!loading && activeNormTab && reportData?.licenses_by_norm_notification && (!reportData?.licenses_by_norm_notification?.[activeNormTab] || Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length === 0) && (
                         <div className="card">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--tb-border-strong)'}}></i>
-                                <h5 className="mt-3 text-muted">No licenses found for {activeNormTab}</h5>
+                                <Inbox className="size-4" aria-hidden="true" />
+                                <h5 className="mt-3 text-muted-foreground">No licenses found for {activeNormTab}</h5>
                                 <p className="text-muted">Try adjusting your filters to see more results.</p>
                             </div>
                         </div>
@@ -738,16 +738,16 @@ export default function ItemPivotReport() {
                                 <div key={`${activeNormTab}-${notification}`} className="mb-4">
                                     <div className="card">
                                         <div
-                                            className="card-header bg-gradient text-primary d-flex justify-content-between align-items-center"
+                                            className="card-header bg-gradient text-primary flex justify-between items-center"
                                             style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
                                             <div>
                                                 <h5 className="mb-0">
-                                                    <i className="bi bi-bell-fill me-2"></i>
+                                                    <Bell className="size-4" aria-hidden="true" />
                                                     Notification Number: {notification}
                                                     {notification === 'Unknown' && (
-                                                        <span className="badge bg-warning text-dark ms-2"
+                                                        <span className="badge bg-warning text-dark ml-2"
                                                               title="Notification number is blank or missing">
-                                                            <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                                                            <TriangleAlert className="size-4" aria-hidden="true" />
                                                             Missing
                                                         </span>
                                                     )}
@@ -851,7 +851,7 @@ export default function ItemPivotReport() {
                                                                 <th key={`${item.id}-qty`} colSpan={colSpan}
                                                                     className="text-center bg-info bg-opacity-10"
                                                                     style={{minWidth: '200px'}}>
-                                                                    <i className="bi bi-box-seam me-1"></i>
+                                                                    <Package className="size-4" aria-hidden="true" />
                                                                     {item.name}
                                                                 </th>
                                                             );
@@ -986,7 +986,7 @@ export default function ItemPivotReport() {
                                                     {licenses.map((license, idx) => (
                                                         <React.Fragment key={license.license_number}>
                                                         <tr className="align-middle">
-                                                            <td className="text-center fw-bold" style={{
+                                                            <td className="text-center font-bold" style={{
                                                                 position: 'sticky',
                                                                 left: 0,
                                                                 zIndex: 1,
@@ -998,7 +998,7 @@ export default function ItemPivotReport() {
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>
-                                                                <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap' }}>
+                                                                <div className="flex items-center gap-2" style={{ flexWrap: 'nowrap' }}>
                                                                     <span>{license.license_number}</span>
                                                                     <PurchaseStatusBadge
                                                                         code={license.purchase_status_code}
@@ -1059,7 +1059,7 @@ export default function ItemPivotReport() {
                                                                                 lineHeight: 1.4,
                                                                             }}
                                                                         >
-                                                                            <i className="bi bi-file-earmark-text me-1"></i>
+                                                                            <FileText className="size-4" aria-hidden="true" />
                                                                             Condition
                                                                         </button>
                                                                     )}
@@ -1094,23 +1094,22 @@ export default function ItemPivotReport() {
                                                             }}>
                                                                 {license.notification_number}
                                                                 {license.notification_number === 'Unknown' && (
-                                                                    <i className="bi bi-exclamation-triangle-fill text-warning ms-1"
-                                                                       title="Missing notification number"></i>
+                                                                    <TriangleAlert className="size-4" aria-hidden="true" />
                                                                 )}
                                                             </td>
-                                                            <td className="text-end fw-semibold" style={{
+                                                            <td className="text-end font-semibold" style={{
                                                                 position: 'sticky',
                                                                 left: '650px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{license.total_cif.toFixed(2)}</td>
-                                                            <td className="text-end fw-semibold text-info" style={{
+                                                            <td className="text-end font-semibold text-info" style={{
                                                                 position: 'sticky',
                                                                 left: '750px',
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{(license.alloted_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-end fw-semibold text-success" style={{
+                                                            <td className="text-end font-semibold text-success" style={{
                                                                 position: 'sticky',
                                                                 left: '850px',
                                                                 zIndex: 1,
@@ -1138,13 +1137,13 @@ export default function ItemPivotReport() {
                                                                         <td className={`text-end ${hasData ? 'bg-light' : ''}`}>
                                                                             {itemData.quantity ? itemData.quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light fw-semibold text-primary' : ''}`}>
+                                                                        <td className={`text-end ${hasData ? 'bg-light font-semibold text-primary' : ''}`}>
                                                                             {itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         <td className={`text-end ${hasData ? 'bg-light' : ''}`} style={hasData ? {color: 'var(--warning-color)'} : {}}>
                                                                             {itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light text-success fw-semibold' : ''}`}>
+                                                                        <td className={`text-end ${hasData ? 'bg-light text-success font-semibold' : ''}`}>
                                                                             {itemData.available_quantity ? itemData.available_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         {item.has_restriction && (
@@ -1155,7 +1154,7 @@ export default function ItemPivotReport() {
                                                                                             className="badge bg-info">{itemData.restriction}%</span>
                                                                                     ) : '-'}
                                                                                 </td>
-                                                                                <td className={`text-end ${hasData ? 'bg-light fw-semibold' : ''}`}>
+                                                                                <td className={`text-end ${hasData ? 'bg-light font-semibold' : ''}`}>
                                                                                     {itemData.restriction_value ? itemData.restriction_value.toFixed(2) : '-'}
                                                                                 </td>
                                                                             </>
@@ -1165,11 +1164,11 @@ export default function ItemPivotReport() {
                                                                         <td className={`text-end ${hasData ? 'bg-light' : ''}`}>
                                                                             {itemData.unit_price ? Number(itemData.unit_price).toFixed(2) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'bg-light fw-semibold' : ''}`}>
+                                                                        <td className={`text-end ${hasData ? 'bg-light font-semibold' : ''}`}>
                                                                             {itemData.planned_cif ? Number(itemData.planned_cif).toFixed(2) : '-'}
                                                                         </td>
                                                                         {item.name === 'RUTILE - A3627' && (
-                                                                            <td className={`text-end ${hasData ? 'bg-light fw-semibold text-warning' : ''}`}>
+                                                                            <td className={`text-end ${hasData ? 'bg-light font-semibold text-warning' : ''}`}>
                                                                                 {itemData.unit_price ? itemData.unit_price.toFixed(4) : '-'}
                                                                             </td>
                                                                         )}
@@ -1193,7 +1192,7 @@ export default function ItemPivotReport() {
                                                                                 borderRadius: 'var(--tb-r-sm)'
                                                                             }}>
                                                                                 <strong style={{ color: '#000' }}>
-                                                                                    <i className="bi bi-sticky me-1"></i>
+                                                                                    <StickyNote className="size-4" aria-hidden="true" />
                                                                                     Notes:
                                                                                 </strong>
                                                                                 <span style={{ color: '#000', marginLeft: '8px' }}>
@@ -1208,7 +1207,7 @@ export default function ItemPivotReport() {
                                                                                 borderRadius: 'var(--tb-r-sm)'
                                                                             }}>
                                                                                 <strong style={{ color: '#000' }}>
-                                                                                    <i className="bi bi-arrow-left-right me-1"></i>
+                                                                                    <ArrowLeftRight className="size-4" aria-hidden="true" />
                                                                                     Latest Transfer:
                                                                                 </strong>
                                                                                 <span style={{ color: '#000', marginLeft: '8px' }}>
@@ -1222,7 +1221,7 @@ export default function ItemPivotReport() {
                                                         )}
                                                         </React.Fragment>
                                                     ))}
-                                                    <tr className="table-warning fw-bold" style={{
+                                                    <tr className="table-warning font-bold" style={{
                                                         position: 'sticky',
                                                         bottom: 0,
                                                         backgroundColor: 'var(--warning-bg)'
@@ -1233,7 +1232,7 @@ export default function ItemPivotReport() {
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)'
                                                         }} colSpan="5">
-                                                            <i className="bi bi-calculator me-2"></i>
+                                                            <Calculator className="size-4" aria-hidden="true" />
                                                             TOTAL
                                                         </td>
                                                         <td style={{
@@ -1308,7 +1307,7 @@ export default function ItemPivotReport() {
                                                                     {item.has_restriction && (
                                                                         <>
                                                                             <td className="text-muted">-</td>
-                                                                            <td className="text-end fw-bold">
+                                                                            <td className="text-end font-bold">
                                                                                 {totalRestrictionVal > 0 ? totalRestrictionVal.toFixed(2) : '-'}
                                                                             </td>
                                                                         </>
@@ -1317,7 +1316,7 @@ export default function ItemPivotReport() {
                                                                     <td className="text-end">
                                                                         {effectiveUnit > 0 ? effectiveUnit.toFixed(2) : '-'}
                                                                     </td>
-                                                                    <td className="text-end fw-bold">
+                                                                    <td className="text-end font-bold">
                                                                         {totalPlanned > 0 ? totalPlanned.toFixed(2) : '-'}
                                                                     </td>
                                                                     {item.name === 'RUTILE - A3627' && (
@@ -1337,7 +1336,7 @@ export default function ItemPivotReport() {
                                                 return (
                                                     <div className="mt-4 px-3 pb-3">
                                                         <h6 className="mb-3 text-primary">
-                                                            <i className="bi bi-calculator me-2"></i>
+                                                            <Calculator className="size-4" aria-hidden="true" />
                                                             Summary
                                                         </h6>
                                                         <div style={{maxWidth: '1400px'}}>
@@ -1354,12 +1353,12 @@ export default function ItemPivotReport() {
                                                                 <tbody>
                                                                 {/* Opening Balance */}
                                                                 <tr className="table-info">
-                                                                    <td colSpan="2" className="text-center fw-bold">OPENING BALANCE</td>
-                                                                    <td className="text-end fw-bold">
+                                                                    <td colSpan="2" className="text-center font-bold">OPENING BALANCE</td>
+                                                                    <td className="text-end font-bold">
                                                                         {formatIndianNumber(summary.openingBalance, 2)}
                                                                     </td>
-                                                                    <td className="text-end fw-bold">-</td>
-                                                                    <td className="text-end fw-bold">-</td>
+                                                                    <td className="text-end font-bold">-</td>
+                                                                    <td className="text-end font-bold">-</td>
                                                                 </tr>
 
                                                                 {/* Regular Items */}
@@ -1373,7 +1372,7 @@ export default function ItemPivotReport() {
                                                                         <td className="text-end">
                                                                             {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
                                                                         </td>
-                                                                        <td className="text-end fw-semibold">
+                                                                        <td className="text-end font-semibold">
                                                                             {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
                                                                         </td>
                                                                     </tr>
@@ -1393,8 +1392,8 @@ export default function ItemPivotReport() {
                                                                                 return (
                                                                                     <React.Fragment key={percentage}>
                                                                                         <tr className="table-warning">
-                                                                                            <td colSpan="5" className="text-center fw-bold">
-                                                                                                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                                                                            <td colSpan="5" className="text-center font-bold">
+                                                                                                <TriangleAlert className="size-4" aria-hidden="true" />
                                                                                                 RESTRICTED ITEMS - {percentage}%
                                                                                             </td>
                                                                                         </tr>
@@ -1408,19 +1407,19 @@ export default function ItemPivotReport() {
                                                                                                 <td className="text-end">
                                                                                                     {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
                                                                                                 </td>
-                                                                                                <td className="text-end fw-semibold">
+                                                                                                <td className="text-end font-semibold">
                                                                                                     {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
                                                                                                 </td>
                                                                                             </tr>
                                                                                         ))}
                                                                                         {/* Balance for this restriction percentage (shared across all items) */}
                                                                                         <tr className="table-warning">
-                                                                                            <td colSpan="2" className="text-center fw-bold">Balance {percentage}%</td>
-                                                                                            <td className="text-end fw-bold">
+                                                                                            <td colSpan="2" className="text-center font-bold">Balance {percentage}%</td>
+                                                                                            <td className="text-end font-bold">
                                                                                                 {formatIndianNumber(groupData.sharedRestrictionValue, 2)}
                                                                                             </td>
-                                                                                            <td className="text-end fw-bold">-</td>
-                                                                                            <td className="text-end fw-bold">-</td>
+                                                                                            <td className="text-end font-bold">-</td>
+                                                                                            <td className="text-end font-bold">-</td>
                                                                                         </tr>
                                                                                     </React.Fragment>
                                                                                 );
@@ -1429,12 +1428,12 @@ export default function ItemPivotReport() {
                                                                 )}
                                                                 {/* Grand-total row for the Summary table. */}
                                                                 <tr className="table-success">
-                                                                    <td colSpan="2" className="text-center fw-bold">TOTAL PLANNED CIF</td>
-                                                                    <td className="text-end fw-bold">
+                                                                    <td colSpan="2" className="text-center font-bold">TOTAL PLANNED CIF</td>
+                                                                    <td className="text-end font-bold">
                                                                         {formatIndianNumber(summary.totalAvailable || 0, 2)}
                                                                     </td>
-                                                                    <td className="text-end fw-bold">-</td>
-                                                                    <td className="text-end fw-bold">
+                                                                    <td className="text-end font-bold">-</td>
+                                                                    <td className="text-end font-bold">
                                                                         {formatIndianNumber(summary.totalPlanned || 0, 2)}
                                                                     </td>
                                                                 </tr>
@@ -1456,7 +1455,7 @@ export default function ItemPivotReport() {
                                 <div className="card mb-4">
                                     <div className="card-header bg-light">
                                         <h5 className="mb-0">
-                                            <i className="bi bi-info-circle-fill me-2 text-info"></i>
+                                            <Info className="size-4" aria-hidden="true" />
                                             SION Norm {activeNormTab} - Notes & Conditions
                                         </h5>
                                     </div>
@@ -1466,7 +1465,7 @@ export default function ItemPivotReport() {
                                             {reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 && (
                                                 <div>
                                                     <h6 className="text-primary mb-3">
-                                                        <i className="bi bi-sticky-fill me-2"></i>
+                                                        <StickyNote className="size-4" aria-hidden="true" />
                                                         Notes
                                                     </h6>
                                                     <div className="list-group">
@@ -1474,8 +1473,8 @@ export default function ItemPivotReport() {
                                                             .sort((a, b) => a.display_order - b.display_order)
                                                             .map((note, index) => (
                                                                 <div key={index} className="list-group-item border-start border-primary border-3">
-                                                                    <div className="d-flex w-100 justify-content-between align-items-start">
-                                                                        <span className="badge bg-primary rounded-pill me-2">{index + 1}</span>
+                                                                    <div className="flex w-full justify-between items-start">
+                                                                        <span className="badge bg-primary rounded-pill mr-2">{index + 1}</span>
                                                                         <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
                                                                             {note.note_text}
                                                                         </p>
@@ -1490,7 +1489,7 @@ export default function ItemPivotReport() {
                                             {reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0 && (
                                                 <div>
                                                     <h6 className="text-warning mb-3">
-                                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                                        <TriangleAlert className="size-4" aria-hidden="true" />
                                                         Conditions
                                                     </h6>
                                                     <div className="list-group">
@@ -1498,8 +1497,8 @@ export default function ItemPivotReport() {
                                                             .sort((a, b) => a.display_order - b.display_order)
                                                             .map((condition, index) => (
                                                                 <div key={index} className="list-group-item border-start border-warning border-3">
-                                                                    <div className="d-flex w-100 justify-content-between align-items-start">
-                                                                        <span className="badge bg-warning text-dark rounded-pill me-2">{index + 1}</span>
+                                                                    <div className="flex w-full justify-between items-start">
+                                                                        <span className="badge bg-warning text-dark rounded-pill mr-2">{index + 1}</span>
                                                                         <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
                                                                             {condition.condition_text}
                                                                         </p>
@@ -1520,7 +1519,7 @@ export default function ItemPivotReport() {
                     {!loading && !activeNormTab && availableNorms.length > 0 && (
                         <div className="card">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-tag" style={{fontSize: '3rem', color: 'var(--primary-color)'}}></i>
+                                <Tag className="size-4" aria-hidden="true" />
                                 <h5 className="mt-3 text-primary">Select a Norm to View Report</h5>
                                 <p className="text-muted">Click on any norm tab above to load the report data</p>
                             </div>
@@ -1531,8 +1530,8 @@ export default function ItemPivotReport() {
                     {!loading && availableNorms.length === 0 && (
                         <div className="card">
                             <div className="card-body text-center py-5">
-                                <i className="bi bi-inbox" style={{fontSize: '3rem', color: 'var(--tb-border-strong)'}}></i>
-                                <h5 className="mt-3 text-muted">No Norms Available</h5>
+                                <Inbox className="size-4" aria-hidden="true" />
+                                <h5 className="mt-3 text-muted-foreground">No Norms Available</h5>
                                 <p className="text-muted">No active norm classes found in the system.</p>
                             </div>
                         </div>

@@ -34,7 +34,7 @@ export default function StatCard({
             className={[
                 "tb-stat",
                 interactive ? "tb-stat-hover" : "",
-                interactive ? "text-start border-0 w-100" : "",
+                interactive ? "text-start border-0 w-full" : "",
                 className,
             ].filter(Boolean).join(" ")}
             style={style}
@@ -59,8 +59,8 @@ export default function StatCard({
                             delta.direction === "down" ? "is-down" : "",
                         ].filter(Boolean).join(" ")}
                     >
-                        {delta.direction === "up" && <i className="bi bi-arrow-up-short" aria-hidden="true" />}
-                        {delta.direction === "down" && <i className="bi bi-arrow-down-short" aria-hidden="true" />}
+                        {delta.direction === "up" && <ArrowUp className="size-4" aria-hidden="true" />}
+                        {delta.direction === "down" && <ArrowDown className="size-4" aria-hidden="true" />}
                         {delta.value}{delta.label ? ` ${delta.label}` : ""}
                     </div>
                 )}

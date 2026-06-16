@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import DebouncedSearchInput from '../components/DebouncedSearchInput';
-import { FileText, FileSpreadsheet, Loader2 } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, BookOpen, Building2, Calendar, CalendarCheck, CalendarRange, CalendarX, FileSpreadsheet, FileText, Filter, Globe, Inbox, Loader2, Trophy, XCircle } from "lucide-react";
 
 function LicenseWiseLedger({ data, navigate }) {
     const { licenses } = data;
@@ -23,10 +23,10 @@ function LicenseWiseLedger({ data, navigate }) {
                     {/* License Header */}
                     <div style={{ background: 'var(--tb-brand-active)', color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '24px' }}>
                         <span style={{ fontWeight: '700', fontSize: 15 }}>
-                            <i className="bi bi-file-earmark-text me-2"></i>{lic.license_number}
+                            <FileText className="size-4" aria-hidden="true" />{lic.license_number}
                         </span>
                         <span style={{ fontSize: 12.5, color: 'var(--tb-text-tertiary)' }}>
-                            <i className="bi bi-calendar3 me-1"></i>{lic.license_date}
+                            <Calendar className="size-4" aria-hidden="true" />{lic.license_date}
                         </span>
                         <span style={{ background: lic.license_type === 'DFIA' ? 'var(--tb-info)' : 'var(--accent-color)', color: '#fff', borderRadius: 'var(--tb-r-sm)', padding: '2px 8px', fontSize: 11, fontWeight: '700' }}>
                             {lic.license_type}
@@ -36,7 +36,7 @@ function LicenseWiseLedger({ data, navigate }) {
                                 onClick={() => navigate(`/license-ledger/${lic.license_id}`)}
                                 style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 'var(--tb-r-sm)', padding: '3px 10px', fontSize: 12, fontWeight: '600', cursor: 'pointer' }}
                             >
-                                <i className="bi bi-journal-text me-1"></i>View Ledger
+                                <BookOpen className="size-4" aria-hidden="true" />View Ledger
                             </button>
                         )}
                     </div>
@@ -59,14 +59,14 @@ function LicenseWiseLedger({ data, navigate }) {
                                         {/* Company name row */}
                                         <tr style={{ background: ci % 2 === 0 ? 'var(--tb-brand-50)' : 'var(--tb-sunken)', borderTop: ci > 0 ? '2px solid var(--tb-border)' : 'none' }}>
                                             <td colSpan="5" style={{ padding: '5px 12px', fontWeight: '700', color: 'var(--tb-text)', fontSize: '0.82rem' }}>
-                                                <i className="bi bi-building me-2"></i>{company.company_name}
+                                                <Building2 className="size-4" aria-hidden="true" />{company.company_name}
                                             </td>
                                         </tr>
                                         {/* Purchase rows */}
                                         {company.purchases.map((row) => (
                                             <tr key={`p-${row.trade_id}`} style={{ background: 'var(--tb-success-soft)', borderBottom: '1px solid var(--tb-success-border)' }}>
                                                 <td style={{ padding: '4px 12px 4px 24px', color: 'var(--tb-text)' }}>
-                                                    <i className="bi bi-arrow-down-circle text-success me-1"></i>Purchase
+                                                    <ArrowDownCircle className="size-4" aria-hidden="true" />Purchase
                                                 </td>
                                                 <td style={{ padding: '4px 12px', color: 'var(--tb-text-secondary)' }}>{lic.license_type}</td>
                                                 <td style={{ padding: '4px 12px', color: 'var(--tb-text-secondary)' }}>{row.invoice_date}</td>
@@ -78,7 +78,7 @@ function LicenseWiseLedger({ data, navigate }) {
                                         {company.sales.map((row) => (
                                             <tr key={`s-${row.trade_id}`} style={{ background: 'var(--tb-danger-soft)', borderBottom: '1px solid var(--tb-danger-border)' }}>
                                                 <td style={{ padding: '4px 12px 4px 24px', color: 'var(--tb-text)' }}>
-                                                    <i className="bi bi-arrow-up-circle text-danger me-1"></i>Sale
+                                                    <ArrowUpCircle className="size-4" aria-hidden="true" />Sale
                                                 </td>
                                                 <td style={{ padding: '4px 12px', color: 'var(--tb-text-secondary)' }}>{lic.license_type}</td>
                                                 <td style={{ padding: '4px 12px', color: 'var(--tb-text-secondary)' }}>{row.invoice_date}</td>
@@ -108,8 +108,8 @@ function LicenseWiseLedger({ data, navigate }) {
             ))}
             {licenses.length === 0 && (
                 <div className="text-center py-5">
-                    <i className="bi bi-inbox" style={{ fontSize: '2.5rem', color: 'var(--tb-border-strong)' }}></i>
-                    <p className="mt-3 text-muted mb-0">No trades found</p>
+                    <Inbox className="size-4" aria-hidden="true" />
+                    <p className="mt-3 text-muted-foreground mb-0">No trades found</p>
                 </div>
             )}
         </div>
@@ -370,15 +370,15 @@ export default function LicenseLedger() {
     return (
         <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
             {/* Header */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="flex justify-between items-center mb-4">
                 <div>
-                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--tb-text)' }}>
-                        <i className="bi bi-journal-text me-2" style={{ color: 'var(--tb-brand)' }}></i>
+                    <h4 className="mb-0 font-bold" style={{ color: 'var(--tb-text)' }}>
+                        <BookOpen className="size-4" aria-hidden="true" />
                         License Ledger
                     </h4>
                     <small className="text-muted">Track available balance for DFIA and Incentive licenses</small>
                 </div>
-                <div className="d-flex gap-2">
+                <div className="flex gap-2">
                     {companyWiseData?.licenses?.length > 0 && (
                         <>
                             <Button variant="outline" size="sm" onClick={handleBulkExportPDF} disabled={bulkExporting}>
@@ -398,8 +398,8 @@ export default function LicenseLedger() {
             {summary && (
                 <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
                     <div className="card" style={{ borderLeft: '3px solid var(--tb-brand)' }}>
-                            <div className="card-header border-bottom py-2 px-3 d-flex align-items-center gap-2">
-                                <i className="bi bi-globe" style={{ color: 'var(--tb-brand)', fontSize: 15 }}></i>
+                            <div className="card-header border-bottom py-2 px-3 flex items-center gap-2">
+                                <Globe className="size-4" aria-hidden="true" />
                                 <span className="fw-semibold small">DFIA Licenses</span>
                                 <span className="badge ms-auto" style={{ background: 'var(--tb-brand)', fontSize: 11 }}>{summary.dfia.total_licenses} active</span>
                             </div>
@@ -427,8 +427,8 @@ export default function LicenseLedger() {
                             </div>
                         </div>
                     <div className="card" style={{ borderLeft: '3px solid var(--tb-info)' }}>
-                            <div className="card-header border-bottom py-2 px-3 d-flex align-items-center gap-2">
-                                <i className="bi bi-trophy" style={{ color: 'var(--tb-info)', fontSize: 15 }}></i>
+                            <div className="card-header border-bottom py-2 px-3 flex items-center gap-2">
+                                <Trophy className="size-4" aria-hidden="true" />
                                 <span className="fw-semibold small">Incentive Licenses</span>
                                 <span className="badge ms-auto" style={{ background: 'var(--tb-info)', fontSize: 11 }}>{summary.incentive.total_licenses} active</span>
                             </div>
@@ -460,26 +460,26 @@ export default function LicenseLedger() {
 
             {/* Filters Section */}
             <div className="card mb-3">
-                <div className="card-header border-bottom py-2 px-3 d-flex align-items-center justify-content-between">
-                    <div className="d-flex align-items-center gap-2">
-                        <i className="bi bi-funnel" style={{ color: 'var(--tb-brand)' }}></i>
-                        <h6 className="mb-0 fw-semibold">Filters & Search</h6>
+                <div className="card-header border-bottom py-2 px-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Filter className="size-4" aria-hidden="true" />
+                        <h6 className="mb-0 font-semibold">Filters & Search</h6>
                         {filters.company && (
-                            <span className="badge bg-info ms-1" style={{ fontSize: 11 }}>
-                                <i className="bi bi-building me-1"></i>{filters.company.label}
+                            <span className="badge bg-info ml-1" style={{ fontSize: 11 }}>
+                                <Building2 className="size-4" aria-hidden="true" />{filters.company.label}
                             </span>
                         )}
                     </div>
                     {filters.company && (
                         <Button size="sm" variant="outline" onClick={() => handleFilterChange('company', null)}>
-                            <i className="bi bi-x-circle me-1" aria-hidden="true" />Clear Company
+                            <XCircle className="size-4" aria-hidden="true" />Clear Company
                         </Button>
                     )}
                 </div>
                 <div className="card-body p-3">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
                         <div className="lg:col-span-2">
-                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><i className="bi bi-building me-1" aria-hidden="true" />Company Filter</label>
+                            <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><Building2 className="size-4" aria-hidden="true" />Company Filter</label>
                             <AsyncSelectField endpoint="masters/companies/" labelField="name" valueField="id" value={filters.company} onChange={(value) => handleFilterChange('company', value)} isMulti={false} placeholder="Select company to view their ledger..." loadOnMount={false} />
                             <p className="mt-0.5 text-[11px] text-muted-foreground">Filter by trades with specific company</p>
                         </div>
@@ -527,23 +527,23 @@ export default function LicenseLedger() {
                     <div className="mt-3 border-t border-border/60 pt-3">
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2 text-[12px] font-semibold text-muted-foreground">
-                                <i className="bi bi-calendar-range text-primary" aria-hidden="true" />
+                                <CalendarRange className="size-4" aria-hidden="true" />
                                 Purchase Date Range
                                 <span className="text-[11.5px] font-normal text-muted-foreground">(Defaults to current FY: Apr-Mar)</span>
                             </div>
                             <div className="flex gap-1">
-                                <Button size="sm" variant="outline" onClick={setCurrentFinancialYear}><i className="bi bi-calendar-check me-1" aria-hidden="true" />Current FY</Button>
-                                <Button size="sm" variant="outline" onClick={setPreviousFinancialYear}><i className="bi bi-calendar3 me-1" aria-hidden="true" />Previous FY</Button>
-                                <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={clearDateFilter} disabled={!filters.purchase_date_from && !filters.purchase_date_to}><i className="bi bi-x-circle me-1" aria-hidden="true" />Clear</Button>
+                                <Button size="sm" variant="outline" onClick={setCurrentFinancialYear}><CalendarCheck className="size-4" aria-hidden="true" />Current FY</Button>
+                                <Button size="sm" variant="outline" onClick={setPreviousFinancialYear}><Calendar className="size-4" aria-hidden="true" />Previous FY</Button>
+                                <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={clearDateFilter} disabled={!filters.purchase_date_from && !filters.purchase_date_to}><XCircle className="size-4" aria-hidden="true" />Clear</Button>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <div>
-                                <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><i className="bi bi-calendar-check me-1" aria-hidden="true" />From Date</label>
+                                <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><CalendarCheck className="size-4" aria-hidden="true" />From Date</label>
                                 <Input type="date" value={filters.purchase_date_from} onChange={(e) => handleFilterChange('purchase_date_from', e.target.value)} />
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><i className="bi bi-calendar-x me-1" aria-hidden="true" />To Date</label>
+                                <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground"><CalendarX className="size-4" aria-hidden="true" />To Date</label>
                                 <Input type="date" value={filters.purchase_date_to} onChange={(e) => handleFilterChange('purchase_date_to', e.target.value)} />
                             </div>
                         </div>
@@ -566,8 +566,8 @@ export default function LicenseLedger() {
                         />
                     ) : (
                         <div className="text-center py-5">
-                            <i className="bi bi-building" style={{ fontSize: '2.5rem', color: 'var(--tb-border-strong)' }}></i>
-                            <p className="mt-3 mb-1 fw-semibold" style={{ color: 'var(--tb-text)', fontSize: 15 }}>No Data</p>
+                            <Building2 className="size-4" aria-hidden="true" />
+                            <p className="mt-3 mb-1 font-semibold" style={{ color: 'var(--tb-text)', fontSize: 15 }}>No Data</p>
                             <p className="text-muted mb-0 small">No trades found</p>
                         </div>
                     )}

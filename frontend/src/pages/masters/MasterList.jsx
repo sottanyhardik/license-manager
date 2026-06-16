@@ -16,7 +16,7 @@ import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../u
 import {openPdfPreview} from "../../utils/pdfPreview";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
-import { FileSpreadsheet, FileText, RefreshCw, Plus, Loader2, X } from "lucide-react";
+import { ArrowRight, BookCheck, Building2, Calendar, CalendarX, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Trash2, TriangleAlert, X } from "lucide-react";
 
 /**
  * Generic Master List Page
@@ -794,11 +794,11 @@ export default function MasterList() {
                         loading ? (
                             <div className="text-center py-5">
                                 <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted">Loading Bill of Entries...</div>
+                                <div className="mt-2 text-muted-foreground">Loading Bill of Entries...</div>
                             </div>
                         ) : data.length === 0 ? (
                             <div className="empty-state">
-                                <div className="empty-icon"><i className="bi bi-inbox"></i></div>
+                                <div className="empty-icon"><Inbox className="size-4" aria-hidden="true" /></div>
                                 <div className="empty-title">No bill of entries found</div>
                                 <div className="empty-sub">Try adjusting filters or create a new BOE.</div>
                             </div>
@@ -836,10 +836,10 @@ export default function MasterList() {
                                                     style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.82rem', color: 'var(--success-text)', background: 'var(--success-bg)', border: '1px solid var(--success-border)', padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}
                                                 >
                                                     {item.invoice_no
-                                                        ? (<><i className="bi bi-receipt" style={{ fontSize: 12 }}></i> {item.invoice_no}</>)
-                                                        : (<><i className="bi bi-plus-circle" style={{ fontSize: 12 }}></i> Add Invoice No</>)
+                                                        ? (<><Receipt className="size-4" aria-hidden="true" /> {item.invoice_no}</>)
+                                                        : (<><PlusCircle className="size-4" aria-hidden="true" /> Add Invoice No</>)
                                                     }
-                                                    <i className="bi bi-pencil-fill" style={{ fontSize: '0.6rem', opacity: 0.6 }}></i>
+                                                    <Pencil className="size-4" aria-hidden="true" />
                                                 </button>
                                             ))
                                         : null;
@@ -909,7 +909,7 @@ export default function MasterList() {
                                                     columns={[
                                                         { key: 'is_dispute', label: '', nowrap: true, width: 28,
                                                             render: (v, row) => row.is_dispute
-                                                                ? <span title="Not found in latest ledger upload — dispute" style={{ color: 'var(--tb-danger)', fontSize: 14.5 }}><i className="bi bi-exclamation-triangle-fill" /></span>
+                                                                ? <span title="Not found in latest ledger upload — dispute" style={{ color: 'var(--tb-danger)', fontSize: 14.5 }}><TriangleAlert className="size-4" aria-hidden="true" /></span>
                                                                 : null },
                                                         { key: 'license_number',   label: 'License',   bold: true, nowrap: true,
                                                             render: (v, row) => v
@@ -961,11 +961,11 @@ export default function MasterList() {
                         loading ? (
                             <div className="text-center py-5">
                                 <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted">Loading Allotments...</div>
+                                <div className="mt-2 text-muted-foreground">Loading Allotments...</div>
                             </div>
                         ) : data.length === 0 ? (
                             <div className="empty-state">
-                                <div className="empty-icon"><i className="bi bi-inbox"></i></div>
+                                <div className="empty-icon"><Inbox className="size-4" aria-hidden="true" /></div>
                                 <div className="empty-title">No allotments found</div>
                                 <div className="empty-sub">Try adjusting filters or create a new allotment.</div>
                             </div>
@@ -1080,11 +1080,11 @@ export default function MasterList() {
                         loading ? (
                             <div className="text-center py-5">
                                 <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted">Loading Licenses...</div>
+                                <div className="mt-2 text-muted-foreground">Loading Licenses...</div>
                             </div>
                         ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted">
-                                <i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i>
+                            <div className="text-center py-5 text-muted-foreground">
+                                <Inbox className="size-4" aria-hidden="true" />
                                 <div className="mt-2">No licenses found</div>
                             </div>
                         ) : (
@@ -1114,32 +1114,32 @@ export default function MasterList() {
                                                 </span>
                                                 {item.license_date && (
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <i className="bi bi-calendar3 me-1"></i>{item.license_date}
+                                                        <Calendar className="size-4" aria-hidden="true" />{item.license_date}
                                                     </span>
                                                 )}
                                                 {item.license_expiry_date && (
                                                     <span style={{ fontSize: 12.5, color: isExpired ? 'var(--tb-danger-text)' : 'var(--tb-text-secondary)', background: isExpired ? 'var(--tb-danger-soft)' : 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <i className="bi bi-calendar-x me-1"></i>Exp: {item.license_expiry_date}
+                                                        <CalendarX className="size-4" aria-hidden="true" />Exp: {item.license_expiry_date}
                                                     </span>
                                                 )}
                                                 {item.ledger_date && (
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <i className="bi bi-journal-check me-1"></i>Ledger: {item.ledger_date}
+                                                        <BookCheck className="size-4" aria-hidden="true" />Ledger: {item.ledger_date}
                                                     </span>
                                                 )}
                                                 {item.port_name && (
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <i className="bi bi-geo-alt me-1"></i>{item.port_name}
+                                                        <MapPin className="size-4" aria-hidden="true" />{item.port_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_name && (
                                                     <span style={{ fontSize: 12.5, color: 'var(--accent-color)', background: 'var(--tb-sunken)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <i className="bi bi-building me-1"></i>{item.exporter_name}
+                                                        <Building2 className="size-4" aria-hidden="true" />{item.exporter_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_iec && (
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <i className="bi bi-fingerprint me-1"></i>IEC: {item.exporter_iec}
+                                                        <Fingerprint className="size-4" aria-hidden="true" />IEC: {item.exporter_iec}
                                                     </span>
                                                 )}
                                                 {item.purchase_status_label && (
@@ -1166,7 +1166,7 @@ export default function MasterList() {
                                                 )}
                                                 {item.has_condition_sheet && (
                                                     <span title="Condition sheet parsed from license copy" style={{ fontSize: 11, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
-                                                        <i className="bi bi-file-earmark-text me-1"></i>Cond. Sheet
+                                                        <FileText className="size-4" aria-hidden="true" />Cond. Sheet
                                                     </span>
                                                 )}
                                             </div>
@@ -1202,16 +1202,16 @@ export default function MasterList() {
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                                                     {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-pencil"></i>
+                                                        <Pencil className="size-4" aria-hidden="true" />
                                                     </button>}
                                                     <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-eye"></i>
+                                                        <Eye className="size-4" aria-hidden="true" />
                                                     </button>
                                                     <button
                                                         onClick={() => { setOwnershipLicense({ id: item.id, number: item.license_number }); setShowOwnershipModal(true); }}
                                                         title="View ownership & transfers"
                                                         style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-50)', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-diagram-3"></i>
+                                                        <Network className="size-4" aria-hidden="true" />
                                                     </button>
                                                     {canWrite && <button
                                                         disabled={fetchingOwnershipIds.has(item.id)}
@@ -1230,7 +1230,7 @@ export default function MasterList() {
                                                         }}
                                                         title="Fetch ownership from DGFT"
                                                         style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--accent-color)', background: 'var(--tb-sunken)', border: '1px solid #c4b5fd', borderRadius: '5px', padding: '4px 9px', cursor: fetchingOwnershipIds.has(item.id) ? 'wait' : 'pointer', opacity: fetchingOwnershipIds.has(item.id) ? 0.6 : 1 }}>
-                                                        <i className={fetchingOwnershipIds.has(item.id) ? 'bi bi-arrow-repeat ' : 'bi bi-cloud-download'}></i>
+                                                        <span className={fetchingOwnershipIds.has(item.id) ? 'inline-block animate-spin' : ''}>{fetchingOwnershipIds.has(item.id) ? <RefreshCw className="size-4" /> : <CloudDownload className="size-4" />}</span>
                                                     </button>}
                                                     <button onClick={async () => {
                                                         try {
@@ -1238,7 +1238,7 @@ export default function MasterList() {
                                                             openPdfPreview(r.data, `${item.license_number || item.id}-balance.pdf`);
                                                         } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate PDF'); }
                                                     }} title="Download PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', border: '1px solid var(--tb-warning-border)', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-file-pdf"></i>
+                                                        <FileText className="size-4" aria-hidden="true" />
                                                     </button>
                                                     <button onClick={async () => {
                                                         try {
@@ -1249,10 +1249,10 @@ export default function MasterList() {
                                                             setTimeout(() => window.URL.revokeObjectURL(url), 10000);
                                                         } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate Excel'); }
                                                     }} title="Download Excel" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-file-earmark-excel"></i>
+                                                        <FileSpreadsheet className="size-4" aria-hidden="true" />
                                                     </button>
                                                     {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-trash"></i>
+                                                        <Trash2 className="size-4" aria-hidden="true" />
                                                     </button>}
                                                 </div>
                                             </div>
@@ -1266,9 +1266,9 @@ export default function MasterList() {
                     {/* Trades Card Layout */}
                     {entityName === 'trades' && (
                         loading ? (
-                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted">Loading Trades...</div></div>
+                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted-foreground">Loading Trades...</div></div>
                         ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted"><i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i><div className="mt-2">No trades found</div></div>
+                            <div className="text-center py-5 text-muted-foreground"><Inbox className="size-4" aria-hidden="true" /><div className="mt-2">No trades found</div></div>
                         ) : (() => {
                             const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
 
@@ -1376,7 +1376,7 @@ export default function MasterList() {
                                                     <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>From</div>
                                                     <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>{item.from_company_label || '—'}</div>
                                                 </div>
-                                                <i className="bi bi-arrow-right" style={{ color: 'var(--text-tertiary)', fontSize: 16 }}></i>
+                                                <ArrowRight className="size-4" aria-hidden="true" />
                                                 <div>
                                                     <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>To</div>
                                                     <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>{item.to_company_label || '—'}</div>
@@ -1436,7 +1436,7 @@ export default function MasterList() {
                                                     onClick={() => togglePair(pairKey)}
                                                 >
                                                     <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Sale</span>
-                                                    <i className="bi bi-link-45deg" style={{ color: 'var(--tb-brand)', fontSize: 16 }}></i>
+                                                    <Link className="size-4" aria-hidden="true" />
                                                     <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Purchase</span>
                                                     <span style={{ fontSize: '0.82rem', color: 'var(--tb-brand)', fontWeight: '600', flex: 1 }}>{companies}</span>
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
@@ -1445,7 +1445,7 @@ export default function MasterList() {
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
                                                         Sale: {fmtInr(sale.total_amount)} · Purchase: {fmtInr(purchase.total_amount)}
                                                     </span>
-                                                    <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'}`} style={{ color: 'var(--tb-brand)' }}></i>
+                                                    <ChevronDown className="size-4 transition-transform" style={{ color: 'var(--tb-brand)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                                                 </div>
                                                 {isExpanded && (
                                                     <div style={{ padding: '8px', background: 'var(--tb-sunken)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1464,9 +1464,9 @@ export default function MasterList() {
                     {/* Incentive Licenses Card Layout */}
                     {entityName === 'incentive-licenses' && (
                         loading ? (
-                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted">Loading Incentive Licenses...</div></div>
+                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted-foreground">Loading Incentive Licenses...</div></div>
                         ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted"><i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i><div className="mt-2">No incentive licenses found</div></div>
+                            <div className="text-center py-5 text-muted-foreground"><Inbox className="size-4" aria-hidden="true" /><div className="mt-2">No incentive licenses found</div></div>
                         ) : (
                             <div>
                                 {data.map(item => {
@@ -1486,27 +1486,27 @@ export default function MasterList() {
                                                 )}
                                                 {item.license_date && (
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)', background: 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <i className="bi bi-calendar3 me-1"></i>{item.license_date}
+                                                        <Calendar className="size-4" aria-hidden="true" />{item.license_date}
                                                     </span>
                                                 )}
                                                 {item.license_expiry_date && (
                                                     <span style={{ fontSize: 12.5, color: isExpired ? 'var(--tb-danger-text)' : 'var(--tb-text-secondary)', background: isExpired ? 'var(--tb-danger-soft)' : 'var(--tb-gray-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>
-                                                        <i className="bi bi-calendar-x me-1"></i>Exp: {item.license_expiry_date}
+                                                        <CalendarX className="size-4" aria-hidden="true" />Exp: {item.license_expiry_date}
                                                     </span>
                                                 )}
                                                 {item.port_name && (
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <i className="bi bi-geo-alt me-1"></i>{item.port_name}
+                                                        <MapPin className="size-4" aria-hidden="true" />{item.port_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_name && (
                                                     <span style={{ fontSize: 12.5, color: 'var(--accent-color)', background: 'var(--tb-sunken)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <i className="bi bi-building me-1"></i>{item.exporter_name}
+                                                        <Building2 className="size-4" aria-hidden="true" />{item.exporter_name}
                                                     </span>
                                                 )}
                                                 {item.exporter_iec && (
                                                     <span style={{ fontSize: 12.5, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '500' }}>
-                                                        <i className="bi bi-fingerprint me-1"></i>IEC: {item.exporter_iec}
+                                                        <Fingerprint className="size-4" aria-hidden="true" />IEC: {item.exporter_iec}
                                                     </span>
                                                 )}
                                                 <span style={{ fontSize: 12, color: soldStyle.badgeText, background: soldStyle.badge, padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
@@ -1526,10 +1526,10 @@ export default function MasterList() {
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                                                     {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/incentive-licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-pencil"></i>
+                                                        <Pencil className="size-4" aria-hidden="true" />
                                                     </button>}
                                                     {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <i className="bi bi-trash"></i>
+                                                        <Trash2 className="size-4" aria-hidden="true" />
                                                     </button>}
                                                 </div>
                                             </div>
@@ -1558,7 +1558,7 @@ export default function MasterList() {
                             customActions={entityName === 'trades' ? [
                                 {
                                     label: 'Transfer Letter',
-                                    icon: 'bi bi-file-earmark-text',
+                                    icon: 'FileText',
                                     className: 'btn btn-outline-info',
                                     onClick: (item) => {
                                         setTransferLetterType('trade');
@@ -1568,7 +1568,7 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Invoice (With Sign)',
-                                    icon: 'bi bi-file-pdf',
+                                    icon: 'FileText',
                                     className: 'btn btn-outline-success',
                                     onClick: async (item) => {
                                         // Only allow for SALE transactions
@@ -1600,7 +1600,7 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Invoice (Without Sign)',
-                                    icon: 'bi bi-file-pdf',
+                                    icon: 'FileText',
                                     className: 'btn btn-outline-warning',
                                     onClick: async (item) => {
                                         // Only allow for SALE transactions
@@ -1632,7 +1632,7 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Copy to Sale',
-                                    icon: 'bi bi-arrow-left-right',
+                                    icon: 'ArrowLeftRight',
                                     className: 'btn btn-outline-primary',
                                     onClick: async (item) => {
                                         if (!window.confirm(`Create a SALE trade from this PURCHASE trade?`)) {
@@ -1722,7 +1722,7 @@ export default function MasterList() {
                             ] : entityName === 'licenses' ? [
                                 {
                                     label: 'View Balance',
-                                    icon: 'bi bi-eye',
+                                    icon: 'Eye',
                                     className: 'btn btn-outline-info',
                                     onClick: (item) => {
                                         setSelectedLicenseId(item.id);
@@ -1731,7 +1731,7 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Ledger',
-                                    icon: 'bi bi-file-pdf',
+                                    icon: 'FileText',
                                     className: 'btn btn-outline-primary',
                                     onClick: async (item) => {
                                         try {
@@ -1748,7 +1748,7 @@ export default function MasterList() {
                             ] : entityName === 'allotments' ? [
                                 {
                                     label: 'Edit',
-                                    icon: 'bi bi-pencil',
+                                    icon: 'Pencil',
                                     className: 'btn btn-outline-primary',
                                     onClick: (item) => {
                                         saveFilterState(entityName, {
@@ -1761,7 +1761,7 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Copy',
-                                    icon: 'bi bi-copy',
+                                    icon: 'Copy',
                                     className: 'btn btn-outline-info',
                                     onClick: async (item) => {
                                         if (!window.confirm(`Create a copy of allotment ${item.invoice_number || 'this allotment'}?`)) {
@@ -1786,7 +1786,7 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Allocate',
-                                    icon: 'bi bi-box-arrow-in-down',
+                                    icon: 'LogIn',
                                     className: 'btn btn-outline-success',
                                     onClick: (item) => {
                                         saveFilterState(entityName, {
@@ -1799,7 +1799,7 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Preview',
-                                    icon: 'bi bi-eye',
+                                    icon: 'Eye',
                                     className: 'btn btn-outline-warning',
                                     onClick: async (item) => {
                                         try {
@@ -1815,7 +1815,7 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Download',
-                                    icon: 'bi bi-download',
+                                    icon: 'Download',
                                     className: 'btn btn-outline-primary',
                                     onClick: async (item) => {
                                         try {
@@ -1838,7 +1838,7 @@ export default function MasterList() {
                             ] : entityName === 'bill-of-entries' ? [
                                 {
                                     label: 'Transfer Letter',
-                                    icon: 'bi bi-file-earmark-text',
+                                    icon: 'FileText',
                                     className: 'btn btn-outline-warning',
                                     onClick: (item) => {
                                         setTransferLetterType('boe');
@@ -1873,11 +1873,11 @@ export default function MasterList() {
                         loading ? (
                             <div className="text-center py-5">
                                 <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted">Loading {entityTitle}...</div>
+                                <div className="mt-2 text-muted-foreground">Loading {entityTitle}...</div>
                             </div>
                         ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted">
-                                <i className="bi bi-inbox" style={{ fontSize: '2rem' }}></i>
+                            <div className="text-center py-5 text-muted-foreground">
+                                <Inbox className="size-4" aria-hidden="true" />
                                 <div className="mt-2">No {entityTitle ? entityTitle.toLowerCase() : 'records'} found</div>
                             </div>
                         ) : (
@@ -1936,14 +1936,14 @@ export default function MasterList() {
                                                     title="Edit"
                                                     style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 10px', cursor: 'pointer' }}
                                                 >
-                                                    <i className="bi bi-pencil"></i> Edit
+                                                    <Pencil className="size-4" aria-hidden="true" /> Edit
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(item)}
                                                     title="Delete"
                                                     style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
                                                 >
-                                                    <i className="bi bi-trash"></i>
+                                                    <Trash2 className="size-4" aria-hidden="true" />
                                                 </button>
                                             </div>
                                         </div>
@@ -2006,11 +2006,11 @@ export default function MasterList() {
                     <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '24px', width: '480px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                             <h6 style={{ margin: 0, fontWeight: '700', color: 'var(--tb-brand-active)' }}>
-                                <i className="bi bi-link-45deg me-2" style={{ color: 'var(--tb-brand)' }}></i>
+                                <Link className="size-4" aria-hidden="true" />
                                 Link Trade: <span style={{ color: 'var(--tb-brand)' }}>{linkModalTrade.invoice_number || 'No Invoice'}</span>
                             </h6>
                             <button onClick={closeLinkModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--tb-text-tertiary)' }}>
-                                <i className="bi bi-x-lg"></i>
+                                <X className="size-4" aria-hidden="true" />
                             </button>
                         </div>
                         <input
@@ -2022,7 +2022,7 @@ export default function MasterList() {
                             onChange={e => setLinkSearch(e.target.value)}
                             style={{ marginBottom: '12px' }}
                         />
-                        {linkSearching && <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px' }}><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent me-2" aria-hidden="true" />Searching...</div>}
+                        {linkSearching && <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px' }}><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" aria-hidden="true" />Searching...</div>}
                         {!linkSearching && linkSearch && linkResults.length === 0 && (
                             <div style={{ textAlign: 'center', color: 'var(--tb-text-tertiary)', padding: '12px', fontSize: 14 }}>No unlinked trades found for "{linkSearch}"</div>
                         )}
@@ -2057,18 +2057,18 @@ export default function MasterList() {
                     <div style={{ background: 'var(--tb-card-bg)', borderRadius: 'var(--tb-r-md)', padding: '24px', width: '560px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                             <h6 style={{ margin: 0, fontWeight: '700', color: 'var(--tb-brand-active)' }}>
-                                <i className="bi bi-intersect me-2" style={{ color: 'var(--accent-color)' }}></i>
+                                <Layers className="size-4" aria-hidden="true" />
                                 Merge BOE: <span style={{ color: 'var(--accent-color)' }}>{mergeBoeTarget.bill_of_entry_number}</span>
                             </h6>
                             <button onClick={closeMergeModal} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--tb-text-tertiary)' }}>
-                                <i className="bi bi-x-lg"></i>
+                                <X className="size-4" aria-hidden="true" />
                             </button>
                         </div>
 
                         {/* Target BOE info */}
                         <div style={{ background: 'var(--tb-success-soft)', border: '1px solid #86efac', borderRadius: 'var(--tb-r-md)', padding: '10px 14px', marginBottom: '16px', fontSize: 13.5 }}>
                             <div style={{ fontWeight: '600', color: 'var(--tb-success-text)', marginBottom: '4px' }}>Target BOE (will be kept &amp; updated)</div>
-                            <div><i className="bi bi-geo-alt me-1"></i>{mergeBoeTarget.port_name}</div>
+                            <div><MapPin className="size-4" aria-hidden="true" />{mergeBoeTarget.port_name}</div>
                             <div style={{ color: 'var(--tb-text-secondary)', fontSize: 12 }}>
                                 {mergeBoeTarget.item_details?.length || 0} item(s) · {mergeBoeTarget.licenses || 'No licenses'}
                             </div>
@@ -2080,7 +2080,7 @@ export default function MasterList() {
 
                         {mergeCandidatesLoading && (
                             <div style={{ textAlign: 'center', padding: '20px', color: 'var(--tb-text-tertiary)' }}>
-                                <span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent me-2" aria-hidden="true" />Loading candidates...
+                                <span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" aria-hidden="true" />Loading candidates...
                             </div>
                         )}
 
@@ -2104,7 +2104,7 @@ export default function MasterList() {
                             >
                                 <div>
                                     <div style={{ fontWeight: '600', fontSize: 14, color: 'var(--tb-text)' }}>
-                                        <i className="bi bi-geo-alt me-1" style={{ color: 'var(--tb-info-text)' }}></i>{candidate.port_name}
+                                        <MapPin className="size-4" aria-hidden="true" />{candidate.port_name}
                                     </div>
                                     <div style={{ fontSize: 12, color: 'var(--tb-text-secondary)' }}>
                                         {candidate.item_details?.length || 0} item(s) · {candidate.licenses || 'No licenses'}
@@ -2145,7 +2145,7 @@ export default function MasterList() {
                             >
                                 {mergeBoeLoading
                                     ? <><div className="" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>Merging...</>
-                                    : <><i className="bi bi-intersect"></i>Confirm Merge</>
+                                    : <><Layers className="size-4" aria-hidden="true" />Confirm Merge</>
                                 }
                             </button>
                         </div>

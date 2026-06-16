@@ -4,6 +4,7 @@ import { AuthContext } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { reportEntities, masterEntities } from "../routes/config";
 import CommandPalette from "./CommandPalette";
+import { ChevronDown, Gauge, Search, ShieldCheck } from "lucide-react";
 
 const NAV_GROUPS = [
     {
@@ -67,7 +68,7 @@ function NavMenu({ icon, label, items, isActive, end = false }) {
             >
                 <i className={`bi bi-${icon}`} aria-hidden="true" />
                 {label}
-                <i className="bi bi-chevron-down" aria-hidden="true" />
+                <ChevronDown className="size-4" aria-hidden="true" />
             </button>
 
             {open && (
@@ -139,7 +140,7 @@ export default function TopNav() {
                 {/* Brand */}
                 <Link to="/" className="tb-nav-brand">
                     <span className="tb-nav-brand-mark" aria-hidden="true">
-                        <i className="bi bi-shield-check" />
+                        <ShieldCheck className="size-4" aria-hidden="true" />
                     </span>
                     <span className="tb-nav-brand-text">License Manager</span>
                 </Link>
@@ -147,7 +148,7 @@ export default function TopNav() {
                 {/* Nav items */}
                 <div className="tb-nav-scroller nav-items-scroller">
                     <Link to="/dashboard" className={`tb-nav-trigger${isDashActive ? " is-active" : ""}`}>
-                        <i className="bi bi-speedometer2" aria-hidden="true" />
+                        <Gauge className="size-4" aria-hidden="true" />
                         Dashboard
                     </Link>
 
@@ -217,7 +218,7 @@ export default function TopNav() {
                         title="Search  ⌘K"
                         style={{ width: "auto", paddingInline: 10, gap: 6, fontSize: 12, color: "var(--tb-text-tertiary)" }}
                     >
-                        <i className="bi bi-search" style={{ fontSize: 14 }} />
+                        <Search className="size-4" aria-hidden="true" />
                         <span style={{ display: "none" }} className="d-sm-inline">
                             Search
                         </span>

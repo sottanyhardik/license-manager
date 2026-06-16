@@ -3,9 +3,47 @@ import {Link} from "react-router-dom";
 import {toast} from "react-toastify";
 import api from "../api/axios";
 import {formatDate} from "../utils/dateFormatter";
-import { Loader2, Check, X } from "lucide-react";
+import {
+    AlertCircle, ArrowLeftRight, Award, BarChart3, BookOpen, Building2,
+    Calendar, CalendarCheck, CalendarX, CalendarRange, Check, CheckCircle,
+    CheckSquare, ChevronDown, ChevronRight, ClipboardCheck, CloudDownload,
+    Copy, Download, Eye, FileText, FileSpreadsheet, Filter, Fingerprint,
+    Globe, Hash, Inbox, Info, Layers, Link as LinkIcon, List, ListChecks,
+    Loader2, LogIn, MapPin, MinusCircle, MoreHorizontal, Network, OctagonX,
+    Package, Paperclip, Pencil, PenSquare, Plus, PlusCircle, QrCode,
+    Receipt, RefreshCw, ScanBarcode, Search, ShieldCheck, SlidersHorizontal,
+    StickyNote, Table, Tag, Tags, Trash2, Trophy, Unlock, Wand2, X, XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {formatIndianNumber} from "../utils/numberFormatter";
+
+// Maps bi-icon short-names and component-name strings → lucide components
+const LUCIDE_MAP = {
+    "FileText": FileText, "FileSpreadsheet": FileSpreadsheet, "Eye": Eye,
+    "Pencil": Pencil, "Trash2": Trash2, "Copy": Copy, "Download": Download,
+    "RefreshCw": RefreshCw, "ArrowLeftRight": ArrowLeftRight, "LogIn": LogIn,
+    "Check": Check, "CheckCircle": CheckCircle, "XCircle": XCircle,
+    "BarChart3": BarChart3, "PenSquare": PenSquare, "Plus": Plus,
+    "building": Building2, "building2": Building2,
+    "pencil": Pencil, "pencil-fill": Pencil, "trash": Trash2,
+    "eye": Eye, "copy": Copy, "download": Download,
+    "arrow-left-right": ArrowLeftRight, "arrow-repeat": RefreshCw,
+    "box-arrow-in-down": LogIn, "link-45deg": LinkIcon,
+    "check2-circle": CheckCircle, "check-circle": CheckCircle,
+    "calendar3": Calendar, "geo-alt": MapPin,
+    "file-earmark-text": FileText, "file-pdf": FileText,
+    "file-earmark-bar-graph": BarChart3,
+    "exclamation-triangle-fill": AlertCircle, "intersect": Layers,
+    "intersect2": Layers,
+};
+
+function IconFromString({ name, className = "size-4" }) {
+    if (!name) return null;
+    const Comp = LUCIDE_MAP[name];
+    if (Comp) return <Comp className={className} aria-hidden="true" />;
+    // Fallback: render as bi icon if unknown
+    return <i className={`bi bi-${name}`} aria-hidden="true" />;
+}
 
 /**
  * Accordion Table Component
@@ -205,7 +243,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
         return (
             <div className="mb-3">
                 <h6 className="text-primary mb-2">
-                    <i className={`bi bi-${getIcon()} me-2`}></i>
+                    <i className={`bi bi-${getIcon()} mr-2`}></i>
                     {fieldKey.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
                 </h6>
                 <div className="table-responsive">
@@ -347,7 +385,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                         onClick={() => toggleRow(item.id, item)}
                                         title={isExpanded ? "Collapse" : "Expand"}
                                     >
-                                        <i className={`bi bi-chevron-${isExpanded ? "down" : "right"} fs-6`}></i>
+                                        <span className="inline-block transition-transform" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}><ChevronRight className="size-4" /></span>
                                     </button>
                                 </td>
                                 {columns.map((col) => {
@@ -406,7 +444,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                             title={isEditableField ? 'Click to edit' : ''}
                                         >
                                             {isCurrentlyEditing ? (
-                                                <div className="d-flex align-items-center gap-1">
+                                                <div className="flex items-center gap-1">
                                                     <input
                                                         type="text"
                                                         className="flex h-8 rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
@@ -448,7 +486,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                 <span>
                                                     {value || "-"}
                                                     {isEditableField && (
-                                                        <i className="bi bi-pencil ms-2 text-muted" style={{fontSize: 12.5}}></i>
+                                                        <Pencil className="size-4" aria-hidden="true" />
                                                     )}
                                                 </span>
                                             )}
@@ -468,17 +506,17 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                                     onClick={() => action.onClick(item)}
                                                     title={action.label}
                                                 >
-                                                    {action.icon && <i className={action.icon}></i>}
+                                                    {action.icon && <IconFromString name={action.icon} />}
                                                 </button>
                                             );
                                         })}
                                         <Button size="sm" variant="outline" asChild title="Edit">
                                             <Link to={`${basePath}/${item.id}/edit`}>
-                                                <i className="bi bi-pencil" aria-hidden="true" />
+                                                <Pencil className="size-4" aria-hidden="true" />
                                             </Link>
                                         </Button>
                                         <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => onDelete(item)} title="Delete">
-                                            <i className="bi bi-trash" aria-hidden="true" />
+                                            <Trash2 className="size-4" aria-hidden="true" />
                                         </Button>
                                     </div>
                                 </td>

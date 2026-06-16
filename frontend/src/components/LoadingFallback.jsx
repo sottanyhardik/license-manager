@@ -53,7 +53,7 @@ export function FullPageLoader() {
                     boxShadow: "0 4px 12px rgba(37,99,235,0.35)",
                 }}
             >
-                <i className="bi bi-shield-check" />
+                <ShieldCheck className="size-4" aria-hidden="true" />
             </div>
             <span style={{ fontSize: 13, color: "var(--tb-text-tertiary)" }}>Loading…</span>
         </div>

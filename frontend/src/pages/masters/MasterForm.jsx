@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Check, Eye, Loader2, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, CheckCircle, CheckCircle2, ExternalLink, Eye, FileText, Info, Loader2, MoreHorizontal, Paperclip, QrCode, RefreshCw, TriangleAlert, Wand2, X } from "lucide-react";
 
 /**
  * Generic Master Form for Create/Edit
@@ -1592,7 +1592,7 @@ export default function MasterForm({
         // Handle date fields with DatePicker
         if (fieldMeta.type === "date" || fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
             return (
-                <div className="w-100">
+                <div className="w-full">
                     <DatePicker
                         selected={parseDate(value)}
                         onChange={(date) => handleChange(fieldName, formatDateForAPI(date))}
@@ -1641,14 +1641,14 @@ export default function MasterForm({
                     {existingFileUrl && !hasNewFile && (
                         <div className="mt-2">
                             <small className="text-muted">Current file:</small>
-                            <div className="d-flex align-items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1">
                                 <a
                                     href={existingFileUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10"
                                 >
-                                    <i className="bi bi-eye me-1"></i>
+                                    <Eye className="size-4" aria-hidden="true" />
                                     View Current
                                 </a>
                                 <img
@@ -1669,7 +1669,7 @@ export default function MasterForm({
                     {hasNewFile && (
                         <div className="mt-2">
                             <small className="text-success">
-                                <i className="bi bi-check-circle me-1"></i>
+                                <CheckCircle className="size-4" aria-hidden="true" />
                                 New file selected: {value.name}
                             </small>
                         </div>
@@ -1761,7 +1761,7 @@ export default function MasterForm({
     if (loading) {
         return (
             <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
-                <div className="d-flex justify-content-between align-items-center mb-4">
+                <div className="flex justify-between items-center mb-4">
                     <div>
                         <div className="placeholder-glow mb-1"><span className="placeholder col-3 rounded" style={{ height: 24 }}></span></div>
                         <div className="placeholder-glow"><span className="placeholder col-5 rounded" style={{ height: 14 }}></span></div>
@@ -1786,10 +1786,10 @@ export default function MasterForm({
     return (
         <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
             {/* Compact Header */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="flex justify-between items-center mb-4">
                 <div>
-                    <h4 className="mb-0 fw-bold" style={{ color: 'var(--tb-text)' }}>
-                        <i className={`bi bi-${entityIcon} me-2`} style={{ color: entityColor }}></i>
+                    <h4 className="mb-0 font-bold" style={{ color: 'var(--tb-text)' }}>
+                        <i className={`bi bi-${entityIcon} mr-2`} style={{ color: entityColor }}></i>
                         {isEdit ? 'Edit' : 'New'} {entityTitle}
                         {/* Clickable BOE number → opens saved BOE copy PDF */}
                         {entityName === 'bill-of-entries' && isEdit && formData.bill_of_entry_number && (() => {
@@ -1805,9 +1805,9 @@ export default function MasterForm({
                                     title="View BOE copy PDF"
                                     style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--primary-color)', textDecoration: 'none' }}
                                 >
-                                    <i className="bi bi-file-earmark-pdf me-1"></i>
+                                    <FileText className="size-4" aria-hidden="true" />
                                     {formData.bill_of_entry_number}
-                                    <i className="bi bi-box-arrow-up-right ms-1" style={{ fontSize: 11 }}></i>
+                                    <ExternalLink className="size-4" aria-hidden="true" />
                                 </a>
                             ) : (
                                 <span className="ms-2" style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text-secondary)' }}>
@@ -1833,9 +1833,9 @@ export default function MasterForm({
 
             <div className="card" style={{ borderRadius: 'var(--tb-r-md)' }}>
                 <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                    <div className="d-flex align-items-center justify-content-between">
-                        <h6 className="mb-0 fw-semibold">
-                            <i className={`bi bi-${entityIcon} me-2`} style={{ color: entityColor }}></i>
+                    <div className="flex items-center justify-between">
+                        <h6 className="mb-0 font-semibold">
+                            <i className={`bi bi-${entityIcon} mr-2`} style={{ color: entityColor }}></i>
                             {entityTitle} Details
                         </h6>
                         {entityName === 'trades' && formData.direction && (() => {
@@ -1845,14 +1845,14 @@ export default function MasterForm({
                             const ltColors = { DFIA: 'var(--tb-info)', INCENTIVE: 'var(--tb-warning)' };
                             const ltLabels = { DFIA: 'DFIA License', INCENTIVE: 'Incentive License' };
                             return (
-                                <div className="d-flex gap-2">
-                                    <span className="badge d-flex align-items-center gap-1" style={{ background: `${dirColors[formData.direction]}20`, color: dirColors[formData.direction], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
+                                <div className="flex gap-2">
+                                    <span className="badge flex items-center gap-1" style={{ background: `${dirColors[formData.direction]}20`, color: dirColors[formData.direction], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
                                         <i className={`bi bi-${dirIcons[formData.direction]}`}></i>
                                         {dirLabels[formData.direction]}
                                     </span>
                                     {formData.license_type && (
-                                        <span className="badge d-flex align-items-center gap-1" style={{ background: `${ltColors[formData.license_type]}20`, color: ltColors[formData.license_type], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
-                                            <i className="bi bi-file-earmark-text"></i>
+                                        <span className="badge flex items-center gap-1" style={{ background: `${ltColors[formData.license_type]}20`, color: ltColors[formData.license_type], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
+                                            <FileText className="size-4" aria-hidden="true" />
                                             {ltLabels[formData.license_type]}
                                         </span>
                                     )}
@@ -1863,8 +1863,8 @@ export default function MasterForm({
                 </div>
                 <div className="card-body" style={{ padding: '24px' }}>
                     {error && (
-                        <div className="alert alert-danger d-flex align-items-start gap-2 mb-4">
-                            <i className="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+                        <div className="alert alert-danger flex items-start gap-2 mb-4">
+                            <TriangleAlert className="size-4" aria-hidden="true" />
                             <div>
                                 <strong>Validation Error</strong>
                                 <div className="mt-1" style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{error}</div>
@@ -1873,7 +1873,7 @@ export default function MasterForm({
                     )}
 
                     {fetchingAllotment && (
-                        <div className="alert alert-info d-flex align-items-center gap-2 mb-4">
+                        <div className="alert alert-info flex items-center gap-2 mb-4">
                             <span className="inline-block size-4 flex-shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
                             Fetching allotment details...
                         </div>
@@ -1886,8 +1886,8 @@ export default function MasterForm({
                             : null;
                         return (
                             <section className="surface-card mb-4" style={{ padding: 16 }}>
-                                <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 12 }}>
-                                    <div className="d-flex align-items-center" style={{ gap: 10 }}>
+                                <div className="flex items-center justify-between flex-wrap" style={{ gap: 12 }}>
+                                    <div className="flex items-center" style={{ gap: 10 }}>
                                         <span
                                             aria-hidden="true"
                                             style={{
@@ -1897,7 +1897,7 @@ export default function MasterForm({
                                                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                             }}
                                         >
-                                            <i className="bi bi-file-earmark-pdf" style={{ fontSize: 16 }}></i>
+                                            <FileText className="size-4" aria-hidden="true" />
                                         </span>
                                         <div>
                                             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>BOE Copy</div>
@@ -1908,7 +1908,7 @@ export default function MasterForm({
                                                     rel="noopener noreferrer"
                                                     style={{ fontSize: 12.5, color: 'var(--primary-color)' }}
                                                 >
-                                                    <i className="bi bi-box-arrow-up-right me-1" style={{ fontSize: 11 }}></i>
+                                                    <ExternalLink className="size-4" aria-hidden="true" />
                                                     View saved BOE PDF
                                                 </a>
                                             ) : (
@@ -1917,7 +1917,7 @@ export default function MasterForm({
                                         </div>
                                     </div>
                                     {/* Allow replacing the copy */}
-                                    <div className="d-flex align-items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+                                    <div className="flex items-center" style={{ gap: 8, flexWrap: 'wrap' }}>
                                         <input
                                             type="file"
                                             accept=".pdf,application/pdf"
@@ -1938,7 +1938,7 @@ export default function MasterForm({
                                             {boeParsing ? (
                                                 <><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent" role="status" aria-hidden="true"></span>Fetching…</>
                                             ) : (
-                                                <><i className="bi bi-magic me-1"></i>Re-fetch</>
+                                                <><Wand2 className="size-4" aria-hidden="true" />Re-fetch</>
                                             )}
                                         </button>
                                     </div>
@@ -1949,7 +1949,7 @@ export default function MasterForm({
 
                     {entityName === 'bill-of-entries' && !isEdit && (
                         <section className="surface-card mb-4" style={{ padding: 20 }}>
-                            <div className="d-flex align-items-start" style={{ gap: 16, flexWrap: 'wrap' }}>
+                            <div className="flex items-start" style={{ gap: 16, flexWrap: 'wrap' }}>
                                 <div
                                     aria-hidden="true"
                                     style={{
@@ -1959,7 +1959,7 @@ export default function MasterForm({
                                         flexShrink: 0,
                                     }}
                                 >
-                                    <i className="bi bi-file-earmark-pdf" style={{ fontSize: '1.15rem' }}></i>
+                                    <FileText className="size-4" aria-hidden="true" />
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
@@ -1968,7 +1968,7 @@ export default function MasterForm({
                                     <div className="mt-1" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                                         Upload an ICEGATE BOE, then click <strong>Fetch</strong> to prefill the form and item rows.
                                     </div>
-                                    <div className="d-flex align-items-center mt-3" style={{ gap: 10, flexWrap: 'wrap' }}>
+                                    <div className="flex items-center mt-3" style={{ gap: 10, flexWrap: 'wrap' }}>
                                         <input
                                             type="file"
                                             accept=".pdf,application/pdf"
@@ -1989,7 +1989,7 @@ export default function MasterForm({
                                             {boeParsing ? (
                                                 <><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent" role="status" aria-hidden="true"></span>Fetching…</>
                                             ) : (
-                                                <><i className="bi bi-magic me-1"></i>Fetch</>
+                                                <><Wand2 className="size-4" aria-hidden="true" />Fetch</>
                                             )}
                                         </button>
                                     </div>
@@ -2014,19 +2014,19 @@ export default function MasterForm({
                                     </div>
                                     {boeParseSummary.company_created && (
                                         <div className="mt-1" style={{ color: 'var(--tb-success-text)' }}>
-                                            <i className="bi bi-check-circle-fill me-1"></i>
+                                            <CheckCircle2 className="size-4" aria-hidden="true" />
                                             New company created from buyer details ({boeParseSummary.buyer_name}).
                                         </div>
                                     )}
                                     {!boeParseSummary.company_created && boeParseSummary.matched_company_id && (
                                         <div className="mt-1" style={{ color: 'var(--text-secondary)' }}>
-                                            <i className="bi bi-check2 me-1"></i>
+                                            <Check className="size-4" aria-hidden="true" />
                                             Matched existing company ({boeParseSummary.buyer_name}).
                                         </div>
                                     )}
                                     {boeParseSummary.matched_allotment_id && (
                                         <div className="mt-1" style={{ color: 'var(--primary-deeper)' }}>
-                                            <i className="bi bi-info-circle me-1"></i>
+                                            <Info className="size-4" aria-hidden="true" />
                                             Matched existing allotment <strong>#{boeParseSummary.matched_allotment_id}</strong> by invoice number.
                                         </div>
                                     )}
@@ -2061,7 +2061,7 @@ export default function MasterForm({
 
                     {entityName === 'licenses' && (
                         <section className="surface-card mb-4" style={{ padding: 20 }}>
-                            <div className="d-flex align-items-start" style={{ gap: 16, flexWrap: 'wrap' }}>
+                            <div className="flex items-start" style={{ gap: 16, flexWrap: 'wrap' }}>
                                 <div
                                     aria-hidden="true"
                                     style={{
@@ -2071,7 +2071,7 @@ export default function MasterForm({
                                         flexShrink: 0,
                                     }}
                                 >
-                                    <i className="bi bi-file-earmark-pdf" style={{ fontSize: '1.15rem' }}></i>
+                                    <FileText className="size-4" aria-hidden="true" />
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
@@ -2080,7 +2080,7 @@ export default function MasterForm({
                                     <div className="mt-1" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                                         Upload the DFIA licence PDF and click <strong>Fetch</strong> to prefill the form. Digital PDFs parse instantly; scanned copies with a DGFT QR code are downloaded fresh from DGFT (~10–15s).
                                     </div>
-                                    <div className="d-flex align-items-center mt-3" style={{ gap: 10, flexWrap: 'wrap' }}>
+                                    <div className="flex items-center mt-3" style={{ gap: 10, flexWrap: 'wrap' }}>
                                         <input
                                             type="file"
                                             accept=".pdf,application/pdf"
@@ -2101,14 +2101,14 @@ export default function MasterForm({
                                             {licenseParsing ? (
                                                 <><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent" role="status" aria-hidden="true"></span>Fetching…</>
                                             ) : (
-                                                <><i className="bi bi-magic me-1"></i>Fetch</>
+                                                <><Wand2 className="size-4" aria-hidden="true" />Fetch</>
                                             )}
                                         </button>
                                     </div>
 
                                     {existingLicenseCopy && (
                                         <div
-                                            className="d-flex align-items-center mt-2"
+                                            className="flex items-center mt-2"
                                             style={{
                                                 gap: 10,
                                                 flexWrap: 'wrap',
@@ -2119,7 +2119,7 @@ export default function MasterForm({
                                                 fontSize: '0.8125rem',
                                             }}
                                         >
-                                            <i className="bi bi-paperclip" style={{ color: 'var(--text-secondary)' }}></i>
+                                            <Paperclip className="size-4" aria-hidden="true" />
                                             <span style={{ color: 'var(--text-primary)', minWidth: 0 }}>
                                                 Saved Licence Copy:&nbsp;
                                                 <a
@@ -2142,7 +2142,7 @@ export default function MasterForm({
                                                 {licenseParsing ? (
                                                     <><span className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent" role="status" aria-hidden="true"></span>Re-fetching…</>
                                                 ) : (
-                                                    <><i className="bi bi-arrow-clockwise me-1"></i>Re-fetch &amp; parse</>
+                                                    <><RefreshCw className="size-4" aria-hidden="true" />Re-fetch &amp; parse</>
                                                 )}
                                             </button>
                                         </div>
@@ -2169,31 +2169,31 @@ export default function MasterForm({
                                     </div>
                                     {licenseParseSummary.source_kind === 'dgft_qr' && (
                                         <div className="mt-1" style={{ color: 'var(--tb-success-text)' }}>
-                                            <i className="bi bi-qr-code-scan me-1"></i>
+                                            <QrCode className="size-4" aria-hidden="true" />
                                             Fetched fresh digital copy from DGFT via QR code on uploaded scan.
                                         </div>
                                     )}
                                     {licenseParseSummary.source_kind === 'ocr' && (
                                         <div className="mt-1" style={{ color: 'var(--tb-warning-text)' }}>
-                                            <i className="bi bi-exclamation-triangle me-1"></i>
+                                            <TriangleAlert className="size-4" aria-hidden="true" />
                                             Scanned PDF — header fields recovered via OCR. Items table is unreliable; please review/add manually.
                                         </div>
                                     )}
                                     {licenseParseSummary.company_created && (
                                         <div className="mt-1" style={{ color: 'var(--tb-success-text)' }}>
-                                            <i className="bi bi-check-circle-fill me-1"></i>
+                                            <CheckCircle2 className="size-4" aria-hidden="true" />
                                             New company created ({licenseParseSummary.company_name}).
                                         </div>
                                     )}
                                     {!licenseParseSummary.company_created && licenseParseSummary.matched_company_id && (
                                         <div className="mt-1" style={{ color: 'var(--text-secondary)' }}>
-                                            <i className="bi bi-check2 me-1"></i>
+                                            <Check className="size-4" aria-hidden="true" />
                                             Matched existing company ({licenseParseSummary.company_name}).
                                         </div>
                                     )}
                                     {!licenseParseSummary.matched_port_id && licenseParseSummary.port_code && (
                                         <div className="mt-1" style={{ color: 'var(--tb-warning-text)' }}>
-                                            <i className="bi bi-exclamation-triangle me-1"></i>
+                                            <TriangleAlert className="size-4" aria-hidden="true" />
                                             Port code <code>{licenseParseSummary.port_code}</code> not found in master — please add and re-select.
                                         </div>
                                     )}
@@ -2237,18 +2237,18 @@ export default function MasterForm({
                                 return (
                                     <div key={field} className={col}>
                                         <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 6 }}>
-                                            {label}{fieldMeta.required && <span className="text-danger ms-1">*</span>}
+                                            {label}{fieldMeta.required && <span className="text-danger ml-1">*</span>}
                                         </label>
                                         {renderField(field)}
                                         {hasError && (
                                             <div className="invalid-feedback d-block" style={{ fontSize: 12, marginTop: 4 }}>
-                                                <i className="bi bi-exclamation-circle me-1"></i>
+                                                <AlertCircle className="size-4" aria-hidden="true" />
                                                 {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
                                             </div>
                                         )}
                                         {helpText && !hasError && (
-                                            <small className="form-text d-block mt-1" style={{ color: 'var(--text-secondary)', fontSize: '0.73rem' }}>
-                                                <i className="bi bi-info-circle me-1"></i>{helpText}
+                                            <small className="form-text block mt-1" style={{ color: 'var(--text-secondary)', fontSize: '0.73rem' }}>
+                                                <Info className="size-4" aria-hidden="true" />{helpText}
                                             </small>
                                         )}
                                     </div>
@@ -2261,7 +2261,7 @@ export default function MasterForm({
                                 const remainingFields = activeFields.filter(f => !sectionedFields.has(f));
 
                                 return (
-                                    <div className="d-flex flex-column gap-3">
+                                    <div className="flex flex-col gap-3">
                                         {sections.map(section => {
                                             const visibleFields = section.fields.filter(f => activeFields.includes(f));
                                             if (visibleFields.length === 0) return null;
@@ -2279,7 +2279,7 @@ export default function MasterForm({
                                         {remainingFields.length > 0 && (
                                             <div style={{ background: 'var(--tb-sunken)', borderRadius: 'var(--tb-r-md)', padding: '16px 20px', borderLeft: '3px solid #9ca3af' }}>
                                                 <div style={{ fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--tb-text-secondary)', marginBottom: '14px' }}>
-                                                    <i className="bi bi-three-dots me-1"></i> Other Fields
+                                                    <MoreHorizontal className="size-4" aria-hidden="true" /> Other Fields
                                                 </div>
                                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                                                     {remainingFields.map(f => renderOneField(f))}
@@ -2355,7 +2355,7 @@ export default function MasterForm({
                                                                         {count}
                                                                     </span>
                                                                 )}
-                                                                {hasErrors && <i className="bi bi-exclamation-circle-fill text-danger" style={{ fontSize: 12 }}></i>}
+                                                                {hasErrors && <AlertCircle className="size-4" aria-hidden="true" />}
                                                             </button>
                                                         </li>
                                                     );

@@ -451,7 +451,7 @@ export default function ItemReport() {
 
             {/* Filters Section */}
             <div className="row mb-3">
-                <div className="col-12">
+                <div className="col-span-full">
                     <div className="surface-card">
                         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tb-border)' }}
                              className="d-flex justify-content-between align-items-center">
@@ -473,7 +473,7 @@ export default function ItemReport() {
                             )}
                         </div>
                         <div style={{ padding: '14px 16px' }}>
-                            <div className="row g-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="col-lg-2 col-md-6">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-currency-dollar me-1"></i>
@@ -594,7 +594,7 @@ export default function ItemReport() {
                                 </div>
                             </div>
 
-                            <div className="row g-3 mt-2">
+                            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="col-lg-3 col-md-6">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-shield-lock me-1"></i>
@@ -684,7 +684,7 @@ export default function ItemReport() {
                                 </div>
                             </div>
 
-                            <div className="row g-3 mt-2">
+                            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="col-lg-6 col-md-12">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-file-text me-1"></i>
@@ -713,8 +713,8 @@ export default function ItemReport() {
                                 </div>
                             </div>
 
-                            <div className="row g-3 mt-2">
-                                <div className="col-12">
+                            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                <div className="col-span-full">
                                     <label className="form-label fw-bold mb-2">
                                         <i className="bi bi-tag me-1"></i>
                                         Filter by Item Name (Multi-select)
@@ -762,7 +762,7 @@ export default function ItemReport() {
             {/* Sticky Totals Bar */}
             {!loading && (selectedItemNames.length > 0 || productDescSearch || hsnCodeSearch) && reportData && reportData.items.length > 0 && (
                 <div className="row mb-3">
-                    <div className="col-12">
+                    <div className="col-span-full">
                         <div className="card" style={{
                             position: 'sticky',
                             top: '70px',
@@ -823,7 +823,7 @@ export default function ItemReport() {
 
             {/* Report Table */}
             <div className="row">
-                <div className="col-12">
+                <div className="col-span-full">
                     {loading && (
                         <div className="card">
                             <div className="card-body flex flex-col items-center py-12 text-center">
@@ -966,7 +966,7 @@ export default function ItemReport() {
                                                                             className="d-flex align-items-center justify-content-between">
                                                                             <span>{firstItem.license_number}</span>
                                                                             <button
-                                                                                className="btn btn-sm btn-outline-secondary ms-2"
+                                                                                className="ml-2 flex items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                                                                 style={{
                                                                                     padding: '2px 8px',
                                                                                     fontSize: 12
@@ -1070,13 +1070,13 @@ export default function ItemReport() {
                                                                                     autoFocus
                                                                                 />
                                                                                 <button
-                                                                                    className="btn btn-sm btn-success"
+                                                                                    className="flex items-center gap-1.5 rounded bg-success px-2 py-1 text-xs font-medium text-white cursor-pointer"
                                                                                     onClick={() => saveEdit(firstItem)}
                                                                                 >
                                                                                     <i className="bi bi-check"></i>
                                                                                 </button>
                                                                                 <button
-                                                                                    className="btn btn-sm btn-secondary"
+                                                                                    className="flex items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                                                                     onClick={cancelEdit}
                                                                                 >
                                                                                     <i className="bi bi-x"></i>
@@ -1107,13 +1107,13 @@ export default function ItemReport() {
                                                                                     autoFocus
                                                                                 />
                                                                                 <button
-                                                                                    className="btn btn-sm btn-success"
+                                                                                    className="flex items-center gap-1.5 rounded bg-success px-2 py-1 text-xs font-medium text-white cursor-pointer"
                                                                                     onClick={() => saveEdit(firstItem)}
                                                                                 >
                                                                                     <i className="bi bi-check"></i>
                                                                                 </button>
                                                                                 <button
-                                                                                    className="btn btn-sm btn-secondary"
+                                                                                    className="flex items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                                                                     onClick={cancelEdit}
                                                                                 >
                                                                                     <i className="bi bi-x"></i>

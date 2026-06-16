@@ -71,7 +71,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                     />
                     <div className="d-flex gap-2">
                         <button
-                            className="btn btn-sm btn-primary"
+                            className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
                             onClick={handleSave}
                             disabled={saving}
                             style={{
@@ -83,7 +83,7 @@ function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {
                             {saving ? 'Saving...' : 'Save'}
                         </button>
                         <button
-                            className="btn btn-sm btn-outline-secondary"
+                            className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                             onClick={handleCancel}
                             disabled={saving}
                         >
@@ -842,14 +842,14 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 }}
                                                                             />
                                                                             <button
-                                                                                className="btn btn-sm btn-success"
+                                                                                className="flex items-center gap-1.5 rounded bg-success px-2.5 py-1 text-xs font-medium text-white cursor-pointer"
                                                                                 onClick={(e) => handleSaveItems(e, item)}
                                                                                 disabled={saving}
                                                                             >
                                                                                 <i className="bi bi-check"></i>
                                                                             </button>
                                                                             <button
-                                                                                className="btn btn-sm btn-secondary"
+                                                                                className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                                                                 onClick={handleCancelEdit}
                                                                                 disabled={saving}
                                                                             >
@@ -1007,12 +1007,12 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                 <strong>Balance Calculation:</strong>
                                                                                 <div className="ms-3 mt-2">
                                                                                     <div className="row">
-                                                                                        <div className="col-md-6">
+                                                                                        <div className="flex-1">
                                                                                             <small className="text-muted">
                                                                                                 Balance Quantity = Total Quantity - Debited Qty - Allotted Qty
                                                                                             </small>
                                                                                         </div>
-                                                                                        <div className="col-md-6 text-end">
+                                                                                        <div className="flex-1 text-right">
                                                                                             <strong>
                                                                                                 Balance: {parseFloat(
                                                                                                     (item.quantity || 0) -

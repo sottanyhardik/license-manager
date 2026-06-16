@@ -419,7 +419,7 @@ export default function TaskDrawer({ show, onClose }) {
                         <span style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.01em" }}>Tasks</span>
                     </div>
                     <button
-                        className="btn btn-sm btn-light"
+                        className="flex items-center gap-1.5 rounded border border-border bg-muted px-2.5 py-1.5 text-xs font-medium cursor-pointer hover:bg-muted/80"
                         onClick={onClose}
                         aria-label="Close"
                         style={{ width: 32, height: 32, padding: 0, borderRadius: 8 }}
@@ -518,7 +518,7 @@ export default function TaskDrawer({ show, onClose }) {
                         </div>
                     )}
 
-                    <div className="row g-2">
+                    <div className="flex flex-wrap gap-2">
                         <div className="col-6">
                             <select
                                 className="form-select form-select-sm"
@@ -562,7 +562,7 @@ export default function TaskDrawer({ show, onClose }) {
                             />
                         </div>
                         <div className="col-12 d-flex justify-content-end">
-                            <button type="submit" className="btn btn-sm btn-primary" disabled={saving}>
+                            <button type="submit" className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90 disabled:opacity-50" disabled={saving}>
                                 {saving ? "Saving..." : "Add task"}
                             </button>
                         </div>
@@ -679,7 +679,7 @@ export default function TaskDrawer({ show, onClose }) {
                                                 {!task.rejection_reason && <span> (no reason given)</span>}
                                                 <button
                                                     type="button"
-                                                    className="btn btn-link btn-sm p-0 ms-2 align-baseline"
+                                                    className="ml-2 cursor-pointer text-xs text-primary underline-offset-2 hover:underline"
                                                     onClick={() => handleReopen(task)}
                                                 >
                                                     Reopen
@@ -689,7 +689,7 @@ export default function TaskDrawer({ show, onClose }) {
                                     </div>
                                     <div className="btn-group btn-group-sm">
                                         <button
-                                            className="btn btn-outline-secondary btn-sm"
+                                            className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                                             onClick={() => setExpanded(open ? null : task.id)}
                                             title="Details"
                                         >
@@ -697,7 +697,7 @@ export default function TaskDrawer({ show, onClose }) {
                                         </button>
                                         {!closed && (
                                             <button
-                                                className="btn btn-outline-warning btn-sm"
+                                                className="flex items-center gap-1.5 rounded border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs font-medium text-warning cursor-pointer hover:bg-warning/20"
                                                 onClick={() => handleReject(task)}
                                                 title="Reject"
                                             >
@@ -706,7 +706,7 @@ export default function TaskDrawer({ show, onClose }) {
                                         )}
                                         {mine && (
                                             <button
-                                                className="btn btn-outline-danger btn-sm"
+                                                className="flex items-center gap-1.5 rounded border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-medium text-destructive cursor-pointer hover:bg-destructive/20"
                                                 onClick={() => handleDelete(task)}
                                                 title="Delete"
                                             >
@@ -730,7 +730,7 @@ export default function TaskDrawer({ show, onClose }) {
                                                 }
                                             }}
                                         />
-                                        <div className="row g-2 mb-2">
+                                        <div className="flex flex-wrap gap-2 mb-2">
                                             <div className="col-6">
                                                 <select
                                                     className="form-select form-select-sm"
@@ -776,7 +776,7 @@ export default function TaskDrawer({ show, onClose }) {
                                                     onKeyDown={(e) => e.key === "Enter" && handleAddRemark(task)}
                                                 />
                                                 <button
-                                                    className="btn btn-sm btn-primary"
+                                                    className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
                                                     onClick={() => handleAddRemark(task)}
                                                     type="button"
                                                 >
